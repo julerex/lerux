@@ -19,3 +19,15 @@ target
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+
+# QEMU bring-up build artifacts
+qemu/*.o
+qemu/*.elf
+qemu/*.bin
+qemu/*.img
+qemu/build/
+qemu/out/
+
+# Validation build outputs
+kernel/validation/trampolines/out/
+kernel/validation/trampolines/asm/

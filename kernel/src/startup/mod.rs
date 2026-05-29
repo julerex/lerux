@@ -174,7 +174,7 @@ pub(crate) fn kmain(bootstrap: Bootstrap) -> ! {
     profiling::ready_for_profiling();
 
     if cfg!(feature = "direct-boot") {
-        debug!("direct-boot mode: skipping userspace bootstrap for kernel-only testing");
+        info!("direct-boot mode: skipping userspace bootstrap for kernel-only testing");
     } else {
         let owner = None; // kmain not owned by any fd
         match context::spawn(true, owner, userspace_init, &mut token) {

@@ -155,19 +155,23 @@ fn register_memory_from_kernel_args(args: &KernelArgs) {
         args.kernel_size as usize,
         BootloaderMemoryKind::Kernel,
     );
-    register_memory_region(
-        args.env_base as usize,
-        args.env_size as usize,
-        BootloaderMemoryKind::IdentityMap,
-    );
+    // Env/bootstrap live in the loaded kernel image for direct-boot; skip IdentityMap.
+    #[cfg(not(feature = "direct-boot"))]
+    {
+        register_memory_region(
+            args.env_base as usize,
+            args.env_size as usize,
+            BootloaderMemoryKind::IdentityMap,
+        );
+        register_memory_region(
+            args.bootstrap_base as usize,
+            args.bootstrap_size as usize,
+            BootloaderMemoryKind::IdentityMap,
+        );
+    }
     register_memory_region(
         args.hwdesc_base as usize,
         args.hwdesc_size as usize,
-        BootloaderMemoryKind::IdentityMap,
-    );
-    register_memory_region(
-        args.bootstrap_base as usize,
-        args.bootstrap_size as usize,
         BootloaderMemoryKind::IdentityMap,
     );
 }
@@ -373,7 +377,9 @@ unsafe fn map_memory<A: Arch>(areas: &[MemoryArea], mut bump_allocator: &mut Bum
             use crate::devices::graphical_debug::FRAMEBUFFER;
 
             let (phys, virt, size) = *FRAMEBUFFER.lock();
-
+            if phys == 0 || virt == 0 || size == 0 {
+                // No bootloader framebuffer (e.g. direct-boot).
+            } else {
             let pages = size.div_ceil(PAGE_SIZE);
             for i in 0..pages {
                 let phys = PhysicalAddress::new(phys + i * PAGE_SIZE);
@@ -383,6 +389,7 @@ unsafe fn map_memory<A: Arch>(areas: &[MemoryArea], mut bump_allocator: &mut Bum
                     .map_phys(virt, phys, flags)
                     .expect("failed to map frame");
                 flush.ignore(); // Not the active table
+            }
             }
         }
 

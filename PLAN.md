@@ -2,7 +2,7 @@
 
 This document collects all potential next steps, ideas, and open questions that have been discussed during development. It serves as a living backlog.
 
-Last updated: 2026-05-29
+Last updated: 2026-05-29 (direct-boot smoke test verified)
 
 ---
 
@@ -10,11 +10,14 @@ Last updated: 2026-05-29
 
 The current focus is getting the kernel to actually boot under QEMU and produce useful output.
 
-- [ ] Make the loader reliably consume the kernel ELF placed at `0x200000` via `-device loader` (partially implemented in the fixed-address path).
-- [ ] Provide a realistic, minimal memory map in the loader (currently very fake).
+**Direct-boot (`just qemu-direct`)** is the preferred fast path: QEMU `-kernel` + PVH note + `direct-boot` feature. Verified 2026-05-29: reaches `"Redox OS starting..."` and memory init over serial; full `kmain` idle loop still blocked in early paging setup (see below).
+
+- [ ] Make the loader reliably consume the kernel ELF placed at `0x200000` via `-device loader` (parallel track; partially implemented in the fixed-address path).
+- [x] Provide a realistic, minimal memory map for direct-boot (`kernel/src/startup/direct_boot.rs`).
 - [ ] Create a minimal but valid `bootstrap` / initfs region (small tarball or in-memory structure) so `kmain` can proceed past early initialization.
-- [ ] Reach the first real kernel message: `"Redox OS starting..."` over serial.
-- [ ] Handle the first userspace bootstrap attempt without immediate panic (or at least reach a controlled failure point).
+- [x] Reach the first real kernel message: `"Redox OS starting..."` over serial (direct-boot).
+- [x] Handle the first userspace bootstrap attempt without immediate panic — direct-boot skips userspace bootstrap by design.
+- [ ] Complete direct-boot through `kmain` idle loop (currently stalls during `map_memory` / linear map setup after the memory-size log).
 - [ ] Improve GDB experience:
   - Dedicated `qemu/debug.sh` script
   - Better symbol loading

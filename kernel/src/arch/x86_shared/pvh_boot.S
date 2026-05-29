@@ -1,11 +1,15 @@
 /* PVH 32-bit entry for QEMU -kernel (direct-boot).
  * All addresses are physical constants so this file needs no relocations.
  */
-#define PVH_ENTRY       0x00100000
+/* Physical address of pvh_start32 (must match linkers/x86_64-direct.ld .pvh.boot) */
+#define PVH_ENTRY       0x00100020
 #define PVH_PML4        0x00108000
 #define PVH_PDPT_LOW    0x00109000
 #define PVH_PD_LOW      0x0010a000
 #define PVH_PDPT_HIGH   0x0010b000
+/* Maps 0xFFFFFFFF80000000+ to loaded phys (see linkers/x86_64-direct.ld). */
+#define PVH_PD_HIGH     0x0010f000
+#define KERNEL_PHYS_BASE 0x00200000
 #define PVH_STACK32     0x0010c000
 #define PVH_STACK64     0x0010d000
 #define PVH_GDT         0x0010e000
@@ -32,6 +36,8 @@ pvh_start32:
     or  $0x3, %eax
     mov $PVH_PML4, %edi
     mov %eax, (%edi)
+    /* Mirror low PDPT at PML4[256] for PHYS_OFFSET linear map during early init */
+    mov %eax, 256 * 8(%edi)
 
     mov $PVH_PDPT_HIGH, %eax
     or  $0x3, %eax
@@ -43,7 +49,8 @@ pvh_start32:
     mov %eax, (%edi)
 
     xor %ecx, %ecx
-    mov $0x83, %eax
+    /* 0x183 = present | writable | huge (2 MiB pages) */
+    mov $0x183, %eax
     mov $PVH_PD_LOW, %edi
 1:
     mov %eax, (%edi, %ecx, 8)
@@ -52,7 +59,18 @@ pvh_start32:
     cmp $512, %ecx
     jb 1b
 
-    mov $PVH_PD_LOW, %eax
+    mov $KERNEL_PHYS_BASE, %eax
+    or  $0x183, %eax
+    mov $PVH_PD_HIGH, %edi
+    xor %ecx, %ecx
+2:
+    mov %eax, (%edi, %ecx, 8)
+    add $0x200000, %eax
+    inc %ecx
+    cmp $512, %ecx
+    jb 2b
+
+    mov $PVH_PD_HIGH, %eax
     or  $0x3, %eax
     mov $PVH_PDPT_HIGH, %edi
     mov %eax, 510 * 8(%edi)

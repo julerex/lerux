@@ -5,9 +5,13 @@ This repo supports fast kernel-only development using the `direct-boot` feature.
 ## Prerequisites
 
 - Recent Rust nightly (see `rust-toolchain.toml`)
-- `nasm`
+- `clang` (recommended; builds the PVH boot stub via `build.rs`)
 - `llvm-objcopy` (or any working `objcopy`)
-- QEMU
+- `qemu-system-x86_64`
+
+You do **not** need `nasm` for direct-boot (the PVH stub is `pvh_boot.S` compiled with `cc`/`clang`).
+
+**Smoke test verified (2026-05-29):** `just build-direct` and `just qemu-direct` reach `Redox OS starting...` and `Memory: … MB` on serial. Paging setup to `kmain` is still in progress.
 
 ## Recommended: Use the justfile
 

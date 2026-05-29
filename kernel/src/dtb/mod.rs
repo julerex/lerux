@@ -98,6 +98,8 @@ pub fn register_dev_memory_ranges(dt: &Fdt) {
         if is_qemu_virt {
             register_memory_region(0x08000000, 0x08000000, BootloaderMemoryKind::Device);
             register_memory_region(0x10000000, 0x30000000, BootloaderMemoryKind::Device);
+            // Also register RAM from the DTB memory nodes (critical for QEMU bring-up without a full bootloader)
+            register_memory_ranges(dt);
             return;
         }
     }
@@ -244,3 +246,53 @@ pub fn fill_env_data(dt: &Fdt, env_base: usize) -> usize {
         0
     }
 }
+
+/// Register free RAM regions described by the DTB `/memory` nodes (or equivalent).
+/// This is essential for QEMU virt bring-up and any DTB-only boot path (aarch64, riscv64)
+/// where there is no bootloader-provided `KernelArgs.areas` list.
+///
+/// Safe to call multiple times; duplicate regions are handled by `register_memory_region`.
+#[cfg_attr(not(dtb), expect(dead_code))]
+pub fn register_memory_ranges(dt: &Fdt) {
+    // The repnop/fdt crate exposes memory via dt.memory() when a standard /memory node exists.
+    // It returns Memory directly (not Option).
+    let mut registered_any = false;
+
+    let mem = dt.memory();
+    for region in mem.regions() {
+        let base = region.starting_address as usize;
+        if let Some(size) = region.size {
+            if size > 0 {
+                register_memory_region(base, size as usize, BootloaderMemoryKind::Free);
+                registered_any = true;
+            }
+        }
+    }
+
+    // Fallback / additional nodes (some DTBs use memory@... subnodes directly under root)
+    if !registered_any {
+        for node in dt.all_nodes() {
+            if node.name.starts_with("memory") || node.name.starts_with("memory@") {
+                if let Some(reg) = node.reg() {
+                    for entry in reg {
+                        if let Some(size) = entry.size {
+                            if size > 0 {
+                                register_memory_region(
+                                    entry.starting_address as usize,
+                                    size as usize,
+                                    BootloaderMemoryKind::Free,
+                                );
+                                registered_any = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if !registered_any {
+        debug!("register_memory_ranges: no /memory nodes found in DTB");
+    }
+}
+

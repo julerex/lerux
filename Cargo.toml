@@ -106,6 +106,7 @@ qemu_debug = []
 serial_debug = []
 system76_ec_debug = []
 x86_kvm_pv = []
+direct-boot = []
 
 debugger = ["syscall_debug"]
 syscall_debug = []

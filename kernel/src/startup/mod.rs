@@ -16,6 +16,9 @@ use crate::{
 
 pub mod memory;
 
+#[cfg(feature = "direct-boot")]
+pub mod direct_boot;
+
 #[repr(C, packed(8))]
 pub(crate) struct KernelArgs {
     kernel_base: u64,
@@ -170,20 +173,24 @@ pub(crate) fn kmain(bootstrap: Bootstrap) -> ! {
 
     profiling::ready_for_profiling();
 
-    let owner = None; // kmain not owned by any fd
-    match context::spawn(true, owner, userspace_init, &mut token) {
-        Ok(context_lock) => {
-            let mut context = context_lock.write(token.token());
-            context.status = context::Status::Runnable;
-            context.name.clear();
-            context.name.push_str("[bootstrap]");
+    if cfg!(feature = "direct-boot") {
+        debug!("direct-boot mode: skipping userspace bootstrap for kernel-only testing");
+    } else {
+        let owner = None; // kmain not owned by any fd
+        match context::spawn(true, owner, userspace_init, &mut token) {
+            Ok(context_lock) => {
+                let mut context = context_lock.write(token.token());
+                context.status = context::Status::Runnable;
+                context.name.clear();
+                context.name.push_str("[bootstrap]");
 
-            // TODO: Remove these from kernel
-            context.euid = 0;
-            context.egid = 0;
-        }
-        Err(err) => {
-            panic!("failed to spawn userspace_init: {:?}", err);
+                // TODO: Remove these from kernel
+                context.euid = 0;
+                context.egid = 0;
+            }
+            Err(err) => {
+                panic!("failed to spawn userspace_init: {:?}", err);
+            }
         }
     }
 

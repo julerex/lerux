@@ -52,27 +52,37 @@ pub(crate) struct KernelArgs {
 
 impl KernelArgs {
     pub(crate) fn print(&self) {
-        debug!(
+        // In direct-boot the early framebuffer/debug! sink is unavailable, so surface the
+        // KernelArgs dump at info! level to make it observable over serial.
+        macro_rules! argline {
+            ($($t:tt)*) => {{
+                #[cfg(feature = "direct-boot")]
+                info!($($t)*);
+                #[cfg(not(feature = "direct-boot"))]
+                debug!($($t)*);
+            }};
+        }
+        argline!(
             "Kernel: {:X}:{:X}",
             { self.kernel_base },
             self.kernel_base + self.kernel_size
         );
-        debug!(
+        argline!(
             "Env: {:X}:{:X}",
             { self.env_base },
             self.env_base + self.env_size
         );
-        debug!(
+        argline!(
             "HWDESC: {:X}:{:X}",
             { self.hwdesc_base },
             self.hwdesc_base + self.hwdesc_size
         );
-        debug!(
+        argline!(
             "Areas: {:X}:{:X}",
             { self.areas_base },
             self.areas_base + self.areas_size
         );
-        debug!(
+        argline!(
             "Bootstrap: {:X}:{:X}",
             { self.bootstrap_base },
             self.bootstrap_base + self.bootstrap_size

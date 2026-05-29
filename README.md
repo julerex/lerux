@@ -7,9 +7,10 @@ A pure-Rust take on the Redox operating system, starting with a vendored and ada
 ## Current Status (Phase 1)
 
 - Kernel source vendored under `kernel/` (copy of redox-os/kernel as of 2026-05).
-- First "Only Rust" milestone achieved: the last external assembler (nasm) dependency for SMP AP trampolines has been removed.
-  - Trampolines are now plain `&[u8]` data (see `kernel/src/arch/x86_shared/trampoline.rs`).
-  - `build.rs` no longer invokes nasm; the unused `cc` build-dep was also dropped.
+- "Only Rust" milestones achieved: the external assembler/compiler build dependencies have been removed.
+  - SMP AP trampolines are now plain `&[u8]` data (see `kernel/src/arch/x86_shared/trampoline.rs`) — no `nasm`.
+  - The direct-boot PVH boot stub is now pure Rust via `core::arch::global_asm!` (see `kernel/src/arch/x86_shared/pvh_boot.rs`); the `cc`/`clang` build dependency it required has been dropped from `build.rs` and `Cargo.toml`.
+- Direct-boot (`just qemu-direct`) boots through early bring-up to the idle loop with no C toolchain required (see `BUILDING-standalone.md`).
 - The kernel remains a drop-in buildable Redox kernel with all its existing features and multi-architecture support.
 
 ## Goals

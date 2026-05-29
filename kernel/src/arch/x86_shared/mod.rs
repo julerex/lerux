@@ -34,6 +34,10 @@ pub mod stop;
 pub mod time;
 pub mod trampoline;
 
+/// PVH 32->64-bit boot stub for direct-boot (pure-Rust global_asm!, no C toolchain).
+#[cfg(all(target_arch = "x86_64", feature = "direct-boot"))]
+pub mod pvh_boot;
+
 #[cfg(target_arch = "x86")]
 pub use ::rmm::x86::X86Arch as CurrentRmmArch;
 

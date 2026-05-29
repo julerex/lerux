@@ -92,8 +92,11 @@ pub fn get_direct_boot_args() -> &'static KernelArgs {
                 hwdesc_size: 0,
                 areas_base: virt_to_phys(AREAS_STORAGE.as_ptr() as usize),
                 areas_size: core::mem::size_of_val(&AREAS_STORAGE) as u64,
-                // Bootstrap is unused in direct-boot; skip IdentityMap registration.
-                bootstrap_base: 0,
+                // No real bootstrap/initfs in direct-boot. Point at a valid (non-zero)
+                // frame with zero length so KernelArgs::bootstrap() does not hit the
+                // `Frame::containing(0)` reserved-frame panic. It is never consumed because
+                // kmain skips userspace bootstrap in direct-boot mode.
+                bootstrap_base: virt_to_phys(BOOTSTRAP_STORAGE.as_ptr() as usize),
                 bootstrap_size: 0,
             });
         }

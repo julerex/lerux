@@ -5,13 +5,17 @@ This repo supports fast kernel-only development using the `direct-boot` feature.
 ## Prerequisites
 
 - Recent Rust nightly (see `rust-toolchain.toml`)
-- `clang` (recommended; builds the PVH boot stub via `build.rs`)
 - `llvm-objcopy` (or any working `objcopy`)
 - `qemu-system-x86_64`
 
-You do **not** need `nasm` for direct-boot (the PVH stub is `pvh_boot.S` compiled with `cc`/`clang`).
+You do **not** need a C toolchain (`cc`/`clang`) or `nasm` for direct-boot. The PVH
+boot stub is pure Rust (`kernel/src/arch/x86_shared/pvh_boot.rs`, assembled via
+`core::arch::global_asm!`).
 
-**Smoke test verified (2026-05-29):** `just build-direct` and `just qemu-direct` reach `Redox OS starting...` and `Memory: … MB` on serial. Paging setup to `kmain` is still in progress.
+**Smoke test verified (2026-05-29):** `just build-direct` + `just qemu-direct` boot
+all the way through early bring-up to the idle loop — serial shows the `KernelArgs`
+dump, `Memory: … MB`, paging milestones, and `direct-boot mode: skipping userspace
+bootstrap…`, after which the kernel idles with no QEMU reset.
 
 ## Recommended: Use the justfile
 
@@ -67,6 +71,17 @@ This is intended purely for rapid kernel development and testing.
 
 ## GDB Debugging
 
+The quickest path is `qemu/debug.sh`, which builds, launches QEMU paused with a GDB
+stub plus exception/reset logging (`qemu-int.log`), and attaches GDB with the
+boot-path breakpoints pre-set:
+
+```bash
+./qemu/debug.sh             # build + launch QEMU (paused) + attach GDB
+./qemu/debug.sh --no-gdb    # only launch QEMU (paused); attach GDB yourself
+```
+
+Two-terminal equivalent:
+
 ```bash
 # Terminal 1
 just qemu-direct -- -s -S
@@ -81,6 +96,10 @@ Or manually:
 gdb -ex "symbol-file build/kernel.sym" \
     -ex "target remote localhost:1234"
 ```
+
+Useful boot-path breakpoints (bare `start`/`kmain` do not resolve — use full paths):
+`pvh_start32`, `kstart`, `kernel::arch::x86_shared::start::start`,
+`kernel::startup::kmain`.
 
 ## Notes
 

@@ -17,7 +17,7 @@ use rmm::{
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u64)]
 #[allow(dead_code)]
-pub enum BootloaderMemoryKind {
+pub(crate) enum BootloaderMemoryKind {
     Null = 0,
     Free = 1,
     Reclaim = 2,
@@ -32,7 +32,7 @@ pub enum BootloaderMemoryKind {
 // Keep synced with OsMemoryEntry in bootloader
 #[derive(Clone, Copy, Debug)]
 #[repr(C, packed(8))]
-struct BootloaderMemoryEntry {
+pub(crate) struct BootloaderMemoryEntry {
     pub base: u64,
     pub size: u64,
     pub kind: BootloaderMemoryKind,

@@ -83,6 +83,10 @@ extern "C" fn kstart() {
 unsafe extern "C" fn start(args_ptr: *const KernelArgs, stack_end: usize) -> ! {
     unsafe {
         let bootstrap = {
+            #[cfg(feature = "direct-boot")]
+            let args = crate::startup::direct_boot::get_direct_boot_args();
+
+            #[cfg(not(feature = "direct-boot"))]
             let args = args_ptr.read();
 
             // Set up serial debug

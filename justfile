@@ -63,6 +63,10 @@ qemu-direct *QEMU_ARGS:
         -no-reboot \
         {{QEMU_ARGS}}
 
+# Direct-boot serial smoke test (CI): boot headless, assert the kmain idle loop.
+smoke: build-direct
+    "{{justfile_directory()}}/qemu/smoke-test.sh" --no-build
+
 # Attach GDB to a QEMU instance started with -s or -s -S
 #
 # Typical workflow:

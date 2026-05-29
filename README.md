@@ -9,7 +9,7 @@ A pure-Rust take on the Redox operating system, starting with a vendored and ada
 - Kernel source vendored under `kernel/` (copy of redox-os/kernel as of 2026-05).
 - First "Only Rust" milestone achieved: the last external assembler (nasm) dependency for SMP AP trampolines has been removed.
   - Trampolines are now plain `&[u8]` data (see `kernel/src/arch/x86_shared/trampoline.rs`).
-  - `kernel/build.rs` no longer invokes nasm; the unused `cc` build-dep was also dropped.
+  - `build.rs` no longer invokes nasm; the unused `cc` build-dep was also dropped.
 - The kernel remains a drop-in buildable Redox kernel with all its existing features and multi-architecture support.
 
 ## Goals

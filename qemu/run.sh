@@ -30,7 +30,7 @@ error() { echo -e "${RED}✗${NC}  $1" >&2; }
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-KERNEL_DIR="$REPO_ROOT/kernel"
+# KERNEL_DIR no longer needed for make; Makefile is now at repo root
 
 # ---------- Configuration ----------
 QEMU="${QEMU:-qemu-system-x86_64}"
@@ -105,7 +105,7 @@ if [ "$BUILD_KERNEL" = "yes" ]; then
     info "Building kernel (features=$KERNEL_FEATURES) ..."
     mkdir -p "$KERNEL_BUILD_DIR"
 
-    if make -C "$KERNEL_DIR" \
+    if make -C "$REPO_ROOT" \
             BUILD="$KERNEL_BUILD_DIR" \
             KERNEL_CARGO_FEATURES="$KERNEL_FEATURES" \
             all; then
@@ -113,7 +113,7 @@ if [ "$BUILD_KERNEL" = "yes" ]; then
     else
         error "Kernel build failed (this is common — the kernel needs a specific nightly toolchain)"
         warn "You can build the kernel manually with:"
-        echo "    make -C kernel BUILD=qemu/build KERNEL_CARGO_FEATURES=serial_debug all"
+        echo "    make -C .. BUILD=qemu/build KERNEL_CARGO_FEATURES=serial_debug all"
         exit 1
     fi
 else
@@ -123,7 +123,7 @@ else
         warn "No kernel binary found at $KERNEL_BIN"
         warn "The loader will currently just say 'N' (no kernel module)."
         warn "Build the kernel first with:"
-        echo "    make -C kernel BUILD=qemu/build KERNEL_CARGO_FEATURES=serial_debug all"
+        echo "    make -C .. BUILD=qemu/build KERNEL_CARGO_FEATURES=serial_debug all"
     fi
 fi
 

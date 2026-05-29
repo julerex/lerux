@@ -8,7 +8,7 @@ Redox OS Microkernel
 
 ## Requirements
 
-No external assemblers (e.g. nasm) are required. The kernel builds with only a recent nightly Rust toolchain (see `rust-toolchain.toml`).
+No external assemblers (e.g. nasm) are required. The kernel builds with only a recent nightly Rust toolchain (see `../rust-toolchain.toml`).
 
 > **lerux note**: The last nasm dependency (SMP trampolines) was removed to achieve the "Only Rust" goal. The binary images are embedded as data in `src/arch/x86_shared/trampoline.rs`.
 

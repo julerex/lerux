@@ -31,3 +31,6 @@ qemu/out/
 # Validation build outputs
 kernel/validation/trampolines/out/
 kernel/validation/trampolines/asm/
+
+# Kernel local runtime config (auto-copied from config.toml.example by build.rs)
+config.toml

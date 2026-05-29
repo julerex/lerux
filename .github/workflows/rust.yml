@@ -10,13 +10,40 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-
+  fmt:
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v4
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: nightly-2026-05-24
+        components: rustfmt
+    - name: Check formatting
+      run: cargo fmt --all -- --check
+
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: nightly-2026-05-24
+        components: clippy, rust-src
+    - name: Add no_std target for clippy
+      run: rustup target add x86_64-unknown-none
+    - name: Clippy
+      run: |
+        export RUST_TARGET_PATH="$PWD/targets"
+        export RUSTFLAGS="-C debuginfo=2"
+        cargo clippy --bin kernel --release --target x86_64-unknown-none
+
+  check:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: nightly-2026-05-24
+        components: rust-src
+    - name: Cargo check (kernel with custom target)
+      run: make check

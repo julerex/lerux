@@ -295,4 +295,3 @@ pub fn register_memory_ranges(dt: &Fdt) {
         debug!("register_memory_ranges: no /memory nodes found in DTB");
     }
 }
-

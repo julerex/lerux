@@ -25,7 +25,7 @@ From `kernel/src/arch/x86_shared/start.rs`:
 
 See:
 - `kernel/src/startup/mod.rs` for the exact `KernelArgs` layout.
-- `kernel/linkers/x86_64.ld` for the virtual/physical layout (higher half, dummy zero page hack for some bootloaders).
+- `linkers/x86_64.ld` for the virtual/physical layout (higher half, dummy zero page hack for some bootloaders).
 
 ## Quick Start (Recommended First Smoke Test)
 
@@ -34,7 +34,7 @@ The most reliable way to run the bring-up right now:
 ```sh
 cd qemu
 # 1. Build the kernel (adjust features as needed)
-make -C ../kernel BUILD=build KERNEL_CARGO_FEATURES=serial_debug all
+make -C .. BUILD=build KERNEL_CARGO_FEATURES=serial_debug all
 
 # 2. Run the improved launcher (now has nice colored feedback + nasm detection)
 ./run.sh

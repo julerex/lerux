@@ -7,6 +7,10 @@ version = "0.5.12"
 build = "build.rs"
 edition = "2024"
 
+[[bin]]
+name = "kernel"
+path = "kernel/src/main.rs"
+
 [build-dependencies]
 toml = "0.8"
 
@@ -19,7 +23,7 @@ hashbrown = { version = "0.14.3", default-features = false, features = ["ahash",
 linked_list_allocator = "0.9.0"
 redox-path = "0.2.0"
 redox_syscall = { version = "0.8.0", default-features = false }
-rmm = { path = "rmm", default-features = false }
+rmm = { path = "kernel/rmm", default-features = false }
 slab = { version = "0.4", default-features = false }
 smallvec = { version = "1.15.1", default-features = false }
 spin = { version = "0.9.8" }

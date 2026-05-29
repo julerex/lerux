@@ -7,8 +7,10 @@
 //!
 //! This is intended for fast kernel development and bring-up testing only.
 
-use super::memory::{BootloaderMemoryEntry, BootloaderMemoryKind};
-use super::KernelArgs;
+use super::{
+    memory::{BootloaderMemoryEntry, BootloaderMemoryKind},
+    KernelArgs,
+};
 
 /// Minimal environment for direct boot.
 const ENV: &[u8] = b"direct-boot=1\0";

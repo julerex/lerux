@@ -77,3 +77,13 @@ pub fn get_direct_boot_args() -> &'static KernelArgs {
         DIRECT_ARGS.as_ref().unwrap()
     }
 }
+
+// Retain the PVH boot stub + ELF note under --gc-sections (QEMU reads them, not Rust).
+#[cfg(target_arch = "x86_64")]
+unsafe extern "C" {
+    fn pvh_start32();
+}
+
+#[cfg(target_arch = "x86_64")]
+#[used]
+static _KEEP_PVH_BOOT: unsafe extern "C" fn() = pvh_start32;

@@ -12,25 +12,34 @@ objcopy := env_var_or_default("OBJCOPY", "llvm-objcopy")
 
 export RUST_TARGET_PATH := justfile_directory() + "/targets"
 
+target_spec := justfile_directory() + "/targets/x86_64-unknown-kernel.json"
+manifest := justfile_directory() + "/Cargo.toml"
+
+# PVH stub + note for qemu -kernel when using direct-boot
+link_script := if features == "direct-boot" { "linkers/x86_64-direct.ld" } else { "linkers/x86_64.ld" }
+
 # Default recipe
 default: build
 
 # Build the kernel (release)
 build:
-    @echo "Building kernel (features: {{features}})"
+    @mkdir -p "{{build_dir}}"
+    @echo "Building kernel (features: {{features}}, linker: {{link_script}})"
     cargo rustc \
         --bin kernel \
+        --manifest-path "{{manifest}}" \
+        --target "{{target_spec}}" \
         --release \
         -Z build-std=core,alloc -Zbuild-std-features=compiler-builtins-mem \
         -Z json-target-spec \
         --features={{features}} \
         -- \
-        -C link-arg=-T -Clink-arg=linkers/x86_64.ld \
+        -C link-arg=-T -Clink-arg={{link_script}} \
         -C link-arg=-z -Clink-arg=max-page-size=0x1000 \
         --emit link={{build_dir}}/kernel.all
 
-    {{objcopy}} --strip-debug {{build_dir}}/kernel.all {{build_dir}}/kernel || true
-    {{objcopy}} --only-keep-debug {{build_dir}}/kernel.all {{build_dir}}/kernel.sym || true
+    {{objcopy}} --strip-debug {{build_dir}}/kernel.all {{build_dir}}/kernel
+    {{objcopy}} --only-keep-debug {{build_dir}}/kernel.all {{build_dir}}/kernel.sym
 
 # Build with the direct-boot feature (for fast QEMU -kernel testing)
 build-direct:
@@ -70,8 +79,11 @@ gdb *GDB_ARGS:
 
 # Quick check (no binary produced)
 check:
+    @mkdir -p "{{build_dir}}"
     cargo check \
         --bin kernel \
+        --manifest-path "{{manifest}}" \
+        --target "{{target_spec}}" \
         -Z build-std=core,alloc -Zbuild-std-features=compiler-builtins-mem \
         -Z json-target-spec \
         --features={{features}}

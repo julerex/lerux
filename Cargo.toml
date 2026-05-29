@@ -12,6 +12,7 @@ name = "kernel"
 path = "kernel/src/main.rs"
 
 [build-dependencies]
+cc = "1.2"
 toml = "0.8"
 
 [dependencies]

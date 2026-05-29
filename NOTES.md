@@ -83,7 +83,28 @@ path (bare `start`/`kmain` do not resolve).
 just build-direct
 just qemu-direct           # boots to the idle loop
 just qemu-direct -- -s -S  # + `just gdb` in another terminal, or use ./qemu/debug.sh
+just smoke                 # build + boot + assert serial markers (CI smoke test)
 ```
+
+## Automated smoke test
+
+`qemu/smoke-test.sh` (exposed as `just smoke`) boots the direct-boot kernel
+headless, captures the serial console to `qemu-serial.log`, and asserts boot
+reaches the `kmain` idle loop. It exits as soon as it sees the idle marker (so it
+does not wait out the timeout), and fails non-zero on a missing marker, a kernel
+panic / triple fault, or a `$TIMEOUT`-second (default 90s) timeout. No KVM is
+required, so it runs on plain GitHub runners.
+
+It checks for these serial substrings (all must appear):
+
+- `Redox OS starting...`
+- `Memory:`
+- `Paging: new kernel page tables active`
+- `Permanently used:`
+- `direct-boot mode: skipping userspace bootstrap` ← idle reached (success)
+
+CI runs it as the `smoke` job in `.github/workflows/rust.yml`, alongside
+`fmt` / `clippy` / `check`, and uploads `qemu-serial.log` as an artifact.
 
 ## Prerequisites (direct-boot)
 
@@ -96,11 +117,10 @@ stub is pure Rust (`kernel/src/arch/x86_shared/pvh_boot.rs`, `core::arch::global
 
 ## Next step
 
-Direct-boot is green and C-toolchain-free. Next candidates:
+Direct-boot is green and C-toolchain-free, and an automated serial smoke test
+(`just smoke`, CI `smoke` job) now guards it against regressions. Next candidates:
 
 - Minimal `bootstrap`/initfs region so the **non**-direct-boot path can spawn
   `userspace_init` (the first true "redox-like OS" milestone).
-- Automated QEMU serial smoke test in CI (boot, capture serial, assert on
-  `Redox OS starting...` / `Memory:` / the direct-boot idle marker).
 - Convert the remaining `qemu/` loaders (`loader.asm`, `loader.S`, `mbr_stub.S`,
   `aarch64-loader.S`) to Rust.

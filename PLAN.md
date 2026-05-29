@@ -2,7 +2,7 @@
 
 This document collects all potential next steps, ideas, and open questions that have been discussed during development. It serves as a living backlog.
 
-Last updated: 2026-05-29 (direct-boot smoke test verified)
+Last updated: 2026-05-29 (direct-boot reaches the `kmain` idle loop; PVH stub now pure Rust — PR #3)
 
 ---
 
@@ -10,18 +10,18 @@ Last updated: 2026-05-29 (direct-boot smoke test verified)
 
 The current focus is getting the kernel to actually boot under QEMU and produce useful output.
 
-**Direct-boot (`just qemu-direct`)** is the preferred fast path: QEMU `-kernel` + PVH note + `direct-boot` feature. Verified 2026-05-29: reaches `"Redox OS starting..."` and memory init over serial; full `kmain` idle loop still blocked in early paging setup (see below).
+**Direct-boot (`just qemu-direct`)** is the preferred fast path: QEMU `-kernel` + PVH note + `direct-boot` feature. Verified 2026-05-29 (PR #3): boots all the way through kernel init to the `kmain` idle loop, C-toolchain-free (pure-Rust PVH stub). See `NOTES.md` for the verified serial output and the root-cause fixes.
 
 - [ ] Make the loader reliably consume the kernel ELF placed at `0x200000` via `-device loader` (parallel track; partially implemented in the fixed-address path).
 - [x] Provide a realistic, minimal memory map for direct-boot (`kernel/src/startup/direct_boot.rs`).
 - [ ] Create a minimal but valid `bootstrap` / initfs region (small tarball or in-memory structure) so `kmain` can proceed past early initialization.
 - [x] Reach the first real kernel message: `"Redox OS starting..."` over serial (direct-boot).
 - [x] Handle the first userspace bootstrap attempt without immediate panic — direct-boot skips userspace bootstrap by design.
-- [ ] Complete direct-boot through `kmain` idle loop (currently stalls during `map_memory` / linear map setup after the memory-size log).
-- [ ] Improve GDB experience:
-  - Dedicated `qemu/debug.sh` script
-  - Better symbol loading
-  - Common breakpoint / watch setups documented
+- [x] Complete direct-boot through `kmain` idle loop (reached in PR #3; the `map_memory` stall was a missing `EFER.NXE` enable plus `env`/`bootstrap` mapping fixes — see `NOTES.md`).
+- [x] Improve GDB experience:
+  - [x] Dedicated `qemu/debug.sh` script
+  - [x] Better symbol loading (`just gdb` / `debug.sh` load `build/kernel.sym` and `set language rust`)
+  - [x] Common breakpoint / watch setups documented (`NOTES.md`; pre-set in `debug.sh`)
 - [ ] Add support for passing kernel command-line / environment from the loader.
 - [ ] Explore using Limine as a more capable bootloader for development (instead of the custom minimal loader).
 - [ ] Add EFI stub / UEFI boot path (longer term but valuable for real hardware).
@@ -32,6 +32,7 @@ The current focus is getting the kernel to actually boot under QEMU and produce 
 
 Core philosophy of the project.
 
+- [x] Port the direct-boot PVH boot stub to pure Rust (`core::arch::global_asm!`) and drop the `cc`/`clang` build dependency (PR #3; see `kernel/src/arch/x86_shared/pvh_boot.rs`).
 - [ ] Convert the QEMU loader itself to pure Rust (eliminate `loader.asm` + `loader.S` entirely).
 - [ ] Investigate removing or dramatically simplifying the custom linker scripts (`linkers/*.ld`).
 - [ ] Achieve fully `cargo`-only development builds (reduce or remove reliance on the `Makefile` for day-to-day work).
@@ -62,7 +63,7 @@ We have good infrastructure now, but it can be stronger.
 
 ## 4. Tooling & Development Experience
 
-- [ ] Automated QEMU boot tests (boot the kernel, capture serial, assert on expected early messages).
+- [x] Automated QEMU boot tests (boot the kernel, capture serial, assert on expected early messages). Implemented as `qemu/smoke-test.sh` / `just smoke`, run by the `smoke` CI job (`.github/workflows/rust.yml`); asserts the direct-boot idle marker and fails on panic/triple-fault/timeout.
 - [ ] Better integration between the QEMU harness and the kernel's own testing story.
 - [ ] `cargo xtask` (or similar) for common development tasks (build kernel + loader, run under QEMU, validate trampolines, etc.).
 - [ ] Improve the root `README.md` with a proper "Getting Started" section once basic QEMU bring-up works.

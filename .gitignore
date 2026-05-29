@@ -28,6 +28,10 @@ qemu/*.img
 qemu/build/
 qemu/out/
 
+# QEMU debug logs (written by qemu/debug.sh)
+qemu-int.log
+qemu.log
+
 # Validation build outputs
 kernel/validation/trampolines/out/
 kernel/validation/trampolines/asm/

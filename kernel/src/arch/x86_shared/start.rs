@@ -84,7 +84,10 @@ unsafe extern "C" fn start(args_ptr: *const KernelArgs, stack_end: usize) -> ! {
     unsafe {
         let bootstrap = {
             #[cfg(feature = "direct-boot")]
-            let args = crate::startup::direct_boot::get_direct_boot_args();
+            let args = {
+                let _ = args_ptr;
+                crate::startup::direct_boot::get_direct_boot_args()
+            };
 
             #[cfg(not(feature = "direct-boot"))]
             let args = args_ptr.read();
@@ -92,7 +95,8 @@ unsafe extern "C" fn start(args_ptr: *const KernelArgs, stack_end: usize) -> ! {
             // Set up serial debug
             device::serial::init();
 
-            // Set up graphical debug
+            // Set up graphical debug (needs bootloader framebuffer env; skip in direct-boot)
+            #[cfg(not(feature = "direct-boot"))]
             graphical_debug::init(args.env());
 
             info!("Redox OS starting...");
@@ -108,7 +112,12 @@ unsafe extern "C" fn start(args_ptr: *const KernelArgs, stack_end: usize) -> ! {
             #[cfg(target_arch = "x86")]
             crate::startup::memory::init(&args, Some(0x100000), Some(0x40000000));
             #[cfg(target_arch = "x86_64")]
-            crate::startup::memory::init(&args, Some(0x100000), None);
+            {
+                #[cfg(feature = "direct-boot")]
+                crate::startup::memory::init(&args, Some(0x100000), None);
+                #[cfg(not(feature = "direct-boot"))]
+                crate::startup::memory::init(&args, Some(0x100000), None);
+            }
 
             // Initialize paging
             paging::init();
@@ -132,8 +141,8 @@ unsafe extern "C" fn start(args_ptr: *const KernelArgs, stack_end: usize) -> ! {
             // Initialize devices
             device::init();
 
-            // Read ACPI tables, starts APs
-            if cfg!(feature = "acpi") {
+            // Read ACPI tables, starts APs (no RSDP in direct-boot)
+            if cfg!(all(feature = "acpi", not(feature = "direct-boot"))) {
                 crate::acpi::init(args.acpi_rsdp());
                 device::init_after_acpi();
             }

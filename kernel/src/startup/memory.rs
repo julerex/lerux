@@ -155,19 +155,23 @@ fn register_memory_from_kernel_args(args: &KernelArgs) {
         args.kernel_size as usize,
         BootloaderMemoryKind::Kernel,
     );
+    // The env and bootstrap regions are dereferenced (via phys_to_virt) after the kernel
+    // switches to its own page tables, so they must be linear-mapped at PHYS_OFFSET. For
+    // direct-boot these live inside the loaded kernel image (which is only mapped at
+    // KERNEL_OFFSET), so this registration is what keeps env() reachable post-switch.
     register_memory_region(
         args.env_base as usize,
         args.env_size as usize,
         BootloaderMemoryKind::IdentityMap,
     );
     register_memory_region(
-        args.hwdesc_base as usize,
-        args.hwdesc_size as usize,
+        args.bootstrap_base as usize,
+        args.bootstrap_size as usize,
         BootloaderMemoryKind::IdentityMap,
     );
     register_memory_region(
-        args.bootstrap_base as usize,
-        args.bootstrap_size as usize,
+        args.hwdesc_base as usize,
+        args.hwdesc_size as usize,
         BootloaderMemoryKind::IdentityMap,
     );
 }
@@ -307,6 +311,7 @@ fn kernel_page_flags<A: Arch>(virt: VirtualAddress) -> PageFlags<A> {
 
 unsafe fn map_memory<A: Arch>(areas: &[MemoryArea], mut bump_allocator: &mut BumpAllocator<A>) {
     unsafe {
+        info!("Paging: building new kernel page tables");
         let mut mapper = PageMapper::<A, _>::create(TableKind::Kernel, &mut bump_allocator)
             .expect("failed to create Mapper");
 
@@ -373,16 +378,19 @@ unsafe fn map_memory<A: Arch>(areas: &[MemoryArea], mut bump_allocator: &mut Bum
             use crate::devices::graphical_debug::FRAMEBUFFER;
 
             let (phys, virt, size) = *FRAMEBUFFER.lock();
-
-            let pages = size.div_ceil(PAGE_SIZE);
-            for i in 0..pages {
-                let phys = PhysicalAddress::new(phys + i * PAGE_SIZE);
-                let virt = VirtualAddress::new(virt + i * PAGE_SIZE);
-                let flags = PageFlags::new().write(true).write_combining(true);
-                let flush = mapper
-                    .map_phys(virt, phys, flags)
-                    .expect("failed to map frame");
-                flush.ignore(); // Not the active table
+            if phys == 0 || virt == 0 || size == 0 {
+                // No bootloader framebuffer (e.g. direct-boot).
+            } else {
+                let pages = size.div_ceil(PAGE_SIZE);
+                for i in 0..pages {
+                    let phys = PhysicalAddress::new(phys + i * PAGE_SIZE);
+                    let virt = VirtualAddress::new(virt + i * PAGE_SIZE);
+                    let flags = PageFlags::new().write(true).write_combining(true);
+                    let flush = mapper
+                        .map_phys(virt, phys, flags)
+                        .expect("failed to map frame");
+                    flush.ignore(); // Not the active table
+                }
             }
         }
 
@@ -390,7 +398,9 @@ unsafe fn map_memory<A: Arch>(areas: &[MemoryArea], mut bump_allocator: &mut Bum
         mapper.table().debug_entries(|args| debug!("{args}"));
 
         // Use the new table
+        info!("Paging: switching to new kernel page tables");
         mapper.make_current();
+        info!("Paging: new kernel page tables active");
     }
 }
 

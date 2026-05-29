@@ -3,6 +3,8 @@ ENTRY(kstart)
 OUTPUT_FORMAT(elf64-x86-64)
 
 KERNEL_OFFSET = 0xFFFFFFFF80000000;
+/* Load main kernel at 2 MiB (QEMU -kernel skips most of PT_LOAD below ~1 MiB). */
+KERNEL_PHYS_BASE = 0x200000;
 
 SECTIONS
 {
@@ -20,16 +22,15 @@ SECTIONS
 
     . = KERNEL_OFFSET;
 
-    . += SIZEOF_HEADERS;
+    /* No SIZEOF_HEADERS gap: virt 0xFFFFFFFF80000000 maps to phys KERNEL_PHYS_BASE. */
+    .dummy : AT(KERNEL_PHYS_BASE) {}
 
-    .dummy : AT(ADDR(.dummy) - KERNEL_OFFSET) {}
-
-    .text ALIGN(4K) : AT(ADDR(.text) - KERNEL_OFFSET) {
+    .text ALIGN(4K) : AT(ADDR(.text) - KERNEL_OFFSET + KERNEL_PHYS_BASE) {
         __text_start = .;
         *(.text*)
     }
 
-    .rodata ALIGN(4K) : AT(ADDR(.rodata) - KERNEL_OFFSET) {
+    .rodata ALIGN(4K) : AT(ADDR(.rodata) - KERNEL_OFFSET + KERNEL_PHYS_BASE) {
         __text_end = .;
         __rodata_start = .;
         *(.rodata*)
@@ -45,7 +46,7 @@ SECTIONS
         __altfeatures_end = .;
     }
 
-    .data ALIGN(4K) : AT(ADDR(.data) - KERNEL_OFFSET) {
+    .data ALIGN(4K) : AT(ADDR(.data) - KERNEL_OFFSET + KERNEL_PHYS_BASE) {
         __rodata_end = .;
         *(.data*)
         . = ALIGN(4K);

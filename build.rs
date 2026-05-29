@@ -60,30 +60,10 @@ fn main() {
             println!("cargo::rustc-cfg=dtb");
         }
         "x86" | "x86_64" => {
-            // Trampoline is now pure Rust (see arch/x86_shared/trampoline.rs).
-            // No nasm invocation — this is the "Only Rust" change for lerux.
-            if env::var("CARGO_FEATURE_DIRECT_BOOT").is_ok() && arch_str == "x86_64" {
-                println!("cargo:rerun-if-changed=kernel/src/arch/x86_shared/pvh_boot.S");
-                let mut asm = cc::Build::new();
-                asm.file("kernel/src/arch/x86_shared/pvh_boot.S")
-                    .flag("-nostdlib")
-                    .flag("-ffreestanding")
-                    .flag("-fno-stack-protector")
-                    .flag("-mno-red-zone")
-                    .flag("-fno-pic")
-                    .flag("-fno-pie")
-                    .flag("-mcmodel=large");
-                if std::process::Command::new("clang")
-                    .arg("--version")
-                    .status()
-                    .is_ok_and(|s| s.success())
-                {
-                    asm.compiler("clang")
-                        .flag("-target")
-                        .flag("x86_64-unknown-none");
-                }
-                asm.compile("pvh_boot");
-            }
+            // Trampoline and the direct-boot PVH stub are now pure Rust
+            // (see arch/x86_shared/trampoline.rs and arch/x86_shared/pvh_boot.rs,
+            // the latter assembled via core::arch::global_asm!). No nasm/cc/clang
+            // invocation — this is the "Only Rust" goal for lerux.
         }
         "riscv64" => {
             println!("cargo::rustc-cfg=dtb");

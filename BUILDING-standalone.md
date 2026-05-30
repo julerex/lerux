@@ -1,5 +1,9 @@
 # Building the lerux kernel (standalone / direct-boot)
 
+This workflow is **lerux-specific**. Upstream Redox kernel development normally goes through the full Redox build system and bootloader handoff; lerux adds a `direct-boot` feature so you can iterate with `qemu -kernel` alone.
+
+See **[VENDORED.md](VENDORED.md)** for how this repo diverges from `redox-os/kernel`.
+
 This repo supports fast kernel-only development using the `direct-boot` feature.
 
 ## Prerequisites
@@ -63,7 +67,7 @@ qemu-system-x86_64 \
 
 ## What direct-boot does
 
-When the `direct-boot` feature is enabled, the kernel synthesizes a minimal `KernelArgs` + memory map at boot time. This lets you test the kernel with plain `qemu -kernel` without the Redox bootloader or a full initfs.
+When the `direct-boot` feature is enabled, the kernel synthesizes a minimal `KernelArgs` + memory map at boot time (see `kernel/src/startup/direct_boot.rs`). This lets you test the kernel with plain `qemu -kernel` without the Redox bootloader or a full initfs. **Upstream Redox has no equivalent feature** — it always expects an external bootloader to supply `KernelArgs`.
 
 The kernel will perform early bring-up (serial, memory, paging, allocator, etc.) and then enter the idle loop (userspace bootstrap is intentionally skipped in this mode).
 

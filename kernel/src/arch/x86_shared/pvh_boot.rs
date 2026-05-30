@@ -1,8 +1,12 @@
 //! PVH 32->64-bit boot stub for direct-boot (QEMU `-kernel`), in pure Rust via
 //! `core::arch::global_asm!` (assembled by rustc/LLVM — no C toolchain).
 //!
-//! This replaces the former `pvh_boot.S` that was compiled by `cc`/`clang`. The
-//! section placement (`.note.Xen`, `.pvh.text`, `.pvh.gdt`) and the fixed physical
+//! ## lerux divergence from upstream Redox
+//!
+//! Upstream compiled `pvh_boot.S` with `cc`/`clang` in `build.rs`. lerux inlines
+//! the same stub here and gates the module on `feature = "direct-boot"`.
+//!
+//! The section placement (`.note.Xen`, `.pvh.text`, `.pvh.gdt`) and the fixed physical
 //! addresses below are matched by `linkers/x86_64-direct.ld`. QEMU reads the Xen
 //! ELF note to find the 32-bit entry point, sets up an initial environment, and
 //! jumps to `pvh_start32`, which builds preliminary page tables, enables long

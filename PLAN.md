@@ -42,22 +42,19 @@ Core philosophy of the project.
   - Keep `kernel/` as a subdirectory forever?
   - Eventually flatten so the root crate *is* the kernel?
 - [ ] Root-level Cargo workspace setup (so we can easily add loader, tests, userspace crates, etc. as members).
-- [ ] Strategy for maintaining the vendored kernel vs. upstream Redox kernel over time (VENDORED.md, patch management, etc.).
+- [x] Document lerux vs upstream divergence baseline ([VENDORED.md](VENDORED.md)).
+- [ ] Strategy for maintaining the vendored kernel vs. upstream Redox kernel over time (patch management, upstream sync policy — extend **VENDORED.md**).
 - [ ] Proper attribution / licensing notes for the vendored Redox code.
 
 ---
 
 ## 3. Trampoline Validation & Maintenance
 
-We have good infrastructure now, but it can be stronger.
-
-- [ ] Enhance `kernel/validation/trampolines/validate-trampolines.sh`:
-  - Automatic byte-for-byte comparison against `trampoline.rs`
-  - Exit non-zero on mismatch (good for CI)
-- [ ] Add an optional build-time check (in `build.rs` or a `cargo xtask`) that validates the trampoline bytes when nasm is available.
-- [ ] Add the validation as a GitHub Action / CI step.
-- [ ] Improve comments in `trampoline.rs` with per-instruction disassembly or regeneration instructions.
-- [ ] Consider storing the assembled `.bin` files in the repo (under `validation/`) as the canonical artifacts, with the `.asm` as human-readable source.
+- [x] Automatic byte-for-byte comparison (`compare_trampoline_bytes.py`, `just validate-trampolines`).
+- [x] Golden `.bin` files under `validation/trampolines/expected/` (embedded via `include_bytes!`).
+- [x] CI job: `trampolines` in `.github/workflows/rust.yml`.
+- [ ] Add an optional build-time check (in `build.rs` or a `cargo xtask`) that validates when nasm is available.
+- [ ] Per-instruction disassembly comments in `asm/` or generated docs.
 
 ---
 

@@ -1,3 +1,7 @@
+# lerux kernel Makefile — compatibility wrapper for Redox-style objcopy targets.
+# Preferred daily interface: justfile (see VENDORED.md). Upstream kernel Makefile
+# lives inside redox-os/kernel; this root Makefile uses *-unknown-redox GNU targets.
+
 .PHONY: all check
 
 SOURCE:=$(dir $(realpath $(lastword $(MAKEFILE_LIST))))

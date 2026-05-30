@@ -2,6 +2,13 @@
 //! It is incredibly unsafe, and should be minimal in nature
 //! It must create the IDT with the correct entries, those entries are
 //! defined in other files inside of the `arch` module
+//!
+//! ## lerux `direct-boot` note
+//!
+//! When `feature = "direct-boot"` is enabled, `start` ignores the bootloader
+//! `KernelArgs` pointer and uses [`crate::startup::direct_boot::get_direct_boot_args`]
+//! instead; graphical debug and ACPI init are skipped (no framebuffer env / RSDP).
+//! Upstream Redox always uses bootloader-supplied args. See root `VENDORED.md`.
 use core::{arch::naked_asm, cell::SyncUnsafeCell, mem::offset_of};
 
 use crate::{
@@ -141,7 +148,8 @@ unsafe extern "C" fn start(args_ptr: *const KernelArgs, stack_end: usize) -> ! {
             // Initialize devices
             device::init();
 
-            // Read ACPI tables, starts APs (no RSDP in direct-boot)
+            // Read ACPI tables, starts APs (no RSDP in lerux direct-boot; upstream
+            // expects bootloader-provided RSDP or BIOS search via normal boot path)
             if cfg!(all(feature = "acpi", not(feature = "direct-boot"))) {
                 crate::acpi::init(args.acpi_rsdp());
                 device::init_after_acpi();

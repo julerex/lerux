@@ -1,3 +1,7 @@
+# lerux wraps a vendored redox-os/kernel tree under kernel/.
+# The crate root is this file (not kernel/Cargo.toml). See VENDORED.md for
+# divergence from upstream: embedded trampolines, pure-Rust PVH stub, direct-boot.
+
 [workspace]
 resolver = "3"
 
@@ -106,6 +110,7 @@ qemu_debug = []
 serial_debug = []
 system76_ec_debug = []
 x86_kvm_pv = []
+# lerux-only: QEMU -kernel path without Redox bootloader/initfs (see startup/direct_boot.rs)
 direct-boot = []
 
 debugger = ["syscall_debug"]

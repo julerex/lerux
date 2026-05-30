@@ -1,4 +1,8 @@
-# Kernel
+# Kernel (vendored from redox-os/kernel)
+
+> **lerux:** This directory is a vendored copy of upstream [redox-os/kernel](https://gitlab.redox-os.org/redox-os/kernel) (~2026-05). The crate is built from the **repo root** (`../Cargo.toml`), not from here. For every intentional difference from upstream — embedded trampolines, pure-Rust PVH stub, `direct-boot`, QEMU harness — see **[../VENDORED.md](../VENDORED.md)**.
+>
+> Standalone development: use `just build-direct` / `just qemu-direct` at the repo root ([../BUILDING-standalone.md](../BUILDING-standalone.md)). The sections below about Podman/Redox build system apply to **full Redox-style** builds, not the lerux direct-boot path.
 
 Redox OS Microkernel
 

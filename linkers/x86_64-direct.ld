@@ -1,4 +1,11 @@
-/* Linker script for x86_64 direct-boot / QEMU -kernel (PVH note + low stub). */
+/* Linker script for x86_64 direct-boot / QEMU -kernel (PVH note + low stub).
+ *
+ * lerux-only: upstream redox-os/kernel uses linkers/x86_64.ld and expects a
+ * Redox-compatible bootloader to set up long mode and pass KernelArgs. This
+ * script places the PVH Xen note and 32-bit stub at fixed physical addresses
+ * for qemu-system-x86_64 -kernel (see kernel/src/arch/x86_shared/pvh_boot.rs).
+ * See VENDORED.md at the repo root.
+ */
 ENTRY(kstart)
 OUTPUT_FORMAT(elf64-x86-64)
 

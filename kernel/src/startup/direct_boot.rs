@@ -1,11 +1,21 @@
 //! Direct-boot support for lightweight kernel testing in QEMU.
 //!
-//! When the `direct-boot` Cargo feature is enabled, the kernel synthesizes
-//! its own minimal `KernelArgs` instead of relying on a real bootloader.
-//! This allows booting with `qemu-system-x86_64 -kernel ...` without the
-//! full Redox bootloader or initfs.
+//! ## lerux divergence from upstream Redox
+//!
+//! Upstream expects a Redox bootloader (or compatible loader) to construct
+//! [`KernelArgs`](super::KernelArgs) from real memory maps, env blocks, RSDP/DTB,
+//! and a contiguous bootstrap/initfs region. This module is **lerux-only**: when
+//! the `direct-boot` Cargo feature is enabled, the kernel synthesizes a minimal
+//! `KernelArgs` instead so you can boot with `qemu-system-x86_64 -kernel ...`
+//! without the full Redox build system, bootloader, or initfs.
+//!
+//! Pair with:
+//! - `linkers/x86_64-direct.ld` (PVH note + stub placement)
+//! - `arch/x86_shared/pvh_boot.rs` (32→64-bit entry for QEMU `-kernel`)
+//! - `startup/mod.rs` (`kmain` skips userspace bootstrap in this mode)
 //!
 //! This is intended for fast kernel development and bring-up testing only.
+//! See root `VENDORED.md` for the full upstream divergence list.
 
 use super::{
     memory::{BootloaderMemoryEntry, BootloaderMemoryKind},

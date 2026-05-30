@@ -1,5 +1,9 @@
 # lerux kernel justfile
-# Modern build interface (preferred over Makefile for daily work)
+# Modern build interface (preferred over Makefile for daily work).
+#
+# lerux divergence: upstream kernel builds inside the Redox build system;
+# this justfile drives the root crate with optional direct-boot + x86_64-direct.ld.
+# See VENDORED.md.
 
 # Where to put build artifacts
 build_dir := env_var_or_default("BUILD", "build")
@@ -15,7 +19,7 @@ export RUST_TARGET_PATH := justfile_directory() + "/targets"
 target_spec := justfile_directory() + "/targets/x86_64-unknown-kernel.json"
 manifest := justfile_directory() + "/Cargo.toml"
 
-# PVH stub + note for qemu -kernel when using direct-boot
+# PVH stub + note for qemu -kernel when using direct-boot (lerux-only linker script)
 link_script := if features == "direct-boot" { "linkers/x86_64-direct.ld" } else { "linkers/x86_64.ld" }
 
 # Default recipe
@@ -91,3 +95,7 @@ check:
         -Z build-std=core,alloc -Zbuild-std-features=compiler-builtins-mem \
         -Z json-target-spec \
         --features={{features}}
+
+# Verify embedded SMP trampoline bytes match NASM sources (requires nasm).
+validate-trampolines:
+    "{{justfile_directory()}}/kernel/validation/trampolines/validate-trampolines.sh"

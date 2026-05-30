@@ -1,6 +1,8 @@
 use crate::{sync::CleanLockToken, syscall::error::Result};
 use alloc::vec::Vec;
 
+/// Returns `sys:uname` payload. Still reports "Redox" (upstream identity) even in
+/// lerux builds — intentional compatibility; see root `VENDORED.md`.
 pub fn resource(_token: &mut CleanLockToken) -> Result<Vec<u8>> {
     Ok(format!(
         "Redox\n{}\n{}\n{}\n",

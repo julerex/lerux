@@ -68,7 +68,7 @@ Target recipe: **`just check-only-rust`** (or a dedicated CI job) implementing t
 
 #### Only Rust migration sequence
 
-1. Fork **`redox-rt` / `generic-rt`** → `userspace/runtime/`; bootstrap uses only that.
+1. [x] Fork **`redox-rt` / `generic-rt`** → `userspace/runtime/`; bootstrap uses only that.
 2. Port **`init`** + early daemons off `libc` / `.toolchain` relibc onto the runtime.
 3. Turn on **enforcement gates** (allowlist shrinks as debt is removed).
 4. Remove **`vendor/relibc/`** and relibc tarball download from `just`.
@@ -89,7 +89,7 @@ Target recipe: **`just check-only-rust`** (or a dedicated CI job) implementing t
 | Item | Violates | Notes |
 |------|----------|-------|
 | `init` + daemons via **`libc`** + `.toolchain/` relibc | Runtime / executables | Phase B bridge |
-| `vendor/relibc/` + bootstrap **`redox-rt`** path | Runtime | Bootstrap closest to target |
+| `vendor/relibc/` + `.toolchain/` for init/daemons | Runtime | Step 2: port init + daemons to `userspace/runtime/` |
 | SMP trampoline **`.bin`** from NASM | CPU code | Use `just validate-trampolines` until Rust rewrite |
 | **`qemu/loader.S`**, MBR stub | Boot chain | Not the product path; remove with Rust bootloader |
 | PVH stub in **`pvh_boot.rs`** | — | Aligned (Rust `global_asm!`) |
@@ -283,7 +283,8 @@ The current focus is getting the kernel to boot under QEMU. **Next focus after i
 See [Only Rust (policy)](#only-rust-policy) for the full spec, enforcement, and migration order.
 
 - [x] Port the direct-boot PVH boot stub to pure Rust (`kernel/src/arch/x86_shared/pvh_boot.rs`; dropped `cc`/`clang` from `build.rs`).
-- [ ] In-tree userspace runtime (`userspace/runtime/` from `redox-rt` / `generic-rt`); bootstrap + init + daemons off relibc.
+- [x] In-tree userspace runtime (`userspace/runtime/` from `redox-rt` / `generic-rt`); bootstrap uses it.
+- [ ] Port init + early daemons off relibc onto `userspace/runtime/`.
 - [ ] `just check-only-rust` + CI: ELF audit, source policy, smoke (see [Only Rust enforcement](#only-rust-enforcement)).
 - [ ] SMP trampolines in Rust `global_asm!`; remove NASM golden / `validation/trampolines/asm/` path.
 - [ ] `x86_64-unknown-lerux` target JSON after relibc removal.

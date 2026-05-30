@@ -42,7 +42,6 @@ pub mod arch;
 pub mod proc;
 
 // TODO: Replace auxvs with a non-stack-based interface, but keep getauxval for compatibility
-#[path = "../../src/platform/auxv_defs.rs"]
 pub mod auxv_defs;
 
 pub mod signal;

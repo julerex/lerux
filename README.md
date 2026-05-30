@@ -27,9 +27,13 @@ See [kernel/README.md](kernel/README.md) for kernel build instructions. The nasm
 
 See [qemu/README.md](qemu/README.md) for how to boot the kernel under QEMU for development and smoke testing. A minimal loader + launch script is provided so you can iterate quickly without the full Redox build system.
 
+## Vendored code
+
+Upstream snapshots and sync policy are documented in [VENDORED.md](VENDORED.md). Lerux does not depend on live Redox GitLab repos at build time.
+
 ## License
 
-MIT (same as upstream Redox components we incorporate).
+MIT (same as upstream Redox components we incorporate). See [VENDORED.md](VENDORED.md) for per-component attribution.
 
 ## Contributing
 

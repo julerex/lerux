@@ -1,10 +1,14 @@
-use std::convert::{TryFrom, TryInto};
-use std::fs::{DirEntry, File, OpenOptions};
-use std::io::{prelude::*, SeekFrom};
-use std::path::{Path, PathBuf};
+use std::{
+    convert::{TryFrom, TryInto},
+    fs::{DirEntry, File, OpenOptions},
+    io::{prelude::*, SeekFrom},
+    path::{Path, PathBuf},
+};
 
-use std::os::unix::ffi::OsStrExt;
-use std::os::unix::fs::{FileExt, FileTypeExt, PermissionsExt};
+use std::os::unix::{
+    ffi::OsStrExt,
+    fs::{FileExt, FileTypeExt, PermissionsExt},
+};
 
 use anyhow::{anyhow, bail, Context, Result};
 

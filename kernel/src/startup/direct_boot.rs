@@ -7,7 +7,8 @@
 //! and a contiguous bootstrap/initfs region. This module is **lerux-only**: when
 //! the `direct-boot` Cargo feature is enabled, the kernel synthesizes a minimal
 //! `KernelArgs` instead so you can boot with `qemu-system-x86_64 -kernel ...`
-//! without the full Redox build system, bootloader, or initfs.
+//! without the full Redox build system or bootloader. A real initfs image is
+//! embedded at build time (`build/initfs.bin` via `just build-initfs`); see
 //!
 //! Pair with:
 //! - `linkers/x86_64-direct.ld` (PVH note + stub placement)
@@ -34,8 +35,9 @@ fn virt_to_phys(virt: usize) -> u64 {
 /// Minimal environment for direct boot.
 const ENV: &[u8] = b"direct-boot=1\0";
 
-/// Placeholder bootstrap payload (unused in direct-boot mode).
-const BOOTSTRAP: &[u8] = b"DIRECT-BOOT";
+mod initfs_embed {
+    include!(concat!(env!("OUT_DIR"), "/initfs_embed.rs"));
+}
 
 /// Static memory map for a typical QEMU machine (512 MiB–2 GiB of RAM).
 static DIRECT_MEMORY_MAP: [BootloaderMemoryEntry; 6] = [
@@ -79,7 +81,6 @@ static DIRECT_MEMORY_MAP: [BootloaderMemoryEntry; 6] = [
 
 static mut DIRECT_ARGS: Option<KernelArgs> = None;
 static mut ENV_STORAGE: [u8; 32] = [0; 32];
-static mut BOOTSTRAP_STORAGE: [u8; 64] = [0; 64];
 static mut AREAS_STORAGE: [BootloaderMemoryEntry; 6] = DIRECT_MEMORY_MAP;
 
 /// Returns a synthesized KernelArgs for direct QEMU `-kernel` boot.
@@ -87,8 +88,11 @@ pub fn get_direct_boot_args() -> &'static KernelArgs {
     unsafe {
         if DIRECT_ARGS.is_none() {
             ENV_STORAGE[..ENV.len()].copy_from_slice(ENV);
-            BOOTSTRAP_STORAGE[..BOOTSTRAP.len()].copy_from_slice(BOOTSTRAP);
             AREAS_STORAGE = DIRECT_MEMORY_MAP;
+
+            let initfs = initfs_embed::INITFS_BLOB;
+            let initfs_base = initfs.as_ptr() as usize;
+            let initfs_size = initfs.len() as u64;
 
             DIRECT_ARGS = Some(KernelArgs {
                 // Kernel extent is covered by the static memory map + linker layout.
@@ -102,12 +106,10 @@ pub fn get_direct_boot_args() -> &'static KernelArgs {
                 hwdesc_size: 0,
                 areas_base: virt_to_phys(AREAS_STORAGE.as_ptr() as usize),
                 areas_size: core::mem::size_of_val(&AREAS_STORAGE) as u64,
-                // No real bootstrap/initfs in direct-boot. Point at a valid (non-zero)
-                // frame with zero length so KernelArgs::bootstrap() does not hit the
-                // `Frame::containing(0)` reserved-frame panic. It is never consumed because
-                // kmain skips userspace bootstrap in direct-boot mode.
-                bootstrap_base: virt_to_phys(BOOTSTRAP_STORAGE.as_ptr() as usize),
-                bootstrap_size: 0,
+                // Real initfs blob embedded in the kernel image (RedoxFtw layout).
+                // userspace_init is still skipped until bootstrap is cross-built (Phase B).
+                bootstrap_base: virt_to_phys(initfs_base),
+                bootstrap_size: initfs_size,
             });
         }
         DIRECT_ARGS.as_ref().unwrap()

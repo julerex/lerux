@@ -4,6 +4,18 @@
 
 [workspace]
 resolver = "3"
+members = [
+    "userspace/initfs",
+    "userspace/initfs-tools",
+]
+exclude = ["userspace/bootstrap"]
+default-members = ["."]
+
+[workspace.dependencies]
+plain = "0.2.3"
+anyhow = "1"
+log = "0.4"
+clap = { version = "4", features = ["cargo"] }
 
 [package]
 name = "kernel"
@@ -112,6 +124,8 @@ system76_ec_debug = []
 x86_kvm_pv = []
 # lerux-only: QEMU -kernel path without Redox bootloader/initfs (see startup/direct_boot.rs)
 direct-boot = []
+# Spawn userspace_init in direct-boot mode (requires real bootstrap ELF in initfs).
+direct-boot-userspace = ["direct-boot"]
 
 debugger = ["syscall_debug"]
 syscall_debug = []

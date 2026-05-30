@@ -186,9 +186,9 @@ pub(crate) fn kmain(bootstrap: Bootstrap) -> ! {
 
     profiling::ready_for_profiling();
 
-    if cfg!(feature = "direct-boot") {
+    if cfg!(feature = "direct-boot") && !cfg!(feature = "direct-boot-userspace") {
         // lerux divergence: upstream always spawns userspace_init here; direct-boot
-        // has no real initfs and skips bootstrap for kernel-only smoke testing.
+        // skips bootstrap for kernel-only smoke testing unless direct-boot-userspace is set.
         info!("direct-boot mode: skipping userspace bootstrap for kernel-only testing");
     } else {
         let owner = None; // kmain not owned by any fd

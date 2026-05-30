@@ -16,10 +16,30 @@ You do **not** need a C toolchain (`cc`/`clang`) or `nasm` for direct-boot. The 
 boot stub is pure Rust (`kernel/src/arch/x86_shared/pvh_boot.rs`, assembled via
 `core::arch::global_asm!`).
 
-**Smoke test verified (2026-05-29):** `just build-direct` + `just qemu-direct` boot
-all the way through early bring-up to the idle loop — serial shows the `KernelArgs`
-dump, `Memory: … MB`, paging milestones, and `direct-boot mode: skipping userspace
-bootstrap…`, after which the kernel idles with no QEMU reset.
+**Smoke test verified (2026-05-30):** `just build-direct` embeds a real initfs blob;
+serial shows non-zero `Bootstrap: START:END`, then `direct-boot mode: skipping
+userspace bootstrap…` (default kernel-only path).
+
+## Initfs (Phase A)
+
+```bash
+just build-initfs      # build/initfs.bin from userspace/initfs-staging/
+just test-initfs       # host archiver round-trip (CI job: initfs)
+just build-direct      # builds initfs, embeds in kernel, then links kernel
+```
+
+The kernel embeds `build/initfs.bin` at build time (`build.rs` → `direct_boot.rs`).
+Staging layout: `userspace/initfs-staging/` (minimal file + dummy bootstrap ELF).
+
+## Userspace bootstrap (Phase B, optional)
+
+```bash
+rustup target add x86_64-unknown-redox --toolchain nightly-2026-05-24
+just build-bootstrap   # → build/bootstrap.elf (needs Redox linker; see VENDORED.md)
+just build-direct-userspace   # initfs + kernel with direct-boot-userspace
+```
+
+Default `just build-direct` / `just smoke` keep userspace spawn disabled for fast CI.
 
 ## Recommended: Use the justfile
 
@@ -67,9 +87,9 @@ qemu-system-x86_64 \
 
 ## What direct-boot does
 
-When the `direct-boot` feature is enabled, the kernel synthesizes a minimal `KernelArgs` + memory map at boot time (see `kernel/src/startup/direct_boot.rs`). This lets you test the kernel with plain `qemu -kernel` without the Redox bootloader or a full initfs. **Upstream Redox has no equivalent feature** — it always expects an external bootloader to supply `KernelArgs`.
+When the `direct-boot` feature is enabled, the kernel synthesizes a minimal `KernelArgs` + memory map at boot time (see `kernel/src/startup/direct_boot.rs`). A real initfs image (`build/initfs.bin`) is embedded via `include_bytes!`; `bootstrap_base` / `bootstrap_size` are non-zero. **Upstream Redox has no equivalent feature** — it always expects an external bootloader to supply `KernelArgs`.
 
-The kernel will perform early bring-up (serial, memory, paging, allocator, etc.) and then enter the idle loop (userspace bootstrap is intentionally skipped in this mode).
+By default the kernel enters the idle loop after early bring-up (`direct-boot` skips `userspace_init`). Enable `direct-boot-userspace` (and a cross-built bootstrap ELF in initfs) to spawn bootstrap.
 
 This is intended purely for rapid kernel development and testing.
 

@@ -45,8 +45,54 @@ build:
     {{objcopy}} --strip-debug {{build_dir}}/kernel.all {{build_dir}}/kernel
     {{objcopy}} --only-keep-debug {{build_dir}}/kernel.all {{build_dir}}/kernel.sym
 
+toolchain_dir := justfile_directory() + "/.toolchain"
+redox_lib := toolchain_dir + "/x86_64-unknown-redox/lib"
+
+# Build the initfs image from the minimal staging directory (Phase A).
+# Uses build/bootstrap.elf when present (Phase B), else the staging dummy ELF.
+build-initfs:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{build_dir}}"
+    bootstrap="userspace/initfs-staging/bootstrap.elf"
+    if [ -f "{{build_dir}}/bootstrap.elf" ]; then bootstrap="{{build_dir}}/bootstrap.elf"; fi
+    cargo run --release \
+        --manifest-path userspace/initfs-tools/Cargo.toml \
+        --bin redox-initfs-ar -- \
+        userspace/initfs-staging \
+        "$bootstrap" \
+        -o "{{build_dir}}/initfs.bin"
+
+# Host round-trip test for initfs archiver + reader.
+test-initfs:
+    cargo test --manifest-path userspace/initfs-tools/Cargo.toml
+
+# Cross-build bootstrap for x86_64-unknown-redox (Phase B).
+# Requires: rustup target add x86_64-unknown-redox (nightly-2026-05-24)
+# Optional: .toolchain/ from https://static.redox-os.org/toolchain/x86_64-unknown-redox/
+#   (relibc-install.tar.gz + gcc-install.tar.gz) for linking; host glibc >= 2.38 for redox-gcc.
+build-bootstrap:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{build_dir}}"
+    export RUSTUP_TOOLCHAIN=nightly-2026-05-24
+    linker="${CARGO_TARGET_X86_64_UNKNOWN_REDOX_LINKER:-}"
+    if [ -z "$linker" ] && [ -x "{{toolchain_dir}}/bin/x86_64-unknown-redox-gcc" ]; then
+    export CARGO_TARGET_X86_64_UNKNOWN_REDOX_LINKER="{{toolchain_dir}}/bin/x86_64-unknown-redox-gcc"
+    elif [ -z "$linker" ]; then
+    export RUSTFLAGS="${RUSTFLAGS:-} -C linker=rust-lld"
+    fi
+    cargo build --release \
+        --manifest-path userspace/bootstrap/Cargo.toml \
+        --target x86_64-unknown-redox
+    cp userspace/bootstrap/target/x86_64-unknown-redox/release/bootstrap "{{build_dir}}/bootstrap.elf"
+
+# Build initfs with cross-built bootstrap, then direct-boot kernel with userspace enabled.
+build-direct-userspace: build-bootstrap build-initfs
+    KERNEL_CARGO_FEATURES="direct-boot,direct-boot-userspace" just build
+
 # Build with the direct-boot feature (for fast QEMU -kernel testing)
-build-direct:
+build-direct: build-initfs
     KERNEL_CARGO_FEATURES=direct-boot just build
 
 # Boot the kernel directly in QEMU using the direct-boot feature.

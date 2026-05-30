@@ -2,7 +2,7 @@
 
 Bring-up log for the **lerux-only** `direct-boot` path (not in upstream Redox). For the full upstream divergence list see [VENDORED.md](VENDORED.md).
 
-Last updated: 2026-05-29
+Last updated: 2026-05-30
 
 ## Summary
 
@@ -31,7 +31,7 @@ Direct-boot intentionally **skips userspace bootstrap** (`kernel/src/startup/mod
   kernel::startup:INFO -- Env: 2BC080:2BC08E
   kernel::startup:INFO -- HWDESC: 0:0
   kernel::startup:INFO -- Areas: 2BB5F8:2BB688
-  kernel::startup:INFO -- Bootstrap: 2BC0A0:2BC0A0
+  kernel::startup:INFO -- Bootstrap: 2B0750:2B7774
   kernel::startup::memory:INFO -- Memory: 205 MB
   kernel::startup::memory:INFO -- Paging: building new kernel page tables
   kernel::startup::memory:INFO -- Paging: switching to new kernel page tables
@@ -52,7 +52,7 @@ Direct-boot intentionally **skips userspace bootstrap** (`kernel/src/startup/mod
 | Crash in graphical debug | Skip **`graphical_debug::init`** when `direct-boot` |
 | **Reserved-bit `#PF` right after CR3 switch** | PVH stub only enabled `EFER.LME`; the kernel's page tables set the **NX** bit on data pages. Enable **`EFER.NXE` (1<<11)** alongside LME in `pvh_boot.rs`, otherwise NX is a reserved bit and the first NX-page access triple-faults. |
 | `env()` unreachable after CR3 switch | Direct-boot folds `env` into the kernel image (mapped only at `KERNEL_OFFSET`). Register it as **`IdentityMap`** so `map_memory` also linear-maps it at `PHYS_OFFSET` (`kernel/src/startup/memory.rs`). |
-| `frame 0x0 is reserved` panic in `KernelArgs::bootstrap()` | Direct-boot has no initfs, so `bootstrap_base` was `0` and `Frame::containing(0)` panicked. Point `bootstrap_base` at a valid frame with `bootstrap_size = 0` (never consumed in direct-boot) (`kernel/src/startup/direct_boot.rs`). |
+| `frame 0x0 is reserved` panic in `KernelArgs::bootstrap()` | Direct-boot has no initfs, so `bootstrap_base` was `0` and `Frame::containing(0)` panicked. Point `bootstrap_base` at a valid frame with `bootstrap_size = 0` (never consumed in direct-boot) (`kernel/src/startup/direct_boot.rs`). **Phase A (2026-05-30):** real initfs embedded; non-zero `bootstrap_size`. |
 
 ## Debugging
 
@@ -119,10 +119,9 @@ stub is pure Rust (`kernel/src/arch/x86_shared/pvh_boot.rs`, `core::arch::global
 
 ## Next step
 
-Direct-boot is green and C-toolchain-free, and an automated serial smoke test
-(`just smoke`, CI `smoke` job) now guards it against regressions. Next candidates:
+Phase A is done: initfs vendored, `just build-initfs` / `just test-initfs`, initfs
+embedded in direct-boot, smoke test checks non-zero Bootstrap size.
 
-- Minimal `bootstrap`/initfs region so the **non**-direct-boot path can spawn
-  `userspace_init` (the first true "redox-like OS" milestone).
-- Convert the remaining `qemu/` loaders (`loader.asm`, `loader.S`, `mbr_stub.S`,
-  `aarch64-loader.S`) to Rust.
+Phase B in progress: bootstrap + relibc snapshot vendored; `just build-bootstrap` and
+`direct-boot-userspace` feature wired. Remaining: reliable cross-link of bootstrap
+(Redox toolchain / in-tree relibc cook), then init + minimal daemons.

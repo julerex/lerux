@@ -27,8 +27,13 @@ const ENV: &[u8] = b"direct-boot=1\0";
 /// Placeholder bootstrap payload (unused in direct-boot mode).
 const BOOTSTRAP: &[u8] = b"DIRECT-BOOT";
 
-/// Static memory map for a typical QEMU machine (512 MiB–2 GiB of RAM).
-static DIRECT_MEMORY_MAP: [BootloaderMemoryEntry; 6] = [
+/// Static memory map for QEMU direct-boot.
+///
+/// The free region must not extend past the guest RAM size. QEMU's default is
+/// 128 MiB (`-m` omitted); the previous map claimed ~205 MiB of free RAM ending
+/// at 0xDF0_0000, so frame allocation mapped non-existent pages and crashed
+/// during init on default-sized guests.
+static DIRECT_MEMORY_MAP: [BootloaderMemoryEntry; 4] = [
     // Low memory (BIOS, VGA, etc.)
     BootloaderMemoryEntry {
         base: 0,
@@ -47,22 +52,10 @@ static DIRECT_MEMORY_MAP: [BootloaderMemoryEntry; 6] = [
         size: 0x0100_0000,
         kind: BootloaderMemoryKind::Kernel,
     },
-    // Main usable RAM after the kernel image (trimmed for 512 MiB guests)
+    // Usable RAM after the kernel image (fits QEMU's default 128 MiB guest).
     BootloaderMemoryEntry {
         base: 0x0120_0000,
-        size: 0x0CD0_0000,
-        kind: BootloaderMemoryKind::Free,
-    },
-    // Typical device/MMIO hole
-    BootloaderMemoryEntry {
-        base: 0xE000_0000,
-        size: 0x2000_0000,
-        kind: BootloaderMemoryKind::Reserved,
-    },
-    // High memory placeholder (zero size = ignored)
-    BootloaderMemoryEntry {
-        base: 0x1_0000_0000,
-        size: 0,
+        size: 0x6E0_0000,
         kind: BootloaderMemoryKind::Free,
     },
 ];
@@ -70,7 +63,7 @@ static DIRECT_MEMORY_MAP: [BootloaderMemoryEntry; 6] = [
 static mut DIRECT_ARGS: Option<KernelArgs> = None;
 static mut ENV_STORAGE: [u8; 32] = [0; 32];
 static mut BOOTSTRAP_STORAGE: [u8; 64] = [0; 64];
-static mut AREAS_STORAGE: [BootloaderMemoryEntry; 6] = DIRECT_MEMORY_MAP;
+static mut AREAS_STORAGE: [BootloaderMemoryEntry; 4] = DIRECT_MEMORY_MAP;
 
 /// Returns a synthesized KernelArgs for direct QEMU `-kernel` boot.
 pub fn get_direct_boot_args() -> &'static KernelArgs {

@@ -43,8 +43,9 @@ Upstream ships the kernel as the crate root. lerux wraps it: `Cargo.toml` and `b
 | SMP trampolines | `nasm` in `build.rs` | Golden `.bin` from `kernel/validation/trampolines/asm/` via `include_bytes!`; validated by `just validate-trampolines` |
 | PVH boot stub | `pvh_boot.S` + `cc` | `pvh_boot.rs` (`global_asm!`); `direct-boot` feature only |
 | Boot args | Redox bootloader supplies `KernelArgs` | `direct-boot` synthesizes args in `direct_boot.rs` for `qemu -kernel` |
-| `build.rs` | nasm + cc on x86 | CPU features from `config.toml` only |
-| CI | Upstream GitLab | `.github/workflows/rust.yml`: fmt, clippy, check, **trampolines**, smoke |
+| `build.rs` | nasm + cc on x86 | CPU features from `config.toml`; embeds `build/initfs.bin` when `direct-boot` |
+| CI | Upstream GitLab | `.github/workflows/rust.yml`: fmt, clippy, check, **trampolines**, **initfs**, smoke |
+| Userspace bootstrap | Always spawned from initfs | `direct-boot` skips spawn; `direct-boot-userspace` spawns when bootstrap ELF is in initfs |
 
 Building **without** `direct-boot` still targets a normal Redox-style kernel but expects the full Redox build system (see [BUILDING-standalone.md](BUILDING-standalone.md)).
 
@@ -54,25 +55,26 @@ Building **without** `direct-boot` still targets a normal Redox-style kernel but
 
 | Component | In-repo path | Upstream | Upstream revision | License | Last synced | Lerux-specific changes |
 |-----------|--------------|----------|-------------------|---------|-------------|-------------------------|
-| Redox kernel | `kernel/` | [redox-os/kernel](https://gitlab.redox-os.org/redox-os/kernel) | `TBD` (initial import ~2026-05; pin commit on next sync) | MIT (`kernel/LICENSE`) | 2026-05 | Direct-boot PVH stub in Rust; SMP trampolines from NASM golden files (`include_bytes!`); `just validate-trampolines` + CI; `direct-boot` feature skips userspace bootstrap; no nasm/cc in kernel build |
+| Redox kernel | `kernel/` | [redox-os/kernel](https://gitlab.redox-os.org/redox-os/kernel) | `TBD` (initial import ~2026-05; pin commit on next sync) | MIT (`kernel/LICENSE`) | 2026-05 | Direct-boot PVH stub in Rust; SMP trampolines from NASM golden files (`include_bytes!`); `just validate-trampolines` + CI; `direct-boot` embeds initfs; `direct-boot-userspace` spawns bootstrap; no nasm/cc in kernel build |
 | RMM (memory manager) | `kernel/rmm/` | Same kernel tree / [redox-os/rmm](https://gitlab.redox-os.org/redox-os/rmm) | `TBD` (bundled with kernel import) | MIT | 2026-05 | Path dependency from root `Cargo.toml`; no separate remote |
+| initfs (reader) | `userspace/initfs/` | [base/initfs](https://gitlab.redox-os.org/redox-os/base) | `TBD` (copied from `tryredox/base/initfs` 2026-05-30) | MIT | 2026-05-30 | Standalone crate in root workspace; `plain` from crates.io |
+| initfs archiver (host) | `userspace/initfs-tools/` | [base/initfs/tools](https://gitlab.redox-os.org/redox-os/base) | `TBD` (copied from `tryredox/base/initfs/tools` 2026-05-30) | MIT | 2026-05-30 | `redox-initfs-ar` / `redox-initfs-dump`; path dep to `userspace/initfs` |
+| bootstrap | `userspace/bootstrap/` | [base/bootstrap](https://gitlab.redox-os.org/redox-os/base) | `TBD` (copied from `tryredox/base/bootstrap` 2026-05-30) | MIT | 2026-05-30 | Own `[workspace]`; `redox-rt` path to `vendor/relibc/redox-rt`; git dep removed |
+| relibc (partial) | `vendor/relibc/` | [redox-os/relibc](https://gitlab.redox-os.org/redox-os/relibc) | `TBD` (copied from `tryredox/relibc` 2026-05-30) | MIT / BSD | 2026-05-30 | Snapshot for bootstrap link; `redox-rt`/`generic-rt` patched for standalone build; `dlmalloc-rs` from `tryredox/dlmalloc-rs`; full relibc cook not wired yet |
 | QEMU bring-up (loader scripts, docs) | `qemu/` | lerux-original + Redox boot concepts | — | MIT (lerux) | — | Custom loader / `KernelArgs` handoff; not a full Redox bootloader |
 
 ---
 
 ## Planned vendoring (from Redox base / userspace roadmap)
 
-Not yet in lerux. Source reference: `tryredox/base` (or upstream [redox-os/base](https://gitlab.redox-os.org/redox-os/base)). When added, move rows into the table above.
+Source reference: `tryredox/base` (or upstream [redox-os/base](https://gitlab.redox-os.org/redox-os/base)). When added, move rows into the table above.
 
 | Planned component | Suggested path | Upstream (reference) | Notes |
 |-------------------|----------------|----------------------|--------|
-| initfs (reader) | `userspace/initfs/` | `base/initfs` | `no_std`; `RedoxFtw` layout |
-| initfs archiver (host) | `userspace/initfs-tools/` | `base/initfs/tools` | Builds initfs image for boot |
-| bootstrap | `userspace/bootstrap/` | `base/bootstrap` | First userspace; separate workspace crate upstream |
 | init | `userspace/init/` | `base/init` | Trimmed `init.initfs.d` |
 | logd, zerod, randd, ramfs | `userspace/<name>/` | `base/*` | Minimal early daemons |
 | daemon, scheme-utils | `userspace/daemon/`, `userspace/scheme-utils/` | `base/*` | Shared daemon patterns |
-| relibc / redox-rt / libredox | `vendor/relibc/` (or similar) | [redox-os/relibc](https://gitlab.redox-os.org/redox-os/relibc) | Required for userspace; must be in-tree, not git dep |
+| libredox (full in-tree) | `vendor/libredox/` | relibc / crates.io | bootstrap still uses crates.io `libredox` 0.1.17 |
 | Drivers (pcid, virtio, …) | `userspace/drivers/` or `vendor/drivers/` | `base/drivers` | Phase C in [PLAN.md](PLAN.md) |
 
 ---

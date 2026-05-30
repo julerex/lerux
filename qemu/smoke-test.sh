@@ -66,6 +66,8 @@ REQUIRED_MARKERS=(
 )
 # Seeing this means we reached the kmain idle loop (direct-boot success).
 SUCCESS_MARKER="direct-boot mode: skipping userspace bootstrap"
+# Bootstrap: START:END must differ (non-zero initfs size; Phase A).
+BOOTSTRAP_MARKER_PREFIX="Bootstrap:"
 # Any of these on the serial console means the boot went wrong.
 FAIL_MARKERS=(
     "panicked at"
@@ -116,6 +118,16 @@ log_has_any() {
     return 1
 }
 
+# Bootstrap log is "Bootstrap: START:END"; Phase A requires non-zero initfs (START != END).
+bootstrap_has_nonzero_size() {
+    local line start end
+    line=$(grep -F "$BOOTSTRAP_MARKER_PREFIX" "$SERIAL_LOG" 2>/dev/null | head -1) || return 1
+    start=${line#*Bootstrap: }
+    start=${start%%:*}
+    end=${line##*:}
+    [ -n "$start" ] && [ -n "$end" ] && [ "$start" != "$end" ]
+}
+
 # Poll the serial log so we can stop as soon as the boot succeeds or fails,
 # instead of always waiting out the full timeout.
 deadline=$((SECONDS + TIMEOUT))
@@ -154,6 +166,12 @@ for m in "${REQUIRED_MARKERS[@]}" "$SUCCESS_MARKER"; do
         fail=1
     fi
 done
+if bootstrap_has_nonzero_size; then
+    printf '  [ ok ] Bootstrap: non-zero initfs size\n'
+else
+    printf '  [MISS] Bootstrap: non-zero initfs size\n'
+    fail=1
+fi
 for m in "${FAIL_MARKERS[@]}"; do
     if log_has "$m"; then
         printf '  [FAIL] saw failure marker: %s\n' "$m"

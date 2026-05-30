@@ -88,3 +88,16 @@ jobs:
         name: qemu-serial-log
         path: qemu-serial.log
         if-no-files-found: ignore
+
+  initfs:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: nightly-2026-05-24
+    - uses: extractions/setup-just@v2
+    - name: Initfs archiver round-trip test
+      run: just test-initfs
+    - name: Build initfs image
+      run: just build-initfs

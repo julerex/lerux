@@ -1,6 +1,6 @@
 #![allow(clippy::unwrap_used)] // the build script can panic
 
-use std::{env, path::Path};
+use std::{env, path::Path, process::Command};
 use toml::Table;
 
 fn parse_kconfig(arch: &str) -> Option<()> {
@@ -77,4 +77,57 @@ fn main() {
     }
 
     let _ = parse_kconfig(&arch_str);
+
+    if env::var("CARGO_FEATURE_DIRECT_BOOT").is_ok() {
+        embed_initfs();
+    }
+}
+
+/// Copy (or build) `build/initfs.bin` into OUT_DIR for `include_bytes!` in direct-boot.
+fn embed_initfs() {
+    let manifest_dir_str = env::var("CARGO_MANIFEST_DIR").unwrap();
+    let manifest_dir = Path::new(&manifest_dir_str);
+    let out_dir = env::var("OUT_DIR").unwrap();
+    let initfs_bin = manifest_dir.join("build/initfs.bin");
+    let staging = manifest_dir.join("userspace/initfs-staging");
+    let bootstrap = staging.join("bootstrap.elf");
+
+    println!("cargo:rerun-if-changed=build/initfs.bin");
+    println!("cargo:rerun-if-changed=userspace/initfs-staging");
+
+    if !initfs_bin.exists() {
+        assert!(
+            bootstrap.exists(),
+            "build/initfs.bin missing and {bootstrap:?} not found; run `just build-initfs` first"
+        );
+        std::fs::create_dir_all(manifest_dir.join("build")).unwrap();
+        let status = Command::new("cargo")
+            .args([
+                "run",
+                "--release",
+                "--manifest-path",
+                "userspace/initfs-tools/Cargo.toml",
+                "--bin",
+                "redox-initfs-ar",
+                "--",
+                staging.to_str().unwrap(),
+                bootstrap.to_str().unwrap(),
+                "-o",
+                "build/initfs.bin",
+            ])
+            .current_dir(&manifest_dir)
+            .status()
+            .expect("failed to spawn initfs archiver");
+        assert!(status.success(), "initfs archiver failed");
+    }
+
+    let dest = Path::new(&out_dir).join("initfs.bin");
+    std::fs::copy(&initfs_bin, &dest).expect("failed to copy initfs.bin to OUT_DIR");
+
+    let embed_rs = format!(
+        "pub static INITFS_BLOB: &[u8] = include_bytes!(r\"{}\");\n",
+        dest.display()
+    );
+    std::fs::write(Path::new(&out_dir).join("initfs_embed.rs"), embed_rs)
+        .expect("failed to write initfs_embed.rs");
 }

@@ -145,23 +145,22 @@ flowchart TB
 
 ### Phase A — Initfs image and boot delivery
 
-- [ ] Vendor **`initfs`** crate (reader) under lerux (e.g. `userspace/initfs/`)
-- [ ] Vendor **`initfs/tools`** (host archiver) under lerux (e.g. `userspace/initfs-tools/`)
-- [ ] Root **Cargo workspace**: kernel + host tools + (later) userspace members; keep **`bootstrap`** as separate crate like upstream
-- [ ] `just` / `xtask` recipe: build minimal staging dir → `initfs.bin`
-- [ ] Deliver blob to kernel:
-  - [ ] Extend **QEMU loader** to place initfs at known physical address, **or**
-  - [ ] Extend **direct-boot** to map a linked-in / embedded blob (same `KernelArgs` contract)
-- [ ] Set real `bootstrap_base` / `bootstrap_size` (replace placeholder in `kernel/src/startup/direct_boot.rs` when leaving kernel-only mode)
-- [ ] Smoke test: assert bootstrap/init log lines (not only "skipping userspace bootstrap")
+- [x] Vendor **`initfs`** crate (reader) under lerux (e.g. `userspace/initfs/`)
+- [x] Vendor **`initfs/tools`** (host archiver) under lerux (e.g. `userspace/initfs-tools/`)
+- [x] Root **Cargo workspace**: kernel + host tools + (later) userspace members; keep **`bootstrap`** as separate crate like upstream
+- [x] `just` / `xtask` recipe: build minimal staging dir → `initfs.bin`
+- [x] Deliver blob to kernel:
+  - [x] Extend **direct-boot** to map a linked-in / embedded blob (same `KernelArgs` contract)
+  - [ ] Extend **QEMU loader** to place initfs at known physical address (parallel track)
+- [x] Set real `bootstrap_base` / `bootstrap_size` (replace placeholder in `kernel/src/startup/direct_boot.rs`)
+- [x] Smoke test: assert non-zero Bootstrap size on serial (userspace spawn still gated until Phase B bootstrap link works)
 
 ### Phase B — First living userspace
 
-- [ ] Vendor **`bootstrap`** (+ **`relibc` / `redox-rt` / `libredox`** and deps) in-tree; align **`redox_syscall` 0.8.0** with kernel
-- [ ] Vendor **`init`**, **`logd`**, **`zerod`**, **`randd`**, **`ramfs`**, **`daemon`**, **`scheme-utils`**
-- [ ] Vendor minimal **`init.initfs.d`** units (runtime target + required daemons only)
+- [x] Vendor **`bootstrap`** (+ **`relibc` / `redox-rt`** snapshot) in-tree; align **`redox_syscall` 0.8.0** with kernel
+- [ ] Vendor **`init`** + minimal **`init.initfs.d`** + **`logd` / `zerod` / `randd` / `ramfs`**
 - [ ] Cross-build userspace for lerux target (vendored toolchain spec, not external Redox sysroot)
-- [ ] Kernel: spawn `userspace_init` (turn off `direct-boot` skip path for this milestone)
+- [x] Kernel: `direct-boot-userspace` feature spawns `userspace_init` (default `direct-boot` still skips for smoke tests)
 - [ ] Milestone: serial shows bootstrap → init → core daemons started
 
 ### Phase C — QEMU closer to full Redox

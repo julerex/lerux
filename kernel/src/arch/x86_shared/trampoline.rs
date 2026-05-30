@@ -32,11 +32,13 @@
 ///
 /// Flat binary linked at physical address 0x8000 (16-bit real mode → long/protected mode).
 #[cfg(target_arch = "x86_64")]
-pub static TRAMPOLINE: &[u8] = include_bytes!("../../../validation/trampolines/expected/trampoline_x86_64.bin");
+pub static TRAMPOLINE: &[u8] =
+    include_bytes!("../../../validation/trampolines/expected/trampoline_x86_64.bin");
 
 /// 32-bit x86 (i586) variant of the trampoline.
 #[cfg(target_arch = "x86")]
-pub static TRAMPOLINE: &[u8] = include_bytes!("../../../validation/trampolines/expected/trampoline_x86.bin");
+pub static TRAMPOLINE: &[u8] =
+    include_bytes!("../../../validation/trampolines/expected/trampoline_x86.bin");
 
 #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
 pub static TRAMPOLINE: &[u8] = &[]; // Never used; other arches do not have this trampoline.

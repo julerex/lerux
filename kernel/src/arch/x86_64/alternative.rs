@@ -86,7 +86,9 @@ pub unsafe fn early_init(bsp: bool) {
             use raw_cpuid::{ExtendedRegisterStateLocation, ExtendedRegisterType};
 
             x86::controlregs::cr4_write(
-                x86::controlregs::cr4() | x86::controlregs::Cr4::CR4_ENABLE_OS_XSAVE,
+                x86::controlregs::cr4()
+                    | x86::controlregs::Cr4::CR4_ENABLE_SSE
+                    | x86::controlregs::Cr4::CR4_ENABLE_OS_XSAVE,
             );
 
             let mut xcr0 = Xcr0::XCR0_FPU_MMX_STATE | Xcr0::XCR0_SSE_STATE;
@@ -124,6 +126,10 @@ pub unsafe fn early_init(bsp: bool) {
             debug!("XSAVE: {:?}", info);
 
             xsave::XSAVE_INFO.call_once(|| info);
+        } else if feature_info().has_fxsave_fxstor() {
+            x86::controlregs::cr4_write(
+                x86::controlregs::cr4() | x86::controlregs::Cr4::CR4_ENABLE_SSE,
+            );
         } else {
             assert!(cfg!(not(cpu_feature_always = "xsave")));
         }

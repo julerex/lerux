@@ -20,7 +20,7 @@ target_spec := justfile_directory() + "/targets/x86_64-unknown-kernel.json"
 manifest := justfile_directory() + "/Cargo.toml"
 
 # PVH stub + note for qemu -kernel when using direct-boot (lerux-only linker script)
-link_script := if features == "direct-boot" { "linkers/x86_64-direct.ld" } else { "linkers/x86_64.ld" }
+link_script := if features == "direct-boot" { "linkers/x86_64-direct.ld" } else if features == "direct-boot,direct-boot-userspace" { "linkers/x86_64-direct.ld" } else { "linkers/x86_64.ld" }
 
 # Default recipe
 default: build
@@ -47,6 +47,34 @@ build:
 
 toolchain_dir := justfile_directory() + "/.toolchain"
 redox_lib := toolchain_dir + "/x86_64-unknown-redox/lib"
+redox_gcc_lib := toolchain_dir + "/lib/gcc/x86_64-unknown-redox/13.2.0"
+home := env_var("HOME")
+redox_cargo := home + "/.cargo/bin/cargo"
+redox_rustup := home + "/.cargo/bin/rustup"
+userspace_target := "x86_64-unknown-redox"
+userspace_bins := "init logd zerod randd ramfs rtcd"
+# Static link via rust-lld + relibc from .toolchain (no host redox-gcc; glibc 2.38+ not required).
+userspace_rustflags := "-C target-feature=+crt-static -C link-arg=" + redox_lib + "/crt1.o -C link-arg=" + redox_lib + "/crti.o -C link-arg=-L" + redox_lib + " -C link-arg=-L" + redox_gcc_lib + " -C link-arg=-lgcc_eh -C link-arg=-lc -C link-arg=" + redox_lib + "/crtn.o -C link-arg=--allow-multiple-definition"
+bootstrap_rustflags := "-C linker=rust-lld"
+userspace_out := justfile_directory() + "/userspace/target/" + userspace_target + "/release"
+staging_bin := justfile_directory() + "/userspace/initfs-staging/bin"
+toolchain_url := "https://static.redox-os.org/toolchain/x86_64-unknown-redox/relibc-install.tar.gz"
+
+# One-time: extract Redox relibc sysroot into .toolchain/ (for static-linking init/daemons).
+install-toolchain:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -f "{{redox_lib}}/libc.a" ]; then
+    echo ".toolchain/ already has relibc; skipping"
+    exit 0
+    fi
+    mkdir -p "{{toolchain_dir}}"
+    tmp="$(mktemp -d)"
+    trap 'rm -rf "$tmp"' EXIT
+    echo "Downloading relibc toolchain (large tarball)..."
+    curl -fsSL "{{toolchain_url}}" | tar -xzf - -C "$tmp"
+    cp -a "$tmp"/* "{{toolchain_dir}}/"
+    echo "Installed relibc to {{toolchain_dir}}"
 
 # Build the initfs image from the minimal staging directory (Phase A).
 # Uses build/bootstrap.elf when present (Phase B), else the staging dummy ELF.
@@ -69,26 +97,52 @@ test-initfs:
 
 # Cross-build bootstrap for x86_64-unknown-redox (Phase B).
 # Requires: rustup target add x86_64-unknown-redox (nightly-2026-05-24)
-# Optional: .toolchain/ from https://static.redox-os.org/toolchain/x86_64-unknown-redox/
-#   (relibc-install.tar.gz + gcc-install.tar.gz) for linking; host glibc >= 2.38 for redox-gcc.
+# Links with rust-lld + build-std compiler-builtins-mem (works without redox-gcc on host).
 build-bootstrap:
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p "{{build_dir}}"
     export RUSTUP_TOOLCHAIN=nightly-2026-05-24
-    linker="${CARGO_TARGET_X86_64_UNKNOWN_REDOX_LINKER:-}"
-    if [ -z "$linker" ] && [ -x "{{toolchain_dir}}/bin/x86_64-unknown-redox-gcc" ]; then
-    export CARGO_TARGET_X86_64_UNKNOWN_REDOX_LINKER="{{toolchain_dir}}/bin/x86_64-unknown-redox-gcc"
-    elif [ -z "$linker" ]; then
-    export RUSTFLAGS="${RUSTFLAGS:-} -C linker=rust-lld"
-    fi
-    cargo build --release \
+    export CARGO_TARGET_X86_64_UNKNOWN_REDOX_LINKER=rust-lld
+    export RUSTFLAGS="{{bootstrap_rustflags}}"
+    {{redox_cargo}} build --release \
         --manifest-path userspace/bootstrap/Cargo.toml \
-        --target x86_64-unknown-redox
-    cp userspace/bootstrap/target/x86_64-unknown-redox/release/bootstrap "{{build_dir}}/bootstrap.elf"
+        --target {{userspace_target}} \
+        -Z build-std=core,alloc,compiler_builtins \
+        -Z build-std-features=compiler-builtins-mem
+    cp userspace/bootstrap/target/{{userspace_target}}/release/bootstrap "{{build_dir}}/bootstrap.elf"
+
+# Cross-build init + minimal early daemons (Phase B).
+build-userspace:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ ! -f "{{redox_lib}}/libc.a" ]; then
+    echo "Missing {{redox_lib}}/libc.a — run: just install-toolchain" >&2
+    exit 1
+    fi
+    export RUSTUP_TOOLCHAIN=nightly-2026-05-24
+    export CARGO_TARGET_X86_64_UNKNOWN_REDOX_LINKER=rust-lld
+    export RUSTFLAGS="{{userspace_rustflags}}"
+    {{redox_cargo}} build --release \
+        --manifest-path userspace/Cargo.toml \
+        --target {{userspace_target}} \
+        -p init -p logd -p zerod -p randd -p ramfs -p rtcd
+
+# Copy cross-built userspace binaries into initfs staging.
+stage-userspace: build-userspace
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{staging_bin}}"
+    for bin in {{userspace_bins}}; do
+    cp "{{userspace_out}}/$bin" "{{staging_bin}}/$bin"
+    done
+    cp "{{userspace_out}}/zerod" "{{staging_bin}}/nulld"
+    staging_lib="{{justfile_directory()}}/userspace/initfs-staging/lib"
+    mkdir -p "$staging_lib"
+    cp "{{redox_lib}}/libc.so" "{{redox_lib}}/ld64.so.1" "$staging_lib/"
 
 # Build initfs with cross-built bootstrap, then direct-boot kernel with userspace enabled.
-build-direct-userspace: build-bootstrap build-initfs
+build-direct-userspace: build-bootstrap stage-userspace build-initfs
     KERNEL_CARGO_FEATURES="direct-boot,direct-boot-userspace" just build
 
 # Build with the direct-boot feature (for fast QEMU -kernel testing)
@@ -116,6 +170,22 @@ qemu-direct *QEMU_ARGS:
 # Direct-boot serial smoke test (CI): boot headless, assert the kmain idle loop.
 smoke: build-direct
     "{{justfile_directory()}}/qemu/smoke-test.sh" --no-build
+
+# Boot direct-boot kernel with userspace spawn enabled (Phase B).
+qemu-direct-userspace *QEMU_ARGS:
+    just build-direct-userspace
+    @echo "Launching QEMU (direct-boot + userspace)..."
+    qemu-system-x86_64 \
+        -kernel {{build_dir}}/kernel \
+        -m 512 \
+        -serial mon:stdio \
+        -display none \
+        -no-reboot \
+        {{QEMU_ARGS}}
+
+# Userspace milestone smoke test: bootstrap spawns and init starts early daemons.
+smoke-userspace: build-direct-userspace
+    USERSPACE_SMOKE=1 "{{justfile_directory()}}/qemu/smoke-test.sh" --no-build
 
 # Attach GDB to a QEMU instance started with -s or -s -S
 #

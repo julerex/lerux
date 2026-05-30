@@ -1,0 +1,22 @@
+[package]
+name = "redox-log"
+version = "0.1.5"
+authors = ["4lDO2 <4lDO2@protonmail.com>", "Mark Tomlin <Dygear@gmail.com>"]
+edition = "2021"
+description = "An extensible logging framework mainly for use by Redox OS"
+documentation = "https://docs.rs/redox-log"
+readme = "README.md"
+homepage = "https://redox-os.org"
+repository = "https://gitlab.redox-os.org/redox-os/redox-log"
+license = "MIT"
+keywords = ["log", "logger", "logging", "redox"]
+categories = ["development-tools::debugging"]
+exclude = ["target"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+chrono = "0.4"
+log = "0.4"
+smallvec = "1"
+termion = "4"

@@ -46,6 +46,7 @@ Upstream ships the kernel as the crate root. lerux wraps it: `Cargo.toml` and `b
 | `build.rs` | nasm + cc on x86 | CPU features from `config.toml`; embeds `build/initfs.bin` when `direct-boot` |
 | CI | Upstream GitLab | `.github/workflows/rust.yml`: fmt, clippy, check, **trampolines**, **initfs**, smoke |
 | Userspace bootstrap | Always spawned from initfs | `direct-boot` skips spawn; `direct-boot-userspace` spawns when bootstrap ELF is in initfs |
+| SSE for userspace | Upstream sets CR4 via boot path | `early_init` sets `CR4_ENABLE_SSE` (+ `CR4_ENABLE_OS_XSAVE` when XSAVE present) so bootstrap/init can use SSE |
 
 Building **without** `direct-boot` still targets a normal Redox-style kernel but expects the full Redox build system (see [BUILDING-standalone.md](BUILDING-standalone.md)).
 
@@ -61,21 +62,26 @@ Building **without** `direct-boot` still targets a normal Redox-style kernel but
 | initfs archiver (host) | `userspace/initfs-tools/` | [base/initfs/tools](https://gitlab.redox-os.org/redox-os/base) | `TBD` (copied from `tryredox/base/initfs/tools` 2026-05-30) | MIT | 2026-05-30 | `redox-initfs-ar` / `redox-initfs-dump`; path dep to `userspace/initfs` |
 | bootstrap | `userspace/bootstrap/` | [base/bootstrap](https://gitlab.redox-os.org/redox-os/base) | `TBD` (copied from `tryredox/base/bootstrap` 2026-05-30) | MIT | 2026-05-30 | Own `[workspace]`; `redox-rt` path to `vendor/relibc/redox-rt`; git dep removed |
 | relibc (partial) | `vendor/relibc/` | [redox-os/relibc](https://gitlab.redox-os.org/redox-os/relibc) | `TBD` (copied from `tryredox/relibc` 2026-05-30) | MIT / BSD | 2026-05-30 | Snapshot for bootstrap link; `redox-rt`/`generic-rt` patched for standalone build; `dlmalloc-rs` from `tryredox/dlmalloc-rs`; full relibc cook not wired yet |
-| QEMU bring-up (loader scripts, docs) | `qemu/` | lerux-original + Redox boot concepts | — | MIT (lerux) | — | Custom loader / `KernelArgs` handoff; not a full Redox bootloader |
+| init | `userspace/init/` | [base/init](https://gitlab.redox-os.org/redox-os/base) | `TBD` (copied from `tryredox/base/init` 2026-05-30) | MIT | 2026-05-30 | In `userspace/` workspace; static link via rust-lld + `.toolchain/` relibc |
+| logd, zerod, randd, ramfs | `userspace/{logd,zerod,randd,ramfs}/` | [base/*](https://gitlab.redox-os.org/redox-os/base) | `TBD` (copied from `tryredox/base` 2026-05-30) | MIT | 2026-05-30 | Minimal early daemons; staged into `initfs-staging/bin/` |
+| rtcd | `userspace/drivers/rtcd/` | [base/drivers/rtcd](https://gitlab.redox-os.org/redox-os/base) | `TBD` (copied from `tryredox/base/drivers/rtcd` 2026-05-30) | MIT | 2026-05-30 | Required by trimmed `00_runtime.target` |
+| daemon, scheme-utils | `userspace/daemon/`, `userspace/scheme-utils/` | [base/*](https://gitlab.redox-os.org/redox-os/base) | `TBD` (copied from `tryredox/base` 2026-05-30) | MIT | 2026-05-30 | Shared daemon plumbing for logd/zerod/randd/ramfs/rtcd |
+| config (userspace) | `userspace/config/` | [base/config](https://gitlab.redox-os.org/redox-os/base) | `TBD` (copied from `tryredox/base/config` 2026-05-30) | MIT | 2026-05-30 | Build-time config for daemons |
+| redox-log | `vendor/redox-log/` | [redox-os/redox-log](https://gitlab.redox-os.org/redox-os/redox-log) | `TBD` (copied from `tryredox/redox-log` 2026-05-30) | MIT | 2026-05-30 | Logging crate for daemons |
+| initfs staging | `userspace/initfs-staging/` | lerux + upstream units | — | MIT | 2026-05-30 | `bin/`, `lib/` (dynamic linker + libc.so), trimmed `lib/init.d/` units |
+| QEMU bring-up (loader scripts, docs) | `qemu/` | lerux-original + Redox boot concepts | — | MIT (lerux) | — | Custom loader / `KernelArgs` handoff; `smoke-test.sh` supports `USERSPACE_SMOKE=1` |
 
 ---
 
 ## Planned vendoring (from Redox base / userspace roadmap)
 
-Source reference: `tryredox/base` (or upstream [redox-os/base](https://gitlab.redox-os.org/redox-os/base)). When added, move rows into the table above.
+Source reference: `tryredox/base` (or upstream [redox-os/base](https://gitlab.redox-os.org/redox-os/base)). Phase B minimal daemons are vendored; remaining rows are Phase C+.
 
 | Planned component | Suggested path | Upstream (reference) | Notes |
 |-------------------|----------------|----------------------|--------|
-| init | `userspace/init/` | `base/init` | Trimmed `init.initfs.d` |
-| logd, zerod, randd, ramfs | `userspace/<name>/` | `base/*` | Minimal early daemons |
-| daemon, scheme-utils | `userspace/daemon/`, `userspace/scheme-utils/` | `base/*` | Shared daemon patterns |
 | libredox (full in-tree) | `vendor/libredox/` | relibc / crates.io | bootstrap still uses crates.io `libredox` 0.1.17 |
 | Drivers (pcid, virtio, …) | `userspace/drivers/` or `vendor/drivers/` | `base/drivers` | Phase C in [PLAN.md](PLAN.md) |
+| redoxfs, vesad, net stack | `userspace/` or `vendor/` | `base/*` | Deferred per Phase C |
 
 ---
 

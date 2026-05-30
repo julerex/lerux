@@ -97,7 +97,7 @@ impl KernelArgs {
             base: crate::memory::Frame::containing(crate::memory::PhysicalAddress::new(
                 self.bootstrap_base as usize,
             )),
-            page_count: (self.bootstrap_size as usize) / crate::memory::PAGE_SIZE,
+            page_count: (self.bootstrap_size as usize).div_ceil(crate::memory::PAGE_SIZE),
             env: self.env(),
         }
     }

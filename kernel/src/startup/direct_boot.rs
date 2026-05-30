@@ -13,7 +13,7 @@
 //! Pair with:
 //! - `linkers/x86_64-direct.ld` (PVH note + stub placement)
 //! - `arch/x86_shared/pvh_boot.rs` (32→64-bit entry for QEMU `-kernel`)
-//! - `startup/mod.rs` (`kmain` skips userspace bootstrap in this mode)
+//! - `startup/mod.rs` (`kmain` skips userspace bootstrap unless `direct-boot-userspace`)
 //!
 //! This is intended for fast kernel development and bring-up testing only.
 //! See root `VENDORED.md` for the full upstream divergence list.
@@ -37,6 +37,11 @@ const ENV: &[u8] = b"direct-boot=1\0";
 
 mod initfs_embed {
     include!(concat!(env!("OUT_DIR"), "/initfs_embed.rs"));
+}
+
+/// Embedded initfs bytes when `direct-boot` is enabled (see `build.rs`).
+pub(crate) fn initfs_blob() -> &'static [u8] {
+    initfs_embed::INITFS_BLOB
 }
 
 /// Static memory map for a typical QEMU machine (512 MiB–2 GiB of RAM).
@@ -80,7 +85,7 @@ static DIRECT_MEMORY_MAP: [BootloaderMemoryEntry; 6] = [
 ];
 
 static mut DIRECT_ARGS: Option<KernelArgs> = None;
-static mut ENV_STORAGE: [u8; 32] = [0; 32];
+static mut ENV_STORAGE: [u8; 128] = [0; 128];
 static mut AREAS_STORAGE: [BootloaderMemoryEntry; 6] = DIRECT_MEMORY_MAP;
 
 /// Returns a synthesized KernelArgs for direct QEMU `-kernel` boot.
@@ -107,7 +112,6 @@ pub fn get_direct_boot_args() -> &'static KernelArgs {
                 areas_base: virt_to_phys(AREAS_STORAGE.as_ptr() as usize),
                 areas_size: core::mem::size_of_val(&AREAS_STORAGE) as u64,
                 // Real initfs blob embedded in the kernel image (RedoxFtw layout).
-                // userspace_init is still skipped until bootstrap is cross-built (Phase B).
                 bootstrap_base: virt_to_phys(initfs_base),
                 bootstrap_size: initfs_size,
             });

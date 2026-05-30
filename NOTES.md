@@ -17,9 +17,11 @@ flowchart LR
   kmain --> idle["run_userspace idle loop"]
 ```
 
-Direct-boot intentionally **skips userspace bootstrap** (`kernel/src/startup/mod.rs`); full success means reaching kernel init and idling, not spawning init.
+Direct-boot intentionally **skips userspace bootstrap** in the default `direct-boot` build
+(`kernel/src/startup/mod.rs`); kernel-only success means reaching `kmain` and idling. With
+`direct-boot-userspace`, bootstrap runs and execs `init` (Phase B).
 
-## Verified working
+## Verified working (kernel-only)
 
 - **Toolchain:** nightly, QEMU 6.2, `llvm-objcopy`
 - **Build:** `just build-direct` → `build/kernel` with `linkers/x86_64-direct.ld` and Xen PVH note at `0x100020`
@@ -41,6 +43,21 @@ Direct-boot intentionally **skips userspace bootstrap** (`kernel/src/startup/mod
   ```
   (`ACPI`/`MADT` warnings are expected: direct-boot provides no RSDP/ACPI tables.)
 
+## Verified working (Phase B userspace)
+
+With `just build-direct-userspace` + QEMU (or `just smoke-userspace`):
+
+```
+kernel::syscall::process:INFO -- Bootstrap entry point: 0x3000
+init: switchroot to /scheme/initfs /scheme/initfs/etc
+init: unit 50_rootfs.service not found
+randd: Seeding failed, no entropy source.  Random numbers on this platform are NOT SECURE
+init: switchroot to /usr /etc
+```
+
+`50_rootfs.service` is intentionally absent (Phase C). After `logd` starts, daemon
+output may leave serial — the smoke test key marker is `init: switchroot to /scheme/initfs`.
+
 ## Fixes applied (root causes found via GDB)
 
 | Issue | Fix |
@@ -53,6 +70,8 @@ Direct-boot intentionally **skips userspace bootstrap** (`kernel/src/startup/mod
 | **Reserved-bit `#PF` right after CR3 switch** | PVH stub only enabled `EFER.LME`; the kernel's page tables set the **NX** bit on data pages. Enable **`EFER.NXE` (1<<11)** alongside LME in `pvh_boot.rs`, otherwise NX is a reserved bit and the first NX-page access triple-faults. |
 | `env()` unreachable after CR3 switch | Direct-boot folds `env` into the kernel image (mapped only at `KERNEL_OFFSET`). Register it as **`IdentityMap`** so `map_memory` also linear-maps it at `PHYS_OFFSET` (`kernel/src/startup/memory.rs`). |
 | `frame 0x0 is reserved` panic in `KernelArgs::bootstrap()` | Direct-boot has no initfs, so `bootstrap_base` was `0` and `Frame::containing(0)` panicked. Point `bootstrap_base` at a valid frame with `bootstrap_size = 0` (never consumed in direct-boot) (`kernel/src/startup/direct_boot.rs`). **Phase A (2026-05-30):** real initfs embedded; non-zero `bootstrap_size`. |
+| Bootstrap `#UD` at `xorps` (SSE) in userspace | Kernel set `CR4.OSXSAVE` but not `CR4_ENABLE_SSE` (OSFXSR). Bootstrap allocator uses SSE via build-std. Set `CR4_ENABLE_SSE` in `early_init` (`kernel/src/arch/x86_64/alternative.rs`). |
+| Garbage bootstrap entry / truncated initfs copy | Use embedded `initfs_blob()` in `bootstrap_mem()`; `page_count` via `div_ceil(PAGE_SIZE)` (`kernel/src/syscall/process.rs`, `kernel/src/startup/mod.rs`). |
 
 ## Debugging
 
@@ -85,19 +104,23 @@ path (bare `start`/`kmain` do not resolve).
 just build-direct
 just qemu-direct           # boots to the idle loop
 just qemu-direct -- -s -S  # + `just gdb` in another terminal, or use ./qemu/debug.sh
-just smoke                 # build + boot + assert serial markers (CI smoke test)
+just smoke                 # build + boot + assert kernel idle (CI smoke test)
+just smoke-userspace       # Phase B: bootstrap → init milestone
+just build-direct-userspace
+just qemu-direct-userspace
 ```
 
 ## Automated smoke test
 
 `qemu/smoke-test.sh` (exposed as `just smoke`) boots the direct-boot kernel
 headless, captures the serial console to `qemu-serial.log`, and asserts boot
-reaches the `kmain` idle loop. It exits as soon as it sees the idle marker (so it
-does not wait out the timeout), and fails non-zero on a missing marker, a kernel
-panic / triple fault, or a `$TIMEOUT`-second (default 90s) timeout. No KVM is
-required, so it runs on plain GitHub runners.
+reaches the `kmain` idle loop. Set `USERSPACE_SMOKE=1` (or run `just smoke-userspace`)
+to assert `init: switchroot to /scheme/initfs` instead. It exits as soon as it sees
+the success marker (so it does not wait out the timeout), and fails non-zero on a
+missing marker, a kernel panic / triple fault, or a `$TIMEOUT`-second (default 90s)
+timeout. No KVM is required, so it runs on plain GitHub runners.
 
-It checks for these serial substrings (all must appear):
+**Kernel-only** checks (all must appear):
 
 - `Redox OS starting...`
 - `Memory:`
@@ -105,7 +128,10 @@ It checks for these serial substrings (all must appear):
 - `Permanently used:`
 - `direct-boot mode: skipping userspace bootstrap` ← idle reached (success)
 
-CI runs it as the `smoke` job in `.github/workflows/rust.yml`, alongside
+**Userspace** (`USERSPACE_SMOKE=1`): same early markers plus
+`init: switchroot to /scheme/initfs`; must **not** see the skip-userspace message.
+
+CI runs kernel-only smoke as the `smoke` job in `.github/workflows/rust.yml`, alongside
 `fmt` / `clippy` / `check`, and uploads `qemu-serial.log` as an artifact.
 
 ## Prerequisites (direct-boot)
@@ -122,6 +148,6 @@ stub is pure Rust (`kernel/src/arch/x86_shared/pvh_boot.rs`, `core::arch::global
 Phase A is done: initfs vendored, `just build-initfs` / `just test-initfs`, initfs
 embedded in direct-boot, smoke test checks non-zero Bootstrap size.
 
-Phase B in progress: bootstrap + relibc snapshot vendored; `just build-bootstrap` and
-`direct-boot-userspace` feature wired. Remaining: reliable cross-link of bootstrap
-(Redox toolchain / in-tree relibc cook), then init + minimal daemons.
+Phase B milestone reached (2026-05-30): cross-linked bootstrap, init + minimal daemons
+in initfs staging, `just smoke-userspace` passes. Next: Phase C (ACPI/RSDP, `pcid`,
+virtio, optional `50_rootfs` / redoxfs).

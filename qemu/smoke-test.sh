@@ -66,6 +66,14 @@ REQUIRED_MARKERS=(
 )
 # Seeing this means we reached the kmain idle loop (direct-boot success).
 SUCCESS_MARKER="direct-boot mode: skipping userspace bootstrap"
+# Phase B userspace milestones (when USERSPACE_SMOKE=1).
+USERSPACE_SUCCESS_MARKERS=(
+    "init: switchroot to /scheme/initfs"
+)
+USERSPACE_FAIL_MARKERS=(
+    "direct-boot mode: skipping userspace bootstrap"
+    "failed to open init"
+)
 # Bootstrap: START:END must differ (non-zero initfs size; Phase A).
 BOOTSTRAP_MARKER_PREFIX="Bootstrap:"
 # Any of these on the serial console means the boot went wrong.
@@ -78,7 +86,12 @@ FAIL_MARKERS=(
 
 if [ "$BUILD_KERNEL" -eq 1 ]; then
     echo "==> Building direct-boot kernel"
-    if ! (cd "$REPO_ROOT" && just build-direct); then
+    if [ "${USERSPACE_SMOKE:-0}" = "1" ]; then
+        build_recipe="build-direct-userspace"
+    else
+        build_recipe="build-direct"
+    fi
+    if ! (cd "$REPO_ROOT" && just "$build_recipe"); then
         echo "SMOKE TEST FAILED: build failed" >&2
         exit 1
     fi
@@ -133,7 +146,12 @@ bootstrap_has_nonzero_size() {
 deadline=$((SECONDS + TIMEOUT))
 outcome="timeout"
 while [ "$SECONDS" -lt "$deadline" ]; do
-    if log_has "$SUCCESS_MARKER"; then
+    if [ "${USERSPACE_SMOKE:-0}" = "1" ]; then
+        if log_has_any "${USERSPACE_SUCCESS_MARKERS[@]}"; then
+            outcome="userspace"
+            break
+        fi
+    elif log_has "$SUCCESS_MARKER"; then
         outcome="idle"
         break
     fi
@@ -158,14 +176,39 @@ echo "==> QEMU outcome: $outcome"
 
 # The captured serial log is the source of truth for pass/fail.
 fail=0
-for m in "${REQUIRED_MARKERS[@]}" "$SUCCESS_MARKER"; do
-    if log_has "$m"; then
-        printf '  [ ok ] %s\n' "$m"
-    else
-        printf '  [MISS] %s\n' "$m"
-        fail=1
-    fi
-done
+if [ "${USERSPACE_SMOKE:-0}" = "1" ]; then
+    for m in "${REQUIRED_MARKERS[@]}"; do
+        if log_has "$m"; then
+            printf '  [ ok ] %s\n' "$m"
+        else
+            printf '  [MISS] %s\n' "$m"
+            fail=1
+        fi
+    done
+    for m in "${USERSPACE_SUCCESS_MARKERS[@]}"; do
+        if log_has "$m"; then
+            printf '  [ ok ] %s\n' "$m"
+        else
+            printf '  [MISS] %s\n' "$m"
+            fail=1
+        fi
+    done
+    for m in "${USERSPACE_FAIL_MARKERS[@]}"; do
+        if log_has "$m"; then
+            printf '  [FAIL] saw userspace failure marker: %s\n' "$m"
+            fail=1
+        fi
+    done
+else
+    for m in "${REQUIRED_MARKERS[@]}" "$SUCCESS_MARKER"; do
+        if log_has "$m"; then
+            printf '  [ ok ] %s\n' "$m"
+        else
+            printf '  [MISS] %s\n' "$m"
+            fail=1
+        fi
+    done
+fi
 if bootstrap_has_nonzero_size; then
     printf '  [ ok ] Bootstrap: non-zero initfs size\n'
 else
@@ -180,7 +223,11 @@ for m in "${FAIL_MARKERS[@]}"; do
 done
 
 if [ "$fail" -eq 0 ]; then
-    echo "SMOKE TEST PASSED: direct-boot reached the kmain idle loop."
+    if [ "${USERSPACE_SMOKE:-0}" = "1" ]; then
+        echo "SMOKE TEST PASSED: direct-boot reached init and early daemons."
+    else
+        echo "SMOKE TEST PASSED: direct-boot reached the kmain idle loop."
+    fi
     exit 0
 fi
 

@@ -2,7 +2,7 @@
 
 This document collects all potential next steps, ideas, and open questions that have been discussed during development. It serves as a living backlog.
 
-Last updated: 2026-05-30 (userspace roadmap from `tryredox/base` analysis; vendoring policy)
+Last updated: 2026-05-30 (Phase B userspace milestone: bootstrap → init → early daemons)
 
 ---
 
@@ -35,14 +35,16 @@ Upstream Redox repos remain useful as **read-only references** for design and oc
 
 ---
 
-## Current state (kernel)
+## Current state (kernel + Phase B userspace)
 
 | Layer | Status |
 |--------|--------|
 | Kernel | Vendored under `kernel/`; direct-boot reaches `kmain` idle loop (`just qemu-direct`) |
 | Boot handoff | PVH stub (pure Rust), synthetic `KernelArgs` in `direct-boot` mode |
-| Userspace | **Not run yet** — `direct-boot` intentionally skips `userspace_init` |
-| Smoke test | Asserts idle marker: `direct-boot mode: skipping userspace bootstrap` |
+| Initfs | Vendored archiver + staging; `build/initfs.bin` embedded in kernel |
+| Userspace | **Phase B milestone:** `just build-direct-userspace` + `just smoke-userspace` — bootstrap → init → early daemons (`init: switchroot to /scheme/initfs`) |
+| Kernel-only smoke | `just smoke` — asserts idle marker: `direct-boot mode: skipping userspace bootstrap` |
+| Userspace smoke | `just smoke-userspace` — asserts `init: switchroot to /scheme/initfs` (set `USERSPACE_SMOKE=1`) |
 
 See `NOTES.md` for serial output, GDB breakpoints, and paging/bootstrap fixes.
 
@@ -158,10 +160,10 @@ flowchart TB
 ### Phase B — First living userspace
 
 - [x] Vendor **`bootstrap`** (+ **`relibc` / `redox-rt`** snapshot) in-tree; align **`redox_syscall` 0.8.0** with kernel
-- [ ] Vendor **`init`** + minimal **`init.initfs.d`** + **`logd` / `zerod` / `randd` / `ramfs`**
-- [ ] Cross-build userspace for lerux target (vendored toolchain spec, not external Redox sysroot)
+- [x] Vendor **`init`** + minimal **`init.initfs.d`** + **`logd` / `zerod` / `randd` / `ramfs` / `rtcd`**
+- [x] Cross-build userspace for lerux target (rust-lld + `.toolchain/` relibc; no host redox-gcc required)
 - [x] Kernel: `direct-boot-userspace` feature spawns `userspace_init` (default `direct-boot` still skips for smoke tests)
-- [ ] Milestone: serial shows bootstrap → init → core daemons started
+- [x] Milestone: serial shows bootstrap → init → core daemons started
 
 ### Phase C — QEMU closer to full Redox
 
@@ -227,9 +229,8 @@ The current focus is getting the kernel to boot under QEMU. **Next focus after i
 ## 4. Tooling & Development Experience
 
 - [x] Automated QEMU boot tests (`qemu/smoke-test.sh` / `just smoke`, CI `smoke` job).
-- [ ] Extend smoke tests for userspace milestones (bootstrap/init strings).
-- [ ] Better integration between the QEMU harness and the kernel's own testing story.
-- [ ] `cargo xtask` (or `just` recipes): build kernel + initfs image + userspace + run QEMU + validate trampolines.
+- [x] Extend smoke tests for userspace milestones (bootstrap/init strings via `just smoke-userspace`).
+- [x] `just` recipes: `build-direct-userspace`, `qemu-direct-userspace`, `smoke-userspace`.
 - [ ] Improve the root `README.md` with a proper "Getting Started" once userspace smoke works.
 - [ ] Add `CONTRIBUTING.md` once the project stabilizes a bit.
 
@@ -237,7 +238,7 @@ The current focus is getting the kernel to boot under QEMU. **Next focus after i
 
 ## 5. Longer-Term / Ambitious Goals
 
-- [ ] Minimal pure-Rust userspace (bootstrap → init → core daemons; see Phases A–B).
+- [x] Minimal pure-Rust userspace (bootstrap → init → core daemons; see Phases A–B).
 - [ ] Full ACPI / device bring-up under QEMU (RSDP in boot args; vendored `acpid`/`hwd`).
 - [ ] Graphical debug / early framebuffer support (vendored graphics stack only when needed).
 - [ ] Real hardware bring-up (especially aarch64 and riscv64).

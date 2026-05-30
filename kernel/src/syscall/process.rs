@@ -243,11 +243,11 @@ pub unsafe fn usermode_bootstrap(bootstrap: &Bootstrap, token: &mut CleanLockTok
     let bootstrap_slice = unsafe { bootstrap_mem(bootstrap) };
     UserSliceWo::new(PAGE_SIZE, bootstrap.page_count * PAGE_SIZE)
         .expect("failed to create bootstrap user slice")
-        .copy_from_slice(bootstrap_slice)
+        .copy_common_bytes_from_slice(bootstrap_slice)
         .expect("failed to copy memory to bootstrap");
 
     let bootstrap_entry = u64::from_le_bytes(bootstrap_slice[0x1a..0x22].try_into().unwrap());
-    debug!("Bootstrap entry point: {:X}", bootstrap_entry);
+    info!("Bootstrap entry point: {bootstrap_entry:#x}");
     assert_ne!(bootstrap_entry, 0);
 
     // Start in a minimal environment without any stack.
@@ -265,6 +265,12 @@ pub unsafe fn usermode_bootstrap(bootstrap: &Bootstrap, token: &mut CleanLockTok
 
 unsafe fn bootstrap_mem(bootstrap: &crate::startup::Bootstrap) -> &'static [u8] {
     unsafe {
+        // lerux direct-boot: initfs is embedded in kernel .rodata; use the linked-in slice
+        // so header fields (bootstrap entry at 0x1a) match the archiver output.
+        #[cfg(feature = "direct-boot")]
+        {
+            return crate::startup::direct_boot::initfs_blob();
+        }
         core::slice::from_raw_parts(
             CurrentRmmArch::phys_to_virt(bootstrap.base.base()).data() as *const u8,
             bootstrap.page_count * PAGE_SIZE,

@@ -31,13 +31,23 @@ just build-direct      # builds initfs, embeds in kernel, then links kernel
 The kernel embeds `build/initfs.bin` at build time (`build.rs` → `direct_boot.rs`).
 Staging layout: `userspace/initfs-staging/` (minimal file + dummy bootstrap ELF).
 
-## Userspace bootstrap (Phase B, optional)
+## Userspace bootstrap (Phase B)
+
+Cross-build bootstrap + minimal daemons, then boot with userspace spawn enabled:
 
 ```bash
 rustup target add x86_64-unknown-redox --toolchain nightly-2026-05-24
-just build-bootstrap   # → build/bootstrap.elf (needs Redox linker; see VENDORED.md)
-just build-direct-userspace   # initfs + kernel with direct-boot-userspace
+just install-toolchain   # one-time: relibc libs into .toolchain/ (see VENDORED.md)
+just build-direct-userspace   # bootstrap + daemons + initfs + kernel
+just qemu-direct-userspace    # serial: bootstrap → init → early daemons
+just smoke-userspace          # CI-friendly headless assert (USERSPACE_SMOKE=1)
 ```
+
+**Linking:** bootstrap uses `rust-lld` + `-Z build-std=…,compiler_builtins` (no host
+`x86_64-unknown-redox-gcc` required). Init and daemons static-link via `rust-lld` +
+`crt*.o` + `libc.a` from `.toolchain/x86_64-unknown-redox/lib`. Dynamic `libc.so` /
+`ld64.so.1` are copied into `userspace/initfs-staging/lib/` for processes exec'd by
+bootstrap.
 
 Default `just build-direct` / `just smoke` keep userspace spawn disabled for fast CI.
 

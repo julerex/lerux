@@ -2,15 +2,97 @@
 
 This document collects all potential next steps, ideas, and open questions that have been discussed during development. It serves as a living backlog.
 
-Last updated: 2026-05-30 (Phase B userspace milestone: bootstrap → init → early daemons)
+Last updated: 2026-05-30 (Only Rust policy recorded; Phase B userspace milestone)
 
 ---
 
 ## Project principles
 
-### Only Rust
+### Only Rust (policy)
 
-Eliminate non-Rust code wherever practical (assembly, build-time codegen in other languages, etc.). Keep the Redox kernel design; make the implementation and toolchain story as Rust-native as possible.
+**Goal:** From CPU reset through every userspace process, only instructions that come from Rust (via the normal Rust toolchain) may execute on lerux. Host build/CI scripts (`just`, shell smoke tests) are fine when they do not run on the machine.
+
+This section records decisions from the 2026-05-30 design review. Use it as the acceptance criteria for “Only Rust” work; see [Only Rust enforcement](#only-rust-enforcement) and [Only Rust migration sequence](#only-rust-migration-sequence).
+
+#### Scope
+
+| In scope | Out of scope |
+|----------|----------------|
+| Kernel, boot stubs, bootloader (when shipped), every initfs ELF | Host-only recipes, CI, reference trees (`../tryredox/`) |
+
+#### Userspace runtime
+
+- **Replace relibc** — no C runtime in shipped ELFs; remove `vendor/relibc/` when nothing references it.
+- **`#![no_std]` + in-tree runtime** — fork/evolve `redox-rt` / `generic-rt` into lerux-owned crates (e.g. `userspace/runtime/`).
+- Drop the workspace **`libc`** dependency on init/daemons; use **`redox_syscall`** and **`libredox`** where needed.
+- **Static linking only** — no foreign dynamic linker; no `.toolchain/` relibc tarball long term.
+
+#### Executables
+
+- **Lerux ELFs only** — only binaries built in this repo against the lerux runtime. No ported Redox/C `pkg` binaries; upstream Redox artifacts are read-only references, not runtime dependencies.
+
+#### Low-level CPU code
+
+- **Rust-authored only** in kernel and userspace: `global_asm!`, `asm!`, `#[naked]` in `.rs` are allowed.
+- **Not allowed** long term: standalone `.S` / `.asm`, NASM, `include_bytes!` of machine code that was not produced by `rustc`/LLVM in this build.
+- **Debt:** SMP trampoline golden `.bin` files (from NASM validation); rewrite in Rust before calling scope A done for the kernel.
+
+#### Boot chain
+
+- **Now:** **direct-boot** + embedded initfs is the product boot path (`just qemu-direct-userspace`).
+- **Before installable image:** add a lerux-owned **Rust bootloader** (UEFI/multiboot or equivalent).
+- **Temporary:** `qemu/loader.S` and related asm are dev/quarantine only — not part of the lerux OS artifact story; remove after the Rust bootloader lands (see boot chain above).
+
+#### Kernel / userspace ABI
+
+- **Redox-compatible boot path, lerux extensions** — keep `redox_syscall`, scheme paths, initfs layout (`RedoxFtw`, entry at offset `0x1a`), and `KernelArgs` for upstream kernel merges.
+- Add lerux-specific syscalls/schemes only when needed; document in `VENDORED.md` / ADRs.
+
+#### Rust target triple
+
+- **Phase 1:** `x86_64-unknown-redox` while porting init and daemons off `.toolchain/` relibc onto the in-tree runtime.
+- **Phase 2:** `x86_64-unknown-lerux` (custom target JSON in-repo) once the in-tree runtime is the sole sysroot.
+
+#### Only Rust enforcement
+
+CI and local checks should prove the policy, not only smoke serial output:
+
+| Check | Purpose |
+|-------|---------|
+| **Smoke** | `just smoke` / `just smoke-userspace` — boot path still works |
+| **ELF audit** | Every initfs ELF: no `NEEDED` on relibc/libc; static lerux runtime only |
+| **Source policy** | Fail on new `*.c`, `*.S`, `*.asm` under `kernel/`, `userspace/`, `vendor/` except a shrinking allowlist |
+| **Trampolines** | `just validate-trampolines` until NASM golden path is removed |
+
+Target recipe: **`just check-only-rust`** (or a dedicated CI job) implementing the above. Allowlist until deleted: `vendor/relibc/`, `qemu/*.S`, trampoline validation asm under `kernel/validation/trampolines/asm/`.
+
+#### Only Rust migration sequence
+
+1. Fork **`redox-rt` / `generic-rt`** → `userspace/runtime/`; bootstrap uses only that.
+2. Port **`init`** + early daemons off `libc` / `.toolchain` relibc onto the runtime.
+3. Turn on **enforcement gates** (allowlist shrinks as debt is removed).
+4. Remove **`vendor/relibc/`** and relibc tarball download from `just`.
+5. SMP trampolines → Rust **`global_asm!`**; drop NASM golden embed path.
+6. Introduce **`x86_64-unknown-lerux`** target (custom JSON + in-tree sysroot).
+7. Rust **bootloader** + installable image.
+8. Delete or quarantine **`qemu/loader.S`** boot asm.
+
+#### Only Rust definition of done
+
+- Direct-boot userspace smoke passes.
+- Initfs ELFs pass enforcement (no relibc; lerux runtime only).
+- Kernel has no non–Rust-authored executing machine code on the boot/SMP path.
+- `vendor/relibc/` removed; dev loop does not download the relibc toolchain tarball.
+
+#### Only Rust current debt
+
+| Item | Violates | Notes |
+|------|----------|-------|
+| `init` + daemons via **`libc`** + `.toolchain/` relibc | Runtime / executables | Phase B bridge |
+| `vendor/relibc/` + bootstrap **`redox-rt`** path | Runtime | Bootstrap closest to target |
+| SMP trampoline **`.bin`** from NASM | CPU code | Use `just validate-trampolines` until Rust rewrite |
+| **`qemu/loader.S`**, MBR stub | Boot chain | Not the product path; remove with Rust bootloader |
+| PVH stub in **`pvh_boot.rs`** | — | Aligned (Rust `global_asm!`) |
 
 ### Vendor everything (no live Redox repo dependencies)
 
@@ -198,16 +280,22 @@ The current focus is getting the kernel to boot under QEMU. **Next focus after i
 
 ## 2. "Only Rust" Purity & Architecture
 
+See [Only Rust (policy)](#only-rust-policy) for the full spec, enforcement, and migration order.
+
 - [x] Port the direct-boot PVH boot stub to pure Rust (`kernel/src/arch/x86_shared/pvh_boot.rs`; dropped `cc`/`clang` from `build.rs`).
-- [ ] Convert the QEMU loader itself to pure Rust (eliminate `loader.asm` + `loader.S` entirely).
+- [ ] In-tree userspace runtime (`userspace/runtime/` from `redox-rt` / `generic-rt`); bootstrap + init + daemons off relibc.
+- [ ] `just check-only-rust` + CI: ELF audit, source policy, smoke (see [Only Rust enforcement](#only-rust-enforcement)).
+- [ ] SMP trampolines in Rust `global_asm!`; remove NASM golden / `validation/trampolines/asm/` path.
+- [ ] `x86_64-unknown-lerux` target JSON after relibc removal.
+- [ ] Rust bootloader before installable OS image; then remove `qemu/loader.S` / MBR stub.
+- [ ] Convert the QEMU loader to pure Rust or delete it (quarantined until bootloader exists).
 - [ ] Investigate removing or dramatically simplifying the custom linker scripts (`linkers/*.ld`).
 - [ ] Achieve fully `cargo`-only development builds (reduce or remove reliance on the `Makefile` for day-to-day work).
 - [ ] Complete SMP bring-up on riscv64 and aarch64 (currently only x86 paths have real trampoline work).
-- [ ] Audit the entire kernel for any remaining non-Rust codegen or build-time tools.
 - [ ] Decide on long-term project layout:
   - Keep `kernel/` as a subdirectory forever?
   - Eventually flatten so the root crate *is* the kernel?
-- [ ] Root-level Cargo workspace (kernel, loader, initfs tools, vendored userspace crates).
+- [x] Root-level Cargo workspace (kernel, initfs tools, userspace members; bootstrap separate crate).
 - [x] **`VENDORED.md`**: vendoring inventory plus kernel divergence baseline (pin kernel commit on next sync).
 - [ ] Strategy for syncing vendored kernel/userspace vs. upstream Redox (infrequent, intentional merges—not live deps).
 - [ ] Proper attribution / licensing notes for all vendored Redox-derived code.
@@ -216,13 +304,13 @@ The current focus is getting the kernel to boot under QEMU. **Next focus after i
 
 ## 3. Trampoline Validation & Maintenance
 
-## 3. Trampoline Validation & Maintenance
+Interim until Rust `global_asm!` trampolines ship ([policy](#low-level-cpu-code)).
 
 - [x] Automatic byte-for-byte comparison (`compare_trampoline_bytes.py`, `just validate-trampolines`).
 - [x] Golden `.bin` files under `validation/trampolines/expected/` (embedded via `include_bytes!`).
 - [x] CI job: `trampolines` in `.github/workflows/rust.yml`.
-- [ ] Add an optional build-time check (in `build.rs` or a `cargo xtask`) that validates when nasm is available.
-- [ ] Per-instruction disassembly comments in `asm/` or generated docs.
+- [ ] Rewrite trampolines in Rust; drop NASM/asm validation tree.
+- [ ] Per-instruction disassembly comments in generated docs (if still needed).
 
 ---
 
@@ -231,6 +319,7 @@ The current focus is getting the kernel to boot under QEMU. **Next focus after i
 - [x] Automated QEMU boot tests (`qemu/smoke-test.sh` / `just smoke`, CI `smoke` job).
 - [x] Extend smoke tests for userspace milestones (bootstrap/init strings via `just smoke-userspace`).
 - [x] `just` recipes: `build-direct-userspace`, `qemu-direct-userspace`, `smoke-userspace`.
+- [ ] `just check-only-rust` — ELF audit + source allowlist + integrate with CI (see [Only Rust enforcement](#only-rust-enforcement)).
 - [ ] Improve the root `README.md` with a proper "Getting Started" once userspace smoke works.
 - [ ] Add `CONTRIBUTING.md` once the project stabilizes a bit.
 
@@ -250,12 +339,19 @@ The current focus is getting the kernel to boot under QEMU. **Next focus after i
 
 ## 6. Open Questions & Design Decisions
 
-- How closely should we track upstream Redox changes vs. diverge for "Only Rust" and lerux boot paths? (**Default: vendor snapshots; merge deliberately.**)
-- What is the target **minimum viable OS** for the first real demo? (Suggested: init + logd + serial logs from init; then shell; then net.)
-- Should the QEMU loader become a first-class Rust crate in the workspace? (Aligns with "Only Rust" and vendoring.)
-- Initfs delivery long term: embedded in loader, linked in direct-boot, or separate image built by vendored `initfs/tools`? (**Preferred: vendored archiver + single blob in RAM; same layout as Redox.**)
-- Where to place vendored userspace in the tree? (e.g. `userspace/` vs. `vendor/redox-base/`—pick one convention and document in `VENDORED.md`.)
-- Userspace target triple: standard `*-unknown-redox` with vendored target JSON, or a lerux-specific triple?
+**Resolved (2026-05-30)** — see [Only Rust (policy)](#only-rust-policy):
+
+- Track upstream Redox via **vendored snapshots**; keep **Redox syscall/scheme/initfs ABI**; lerux extensions only when needed.
+- **No foreign ELFs** — lerux-built binaries only; relibc removed, not kept for compat.
+- Boot: **direct-boot + embedded initfs** now; **Rust bootloader** before installable image; QEMU asm temporary.
+- Userspace: **`no_std` + in-tree runtime**; target **`unknown-redox` then `unknown-lerux`**.
+- Userspace tree convention: **`userspace/`** + **`vendor/`** (documented in `VENDORED.md`).
+
+**Still open:**
+
+- What is the target **minimum viable OS** for the first real demo after Only Rust milestone? (Suggested: init + logd + serial; then shell; then net.)
+- Should the QEMU loader become a first-class Rust crate, or be deleted once the Rust bootloader exists?
+- Initfs delivery for non-direct-boot: same blob via Rust bootloader vs. separate image from vendored `initfs/tools`?
 
 ---
 

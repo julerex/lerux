@@ -40,13 +40,15 @@ See [qemu/README.md](qemu/README.md) for how to boot the kernel under QEMU for d
 |-----|---------|
 | [docs/GLOSSARY.md](docs/GLOSSARY.md) | Terms and concepts (boot, validation, Redox, lerux-specific names) |
 | [docs/trampoline-bytes-postmortem.md](docs/trampoline-bytes-postmortem.md) | Why original trampoline bytes did not match NASM |
-| [VENDORED.md](VENDORED.md) | How lerux diverges from upstream Redox |
+| [VENDORED.md](VENDORED.md) | Vendoring policy, upstream inventory, and kernel divergence |
 | [BUILDING-standalone.md](BUILDING-standalone.md) | Direct-boot build and run |
 | [PLAN.md](PLAN.md) | Roadmap and open questions |
 
+Upstream snapshots and sync policy: [VENDORED.md](VENDORED.md). Lerux does not depend on live Redox GitLab repos at build time.
+
 ## License
 
-MIT (same as upstream Redox components we incorporate).
+MIT (same as upstream Redox components we incorporate). See [VENDORED.md](VENDORED.md) for per-component attribution.
 
 ## Contributing
 

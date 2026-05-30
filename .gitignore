@@ -43,3 +43,8 @@ kernel/validation/trampolines/out/
 
 # Kernel local runtime config (auto-copied from config.toml.example by build.rs)
 config.toml
+
+# Userspace initfs staging build outputs
+userspace/initfs-staging/bin/
+userspace/initfs-staging/lib/ld64.so.1
+userspace/initfs-staging/lib/libc.so

@@ -1,7 +1,20 @@
 //! # The Redox OS Kernel, version 2
 //!
 //! The Redox OS Kernel is a microkernel that supports `x86_64` systems and
-//! provides Unix-like syscalls for primarily Rust applications
+//! provides Unix-like syscalls for primarily Rust applications.
+//!
+//! ## lerux vendoring note
+//!
+//! This source tree is a vendored copy of upstream `redox-os/kernel` (~2026-05),
+//! built from the lerux repo root (see root `Cargo.toml`). Most files are
+//! unmodified Redox code; lerux-specific changes are limited to:
+//!
+//! - Embedded SMP trampolines (`arch/x86_shared/trampoline.rs`) — no `nasm`
+//! - Pure-Rust PVH stub (`arch/x86_shared/pvh_boot.rs`) — no `cc`/`clang`
+//! - `direct-boot` feature: synthetic `KernelArgs` (`startup/direct_boot.rs`)
+//!
+//! Runtime branding (`uname`, boot strings) still says "Redox" for compatibility.
+//! See root [VENDORED.md](../../../VENDORED.md) for the full upstream divergence list.
 
 #![feature(int_roundings)]
 #![cfg_attr(dtb, feature(iter_next_chunk))]

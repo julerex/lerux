@@ -48,6 +48,21 @@ jobs:
     - name: Cargo check (kernel with custom target)
       run: make check
 
+  trampolines:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: nightly-2026-05-24
+    - uses: extractions/setup-just@v2
+    - name: Install NASM
+      run: sudo apt-get update && sudo apt-get install -y --no-install-recommends nasm
+    - name: Trampoline bytes match NASM (script)
+      run: just validate-trampolines
+    - name: Trampoline bytes match NASM (unit tests)
+      run: cargo test --bin kernel trampoline
+
   smoke:
     runs-on: ubuntu-latest
     steps:

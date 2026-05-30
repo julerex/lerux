@@ -60,10 +60,15 @@ fn main() {
             println!("cargo::rustc-cfg=dtb");
         }
         "x86" | "x86_64" => {
-            // Trampoline and the direct-boot PVH stub are now pure Rust
-            // (see arch/x86_shared/trampoline.rs and arch/x86_shared/pvh_boot.rs,
-            // the latter assembled via core::arch::global_asm!). No nasm/cc/clang
-            // invocation — this is the "Only Rust" goal for lerux.
+            // lerux divergence from upstream redox-os/kernel build.rs:
+            //
+            // Upstream invoked nasm (SMP trampolines from src/asm/*/trampoline.asm)
+            // and cc/clang (pvh_boot.S). lerux embeds trampoline bytes in
+            // kernel/src/arch/x86_shared/trampoline.rs and assembles the PVH stub
+            // via core::arch::global_asm! in kernel/src/arch/x86_shared/pvh_boot.rs
+            // (direct-boot feature only). No external assembler or C compiler here.
+            //
+            // See VENDORED.md at the repo root.
         }
         "riscv64" => {
             println!("cargo::rustc-cfg=dtb");

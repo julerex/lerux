@@ -34,7 +34,8 @@ pub mod stop;
 pub mod time;
 pub mod trampoline;
 
-/// PVH 32->64-bit boot stub for direct-boot (pure-Rust global_asm!, no C toolchain).
+/// PVH 32->64-bit boot stub for direct-boot (lerux: pure-Rust global_asm!, no C toolchain).
+/// Upstream used `pvh_boot.S` + `cc`. Not present in upstream when `direct-boot` is disabled.
 #[cfg(all(target_arch = "x86_64", feature = "direct-boot"))]
 pub mod pvh_boot;
 

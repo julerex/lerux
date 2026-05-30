@@ -4,6 +4,12 @@
 
 A pure-Rust take on the Redox operating system, starting with a vendored and adapted version of the Redox microkernel.
 
+## Relationship to upstream Redox
+
+The tree under `kernel/` is a **vendored copy** of [redox-os/kernel](https://gitlab.redox-os.org/redox-os/kernel) (~2026-05). Most kernel logic, syscalls, and schemes are unchanged Redox code. lerux-specific work lives at the **repo root** (build, QEMU harness, direct-boot) and in a **small set of kernel patches** (embedded trampolines, pure-Rust PVH stub, `direct-boot` boot path).
+
+See **[VENDORED.md](VENDORED.md)** for the full divergence list: what changed, what stayed the same, and what is still planned.
+
 ## Current Status (Phase 1)
 
 - Kernel source vendored under `kernel/` (copy of redox-os/kernel as of 2026-05).
@@ -21,15 +27,24 @@ A pure-Rust take on the Redox operating system, starting with a vendored and ada
 
 ## Building
 
-See [kernel/README.md](kernel/README.md) for kernel build instructions. The nasm requirement listed in the upstream docs no longer applies to lerux.
+- **Standalone / direct-boot (lerux):** [BUILDING-standalone.md](BUILDING-standalone.md) — `just build-direct`, no Redox image or C toolchain.
+- **Full Redox-style build:** [kernel/README.md](kernel/README.md) — still requires the Redox build system when not using `direct-boot`. The nasm requirement listed in upstream docs **does not apply** to lerux kernel builds.
 
 ## QEMU Bring-up
 
 See [qemu/README.md](qemu/README.md) for how to boot the kernel under QEMU for development and smoke testing. A minimal loader + launch script is provided so you can iterate quickly without the full Redox build system.
 
-## Vendored code
+## Documentation
 
-Upstream snapshots and sync policy are documented in [VENDORED.md](VENDORED.md). Lerux does not depend on live Redox GitLab repos at build time.
+| Doc | Purpose |
+|-----|---------|
+| [docs/GLOSSARY.md](docs/GLOSSARY.md) | Terms and concepts (boot, validation, Redox, lerux-specific names) |
+| [docs/trampoline-bytes-postmortem.md](docs/trampoline-bytes-postmortem.md) | Why original trampoline bytes did not match NASM |
+| [VENDORED.md](VENDORED.md) | Vendoring policy, upstream inventory, and kernel divergence |
+| [BUILDING-standalone.md](BUILDING-standalone.md) | Direct-boot build and run |
+| [PLAN.md](PLAN.md) | Roadmap and open questions |
+
+Upstream snapshots and sync policy: [VENDORED.md](VENDORED.md). Lerux does not depend on live Redox GitLab repos at build time.
 
 ## License
 

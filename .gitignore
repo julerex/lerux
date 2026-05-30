@@ -36,9 +36,8 @@ qemu-int.log
 qemu.log
 qemu-serial.log
 
-# Validation build outputs
+# Validation build outputs (committed: asm/, expected/)
 kernel/validation/trampolines/out/
-kernel/validation/trampolines/asm/
 
 # Kernel local runtime config (auto-copied from config.toml.example by build.rs)
 config.toml

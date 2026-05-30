@@ -157,8 +157,9 @@ fn register_memory_from_kernel_args(args: &KernelArgs) {
     );
     // The env and bootstrap regions are dereferenced (via phys_to_virt) after the kernel
     // switches to its own page tables, so they must be linear-mapped at PHYS_OFFSET. For
-    // direct-boot these live inside the loaded kernel image (which is only mapped at
-    // KERNEL_OFFSET), so this registration is what keeps env() reachable post-switch.
+    // lerux direct-boot these live inside the loaded kernel image (only mapped at
+    // KERNEL_OFFSET); upstream bootloaders place env/bootstrap in separately mapped RAM.
+    // This registration keeps env() reachable post-switch. See VENDORED.md.
     register_memory_region(
         args.env_base as usize,
         args.env_size as usize,
@@ -379,7 +380,7 @@ unsafe fn map_memory<A: Arch>(areas: &[MemoryArea], mut bump_allocator: &mut Bum
 
             let (phys, virt, size) = *FRAMEBUFFER.lock();
             if phys == 0 || virt == 0 || size == 0 {
-                // No bootloader framebuffer (e.g. direct-boot).
+                // No bootloader framebuffer (lerux direct-boot; upstream loaders supply one).
             } else {
                 let pages = size.div_ceil(PAGE_SIZE);
                 for i in 0..pages {

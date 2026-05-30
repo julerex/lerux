@@ -207,7 +207,7 @@ The current focus is getting the kernel to boot under QEMU. **Next focus after i
   - Keep `kernel/` as a subdirectory forever?
   - Eventually flatten so the root crate *is* the kernel?
 - [ ] Root-level Cargo workspace (kernel, loader, initfs tools, vendored userspace crates).
-- [x] **`VENDORED.md`**: list vendored trees (kernel, initfs, bootstrap, relibc, drivers, …), upstream SHA, license, lerux-specific patches (stub in place; pin kernel commit on next sync).
+- [x] **`VENDORED.md`**: vendoring inventory plus kernel divergence baseline (pin kernel commit on next sync).
 - [ ] Strategy for syncing vendored kernel/userspace vs. upstream Redox (infrequent, intentional merges—not live deps).
 - [ ] Proper attribution / licensing notes for all vendored Redox-derived code.
 
@@ -215,13 +215,13 @@ The current focus is getting the kernel to boot under QEMU. **Next focus after i
 
 ## 3. Trampoline Validation & Maintenance
 
-- [ ] Enhance `kernel/validation/trampolines/validate-trampolines.sh`:
-  - Automatic byte-for-byte comparison against `trampoline.rs`
-  - Exit non-zero on mismatch (good for CI)
-- [ ] Add an optional build-time check (in `build.rs` or a `cargo xtask`) that validates the trampoline bytes when nasm is available.
-- [ ] Add the validation as a GitHub Action / CI step.
-- [ ] Improve comments in `trampoline.rs` with per-instruction disassembly or regeneration instructions.
-- [ ] Consider storing the assembled `.bin` files in the repo (under `validation/`) as the canonical artifacts, with the `.asm` as human-readable source.
+## 3. Trampoline Validation & Maintenance
+
+- [x] Automatic byte-for-byte comparison (`compare_trampoline_bytes.py`, `just validate-trampolines`).
+- [x] Golden `.bin` files under `validation/trampolines/expected/` (embedded via `include_bytes!`).
+- [x] CI job: `trampolines` in `.github/workflows/rust.yml`.
+- [ ] Add an optional build-time check (in `build.rs` or a `cargo xtask`) that validates when nasm is available.
+- [ ] Per-instruction disassembly comments in `asm/` or generated docs.
 
 ---
 

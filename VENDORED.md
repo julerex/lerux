@@ -20,11 +20,41 @@ When syncing from upstream Redox, bump **Upstream revision**, re-apply lerux pat
 
 ---
 
+## Kernel divergence from upstream (lerux patches)
+
+Most of `kernel/` is unmodified Redox code (~2026-05 import). The items below are **intentional lerux changes** on top of upstream; re-check them on every kernel sync. Terminology: [docs/GLOSSARY.md](docs/GLOSSARY.md). Postmortem on an earlier trampoline mistake: [docs/trampoline-bytes-postmortem.md](docs/trampoline-bytes-postmortem.md).
+
+### What stays the same
+
+| Area | Status |
+|------|--------|
+| Syscall surface (`redox_syscall`, scheme handlers) | Unchanged |
+| Memory manager (`kernel/rmm/`) | Unchanged |
+| Boot strings and `sys:uname` | Still report **"Redox"** (not renamed to lerux) |
+
+### Repository layout (lerux-only)
+
+Upstream ships the kernel as the crate root. lerux wraps it: `Cargo.toml` and `build.rs` at the **repo root**, sources under `kernel/`, plus `justfile`, `qemu/`, `linkers/`, `targets/`.
+
+### Code and build changes
+
+| Change | Upstream | lerux |
+|--------|----------|-------|
+| SMP trampolines | `nasm` in `build.rs` | Golden `.bin` from `kernel/validation/trampolines/asm/` via `include_bytes!`; validated by `just validate-trampolines` |
+| PVH boot stub | `pvh_boot.S` + `cc` | `pvh_boot.rs` (`global_asm!`); `direct-boot` feature only |
+| Boot args | Redox bootloader supplies `KernelArgs` | `direct-boot` synthesizes args in `direct_boot.rs` for `qemu -kernel` |
+| `build.rs` | nasm + cc on x86 | CPU features from `config.toml` only |
+| CI | Upstream GitLab | `.github/workflows/rust.yml`: fmt, clippy, check, **trampolines**, smoke |
+
+Building **without** `direct-boot` still targets a normal Redox-style kernel but expects the full Redox build system (see [BUILDING-standalone.md](BUILDING-standalone.md)).
+
+---
+
 ## Vendored in-tree (lerux repository)
 
 | Component | In-repo path | Upstream | Upstream revision | License | Last synced | Lerux-specific changes |
 |-----------|--------------|----------|-------------------|---------|-------------|-------------------------|
-| Redox kernel | `kernel/` | [redox-os/kernel](https://gitlab.redox-os.org/redox-os/kernel) | `TBD` (initial import ~2026-05; pin commit on next sync) | MIT (`kernel/LICENSE`) | 2026-05 | Direct-boot PVH stub in Rust (`kernel/src/arch/x86_shared/pvh_boot.rs`); SMP trampolines as `&[u8]` (`trampoline.rs`); `direct-boot` feature skips userspace bootstrap; no nasm/cc for bring-up paths documented in `NOTES.md` |
+| Redox kernel | `kernel/` | [redox-os/kernel](https://gitlab.redox-os.org/redox-os/kernel) | `TBD` (initial import ~2026-05; pin commit on next sync) | MIT (`kernel/LICENSE`) | 2026-05 | Direct-boot PVH stub in Rust; SMP trampolines from NASM golden files (`include_bytes!`); `just validate-trampolines` + CI; `direct-boot` feature skips userspace bootstrap; no nasm/cc in kernel build |
 | RMM (memory manager) | `kernel/rmm/` | Same kernel tree / [redox-os/rmm](https://gitlab.redox-os.org/redox-os/rmm) | `TBD` (bundled with kernel import) | MIT | 2026-05 | Path dependency from root `Cargo.toml`; no separate remote |
 | QEMU bring-up (loader scripts, docs) | `qemu/` | lerux-original + Redox boot concepts | — | MIT (lerux) | — | Custom loader / `KernelArgs` handoff; not a full Redox bootloader |
 
@@ -217,7 +247,7 @@ These are pulled at build time from **crates.io** or **git** today. Per project 
 1. Identify upstream commit on [redox-os/kernel](https://gitlab.redox-os.org/redox-os/kernel) (or relevant repo).
 2. Diff against current `kernel/`; apply lerux-only commits on top (direct-boot, trampolines, etc.).
 3. Update **Upstream revision** and **Last synced** in this file.
-4. Run `just build-direct`, `just smoke`, and kernel tests if applicable.
+4. Run `just build-direct`, `just smoke`, `just validate-trampolines`, and `cargo test --bin kernel trampoline`.
 5. Note breaking syscall or ABI changes against planned userspace vendoring.
 
 ---
@@ -227,3 +257,5 @@ These are pulled at build time from **crates.io** or **git** today. Per project 
 - [PLAN.md](PLAN.md) — roadmap, phases, and vendoring policy
 - [NOTES.md](NOTES.md) — verified direct-boot behavior and debug notes
 - [README.md](README.md) — project overview
+- [docs/GLOSSARY.md](docs/GLOSSARY.md) — terminology
+- [docs/trampoline-bytes-postmortem.md](docs/trampoline-bytes-postmortem.md) — trampoline byte-array incident

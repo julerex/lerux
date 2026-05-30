@@ -16,6 +16,9 @@ use crate::{
 
 pub mod memory;
 
+/// lerux-only: synthetic [`KernelArgs`] for QEMU `-kernel` direct-boot (upstream
+/// always receives boot info from an external bootloader). See `direct_boot.rs`
+/// and root `VENDORED.md`.
 #[cfg(feature = "direct-boot")]
 pub mod direct_boot;
 
@@ -52,8 +55,8 @@ pub(crate) struct KernelArgs {
 
 impl KernelArgs {
     pub(crate) fn print(&self) {
-        // In direct-boot the early framebuffer/debug! sink is unavailable, so surface the
-        // KernelArgs dump at info! level to make it observable over serial.
+        // lerux direct-boot: KernelArgs dump at info! (serial); upstream uses debug!
+        // because graphical_debug is available from the bootloader framebuffer.
         macro_rules! argline {
             ($($t:tt)*) => {{
                 #[cfg(feature = "direct-boot")]
@@ -184,6 +187,8 @@ pub(crate) fn kmain(bootstrap: Bootstrap) -> ! {
     profiling::ready_for_profiling();
 
     if cfg!(feature = "direct-boot") {
+        // lerux divergence: upstream always spawns userspace_init here; direct-boot
+        // has no real initfs and skips bootstrap for kernel-only smoke testing.
         info!("direct-boot mode: skipping userspace bootstrap for kernel-only testing");
     } else {
         let owner = None; // kmain not owned by any fd

@@ -49,32 +49,30 @@ toolchain_dir := justfile_directory() + "/.toolchain"
 redox_lib := toolchain_dir + "/x86_64-unknown-redox/lib"
 redox_gcc_lib := toolchain_dir + "/lib/gcc/x86_64-unknown-redox/13.2.0"
 home := env_var("HOME")
-redox_cargo := home + "/.cargo/bin/cargo"
-redox_rustup := home + "/.cargo/bin/rustup"
+userspace_toolchain := home + "/.rustup/toolchains/nightly-2026-05-24-x86_64-unknown-linux-gnu/bin"
+relibc_toolchain := home + "/.rustup/toolchains/nightly-2025-11-15-x86_64-unknown-linux-gnu/bin"
+redox_cargo := userspace_toolchain + "/cargo"
 userspace_target := "x86_64-unknown-redox"
+userspace_target_spec := justfile_directory() + "/targets/x86_64-unknown-redox.json"
 userspace_bins := "init logd zerod randd ramfs rtcd"
-# Static link via rust-lld + relibc from .toolchain (no host redox-gcc; glibc 2.38+ not required).
+# Static link: in-tree relibc sysroot + Redox libgcc_eh (rustc liblibc) + build-std panic_abort.
 userspace_rustflags := "-C target-feature=+crt-static -C link-arg=" + redox_lib + "/crt1.o -C link-arg=" + redox_lib + "/crti.o -C link-arg=-L" + redox_lib + " -C link-arg=-L" + redox_gcc_lib + " -C link-arg=-lgcc_eh -C link-arg=-lc -C link-arg=" + redox_lib + "/crtn.o -C link-arg=--allow-multiple-definition"
+userspace_build_std := "-Z build-std=std,panic_abort,core,alloc,compiler_builtins -Z build-std-features=compiler-builtins-mem -Z json-target-spec"
 bootstrap_rustflags := "-C linker=rust-lld"
 userspace_out := justfile_directory() + "/userspace/target/" + userspace_target + "/release"
 staging_bin := justfile_directory() + "/userspace/initfs-staging/bin"
 toolchain_url := "https://static.redox-os.org/toolchain/x86_64-unknown-redox/relibc-install.tar.gz"
 
-# One-time: extract Redox relibc sysroot into .toolchain/ (for static-linking init/daemons).
+# Build relibc sysroot from vendor/relibc (libc.a, crt*.o, ld64) + libgcc from Redox toolchain.
+build-sysroot:
+    "{{justfile_directory()}}/scripts/build-sysroot.sh"
+
+# Deprecated: full tarball install. Prefer `just build-sysroot`.
 install-toolchain:
     #!/usr/bin/env bash
     set -euo pipefail
-    if [ -f "{{redox_lib}}/libc.a" ]; then
-    echo ".toolchain/ already has relibc; skipping"
-    exit 0
-    fi
-    mkdir -p "{{toolchain_dir}}"
-    tmp="$(mktemp -d)"
-    trap 'rm -rf "$tmp"' EXIT
-    echo "Downloading relibc toolchain (large tarball)..."
-    curl -fsSL "{{toolchain_url}}" | tar -xzf - -C "$tmp"
-    cp -a "$tmp"/* "{{toolchain_dir}}/"
-    echo "Installed relibc to {{toolchain_dir}}"
+    echo "install-toolchain is deprecated; use: just build-sysroot" >&2
+    just build-sysroot
 
 # Build the initfs image from the minimal staging directory (Phase A).
 # Uses build/bootstrap.elf when present (Phase B), else the staging dummy ELF.
@@ -102,7 +100,7 @@ build-bootstrap:
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p "{{build_dir}}"
-    export RUSTUP_TOOLCHAIN=nightly-2026-05-24
+    export PATH="{{userspace_toolchain}}:$PATH"
     export CARGO_TARGET_X86_64_UNKNOWN_REDOX_LINKER=rust-lld
     export RUSTFLAGS="{{bootstrap_rustflags}}"
     {{redox_cargo}} build --release \
@@ -113,19 +111,17 @@ build-bootstrap:
     cp userspace/bootstrap/target/{{userspace_target}}/release/bootstrap "{{build_dir}}/bootstrap.elf"
 
 # Cross-build init + minimal early daemons (Phase B).
-build-userspace:
+build-userspace: build-sysroot
     #!/usr/bin/env bash
     set -euo pipefail
-    if [ ! -f "{{redox_lib}}/libc.a" ]; then
-    echo "Missing {{redox_lib}}/libc.a — run: just install-toolchain" >&2
-    exit 1
-    fi
-    export RUSTUP_TOOLCHAIN=nightly-2026-05-24
+    export PATH="{{userspace_toolchain}}:$PATH"
+    export RUST_TARGET_PATH="{{justfile_directory()}}/targets"
+    export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="{{userspace_rustflags}}"
     export CARGO_TARGET_X86_64_UNKNOWN_REDOX_LINKER=rust-lld
-    export RUSTFLAGS="{{userspace_rustflags}}"
     {{redox_cargo}} build --release \
         --manifest-path userspace/Cargo.toml \
-        --target {{userspace_target}} \
+        --target {{userspace_target_spec}} \
+        {{userspace_build_std}} \
         -p init -p logd -p zerod -p randd -p ramfs -p rtcd
 
 # Copy cross-built userspace binaries into initfs staging.
@@ -137,9 +133,7 @@ stage-userspace: build-userspace
     cp "{{userspace_out}}/$bin" "{{staging_bin}}/$bin"
     done
     cp "{{userspace_out}}/zerod" "{{staging_bin}}/nulld"
-    staging_lib="{{justfile_directory()}}/userspace/initfs-staging/lib"
-    mkdir -p "$staging_lib"
-    cp "{{redox_lib}}/libc.so" "{{redox_lib}}/ld64.so.1" "$staging_lib/"
+    # Init/daemons are statically linked (+crt-static); no dynamic linker in initfs.
 
 # Build initfs with cross-built bootstrap, then direct-boot kernel with userspace enabled.
 build-direct-userspace: build-bootstrap stage-userspace build-initfs
@@ -211,6 +205,10 @@ check:
         -Z build-std=core,alloc -Zbuild-std-features=compiler-builtins-mem \
         -Z json-target-spec \
         --features={{features}}
+
+# Verify Only Rust policy: ELF audit, source allowlist, optional smoke.
+check-only-rust *ARGS:
+    "{{justfile_directory()}}/scripts/check-only-rust.sh" {{ARGS}}
 
 # Verify embedded SMP trampoline bytes match NASM sources (requires nasm).
 validate-trampolines:

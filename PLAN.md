@@ -2,7 +2,7 @@
 
 This document collects all potential next steps, ideas, and open questions that have been discussed during development. It serves as a living backlog.
 
-Last updated: 2026-05-30 (Only Rust policy recorded; Phase B userspace milestone)
+Last updated: 2026-05-31 (Only Rust step 2: in-tree relibc sysroot)
 
 ---
 
@@ -69,8 +69,8 @@ Target recipe: **`just check-only-rust`** (or a dedicated CI job) implementing t
 #### Only Rust migration sequence
 
 1. [x] Fork **`redox-rt` / `generic-rt`** → `userspace/runtime/`; bootstrap uses only that.
-2. Port **`init`** + early daemons off `libc` / `.toolchain` relibc onto the runtime.
-3. Turn on **enforcement gates** (allowlist shrinks as debt is removed).
+2. [x] Port **`init`** + early daemons to **in-tree relibc sysroot** (`just build-sysroot`); drop workspace **`libc`** crate; static initfs ELFs (no `libc.so` staging).
+3. Turn on **enforcement gates** (allowlist shrinks as debt is removed). — **`just check-only-rust`** (ELF audit + source policy; CI job `check-only-rust`).
 4. Remove **`vendor/relibc/`** and relibc tarball download from `just`.
 5. SMP trampolines → Rust **`global_asm!`**; drop NASM golden embed path.
 6. Introduce **`x86_64-unknown-lerux`** target (custom JSON + in-tree sysroot).
@@ -88,8 +88,8 @@ Target recipe: **`just check-only-rust`** (or a dedicated CI job) implementing t
 
 | Item | Violates | Notes |
 |------|----------|-------|
-| `init` + daemons via **`libc`** + `.toolchain/` relibc | Runtime / executables | Phase B bridge |
-| `vendor/relibc/` + `.toolchain/` for init/daemons | Runtime | Step 2: port init + daemons to `userspace/runtime/` |
+| `init` + daemons via **`libc`** + `.toolchain/` relibc | Runtime / executables | **Step 2 done:** in-tree `build-sysroot`; still relibc not `userspace/runtime/` |
+| `vendor/relibc/` + `.toolchain/` tarball **`libc.a`** | Runtime | Step 2: **`just build-sysroot`**; only **`lib/gcc`** fetched for `libgcc_eh` |
 | SMP trampoline **`.bin`** from NASM | CPU code | Use `just validate-trampolines` until Rust rewrite |
 | **`qemu/loader.S`**, MBR stub | Boot chain | Not the product path; remove with Rust bootloader |
 | PVH stub in **`pvh_boot.rs`** | — | Aligned (Rust `global_asm!`) |
@@ -284,8 +284,8 @@ See [Only Rust (policy)](#only-rust-policy) for the full spec, enforcement, and 
 
 - [x] Port the direct-boot PVH boot stub to pure Rust (`kernel/src/arch/x86_shared/pvh_boot.rs`; dropped `cc`/`clang` from `build.rs`).
 - [x] In-tree userspace runtime (`userspace/runtime/` from `redox-rt` / `generic-rt`); bootstrap uses it.
-- [ ] Port init + early daemons off relibc onto `userspace/runtime/`.
-- [ ] `just check-only-rust` + CI: ELF audit, source policy, smoke (see [Only Rust enforcement](#only-rust-enforcement)).
+- [ ] Port init + early daemons off relibc onto `userspace/runtime/` (step 2 shipped in-tree relibc sysroot; full runtime port remains).
+- [x] `just check-only-rust` + CI: ELF audit, source policy (`check-only-rust` job; `--smoke` optional).
 - [ ] SMP trampolines in Rust `global_asm!`; remove NASM golden / `validation/trampolines/asm/` path.
 - [ ] `x86_64-unknown-lerux` target JSON after relibc removal.
 - [ ] Rust bootloader before installable OS image; then remove `qemu/loader.S` / MBR stub.
@@ -320,7 +320,7 @@ Interim until Rust `global_asm!` trampolines ship ([policy](#low-level-cpu-code)
 - [x] Automated QEMU boot tests (`qemu/smoke-test.sh` / `just smoke`, CI `smoke` job).
 - [x] Extend smoke tests for userspace milestones (bootstrap/init strings via `just smoke-userspace`).
 - [x] `just` recipes: `build-direct-userspace`, `qemu-direct-userspace`, `smoke-userspace`.
-- [ ] `just check-only-rust` — ELF audit + source allowlist + integrate with CI (see [Only Rust enforcement](#only-rust-enforcement)).
+- [x] `just check-only-rust` — ELF audit + source allowlist + CI (see [Only Rust enforcement](#only-rust-enforcement)).
 - [ ] Improve the root `README.md` with a proper "Getting Started" once userspace smoke works.
 - [ ] Add `CONTRIBUTING.md` once the project stabilizes a bit.
 

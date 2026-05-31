@@ -37,17 +37,20 @@ Cross-build bootstrap + minimal daemons, then boot with userspace spawn enabled:
 
 ```bash
 rustup target add x86_64-unknown-redox --toolchain nightly-2026-05-24
-just install-toolchain   # one-time: relibc libs into .toolchain/ (see VENDORED.md)
+rustup toolchain install nightly-2025-11-15 --component rust-src   # relibc build
+just build-sysroot          # in-tree relibc → .toolchain/ (+ libgcc from Redox tarball)
 just build-direct-userspace   # bootstrap + daemons + initfs + kernel
 just qemu-direct-userspace    # serial: bootstrap → init → early daemons
 just smoke-userspace          # CI-friendly headless assert (USERSPACE_SMOKE=1)
+just check-only-rust          # ELF audit + source allowlist
 ```
 
 **Linking:** bootstrap uses `rust-lld` + `-Z build-std=…,compiler_builtins` (no host
-`x86_64-unknown-redox-gcc` required). Init and daemons static-link via `rust-lld` +
-`crt*.o` + `libc.a` from `.toolchain/x86_64-unknown-redox/lib`. Dynamic `libc.so` /
-`ld64.so.1` are copied into `userspace/initfs-staging/lib/` for processes exec'd by
-bootstrap.
+`x86_64-unknown-redox-gcc` required). Init and daemons static-link via in-tree
+`libc.a` + `crt*.o` from `.toolchain/x86_64-unknown-redox/lib`, Redox `libgcc_eh`
+from `.toolchain/lib/gcc/…`, and lerux target spec
+[`targets/x86_64-unknown-redox.json`](targets/x86_64-unknown-redox.json) (no `-lgcc`
+late-link). Initfs staging ships **static ELFs only** (no `libc.so` / `ld64.so.1`).
 
 Default `just build-direct` / `just smoke` keep userspace spawn disabled for fast CI.
 

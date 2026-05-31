@@ -10,9 +10,20 @@ use libredox::Fd;
 use redox_scheme::Socket;
 use redox_scheme::scheme::{SchemeAsync, SchemeSync};
 
+fn set_fd_flags(fd: RawFd, flags: usize) -> io::Result<()> {
+    match syscall::fcntl(fd as usize, syscall::F_SETFD, flags) {
+        Ok(_) => Ok(()),
+        Err(err) => Err(io::Error::from_raw_os_error(err.errno)),
+    }
+}
+
 unsafe fn get_fd(var: &str) -> RawFd {
     let fd: RawFd = std::env::var(var).unwrap().parse().unwrap();
-    if unsafe { libc::fcntl(fd, libc::F_SETFD, libc::FD_CLOEXEC) } == -1 {
+    if unsafe {
+        set_fd_flags(fd, syscall::CallFlags::FD_CLOEXEC.bits())
+    }
+    .is_err()
+    {
         panic!(
             "daemon: failed to set CLOEXEC flag for {var} fd: {}",
             io::Error::last_os_error()
@@ -24,14 +35,7 @@ unsafe fn get_fd(var: &str) -> RawFd {
 unsafe fn pass_fd(cmd: &mut Command, env: &str, fd: RawFd) {
     cmd.env(env, format!("{}", fd));
     unsafe {
-        cmd.pre_exec(move || {
-            // Pass notify pipe to child
-            if libc::fcntl(fd, libc::F_SETFD, 0) == -1 {
-                Err(io::Error::last_os_error())
-            } else {
-                Ok(())
-            }
-        });
+        cmd.pre_exec(move || set_fd_flags(fd, 0));
     }
 }
 

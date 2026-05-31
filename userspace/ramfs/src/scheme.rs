@@ -279,7 +279,7 @@ impl SchemeSync for Scheme {
     }
     fn unlinkat(&mut self, dirfd: usize, path: &str, flags: usize, ctx: &CallerCtx) -> Result<()> {
         {
-            if !self.handles.get(dirfd)?.as_inode()? != Filesystem::ROOT_INODE {
+            if self.handles.get(dirfd)?.as_inode()? != Filesystem::ROOT_INODE {
                 return Err(Error::new(EACCES));
             }
         }
@@ -360,7 +360,7 @@ impl SchemeSync for Scheme {
         fd: usize,
         buf: &[u8],
         offset: u64,
-        _fcntl_flags: u32,
+        fcntl_flags: u32,
         _ctx: &CallerCtx,
     ) -> Result<usize> {
         let Ok(offset) = usize::try_from(offset) else {
@@ -372,6 +372,10 @@ impl SchemeSync for Scheme {
             .files
             .get_mut(&inode)
             .ok_or(Error::new(EBADFD))?;
+
+        if !matches!((fcntl_flags as usize) & O_ACCMODE, O_WRONLY | O_RDWR) {
+            return Err(Error::new(EBADF));
+        }
 
         if let &mut FileData::File(ref mut bytes) = &mut file.data {
             if file.mode & MODE_TYPE == MODE_DIR {
@@ -412,7 +416,8 @@ impl SchemeSync for Scheme {
 
         Ok(())
     }
-    fn fchown(&mut self, inode: usize, uid: u32, gid: u32, _ctx: &CallerCtx) -> Result<()> {
+    fn fchown(&mut self, fd: usize, uid: u32, gid: u32, _ctx: &CallerCtx) -> Result<()> {
+        let inode = self.handles.get(fd)?.as_inode()?;
         let file = self
             .filesystem
             .files

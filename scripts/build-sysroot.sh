@@ -10,8 +10,14 @@ TOOLCHAIN_BIN="${TOOLCHAIN_BIN:-$HOME/.rustup/toolchains/nightly-2025-11-15-x86_
 export PATH="$TOOLCHAIN_BIN:$PATH"
 CARGO="$TOOLCHAIN_BIN/cargo"
 AR="${AR:-ar}"
+if command -v objcopy >/dev/null 2>&1; then
+    OBJCOPY="${OBJCOPY:-objcopy}"
+elif command -v llvm-objcopy >/dev/null 2>&1; then
+    OBJCOPY="${OBJCOPY:-llvm-objcopy}"
+else
+    OBJCOPY="${OBJCOPY:-$TOOLCHAIN_BIN/../lib/rustlib/x86_64-unknown-linux-gnu/bin/rust-objcopy}"
+fi
 NM="${NM:-nm}"
-OBJCOPY="${OBJCOPY:-$TOOLCHAIN_BIN/../lib/rustlib/x86_64-unknown-linux-gnu/bin/rust-objcopy}"
 LLD="${LLD:-$TOOLCHAIN_BIN/../lib/rustlib/x86_64-unknown-linux-gnu/bin/rust-lld}"
 TARGET=x86_64-unknown-redox
 TOOLCHAIN_URL="${TOOLCHAIN_URL:-https://static.redox-os.org/toolchain/x86_64-unknown-redox/relibc-install.tar.gz}"

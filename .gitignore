@@ -41,6 +41,9 @@ kernel/validation/trampolines/out/
 
 /.toolchain/
 
+# In-tree relibc sysroot build artifacts
+/vendor/relibc/target/
+
 # Kernel local runtime config (auto-copied from config.toml.example by build.rs)
 config.toml
 

@@ -16,7 +16,6 @@ exclude = ["bootstrap", "initfs", "initfs-tools"]
 
 [workspace.dependencies]
 anyhow = "1"
-libc = "0.2.181"
 log = "0.4"
 libredox = "0.1.17"
 plain = "0.2.3"

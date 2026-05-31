@@ -145,9 +145,9 @@ stub is pure Rust (`kernel/src/arch/x86_shared/pvh_boot.rs`, `core::arch::global
 
 ## Next step
 
-Phase A is done: initfs vendored, `just build-initfs` / `just test-initfs`, initfs
-embedded in direct-boot, smoke test checks non-zero Bootstrap size.
+Only Rust step 2 is done (2026-05-31): `just build-sysroot` builds relibc from
+`vendor/relibc/` into `.toolchain/`; init/daemons are static ELFs (no `libc.so` in
+initfs staging); `just check-only-rust` enforces ELF + source policy.
 
-Phase B milestone reached (2026-05-30): cross-linked bootstrap, init + minimal daemons
-in initfs staging, `just smoke-userspace` passes. Next: Phase C (ACPI/RSDP, `pcid`,
-virtio, optional `50_rootfs` / redoxfs).
+Next: Phase C (ACPI/RSDP, `pcid`, virtio) or Only Rust step 3–4 (shrink allowlist,
+remove `vendor/relibc/` entirely).

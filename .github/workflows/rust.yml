@@ -110,19 +110,23 @@ jobs:
       with:
         toolchain: nightly-2026-05-24
         components: rust-src, llvm-tools
+    - name: Install relibc build toolchain
+      run: rustup toolchain install nightly-2025-11-15 --component rust-src
     - uses: extractions/setup-just@v2
     - name: Install QEMU
       run: |
         sudo apt-get update
-        sudo apt-get install -y --no-install-recommends qemu-system-x86 curl
-    - name: Cache Redox relibc toolchain
+        sudo apt-get install -y --no-install-recommends qemu-system-x86 curl binutils
+    - name: Cache in-tree sysroot
       uses: actions/cache@v4
       with:
-        path: .toolchain
-        key: relibc-toolchain-x86_64-${{ hashFiles('justfile') }}
-        restore-keys: relibc-toolchain-x86_64-
-    - name: Install relibc toolchain
-      run: just install-toolchain
+        path: |
+          .toolchain
+          vendor/relibc/target
+        key: lerux-sysroot-${{ hashFiles('vendor/relibc/**', 'userspace/runtime/**', 'scripts/build-sysroot.sh', 'targets/x86_64-unknown-redox.json') }}
+        restore-keys: lerux-sysroot-
+    - name: Build in-tree sysroot
+      run: just build-sysroot
     - name: Add Redox userspace target
       run: rustup target add x86_64-unknown-redox --toolchain nightly-2026-05-24
     - name: Phase B userspace smoke test
@@ -136,3 +140,12 @@ jobs:
         name: qemu-serial-userspace-log
         path: qemu-serial.log
         if-no-files-found: ignore
+
+  check-only-rust:
+    runs-on: ubuntu-latest
+    needs: [smoke-userspace]
+    steps:
+    - uses: actions/checkout@v4
+    - uses: extractions/setup-just@v2
+    - name: Only Rust policy checks
+      run: just check-only-rust

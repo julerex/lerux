@@ -13,9 +13,7 @@ members = [
     "src/crt0",
     "src/crti",
     "src/crtn",
-    "../../userspace/runtime/redox-rt",
     "ld_so",
-    "../../userspace/runtime/generic-rt",
 ]
 exclude = ["tests", "dlmalloc-rs"]
 

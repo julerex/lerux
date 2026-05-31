@@ -122,11 +122,9 @@ unsafe fn pass_fd(cmd: &mut Command, env: &str, fd: RawFd) {
     cmd.env(env, format!("{}", fd));
     unsafe {
         cmd.pre_exec(move || {
-            // Pass notify pipe to child
-            if libc::fcntl(fd, libc::F_SETFD, 0) == -1 {
-                Err(io::Error::last_os_error())
-            } else {
-                Ok(())
+            match syscall::fcntl(fd as usize, syscall::F_SETFD, 0) {
+                Ok(_) => Ok(()),
+                Err(err) => Err(io::Error::from_raw_os_error(err.errno)),
             }
         });
     }

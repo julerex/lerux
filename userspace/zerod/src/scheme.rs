@@ -1,9 +1,13 @@
 use redox_scheme::scheme::SchemeSync;
 use redox_scheme::{CallerCtx, OpenResult};
 use scheme_utils::FpathWriter;
-use syscall::{error::*, schemev2::NewFdFlags, MODE_CHR};
+use syscall::error::{Error, Result, *};
+use syscall::{schemev2::NewFdFlags, MODE_CHR};
 
-use crate::Ty;
+pub enum Ty {
+    Null,
+    Zero,
+}
 
 pub struct ZeroScheme(pub Ty);
 

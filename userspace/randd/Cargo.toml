@@ -2,20 +2,29 @@
 name = "randd"
 description = "Random number generation daemon"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
-rand_chacha = "0.2"
-rand_core = "0.5"
+rand_chacha = { version = "0.9", default-features = false }
+rand_core = { version = "0.9", default-features = false }
 daemon = { path = "../daemon" }
-redox_syscall.workspace = true
+lerux-entry = { path = "../lerux-entry" }
+lerux-shim = { path = "../lerux-shim" }
 libredox.workspace = true
-sha2 = "0.8"
-redox-scheme.workspace = true
+redox-scheme = { workspace = true, default-features = false }
+redox_syscall.workspace = true
+rt-bin = { path = "../rt-bin" }
 scheme-utils = { path = "../scheme-utils" }
+sha2 = { version = "0.10", default-features = false }
 
 [target.'cfg(target_arch = "x86_64")'.dependencies]
 raw-cpuid = "11.0.1"
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
 
 [lints]
 workspace = true

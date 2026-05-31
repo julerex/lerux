@@ -3,14 +3,21 @@ name = "rtcd"
 description = "x86 Real Time Clock daemon"
 version = "0.1.0"
 authors = ["4lDO2 <4lDO2@protonmail.com>"]
-edition = "2018"
+edition = "2024"
 license = "MIT"
 
-
 [dependencies]
-anyhow.workspace = true
+lerux-entry = { path = "../../lerux-entry" }
+lerux-shim = { path = "../../lerux-shim" }
+libredox = { workspace = true, features = ["call", "protocol"] }
+redox_syscall.workspace = true
+rt-bin = { path = "../../rt-bin" }
 
-common = { path = "../common" }
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
 
 [lints]
 workspace = true

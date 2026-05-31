@@ -52,6 +52,8 @@ pub unsafe extern "C" fn start() -> ! {
     let _ = syscall::openat(debug_fd, "", syscall::O_WRONLY, 0); // stdout
     let _ = syscall::openat(debug_fd, "", syscall::O_WRONLY, 0); // stderr
 
+    let _ = syscall::write(1, b"bootstrap: start\n");
+
     unsafe {
         let _ = syscall::mprotect(4096, 4096, MapFlags::PROT_READ | MapFlags::MAP_PRIVATE)
             .expect("mprotect failed for initfs header page");

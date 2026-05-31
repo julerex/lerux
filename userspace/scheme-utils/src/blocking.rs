@@ -1,5 +1,6 @@
-use std::collections::VecDeque;
-use std::ops::ControlFlow;
+use alloc::collections::VecDeque;
+use alloc::vec::Vec;
+use core::ops::ControlFlow;
 
 use libredox::error::Error as LError;
 
@@ -10,7 +11,6 @@ use redox_scheme::scheme::{SchemeState, SchemeSync};
 use redox_scheme::{Request, RequestKind, Response, SignalBehavior, Socket};
 
 pub struct Blocking<'sock> {
-    // TODO: VecDeque for both when it implements spare_capacity
     requests_read: Vec<Request>,
     responses_to_write: VecDeque<Response>,
 
@@ -57,7 +57,6 @@ impl<'sock> Blocking<'sock> {
                 }
                 RequestKind::Cancellation(_req) => {}
                 RequestKind::OnClose { id } => {
-                    // TODO: state.on_close()
                     scheme.on_close(id);
                 }
                 RequestKind::SendFd(sendfd_request) => {

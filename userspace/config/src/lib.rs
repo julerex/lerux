@@ -1,40 +1,44 @@
-use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
-use std::{fs, io};
+#![no_std]
 
-pub fn config(name: &str) -> Result<Vec<PathBuf>, io::Error> {
-    config_for_dirs(&[
-        &Path::new("/usr/lib").join(format!("{name}.d")),
-        &Path::new("/etc").join(format!("{name}.d")),
-    ])
-}
+extern crate alloc;
 
-pub fn config_for_initfs(name: &str) -> Result<Vec<PathBuf>, io::Error> {
-    config_for_dirs(&[
-        &Path::new("/scheme/initfs/lib").join(format!("{name}.d")),
-        &Path::new("/scheme/initfs/etc").join(format!("{name}.d")),
-    ])
-}
+use alloc::collections::BTreeMap;
+use alloc::string::String;
+use alloc::vec::Vec;
 
-pub fn config_for_dirs(dirs: &[impl AsRef<Path>]) -> Result<Vec<PathBuf>, io::Error> {
-    // This must be a BTreeMap to iterate in sorted order.
+use libredox::Fd;
+use libredox::flag::O_RDONLY;
+
+pub fn config_for_dirs(dirs: &[&str]) -> Result<Vec<String>, syscall::Error> {
     let mut entries = BTreeMap::new();
 
     for dir in dirs {
-        let dir = dir.as_ref();
-        if !dir.exists() {
-            // Skip non-existent dirs
+        let Ok(fd) = Fd::open(*dir, O_RDONLY, 0) else {
             continue;
-        }
-
-        for entry_res in fs::read_dir(&dir)? {
-            // This intentionally overwrites older entries with
-            // the same filename to allow overriding entries in
-            // one search dir with those in a later search dir.
-            let entry = entry_res?;
-            entries.insert(entry.file_name(), entry.path());
+        };
+        let mut buf = [0u8; 4096];
+        let n = fd.read(&mut buf)?;
+        let text = core::str::from_utf8(&buf[..n]).map_err(|_| syscall::Error::new(syscall::EINVAL))?;
+        for line in text.lines() {
+            let name = line.trim();
+            if name.is_empty() || name.starts_with('#') {
+                continue;
+            }
+            let path = if dir.ends_with('/') {
+                format!("{dir}{name}")
+            } else {
+                format!("{dir}/{name}")
+            };
+            entries.insert(name.to_string(), path);
         }
     }
 
     Ok(entries.into_values().collect())
+}
+
+pub fn config_for_initfs(name: &str) -> Result<Vec<String>, syscall::Error> {
+    config_for_dirs(&[
+        &alloc::format!("/scheme/initfs/lib/{name}.d"),
+        &alloc::format!("/scheme/initfs/etc/{name}.d"),
+    ])
 }

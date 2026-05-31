@@ -1,6 +1,6 @@
-use std::collections::{HashMap, VecDeque};
-use std::ops::ControlFlow;
-
+use alloc::collections::{BTreeMap, VecDeque};
+use alloc::vec::Vec;
+use core::ops::ControlFlow;
 use libredox::error::Error as LError;
 
 use syscall::Result;
@@ -10,11 +10,10 @@ use redox_scheme::scheme::{Op, SchemeResponse, SchemeState, SchemeSync};
 use redox_scheme::{CallerCtx, Id, Request, RequestKind, Response, SignalBehavior, Socket};
 
 pub struct ReadinessBased<'sock> {
-    // TODO: VecDeque for both when it implements spare_capacity
     requests_read: Vec<Request>,
     responses_to_write: VecDeque<Response>,
 
-    states: HashMap<Id, (CallerCtx, Op)>,
+    states: BTreeMap<Id, (CallerCtx, Op)>,
     ready_queue: VecDeque<Id>,
 
     socket: &'sock Socket,
@@ -25,7 +24,7 @@ impl<'sock> ReadinessBased<'sock> {
         Self {
             requests_read: Vec::with_capacity(queue_size),
             responses_to_write: VecDeque::with_capacity(queue_size),
-            states: HashMap::new(),
+            states: BTreeMap::new(),
             socket,
             ready_queue: VecDeque::new(),
             state: SchemeState::new(),
@@ -59,7 +58,6 @@ impl<'sock> ReadinessBased<'sock> {
                     continue;
                 }
                 RequestKind::OnClose { id } => {
-                    // TODO: state.on_close()
                     scheme.on_close(id);
                     continue;
                 }
@@ -116,8 +114,7 @@ impl<'sock> ReadinessBased<'sock> {
 
         Ok(())
     }
-    // TODO: Doesn't scale. Instead, provide an API for some form of queue.
-    // TODO: panic if id isn't present?
+
     pub fn poll_request(&mut self, id: Id, scheme: &mut impl SchemeSync) -> Result<bool> {
         Ok(
             match Self::poll_request_inner(id, scheme, &mut self.state, &mut self.states)? {
@@ -137,7 +134,7 @@ impl<'sock> ReadinessBased<'sock> {
         id: Id,
         scheme: &mut impl SchemeSync,
         state: &mut SchemeState,
-        states: &mut HashMap<Id, (CallerCtx, Op)>,
+        states: &mut BTreeMap<Id, (CallerCtx, Op)>,
     ) -> Result<ControlFlow<Response, (CallerCtx, Op)>> {
         let (caller, mut op) = states.remove(&id).ok_or(Error::new(EIO))?;
         let resp = match op.handle_sync_dont_consume(&caller, scheme, state) {
@@ -171,7 +168,6 @@ impl<'sock> ReadinessBased<'sock> {
         Ok(())
     }
     pub fn poll_all_requests(&mut self, scheme: &mut impl SchemeSync) -> Result<()> {
-        // TODO: implement waker-like API
         self.ready_queue.clear();
         self.ready_queue.extend(self.states.keys().copied());
         self.poll_ready_requests(scheme)

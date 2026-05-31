@@ -115,16 +115,16 @@ pub fn main() -> ! {
     let _ = log::set_logger(&Logger);
 
     unsafe extern "C" {
-        // The linker script will define this as the location of the initfs header.
-        static __initfs_header: u8;
-
-        // The linker script will define this as the end of the executable (excluding initfs).
+        // End of the bootstrap ELF mapping (initfs archive follows in the same blob).
         static __bss_end: u8;
     }
 
-    let initfs_start = core::ptr::addr_of!(__initfs_header);
+    // The kernel maps the full initfs.bin blob at PAGE_SIZE. The archive header lives at the
+    // start of that blob; `__initfs_header` (linker "page before .text") is the embedded ELF
+    // file inside the archive, not the archive header.
+    let initfs_start = syscall::PAGE_SIZE as *const u8;
     let initfs_length = unsafe {
-        (*(core::ptr::addr_of!(__initfs_header) as *const redox_initfs::types::Header))
+        (*(initfs_start as *const redox_initfs::types::Header))
             .initfs_size
             .get() as usize
     };
@@ -145,16 +145,19 @@ pub fn main() -> ! {
         },
     );
 
-    // Unmap initfs data as only the initfs scheme implementation needs it.
+    // Unmap the initfs archive tail from the parent; the initfs child keeps a CoW copy.
     unsafe {
         let executable_end = core::ptr::addr_of!(__bss_end)
             .add(core::ptr::addr_of!(__bss_end).align_offset(syscall::PAGE_SIZE));
-        syscall::funmap(
-            executable_end as usize,
-            initfs_length.next_multiple_of(syscall::PAGE_SIZE)
-                - (executable_end.offset_from(initfs_start) as usize),
-        )
-        .unwrap();
+        let initfs_end = initfs_start as usize + initfs_length;
+        let unmap_start = executable_end as usize;
+        if initfs_end > unmap_start {
+            syscall::funmap(
+                unmap_start,
+                (initfs_end - unmap_start).next_multiple_of(syscall::PAGE_SIZE),
+            )
+            .expect("bootstrap: failed to unmap initfs from parent");
+        }
     }
 
     let (scheme_creation_cap, auth, kernel_schemes, proc_fd) = spawn(
@@ -204,6 +207,30 @@ pub fn main() -> ! {
     let (init_proc_fd, init_thr_fd) = unsafe { make_init(proc_fd.take()) };
     // from this point, this_thr_fd is no longer valid
 
+    let thr_fd_env: &'static [u8] = alloc::format!("__LERUX_THR_FD={}\0", init_thr_fd.as_raw_fd())
+        .into_bytes()
+        .leak();
+    let proc_fd_env: &'static [u8] = alloc::format!("__LERUX_PROC_FD={}\0", init_proc_fd.as_raw_fd())
+        .into_bytes()
+        .leak();
+    let ns_fd_env: &'static [u8] =
+        alloc::format!("__LERUX_NS_FD={}\0", initns_fd.as_raw_fd())
+            .into_bytes()
+            .leak();
+    envs.push(thr_fd_env);
+    envs.push(proc_fd_env);
+    envs.push(ns_fd_env);
+
+    let initns_raw = initns_fd.as_raw_fd();
+    let fd_argv: &'static [u8] = alloc::format!(
+        "{},{},{}\0",
+        init_thr_fd.as_raw_fd(),
+        init_proc_fd.as_raw_fd(),
+        initns_raw
+    )
+    .into_bytes()
+    .leak();
+
     const CWD: &[u8] = b"/scheme/initfs";
     let cwd_fd = FdGuard::new(
         syscall::openat(initns_fd.as_raw_fd(), "/scheme/initfs", O_STAT, 0)
@@ -231,47 +258,50 @@ pub fn main() -> ! {
     .to_upper()
     .unwrap();
 
-    let FexecResult::Interp {
-        path: interp_path,
-        interp_override,
-    } = fexec_impl(
+    let _ = syscall::write(1, b"bootstrap: fexec init\n");
+
+    match fexec_impl(
         image_file,
         init_thr_fd,
         init_proc_fd,
         exe_path.as_bytes(),
-        &[exe_path.as_bytes()],
+        &[exe_path.as_bytes(), fd_argv],
         &envs,
         &extrainfo,
         None,
-    )
-    .expect("failed to execute init");
+    ) {
+        Ok(FexecResult::Interp {
+            path: interp_path,
+            interp_override,
+        }) => {
+            let interp_cstr =
+                CStr::from_bytes_with_nul(&interp_path).expect("interpreter not valid C str");
+            let interp_file = FdGuard::new(
+                syscall::openat(
+                    extrainfo.ns_fd.unwrap(),
+                    interp_cstr.to_str().expect("interpreter not UTF-8"),
+                    O_RDONLY | O_CLOEXEC,
+                    0,
+                )
+                .expect("failed to open dynamic linker"),
+            )
+            .to_upper()
+            .unwrap();
 
-    // According to elf(5), PT_INTERP requires that the interpreter path be
-    // null-terminated. Violating this should therefore give the "format error" ENOEXEC.
-    let interp_cstr = CStr::from_bytes_with_nul(&interp_path).expect("interpreter not valid C str");
-    let interp_file = FdGuard::new(
-        syscall::openat(
-            extrainfo.ns_fd.unwrap(), // initns, not initfs!
-            interp_cstr.to_str().expect("interpreter not UTF-8"),
-            O_RDONLY | O_CLOEXEC,
-            0,
-        )
-        .expect("failed to open dynamic linker"),
-    )
-    .to_upper()
-    .unwrap();
-
-    fexec_impl(
-        interp_file,
-        init_thr_fd,
-        init_proc_fd,
-        exe_path.as_bytes(),
-        &[exe_path.as_bytes()],
-        &envs,
-        &extrainfo,
-        Some(interp_override),
-    )
-    .expect("failed to execute init");
+            fexec_impl(
+                interp_file,
+                init_thr_fd,
+                init_proc_fd,
+                exe_path.as_bytes(),
+                &[exe_path.as_bytes(), fd_argv],
+                &envs,
+                &extrainfo,
+                Some(interp_override),
+            )
+            .expect("failed to execute init");
+        }
+        Err(err) => panic!("failed to execute init: {err}"),
+    }
 
     unreachable!()
 }

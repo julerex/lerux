@@ -1,26 +1,50 @@
-use anyhow::{Context, Result};
+#![no_std]
+#![no_main]
+#![feature(never_type)]
 
-// TODO: Do not use target architecture to distinguish these.
-#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+extern crate alloc;
+
+#[allow(unused_imports)]
+use lerux_entry as _;
+#[allow(unused_imports)]
+use lerux_shim as _;
+
+mod pio;
 mod x86;
 
-/// The rtc driver runs only once, being perhaps the first of all processes that init starts (since
-/// early logging benefits from knowing the time, even though this can be adjusted later once the
-/// time is known). The sole job of `rtcd` is to read from the hardware real-time clock, and then
-/// write the offset to the kernel.
+use libredox::Fd;
+use libredox::flag::O_WRONLY;
 
-fn main() -> Result<()> {
-    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
-    {
-        common::acquire_port_io_rights().context("failed to set iopl")?;
+#[panic_handler]
+fn panic(info: &core::panic::PanicInfo) -> ! {
+    rt_bin::panic_handler(info)
+}
 
-        let time_s = self::x86::get_time();
-        let time_ns = u128::from(time_s) * 1_000_000_000;
+fn acquire_iopl() {
+    use libredox::call::call_wo;
+    let thr = unsafe { lerux_shim::redox_cur_thrfd_v0() };
+    let kernel_fd = syscall::dup(thr, b"open_via_dup").expect("rtcd: open_via_dup");
+    call_wo(
+        kernel_fd,
+        &[],
+        syscall::CallFlags::empty(),
+        &[syscall::ProcSchemeVerb::Iopl as u64],
+    )
+    .expect("rtcd: iopl");
+    syscall::close(kernel_fd).ok();
+}
 
-        std::fs::write("/scheme/sys/update_time_offset", &time_ns.to_ne_bytes())
-            .context("failed to write to time offset")?;
+#[unsafe(no_mangle)]
+fn lerux_rt_main() -> ! {
+    acquire_iopl();
+    let time_s = x86::get_time();
+    let time_ns = (time_s as u128) * 1_000_000_000;
+    let fd = Fd::open("/scheme/sys/update_time_offset", O_WRONLY, 0)
+        .expect("rtcd: failed to open sys time offset");
+    fd.write(&time_ns.to_ne_bytes())
+        .expect("rtcd: failed to write time offset");
+    libredox::call::setrens(0, 0).expect("rtcd: failed to enter null namespace");
+    loop {
+        core::hint::spin_loop();
     }
-    // TODO: aarch64 is currently handled in the kernel
-
-    Ok(())
 }

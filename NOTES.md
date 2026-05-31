@@ -145,9 +145,9 @@ stub is pure Rust (`kernel/src/arch/x86_shared/pvh_boot.rs`, `core::arch::global
 
 ## Next step
 
-Only Rust step 2 is done (2026-05-31): `just build-sysroot` builds relibc from
-`vendor/relibc/` into `.toolchain/`; init/daemons are static ELFs (no `libc.so` in
-initfs staging); `just check-only-rust` enforces ELF + source policy.
+Only Rust step 3–4 (2026-05-31): initfs daemons link `userspace/runtime/` via
+`lerux-entry` / `lerux-shim` (`just build-userspace`; no `vendor/relibc/`). Policy:
+`just check-only-rust --no-smoke`. QEMU smoke still needs bootstrap initfs header
+fix (`PAGE_SIZE`) and post-`fexec` entry (`lerux-entry` stack/auxv).
 
-Next: Phase C (ACPI/RSDP, `pcid`, virtio) or Only Rust step 3–4 (shrink allowlist,
-remove `vendor/relibc/` entirely).
+Next: fix `just smoke-userspace`, re-enable daemon spawn in `init`, Phase C (ACPI).

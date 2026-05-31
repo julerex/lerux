@@ -3,14 +3,23 @@ name = "zerod"
 description = "Zeroing buffers daemon"
 version = "0.1.0"
 authors = ["Alex Lyon <arcterus@mail.com>"]
-edition = "2021"
+edition = "2024"
 
 [dependencies]
-redox_syscall.workspace = true
-redox-scheme.workspace = true
-scheme-utils = { path = "../scheme-utils" }
+rt-bin = { path = "../rt-bin" }
 daemon = { path = "../daemon" }
+lerux-entry = { path = "../lerux-entry" }
+lerux-shim = { path = "../lerux-shim" }
 libredox.workspace = true
+redox-scheme = { workspace = true, default-features = false }
+redox_syscall.workspace = true
+scheme-utils = { path = "../scheme-utils" }
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
 
 [lints]
 workspace = true

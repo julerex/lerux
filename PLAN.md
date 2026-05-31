@@ -64,14 +64,14 @@ CI and local checks should prove the policy, not only smoke serial output:
 | **Source policy** | Fail on new `*.c`, `*.S`, `*.asm` under `kernel/`, `userspace/`, `vendor/` except a shrinking allowlist |
 | **Trampolines** | `just validate-trampolines` until NASM golden path is removed |
 
-Target recipe: **`just check-only-rust`** (or a dedicated CI job) implementing the above. Allowlist until deleted: `vendor/relibc/`, `qemu/*.S`, trampoline validation asm under `kernel/validation/trampolines/asm/`.
+Target recipe: **`just check-only-rust`** (or a dedicated CI job) implementing the above. Allowlist: `qemu/*.S`, trampoline validation asm under `kernel/validation/trampolines/asm/`.
 
 #### Only Rust migration sequence
 
 1. [x] Fork **`redox-rt` / `generic-rt`** → `userspace/runtime/`; bootstrap uses only that.
 2. [x] Port **`init`** + early daemons to **in-tree relibc sysroot** (`just build-sysroot`); drop workspace **`libc`** crate; static initfs ELFs (no `libc.so` staging).
 3. Turn on **enforcement gates** (allowlist shrinks as debt is removed). — **`just check-only-rust`** (ELF audit + source policy; CI job `check-only-rust`).
-4. Remove **`vendor/relibc/`** and relibc tarball download from `just`.
+4. [x] Remove **`vendor/relibc/`** and relibc tarball download from `just`.
 5. SMP trampolines → Rust **`global_asm!`**; drop NASM golden embed path.
 6. Introduce **`x86_64-unknown-lerux`** target (custom JSON + in-tree sysroot).
 7. Rust **bootloader** + installable image.

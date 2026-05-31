@@ -1,8 +1,12 @@
+#![no_std]
 #![feature(never_type)]
 
-use std::collections::{BTreeMap, btree_map};
-use std::fmt;
-use std::num::Wrapping;
+extern crate alloc;
+
+use alloc::collections::{BTreeMap, VecDeque};
+use alloc::string::String;
+use core::fmt;
+use core::num::Wrapping;
 
 use syscall::{EBADF, Error, Result};
 
@@ -28,7 +32,6 @@ impl<T> HandleMap<T> {
     pub fn insert(&mut self, handle: T) -> usize {
         let id = self.next_id;
 
-        // If we've looped round there's a small chance that the file descriptor still exists, so loop till we get one that doesn't
         self.next_id += Wrapping(1);
         loop {
             if !self.handles.contains_key(&self.next_id.0) {
@@ -75,48 +78,29 @@ impl<T> HandleMap<T> {
     }
 }
 
+use alloc::collections::btree_map;
+
 pub struct FpathWriter<'a> {
     buf: &'a mut [u8],
     written: usize,
 }
 
 impl<'a> FpathWriter<'a> {
-    pub fn with(
-        buf: &'a mut [u8],
-        scheme_name: &str,
-        f: impl FnOnce(&mut Self) -> Result<()>,
-    ) -> Result<usize> {
+    pub fn with(buf: &'a mut [u8], scheme: &str, f: impl FnOnce(&mut Self) -> Result<()>) -> Result<usize> {
         let mut w = FpathWriter { buf, written: 0 };
-        write!(w, "/scheme/{scheme_name}/").unwrap();
+        w.push_str(scheme)?;
+        w.push_str(":")?;
         f(&mut w)?;
         Ok(w.written)
     }
 
-    pub fn with_legacy(
-        buf: &'a mut [u8],
-        scheme_name: &str,
-        f: impl FnOnce(&mut Self) -> Result<()>,
-    ) -> Result<usize> {
-        let mut w = FpathWriter { buf, written: 0 };
-        write!(w, "{scheme_name}:").unwrap();
-        f(&mut w)?;
-        Ok(w.written)
-    }
-
-    pub fn push_str(&mut self, s: &str) {
-        let count = core::cmp::min(s.len(), self.buf.len() - self.written);
-        self.buf[self.written..self.written + count].copy_from_slice(&s.as_bytes()[..count]);
-        self.written += count;
-    }
-
-    pub fn write_fmt(&mut self, args: fmt::Arguments<'_>) -> fmt::Result {
-        std::fmt::write(self, args)
-    }
-}
-
-impl fmt::Write for FpathWriter<'_> {
-    fn write_str(&mut self, s: &str) -> fmt::Result {
-        self.push_str(s);
+    pub fn push_str(&mut self, s: &str) -> Result<()> {
+        let bytes = s.as_bytes();
+        if self.written + bytes.len() > self.buf.len() {
+            return Err(Error::new(syscall::ENAMETOOLONG));
+        }
+        self.buf[self.written..self.written + bytes.len()].copy_from_slice(bytes);
+        self.written += bytes.len();
         Ok(())
     }
 }

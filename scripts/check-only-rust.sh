@@ -21,9 +21,6 @@ echo "== Only Rust: source policy =="
 violations=()
 while IFS= read -r -d '' path; do
     case "$path" in
-        vendor/relibc/*) continue ;;
-        vendor/relibc/redox-rt/*) continue ;;
-        vendor/relibc/generic-rt/*) continue ;;
         qemu/*.S) continue ;;
         kernel/validation/trampolines/asm/*) continue ;;
         *)

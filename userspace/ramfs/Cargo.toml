@@ -2,20 +2,25 @@
 name = "ramfs"
 version = "0.1.0"
 authors = ["4lDO2 <4lDO2@protonmail.com>"]
-edition = "2018"
+edition = "2024"
 license = "MIT"
-description = "RAM filesystem, which is useful for early logging"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "RAM filesystem (lerux minimal scheme stub)"
 
 [dependencies]
 daemon = { path = "../daemon" }
+lerux-entry = { path = "../lerux-entry" }
+lerux-shim = { path = "../lerux-shim" }
+libredox.workspace = true
+redox-scheme = { workspace = true, default-features = false }
 redox_syscall.workspace = true
-redox-scheme.workspace = true
+rt-bin = { path = "../rt-bin" }
 scheme-utils = { path = "../scheme-utils" }
-libredox = { workspace = true, features = ["call"] }
-indexmap = "2.5.0"
-slab.workspace = true
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
 
 [lints]
 workspace = true

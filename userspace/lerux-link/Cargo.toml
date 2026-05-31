@@ -1,0 +1,10 @@
+[package]
+name = "lerux-link"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Linker script for lerux no_std userspace binaries"
+publish = false
+
+[lib]
+path = "lib.rs"

@@ -1,0 +1,12 @@
+[package]
+name = "rt-bin"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+
+[lib]
+path = "lib.rs"
+
+[dependencies]
+syscall = { package = "redox_syscall", version = "0.8.0", default-features = false }

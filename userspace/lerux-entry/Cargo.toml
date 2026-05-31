@@ -1,0 +1,16 @@
+[package]
+name = "lerux-entry"
+description = "no_std entry, heap, and stack helpers for lerux userspace binaries"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[dependencies]
+linked_list_allocator = "0.10"
+redox-rt = { path = "../runtime/redox-rt" }
+redox_syscall = "0.8.0"
+
+[build-dependencies]
+
+[lints]
+workspace = true

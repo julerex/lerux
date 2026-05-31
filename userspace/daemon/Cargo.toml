@@ -5,8 +5,9 @@ version = "0.0.0"
 edition = "2024"
 
 [dependencies]
+lerux-entry = { path = "../lerux-entry" }
 libredox.workspace = true
-redox-scheme.workspace = true
+redox-scheme = { workspace = true, default-features = false }
 redox_syscall.workspace = true
 
 [lints]

@@ -64,10 +64,11 @@ static DIRECT_MEMORY_MAP: [BootloaderMemoryEntry; 6] = [
         size: 0x0100_0000,
         kind: BootloaderMemoryKind::Kernel,
     },
-    // Main usable RAM after the kernel image (trimmed for 512 MiB guests)
+    // Usable RAM after the kernel image. Must not extend past the guest RAM size:
+    // QEMU's default is 128 MiB when `-m` is omitted (ends at 0x800_0000).
     BootloaderMemoryEntry {
         base: 0x0120_0000,
-        size: 0x0CD0_0000,
+        size: 0x6E0_0000,
         kind: BootloaderMemoryKind::Free,
     },
     // Typical device/MMIO hole

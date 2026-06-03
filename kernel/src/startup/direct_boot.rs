@@ -44,7 +44,19 @@ pub(crate) fn initfs_blob() -> &'static [u8] {
     initfs_embed::INITFS_BLOB
 }
 
-/// Static memory map for a typical QEMU machine (512 MiB–2 GiB of RAM).
+/// Usable RAM after the kernel image (must not extend past the guest RAM size).
+///
+/// QEMU's default guest size is 128 MiB when `-m` is omitted. The previous map
+/// ended free RAM at 0xDF0_0000 (~223 MiB), so frame allocation used
+/// non-existent physical pages and crashed during init on default-sized guests.
+#[cfg(not(feature = "direct-boot-userspace"))]
+const DIRECT_BOOT_FREE_RAM_SIZE: u64 = 0x6E0_0000; // ends at 128 MiB
+
+/// Phase B userspace smoke runs QEMU with `-m 512`; allow more free RAM in that build.
+#[cfg(feature = "direct-boot-userspace")]
+const DIRECT_BOOT_FREE_RAM_SIZE: u64 = 0x0CD0_0000; // ends at ~223 MiB (fits 512 MiB guests)
+
+/// Static memory map for QEMU direct-boot.
 static DIRECT_MEMORY_MAP: [BootloaderMemoryEntry; 6] = [
     // Low memory (BIOS, VGA, etc.)
     BootloaderMemoryEntry {
@@ -64,10 +76,10 @@ static DIRECT_MEMORY_MAP: [BootloaderMemoryEntry; 6] = [
         size: 0x0100_0000,
         kind: BootloaderMemoryKind::Kernel,
     },
-    // Main usable RAM after the kernel image (trimmed for 512 MiB guests)
+    // Main usable RAM after the kernel image
     BootloaderMemoryEntry {
         base: 0x0120_0000,
-        size: 0x0CD0_0000,
+        size: DIRECT_BOOT_FREE_RAM_SIZE,
         kind: BootloaderMemoryKind::Free,
     },
     // Typical device/MMIO hole

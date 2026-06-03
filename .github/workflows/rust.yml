@@ -76,11 +76,15 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y --no-install-recommends qemu-system-x86
-    - name: Direct-boot serial smoke test
+    - name: Direct-boot serial smoke test (512 MiB guest)
       run: |
         # llvm-objcopy ships with the llvm-tools rustup component; put it on PATH.
         export PATH="$(dirname "$(rustc --print target-libdir)")/bin:$PATH"
         just smoke
+    - name: Direct-boot serial smoke test (128 MiB default QEMU RAM)
+      run: |
+        export PATH="$(dirname "$(rustc --print target-libdir)")/bin:$PATH"
+        MEMORY=128 just smoke
     - name: Upload serial log
       if: always()
       uses: actions/upload-artifact@v4

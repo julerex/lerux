@@ -110,3 +110,52 @@ fn archive_and_read() -> Result<()> {
 
     Ok(())
 }
+
+/// Regression: chunk loop must advance by bytes read, not buffer size (see allocate_and_write_file).
+#[test]
+fn archive_large_file_roundtrip() -> Result<()> {
+    let tmp = std::env::temp_dir().join("redox-initfs-tools-large-file-test");
+    let _ = std::fs::remove_dir_all(&tmp);
+    std::fs::create_dir_all(&tmp).context("create temp dir")?;
+    let source = tmp.join("src");
+    std::fs::create_dir_all(source.join("payload"))?;
+
+    // 12_000 bytes: spans multiple 8 KiB chunks and is not chunk-aligned.
+    let payload: Vec<u8> = (0..12_000).map(|i| (i % 251) as u8).collect();
+    std::fs::write(source.join("payload").join("big.bin"), &payload)?;
+
+    let bootstrap = source.join("bootstrap.elf");
+    std::fs::copy("data/foo/bootstrap.elf", &bootstrap).context("copy bootstrap elf")?;
+
+    let out = tmp.join("out.img");
+    let args = redox_initfs_tools::Args {
+        destination_path: &out,
+        source: &source,
+        bootstrap_code: &bootstrap,
+        max_size: redox_initfs_tools::DEFAULT_MAX_SIZE,
+    };
+    redox_initfs_tools::archive(&args).context("failed to archive")?;
+
+    let data = std::fs::read(&out).context("read archive")?;
+    let fs = redox_initfs::InitFs::new(&data, None).context("parse archive")?;
+    let root = fs
+        .get_inode(fs.root_inode())
+        .ok_or_else(|| anyhow!("missing root"))?;
+    let root = build_tree(fs, root)?;
+
+    let Node::Dir(entries) = root else {
+        return Err(anyhow!("expected root directory"));
+    };
+    let Node::Dir(payload_dir) = entries.get(b"payload".as_slice()).context("payload dir")? else {
+        return Err(anyhow!("expected payload directory"));
+    };
+    let Node::File { data } = payload_dir
+        .get(b"big.bin".as_slice())
+        .context("big.bin")?
+    else {
+        return Err(anyhow!("expected file node"));
+    };
+    assert_eq!(data.as_slice(), payload.as_slice());
+
+    Ok(())
+}

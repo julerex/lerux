@@ -32,6 +32,26 @@ const DEFAULT_PRNG_MODE: u16 = 0o644;
 // Rand crate recommends at least 256 bits of entropy to seed the RNG
 const SEED_BYTES: usize = 32;
 
+#[cfg(target_arch = "x86_64")]
+fn rdrand_u64() -> Option<u64> {
+    for _ in 0..64 {
+        let rand: u64;
+        let ok: u8;
+        unsafe {
+            asm!(
+                "rdrand {rand}",
+                "setc {ok}",
+                rand = out(reg) rand,
+                ok = out(reg_byte) ok,
+            );
+        }
+        if ok != 0 {
+            return Some(rand);
+        }
+    }
+    None
+}
+
 /// Create a true random seed for the RNG if hardware support is present.
 /// On Intel x64 from rdrand instruction.
 /// On AArch64 from RNDRRS system register.
@@ -42,16 +62,16 @@ fn create_rdrand_seed() -> [u8; SEED_BYTES] {
     #[cfg(target_arch = "x86_64")]
     {
         if CpuId::new().get_feature_info().unwrap().has_rdrand() {
+            let mut failure = false;
             for i in 0..SEED_BYTES / 8 {
-                // We get 8 bytes at a time from rdrand instruction
-                let rand: u64;
-                unsafe {
-                    asm!("rdrand rax", out("rax") rand);
+                match rdrand_u64() {
+                    Some(rand) => {
+                        rng[i * 8..(i * 8 + 8)].copy_from_slice(&rand.to_le_bytes());
+                    }
+                    None => failure = true,
                 }
-
-                rng[i * 8..(i * 8 + 8)].copy_from_slice(&rand.to_le_bytes());
             }
-            have_seeded = true;
+            have_seeded = !failure;
         }
     }
     #[cfg(target_arch = "aarch64")]

@@ -1,0 +1,9 @@
+# Cranelift overrides for Redox rust recipe (merged by scripts/build-rustc-redox.sh)
+#
+# Requires vendored rustc_codegen_cranelift at vendor/sources/rustc_codegen_cranelift
+# and a compatible redox-os/rust fork at vendor/sources/rust.
+
+[rust]
+codegen-backend = ["cranelift"]
+
+# crt-static remains false — dynamic toolchain on rootfs (see VENDORED.md)

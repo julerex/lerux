@@ -20,7 +20,7 @@ target_spec := justfile_directory() + "/targets/x86_64-unknown-kernel.json"
 manifest := justfile_directory() + "/Cargo.toml"
 
 # PVH stub + note for qemu -kernel when using direct-boot (lerux-only linker script)
-link_script := if features == "direct-boot" { "linkers/x86_64-direct.ld" } else if features == "direct-boot,direct-boot-userspace" { "linkers/x86_64-direct.ld" } else { "linkers/x86_64.ld" }
+link_script := if features == "direct-boot" { "linkers/x86_64-direct.ld" } else if features == "direct-boot,direct-boot-userspace" { "linkers/x86_64-direct.ld" } else if features == "direct-boot,direct-boot-userspace,direct-boot-rootfs" { "linkers/x86_64-direct.ld" } else { "linkers/x86_64.ld" }
 
 # Default recipe
 default: build
@@ -54,7 +54,11 @@ relibc_toolchain := home + "/.rustup/toolchains/nightly-2025-11-15-x86_64-unknow
 redox_cargo := userspace_toolchain + "/cargo"
 userspace_target := "x86_64-unknown-redox"
 userspace_target_spec := justfile_directory() + "/targets/x86_64-unknown-redox.json"
-userspace_bins := "init logd zerod randd ramfs rtcd"
+userspace_bins := "init logd zerod randd ramfs rtcd ptyd pcid-spawner"
+userspace_drivers := "virtio-blkd"
+rootfs_img := build_dir + "/rootfs.img"
+prefix_sysroot := build_dir + "/prefix/x86_64-unknown-redox/sysroot"
+kernel_features_rootfs := "direct-boot,direct-boot-userspace,direct-boot-rootfs"
 # Static link: in-tree relibc sysroot + Redox libgcc_eh (rustc liblibc) + build-std panic_abort.
 userspace_rustflags := "-C target-feature=+crt-static -C link-arg=" + redox_lib + "/crt1.o -C link-arg=" + redox_lib + "/crti.o -C link-arg=-L" + redox_lib + " -C link-arg=-L" + redox_gcc_lib + " -C link-arg=-lgcc_eh -C link-arg=-lc -C link-arg=" + redox_lib + "/crtn.o -C link-arg=--allow-multiple-definition"
 userspace_build_std := "-Z build-std=std,panic_abort,core,alloc,compiler_builtins -Z build-std-features=compiler-builtins-mem -Z json-target-spec"
@@ -122,7 +126,7 @@ build-userspace: build-sysroot
         --manifest-path userspace/Cargo.toml \
         --target {{userspace_target_spec}} \
         {{userspace_build_std}} \
-        -p init -p logd -p zerod -p randd -p ramfs -p rtcd
+        -p init -p logd -p zerod -p randd -p ramfs -p rtcd -p ptyd -p pcid-spawner
 
 # Copy cross-built userspace binaries into initfs staging.
 stage-userspace: build-userspace
@@ -209,6 +213,107 @@ check:
 # Verify Only Rust policy: ELF audit, source allowlist, optional smoke.
 check-only-rust *ARGS:
     "{{justfile_directory()}}/scripts/check-only-rust.sh" {{ARGS}}
+
+# --- Toolchain / rootfs (Cranelift rustc on lerux) ---
+
+fetch-vendor-sources:
+    "{{justfile_directory()}}/scripts/fetch-vendor-sources.sh"
+
+build-prefix:
+    "{{justfile_directory()}}/scripts/build-prefix.sh"
+
+build-rustc-redox:
+    RUST_CODEGEN_BACKEND=llvm "{{justfile_directory()}}/scripts/build-rustc-redox.sh"
+
+build-rustc-redox-cranelift:
+    RUST_CODEGEN_BACKEND=cranelift "{{justfile_directory()}}/scripts/build-rustc-redox.sh"
+
+mk-rootfs: build-prefix
+    "{{justfile_directory()}}/scripts/mk-rootfs.sh"
+
+# Full rootfs with native Redox rustc (long build; required for rustc-smoke).
+mk-rootfs-with-rustc: build-prefix build-rustc-redox
+    "{{justfile_directory()}}/scripts/mk-rootfs.sh"
+
+# Cross-build redoxfs mount tool for initfs (required before 50_rootfs.service).
+build-redoxfs: build-sysroot
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export PATH="{{userspace_toolchain}}:$PATH"
+    export RUST_TARGET_PATH="{{justfile_directory()}}/targets"
+    export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="{{userspace_rustflags}}"
+    export CARGO_TARGET_X86_64_UNKNOWN_REDOX_LINKER=rust-lld
+    {{redox_cargo}} build --release \
+        --manifest-path vendor/redoxfs/Cargo.toml \
+        --bin redoxfs \
+        --target {{userspace_target_spec}} \
+        {{userspace_build_std}} \
+        --features std
+    {{redox_cargo}} build --release \
+        --manifest-path vendor/redoxfs/Cargo.toml \
+        --bin redoxfs-mkfs \
+        --features std
+    {{redox_cargo}} build --release \
+        --manifest-path vendor/redoxfs/Cargo.toml \
+        --bin redoxfs-ar \
+        --features std
+
+# Build initfs driver ELFs (virtio-blkd, etc.) into staging/lib/drivers/.
+build-drivers: build-sysroot
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export PATH="{{userspace_toolchain}}:$PATH"
+    export RUST_TARGET_PATH="{{justfile_directory()}}/targets"
+    export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="{{userspace_rustflags}}"
+    export CARGO_TARGET_X86_64_UNKNOWN_REDOX_LINKER=rust-lld
+    {{redox_cargo}} build --release \
+        --manifest-path userspace/Cargo.toml \
+        --target {{userspace_target_spec}} \
+        {{userspace_build_std}} \
+        -p virtio-blkd
+    mkdir -p "{{justfile_directory()}}/userspace/initfs-staging/lib/drivers"
+    for bin in {{userspace_drivers}}; do
+        cp "{{userspace_out}}/$bin" "{{justfile_directory()}}/userspace/initfs-staging/lib/drivers/$bin"
+    done
+
+stage-redoxfs: build-redoxfs
+    cp vendor/redoxfs/target/{{userspace_target}}/release/redoxfs "{{staging_bin}}/redoxfs"
+
+# Build userspace with rootfs drivers + redoxfs + rootfs image (prefix toolchain; no native rustc cook).
+build-rootfs-userspace: build-bootstrap build-userspace build-drivers stage-redoxfs stage-userspace build-initfs mk-rootfs
+    KERNEL_CARGO_FEATURES="{{kernel_features_rootfs}}" just build
+
+# Same as build-rootfs-userspace but also cross-builds native Redox rustc (very long).
+build-rootfs-userspace-rustc: build-bootstrap build-userspace build-drivers stage-redoxfs stage-userspace build-initfs mk-rootfs-with-rustc
+    KERNEL_CARGO_FEATURES="{{kernel_features_rootfs}}" just build
+
+build-direct-rootfs: build-initfs
+    KERNEL_CARGO_FEATURES="{{kernel_features_rootfs}}" just build
+
+# Boot with virtio rootfs disk (4G RAM). Requires build/rootfs.img.
+qemu-toolchain *QEMU_ARGS:
+    just build-rootfs-userspace
+    @echo "Launching QEMU (rootfs + toolchain)..."
+    qemu-system-x86_64 \
+        -kernel {{build_dir}}/kernel \
+        -m 4096 \
+        -smp 2 \
+        -serial mon:stdio \
+        -display none \
+        -no-reboot \
+        -drive file={{rootfs_img}},if=virtio,format=raw \
+        {{QEMU_ARGS}}
+
+qemu-rustc-smoke:
+    RUSTC_SMOKE=1 "{{justfile_directory()}}/qemu/rustc-smoke-test.sh"
+
+# LLVM prefix-only sanity (download tarballs, verify layout — do not execute Redox rustc on host).
+llvm-sanity: build-prefix
+    @echo "Prefix sysroot at {{prefix_sysroot}}"
+    @test -f "{{prefix_sysroot}}/bin/rustc" || (echo "missing {{prefix_sysroot}}/bin/rustc" >&2; exit 1)
+    @test -d "{{prefix_sysroot}}/lib/rustlib/x86_64-unknown-redox" || (echo "missing rustlib for x86_64-unknown-redox" >&2; exit 1)
+    @file "{{prefix_sysroot}}/bin/rustc"
+    @echo "llvm-sanity: prefix layout OK (run rustc inside lerux QEMU, not on host)"
 
 # Verify embedded SMP trampoline bytes match NASM sources (requires nasm).
 validate-trampolines:

@@ -1,0 +1,7 @@
+[unit]
+description = "Pseudo-terminal daemon"
+requires_weak = ["00_runtime.target"]
+
+[service]
+cmd = "ptyd"
+type = "notify"

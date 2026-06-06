@@ -1,0 +1,27 @@
+# Pinned upstream revisions for vendored Redox toolchain components.
+# Update when syncing; run scripts/fetch-vendor-sources.sh after changes.
+
+[rust]
+git = "https://gitlab.redox-os.org/redox-os/rust.git"
+branch = "redox-2025-10-03"
+path = "vendor/sources/rust"
+
+[llvm-project]
+git = "https://gitlab.redox-os.org/redox-os/llvm-project.git"
+branch = "redox-2025-10-03"
+path = "vendor/sources/llvm-project"
+
+[rustc_codegen_cranelift]
+git = "https://github.com/rust-lang/rustc_codegen_cranelift.git"
+branch = "main"
+path = "vendor/sources/rustc_codegen_cranelift"
+
+[cookbook]
+git = "https://gitlab.redox-os.org/redox-os/cookbook.git"
+branch = "master"
+path = "vendor/sources/cookbook"
+
+[redoxfs]
+source = "vendor/redoxfs"
+upstream = "https://gitlab.redox-os.org/redox-os/redoxfs"
+note = "Copied from tryredox snapshot; see VENDORED.md"

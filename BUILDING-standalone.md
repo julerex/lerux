@@ -54,7 +54,24 @@ late-link). Initfs staging ships **static ELFs only** (no `libc.so` / `ld64.so.1
 
 Default `just build-direct` / `just smoke` keep userspace spawn disabled for fast CI.
 
-## Recommended: Use the justfile
+## Toolchain / rootfs (Cranelift rustc on lerux)
+
+Cross-build a native Redox `rustc`, populate a virtio rootfs, and compile `hello.rs` inside QEMU:
+
+```bash
+just fetch-vendor-sources    # large forks: rust, llvm, rustc_codegen_cranelift
+just build-prefix            # download dynamic prefix sysroot (LLVM sanity)
+just llvm-sanity             # verify prefix layout (do not run rustc on host)
+just build-rustc-redox       # native Redox rustc (LLVM; long)
+just build-rustc-redox-cranelift   # same with Cranelift backend (experimental)
+just build-rootfs-userspace  # initfs + drivers + rootfs image (prefix only)
+just build-rootfs-userspace-rustc  # includes native rustc on rootfs
+just qemu-toolchain          # boot with virtio disk, 4G RAM
+just qemu-rustc-smoke        # headless assert rustc hello (needs build-rootfs-userspace-rustc)
+```
+
+Initfs daemons stay **static**; the rootfs `/usr` toolchain uses **dynamic** linking (upstream model). See [VENDORED.md](VENDORED.md) § Toolchain / rootfs policy.
+
 
 ```bash
 # Build with direct-boot support

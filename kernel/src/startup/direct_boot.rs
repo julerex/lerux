@@ -32,8 +32,24 @@ fn virt_to_phys(virt: usize) -> u64 {
         .wrapping_add(KERNEL_LOAD_PHYS) as u64
 }
 
-/// Minimal environment for direct boot.
+/// Minimal environment for direct boot (extended when `direct-boot-rootfs` is enabled).
+#[cfg(not(feature = "direct-boot-rootfs"))]
 const ENV: &[u8] = b"direct-boot=1\0";
+
+#[cfg(feature = "direct-boot-rootfs")]
+mod rootfs_env {
+    include!(concat!(env!("OUT_DIR"), "/rootfs_env.rs"));
+}
+
+#[cfg(feature = "direct-boot-rootfs")]
+fn env_block() -> &'static [u8] {
+    rootfs_env::ROOTFS_ENV
+}
+
+#[cfg(not(feature = "direct-boot-rootfs"))]
+fn env_block() -> &'static [u8] {
+    ENV
+}
 
 mod initfs_embed {
     include!(concat!(env!("OUT_DIR"), "/initfs_embed.rs"));
@@ -85,14 +101,15 @@ static DIRECT_MEMORY_MAP: [BootloaderMemoryEntry; 6] = [
 ];
 
 static mut DIRECT_ARGS: Option<KernelArgs> = None;
-static mut ENV_STORAGE: [u8; 128] = [0; 128];
+static mut ENV_STORAGE: [u8; 256] = [0; 256];
 static mut AREAS_STORAGE: [BootloaderMemoryEntry; 6] = DIRECT_MEMORY_MAP;
 
 /// Returns a synthesized KernelArgs for direct QEMU `-kernel` boot.
 pub fn get_direct_boot_args() -> &'static KernelArgs {
     unsafe {
         if DIRECT_ARGS.is_none() {
-            ENV_STORAGE[..ENV.len()].copy_from_slice(ENV);
+            let env = env_block();
+            ENV_STORAGE[..env.len()].copy_from_slice(env);
             AREAS_STORAGE = DIRECT_MEMORY_MAP;
 
             let initfs = initfs_embed::INITFS_BLOB;
@@ -106,7 +123,7 @@ pub fn get_direct_boot_args() -> &'static KernelArgs {
                 stack_base: 0,
                 stack_size: 0,
                 env_base: virt_to_phys(ENV_STORAGE.as_ptr() as usize),
-                env_size: ENV.len() as u64,
+                env_size: env.len() as u64,
                 hwdesc_base: 0,
                 hwdesc_size: 0,
                 areas_base: virt_to_phys(AREAS_STORAGE.as_ptr() as usize),

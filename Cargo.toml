@@ -8,7 +8,7 @@ members = [
     "userspace/initfs",
     "userspace/initfs-tools",
 ]
-exclude = ["userspace/bootstrap"]
+exclude = ["userspace/bootstrap", "vendor/redoxfs"]
 default-members = ["."]
 
 [workspace.dependencies]
@@ -126,6 +126,8 @@ x86_kvm_pv = []
 direct-boot = []
 # Spawn userspace_init in direct-boot mode (requires real bootstrap ELF in initfs).
 direct-boot-userspace = ["direct-boot"]
+# Inject REDOXFS_* env for virtio rootfs mount (see build.rs, direct_boot.rs).
+direct-boot-rootfs = ["direct-boot"]
 
 debugger = ["syscall_debug"]
 syscall_debug = []

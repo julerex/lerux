@@ -1,0 +1,5 @@
+[unit]
+description = "Initfs drivers (lerux rootfs milestone)"
+requires_weak = [
+    "40_pcid-spawner-initfs.service",
+]

@@ -1,0 +1,8 @@
+[unit]
+description = "PCI driver spawner"
+requires_weak = ["40_drivers.target"]
+
+[service]
+cmd = "pcid-spawner"
+args = ["--initfs"]
+type = "oneshot"

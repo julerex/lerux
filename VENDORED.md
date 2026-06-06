@@ -69,7 +69,12 @@ Building **without** `direct-boot` still targets a normal Redox-style kernel but
 | daemon, scheme-utils | `userspace/daemon/`, `userspace/scheme-utils/` | [base/*](https://gitlab.redox-os.org/redox-os/base) | `TBD` (copied from `tryredox/base` 2026-05-30) | MIT | 2026-05-30 | Shared daemon plumbing for logd/zerod/randd/ramfs/rtcd |
 | config (userspace) | `userspace/config/` | [base/config](https://gitlab.redox-os.org/redox-os/base) | `TBD` (copied from `tryredox/base/config` 2026-05-30) | MIT | 2026-05-30 | Build-time config for daemons |
 | redox-log | `vendor/redox-log/` | [redox-os/redox-log](https://gitlab.redox-os.org/redox-os/redox-log) | `TBD` (copied from `tryredox/redox-log` 2026-05-30) | MIT | 2026-05-30 | Logging crate for daemons |
-| initfs staging | `userspace/initfs-staging/` | lerux + upstream units | — | MIT | 2026-05-31 | `bin/` + trimmed `lib/init.d/`; **no** dynamic `libc.so` / `ld64` (static ELFs) |
+| initfs staging | `userspace/initfs-staging/` | lerux + upstream units | — | MIT | 2026-06-06 | `bin/` + trimmed `lib/init.d/` + **rootfs drivers** (`lib/drivers/`, `initfs.toml`); static ELFs in initfs |
+| redoxfs | `vendor/redoxfs/` | [redox-os/redoxfs](https://gitlab.redox-os.org/redox-os/redoxfs) | `TBD` (copied from tryredox 2026-06-06) | MIT | 2026-06-06 | `redoxfs` mount binary cross-built for initfs; host mkfs/ar for `mk-rootfs.sh` |
+| Redox recipes (toolchain) | `vendor/redox-recipes/` | [redox/recipes](https://gitlab.redox-os.org/redox-os/redox) + cookbook | `TBD` (copied 2026-06-06) | MIT | 2026-06-06 | dev/llvm/gcc/rust/relibc recipe copies; Cranelift overlay in `dev/rust/config-cranelift.toml` |
+| Build wrapper | `vendor/redox-build/` | lerux + `prefix.mk` docs | — | MIT | 2026-06-06 | Toolchain/rootfs policy README |
+| pcid, pcid-spawner, virtio | `userspace/drivers/{pcid,pcid-spawner,virtio-core,storage/*,executor}/` | [base/drivers](https://gitlab.redox-os.org/redox-os/base) | `TBD` (copied 2026-06-06) | MIT | 2026-06-06 | Virtio-blk rootfs milestone |
+| ptyd | `userspace/ptyd/` | [base/ptyd](https://gitlab.redox-os.org/redox-os/base) | `TBD` (copied 2026-06-06) | MIT | 2026-06-06 | PTY for rustc diagnostics |
 | QEMU bring-up (loader scripts, docs) | `qemu/` | lerux-original + Redox boot concepts | — | MIT (lerux) | — | Custom loader / `KernelArgs` handoff; `smoke-test.sh` supports `USERSPACE_SMOKE=1` |
 
 ---
@@ -224,6 +229,53 @@ flowchart TB
 | Desktop | In `tryredox/` (Tier 3) | Defer for lerux until after minimal userspace |
 
 When cloning new reference repos into `tryredox/`, update the tables above and note the date.
+
+---
+
+## Toolchain / rootfs policy (Cranelift rustc on lerux)
+
+Decisions for running a cross-built `rustc` on lerux in QEMU (see root `scripts/build-prefix.sh`, `scripts/mk-rootfs.sh`).
+
+### Linking model (hybrid)
+
+| Layer | Linking | Notes |
+|-------|---------|-------|
+| Initfs daemons (`userspace/initfs-staging/bin/`) | **Static** (`+crt-static`, no `NEEDED`) | Unchanged Only Rust policy for early bring-up |
+| Rootfs toolchain (`/usr` on virtio disk) | **Dynamic** (upstream Redox model) | `libc.so`, `ld64.so.1`, `libLLVM`, `libstdc++`, full `rustlib/` |
+| `check-only-rust` ELF audit | Initfs staging + bootstrap only | Rootfs contents are **excluded** — dynamic toolchain ELFs are expected there |
+
+### Boot path
+
+- **Keep** `direct-boot` + embedded initfs for kernel iteration.
+- **Add** virtio-blk rootfs disk in QEMU (`just qemu-toolchain` / `just qemu-rustc-smoke`).
+- **`REDOXFS_*` env** injected at build time when `direct-boot-rootfs` kernel feature is enabled (see `kernel/src/startup/direct_boot.rs`, root `build.rs`).
+
+### Cranelift vs LLVM
+
+- Upstream Redox [`recipes/dev/rust`](https://gitlab.redox-os.org/redox-os/redox) uses **LLVM** (`llvm18`/`llvm21`, `link-shared = true`).
+- lerux adds an optional **Cranelift** path via vendored `rustc_codegen_cranelift` and patched rust `config.toml` under [`vendor/redox-recipes/dev/rust/`](vendor/redox-recipes/dev/rust/).
+- **`just build-rustc-redox`** defaults to LLVM (sanity / prefix validation); **`just build-rustc-redox-cranelift`** sets `RUST_CODEGEN_BACKEND=cranelift`.
+- Cranelift is **not** upstream-supported on Redox; expect integration patches. LLVM libs may still be required at runtime (`ldd` on the built `rustc`).
+
+### Vendored build infrastructure
+
+| Path | Upstream | Role |
+|------|----------|------|
+| [`vendor/redox-recipes/`](vendor/redox-recipes/) | `redox/recipes/` + `cookbook/recipes/` | Pinned recipe copies (dev/libs/core) |
+| [`vendor/redox-build/`](vendor/redox-build/) | `redox/mk/prefix.mk` logic | lerux wrapper docs + env |
+| [`vendor/sources/`](vendor/sources/) (gitignored, fetched) | `rust`, `llvm-project`, `rustc_codegen_cranelift` | Large forks; see `scripts/fetch-vendor-sources.sh` |
+| [`vendor/redoxfs/`](vendor/redoxfs/) | [redox-os/redoxfs](https://gitlab.redox-os.org/redox-os/redoxfs) | `redoxfs` mount binary + mkfs |
+
+Reference checkout: `../tryredox/` (optional). `LERUX_REDOX_REF` overrides the path for fetch/copy scripts.
+
+### Runtime drivers (rootfs milestone)
+
+Vendored from `base/drivers/` into `userspace/drivers/`:
+
+- `pcid`, `pcid-spawner`, `virtio-core`, `storage/{driver-block,partitionlib,virtio-blkd}`, `executor`
+- `ptyd` (from `base/ptyd/`)
+
+Init units: [`userspace/initfs-staging/lib/init.d/40_pcid-spawner-initfs.service`](userspace/initfs-staging/lib/init.d/40_pcid-spawner-initfs.service), [`50_rootfs.service`](userspace/initfs-staging/lib/init.d/50_rootfs.service), trimmed [`40_drivers.target`](userspace/initfs-staging/lib/init.d/40_drivers.target).
 
 ---
 

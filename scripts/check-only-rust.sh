@@ -39,7 +39,7 @@ if ((${#violations[@]} > 0)); then
 fi
 echo "OK: no disallowed C/asm outside allowlist"
 
-echo "== Only Rust: ELF audit (initfs staging + bootstrap) =="
+echo "== Only Rust: ELF audit (initfs staging + bootstrap; rootfs /usr excluded) =="
 audit_elf() {
     local bin="$1"
     if readelf -d "$bin" 2>/dev/null | grep -q 'Shared library:'; then

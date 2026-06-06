@@ -41,7 +41,21 @@ kernel/validation/trampolines/out/
 
 /.toolchain/
 
-# In-tree relibc sysroot build artifacts
+# Large upstream forks (fetch via scripts/fetch-vendor-sources.sh)
+/vendor/sources/
+
+# Vendored redoxfs host/target build artifacts
+/vendor/redoxfs/target/
+
+# Prefix sysroot tarballs merge under build/prefix/
+/build/prefix/
+
+# Rootfs disk images and staging
+/build/rootfs.img
+/build/rootfs-staging/
+/build/rootfs-mnt/
+/build/rust-install/
+/build/prefix-sysroot
 /vendor/relibc/target/
 
 # Kernel local runtime config (auto-copied from config.toml.example by build.rs)

@@ -81,6 +81,10 @@ fn main() {
     if env::var("CARGO_FEATURE_DIRECT_BOOT").is_ok() {
         embed_initfs();
     }
+
+    if env::var("CARGO_FEATURE_DIRECT_BOOT_ROOTFS").is_ok() {
+        embed_rootfs_env();
+    }
 }
 
 /// Copy (or build) `build/initfs.bin` into OUT_DIR for `include_bytes!` in direct-boot.
@@ -130,4 +134,34 @@ fn embed_initfs() {
     );
     std::fs::write(Path::new(&out_dir).join("initfs_embed.rs"), embed_rs)
         .expect("failed to write initfs_embed.rs");
+}
+
+/// Write REDOXFS_* env block for direct-boot rootfs (see `direct-boot-rootfs` feature).
+fn embed_rootfs_env() {
+    let manifest_dir_str = env::var("CARGO_MANIFEST_DIR").unwrap();
+    let manifest_dir = Path::new(&manifest_dir_str);
+    let out_dir = env::var("OUT_DIR").unwrap();
+    let uuid_path = manifest_dir.join("build/rootfs.uuid");
+
+    println!("cargo:rerun-if-changed=build/rootfs.uuid");
+
+    let uuid = if uuid_path.exists() {
+        std::fs::read_to_string(&uuid_path)
+            .unwrap()
+            .trim()
+            .to_string()
+    } else {
+        "00000000-0000-0000-0000-000000000001".to_string()
+    };
+
+    // REDOXFS_BLOCK=0 — search first matching block device (bootloader uses 0 for live disk).
+    let env_block = format!(
+        "direct-boot=1\0REDOXFS_UUID={uuid}\0REDOXFS_BLOCK=0000000000000000\0"
+    );
+
+    let embed_rs = format!(
+        "pub static ROOTFS_ENV: &[u8] = b{env_block:?};\n"
+    );
+    std::fs::write(Path::new(&out_dir).join("rootfs_env.rs"), embed_rs)
+        .expect("failed to write rootfs_env.rs");
 }

@@ -10,6 +10,7 @@ pub struct Scheduler {
 struct Job {
     unit: UnitId,
     kind: JobKind,
+    weak_dep_waits: usize,
 }
 
 enum JobKind {
@@ -50,6 +51,7 @@ impl Scheduler {
             self.pending.push_back(Job {
                 unit: unit_id,
                 kind: JobKind::Start,
+                weak_dep_waits: 0,
             });
         }
     }
@@ -64,12 +66,30 @@ impl Scheduler {
                 JobKind::Start => {
                     let unit = unit_store.unit_mut(&job.unit);
 
+                    let mut waiting_on_weak_dep = false;
                     for dep in &unit.info.requires_weak {
                         for pending_job in &self.pending {
                             if &pending_job.unit == dep {
-                                self.pending.push_back(job);
-                                continue 'a;
+                                waiting_on_weak_dep = true;
+                                break;
                             }
+                        }
+                        if waiting_on_weak_dep {
+                            break;
+                        }
+                    }
+                    if waiting_on_weak_dep {
+                        let max_waits = self.pending.len().max(1);
+                        if job.weak_dep_waits >= max_waits {
+                            eprintln!(
+                                "init: starting {} despite pending weak dependencies (possible cycle)",
+                                job.unit.0
+                            );
+                        } else {
+                            let mut job = job;
+                            job.weak_dep_waits += 1;
+                            self.pending.push_back(job);
+                            continue 'a;
                         }
                     }
 

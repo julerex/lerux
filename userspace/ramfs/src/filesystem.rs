@@ -92,19 +92,24 @@ impl Filesystem {
         self.last_inode_number = next;
         Ok(next)
     }
-    fn resolve_generic(&self, mut parts: Vec<&str>, uid: u32, gid: u32) -> Result<usize> {
-        let mut current_file = self
-            .files
-            .get(&Self::ROOT_INODE)
-            .ok_or(Error::new(ENOENT))?;
+    fn resolve_generic(&self, parts: Vec<&str>, uid: u32, gid: u32) -> Result<usize> {
         let mut current_inode = Self::ROOT_INODE;
 
-        let mut i = 0;
+        for part in parts {
+            let current_file = self
+                .files
+                .get(&current_inode)
+                .ok_or(Error::new(ENOENT))?;
 
-        loop {
-            let Some(&part) = parts.get(i) else {
-                break;
-            };
+            if part == "." {
+                continue;
+            }
+
+            if part == ".." {
+                current_inode = current_file.parent.0;
+                continue;
+            }
+
             let dentries = match current_file.data {
                 FileData::Directory(ref dentries) => dentries,
                 FileData::File(_) => return Err(Error::new(ENOENT)),
@@ -114,21 +119,7 @@ impl Filesystem {
                 return Err(Error::new(EACCES));
             }
 
-            if part == "." || part == ".." {
-                parts.remove(i);
-            }
-
-            let part = *parts.get(i).unwrap();
-            if part == ".." && i > 0 {
-                i -= 1;
-                parts.remove(i);
-            }
-            let part = *parts.get(i).unwrap();
-
             current_inode = dentries.get(part).ok_or(Error::new(ENOENT))?.0;
-            current_file = self.files.get(&current_inode).ok_or(Error::new(EIO))?;
-
-            i += 1;
         }
         Ok(current_inode)
     }
@@ -188,5 +179,56 @@ pub fn current_time() -> TimeSpec {
             .subsec_nanos()
             .try_into()
             .unwrap_or(i32::max_value()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_filesystem() -> Filesystem {
+        Filesystem {
+            files: iter::once((Filesystem::ROOT_INODE, Filesystem::create_root_inode())).collect(),
+            memory_file: fs::File::open("/dev/null").expect("open /dev/null"),
+            last_inode_number: Filesystem::ROOT_INODE,
+        }
+    }
+
+    fn mkdir(fs: &mut Filesystem, parent: usize, name: &str) -> usize {
+        let inode = fs.next_inode_number().unwrap();
+        let parent_file = fs.files.get_mut(&parent).unwrap();
+        let FileData::Directory(ref mut dentries) = parent_file.data else {
+            panic!("parent is not a directory");
+        };
+        dentries.insert(name.to_string(), Inode(inode));
+        let cur_time = current_time();
+        fs.files.insert(
+            inode,
+            File {
+                atime: cur_time,
+                ctime: cur_time,
+                mtime: cur_time,
+                mode: MODE_DIR | 0o755,
+                nlink: 1,
+                open_handles: 0,
+                uid: 0,
+                gid: 0,
+                data: FileData::Directory(IndexMap::new()),
+                parent: Inode(parent),
+            },
+        );
+        inode
+    }
+
+    #[test]
+    fn resolve_dot_and_dotdot() {
+        let mut fs = test_filesystem();
+        let sub = mkdir(&mut fs, Filesystem::ROOT_INODE, "sub");
+
+        assert_eq!(fs.resolve("/", 0, 0).unwrap(), Filesystem::ROOT_INODE);
+        assert_eq!(fs.resolve("/.", 0, 0).unwrap(), Filesystem::ROOT_INODE);
+        assert_eq!(fs.resolve("/sub/.", 0, 0).unwrap(), sub);
+        assert_eq!(fs.resolve("/sub/..", 0, 0).unwrap(), Filesystem::ROOT_INODE);
+        assert_eq!(fs.resolve("/sub/../sub", 0, 0).unwrap(), sub);
     }
 }

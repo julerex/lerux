@@ -339,8 +339,20 @@ pub(crate) fn spawn(
                     &[],
                 ) {
                     Err(Error { errno: EINTR }) => continue,
-                    _ => break,
+                    Ok(0) => {
+                        panic!("{name} exited without notifying readiness");
+                    }
+                    Ok(1) => break,
+                    Ok(n) => {
+                        panic!("{name} returned incorrect amount of fds: {n}");
+                    }
+                    Err(err) => {
+                        panic!("failed to wait for {name}: {err}");
+                    }
                 }
+            }
+            if new_fd == usize::MAX {
+                panic!("{name} returned invalid scheme fd");
             }
 
             (

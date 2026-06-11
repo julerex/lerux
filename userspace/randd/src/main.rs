@@ -42,16 +42,23 @@ fn create_rdrand_seed() -> [u8; SEED_BYTES] {
     #[cfg(target_arch = "x86_64")]
     {
         if CpuId::new().get_feature_info().unwrap().has_rdrand() {
+            let mut failure = false;
             for i in 0..SEED_BYTES / 8 {
                 // We get 8 bytes at a time from rdrand instruction
                 let rand: u64;
+                let success: u8;
                 unsafe {
-                    asm!("rdrand rax", out("rax") rand);
+                    asm!(
+                        "rdrand {rand}",
+                        "setc {success}",
+                        rand = out(reg) rand,
+                        success = out(reg_byte) success,
+                    );
                 }
-
+                failure |= success == 0;
                 rng[i * 8..(i * 8 + 8)].copy_from_slice(&rand.to_le_bytes());
             }
-            have_seeded = true;
+            have_seeded = !failure;
         }
     }
     #[cfg(target_arch = "aarch64")]

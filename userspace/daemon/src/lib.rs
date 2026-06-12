@@ -20,7 +20,7 @@ fn set_fd_flags(fd: RawFd, flags: usize) -> io::Result<()> {
 unsafe fn get_fd(var: &str) -> RawFd {
     let fd: RawFd = std::env::var(var).unwrap().parse().unwrap();
     if unsafe {
-        set_fd_flags(fd, syscall::CallFlags::FD_CLOEXEC.bits())
+        set_fd_flags(fd, syscall::O_CLOEXEC)
     }
     .is_err()
     {

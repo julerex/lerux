@@ -9,6 +9,7 @@ use std::process::Command;
 use libredox::Fd;
 use redox_scheme::Socket;
 use redox_scheme::scheme::{SchemeAsync, SchemeSync};
+use syscall::flag::O_CLOEXEC;
 
 fn set_fd_flags(fd: RawFd, flags: usize) -> io::Result<()> {
     match syscall::fcntl(fd as usize, syscall::F_SETFD, flags) {
@@ -19,10 +20,7 @@ fn set_fd_flags(fd: RawFd, flags: usize) -> io::Result<()> {
 
 unsafe fn get_fd(var: &str) -> RawFd {
     let fd: RawFd = std::env::var(var).unwrap().parse().unwrap();
-    if unsafe {
-        set_fd_flags(fd, syscall::CallFlags::FD_CLOEXEC.bits())
-    }
-    .is_err()
+    if set_fd_flags(fd, O_CLOEXEC).is_err()
     {
         panic!(
             "daemon: failed to set CLOEXEC flag for {var} fd: {}",

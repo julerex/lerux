@@ -2,7 +2,7 @@
 
 This document collects all potential next steps, ideas, and open questions that have been discussed during development. It serves as a living backlog.
 
-Last updated: 2026-05-31 (Only Rust step 2: in-tree relibc sysroot)
+Last updated: 2026-06-15 (post smoke-rustc run; rustc-hosting milestone plan added)
 
 ---
 
@@ -127,6 +127,7 @@ Upstream Redox repos remain useful as **read-only references** for design and oc
 | Userspace | **Phase B milestone:** `just build-direct-userspace` + `just smoke-userspace` — bootstrap → init → early daemons (`init: switchroot to /scheme/initfs`) |
 | Kernel-only smoke | `just smoke` — asserts idle marker: `direct-boot mode: skipping userspace bootstrap` |
 | Userspace smoke | `just smoke-userspace` — asserts `init: switchroot to /scheme/initfs` (set `USERSPACE_SMOKE=1`) |
+| Rustc-hosting smoke (in progress) | `just smoke-rustc` / `qemu-direct-rustc` + `build-redoxfs-test-image`; RUSTC markers defined but not yet asserted. Kernel + userspace boot clean; integration scaffolding present (redoxfs vendored, service stub, image recipe skeleton) but wiring incomplete (see new section 8). |
 
 See `NOTES.md` for serial output, GDB breakpoints, and paging/bootstrap fixes.
 
@@ -251,7 +252,7 @@ flowchart TB
 
 - [ ] Pass **RSDP/ACPI** (or DTB on other arches) in `KernelArgs` for direct-boot / loader
 - [ ] Vendor **`drivers/pcid`**, **`pcid-spawner`**, **`virtio-core`**, **`virtio-blkd`**, **`virtio-netd`**, **`acpid`**, **`hwd`** as needed
-- [ ] Optional: **`redoxfs`** + rootfs image; trim `init.d` for net/graphics when ready
+- [ ] Optional: **`redoxfs`** + rootfs image; trim `init.d` for net/graphics when ready. (Accelerated as the rustc-hosting smoke milestone — see §8 for current plan, DiskMemory fallback + image population + marker validation.)
 - [ ] Multi-arch userspace CI when kernel paths mature
 
 ---
@@ -363,8 +364,59 @@ Interim until Rust `global_asm!` trampolines ship ([policy](#low-level-cpu-code)
 3. Vendor **`init`** + minimal **`init.initfs.d`** + **`logd` / `zerod` / `randd` / `ramfs`** — first living system.
 4. Vendor **`daemon` / `scheme-utils`** — patterns for custom daemons.
 5. Vendor **`virtio-core` + pcid + block/net + ACPI** — when QEMU should feel like full Redox.
+6. **Rustc-hosting smoke (accelerated):** stage redoxfs + wire 50_rootfs.service (DiskMemory first) + make build-redoxfs-test-image produce + populate a real image with cross-compiled stub "rustc" + emit/validate RUSTC markers via updated harness (see section 8 for the detailed plan after the first `just smoke-rustc` run). This is the current concrete milestone.
 
 ---
+
+## 8. Rustc-hosting Milestone (redoxfs + first compiler proof) — 2026-06
+
+**Concrete goal (from project CONTEXT):** Produce the first tangible proof of a "lerux operating system" capable of hosting a rustc compiler binary that was built for the target (cross-compiled stand-in/"bootstrap rustc" for the initial milestone). The smoke must show: redoxfs mounted (at /data or equivalent), `rustc --version` succeeding from the FS, and a trivial compile succeeding (producing a marker binary/output containing "lerux-bootstrap-compiled").
+
+This intentionally accelerates a small slice of Phase C (optional redoxfs + rootfs image) as a hybrid base-first step. The long-term "real rustc built for lerux" comes after pure runtime port + more of the OS surface. Vendored `userspace/redoxfs` (with DiskMemory + DiskFile backends, scheme provider, no FUSE) is the FS vehicle; keep Redox scheme/initfs/ABI compatibility.
+
+### Status after `just smoke-rustc` (2026-06-15 run)
+- Builds succeed: `build-direct-userspace` (bootstrap + stage + initfs + kernel with direct-boot + userspace features) + `build-redoxfs-test-image`.
+- Kernel + minimal userspace: clean boot to "init: switchroot to /usr /etc". Serial shows required early markers + bootstrap/init activity.
+- `just smoke-rustc` launches QEMU with the virtio drive (`-drive file=/tmp/lerux-rustc-test.img,format=raw,if=virtio` via `qemu-direct-rustc`).
+- Observed in guest: `init: unit 50_rootfs.service not found` (because `90_initfs.target` declares `requires_weak = ["50_rootfs.service"]` but the unit does not exist on disk; only a scaffolding `redoxfs.service` is present in `userspace/initfs-staging/lib/init.d/`).
+- `redoxfs` binary (the mount/scheme provider from `userspace/redoxfs/src/bin/mount.rs`): **not staged** into the initfs (staging only copies the early daemons listed in `justfile` `userspace_bins`). The binary itself was never cross-built in the `build-userspace` path.
+- Test image: 64 MiB raw zeroed file (completely empty). The `build-redoxfs-test-image` recipe only does `dd`, a suppressed `cargo build` of the mkfs tool (with `|| echo fallback`), and a mkfs call whose flags do not match the actual `redoxfs-mkfs` CLI. No population of any "rustc" binary or sources.
+- Kernel driver reality: **no virtio, PCI, AHCI, block, storage, or disk scheme code** present in `kernel/src`. The QEMU drive is attached at the hypervisor level but produces no visible device/scheme inside the guest (no `/scheme/disk*` etc.). Confirmed via source searches.
+- `redoxfs` CLI and backends (actual code): Positional `redoxfs [--no-daemon|-d] [--uuid] [disk-or-uuid] [mountpoint] [block]`. On target it scans `/scheme` for "disk" category schemes and opens via `DiskFile`. The crate lib has `DiskMemory` (used in tests) and `DiskFile`. The `.service` comments describe aspirational `--mount /data --memory` / `--image` wrappers that do not exist in the current binary.
+- Harness: `RUSTC_SUCCESS_MARKERS` array exists in `qemu/smoke-test.sh` (and referenced from justfile comments), but the polling, outcome logic, and final pass/fail reporting never check them (only basic idle or `USERSPACE_SMOKE` paths). `smoke-rustc` recipe only does the build + live `just qemu-direct-rustc` + a manual "check the serial" echo. No automated verdict for the rustc case.
+- Overall: The "wiring" (recipes, drive injection under RUSTC_SMOKE=1, service stub, marker definitions) is present per prior decisions, but the execution of the end-to-end (staged binary + correct service + populated image + markers emitted from a runnable cross-compiled stub + harness assertion) is not. The run produced the exact "iteration signal" anticipated in CONTEXT (block visibility missing → fall back to DiskMemory for the absolute first green).
+
+No panics; the base direct-boot + userspace path is solid. The rustc-hosting slice is the current focus for a concrete, measurable milestone.
+
+### Plan to first green (markers visible + harness passes)
+Follow the "run the smoke now to validate" decision. Use **DiskMemory (in-RAM) fallback** for the initial service (per CONTEXT guidance) while keeping the `-drive` attached and the host image recipe producing real content (for future block driver work and as the documented payload). The "rustc" is a tiny cross-compiled stand-in for this proof (prints version + performs a simulated compile that produces the marker); it is not the full upstream rustc.
+
+Do these in a small vertical slice (build → stage → service → image content → marker emission → automated test):
+
+- [ ] **Harness & recipe for automated validation.** Update `qemu/smoke-test.sh` so that when `RUSTC_SMOKE=1` it also waits for + asserts the three `RUSTC_SUCCESS_MARKERS` (in addition to required + userspace ones), handles them in the outcome loop, and reports them (with [ ok ] / [MISS] / [FAIL]) at the end. Fail the smoke if any are missing. Change the `smoke-rustc` recipe (and/or `qemu-direct-rustc`) to set `RUSTC_SMOKE=1` and drive through the smoke-test.sh `--no-build` path (analogous to `smoke-userspace`), while preserving the live serial-to-stdio launch for manual debugging. After this, `just smoke-rustc` (via the test script) should give a clear PASS/FAIL.
+- [ ] **Stage the `redoxfs` binary for the guest.** Extend `build-userspace` / `stage-userspace` (or add a parallel step used by `build-direct-userspace` and the rustc image recipe) to cross-build the `redoxfs` package/bin for `x86_64-unknown-redox` (using the same `userspace_toolchain`, `CARGO_TARGET_*_RUSTFLAGS`, `redox_cargo`, build-std, and relibc sysroot as the other daemons). Copy the resulting `redoxfs` ELF into `userspace/initfs-staging/bin/redoxfs` (and the nulld-style alias if needed). Ensure it ends up inside the generated `initfs.bin`.
+- [ ] **Wire a working `50_rootfs.service` (and/or fix the existing scaffold).** Create `userspace/initfs-staging/lib/init.d/50_rootfs.service` (or rename/adapt `redoxfs.service` and update the weak requires in 90_initfs.target and any other targets). Use the actual binary CLI. Because no kernel "disk" scheme exists yet, extend the vendored redoxfs (small, targeted change in the mount binary or a new thin smoke daemon) to support a memory/in-RAM mode: create a `DiskMemory` backend, format it (or load), register the scheme under the desired mountpoint (e.g. /data), and notify readiness exactly like the other `type = { scheme = "..." }` services. Service should depend on the early daemons (randd, ramfs@logging, etc.) as the scaffold already sketches. Goal: init starts it, "redoxfs mounted" appears, and the mount is usable for later exec of the rustc stub.
+- [ ] **Make `build-redoxfs-test-image` produce a real formatted + populated image.** 
+  - Build the host tools (`redoxfs-mkfs`, possibly `redoxfs-ar` / mount helpers) without `2>/dev/null || echo` hiding errors; make failures fatal for the recipe.
+  - Invoke `redoxfs-mkfs` with the correct positional args it expects.
+  - After successful mkfs, populate the image with minimal content: at minimum a `bin/rustc` ELF + a small test source file (or the output of a "compile").
+  - Population implementation: a small host-side step (inline cargo script, or a one-off bin, or direct Rust code in the just recipe using `use redoxfs::{FileSystem, DiskFile}` + the archive/FS writer APIs) that opens the image, creates directories, and writes the file contents. (This keeps everything in-tree and "Only Rust" on the host tooling side where allowed.)
+  - As part of the same recipe (or a called helper like `build-rustc-smoke-stub`): cross-compile the tiny "rustc" stand-in using the **exact same mechanism** as the rest of userspace (temp Cargo project under /tmp or a permanent `userspace/rustc-smoke/` crate; `redox_cargo`, target spec, `RUSTFLAGS` with crt-static + the sysroot crt*.o + libgcc_eh + libc, `-C linker=rust-lld`, `-Z build-std=...`). The stub's `main` should emit something recognizable as "rustc --version" output and then perform a trivial action whose success produces the "lerux-bootstrap-compiled" string (e.g. write a file under the mounted view, or just print it). The built ELF is fed to the population step above so it lives inside the redoxfs image.
+- [ ] **Emit the RUSTC_SUCCESS_MARKERS from actual execution.** After the rootfs service is up, add (or have the service trigger) a dependent oneshot unit (e.g. `55_rustc-smoke.service` or similar) that is part of the init graph. This oneshot execs the "rustc" from the mounted FS location (e.g. `/data/bin/rustc --version` or equivalent), captures/echoes the output (proving presence and --version), performs or simulates the compile step, and ensures the three marker strings appear on stdout (which serial captures). Or have the redoxfs scheme provider itself print the initial "redoxfs mounted" line on successful mount. The combination must make all three strings reliably visible in the captured `qemu-serial.log`.
+- [ ] **Keep drive + image attachment.** Leave the `-drive` in `qemu-direct-rustc` and the RUSTC_SMOKE path in smoke-test.sh. The host image is still produced and attached (even while the guest service currently uses the DiskMemory fallback). This makes the eventual block driver addition a small flip.
+- [ ] **Run and iterate to green.** `just smoke-rustc` (now via the harness) must show the early required markers + the three RUSTC ones, reach a clean "SMOKE TEST PASSED" (or equivalent), with no FAIL markers or panics. Use the live QEMU launch for interactive serial inspection during debugging. Once green, this is the "tangible proof of the goal" (FS + real cross-compiled bootstrap rustc on it + runnable).
+- [ ] **Post-green cleanup & next.** Update this plan + CONTEXT.md with results. Then: accelerate the pure runtime port (the vendored redoxfs in particular — audit unsafe in allocator/block/fs layers as co-pilot with human review), measure the exact divergence (diffs vs reference), no further vendoring until the smoke is solid unless a clear blocker (e.g. the block driver exposure work itself). Evolve the stub toward fuller compiler simulation only after the base is proven.
+
+### Block / driver follow-up (post first-green)
+Add the smallest possible block device exposure so the real `-drive` image + DiskFile path becomes visible in-guest (options: a simple ramdisk scheme populated from bootstrap memory or the attached image at boot, a minimal virtio-blk or direct-boot drive mapper registered as a "disk" category scheme, or wiring an existing area). Once present, update the service to use the real disk path (or UUID) from the image, remove or conditionalize the pure-memory fallback, and re-run the smoke against the populated image. This closes the loop on the drive that is already being passed today.
+
+### Relation to other work
+- Aligns with Only Rust (the stub "rustc" and everything on the target path must be lerux-built ELFs using the in-tree runtime once that debt is paid).
+- Does not require the full driver graph (Phase C PCI/virtio) for the absolute first green — memory backend is explicitly allowed as the iteration signal.
+- The vendored redoxfs is "base-first" with minimal mechanical integration only (as documented in VENDORED.md); deeper AI-assisted cleanup and lerux divergences are deferred until after this smoke is solid.
+- Updates the "Optional: redoxfs + rootfs image" item in Phase C and the one-line priority list.
+
+This section captures the post-run diagnosis (2026-06-15) and the concrete backlog to turn the wired scaffolding into a passing milestone.
 
 ## How to Use This Document
 

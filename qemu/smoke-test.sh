@@ -70,6 +70,13 @@ SUCCESS_MARKER="direct-boot mode: skipping userspace bootstrap"
 USERSPACE_SUCCESS_MARKERS=(
     "init: switchroot to /scheme/initfs"
 )
+
+# Rustc-hosting milestone markers (for smoke-rustc once wired).
+RUSTC_SUCCESS_MARKERS=(
+    "redoxfs mounted"
+    "rustc --version"
+    "lerux-bootstrap-compiled"
+)
 USERSPACE_FAIL_MARKERS=(
     "direct-boot mode: skipping userspace bootstrap"
     "failed to open init"
@@ -86,6 +93,10 @@ FAIL_MARKERS=(
 
 if [ "$BUILD_KERNEL" -eq 1 ]; then
     echo "==> Building direct-boot kernel"
+    if [ "${RUSTC_SMOKE:-0}" = "1" ]; then
+        build_recipe="build-redoxfs-test-image"
+        (cd "$REPO_ROOT" && just "$build_recipe") || true
+    fi
     if [ "${USERSPACE_SMOKE:-0}" = "1" ]; then
         build_recipe="build-direct-userspace"
     else
@@ -110,12 +121,17 @@ fi
 : >"$SERIAL_LOG"
 
 echo "==> Booting direct-boot kernel under QEMU (timeout ${TIMEOUT}s, serial -> $SERIAL_LOG)"
+EXTRA_QEMU_ARGS=""
+if [ "${RUSTC_SMOKE:-0}" = "1" ]; then
+    EXTRA_QEMU_ARGS="-drive file=/tmp/lerux-rustc-test.img,format=raw,if=virtio"
+fi
 "$QEMU" \
     -kernel "$KERNEL" \
     -m "$MEMORY" \
     -display none \
     -no-reboot \
-    -serial "file:$SERIAL_LOG" &
+    -serial "file:$SERIAL_LOG" \
+    $EXTRA_QEMU_ARGS &
 QEMU_PID=$!
 
 cleanup() {

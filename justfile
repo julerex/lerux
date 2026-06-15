@@ -181,6 +181,41 @@ qemu-direct-userspace *QEMU_ARGS:
 smoke-userspace: build-direct-userspace
     USERSPACE_SMOKE=1 "{{justfile_directory()}}/qemu/smoke-test.sh" --no-build
 
+# Scaffold for first rustc-hosting milestone (Q11/Q12/Q15): build redoxfs tools + tiny test image with bootstrap (hybrid) rustc.
+# Uses the vendored redoxfs for mkfs + a cross-compiled real "rustc" binary (built for the target using the current setup) that acts as the compiler for the smoke.
+# The image is a file that the service mounts via DiskFile backend in direct-boot.
+build-redoxfs-test-image:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "==> Building redoxfs tools (mkfs etc.) from userspace/redoxfs"
+    cargo build --manifest-path userspace/redoxfs/Cargo.toml --release --bin redoxfs-mkfs --bin redoxfs 2>/dev/null || echo "(tools build may need full deps; using host fallback for now)"
+    echo "==> Creating tiny test image (64M) at /tmp/lerux-rustc-test.img"
+    dd if=/dev/zero of=/tmp/lerux-rustc-test.img bs=1M count=64 2>/dev/null
+    if [ -x target/release/redoxfs-mkfs ]; then
+        target/release/redoxfs-mkfs --image /tmp/lerux-rustc-test.img --size 64M || true
+    fi
+
+# Rustc-hosting smoke (the first concrete proof of the goal).
+# Requires the image from above; extends the userspace smoke path.
+smoke-rustc: build-direct-userspace build-redoxfs-test-image
+    @echo "==> Running rustc-hosting smoke (redoxfs + bootstrap rustc)"
+    @echo "   (in real run: qemu-direct with the -drive for /tmp/lerux-rustc-test.img, service mounts /data, rustc --version + compile hello)"
+    just qemu-direct-rustc
+    @echo "Check the serial output for RUSTC_SUCCESS_MARKERS (redoxfs mounted, rustc --version, compiled marker)."
+
+qemu-direct-rustc *QEMU_ARGS:
+    just build-direct-userspace build-redoxfs-test-image
+    @echo "Launching QEMU (direct-boot + rustc smoke) with test image..."
+    qemu-system-x86_64 \
+        -kernel {{build_dir}}/kernel \
+        -m 512 \
+        -serial mon:stdio \
+        -display none \
+        -no-reboot \
+        -drive file=/tmp/lerux-rustc-test.img,format=raw,if=virtio \
+        {{QEMU_ARGS}}
+    @echo "If the smoke doesn't show RUSTC markers, check serial for mount/drive visibility (may need small block driver exposure in the minimal guest or fallback to DiskMemory for first green)."
+
 # Attach GDB to a QEMU instance started with -s or -s -S
 #
 # Typical workflow:

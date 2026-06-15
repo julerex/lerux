@@ -69,6 +69,7 @@ Building **without** `direct-boot` still targets a normal Redox-style kernel but
 | daemon, scheme-utils | `userspace/daemon/`, `userspace/scheme-utils/` | [base/*](https://gitlab.redox-os.org/redox-os/base) | `TBD` (copied from `tryredox/base` 2026-05-30) | MIT | 2026-05-30 | Shared daemon plumbing for logd/zerod/randd/ramfs/rtcd |
 | config (userspace) | `userspace/config/` | [base/config](https://gitlab.redox-os.org/redox-os/base) | `TBD` (copied from `tryredox/base/config` 2026-05-30) | MIT | 2026-05-30 | Build-time config for daemons |
 | redox-log | `vendor/redox-log/` | [redox-os/redox-log](https://gitlab.redox-os.org/redox-os/redox-log) | `TBD` (copied from `tryredox/redox-log` 2026-05-30) | MIT | 2026-05-30 | Logging crate for daemons |
+| redoxfs | `userspace/redoxfs/` | [redox-os/redoxfs](https://gitlab.redox-os.org/redox-os/redoxfs) | TBD (copied from ../tryredox/redoxfs 2026-06) | MIT | 2026-06 | Base-first import to support rustc-hosting goal (real FS for source trees/artifacts); minimal mechanical integration only (DiskMemory/DiskFile backends, scheme provider); no FUSE; preserves Redox scheme interface for compatibility with "rustc built for redox"; AI-driven unsafe/idiom cleanup and own-path changes deferred until after working base. |
 | initfs staging | `userspace/initfs-staging/` | lerux + upstream units | — | MIT | 2026-05-31 | `bin/` + trimmed `lib/init.d/`; **no** dynamic `libc.so` / `ld64` (static ELFs) |
 | QEMU bring-up (loader scripts, docs) | `qemu/` | lerux-original + Redox boot concepts | — | MIT (lerux) | — | Custom loader / `KernelArgs` handoff; `smoke-test.sh` supports `USERSPACE_SMOKE=1` |
 
@@ -82,7 +83,6 @@ Source reference: `tryredox/base` (or upstream [redox-os/base](https://gitlab.re
 |-------------------|----------------|----------------------|--------|
 | libredox (full in-tree) | `vendor/libredox/` | relibc / crates.io | bootstrap still uses crates.io `libredox` 0.1.17 |
 | Drivers (pcid, virtio, …) | `userspace/drivers/` or `vendor/drivers/` | `base/drivers` | Phase C in [PLAN.md](PLAN.md) |
-| redoxfs, vesad, net stack | `userspace/` or `vendor/` | `base/*` | Deferred per Phase C |
 
 ---
 
@@ -92,7 +92,7 @@ The sibling directory `../tryredox/` (or your local clone of the same layout) ho
 
 This section records what is present under `tryredox/` versus what the upstream Redox project treats as fundamental. Sources: official [redox](https://gitlab.redox-os.org/redox-os/redox/-/blob/master/README.md) README, `tryredox/redox/config/base.toml`, `config/minimal.toml`, `config/desktop-minimal.toml`, and `tryredox/redox/recipes/core/*/recipe.toml`. (GitLab’s group browser may require login; repo lists are also defined by the build system recipes.)
 
-**Population (2026-05-30):** Tier 1–3 repos, `cookbook`, and Tier 5 core recipe repos were added via `git clone --depth 1` into `../tryredox/`. **`acpi`** was cloned with `-b redox-6.x`. Tier 4 **toolchain** forks (`gcc`, `llvm-project`, `rust`, `binutils-gdb`) were **not** cloned (multi‑GB; only needed for full upstream image cooks).
+**Population (2026-05-30):** Tier 1–3 repos and Tier 5 core recipe repos were added via `git clone --depth 1` into `../tryredox/`. **`acpi`** was cloned with `-b redox-6.x`. Tier 4 **toolchain** forks (`gcc`, `llvm-project`, `rust`, `binutils-gdb`) were **not** cloned (multi‑GB; only needed for full upstream image cooks).
 
 ### What `tryredox` already has (top-level git clones)
 
@@ -135,7 +135,7 @@ Required by `tryredox/redox/config/base.toml` (`[packages]`) and/or `config/mini
 
 **Also cloned:** [installer](https://gitlab.redox-os.org/redox-os/installer) — image build (`server.toml`, book).
 
-With Tier 1–3 and `cookbook` present locally, `tryredox/redox/` cooks can use local source trees if recipes/paths are pointed at siblings (default recipes still use Git URLs unless patched).
+With Tier 1–3 present locally, `tryredox/redox/` cooks can use local source trees if recipes/paths are pointed at siblings (default recipes still use Git URLs unless patched).
 
 ### Tier 2 — **Fundamental GitLab dependencies** of `base` / `orbital`
 
@@ -169,7 +169,6 @@ With Tier 3 siblings present, `desktop-minimal.toml` package sources are availab
 
 | Repo | In `tryredox/`? | Role |
 |------|-----------------|------|
-| [cookbook](https://gitlab.redox-os.org/redox-os/cookbook) | Yes (2026-05-30) | Shared cook scripts / linking policy |
 | Toolchain forks under `redox/recipes/dev/` | **No** (size) | [gcc](https://gitlab.redox-os.org/redox-os/gcc), [llvm-project](https://gitlab.redox-os.org/redox-os/llvm-project), [rust](https://gitlab.redox-os.org/redox-os/rust), [binutils-gdb](https://gitlab.redox-os.org/redox-os/binutils-gdb) — clone separately if doing full upstream image builds |
 
 ### Tier 5 — Other `recipes/core/` repos (useful, not always “minimal”)

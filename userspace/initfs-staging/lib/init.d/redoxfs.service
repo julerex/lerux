@@ -1,0 +1,16 @@
+[unit]
+description = "RedoxFS (base-first, for rustc-hosting validation)"
+default_dependencies = false
+requires_weak = ["00_randd.service", "ramfs@logging.service"]
+
+[service]
+cmd = "redoxfs"
+# Base-first: use existing DiskMemory (in-RAM for pure direct-boot) or DiskFile (QEMU -drive image).
+# Mount at /data for the initial test smoke (keeps /scheme/initfs for bootstrap).
+# Args will be refined when we add the image production recipe.
+# For memory test: args = ["--mount", "/data", "--memory"]
+# For file-backed: args = ["--mount", "/data", "--image", "/path/to/image.img"]
+type = { scheme = "redoxfs" }
+
+# Note: Initial scaffolding per Q11 decision. Wire this into the init graph (e.g. add to a target)
+# and extend smoke once the image recipe exists. Keep changes minimal; no FUSE, preserve Redox scheme interface.

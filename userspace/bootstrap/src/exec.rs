@@ -339,7 +339,16 @@ pub(crate) fn spawn(
                     &[],
                 ) {
                     Err(Error { errno: EINTR }) => continue,
-                    _ => break,
+                    Ok(0) => {
+                        panic!("{name} exited without sending capability fd");
+                    }
+                    Ok(1) => break,
+                    Ok(n) => {
+                        panic!("{name} sent incorrect fd count {n}");
+                    }
+                    Err(err) => {
+                        panic!("failed to receive capability fd from {name}: {err}");
+                    }
                 }
             }
 

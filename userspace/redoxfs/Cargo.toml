@@ -8,6 +8,11 @@ readme = "README.md"
 authors = ["Jeremy Soller <jackpot51@gmail.com>"]
 edition = "2021"
 
+[workspace]
+# Standalone crate (vendored base-first for the rustc-hosting smoke). Keep its target/ and
+# build independent from the userspace/ workspace (like bootstrap and the new rustc-smoke).
+# just recipes supply the full cross RUSTFLAGS/sysroot for the x86_64-unknown-redox target.
+
 [lib]
 name = "redoxfs"
 path = "src/lib.rs"

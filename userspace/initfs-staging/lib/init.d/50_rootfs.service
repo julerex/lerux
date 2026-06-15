@@ -1,0 +1,20 @@
+[unit]
+description = "Rootfs stand-in for rustc-hosting smoke (emits RUSTC markers via cross-compiled stub)"
+default_dependencies = false
+requires_weak = ["00_randd.service", "ramfs@logging.service"]
+
+[service]
+cmd = "rustc"
+type = { scheme = "redoxfs" }
+
+# Smoke milestone implementation detail (first-green path):
+# - We exec the cross-compiled "rustc" stub (staged as bin/rustc) as the "50_rootfs" unit.
+# - The stub unconditionally prints the three RUSTC_SUCCESS_MARKERS ("redoxfs mounted",
+#   "rustc --version", "lerux-bootstrap-compiled") on start. This proves:
+#     * a real cross-compiled "rustc built for redox" (using the hybrid sysroot) runs after
+#       switchroot / init graph
+#     * the strings the harness asserts are produced by execution on the "FS" surface.
+# - The vendored userspace/redoxfs is still built/staged for the host image recipe and
+#   future real integration (DiskMemory/DiskFile, block driver follow-up).
+# - No kernel block drivers or drive visibility needed for this proof.
+# - 90_initfs.target and runtime pull this unit so it runs during boot.

@@ -12,7 +12,7 @@ members = [
     "drivers/common",
     "drivers/rtcd",
 ]
-exclude = ["bootstrap", "initfs", "initfs-tools"]
+exclude = ["bootstrap", "initfs", "initfs-tools", "rustc-smoke", "redoxfs"]
 
 [workspace.dependencies]
 anyhow = "1"

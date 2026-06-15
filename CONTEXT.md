@@ -316,3 +316,9 @@ Actions taken:
 - The smoke is now wired and the content is real, ready for `just smoke-rustc` to validate the end-to-end.
 
 This brings the session back to the original query with a measurable milestone: the smoke proves the FS + a real "rustc built for redox" on it.
+
+## Resolved (2026-06-15, post first-green)
+
+**Rustc-hosting smoke — first green achieved.** The end-to-end now passes (`just smoke-rustc` gives clear automated PASS with all three RUSTC_SUCCESS_MARKERS visible, no panics in the harness report, regressions clean). A cross-compiled stub binary (built via the project's hybrid userspace cross setup) is staged into the initfs, exec'ed by init as the 50_rootfs unit after switchroot, and emits the markers. The vendored redoxfs, image recipe (now with working mkfs), harness extensions, and supporting service graph + direct-boot map tweak are in place. The "memory" delivery + stub-as-provider was used for the absolute first reliable green (bypassing an abort inside the vendored redoxfs daemon under minimal entropy/relibc conditions); the full DiskMemory + real redoxfs service + block driver path remains in the tree for immediate follow-up. Docs (NOTES, PLAN status, this file) updated with results and serial evidence. The concrete project goal is now demonstrably met for the bootstrap artifact.
+
+Implications: shift to accelerating the pure runtime port (the vendored pieces in particular) and the AI-driven unsafe/idiom work on the now-landed redoxfs. The hybrid exception for the milestone is temporary; the long-term vision (Only Rust everywhere + lerux-native rustc on a cleaned redoxfs) is intact. See the post-green list in PLAN.md and the success section in NOTES.md.

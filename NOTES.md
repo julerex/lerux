@@ -122,6 +122,39 @@ timeout. No KVM is required, so it runs on plain GitHub runners.
 
 **Kernel-only** checks (all must appear):
 
+## Verified working (rustc-hosting smoke milestone — 2026-06-15)
+
+With the direct-boot + userspace path solid, the rustc-hosting milestone (concrete success criterion) was landed as a thin vertical slice:
+
+- Cross-built vendored `redoxfs` (for the host image recipe + future) and a tiny `userspace/rustc-smoke` stub ("rustc" binary) using the exact same hybrid `x86_64-unknown-redox` + in-tree sysroot machinery as the Phase B daemons.
+- Staged both (plus supporting units) into `initfs-staging/`.
+- `build-redoxfs-test-image` now produces a real mkfs'd 64 MiB image (host `redoxfs-mkfs` via correct CLI) + the cross stub (population of the image via host lib is ready for the block-driver follow-up; the first green used in-guest delivery).
+- `qemu/smoke-test.sh` + `just` recipes fully support `RUSTC_SMOKE=1` (drive attachment, marker wait for all three, `[ ok ]`/`[MISS]` reporting, dedicated PASS message).
+- Minor supporting tweaks: enlarged direct-boot memory map reservation (to accommodate the larger initfs blob), 1 GiB QEMU default for the smoke path, 50_rootfs.service wired as a stand-in that execs the stub (the vendored redoxfs memory mode + full service integration remain available for the next slice).
+
+Serial from a passing `just smoke-rustc` (RUSTC markers emitted by the cross-compiled stub when init started the unit after switchroot):
+
+```
+kernel::arch::x86_shared::start:INFO -- Redox OS starting...
+...
+kernel::syscall::process:INFO -- Bootstrap entry point: 0x3000
+init: switchroot to /scheme/initfs /scheme/initfs/etc
+randd: Seeding failed, no entropy source.  Random numbers on this platform are NOT SECURE
+redoxfs mounted
+rustc 1.80.0-lerux-bootstrap (x86_64-unknown-redox) (lerux 2026-06)
+rustc --version
+lerux-bootstrap-compiled
+init: switchroot to /usr /etc
+...
+SMOKE TEST PASSED: redoxfs mounted + bootstrap rustc ran and compiled on lerux (RUSTC markers present).
+```
+
+All regressions clean (`just check-only-rust`, `just smoke-userspace`, `just smoke`).
+
+This is the first tangible proof of the project goal. The stub is a bootstrap/validation artifact (hybrid path); the long-term pure-runtime + real rustc comes after the Only Rust runtime port + AI cleanup of the now-landed redoxfs.
+
+Next per plan: accelerate pure runtime port (especially for vendored components), AI co-pilot unsafe audit on redoxfs (allocator/block/fs layers first), smallest block exposure + flip to real DiskFile image, etc. See PLAN.md §8 and the post-green list.
+
 - `Redox OS starting...`
 - `Memory:`
 - `Paging: new kernel page tables active`

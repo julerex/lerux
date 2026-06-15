@@ -58,16 +58,20 @@ static DIRECT_MEMORY_MAP: [BootloaderMemoryEntry; 6] = [
         size: 0x100000,
         kind: BootloaderMemoryKind::Reserved,
     },
-    // Kernel image at 2 MiB (must match KERNEL_LOAD_PHYS)
+    // Kernel image at 2 MiB (must match KERNEL_LOAD_PHYS). Enlarged to give headroom for
+    // larger embedded initfs (redoxfs + rustc stub + services for the rustc-hosting smoke).
+    // The actual bootstrap blob lives inside the kernel's linked image; declaring a larger
+    // Kernel reservation prevents overlap diagnostics and paging issues when the blob grows.
     BootloaderMemoryEntry {
         base: KERNEL_LOAD_PHYS as u64,
-        size: 0x0100_0000,
+        size: 0x0400_0000, // 64 MiB reservation for kernel + big initfs blob
         kind: BootloaderMemoryKind::Kernel,
     },
-    // Main usable RAM after the kernel image (trimmed for 512 MiB guests)
+    // Main usable RAM after the (enlarged) kernel reservation. Sufficient for 1 GiB+ QEMU guests
+    // used by the rustc smoke; the map is a minimal synthetic view for direct-boot bring-up.
     BootloaderMemoryEntry {
-        base: 0x0120_0000,
-        size: 0x0CD0_0000,
+        base: 0x0420_0000,
+        size: 0x0BE0_0000,
         kind: BootloaderMemoryKind::Free,
     },
     // Typical device/MMIO hole

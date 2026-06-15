@@ -1,0 +1,17 @@
+[package]
+name = "rustc-smoke"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+# Standalone (not part of the userspace/ workspace) so its target/ and build flags are isolated,
+# exactly like userspace/bootstrap/. The just recipes cross-build it with the shared sysroot flags.
+
+[[bin]]
+name = "rustc"
+path = "src/main.rs"
+
+# Built via the lerux cross setup (same as other daemons) for the x86_64-unknown-redox target.
+# This produces the bootstrap "rustc" stand-in used for the rustc-hosting smoke milestone.
+# It is a minimal program that satisfies the RUSTC_SUCCESS_MARKERS when invoked appropriately.

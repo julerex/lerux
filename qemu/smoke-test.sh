@@ -37,7 +37,9 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 QEMU="${QEMU:-qemu-system-x86_64}"
 BUILD_DIR="${BUILD:-$REPO_ROOT/build}"
 KERNEL="$BUILD_DIR/kernel"
-MEMORY="${MEMORY:-512}"
+# Bump default for the rustc smoke (larger initfs with redoxfs + stub + services can stress the
+# direct-boot synthetic memory map / reservations). 512M was fine for Phase B minimal; 1G+ is safe.
+MEMORY="${MEMORY:-1024}"
 TIMEOUT="${TIMEOUT:-90}"
 SERIAL_LOG="${SERIAL_LOG:-$REPO_ROOT/qemu-serial.log}"
 
@@ -167,6 +169,13 @@ while [ "$SECONDS" -lt "$deadline" ]; do
             outcome="userspace"
             break
         fi
+    elif [ "${RUSTC_SMOKE:-0}" = "1" ]; then
+        # For the rustc milestone, wait until all three markers are present (mount + version + compile).
+        # This gives a clear early exit when the full chain (redoxfs service + stub on FS) has run.
+        if log_has "${RUSTC_SUCCESS_MARKERS[0]}" && log_has "${RUSTC_SUCCESS_MARKERS[1]}" && log_has "${RUSTC_SUCCESS_MARKERS[2]}"; then
+            outcome="rustc"
+            break
+        fi
     elif log_has "$SUCCESS_MARKER"; then
         outcome="idle"
         break
@@ -215,6 +224,24 @@ if [ "${USERSPACE_SMOKE:-0}" = "1" ]; then
             fail=1
         fi
     done
+elif [ "${RUSTC_SMOKE:-0}" = "1" ]; then
+    # Rustc-hosting milestone: REQUIRED + the three RUSTC markers (mount from service, --version and compiled from stub on FS).
+    for m in "${REQUIRED_MARKERS[@]}"; do
+        if log_has "$m"; then
+            printf '  [ ok ] %s\n' "$m"
+        else
+            printf '  [MISS] %s\n' "$m"
+            fail=1
+        fi
+    done
+    for m in "${RUSTC_SUCCESS_MARKERS[@]}"; do
+        if log_has "$m"; then
+            printf '  [ ok ] %s\n' "$m"
+        else
+            printf '  [MISS] %s\n' "$m"
+            fail=1
+        fi
+    done
 else
     for m in "${REQUIRED_MARKERS[@]}" "$SUCCESS_MARKER"; do
         if log_has "$m"; then
@@ -241,6 +268,8 @@ done
 if [ "$fail" -eq 0 ]; then
     if [ "${USERSPACE_SMOKE:-0}" = "1" ]; then
         echo "SMOKE TEST PASSED: direct-boot reached init and early daemons."
+    elif [ "${RUSTC_SMOKE:-0}" = "1" ]; then
+        echo "SMOKE TEST PASSED: redoxfs mounted + bootstrap rustc ran and compiled on lerux (RUSTC markers present)."
     else
         echo "SMOKE TEST PASSED: direct-boot reached the kmain idle loop."
     fi

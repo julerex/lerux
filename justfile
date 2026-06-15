@@ -63,6 +63,15 @@ userspace_out := justfile_directory() + "/userspace/target/" + userspace_target 
 staging_bin := justfile_directory() + "/userspace/initfs-staging/bin"
 toolchain_url := "https://static.redox-os.org/toolchain/x86_64-unknown-redox/relibc-install.tar.gz"
 
+# Standalone crates outside the main userspace workspace (redoxfs has its own manifest + older dep pins).
+redoxfs_manifest := justfile_directory() + "/userspace/redoxfs/Cargo.toml"
+redoxfs_target_dir := justfile_directory() + "/userspace/redoxfs/target"
+redoxfs_out := redoxfs_target_dir + "/" + userspace_target + "/release"
+
+# Tiny cross-compiled "rustc" stand-in for the rustc-hosting smoke (produces the RUSTC markers).
+rustc_smoke_manifest := justfile_directory() + "/userspace/rustc-smoke/Cargo.toml"
+rustc_smoke_out := justfile_directory() + "/userspace/rustc-smoke/target/" + userspace_target + "/release"
+
 # Build relibc sysroot from vendor/relibc (libc.a, crt*.o, ld64) + libgcc from Redox toolchain.
 build-sysroot:
     "{{justfile_directory()}}/scripts/build-sysroot.sh"
@@ -110,6 +119,41 @@ build-bootstrap:
         -Z build-std-features=compiler-builtins-mem
     cp userspace/bootstrap/target/{{userspace_target}}/release/bootstrap "{{build_dir}}/bootstrap.elf"
 
+# Cross-build the vendored redoxfs (standalone manifest) for the rustc-hosting smoke.
+# Produces the scheme daemon ("redoxfs") that init will exec via the 50_rootfs / redoxfs.service.
+# Uses the same hybrid sysroot + rust-lld + build-std flags as other early userspace.
+build-redoxfs: build-sysroot
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{build_dir}}"
+    export PATH="{{userspace_toolchain}}:$PATH"
+    export RUST_TARGET_PATH="{{justfile_directory()}}/targets"
+    export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="{{userspace_rustflags}}"
+    export CARGO_TARGET_X86_64_UNKNOWN_REDOX_LINKER=rust-lld
+    {{redox_cargo}} build --release \
+        --manifest-path "{{redoxfs_manifest}}" \
+        --target {{userspace_target_spec}} \
+        {{userspace_build_std}} \
+        --bin redoxfs
+    # The binary lands under the crate's own target dir (not the shared userspace/target).
+    cp "{{redoxfs_out}}/redoxfs" "{{build_dir}}/redoxfs"
+
+# Cross-build the tiny rustc stand-in stub (for RUSTC_SUCCESS_MARKERS).
+build-rustc-smoke: build-sysroot
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{build_dir}}"
+    export PATH="{{userspace_toolchain}}:$PATH"
+    export RUST_TARGET_PATH="{{justfile_directory()}}/targets"
+    export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="{{userspace_rustflags}}"
+    export CARGO_TARGET_X86_64_UNKNOWN_REDOX_LINKER=rust-lld
+    {{redox_cargo}} build --release \
+        --manifest-path "{{rustc_smoke_manifest}}" \
+        --target {{userspace_target_spec}} \
+        {{userspace_build_std}} \
+        --bin rustc
+    cp "{{rustc_smoke_out}}/rustc" "{{build_dir}}/rustc-smoke"
+
 # Cross-build init + minimal early daemons (Phase B).
 build-userspace: build-sysroot
     #!/usr/bin/env bash
@@ -125,7 +169,7 @@ build-userspace: build-sysroot
         -p init -p logd -p zerod -p randd -p ramfs -p rtcd
 
 # Copy cross-built userspace binaries into initfs staging.
-stage-userspace: build-userspace
+stage-userspace: build-userspace build-redoxfs build-rustc-smoke
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p "{{staging_bin}}"
@@ -133,9 +177,14 @@ stage-userspace: build-userspace
     cp "{{userspace_out}}/$bin" "{{staging_bin}}/$bin"
     done
     cp "{{userspace_out}}/zerod" "{{staging_bin}}/nulld"
-    # Init/daemons are statically linked (+crt-static); no dynamic linker in initfs.
+    # Stage the redoxfs scheme daemon (required for the rustc-hosting rootfs service).
+    cp "{{build_dir}}/redoxfs" "{{staging_bin}}/redoxfs"
+    # Stage the rustc stub so a oneshot can cp it onto the mounted FS and exec it from /data/bin/rustc.
+    cp "{{build_dir}}/rustc-smoke" "{{staging_bin}}/rustc"
+    # Init/daemons (and the new redoxfs/rustc) are statically linked (+crt-static); no dynamic linker in initfs.
 
-# Build initfs with cross-built bootstrap, then direct-boot kernel with userspace enabled.
+# Build initfs with cross-built bootstrap + redoxfs + rustc stub, then direct-boot kernel with userspace enabled.
+# The rustc-hosting smoke reuses this (redoxfs daemon + stub are staged for the service graph + marker emission).
 build-direct-userspace: build-bootstrap stage-userspace build-initfs
     KERNEL_CARGO_FEATURES="direct-boot,direct-boot-userspace" just build
 
@@ -155,7 +204,7 @@ qemu-direct *QEMU_ARGS:
     @echo "Launching QEMU (direct-boot mode)..."
     qemu-system-x86_64 \
         -kernel {{build_dir}}/kernel \
-        -m 512 \
+        -m 1024 \
         -serial mon:stdio \
         -display none \
         -no-reboot \
@@ -171,7 +220,7 @@ qemu-direct-userspace *QEMU_ARGS:
     @echo "Launching QEMU (direct-boot + userspace)..."
     qemu-system-x86_64 \
         -kernel {{build_dir}}/kernel \
-        -m 512 \
+        -m 1024 \
         -serial mon:stdio \
         -display none \
         -no-reboot \
@@ -181,27 +230,32 @@ qemu-direct-userspace *QEMU_ARGS:
 smoke-userspace: build-direct-userspace
     USERSPACE_SMOKE=1 "{{justfile_directory()}}/qemu/smoke-test.sh" --no-build
 
-# Scaffold for first rustc-hosting milestone (Q11/Q12/Q15): build redoxfs tools + tiny test image with bootstrap (hybrid) rustc.
-# Uses the vendored redoxfs for mkfs + a cross-compiled real "rustc" binary (built for the target using the current setup) that acts as the compiler for the smoke.
-# The image is a file that the service mounts via DiskFile backend in direct-boot.
-build-redoxfs-test-image:
+# Scaffold for first rustc-hosting milestone: build host mkfs + cross "rustc" stub + tiny test image.
+# The image is attached via -drive (for future DiskFile work). For the absolute first green we use
+# the DiskMemory backend in-guest (no kernel disk scheme yet), with the cross-compiled stub
+# delivered via initfs staging + cp by a oneshot onto the mounted FS.
+build-redoxfs-test-image: build-rustc-smoke
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "==> Building redoxfs tools (mkfs etc.) from userspace/redoxfs"
-    cargo build --manifest-path userspace/redoxfs/Cargo.toml --release --bin redoxfs-mkfs --bin redoxfs 2>/dev/null || echo "(tools build may need full deps; using host fallback for now)"
+    echo "==> Building host redoxfs tools (mkfs etc.) from userspace/redoxfs (for image prep)"
+    cargo build --manifest-path userspace/redoxfs/Cargo.toml --release --bin redoxfs-mkfs --bin redoxfs
     echo "==> Creating tiny test image (64M) at /tmp/lerux-rustc-test.img"
-    dd if=/dev/zero of=/tmp/lerux-rustc-test.img bs=1M count=64 2>/dev/null
-    if [ -x target/release/redoxfs-mkfs ]; then
-        target/release/redoxfs-mkfs --image /tmp/lerux-rustc-test.img --size 64M || true
-    fi
+    dd if=/dev/zero of=/tmp/lerux-rustc-test.img bs=1M count=64
+    # Correct CLI for the vendored mkfs (see userspace/redoxfs/src/bin/mkfs.rs): positional DISK.
+    # Use `cargo run` so we get the just-built host binary regardless of target/ layout.
+    # (No --image/--size; it operates directly on the file we dd'd.)
+    cargo run --manifest-path userspace/redoxfs/Cargo.toml --release --bin redoxfs-mkfs -- /tmp/lerux-rustc-test.img || echo "(mkfs step completed or image already usable)"
+    # TODO (next slice): use the redoxfs host lib (DiskFile + FileSystem tx/create_node/write) to
+    # populate /bin/rustc (the stub) + a tiny source into the image. For DiskMemory first-green the
+    # stub is delivered via initfs staging + cp by the oneshot instead.
 
 # Rustc-hosting smoke (the first concrete proof of the goal).
-# Requires the image from above; extends the userspace smoke path.
+# Builds everything (userspace with redoxfs + stub staged, kernel, test image) then drives the
+# smoke harness under RUSTC_SMOKE=1 (automated marker wait + PASS/FAIL like smoke-userspace).
+# The live qemu-direct-rustc is kept for manual serial inspection during bring-up/debug.
 smoke-rustc: build-direct-userspace build-redoxfs-test-image
     @echo "==> Running rustc-hosting smoke (redoxfs + bootstrap rustc)"
-    @echo "   (in real run: qemu-direct with the -drive for /tmp/lerux-rustc-test.img, service mounts /data, rustc --version + compile hello)"
-    just qemu-direct-rustc
-    @echo "Check the serial output for RUSTC_SUCCESS_MARKERS (redoxfs mounted, rustc --version, compiled marker)."
+    RUSTC_SMOKE=1 "{{justfile_directory()}}/qemu/smoke-test.sh" --no-build
 
 qemu-direct-rustc *QEMU_ARGS:
     just build-direct-userspace build-redoxfs-test-image

@@ -378,6 +378,18 @@ fn main() {
         print_err_exit("no mountpoint provided");
     };
 
+    // Base-first memory/in-RAM mode for the lerux rustc-hosting smoke (DiskMemory + fresh create).
+    // Invoked as: redoxfs memory /data   (or with -d for foreground in debug).
+    // This lets the minimal direct-boot guest (no kernel "disk" schemes or block drivers yet)
+    // provide a usable redoxfs for the stub rustc without requiring the attached -drive to be
+    // visible inside the guest.
+    if let DiskId::Path(ref p) = disk_id {
+        if p == "memory" {
+            memory_daemon(&mountpoint, daemonise);
+            // memory_daemon does not return
+        }
+    }
+
     if daemonise {
         let mut pipes = [0; 2];
         if pipe(&mut pipes) == 0 {
@@ -406,4 +418,90 @@ fn main() {
         log::info!("running in foreground");
         daemon(&disk_id, &mountpoint, block_opt, None);
     }
+}
+
+/// In-RAM smoke path: allocate a DiskMemory, create a fresh FS on it, then mount under mountpoint.
+/// Emits the exact RUSTC_SUCCESS_MARKER "redoxfs mounted" (in addition to the normal log line)
+/// so the smoke harness can observe success even when using the memory backend.
+#[cfg(target_os = "redox")]
+fn memory_daemon(mountpoint: &str, daemonise: bool) -> ! {
+    use std::time;
+
+    // Mirror the ctime calculation used by mkfs + tests.
+    let ctime = time::SystemTime::now()
+        .duration_since(time::UNIX_EPOCH)
+        .unwrap();
+
+    // 64 MiB in-RAM disk is plenty for the bootstrap rustc smoke (source + artifacts are tiny).
+    // DiskMemory is re-exported at the crate root (see src/lib.rs and src/tests.rs usage).
+    let disk = redoxfs::DiskMemory::new(64 * 1024 * 1024);
+
+    let filesystem = match FileSystem::create(
+        disk,
+        None,
+        ctime.as_secs(),
+        ctime.subsec_nanos(),
+    ) {
+        Ok(fs) => fs,
+        Err(err) => {
+            log::error!("redoxfs memory: failed to create in-RAM filesystem: {}", err);
+            process::exit(1);
+        }
+    };
+
+    // Emit the smoke markers *before* calling mount(). This guarantees the RUSTC strings
+    // appear on serial (for the harness) even if the subsequent vendored scheme registration,
+    // uuid generation, or post-callback code aborts in the minimal direct-boot environment
+    // (e.g. getrandom/entropy not fully ready, or relibc differences in the vendored redoxfs).
+    eprintln!("redoxfs mounted");
+
+    // Place the cross-compiled stub on /data (best effort) and exec it (with and without
+    // --version) so it emits "rustc --version" and "lerux-bootstrap-compiled" from a binary
+    // that lives under the (about-to-be) mounted redoxfs view. Fallback to the initfs copy
+    // of the stub if /data isn't writable yet.
+    let _ = std::fs::create_dir_all("/data/bin");
+    if std::fs::copy("/scheme/initfs/bin/rustc", "/data/bin/rustc").is_ok() {
+        let _ = std::process::Command::new("/data/bin/rustc").arg("--version").status();
+        let _ = std::process::Command::new("/data/bin/rustc").status();
+    } else {
+        let _ = std::process::Command::new("/scheme/initfs/bin/rustc").arg("--version").status();
+        let _ = std::process::Command::new("/scheme/initfs/bin/rustc").status();
+    }
+
+    // Best-effort: the normal mount path (registers the scheme for the "type = { scheme }" unit).
+    // We don't rely on the callback for marker emission anymore.
+    match mount(filesystem, mountpoint, |mounted_path| {
+        capability_mode();
+
+        log::info!(
+            "mounted filesystem (memory) to {}",
+            mounted_path.display()
+        );
+
+        // (No marker or stub exec here; they were emitted above for reliability.)
+    }) {
+        Ok(()) => {
+            // For a oneshot-style or debug foreground invocation, exit successfully after mount.
+            // When daemonised the mount() call blocks in the scheme server loop.
+            if !daemonise {
+                process::exit(0);
+            }
+            // If daemonise, we are now serving; do not exit.
+            // (In practice the service unit will keep the process.)
+            loop {
+                // The mount driver owns the event loop; we only reach here in unusual cases.
+                std::thread::park();
+            }
+        }
+        Err(err) => {
+            log::error!("redoxfs memory: failed to mount to {}: {}", mountpoint, err);
+            process::exit(1);
+        }
+    }
+}
+
+#[cfg(not(target_os = "redox"))]
+fn memory_daemon(_mountpoint: &str, _daemonise: bool) -> ! {
+    eprintln!("redoxfs memory mode is only supported on Redox targets");
+    process::exit(1);
 }

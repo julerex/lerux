@@ -27,6 +27,8 @@ just qemu-rustc-smoke
 | `PREFIX_BINARY` | `1` | `1` = download official tarballs (fast); `0` = cook from source |
 | `RUST_CODEGEN_BACKEND` | `llvm` | `cranelift` for `just build-rustc-redox-cranelift` |
 
+After fetch, `scripts/patch-vendor-rust.sh` gives `src/bootstrap` a standalone `[workspace]` so it does not inherit lerux's root workspace when `x.py` runs cargo.
+
 ## Pinned upstream (document in VENDORED.md on sync)
 
 | Component | Branch / source |

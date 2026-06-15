@@ -49,3 +49,4 @@ clone_if_missing cookbook \
     "$ROOT/$(read_manifest cookbook path)"
 
 echo "fetch-vendor-sources: done"
+"$(dirname "$0")/patch-vendor-rust.sh"

@@ -8,7 +8,7 @@ members = [
     "userspace/initfs",
     "userspace/initfs-tools",
 ]
-exclude = ["userspace/bootstrap", "vendor/redoxfs"]
+exclude = ["userspace/bootstrap", "vendor/redoxfs", "vendor/sources"]
 default-members = ["."]
 
 [workspace.dependencies]

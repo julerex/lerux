@@ -50,13 +50,32 @@ merge_sysroot() {
 }
 
 build_from_source() {
-    if [[ ! -d "$LERUX_REDOX_REF/redox-master" && ! -d "$LERUX_REDOX_REF/redox" ]]; then
+    local redox_dir=""
+    if [[ -f "$LERUX_REDOX_REF/redox/build/container.tag" ]]; then
+        redox_dir="$LERUX_REDOX_REF/redox"
+    elif [[ -d "$LERUX_REDOX_REF/redox" ]]; then
+        redox_dir="$LERUX_REDOX_REF/redox"
+    elif [[ -d "$LERUX_REDOX_REF/redox-master" ]]; then
+        redox_dir="$LERUX_REDOX_REF/redox-master"
+    fi
+    if [[ -z "$redox_dir" ]]; then
         echo "PREFIX_BINARY=0 requires Redox build tree at LERUX_REDOX_REF=$LERUX_REDOX_REF" >&2
         exit 1
     fi
-    local redox_dir="$LERUX_REDOX_REF/redox-master"
-    [[ -d "$redox_dir" ]] || redox_dir="$LERUX_REDOX_REF/redox"
     echo "prefix: cooking from source via $redox_dir (this takes a long time)"
+    if [[ -f "$redox_dir/build/container.tag" ]] \
+        && ! podman image exists redox-base >/dev/null 2>&1; then
+        echo "prefix: stale container.tag (redox-base image missing), rebuilding..." >&2
+        rm -f "$redox_dir/build/container.tag"
+    fi
+    if [[ ! -f "$redox_dir/build/container.tag" ]]; then
+        echo "prefix: building podman container first (slow one-time step)..." >&2
+        make -C "$redox_dir" build/container.tag \
+            PREFIX_BINARY=0 \
+            TARGET="$TARGET" \
+            HOST_TARGET="$HOST_TARGET" \
+            ROOT="$redox_dir"
+    fi
     make -C "$redox_dir" prefix \
         PREFIX_BINARY=0 \
         TARGET="$TARGET" \

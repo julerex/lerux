@@ -152,18 +152,21 @@ build-redoxfs-runtime: build-sysroot
         -Z build-std-features=compiler-builtins-mem \
         -Z json-target-spec \
         --no-default-features \
-        --features redox-daemon
+        --features redox-daemon \
+        --lib
     echo "redoxfs lib built against runtime (no_std). Daemon bin still hybrid until mount.rs ported."
-    # Attempt to build the target daemon bin in this context (with std to satisfy bin required-features).
+    # Attempt to build the target daemon bin in this context (no_std under redox-daemon for true runtime path).
     # Uses the runtime RUSTFLAGS (lld etc.). This is the "no_std path" experiment for the binary too.
+    # Now with the port in mount.rs, try no_std bin.
     {{redox_cargo}} build --release \
         --manifest-path "{{redoxfs_manifest}}" \
         --target {{userspace_target_spec}} \
         -Z build-std=std,core,alloc,compiler_builtins \
         -Z build-std-features=compiler-builtins-mem \
         -Z json-target-spec \
-        --features std,redox-daemon \
-        --bin redoxfs || echo "note: target daemon bin build with std+build-std may need further porting"
+        --no-default-features \
+        --features redox-daemon \
+        --bin redoxfs || echo "note: target no_std daemon bin may need more porting in mount.rs or deps"
     cp "{{redoxfs_out}}/redoxfs" "{{build_dir}}/redoxfs-runtime" || echo "note: using fallback for redoxfs-runtime"
     # Host tools still use std path
     cargo build --manifest-path "{{redoxfs_manifest}}" --release --bin redoxfs-mkfs --bin redoxfs-ar

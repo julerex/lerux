@@ -26,6 +26,7 @@ name = "redoxfs"
 path = "src/bin/mount.rs"
 doc = false
 required-features = ["std"]
+# Note: for full no_std daemon under redox-daemon in future, we will port the bin code to compile without "std" (using redox-rt). Currently the bin requires "std" for hybrid compatibility; the no_std path applies to the lib and build context.
 
 [[bin]]
 name = "redoxfs-ar"
@@ -89,8 +90,11 @@ std = [
     "redox_syscall/std",
     "redox-scheme",
 ]
-# Post-green runtime port: stub feature for building daemon with userspace/runtime/
-# (no_std path). Currently no-op; will control no_std + runtime deps later.
+# Post-green runtime port:
+# "redox-daemon" enables building the scheme daemon (bin/mount.rs) using userspace/runtime/
+# (redox-rt for proc, signals, thread, etc.) instead of libc/libredox + relibc hybrid.
+# The lib supports no_std (via no-default-features); the bin is being incrementally ported.
+# Keep "std" for hybrid builds during transition.
 redox-daemon = []
 
 [target.'cfg(not(target_os = "redox"))'.dependencies]
@@ -100,6 +104,8 @@ fuser = { version = "0.16", optional = true }
 libredox = { version = "0.1.13", optional = true }
 redox-path = "0.3.0"
 redox-scheme = { version = "0.11.0", optional = true }
+# no_std runtime for daemon under redox-daemon feature
+redox-rt = { path = "../runtime/redox-rt", optional = true, default-features = false, features = ["proc"] }
 
 
 

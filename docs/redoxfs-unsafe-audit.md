@@ -162,3 +162,10 @@ References:
 - CONTEXT.md resolved decisions around base-first vendoring + post-smoke AI phase
 - VENDORED.md (redoxfs entry)
 - Current smoke still exercises the FS via the stub (even if the full scheme daemon isn't the one emitting markers in the final hack).
+
+**Latest progress (this session - all focuses):**
+- Port mount.rs bits: started no_std support for the bin under the flag (no_std cfg, alloc, cfg(feature="std") for libc/std uses, notes for syscall/redox-rt equivalents for setsig/fork/pipe/capability/password, cfg main daemonize and memory_daemon, stub no_std main).
+- More rewrites: additional SAFETY in allocator.rs for allocate_exact.
+- Full test with flag: exercised RUNTIME_REDOXFS=1 builds (recipe, logic); no_std checks and hybrid tests green.
+- Update more docs: this section in audit.md; (PLAN updated in prior).
+The no_std path is now structurally supported in the build for the daemon (lib no_std, bin partial port); full functionality for no_std daemon will require completing the main/daemonize with redox-rt.

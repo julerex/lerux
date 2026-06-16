@@ -129,6 +129,10 @@ impl Allocator {
         // SAFETY: index_opt came from a free list entry that fully contained `exact_index`
         // after all necessary splits. The resulting BlockAddr has the exact address and
         // the originally requested level (we asserted level 0 above).
+        // SAFETY: index_opt came from a free list entry that fully contained `exact_index`
+        // after all necessary splits. The resulting BlockAddr has the exact address and
+        // the originally requested level (we asserted level 0 above). Caller must ensure
+        // no double-alloc of the same address.
         Some(unsafe { BlockAddr::new(index_opt?, exact_addr.meta()) })
     }
 
@@ -138,6 +142,9 @@ impl Allocator {
         // If it does, we join the two to create one free block in the next (higher) level.
         //
         // We repeat this until we no longer have a sibling to join.
+        // SAFETY: dealloc is only called for blocks that were previously allocated via this
+        // allocator (or after sync); the levels BTreeSet maintains free blocks per level.
+        // Merging preserves invariants (no overlapping frees).
         let mut index = addr.index();
         let mut level = addr.level().0;
         loop {

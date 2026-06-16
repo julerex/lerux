@@ -398,6 +398,10 @@ impl<'a, D: Disk> Transaction<'a, D> {
     ///
     /// # Safety
     /// Unsafe because it creates strange BlockData types that must be swapped before use
+    /// # Safety
+    /// See `read_block`. Additionally, returns an empty (zeroed) block for null
+    /// pointers, which the caller must treat as "not present on disk".
+    /// The empty block construction must not panic for valid levels.
     unsafe fn read_block_or_empty<T: BlockTrait + DerefMut<Target = [u8]>>(
         &mut self,
         ptr: BlockPtr<T>,
@@ -511,6 +515,16 @@ impl<'a, D: Disk> Transaction<'a, D> {
     /// - `block` must have a valid non-null address (we check here).
     /// - The data in the BlockData must be a valid on-disk representation for
     ///   the BlockTrait (no uninitialized bytes, correct size for level).
+    /// Write block data, returning a calculated block pointer.
+    ///
+    /// # Safety
+    /// - Caller must ensure CoW semantics: the returned pointer is to a *new*
+    ///   address allocated for this write. The old address (if any) must be
+    ///   deallocated only after the new data is durable (via sync_allocator +
+    ///   header update).
+    /// - `block` must have a valid non-null address (we check here).
+    /// - The data in the BlockData must be a valid on-disk representation for
+    ///   the BlockTrait (no uninitialized bytes, correct size for level).
     pub(crate) unsafe fn write_block<T: BlockTrait + Deref<Target = [u8]>>(
         &mut self,
         block: BlockData<T>,
@@ -586,6 +600,8 @@ impl<'a, D: Disk> Transaction<'a, D> {
         // Remember that if there is a free block at any level it will always sync when it
         // allocates at the lowest level, so we can save a write by not writing each level as it
         // is allocated.
+        // SAFETY: the unsafe block is for tree walking and sync; allocations/deallocs inside
+        // respect the ordering invariants (see allocate/deallocate SAFETY).
         unsafe {
             let mut l3 = self.read_block(self.header.tree)?;
             for i3 in 0..l3.data().ptrs.len() {

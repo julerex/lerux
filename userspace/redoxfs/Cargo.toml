@@ -25,8 +25,10 @@ path = "src/lib.rs"
 name = "redoxfs"
 path = "src/bin/mount.rs"
 doc = false
-required-features = ["std"]
-# Note: for full no_std daemon under redox-daemon in future, we will port the bin code to compile without "std" (using redox-rt). Currently the bin requires "std" for hybrid compatibility; the no_std path applies to the lib and build context.
+# No required-features: mount.rs now has additive cfgs so the daemon bin compiles for both
+# std (hybrid, default features) and no_std ( --no-default-features --features redox-daemon ).
+# The original main/daemon/fork etc remain intact under #[cfg(feature = "std")].
+# The no_std entrypoint (memory_daemon + main for smoke under RUNTIME_REDOXFS) is behind not(feature="std").
 
 [[bin]]
 name = "redoxfs-ar"

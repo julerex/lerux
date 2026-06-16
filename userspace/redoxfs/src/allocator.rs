@@ -85,6 +85,10 @@ impl Allocator {
             self.levels[level].insert(index + level_size);
         }
 
+        // SAFETY: The index came from the free list for this level, and we have already
+        // performed the necessary splits above to guarantee it has the requested level.
+        // The caller (Transaction/FS) is responsible for never using the same BlockAddr
+        // for two different allocations without an intervening deallocate.
         Some(unsafe { BlockAddr::new(index, meta) })
     }
 
@@ -122,6 +126,9 @@ impl Allocator {
             }
         }
 
+        // SAFETY: index_opt came from a free list entry that fully contained `exact_index`
+        // after all necessary splits. The resulting BlockAddr has the exact address and
+        // the originally requested level (we asserted level 0 above).
         Some(unsafe { BlockAddr::new(index_opt?, exact_addr.meta()) })
     }
 

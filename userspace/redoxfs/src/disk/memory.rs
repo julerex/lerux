@@ -16,6 +16,13 @@ impl DiskMemory {
 }
 
 impl Disk for DiskMemory {
+    /// # Safety
+    /// - `block` must correspond to a valid on-disk block index for this in-memory disk.
+    /// - `buffer.len()` must be a multiple of BLOCK_SIZE or the caller must handle partial
+    ///   block semantics (current RedoxFS always uses full blocks for this trait).
+    /// - The buffer must not overlap with any other concurrent access to the same blocks.
+    /// - The implementation assumes the disk size is a multiple of BLOCK_SIZE and never
+    ///   grows after construction.
     unsafe fn read_at(&mut self, block: u64, buffer: &mut [u8]) -> Result<usize> {
         let offset = (block * BLOCK_SIZE) as usize;
         let end = offset + buffer.len();
@@ -26,6 +33,9 @@ impl Disk for DiskMemory {
         Ok(buffer.len())
     }
 
+    /// # Safety
+    /// Same invariants as `read_at`. Writes must be durable from the caller's perspective
+    /// (for DiskMemory this is immediate since it is RAM; real disks require flushes higher up).
     unsafe fn write_at(&mut self, block: u64, buffer: &[u8]) -> Result<usize> {
         let offset = (block * BLOCK_SIZE) as usize;
         let end = offset + buffer.len();

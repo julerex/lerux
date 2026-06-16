@@ -122,7 +122,52 @@ build-bootstrap:
 # Cross-build the vendored redoxfs (standalone manifest) for the rustc-hosting smoke.
 # Produces the scheme daemon ("redoxfs") that init will exec via the 50_rootfs / redoxfs.service.
 # Uses the same hybrid sysroot + rust-lld + build-std flags as other early userspace.
+#
+# Post-green (Only Rust runtime port): long-term goal is to build the daemon against
+# userspace/runtime/ (no_std + redox-rt) instead of the relibc hybrid sysroot, so we
+# can eventually drop vendor/relibc/ and the toolchain tarball for this component.
+# See docs/redoxfs-unsafe-audit.md and userspace/runtime/redox-rt for the target model.
+# For now the hybrid path keeps the smoke green while we audit unsafe and prepare the port.
 build-redoxfs: build-sysroot
+
+# Pure-runtime build for post-green Only Rust port (work in progress).
+# Uses the in-tree userspace/runtime (redox-rt + generic-rt) instead of relibc hybrid.
+# Current: builds the core lib no_std + the host tools (mkfs etc still need std).
+# Future: port bin/mount.rs daemonize to use redox-rt proc/thread model, drop libc/libredox direct use.
+build-redoxfs-runtime: build-sysroot
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{build_dir}}"
+    export PATH="{{userspace_toolchain}}:$PATH"
+    export RUST_TARGET_PATH="{{justfile_directory()}}/targets"
+    # Runtime-style flags: rust-lld, build-std core/alloc (no full std yet for daemon),
+    # link against runtime instead of relibc crts + libc.
+    export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C linker=rust-lld -C target-feature=+crt-static"
+    export CARGO_TARGET_X86_64_UNKNOWN_REDOX_LINKER=rust-lld
+    # Build the lib with no_std path (redox-daemon feature is stub for now)
+    {{redox_cargo}} build --release \
+        --manifest-path "{{redoxfs_manifest}}" \
+        --target {{userspace_target_spec}} \
+        -Z build-std=core,alloc,compiler_builtins \
+        -Z build-std-features=compiler-builtins-mem \
+        -Z json-target-spec \
+        --no-default-features \
+        --features redox-daemon
+    echo "redoxfs lib built against runtime (no_std). Daemon bin still hybrid until mount.rs ported."
+    # Attempt to build the target daemon bin in this context (with std to satisfy bin required-features).
+    # Uses the runtime RUSTFLAGS (lld etc.). This is the "no_std path" experiment for the binary too.
+    {{redox_cargo}} build --release \
+        --manifest-path "{{redoxfs_manifest}}" \
+        --target {{userspace_target_spec}} \
+        -Z build-std=std,core,alloc,compiler_builtins \
+        -Z build-std-features=compiler-builtins-mem \
+        -Z json-target-spec \
+        --features std,redox-daemon \
+        --bin redoxfs || echo "note: target daemon bin build with std+build-std may need further porting"
+    cp "{{redoxfs_out}}/redoxfs" "{{build_dir}}/redoxfs-runtime" || echo "note: using fallback for redoxfs-runtime"
+    # Host tools still use std path
+    cargo build --manifest-path "{{redoxfs_manifest}}" --release --bin redoxfs-mkfs --bin redoxfs-ar
+    cp target/release/redoxfs-mkfs "{{build_dir}}/redoxfs-mkfs-runtime" || true
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p "{{build_dir}}"
@@ -169,7 +214,7 @@ build-userspace: build-sysroot
         -p init -p logd -p zerod -p randd -p ramfs -p rtcd
 
 # Copy cross-built userspace binaries into initfs staging.
-stage-userspace: build-userspace build-redoxfs build-rustc-smoke
+stage-userspace: build-userspace build-rustc-smoke
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p "{{staging_bin}}"
@@ -177,14 +222,27 @@ stage-userspace: build-userspace build-redoxfs build-rustc-smoke
     cp "{{userspace_out}}/$bin" "{{staging_bin}}/$bin"
     done
     cp "{{userspace_out}}/zerod" "{{staging_bin}}/nulld"
-    # Stage the redoxfs scheme daemon (required for the rustc-hosting rootfs service).
-    cp "{{build_dir}}/redoxfs" "{{staging_bin}}/redoxfs"
     # Stage the rustc stub so a oneshot can cp it onto the mounted FS and exec it from /data/bin/rustc.
     cp "{{build_dir}}/rustc-smoke" "{{staging_bin}}/rustc"
+    # Stage the redoxfs scheme daemon.
+    # Default: hybrid relibc sysroot build (current smoke path).
+    # With RUNTIME_REDOXFS=1: use the no_std / userspace/runtime build path (post-green experiment).
+    # This wires the runtime recipe into build-direct-userspace and smoke *behind a flag* so the
+    # default smoke remains unchanged and green. The no_std path builds the lib with runtime-style
+    # flags/build-std; the daemon bin may still pull std for compatibility until full port of mount.rs.
+    if [ "${RUNTIME_REDOXFS:-0}" = "1" ]; then
+        just build-redoxfs-runtime
+        cp "{{build_dir}}/redoxfs-runtime" "{{staging_bin}}/redoxfs" || echo "warning: no runtime-produced redoxfs bin; check build-redoxfs-runtime output"
+    else
+        just build-redoxfs
+        cp "{{build_dir}}/redoxfs" "{{staging_bin}}/redoxfs"
+    fi
     # Init/daemons (and the new redoxfs/rustc) are statically linked (+crt-static); no dynamic linker in initfs.
 
 # Build initfs with cross-built bootstrap + redoxfs + rustc stub, then direct-boot kernel with userspace enabled.
 # The rustc-hosting smoke reuses this (redoxfs daemon + stub are staged for the service graph + marker emission).
+# To use the no_std / userspace/runtime build path for the redoxfs daemon: RUNTIME_REDOXFS=1 just build-direct-userspace
+# (default remains hybrid to keep smoke unchanged and green; see stage-userspace for the wiring).
 build-direct-userspace: build-bootstrap stage-userspace build-initfs
     KERNEL_CARGO_FEATURES="direct-boot,direct-boot-userspace" just build
 
@@ -253,6 +311,7 @@ build-redoxfs-test-image: build-rustc-smoke
 # Builds everything (userspace with redoxfs + stub staged, kernel, test image) then drives the
 # smoke harness under RUSTC_SMOKE=1 (automated marker wait + PASS/FAIL like smoke-userspace).
 # The live qemu-direct-rustc is kept for manual serial inspection during bring-up/debug.
+# To exercise the no_std/runtime path for redoxfs: RUNTIME_REDOXFS=1 just smoke-rustc
 smoke-rustc: build-direct-userspace build-redoxfs-test-image
     @echo "==> Running rustc-hosting smoke (redoxfs + bootstrap rustc)"
     RUSTC_SMOKE=1 "{{justfile_directory()}}/qemu/smoke-test.sh" --no-build

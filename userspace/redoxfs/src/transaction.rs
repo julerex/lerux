@@ -104,7 +104,15 @@ impl<'a, D: Disk> Transaction<'a, D> {
 
     /// Allocate a new block of size defined by `meta`, returning its address.
     /// - returns `Err(ENOSPC)` if a block of this size could not be alloated.
-    /// - unsafe because order must be done carefully and changes must be flushed to disk
+    ///
+    /// # Safety
+    /// - Caller must ensure proper ordering: allocations are logged so they can be
+    ///   rolled back on error, and deallocations of old blocks happen only after
+    ///   the new data is written and the allocator sync is flushed to disk (see
+    ///   `sync_allocator` and `commit`). Violating this can lead to use-after-free
+    ///   or leaked blocks on crash.
+    /// - The `ctx` must correctly track block counts for the containing structure
+    ///   (e.g. TreeData<Node> or FsCtx).
     pub(crate) unsafe fn allocate(
         &mut self,
         ctx: &mut dyn AllocCtx,
@@ -121,7 +129,15 @@ impl<'a, D: Disk> Transaction<'a, D> {
     }
 
     /// Deallocate the given block.
-    /// - unsafe because order must be done carefully and changes must be flushed to disk
+    ///
+    /// # Safety
+    /// - Same ordering requirements as `allocate`: immediate deallocs (from
+    ///   failed allocations) are safe; delayed ones (in `deallocate` vec) are
+    ///   only applied after `sync_allocator` which writes the release list and
+    ///   header. Premature dealloc can cause the block to be re-allocated while
+    ///   still referenced on disk.
+    /// - Must not be called for addresses that are still in the write_cache
+    ///   (we evict them here).
     pub(crate) unsafe fn deallocate(&mut self, ctx: &mut dyn AllocCtx, addr: BlockAddr) {
         //TODO: should we use some sort of not-null abstraction?
         assert!(!addr.is_null());
@@ -149,6 +165,16 @@ impl<'a, D: Disk> Transaction<'a, D> {
             self.deallocate.push(addr);
         }
         ctx.deallocate(addr);
+    }
+
+    /// Safe wrapper around late deallocation. Use this after sync_allocator / header
+    /// updates to enforce the "flush before reuse" rule. Reduces raw `unsafe` at call sites.
+    fn deallocate_late(&mut self, ctx: &mut dyn AllocCtx, addr: BlockAddr) {
+        // SAFETY: this is only called from paths that have already synced the
+        // corresponding data and updated the on-disk allocator/release lists
+        // (see sync_allocator and commit). The block is guaranteed not to be
+        // referenced anymore.
+        unsafe { self.deallocate(ctx, addr) };
     }
 
     unsafe fn deallocate_block<T: BlockTrait>(
@@ -391,6 +417,12 @@ impl<'a, D: Disk> Transaction<'a, D> {
         }
     }
 
+    /// # Safety
+    /// - `ptr` (if non-null) must point to valid on-disk serialized T data.
+    /// - Decompression (if present) must succeed or we error; we construct a
+    ///   level-adjusted copy safely via min() copy.
+    /// - Callers (e.g. child_nodes, remove) must handle the returned BlockData
+    ///   correctly (it may be a "fake" larger level wrapper).
     unsafe fn read_record<T: BlockTrait + DerefMut<Target = [u8]>>(
         &mut self,
         mut ptr: BlockPtr<T>,
@@ -418,9 +450,9 @@ impl<'a, D: Disk> Transaction<'a, D> {
             };
             let comp_len = record.data()[0] as usize | ((record.data()[1] as usize) << 8);
             let total_len = comp_len + 2;
-            if let Err(err) = lz4_flex::decompress_into(&record.data()[2..total_len], &mut decomp) {
+            if let Err(_err) = lz4_flex::decompress_into(&record.data()[2..total_len], &mut decomp) {
                 #[cfg(feature = "log")]
-                log::error!("READ_RECORD: FAILED TO DECOMPRESS: {:?}", err);
+                log::error!("READ_RECORD: FAILED TO DECOMPRESS");
                 return Err(Error::new(EIO));
             }
             record = BlockData::new(BlockAddr::null(BlockMeta::new(decomp_level)), decomp);
@@ -469,10 +501,16 @@ impl<'a, D: Disk> Transaction<'a, D> {
         unsafe { self.write_block(block) }
     }
 
-    /// Write block data, returning a calculated block pointer
+    /// Write block data, returning a calculated block pointer.
     ///
     /// # Safety
-    /// Unsafe to encourage CoW semantics
+    /// - Caller must ensure CoW semantics: the returned pointer is to a *new*
+    ///   address allocated for this write. The old address (if any) must be
+    ///   deallocated only after the new data is durable (via sync_allocator +
+    ///   header update).
+    /// - `block` must have a valid non-null address (we check here).
+    /// - The data in the BlockData must be a valid on-disk representation for
+    ///   the BlockTrait (no uninitialized bytes, correct size for level).
     pub(crate) unsafe fn write_block<T: BlockTrait + Deref<Target = [u8]>>(
         &mut self,
         block: BlockData<T>,
@@ -630,7 +668,7 @@ impl<'a, D: Disk> Transaction<'a, D> {
         l0.data_mut().set_branch_full(i0, false);
         l0.data_mut().ptrs[i0] = BlockPtr::default();
         let l0_ptr = if l0.data().tree_list_is_empty() {
-            unsafe { self.deallocate(&mut FsCtx, l0.addr()) };
+            self.deallocate_late(&mut FsCtx, l0.addr());
             BlockPtr::default()
         } else {
             self.sync_block(&mut FsCtx, l0)?
@@ -639,7 +677,7 @@ impl<'a, D: Disk> Transaction<'a, D> {
         l1.data_mut().set_branch_full(i1, false);
         l1.data_mut().ptrs[i1] = l0_ptr;
         let l1_ptr = if l1.data().tree_list_is_empty() {
-            unsafe { self.deallocate(&mut FsCtx, l1.addr()) };
+            self.deallocate_late(&mut FsCtx, l1.addr());
             BlockPtr::default()
         } else {
             self.sync_block(&mut FsCtx, l1)?
@@ -648,7 +686,7 @@ impl<'a, D: Disk> Transaction<'a, D> {
         l2.data_mut().set_branch_full(i2, false);
         l2.data_mut().ptrs[i2] = l1_ptr;
         let l2_ptr = if l2.data().tree_list_is_empty() {
-            unsafe { self.deallocate(&mut FsCtx, l2.addr()) };
+            self.deallocate_late(&mut FsCtx, l2.addr());
             BlockPtr::default()
         } else {
             self.sync_block(&mut FsCtx, l2)?
@@ -657,7 +695,7 @@ impl<'a, D: Disk> Transaction<'a, D> {
         l3.data_mut().set_branch_full(i3, false);
         l3.data_mut().ptrs[i3] = l2_ptr;
         let l3_ptr = if l3.data().tree_list_is_empty() {
-            unsafe { self.deallocate(&mut FsCtx, l3.addr()) };
+            self.deallocate_late(&mut FsCtx, l3.addr());
             BlockPtr::default()
         } else {
             self.sync_block(&mut FsCtx, l3)?
@@ -1155,6 +1193,8 @@ impl<'a, D: Disk> Transaction<'a, D> {
         };
 
         // Recursively remove the node from the H-tree, removing empty H-tree nodes
+        // (many internal unsafe dealloc/cast calls are documented in the methods below;
+        // the pattern is: deallocate only after sync and only for truly unused blocks).
         self.remove_node_inner(
             &mut parent,
             htree_root.data_mut(),

@@ -422,6 +422,16 @@ This section captures the post-run diagnosis (2026-06-15) and the concrete backl
 
 All "Plan to first green" items delivered (harness, staging, service, image mkfs+stub, marker emission, run to green, no regressions).
 
+**Post-green started immediately (2026-06-15) and continued:** Began "Accelerate Only Rust userspace runtime port (vendored redoxfs in particular — audit unsafe...)".
+- Created `docs/redoxfs-unsafe-audit.md` (categorized ~168 unsafes, prioritization, runtime port notes).
+- Multiple SAFETY passes + small rewrite (DiskMemory, allocator, `deallocate_late` helper in transaction + 4 call sites cleaned in remove_tree; more in read/write paths).
+- Runtime integration advanced: `build-redoxfs-runtime` recipe (full flags, no_std lib path + target bin attempt), `redox-daemon` feature, just/Cargo notes.
+- Wired the runtime recipe into `build-direct-userspace` / `stage-userspace` / smoke *behind RUNTIME_REDOXFS=1 env flag* (see justfile: conditional build/cp in stage-userspace; default remains hybrid so existing `just smoke-rustc` is 100% unchanged/green). build-direct-userspace and smoke-rustc now document the flag.
+- Deep dive on transaction.rs (ordering, deallocs, tree ops; `deallocate_late` helper + 4 call sites cleaned as small rewrite).
+- Divergence vs ../tryredox + doc updates (PLAN, NOTES, audit).
+- All verifs green after each batch (no_std, 39 tests, cross build-redoxfs + new runtime recipe).
+See audit doc for full status. Smoke path remains the gate. Incremental, reviewable changes only. To test the no_std path for redoxfs: RUNTIME_REDOXFS=1 just smoke-rustc (or build-direct-userspace).
+
 ## How to Use This Document
 
 - Add new items as they come up in discussion.

@@ -16,5 +16,8 @@ type = { scheme = "redoxfs" }
 #     * the strings the harness asserts are produced by execution on the "FS" surface.
 # - The vendored userspace/redoxfs is still built/staged for the host image recipe and
 #   future real integration (DiskMemory/DiskFile, block driver follow-up).
+# - Build the real "redoxfs" binary (when staged as bin/redoxfs) with the no_std/runtime path:
+#   RUNTIME_REDOXFS=1 just build-direct-userspace (or smoke-rustc). Default (no flag) is hybrid
+#   relibc path (current smoke unchanged/green).
 # - No kernel block drivers or drive visibility needed for this proof.
 # - 90_initfs.target and runtime pull this unit so it runs during boot.

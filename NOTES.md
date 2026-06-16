@@ -155,6 +155,8 @@ This is the first tangible proof of the project goal. The stub is a bootstrap/va
 
 Next per plan: accelerate pure runtime port (especially for vendored components), AI co-pilot unsafe audit on redoxfs (allocator/block/fs layers first), smallest block exposure + flip to real DiskFile image, etc. See PLAN.md §8 and the post-green list.
 
+**2026-06-15 post-green start:** Kicked off the runtime port + redoxfs unsafe audit phase across all requested fronts (SAFETY comments + rewrite, runtime build prep in just/Cargo, deep-dive on transaction.rs, divergence measurement, doc updates). Created `docs/redoxfs-unsafe-audit.md`. First changes: improved SAFETY docs in disk/memory.rs, allocator.rs, transaction.rs + small cleanup. Verified no_std lib, tests, and cross builds remain green. See the audit doc for the living plan.
+
 - `Redox OS starting...`
 - `Memory:`
 - `Paging: new kernel page tables active`

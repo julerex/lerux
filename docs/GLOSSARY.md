@@ -19,13 +19,13 @@ For lerux-only names, files, and commands, see **[lerux-specific names](#lerux-s
 : A committed reference artifact whose contents are treated as the source of truth for regression checks. Here, `kernel/validation/trampolines/expected/*.bin` are golden binaries: NASM assembles `asm/*.asm`, the output is stored in `expected/`, and tests/scripts assert that embedded kernel bytes match exactly. If you intentionally change the assembly, regenerate golden files with `./validate-trampolines.sh refresh` and commit the update.
 
 **Postmortem**
-: A written retrospective explaining how something went wrong and why it was not caught earlier. See [trampoline-bytes-postmortem.md](trampoline-bytes-postmortem.md).
+: A written retrospective explaining how something went wrong and why it was not caught earlier. See [trampoline-bytes-postmortem.md](trampoline-bytes-postmortem.md) (historical; now also referenced from [docs/development/trampolines.md](development/trampolines.md)).
 
 **Smoke test**
 : A minimal end-to-end test that proves the system basically works (boots, prints expected output, does not crash). lerux’s smoke test runs QEMU direct-boot headless and asserts on serial markers such as `"Redox OS starting..."` and the direct-boot idle message (`just smoke`).
 
 **Upstream**
-: The original project lerux derives from — here, [redox-os/kernel](https://gitlab.redox-os.org/redox-os/kernel). “Tracking upstream” means merging or comparing against that project; “divergence” is documented in [VENDORED.md](../VENDORED.md).
+: The original project lerux derives from — here, [redox-os/kernel](https://gitlab.redox-os.org/redox-os/kernel). “Tracking upstream” means merging or comparing against that project; “divergence” is documented in [vendored.md](vendored.md).
 
 **Vendoring**
 : Copying another project’s source into this repository (`kernel/`) and building from that copy instead of fetching it as a dependency. lerux vendors the Redox microkernel (~2026-05 snapshot).
@@ -84,7 +84,7 @@ For lerux-only names, files, and commands, see **[lerux-specific names](#lerux-s
 : x86 control register holding the physical address of the page table root (PML4). The trampoline loads CR3 from a field patched by the BSP before SIPI.
 
 **Direct-boot**
-: lerux Cargo feature and boot path: kernel synthesizes its own `KernelArgs` for `qemu -kernel` without the Redox bootloader or initfs. See [BUILDING-standalone.md](../BUILDING-standalone.md).
+: lerux Cargo feature and boot path: kernel synthesizes its own `KernelArgs` for `qemu -kernel` without the Redox bootloader or initfs. See [building/standalone.md](../building/standalone.md).
 
 **EFER**
 : Extended Feature Enable Register (MSR `0xC0000080`). Long mode and NX enablement; the PVH stub must set **LME** and **NXE** before paging with NX bits.
@@ -117,7 +117,7 @@ For lerux-only names, files, and commands, see **[lerux-specific names](#lerux-s
 : Array of `{ base, size, kind }` entries in `KernelArgs` describing RAM, reserved regions, kernel image, etc. Direct-boot uses a static map tuned for typical QEMU machines.
 
 **Multiboot2 / Limine**
-: Common open boot protocols. **Redox/lerux do not use them** for the main kernel handoff; they use `KernelArgs` instead. Limine is listed as a possible future dev bootloader in [PLAN.md](../PLAN.md).
+: Common open boot protocols. **Redox/lerux do not use them** for the main kernel handoff; they use `KernelArgs` instead. Limine is listed as a possible future dev bootloader in [plan.md](plan.md).
 
 **ORG 0x8000**
 : NASM directive placing the SMP trampoline at physical address `0x8000`, where SIPI startup code expects it.
@@ -206,8 +206,8 @@ Named artifacts, features, paths, and commands that exist **only in this reposit
 | **`direct-boot`** | Cargo feature enabling synthetic `KernelArgs`, PVH stub module, and `x86_64-direct.ld`. Env marker: `direct-boot=1`. |
 | **`direct_boot.rs`** | Module (`kernel/src/startup/direct_boot.rs`) that builds fake boot info for QEMU `-kernel`. |
 | **`get_direct_boot_args()`** | Function returning the static synthetic `KernelArgs` used when `direct-boot` is enabled. |
-| **`BUILDING-standalone.md`** | Doc for kernel-only builds without the Redox build system. |
-| **`VENDORED.md`** | Canonical list of intentional differences from upstream `redox-os/kernel`. |
+| **`building/standalone.md`** | Doc for kernel-only builds without the Redox build system. |
+| **[vendored.md](vendored.md)** | Canonical list of intentional differences from upstream `redox-os/kernel`. |
 | **`PLAN.md`** | Living development roadmap and open questions. |
 | **`NOTES.md`** | Direct-boot bring-up log and verified serial output. |
 | **`linkers/x86_64-direct.ld`** | Linker script for PVH note, stub, and kernel load @ 2 MiB (direct-boot only). |
@@ -235,8 +235,8 @@ Named artifacts, features, paths, and commands that exist **only in this reposit
 | Document | Contents |
 |----------|----------|
 | [README.md](../README.md) | Project overview and status |
-| [VENDORED.md](../VENDORED.md) | Upstream divergence |
-| [BUILDING-standalone.md](../BUILDING-standalone.md) | Direct-boot build/run |
-| [qemu/README.md](../qemu/README.md) | QEMU harness and handoff protocol |
-| [kernel/validation/trampolines/README.md](../kernel/validation/trampolines/README.md) | Trampoline golden-file workflow |
-| [trampoline-bytes-postmortem.md](trampoline-bytes-postmortem.md) | Why bad bytes slipped through |
+| [vendored.md](vendored.md) | Upstream divergence |
+| [building/standalone.md](building/standalone.md) | Direct-boot build/run |
+| [development/qemu.md](development/qemu.md) | QEMU harness and handoff protocol |
+| [development/trampolines.md](development/trampolines.md) | Trampoline golden-file workflow + validation |
+| [trampoline-bytes-postmortem.md](trampoline-bytes-postmortem.md) | Why bad bytes slipped through (historical) |

@@ -19,7 +19,7 @@ what the original NASM sources produce.
 As part of the lerux "Only Rust Redox" goal, the last external assembler
 dependency (nasm for AP bring-up trampolines) was removed from the **kernel
 build**. Upstream `redox-os/kernel` still assembled these via nasm in
-`build.rs`; see root [VENDORED.md](../../VENDORED.md).
+`build.rs`; see root [docs/vendored.md](../../docs/vendored.md).
 
 The kernel embeds the golden `.bin` files directly:
 

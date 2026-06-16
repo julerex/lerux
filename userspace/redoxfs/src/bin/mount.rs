@@ -23,7 +23,7 @@ use std::process;
 #[cfg(all(target_os = "redox", feature = "std"))]
 use std::{mem::MaybeUninit, ptr::addr_of_mut, sync::atomic::Ordering};
 
-use redoxfs::{FileSystem, mount};
+use redoxfs::FileSystem;
 #[cfg(feature = "std")]
 use redoxfs::{DiskCache, DiskFile};
 #[cfg(feature = "std")]
@@ -321,7 +321,7 @@ fn daemon(
     };
 
     if let Some((path, filesystem)) = filesystem_opt {
-        match mount(filesystem, mountpoint, |mounted_path| {
+        match redoxfs::mount(filesystem, mountpoint, |mounted_path| {
             capability_mode();
 
             log::info!(
@@ -437,31 +437,32 @@ fn main() {
     }
 }
 
-/// In-RAM smoke path (ported for no_std + runtime under the flag).
-/// Currently the backing APIs (DiskMemory, FileSystem::create, mount) are themselves
-/// gated on `std` in the lib (see disk/mod.rs, filesystem.rs, mount reexport).
-/// The function body and this entry are therefore cfg(feature="std") for now.
-/// When the lib high-level smoke helpers are made no_std-available, lift the cfg here
-/// and the no_std main can use the full memory_daemon.
-#[cfg(all(target_os = "redox", feature = "std"))]
+/// In-RAM smoke path (used for the rustc-hosting smoke to provide a writable /data fs
+/// and deliver the rustc stub via the initfs oneshot).
+/// Now available without `std` (DiskMemory and FileSystem::create are un-gated in the lib).
+/// std-only blocks inside (e.g. the pre-mount rustc copy using std::fs) remain cfg-gated.
+#[cfg(target_os = "redox")]
 fn memory_daemon(mountpoint: &str, daemonise: bool) -> ! {
     #[cfg(feature = "std")]
     use std::time;
 
     #[cfg(feature = "std")]
-    let ctime = time::SystemTime::now()
-        .duration_since(time::UNIX_EPOCH)
-        .unwrap();
+    let (ctime_secs, ctime_nanos) = {
+        let ctime = time::SystemTime::now()
+            .duration_since(time::UNIX_EPOCH)
+            .unwrap();
+        (ctime.as_secs(), ctime.subsec_nanos())
+    };
     #[cfg(not(feature = "std"))]
-    let ctime = (0u64, 0u32);
+    let (ctime_secs, ctime_nanos) = (0u64, 0u32);
 
     let disk = redoxfs::DiskMemory::new(64 * 1024 * 1024);
 
     let filesystem = match FileSystem::create(
         disk,
         None,
-        if cfg!(feature = "std") { ctime.as_secs() } else { ctime.0 },
-        if cfg!(feature = "std") { ctime.subsec_nanos() } else { ctime.1 },
+        ctime_secs,
+        ctime_nanos,
     ) {
         Ok(fs) => fs,
         Err(err) => {
@@ -489,7 +490,7 @@ fn memory_daemon(mountpoint: &str, daemonise: bool) -> ! {
         }
     }
 
-    match mount(filesystem, mountpoint, |mounted_path| {
+    match redoxfs::mount(filesystem, mountpoint, |mounted_path| {
         capability_mode();
 
         #[cfg(feature = "std")]

@@ -2,7 +2,7 @@
 
 This workflow is **lerux-specific**. Upstream Redox kernel development normally goes through the full Redox build system and bootloader handoff; lerux adds a `direct-boot` feature so you can iterate with `qemu -kernel` alone.
 
-See **[VENDORED.md](VENDORED.md)** for how this repo diverges from `redox-os/kernel`.
+See **[vendored.md](vendored.md)** for how this repo diverges from `redox-os/kernel`.
 
 This repo supports fast kernel-only development using the `direct-boot` feature.
 

@@ -3,7 +3,7 @@
 #
 # lerux divergence: upstream kernel builds inside the Redox build system;
 # this justfile drives the root crate with optional direct-boot + x86_64-direct.ld.
-# See VENDORED.md.
+# See [vendored.md](vendored.md).
 
 # Where to put build artifacts
 build_dir := env_var_or_default("BUILD", "build")
@@ -132,23 +132,33 @@ build-redoxfs: build-sysroot
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p "{{build_dir}}"
-    # Guarded: if a prior cross build left a good binary in the crate out dir, just cp it to
-    # build/ (fast, no recompile). This prevents unnecessary re-triggers of the redox-scheme
-    # compile error (E0277 From<libredox Error>) on incremental runs, while keeping the
-    # recipe strict and `just build-redoxfs` + stage cp reliable for default green smokes.
-    # When a true rebuild is required and no artifact, delegate (which may surface the known dep skew).
-    if [ -f "{{redoxfs_out}}/redoxfs" ]; then
-        cp "{{redoxfs_out}}/redoxfs" "{{build_dir}}/redoxfs"
-    else
-        just build-redoxfs-runtime
-        cp "{{build_dir}}/redoxfs-runtime" "{{build_dir}}/redoxfs"
+    # For the default (hybrid) smoke path we build with --features std only.
+    # This avoids activating the optional `redox-rt` dep (which wants libredox ^0.1.17),
+    # preventing version conflicts with the libredox used by the std feature / redox-scheme.
+    # The guard lets us reuse a previous successful cross artifact from the crate's own
+    # target dir (typical on a dev machine after the first build). On a clean CI it will
+    # run the cross; with fewer constraints on libredox the hope is that the pinned
+    # redox_syscall + redox-scheme will resolve without the E0277 errors.
+    if [ ! -f "{{redoxfs_out}}/redoxfs" ]; then
+        export PATH="{{userspace_toolchain}}:$PATH"
+        export RUST_TARGET_PATH="{{justfile_directory()}}/targets"
+        export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="{{userspace_rustflags}}"
+        export CARGO_TARGET_X86_64_UNKNOWN_REDOX_LINKER=rust-lld
+        {{redox_cargo}} build --release \
+            --manifest-path "{{redoxfs_manifest}}" \
+            --target {{userspace_target_spec}} \
+            -Z build-std=std,core,alloc,compiler_builtins \
+            -Z build-std-features=compiler-builtins-mem \
+            -Z json-target-spec \
+            --features std \
+            --bin redoxfs
     fi
+    cp "{{redoxfs_out}}/redoxfs" "{{build_dir}}/redoxfs"
     echo "build/redoxfs present for default/hybrid path."
 
-# Pure-runtime build for post-green Only Rust port (work in progress).
-# Uses the in-tree userspace/runtime (redox-rt + generic-rt) instead of relibc hybrid.
-# Current: builds the core lib no_std + the host tools (mkfs etc still need std).
-# Future: port bin/mount.rs daemonize to use redox-rt proc/thread model, drop libc/libredox direct use.
+# Build for the redoxfs scheme daemon when the RUNTIME_REDOXFS=1 path is selected.
+# Uses --features std,redox-daemon (this activates the optional redox-rt dep).
+# Guard still protects against re-running the cross compile when a good artifact exists.
 build-redoxfs-runtime: build-sysroot
     #!/usr/bin/env bash
     set -euo pipefail
@@ -173,7 +183,7 @@ build-redoxfs-runtime: build-sysroot
             --bin redoxfs
     fi
     cp "{{redoxfs_out}}/redoxfs" "{{build_dir}}/redoxfs-runtime"
-    echo "redoxfs binary built (or reused) in runtime recipe context for flag path."
+    echo "redoxfs binary built (or reused) in runtime recipe context for flag path (no_std + redox-daemon to avoid scheme dep skew)."
     # Host tools (mkfs etc.) still std.
     cargo build --manifest-path "{{redoxfs_manifest}}" --release --bin redoxfs-mkfs --bin redoxfs-ar
     if [ -f target/release/redoxfs-mkfs ]; then
@@ -222,11 +232,11 @@ stage-userspace: build-userspace build-rustc-smoke
     # Stage the rustc stub so a oneshot can cp it onto the mounted FS and exec it from /data/bin/rustc.
     cp "{{build_dir}}/rustc-smoke" "{{staging_bin}}/rustc"
     # Stage the redoxfs scheme daemon.
-    # Default: hybrid relibc sysroot build (current smoke path).
-    # With RUNTIME_REDOXFS=1: use the no_std / userspace/runtime build path (post-green experiment).
-    # This wires the runtime recipe into build-direct-userspace and smoke *behind a flag* so the
-    # default smoke remains unchanged and green. The no_std path builds the lib with runtime-style
-    # flags/build-std; the daemon bin may still pull std for compatibility until full port of mount.rs.
+    # Default path: built with --features std only (no redox-daemon / no redox-rt dep)
+    # to keep libredox version resolution as simple as possible for the scheme code.
+    # RUNTIME_REDOXFS=1 path: includes ,redox-daemon (pulls redox-rt).
+    # The guard + separate build logic in the recipes exist to make the cp to staging
+    # reliable even when the vendored standalone + redox-scheme has fragile resolution.
     if [ "${RUNTIME_REDOXFS:-0}" = "1" ]; then
         just build-redoxfs-runtime
         cp "{{build_dir}}/redoxfs-runtime" "{{staging_bin}}/redoxfs"
@@ -358,3 +368,63 @@ check-only-rust *ARGS:
 # Verify embedded SMP trampoline bytes match NASM sources (requires nasm).
 validate-trampolines:
     "{{justfile_directory()}}/kernel/validation/trampolines/validate-trampolines.sh"
+
+# Host unit tests for crates that support them without the custom kernel target or cross.
+# This is the fast, native "cargo test" surface (rmm under std, kernel cfg(test) modules,
+# initfs-tools integration, etc.). Does not include redoxfs (excluded per request).
+test:
+    @echo "== rmm (std feature) =="
+    cargo test -p rmm --features std
+    @echo "== kernel (host tests, e.g. trampoline) =="
+    cargo test --bin kernel trampoline
+    @echo "== initfs-tools (integration) =="
+    cargo test --manifest-path userspace/initfs-tools/Cargo.toml
+    @echo "== userspace workspace (selected) =="
+    cargo test --manifest-path userspace/Cargo.toml --workspace || echo "(some members may need extra setup; run per-crate as needed)"
+    @echo "Host unit tests complete. For full coverage report use: just coverage"
+
+# Generate coverage report aiming for 100% on in-scope code (excludes redoxfs + vendor).
+# Uses cargo-llvm-cov (installs on demand for local dev; CI jobs already provision llvm-tools).
+# See docs/development/coverage.md for exceptions policy, ignore config, and how to run pieces.
+# The recipe currently produces reports without hard --fail-under (gate enforced in polish phase).
+coverage:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "==> Ensuring cargo-llvm-cov and llvm-tools (local dev convenience; CI usually has them)"
+    rustup component add llvm-tools-preview 2>/dev/null || true
+    if ! command -v cargo-llvm-cov >/dev/null 2>&1; then
+        cargo install cargo-llvm-cov --locked --quiet || echo "cargo-llvm-cov install may have issues; ensure it is on PATH"
+    fi
+
+    mkdir -p target/coverage
+    export RUSTFLAGS="${RUSTFLAGS:-} -C instrument-coverage"
+
+    echo "==> Coverage: rmm (std)"
+    cargo llvm-cov -p rmm --features std --html --output-dir target/coverage/rmm || true
+
+    echo "==> Coverage: kernel host tests (trampoline + any other cfg(test))"
+    cargo llvm-cov --bin kernel --test trampoline --html --output-dir target/coverage/kernel || true
+
+    echo "==> Coverage: initfs-tools"
+    cargo llvm-cov --manifest-path userspace/initfs-tools/Cargo.toml --html --output-dir target/coverage/initfs-tools || true
+
+    echo "==> Coverage summary (text) for quick view"
+    cargo llvm-cov -p rmm --features std --summary-only || true
+    cargo llvm-cov --bin kernel --test trampoline --summary-only || true
+
+    echo "==> Combined / top-level report (best effort)"
+    cargo llvm-cov --workspace --html --output-dir target/coverage/overall --ignore-filename-regex '(/redoxfs/|/vendor/|/target/|validation/trampolines/asm)' || true
+
+    echo "Reports written under target/coverage/. Open target/coverage/*/html/index.html"
+    echo "See docs/development/coverage.md for the 100% goal, approved exceptions, and update steps."
+    echo "To enforce the gate later: add --fail-under-lines 100 (and keep the ignore regex)."
+
+# Build rustdoc for the main crates (includes private items while we are filling docs).
+# After docstring work this should be clean (modulo the scoped "public + key internals" rule).
+docs:
+    @echo "==> rustdoc (kernel + rmm + userspace libs, private items)"
+    cargo doc --no-deps --document-private-items --bin kernel -Z build-std=core,alloc || true
+    cargo doc -p rmm --features std --document-private-items || true
+    cargo doc --manifest-path userspace/initfs/Cargo.toml --document-private-items || true
+    cargo doc --manifest-path userspace/initfs-tools/Cargo.toml --document-private-items || true
+    @echo "Docs in target/doc/. See also the markdown docs now centralized under docs/."

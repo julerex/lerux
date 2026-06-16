@@ -1,6 +1,6 @@
 # VENDORED.md — Third-party and upstream code in lerux
 
-This file tracks code copied into lerux from upstream projects (especially Redox), how it differs from upstream, and what still depends on external registries. See [PLAN.md](PLAN.md) for the **vendor everything** policy: no build-time dependencies on Redox GitLab or other moving upstream trees.
+This file tracks code copied into lerux from upstream projects (especially Redox), how it differs from upstream, and what still depends on external registries. See [plan.md](plan.md) for the **vendor everything** policy: no build-time dependencies on Redox GitLab or other moving upstream trees.
 
 **Convention:** vendored trees live under `kernel/`, `userspace/`, or `vendor/` (pick one layout per import; document each row below). Reference trees such as `../tryredox/base` are **not** part of lerux and are not listed here as vendored—only what is **in this repository**.
 
@@ -49,7 +49,7 @@ Upstream ships the kernel as the crate root. lerux wraps it: `Cargo.toml` and `b
 | SSE for userspace | Upstream sets CR4 via boot path | `early_init` sets `CR4_ENABLE_SSE` (+ `CR4_ENABLE_OS_XSAVE` when XSAVE present) so bootstrap/init can use SSE |
 | Direct-boot memory map | Static minimal map (assumed ~512 MiB) | Enlarged kernel reservation (0x0400_0000) + shifted free base to tolerate larger embedded initfs blob (redoxfs + stub + services for rustc-hosting smoke). See `kernel/src/startup/direct_boot.rs`. |
 
-Building **without** `direct-boot` still targets a normal Redox-style kernel but expects the full Redox build system (see [BUILDING-standalone.md](BUILDING-standalone.md)).
+Building **without** `direct-boot` still targets a normal Redox-style kernel but expects the full Redox build system (see [building/standalone.md](building/standalone.md)).
 
 ---
 
@@ -83,7 +83,7 @@ Source reference: `tryredox/base` (or upstream [redox-os/base](https://gitlab.re
 | Planned component | Suggested path | Upstream (reference) | Notes |
 |-------------------|----------------|----------------------|--------|
 | libredox (full in-tree) | `vendor/libredox/` | relibc / crates.io | bootstrap still uses crates.io `libredox` 0.1.17 |
-| Drivers (pcid, virtio, …) | `userspace/drivers/` or `vendor/drivers/` | `base/drivers` | Phase C in [PLAN.md](PLAN.md) |
+| Drivers (pcid, virtio, …) | `userspace/drivers/` or `vendor/drivers/` | `base/drivers` | Phase C in [plan.md](plan.md) |
 
 ---
 
@@ -176,7 +176,7 @@ With Tier 3 siblings present, `desktop-minimal.toml` package sources are availab
 
 **Cloned 2026-05-30:** [findutils](https://gitlab.redox-os.org/redox-os/findutils), [dash](https://gitlab.redox-os.org/redox-os/dash), [contain](https://gitlab.redox-os.org/redox-os/contain), [profiled](https://gitlab.redox-os.org/redox-os/profiled), [strace-redox](https://gitlab.redox-os.org/redox-os/strace-redox), [openlibm](https://gitlab.redox-os.org/redox-os/openlibm), [dlmalloc-rs](https://gitlab.redox-os.org/redox-os/dlmalloc-rs).
 
-Defer for lerux until after Phases A–B in [PLAN.md](PLAN.md): full desktop extras, games, WIP recipes, COSMIC, etc.
+Defer for lerux until after Phases A–B in [plan.md](plan.md): full desktop extras, games, WIP recipes, COSMIC, etc.
 
 ### Boot-path diagram (`tryredox` vs gaps)
 
@@ -263,8 +263,8 @@ These are pulled at build time from **crates.io** or **git** today. Per project 
 
 ## Related documents
 
-- [PLAN.md](PLAN.md) — roadmap, phases, and vendoring policy
-- [NOTES.md](NOTES.md) — verified direct-boot behavior and debug notes
+- [plan.md](plan.md) — roadmap, phases, and vendoring policy
+- [notes.md](notes.md) — verified direct-boot behavior and debug notes
 - [README.md](README.md) — project overview
 - [docs/GLOSSARY.md](docs/GLOSSARY.md) — terminology
 - [docs/trampoline-bytes-postmortem.md](docs/trampoline-bytes-postmortem.md) — trampoline byte-array incident

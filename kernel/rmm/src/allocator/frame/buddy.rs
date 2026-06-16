@@ -4,16 +4,18 @@ use crate::{
     Arch, BumpAllocator, FrameAllocator, FrameCount, FrameUsage, PhysicalAddress, VirtualAddress,
 };
 
+/// Per-page usage marker stored in a side table for each buddy region.
 #[repr(transparent)]
 struct BuddyUsage(u8);
 
+/// On-disk / in-memory descriptor for one buddy-managed region.
 #[repr(C, packed)]
 struct BuddyEntry<A> {
     base: PhysicalAddress,
     size: usize,
-    // Number of first free page
+    /// Byte index of the first still-free page within this region (relative to base)
     skip: usize,
-    // Count of used pages
+    /// Number of pages currently allocated out of this region
     used: usize,
     phantom: PhantomData<A>,
 }
@@ -72,6 +74,15 @@ impl<A: Arch> BuddyEntry<A> {
     }
 }
 
+/// Classic binary-buddy physical frame allocator.
+///
+/// Regions are described by [`BuddyEntry`] records stored in a table allocated
+/// via a [`BumpAllocator`] at construction time. Each region maintains its own
+/// usage bitmap (one byte per page) so that free/allocate can find buddies and
+/// coalesce on free.
+///
+/// The implementation is heavily unsafe because it performs manual virtual
+/// mappings and raw reads/writes through the [`Arch`] abstraction.
 pub struct BuddyAllocator<A> {
     table_virt: VirtualAddress,
     phantom: PhantomData<A>,
@@ -80,6 +91,19 @@ pub struct BuddyAllocator<A> {
 impl<A: Arch> BuddyAllocator<A> {
     const BUDDY_ENTRIES: usize = A::PAGE_SIZE / mem::size_of::<BuddyEntry<A>>();
 
+    /// Create a new buddy allocator, consuming a bump allocator for its backing
+    /// storage (table + per-page usage bitmaps).
+    ///
+    /// After successful construction the remaining capacity in the bump allocator
+    /// (if any) can still be used by the caller; the buddy records which areas
+    /// belong to it.
+    ///
+    /// # Safety
+    /// * `bump_allocator` must have been initialized with enough memory to hold
+    ///   the buddy descriptor table and the usage bitmaps for all areas it will
+    ///   manage.
+    /// * All memory areas supplied via the bump must be valid, page-aligned,
+    ///   non-overlapping physical regions.
     pub unsafe fn new(mut bump_allocator: BumpAllocator<A>) -> Option<Self> {
         unsafe {
             // Allocate buddy table

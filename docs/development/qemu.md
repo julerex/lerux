@@ -1,6 +1,6 @@
 # QEMU Bring-up for lerux
 
-This directory contains **lerux-only** tooling for running the vendored Redox kernel under QEMU. It is not part of upstream `redox-os/kernel`. See **[../VENDORED.md](../VENDORED.md)** for how lerux diverges from Redox (boot paths, loaders, build layout).
+This directory contains **lerux-only** tooling for running the vendored Redox kernel under QEMU. It is not part of upstream `redox-os/kernel`. See **[../../docs/vendored.md](../../docs/vendored.md)** for how lerux diverges from Redox (boot paths, loaders, build layout).
 
 The kernel still uses Redox's custom **`KernelArgs` handoff** (not multiboot2/Limine). Upstream expects the Redox bootloader to supply that structure; lerux can synthesize it via the `direct-boot` feature (`just qemu-direct`) or via the loaders in this directory.
 

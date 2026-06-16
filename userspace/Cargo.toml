@@ -28,7 +28,7 @@ slab = "0.4.9"
 toml = "1"
 
 [workspace.lints.rust]
-missing_docs = "allow"
+missing_docs = "warn"
 
 [workspace.lints.clippy]
 missing_safety_doc = "warn"

@@ -6,7 +6,7 @@ were meant to replace, and why that went undetected until automatic validation
 was added.
 
 For the current validation workflow, see
-[`kernel/validation/trampolines/README.md`](../kernel/validation/trampolines/README.md).
+[`docs/development/trampolines.md`](development/trampolines.md).
 
 ---
 

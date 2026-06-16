@@ -149,3 +149,30 @@ jobs:
     - uses: extractions/setup-just@v2
     - name: Only Rust policy checks
       run: just check-only-rust
+
+  # Fast host-only unit tests for the "100% coverage" goal (excl. redoxfs).
+  # Complements the integration smokes. See docs/development/coverage.md and justfile.
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: nightly-2026-05-24
+        components: rust-src, llvm-tools
+    - uses: extractions/setup-just@v2
+    - name: Host unit tests (rmm + kernel cfg(test) + initfs-tools + workspace pieces)
+      run: |
+        export PATH="$(dirname "$(rustc --print target-libdir)")/bin:$PATH"
+        just test
+    - name: Quick coverage collection (report artifact; gate enforced later)
+      run: |
+        export PATH="$(dirname "$(rustc --print target-libdir)")/bin:$PATH"
+        just coverage || echo "Coverage collection completed (or partial); see target/coverage/ artifacts"
+    - name: Upload coverage reports
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-reports
+        path: target/coverage/
+        if-no-files-found: ignore

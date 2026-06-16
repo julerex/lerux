@@ -1,3 +1,12 @@
+//! Linked-list based kernel heap allocator wrapper.
+//!
+//! This provides the global allocator implementation for the kernel using
+//! `linked_list_allocator`. It supports dynamic heap extension via the kernel
+//! mapper when the initial heap is exhausted.
+//!
+//! The `Allocator` is a zero-sized type implementing `GlobalAlloc`. Initialization
+//! must happen early via `init` before any allocations.
+
 use crate::memory::KernelMapper;
 use core::{
     alloc::{GlobalAlloc, Layout},
@@ -8,9 +17,16 @@ use spin::Mutex;
 
 static HEAP: Mutex<Option<Heap>> = Mutex::new(None);
 
+/// The kernel's global allocator (linked list based).
 pub struct Allocator;
 
 impl Allocator {
+    /// Initialize the heap at the given offset with the given size (in bytes).
+    ///
+    /// # Safety
+    /// The memory range `[offset, offset + size)` must be valid, writable,
+    /// and not used for anything else. Must be called exactly once before
+    /// any allocations.
     pub unsafe fn init(offset: usize, size: usize) {
         unsafe {
             *HEAP.lock() = Some(Heap::new(offset, size));
@@ -19,6 +35,10 @@ impl Allocator {
 }
 
 unsafe impl GlobalAlloc for Allocator {
+    /// Allocate memory with the given layout.
+    ///
+    /// On OOM for the current heap region, attempts to extend the heap by
+    /// mapping more pages and retrying.
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         unsafe {
             while let Some(ref mut heap) = *HEAP.lock() {
@@ -39,6 +59,11 @@ unsafe impl GlobalAlloc for Allocator {
         }
     }
 
+    /// Deallocate previously allocated memory.
+    ///
+    /// # Safety
+    /// `ptr` must have been allocated with this allocator using the exact
+    /// same `layout`, and must not have been deallocated already.
     unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         unsafe {
             HEAP.lock()

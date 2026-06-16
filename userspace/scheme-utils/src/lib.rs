@@ -1,5 +1,16 @@
 #![feature(never_type)]
 
+//! Utilities for scheme (device/driver) daemons.
+//!
+//! Provides common building blocks used by early userspace daemons
+//! (logd, ramfs, zerod, etc.):
+//!
+//! * [`HandleMap`] — simple ID allocator + map for open file handles / resources.
+//! * [`Blocking`] — readiness-based blocking read/write helper.
+//! * [`ReadinessBased`] — event readiness tracking for schemes.
+//!
+//! These reduce boilerplate for implementing `redox_scheme::Scheme` (or `SchemeSync`).
+
 use std::collections::{BTreeMap, btree_map};
 use std::fmt;
 use std::num::Wrapping;
@@ -12,12 +23,17 @@ mod readiness_based;
 pub use blocking::Blocking;
 pub use readiness_based::ReadinessBased;
 
+/// Simple growing ID allocator + BTreeMap for scheme handles.
+///
+/// IDs start at 1 and wrap; `insert` finds the next free slot (skipping in-use IDs).
+/// Used by daemons to assign unique handles returned to userspace on open.
 pub struct HandleMap<T> {
     handles: BTreeMap<usize, T>,
     next_id: Wrapping<usize>,
 }
 
 impl<T> HandleMap<T> {
+    /// Create an empty handle map (next ID starts at 1).
     pub const fn new() -> Self {
         HandleMap {
             handles: BTreeMap::new(),
@@ -25,6 +41,9 @@ impl<T> HandleMap<T> {
         }
     }
 
+    /// Insert a value and return a fresh ID for it.
+    ///
+    /// Loops to find an unused ID (handles wrap-around collisions).
     pub fn insert(&mut self, handle: T) -> usize {
         let id = self.next_id;
 
@@ -42,10 +61,14 @@ impl<T> HandleMap<T> {
         id.0
     }
 
+    /// Remove and return the value for an ID, if present.
     pub fn remove(&mut self, id: usize) -> Option<T> {
         self.handles.remove(&id)
     }
 
+    /// Get a reference to the value for an ID.
+    ///
+    /// Returns `EBADF` error if not present (standard for bad fd/handle).
     pub fn get(&self, id: usize) -> Result<&T> {
         self.handles.get(&id).ok_or(Error::new(EBADF))
     }

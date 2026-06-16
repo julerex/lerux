@@ -146,6 +146,13 @@ macro_rules! int_like {
     };
 }
 
+/// Macro that generates a newtype wrapper around an integer type (and optionally
+/// a matching atomic newtype).
+///
+/// See the module-level documentation for usage and examples.
+#[macro_export]
+macro_rules! int_like { ($($tt:tt)*) => { ... } }
+
 #[test]
 fn test() {
     use ::core::sync::atomic::AtomicUsize;
@@ -158,4 +165,11 @@ fn test() {
     int_like!(UsizeLike2, AtomicUsizeLike, usize, AtomicUsize);
     assert_eq!(size_of::<UsizeLike2>(), size_of::<usize>());
     assert_eq!(size_of::<AtomicUsizeLike>(), size_of::<AtomicUsize>());
+
+    // Basic round-trip through the generated API (exercises more of the emitted code).
+    let a = UsizeLike::new(42);
+    assert_eq!(a.get(), 42);
+    assert!(a > UsizeLike::new(41));
+    let b = a + UsizeLike::new(1);
+    assert_eq!(b.get(), 43);
 }

@@ -46,28 +46,33 @@ pub(crate) fn areas() -> &'static [rmm::MemoryArea] {
     unsafe { &(&*AREAS.get())[..AREA_COUNT.get().read().into()] }
 }
 
-/// Get the number of frames available
+/// Get the number of frames available (total - used).
 pub fn free_frames() -> usize {
     total_frames() - used_frames()
 }
 
-/// Get the number of frames used
+/// Get the number of frames currently used.
 pub fn used_frames() -> usize {
     // TODO: Include bump allocator static pages?
     FREELIST.lock().used_frames
 }
+
+/// Get the total number of frames managed by the allocator.
 pub fn total_frames() -> usize {
     // TODO: Include bump allocator static pages?
     sections().iter().map(|section| section.frames.len()).sum()
 }
 
-/// Allocate a range of frames
+/// Allocate a range of frames (power-of-2 order).
 pub fn allocate_p2frame(order: u32) -> Option<Frame> {
     allocate_p2frame_complex(order, (), None, order).map(|(f, _)| f)
 }
+
+/// Allocate a single frame (order 0).
 pub fn allocate_frame() -> Option<Frame> {
     allocate_p2frame(0)
 }
+
 // TODO: Flags, strategy
 pub fn allocate_p2frame_complex(
     _req_order: u32,

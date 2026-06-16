@@ -46,7 +46,7 @@ This section records decisions from the 2026-05-30 design review. Use it as the 
 #### Kernel / userspace ABI
 
 - **Redox-compatible boot path, lerux extensions** — keep `redox_syscall`, scheme paths, initfs layout (`RedoxFtw`, entry at offset `0x1a`), and `KernelArgs` for upstream kernel merges.
-- Add lerux-specific syscalls/schemes only when needed; document in `VENDORED.md` / ADRs.
+- Add lerux-specific syscalls/schemes only when needed; document in [vendored.md](vendored.md) / ADRs.
 
 #### Rust target triple
 
@@ -105,7 +105,7 @@ Target recipe: **`just check-only-rust`** (or a dedicated CI job) implementing t
 When adopting components from upstream Redox (e.g. the reference tree under `tryredox/base`), **copy them into lerux** (e.g. `userspace/`, `vendor/`) and:
 
 - Replace `path = "../…"` and `git = "https://gitlab.redox-os.org/…"` with **in-tree paths**
-- Pin versions in the lerux workspace; document provenance in [VENDORED.md](VENDORED.md)
+- Pin versions in the lerux workspace; document provenance in [vendored.md](vendored.md)
 - Track intentional divergences for "Only Rust" or lerux-specific boot paths
 
 Upstream Redox repos remain useful as **read-only references** for design and occasional merges—not as runtime build dependencies.
@@ -129,7 +129,7 @@ Upstream Redox repos remain useful as **read-only references** for design and oc
 | Userspace smoke | `just smoke-userspace` — asserts `init: switchroot to /scheme/initfs` (set `USERSPACE_SMOKE=1`) |
 | Rustc-hosting smoke (GREEN 2026-06-15) | `just smoke-rustc` now fully automated (harness asserts all three RUSTC markers + PASS). Fresh kernel + initfs with staged redoxfs + rustc-stub + 50_rootfs service. See NOTES.md for success serial and "Verified working" section. Post-green work (pure runtime, AI audit of redoxfs, block exposure) is next. |
 
-See `NOTES.md` for serial output, GDB breakpoints, and paging/bootstrap fixes.
+See [notes.md](notes.md) for serial output, GDB breakpoints, and paging/bootstrap fixes.
 
 ### Kernel ↔ userspace contract (for later phases)
 
@@ -144,9 +144,9 @@ The kernel expects a contiguous physical **bootstrap/initfs** blob. The first us
 The sibling directory `../tryredox/` holds local clones for study and copying into lerux. It is **not** part of lerux and must not be required to build lerux.
 
 - **`tryredox/base`** — daemons, drivers, bootstrap, initfs, init (primary source for userspace Phases A–B).
-- **Full GitLab gap analysis** — what `tryredox` has vs missing repos (Tiers 1–5), boot diagram, and lerux implications: [VENDORED.md § Reference tree: tryredox](VENDORED.md#reference-tree-tryredox-vs-gitlabredox-osorgredox-os).
+- **Full GitLab gap analysis** — what `tryredox` has vs missing repos (Tiers 1–5), boot diagram, and lerux implications: [vendored.md § Reference tree: tryredox](vendored.md#reference-tree-tryredox-vs-gitlabredox-osorgredox-os).
 
-Summary: `tryredox` already has **kernel, base, relibc, syscall, redoxfs, redox, redoxer, orbital, acid, book, uefi** (~11 git repos). It is **missing Tier 1** boot/image pieces (**bootloader**, **ion**, **coreutils**, **pkgutils**, **net** utils, **binutils**, …) and **Tier 2** git deps of `base` (**acpi**, **redox-log**, **orbclient**, …). See VENDORED.md for the complete tier tables.
+Summary: `tryredox` already has **kernel, base, relibc, syscall, redoxfs, redox, redoxer, orbital, acid, book, uefi** (~11 git repos). It is **missing Tier 1** boot/image pieces (**bootloader**, **ion**, **coreutils**, **pkgutils**, **net** utils, **binutils**, …) and **Tier 2** git deps of `base` (**acpi**, **redox-log**, **orbclient**, …). See [vendored.md](vendored.md) for the complete tier tables.
 
 ### What `base` contains (high level)
 
@@ -261,14 +261,14 @@ flowchart TB
 
 The current focus is getting the kernel to boot under QEMU. **Next focus after idle loop:** deliver a real initfs blob (Phase A above).
 
-**Direct-boot (`just qemu-direct`)** is the preferred fast path: QEMU `-kernel` + PVH note + `direct-boot` feature. Verified 2026-05-29 (PR #3): boots through kernel init to the `kmain` idle loop. See `NOTES.md`.
+**Direct-boot (`just qemu-direct`)** is the preferred fast path: QEMU `-kernel` + PVH note + `direct-boot` feature. Verified 2026-05-29 (PR #3): boots through kernel init to the `kmain` idle loop. See [notes.md](notes.md).
 
 - [ ] Make the loader reliably consume the kernel ELF placed at `0x200000` via `-device loader` (parallel track; partially implemented in the fixed-address path).
 - [x] Provide a realistic, minimal memory map for direct-boot (`kernel/src/startup/direct_boot.rs`).
 - [ ] Create a minimal but valid **bootstrap/initfs** region (initfs image built by vendored archiver—not tarball ad hoc; see Phase A).
 - [x] Reach the first real kernel message: `"Redox OS starting..."` over serial (direct-boot).
 - [x] Handle the first userspace bootstrap attempt without immediate panic — direct-boot skips userspace bootstrap by design.
-- [x] Complete direct-boot through `kmain` idle loop (PR #3; see `NOTES.md`).
+- [x] Complete direct-boot through `kmain` idle loop (PR #3; see [notes.md](notes.md)).
 - [x] Improve GDB experience:
   - [x] Dedicated `qemu/debug.sh` script
   - [x] Better symbol loading (`just gdb` / `debug.sh` load `build/kernel.sym` and `set language rust`)
@@ -298,7 +298,7 @@ See [Only Rust (policy)](#only-rust-policy) for the full spec, enforcement, and 
   - Keep `kernel/` as a subdirectory forever?
   - Eventually flatten so the root crate *is* the kernel?
 - [x] Root-level Cargo workspace (kernel, initfs tools, userspace members; bootstrap separate crate).
-- [x] **`VENDORED.md`**: vendoring inventory plus kernel divergence baseline (pin kernel commit on next sync).
+- [x] **[vendored.md](vendored.md)**: vendoring inventory plus kernel divergence baseline (pin kernel commit on next sync).
 - [ ] Strategy for syncing vendored kernel/userspace vs. upstream Redox (infrequent, intentional merges—not live deps).
 - [ ] Proper attribution / licensing notes for all vendored Redox-derived code.
 
@@ -347,7 +347,7 @@ Interim until Rust `global_asm!` trampolines ship ([policy](#low-level-cpu-code)
 - **No foreign ELFs** — lerux-built binaries only; relibc removed, not kept for compat.
 - Boot: **direct-boot + embedded initfs** now; **Rust bootloader** before installable image; QEMU asm temporary.
 - Userspace: **`no_std` + in-tree runtime**; target **`unknown-redox` then `unknown-lerux`**.
-- Userspace tree convention: **`userspace/`** + **`vendor/`** (documented in `VENDORED.md`).
+- Userspace tree convention: **`userspace/`** + **`vendor/`** (documented in [vendored.md](vendored.md)).
 
 **Still open:**
 

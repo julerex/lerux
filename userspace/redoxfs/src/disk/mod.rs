@@ -6,8 +6,7 @@ pub use self::cache::DiskCache;
 pub use self::file::DiskFile;
 #[cfg(feature = "std")]
 pub use self::io::DiskIo;
-#[cfg(feature = "std")]
-pub use self::memory::DiskMemory;
+pub use self::memory::DiskMemory;   // available without std (pure alloc + Disk impl for in-RAM smoke / tests)
 #[cfg(feature = "std")]
 pub use self::sparse::DiskSparse;
 
@@ -17,8 +16,7 @@ mod cache;
 mod file;
 #[cfg(feature = "std")]
 mod io;
-#[cfg(feature = "std")]
-mod memory;
+mod memory;   // no_std capable (Vec + syscall only)
 #[cfg(feature = "std")]
 mod sparse;
 

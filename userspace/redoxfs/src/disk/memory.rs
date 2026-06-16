@@ -1,5 +1,7 @@
 use syscall::error::{Error, Result, EIO};
 
+use alloc::{vec, vec::Vec};
+
 use crate::disk::Disk;
 use crate::BLOCK_SIZE;
 

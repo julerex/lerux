@@ -1,3 +1,13 @@
+//! Wait queue for kernel synchronization.
+//!
+//! Provides a queue of values (typically for IPC or event delivery) that supports
+//! blocking receive (via associated WaitCondition) and non-blocking or blocking send.
+//! Used by schemes and other kernel components for user-visible queues (e.g. events,
+//! pipes, etc.).
+//!
+//! The queue is protected by a level-2 mutex and integrates with the lock token
+//! system for safe nesting with other kernel locks.
+
 use alloc::collections::VecDeque;
 use syscall::{EAGAIN, EINTR};
 
@@ -16,15 +26,25 @@ pub struct WaitQueue<T> {
 }
 
 impl<T> WaitQueue<T> {
+    /// Create a new empty wait queue.
     pub const fn new() -> WaitQueue<T> {
         WaitQueue {
             inner: Mutex::new(VecDeque::new()),
             condition: WaitCondition::new(),
         }
     }
+
+    /// Check whether the queue currently has no pending items (under the lock).
     pub fn is_currently_empty(&self, token: &mut CleanLockToken) -> bool {
         self.inner.lock(token.token()).is_empty()
     }
+
+    /// Receive items from the queue into a userspace buffer.
+    ///
+    /// If `block` is true and the queue is empty, waits using the condition
+    /// (can return EINTR on signal). Copies as many items as fit, draining them.
+    /// Returns the number of bytes copied or an error (EINVAL for undersized buf,
+    /// EAGAIN for non-block empty, etc.).
     pub fn receive_into_user(
         &self,
         buf: UserSliceWo,
@@ -72,10 +92,14 @@ impl<T> WaitQueue<T> {
         }
     }
 
+    /// Send a value into the queue (non-locked variant).
+    /// Returns the new length after the send.
     pub fn send(&self, value: T, token: &mut CleanLockToken) -> usize {
         self.send_locked(value, token.token().downgrade())
     }
 
+    /// Send a value while holding a downgraded lock token.
+    /// Notifies waiters and returns the new length.
     pub fn send_locked(&self, value: T, mut token: LockToken<'_, L1>) -> usize {
         let len = {
             let mut inner = self.inner.lock(token.token());

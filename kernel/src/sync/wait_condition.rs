@@ -1,3 +1,12 @@
+//! Wait conditions for kernel blocking / wakeup.
+//!
+//! WaitCondition allows tasks to block (via context block + scheduler switch)
+//! until notified. It tracks waiting contexts and supports normal notify,
+//! signal-style notify, and cleanup on drop.
+//!
+//! Integrated with the kernel's multi-level lock tokens (L1/L2/L3) and
+//! preemption guards to avoid deadlocks and missed wakeups.
+
 use core::mem::ManuallyDrop;
 
 use alloc::{
@@ -16,17 +25,19 @@ pub struct WaitCondition {
 }
 
 impl WaitCondition {
+    /// Create a new empty wait condition.
     pub const fn new() -> WaitCondition {
         WaitCondition {
             contexts: Mutex::new(Vec::new()),
         }
     }
 
-    // Notify all waiters
+    /// Notify all current waiters. Returns number notified.
     pub fn notify(&self, token: &mut CleanLockToken) -> usize {
         self.notify_locked(token.token().downgrade())
     }
 
+    /// Notify while holding a downgraded L1 token.
     pub fn notify_locked(&self, token: LockToken<'_, L1>) -> usize {
         let mut contexts = self.contexts.lock(token);
         let (contexts, mut token) = contexts.token_split();
@@ -39,7 +50,11 @@ impl WaitCondition {
         len
     }
 
-    // Notify as though a signal woke the waiters
+    /// Notify as though from a signal delivery path.
+    ///
+    /// # Safety
+    /// Caller must ensure calling from appropriate signal context and
+    /// that unblocking is safe.
     pub unsafe fn notify_signal(&self, token: LockToken<'_, L1>) -> usize {
         let mut contexts = self.contexts.lock(token);
         let (contexts, mut token) = contexts.token_split();
@@ -53,7 +68,9 @@ impl WaitCondition {
     }
 
     /// Wait until notified. Unlocks guard when blocking is ready. Returns false if resumed by a signal or the notify_signal function.
-    /// SAFETY: Caller MUST ensure the given token is coming from the guard. There is no compiler check to do it.
+    ///
+    /// # Safety
+    /// Caller MUST ensure the given token is coming from the guard. There is no compiler check to do it.
     pub fn wait<'a, T>(
         &self,
         guard: T,

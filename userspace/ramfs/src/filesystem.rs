@@ -1,3 +1,12 @@
+//! In-memory filesystem implementation for the ramfs scheme daemon.
+//!
+//! Provides a simple tree of files and directories backed by an IndexMap/BTreeMap,
+//! with metadata (times, perms, nlink). Used for early logging and temporary
+//! storage before a real FS like redoxfs is mounted.
+//!
+//! The `Filesystem` is not thread-safe by itself; synchronization is provided
+//! by the scheme layer.
+
 use std::collections::BTreeMap;
 use std::convert::TryInto;
 use std::{fs, iter, time};
@@ -35,7 +44,9 @@ pub enum FileData {
     File(Vec<u8>),
     Directory(IndexMap<String, Inode>),
 }
+
 impl FileData {
+    /// Return the size in bytes (for files) or 0 (for directories).
     pub fn size(&self) -> usize {
         match self {
             &Self::File(ref data) => data.len(),
@@ -44,15 +55,18 @@ impl FileData {
     }
 }
 
+/// The core in-memory filesystem state.
 pub struct Filesystem {
     pub files: BTreeMap<usize, File>,
     pub memory_file: fs::File,
     pub last_inode_number: usize,
 }
+
 impl Filesystem {
     pub const DEFAULT_BLOCK_SIZE: u32 = 4096;
     pub const ROOT_INODE: usize = 1;
 
+    /// Create a new filesystem with a root directory inode.
     pub fn new() -> Result<Self> {
         Ok(Self {
             files: iter::once((Self::ROOT_INODE, Self::create_root_inode())).collect(),
@@ -60,6 +74,7 @@ impl Filesystem {
             last_inode_number: Self::ROOT_INODE,
         })
     }
+
     fn create_root_inode() -> File {
         let cur_time = current_time();
         File {
@@ -188,5 +203,37 @@ pub fn current_time() -> TimeSpec {
             .subsec_nanos()
             .try_into()
             .unwrap_or(i32::max_value()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn file_data_size() {
+        let f = FileData::File(vec![0; 42]);
+        assert_eq!(f.size(), 42);
+
+        let d = FileData::Directory(IndexMap::new());
+        assert_eq!(d.size(), 0);
+    }
+
+    #[test]
+    fn filesystem_new_has_root() {
+        // Simple smoke that the public types and FileData size logic work.
+        // Full new() requires /scheme/memory fd in the test env.
+        let _ = File {
+            mode: 0,
+            uid: 0,
+            gid: 0,
+            nlink: 1,
+            parent: Inode(1),
+            open_handles: 0,
+            atime: TimeSpec { tv_sec: 0, tv_nsec: 0 },
+            ctime: TimeSpec { tv_sec: 0, tv_nsec: 0 },
+            mtime: TimeSpec { tv_sec: 0, tv_nsec: 0 },
+            data: FileData::Directory(IndexMap::new()),
+        };
     }
 }

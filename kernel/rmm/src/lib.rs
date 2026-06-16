@@ -1,4 +1,19 @@
 #![no_std]
+//! RMM — Redox Memory Manager.
+//!
+//! This crate provides the core physical memory management primitives used by the
+//! Redox / lerux kernel:
+//!
+//! * Typed physical / virtual address wrappers ([`PhysicalAddress`], [`VirtualAddress`]).
+//! * The [`Arch`] trait abstracting architecture-specific page-table and MMU operations.
+//! * Frame allocators ([`BumpAllocator`], [`BuddyAllocator`]) implementing [`FrameAllocator`].
+//! * Page table entry / flag / mapper abstractions (re-exported from `page`).
+//!
+//! The crate is `no_std` by default but can be compiled with the `std` feature for
+//! host-side testing (see the paging `is_canonical` tests and allocator tests).
+//!
+//! Many items are re-exported at the crate root for convenience.
+
 #![allow(clippy::new_without_default)]
 
 pub use crate::{allocator::*, arch::*, page::*};

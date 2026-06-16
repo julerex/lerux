@@ -97,6 +97,9 @@ std = [
 # (redox-rt for proc, signals, thread, etc.) instead of libc/libredox + relibc hybrid.
 # The lib supports no_std (via no-default-features); the bin is being incrementally ported.
 # Keep "std" for hybrid builds during transition.
+# Note: the default smoke path in justfile now uses --features std (without "redox-daemon")
+# precisely to avoid pulling the redox-rt dep (which has its own libredox requirement) and
+# to reduce version skew when "redox-scheme" is also activated by std.
 redox-daemon = []
 
 [target.'cfg(not(target_os = "redox"))'.dependencies]

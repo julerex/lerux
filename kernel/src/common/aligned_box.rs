@@ -1,3 +1,13 @@
+//! Aligned allocation helper for types requiring specific alignment.
+//!
+//! `Box<T>` does not allow controlling alignment beyond what the type requires.
+//! `AlignedBox` provides zeroed allocation with an explicit alignment parameter
+//! (power of two, >= type align), while still providing `Deref`, `Drop`, `Clone`
+//! (for `ValidForZero` types), and `Debug`.
+//!
+//! Used in the kernel for structures like page tables or other aligned data
+//! that must live at particular alignments for hardware or performance.
+
 use core::alloc::{GlobalAlloc, Layout};
 
 use crate::memory::Enomem;
@@ -11,7 +21,9 @@ unsafe impl<T: Send + ?Sized, const ALIGN: usize> Send for AlignedBox<T, ALIGN> 
 unsafe impl<T: Sync + ?Sized, const ALIGN: usize> Sync for AlignedBox<T, ALIGN> {}
 
 /// # Safety
-/// All types implementing this trait must be valid when zeroed
+/// All types implementing this trait must be valid when zeroed (e.g. all bytes 0
+/// is a valid instance). Used to safely create zeroed instances for aligned
+/// allocations without running initializers.
 pub unsafe trait ValidForZero {}
 unsafe impl<const N: usize> ValidForZero for [u8; N] {}
 unsafe impl ValidForZero for u8 {}
@@ -21,6 +33,8 @@ impl<T: ?Sized, const ALIGN: usize> AlignedBox<T, ALIGN> {
         layout_upgrade_align(Layout::for_value::<T>(self), ALIGN)
     }
 }
+
+/// Upgrade a layout's alignment to at least `align` (taking the max).
 const fn layout_upgrade_align(layout: Layout, align: usize) -> Layout {
     const fn max(a: usize, b: usize) -> usize {
         if a > b {
@@ -36,6 +50,9 @@ const fn layout_upgrade_align(layout: Layout, align: usize) -> Layout {
 }
 
 impl<T, const ALIGN: usize> AlignedBox<T, ALIGN> {
+    /// Allocate a zeroed `T` with at least `ALIGN` alignment.
+    ///
+    /// Returns `Err(Enomem)` on allocation failure.
     #[inline(always)]
     pub fn try_zeroed() -> Result<Self, Enomem>
     where
@@ -52,6 +69,7 @@ impl<T, const ALIGN: usize> AlignedBox<T, ALIGN> {
     }
 }
 impl<T, const ALIGN: usize> AlignedBox<[T], ALIGN> {
+    /// Allocate a zeroed slice of `len` elements of `T` with at least `ALIGN` alignment.
     #[inline]
     pub fn try_zeroed_slice(len: usize) -> Result<Self, Enomem>
     where
@@ -73,6 +91,7 @@ impl<T, const ALIGN: usize> AlignedBox<[T], ALIGN> {
 }
 
 impl<T: ?Sized, const ALIGN: usize> core::fmt::Debug for AlignedBox<T, ALIGN> {
+    /// Debug as pointer + size/align info (does not deref contents).
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(
             f,
@@ -83,7 +102,9 @@ impl<T: ?Sized, const ALIGN: usize> core::fmt::Debug for AlignedBox<T, ALIGN> {
         )
     }
 }
+
 impl<T: ?Sized, const ALIGN: usize> Drop for AlignedBox<T, ALIGN> {
+    /// Drop the inner value (if any) and deallocate using the original layout.
     fn drop(&mut self) {
         unsafe {
             let layout = self.layout();
@@ -92,6 +113,7 @@ impl<T: ?Sized, const ALIGN: usize> Drop for AlignedBox<T, ALIGN> {
         }
     }
 }
+
 impl<T: ?Sized, const ALIGN: usize> core::ops::Deref for AlignedBox<T, ALIGN> {
     type Target = T;
 
@@ -99,12 +121,15 @@ impl<T: ?Sized, const ALIGN: usize> core::ops::Deref for AlignedBox<T, ALIGN> {
         unsafe { &*self.inner }
     }
 }
+
 impl<T: ?Sized, const ALIGN: usize> core::ops::DerefMut for AlignedBox<T, ALIGN> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe { &mut *self.inner }
     }
 }
+
 impl<T: Clone + ValidForZero, const ALIGN: usize> Clone for AlignedBox<T, ALIGN> {
+    /// Clone by allocating a new zeroed aligned box and cloning the value into it.
     fn clone(&self) -> Self {
         let mut new =
             Self::try_zeroed().unwrap_or_else(|_| alloc::alloc::handle_alloc_error(self.layout()));
@@ -112,7 +137,9 @@ impl<T: Clone + ValidForZero, const ALIGN: usize> Clone for AlignedBox<T, ALIGN>
         new
     }
 }
+
 impl<T: Clone + ValidForZero, const ALIGN: usize> Clone for AlignedBox<[T], ALIGN> {
+    /// Clone slice element-wise into a new aligned box.
     fn clone(&self) -> Self {
         let mut new = Self::try_zeroed_slice(self.len())
             .unwrap_or_else(|_| alloc::alloc::handle_alloc_error(self.layout()));

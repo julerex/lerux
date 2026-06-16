@@ -7,12 +7,14 @@ use alloc::{
 use syscall::error::{Error, Result, EKEYREJECTED, ENOENT, ENOKEY};
 use xts_mode::{get_tweak_default, Xts128};
 
-#[cfg(feature = "std")]
-use crate::{AllocEntry, AllocList, BlockData, BlockTrait, Key, KeySlot, Node, Salt, TreeList};
+// Core types needed for create (in-RAM no_std smoke) and other no_std paths.
 use crate::{
+    AllocEntry, AllocList, BlockData, BlockTrait, Node, TreeList,
     Allocator, BlockAddr, BlockLevel, BlockMeta, Disk, Header, Transaction, BLOCK_SIZE,
     HEADER_RING, RECORD_SIZE,
 };
+#[cfg(feature = "std")]
+use crate::{Key, KeySlot, Salt};
 
 fn compress_cache() -> Box<[u8]> {
     vec![0; lz4_flex::block::get_maximum_output_size(RECORD_SIZE as usize)].into_boxed_slice()
@@ -111,7 +113,6 @@ impl<D: Disk> FileSystem<D> {
     }
 
     /// Create a file system on a disk
-    #[cfg(feature = "std")]
     pub fn create(
         disk: D,
         password_opt: Option<&[u8]>,
@@ -124,7 +125,6 @@ impl<D: Disk> FileSystem<D> {
     /// Create a file system on a disk, with reserved data at the beginning
     /// Reserved data will be zero padded up to the nearest block
     /// We need to pass ctime and ctime_nsec in order to initialize the unix timestamps
-    #[cfg(feature = "std")]
     pub fn create_reserved(
         mut disk: D,
         password_opt: Option<&[u8]>,
@@ -157,18 +157,28 @@ impl<D: Disk> FileSystem<D> {
 
         let mut header = Header::new(fs_blocks * BLOCK_SIZE);
 
-        let cipher_opt = match password_opt {
-            Some(password) => {
-                //TODO: handle errors
-                header.key_slots[0] = KeySlot::new(
-                    password,
-                    Salt::new().unwrap(),
-                    (Key::new().unwrap(), Key::new().unwrap()),
-                )
-                .unwrap();
-                Some(header.key_slots[0].cipher(password).unwrap())
+        let cipher_opt = if cfg!(feature = "std") {
+            #[cfg(feature = "std")]
+            match password_opt {
+                Some(password) => {
+                    //TODO: handle errors
+                    header.key_slots[0] = KeySlot::new(
+                        password,
+                        Salt::new().unwrap(),
+                        (Key::new().unwrap(), Key::new().unwrap()),
+                    )
+                    .unwrap();
+                    Some(header.key_slots[0].cipher(password).unwrap())
+                }
+                None => None,
             }
-            None => None,
+            #[cfg(not(feature = "std"))]
+            { None }
+        } else {
+            if password_opt.is_some() {
+                // Encryption not supported in no_std builds yet (used only for smoke with None).
+            }
+            None
         };
 
         let mut fs = FileSystem {

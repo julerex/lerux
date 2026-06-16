@@ -1,3 +1,9 @@
+//! Kernel event system (scheme events, notifications, and user queues).
+//!
+//! Provides registration of interest in scheme events (read/write/hangup etc.),
+//! triggering from schemes, and delivery to userspace via event queues or
+//! blocking reads. Integrates with the wait queue / condition machinery.
+
 use alloc::sync::Arc;
 use core::{
     hash::{Hash, Hasher},

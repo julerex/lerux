@@ -1,3 +1,12 @@
+//! Ramfs scheme implementation.
+//!
+//! Implements the `SchemeSync` interface to provide an in-memory filesystem
+//! over the `ramfs` scheme. Handles open/read/write/etc. by delegating to the
+//! `Filesystem` while managing per-open handles via `HandleMap`, permissions
+//! via `current_perm`, and events.
+//!
+//! This is the "early" ramfs used for logging and temp files before rootfs.
+
 use std::convert::{TryFrom, TryInto};
 use std::os::unix::io::AsRawFd;
 use std::{mem, str};

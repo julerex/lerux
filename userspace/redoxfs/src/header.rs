@@ -40,18 +40,35 @@ pub struct Header {
 }
 
 impl Header {
-    #[cfg(feature = "std")]
     pub fn new(size: u64) -> Header {
-        let uuid = uuid::Uuid::new_v4();
-        let mut header = Header {
-            signature: *SIGNATURE,
-            version: VERSION.into(),
-            uuid: *uuid.as_bytes(),
-            size: size.into(),
-            ..Default::default()
-        };
-        header.update_hash(None);
-        header
+        #[cfg(feature = "std")]
+        {
+            let uuid = uuid::Uuid::new_v4();
+            let mut header = Header {
+                signature: *SIGNATURE,
+                version: VERSION.into(),
+                uuid: *uuid.as_bytes(),
+                size: size.into(),
+                ..Default::default()
+            };
+            header.update_hash(None);
+            return header;
+        }
+
+        #[cfg(not(feature = "std"))]
+        {
+            // Fixed UUID for no_std / in-RAM smoke cases (the smoke doesn't rely on
+            // UUID-based lookup for the temporary memory filesystem).
+            let mut header = Header {
+                signature: *SIGNATURE,
+                version: VERSION.into(),
+                uuid: [0x53, 0x6d, 0x6f, 0x6b, 0x65, 0x2d, 0x49, 0x6e, 0x52, 0x61, 0x6d, 0x00, 0x00, 0x00, 0x00, 0x01], // "Smoke-InRam.."
+                size: size.into(),
+                ..Default::default()
+            };
+            header.update_hash(None);
+            header
+        }
     }
 
     pub fn valid(&self) -> bool {

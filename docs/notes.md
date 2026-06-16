@@ -1,6 +1,6 @@
 # Direct-boot smoke test notes
 
-Bring-up log for the **lerux-only** `direct-boot` path (not in upstream Redox). For the full upstream divergence list see [VENDORED.md](VENDORED.md).
+Bring-up log for the **lerux-only** `direct-boot` path (not in upstream Redox). For the full upstream divergence list see [vendored.md](vendored.md).
 
 Last updated: 2026-05-30
 

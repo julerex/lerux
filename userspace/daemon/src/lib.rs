@@ -9,6 +9,7 @@ use std::process::Command;
 use libredox::Fd;
 use redox_scheme::Socket;
 use redox_scheme::scheme::{SchemeAsync, SchemeSync};
+use syscall::flag::O_CLOEXEC;
 
 fn set_fd_flags(fd: RawFd, flags: usize) -> io::Result<()> {
     match syscall::fcntl(fd as usize, syscall::F_SETFD, flags) {
@@ -19,11 +20,7 @@ fn set_fd_flags(fd: RawFd, flags: usize) -> io::Result<()> {
 
 unsafe fn get_fd(var: &str) -> RawFd {
     let fd: RawFd = std::env::var(var).unwrap().parse().unwrap();
-    if unsafe {
-        set_fd_flags(fd, syscall::CallFlags::FD_CLOEXEC.bits())
-    }
-    .is_err()
-    {
+    if set_fd_flags(fd, O_CLOEXEC).is_err() {
         panic!(
             "daemon: failed to set CLOEXEC flag for {var} fd: {}",
             io::Error::last_os_error()
@@ -130,5 +127,20 @@ impl SchemeDaemon {
         let cap_id = scheme.scheme_root()?;
         let cap_fd = socket.create_this_scheme_fd(0, cap_id, 0, 0)?;
         self.ready_with_fd(Fd::new(cap_fd))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn f_setfd_cloexec_uses_o_cloexec_not_call_flags() {
+        // Kernel F_SETFD checks arg & O_CLOEXEC, not CallFlags::FD_CLOEXEC (syscall call flag).
+        assert_ne!(
+            syscall::CallFlags::FD_CLOEXEC.bits(),
+            O_CLOEXEC,
+            "INIT_NOTIFY CLOEXEC must use O_CLOEXEC for fcntl(F_SETFD)"
+        );
     }
 }

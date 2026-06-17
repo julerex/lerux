@@ -1,3 +1,4 @@
+//! riscv64 serial console setup, located via the device tree.
 use crate::fdt::Fdt;
 use alloc::boxed::Box;
 

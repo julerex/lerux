@@ -1,3 +1,16 @@
+//! The `memory:` scheme: mapping physical memory and anonymous RAM.
+//!
+//! This kernel scheme backs `mmap` for memory that is not a normal file: a
+//! userspace driver can map a specific physical address range (for example a
+//! device's memory-mapped registers), and ordinary programs get anonymous
+//! shared memory through it. It is the kernel side of "give me some pages of
+//! RAM" and "let me talk to this hardware register block," implemented on top of
+//! the grant machinery in [`crate::context::memory`].
+//!
+//! See also: [`docs/kernel/architecture.md`] sections 4 and 7.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use core::num::NonZeroUsize;
 
 use crate::rmm::PhysicalAddress;

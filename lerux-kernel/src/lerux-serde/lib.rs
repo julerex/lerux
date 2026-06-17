@@ -1,3 +1,12 @@
+//! Inlined vendored crate (`lerux-serde`): **build-time only** serialization framework.
+//!
+//! Used only by `build.rs` (TOML config parsing) at compile time; never runs on
+//! the target and is not part of the kernel binary. Inlined for a zero-dependency
+//! build (see `docs/vendored.md`). You do not need to read this to understand the
+//! kernel; the upstream docs follow.
+//!
+//! ---
+//!
 //! # Serde
 //!
 //! Serde is a framework for ***ser***ializing and ***de***serializing Rust data

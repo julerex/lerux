@@ -1,3 +1,4 @@
+//! `sys:cpu` — reports the host CPU's vendor and feature flags.
 use alloc::vec::Vec;
 
 use crate::{

@@ -1,3 +1,13 @@
+//! Selecting where x86 debug output goes.
+//!
+//! Picks the backend for the kernel's debug writer — a normal serial port, the
+//! QEMU debug exit/console port, or an LPSS UART — depending on enabled
+//! features. The rest of the kernel writes through this without caring which
+//! sink is active.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 8.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
 #[cfg(feature = "qemu_debug")]
 use crate::spin::Mutex;
 use crate::spin::MutexGuard;

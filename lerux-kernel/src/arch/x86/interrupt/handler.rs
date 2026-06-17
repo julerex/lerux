@@ -1,3 +1,13 @@
+//! 32-bit x86 interrupt entry: register save/restore (the `x86_64` analog).
+//!
+//! Defines the `InterruptStack` layout and the entry/exit stub macros for 32-bit
+//! x86, mirroring the 64-bit `handler.rs`. See that file for the detailed
+//! explanation of why the register layout must be exact.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 8.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../../docs/kernel/architecture.md
+
 use crate::{arch::flags::FLAG_SINGLESTEP, memory::ArchIntCtx, panic, syscall::IntRegisters};
 
 #[derive(Default)]

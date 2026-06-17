@@ -1,3 +1,12 @@
+//! Driver for the 16550 UART (the standard PC serial port chip).
+//!
+//! Implements byte-at-a-time read/write to a 16550-compatible serial port over
+//! either I/O ports or memory-mapped registers. This is the most common console
+//! device on x86 and what the QEMU smoke test watches.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 8.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
 #![allow(unused)]
 
 use core::{

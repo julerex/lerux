@@ -1,3 +1,12 @@
+//! Inlined vendored crate (`lerux-ahash`): the hash function behind hashbrown.
+//!
+//! Copied into the kernel tree (wired via `#[path]` in `main.rs`) to keep zero
+//! external runtime dependencies — see `docs/vendored.md`. It provides the
+//! default hasher used by [`crate::hashbrown`] maps. The code below is upstream;
+//! the original crate docs follow.
+//!
+//! ---
+//!
 //! AHash is a high performance keyed hash function.
 //!
 //! It quickly provides a high quality hash where the result is not predictable without knowing the Key.

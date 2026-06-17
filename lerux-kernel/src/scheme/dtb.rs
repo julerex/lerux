@@ -1,3 +1,15 @@
+//! The `dtb:` scheme: exposing the device tree blob to userspace.
+//!
+//! On ARM/RISC-V style platforms the firmware hands the kernel a **device tree
+//! blob (DTB)** describing the hardware (CPUs, memory, peripherals). This scheme
+//! lets userspace drivers read that description so they can discover and
+//! configure devices. It is the device-tree analog of the `acpi:` scheme on PCs,
+//! and is feature-gated since it only applies to DTB platforms.
+//!
+//! See also: [`docs/kernel/architecture.md`] sections 7-8.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use crate::spin::Once;
 use alloc::boxed::Box;
 

@@ -1,3 +1,4 @@
+//! `sys:fdstat` — a listing of every open file descriptor across all contexts.
 use crate::{
     alloc::string::ToString,
     context::{contexts, file::LockedFileDescription, memory::AddrSpaceWrapper},

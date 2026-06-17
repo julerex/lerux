@@ -1,3 +1,16 @@
+//! The `irq:` scheme: delivering hardware interrupts to userspace drivers.
+//!
+//! In a microkernel, device drivers live in userspace, but only the kernel can
+//! receive a hardware **interrupt** (the signal a device raises to demand
+//! attention). This scheme bridges the gap: a driver opens `irq:N` to subscribe
+//! to interrupt line `N`, and the kernel's interrupt handler then makes a
+//! read on that file complete each time the interrupt fires. The driver
+//! effectively turns "an interrupt happened" into "a byte became readable."
+//!
+//! See also: [`docs/kernel/architecture.md`] sections 7-8.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 // TODO: Rewrite this entire scheme. Legacy x86 APIs should be abstracted by a userspace scheme,
 // this scheme should only handle raw IRQ registration and delivery to userspace.
 

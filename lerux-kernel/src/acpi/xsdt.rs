@@ -1,3 +1,13 @@
+//! The XSDT: the 64-bit root table listing all other ACPI tables.
+//!
+//! The **XSDT** (Extended System Description Table) is the modern, 64-bit-pointer
+//! version of the [`rsdt`](super). Firmware provides one or the other;
+//! [`rxsdt`](super) lets the kernel treat both uniformly.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 8.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use crate::rmm::PhysicalAddress;
 use alloc::boxed::Box;
 use core::convert::TryFrom;

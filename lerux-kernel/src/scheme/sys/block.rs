@@ -1,3 +1,4 @@
+//! `sys:block` — lists contexts that are currently blocked and why.
 use alloc::{string::String, vec::Vec};
 use core::fmt::Write;
 

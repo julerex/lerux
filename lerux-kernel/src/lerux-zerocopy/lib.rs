@@ -1,3 +1,10 @@
+//! Inlined vendored crate (`lerux-zerocopy`): **build-time only** zero-copy byte casts.
+//!
+//! Used only by `build.rs` (a transitive dependency of the TOML/serde build path)
+//! at compile time; never runs on the target. Inlined for a zero-dependency build
+//! (see `docs/vendored.md`). You do not need to read this to understand the
+//! kernel. The upstream license/header and code follow unchanged.
+
 // Copyright 2018 The Fuchsia Authors
 //
 // Licensed under the 2-Clause BSD License <LICENSE-BSD or

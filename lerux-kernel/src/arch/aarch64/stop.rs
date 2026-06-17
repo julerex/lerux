@@ -1,3 +1,4 @@
+//! aarch64 shutdown/reset (the x86 `stop.rs` analog).
 use crate::sync::CleanLockToken;
 use core::arch::asm;
 

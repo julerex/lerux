@@ -1,3 +1,16 @@
+//! CPU exception handlers (page faults, divide-by-zero, etc.).
+//!
+//! Exceptions are interrupts the CPU itself raises when something goes wrong.
+//! The most important is the **page fault**, which is routed to
+//! [`crate::context::memory::try_correcting_page_tables`] to be fixed up
+//! (lazy allocation, copy-on-write) or turned into a fatal signal. Other
+//! exceptions (invalid opcode, general protection fault, …) typically kill the
+//! offending context or panic the kernel if they happen in kernel mode.
+//!
+//! See also: [`docs/kernel/architecture.md`] sections 4 and 8.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../../docs/kernel/architecture.md
+
 use crate::syscall::Exception;
 
 use crate::{

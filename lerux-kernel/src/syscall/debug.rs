@@ -1,3 +1,14 @@
+//! Human-readable syscall tracing for debugging.
+//!
+//! When enabled, [`debug_start`](super::debug::debug_start) /
+//! [`debug_end`](super::debug::debug_end) are called around each syscall to log
+//! its name and arguments (decoding pointers, flags, and structs into readable
+//! text). This is a development aid for watching what userspace asks the kernel
+//! to do; it has no effect on syscall behavior.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 6.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
 use alloc::{borrow::ToOwned, string::String, vec::Vec};
 use core::{ascii, fmt::Debug};
 

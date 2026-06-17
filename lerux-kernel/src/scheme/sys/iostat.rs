@@ -1,3 +1,4 @@
+//! `sys:iostat` — per-file-descriptor I/O statistics across all contexts.
 use crate::{
     context::{
         self,

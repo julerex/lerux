@@ -1,3 +1,4 @@
+//! riscv64 shutdown/reset, via SBI (the x86 `stop.rs` analog).
 use crate::sync::CleanLockToken;
 
 pub unsafe fn kreset() -> ! {

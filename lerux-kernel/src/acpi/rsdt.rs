@@ -1,3 +1,14 @@
+//! The RSDT: the 32-bit root table listing all other ACPI tables.
+//!
+//! The **RSDT** (Root System Description Table) is an array of 32-bit pointers to
+//! every other ACPI table. The kernel walks it to locate the tables it cares
+//! about (like the MADT for CPU/interrupt discovery). Newer firmware uses the
+//! 64-bit [`xsdt`](super) instead; [`rxsdt`](super) abstracts over the two.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 8.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use crate::rmm::PhysicalAddress;
 use alloc::boxed::Box;
 use core::convert::TryFrom;

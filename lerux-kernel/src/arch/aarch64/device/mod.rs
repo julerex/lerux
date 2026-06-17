@@ -1,3 +1,4 @@
+//! Built-in aarch64 device setup (interrupt controller, timer, serial), from the device tree.
 use crate::{fdt::Fdt, info};
 use core::sync::atomic::{AtomicUsize, Ordering};
 

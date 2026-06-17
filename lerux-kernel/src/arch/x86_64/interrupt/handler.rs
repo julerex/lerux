@@ -1,5 +1,21 @@
+//! Low-level interrupt/exception entry: saving and restoring CPU state.
+//!
+//! When the CPU takes an interrupt or exception, it jumps to a stub that must
+//! first save the interrupted code's registers somewhere the Rust handler can
+//! see and later restore them. That saved layout is the [`InterruptStack`] (made
+//! of [`ScratchRegisters`], [`PreservedRegisters`], and the hardware-pushed
+//! frame). The macros in this file generate the entry/exit stubs around each
+//! handler so the register save/restore is correct and identical everywhere;
+//! getting a single field order wrong here corrupts userspace state, so it is
+//! written very carefully.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 8 ("Interrupts").
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use crate::{arch::flags::FLAG_SINGLESTEP, memory::ArchIntCtx, panic, syscall::IntRegisters};
 
+/// The caller-saved ("scratch") registers, saved on every interrupt entry.
 #[derive(Default)]
 #[repr(C)]
 pub struct ScratchRegisters {

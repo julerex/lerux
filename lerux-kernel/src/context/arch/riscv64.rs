@@ -1,3 +1,12 @@
+//! riscv64 context switching (the `x86_64` analog for the RISC-V port).
+//!
+//! Defines the saved register state for a context and the switch routine on
+//! 64-bit RISC-V. See the x86_64 version for the conceptual walkthrough.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 5.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use crate::{
     arch::interrupt::InterruptStack,
     context::context::Kstack,

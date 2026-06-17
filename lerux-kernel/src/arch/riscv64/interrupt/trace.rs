@@ -1,3 +1,4 @@
+//! riscv64 stack-trace walking for backtraces.
 use core::arch::asm;
 
 pub struct StackTrace {

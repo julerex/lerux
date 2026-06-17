@@ -1,3 +1,13 @@
+//! The HPET (High Precision Event Timer) ACPI table and driver.
+//!
+//! The **HPET** is a modern, high-resolution timer on PCs. This module parses
+//! its ACPI table to find the timer's registers and then drives it, providing a
+//! good clock source for timekeeping and timeouts when present.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 5.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use core::ptr::{self, read_volatile, write_volatile};
 
 #[cfg(not(target_arch = "x86"))]

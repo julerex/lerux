@@ -1,3 +1,17 @@
+//! Timed wakeups: deliver an event when a deadline passes.
+//!
+//! When a context blocks "until time T" (for example a sleep, or a syscall with
+//! a timeout), it registers a [`Timeout`] here. The time subsystem periodically
+//! checks the registry and, once a deadline is reached, fires the associated
+//! event so the waiting context becomes runnable again.
+//!
+//! This is what lets a [`Blocked`](crate::context::Status::Blocked) context wake
+//! itself up without anyone explicitly unblocking it.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 5.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use alloc::collections::VecDeque;
 
 use crate::{
@@ -11,6 +25,8 @@ use crate::{
     time,
 };
 
+/// One registered deadline: when `time` (on `clock`) passes, fire `event_id`
+/// on `scheme_id`.
 #[derive(Debug)]
 struct Timeout {
     pub scheme_id: SchemeId,

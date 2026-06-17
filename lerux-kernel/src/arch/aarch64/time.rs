@@ -1,3 +1,4 @@
+//! aarch64 timekeeping via the architected generic timer.
 use crate::{sync::CleanLockToken, time::NANOS_PER_SEC};
 
 pub fn monotonic_absolute(_token: &mut CleanLockToken) -> u128 {

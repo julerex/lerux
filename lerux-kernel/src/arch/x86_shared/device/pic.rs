@@ -1,3 +1,14 @@
+//! The legacy 8259 PIC (Programmable Interrupt Controller).
+//!
+//! Before the APIC, PCs used a pair of 8259 PIC chips to manage interrupts. The
+//! kernel still needs to deal with it: at minimum to mask it off after switching
+//! to the APIC, and to support hardware/boot configurations that fall back to
+//! it. This driver provides that minimal control.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 8.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../../docs/kernel/architecture.md
+
 use core::cell::SyncUnsafeCell;
 
 use crate::{

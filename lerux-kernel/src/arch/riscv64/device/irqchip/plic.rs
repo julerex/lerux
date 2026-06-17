@@ -1,3 +1,4 @@
+//! Driver for the RISC-V PLIC (Platform-Level Interrupt Controller): device IRQs.
 use crate::{
     arch::{device::irqchip::hlic, start::BOOT_HART_ID},
     dtb::{

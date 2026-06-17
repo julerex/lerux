@@ -1,3 +1,12 @@
+//! Inlined vendored crate (`lerux-raw-cpuid`): parses the x86 `cpuid` instruction.
+//!
+//! Copied into the kernel tree (wired via `#[path]` in `main.rs`) to keep zero
+//! external runtime dependencies — see `docs/vendored.md`. The kernel uses it to
+//! detect CPU features during boot (deciding which code paths and instructions
+//! are safe to use). The code below is upstream; the original crate docs follow.
+//!
+//! ---
+//!
 //! A library to parse the x86 CPUID instruction, written in rust with no
 //! external dependencies. The implementation closely resembles the Intel CPUID
 //! manual description. The library works with no_std.

@@ -1,3 +1,11 @@
+//! Inlined vendored crate (`lerux-smallvec`): a `Vec` that avoids heap allocation
+//! for small sizes.
+//!
+//! Copied into the kernel tree (wired via `#[path]` in `main.rs`) to keep zero
+//! external runtime dependencies — see `docs/vendored.md`. The kernel uses it for
+//! collections that are usually tiny, to avoid a heap allocation in the common
+//! case. The code below is upstream.
+
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
 // http://www.apache.org/licenses/LICENSE-2.0> or the MIT license
 // <LICENSE-MIT or http://opensource.org/licenses/MIT>, at your

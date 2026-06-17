@@ -1,3 +1,14 @@
+//! Thin wrapper over the `cpuid` instruction.
+//!
+//! `cpuid` is how x86 software asks the CPU what it is and what features it
+//! supports. This module wraps the inlined `raw_cpuid` crate to give the rest of
+//! the kernel convenient feature queries (used during boot to decide which code
+//! paths and CPU features to enable).
+//!
+//! See also: [`docs/kernel/architecture.md`] section 3.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use crate::raw_cpuid::{CpuId, CpuIdResult, ExtendedFeatures, FeatureInfo};
 
 pub fn cpuid() -> CpuId {

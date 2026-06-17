@@ -1,3 +1,4 @@
+//! `sys:exe` — the name/path of the currently running program.
 use alloc::vec::Vec;
 
 use crate::{context, sync::CleanLockToken, syscall::error::Result};

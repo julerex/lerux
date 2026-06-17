@@ -1,5 +1,35 @@
-//! # Memory management
+//! # Physical memory management
+//!
+//! This module is the kernel's authority on **physical** RAM: which frames
+//! exist, which are free, and how to hand them out. (Virtual memory — per-process
+//! address spaces, `mmap`, page faults — lives one layer up in
+//! [`crate::context::memory`].)
+//!
+//! ## Key terms
+//!
+//! - A **frame** is one page-sized chunk of physical RAM (`PAGE_SIZE`, 4 KiB on
+//!   x86_64). [`Frame`] is just a typed wrapper around a frame's physical
+//!   address.
+//! - The **frame allocator** tracks which frames are free using a **free list**
+//!   ([`FREELIST`]) organized by power-of-two size ("order"), so it can satisfy
+//!   both single-page and larger contiguous requests.
+//! - A **`PageMapper`** edits a set of page tables — the hardware structures that
+//!   translate virtual addresses to frames. [`KernelMapper`] is the guarded
+//!   handle for editing the kernel's own mappings.
+//! - **Reference counting** ([`PageInfo`]/[`RefCount`]): a single frame can be
+//!   shared by several processes (think copy-on-write after `fork`). The kernel
+//!   counts users so a frame is freed only when the last reference goes away.
+//!
+//! This file re-exports the architecture-specific types from the inlined [`rmm`]
+//! crate (`RmmA`, `PhysicalAddress`, `PageFlags`, …), which knows the exact
+//! page-table format of each CPU. Think of `rmm` as the hardware driver and this
+//! module as the policy on top of it.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 4 ("Memory model").
+//!
 //! Some code was borrowed from [Phil Opp's Blog](http://os.phil-opp.com/allocating-frames.html)
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
 
 use core::{
     cell::SyncUnsafeCell,

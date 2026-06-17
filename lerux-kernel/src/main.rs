@@ -1,9 +1,40 @@
 #![allow(uninhabited_static)]
 #![allow(static_mut_refs)] // uninhabited HandleMap statics in schemes (L1 + RwLock pattern)
-//! # The Redox OS Kernel, version 2
+//! # The lerux kernel (a Redox-derived microkernel)
 //!
-//! The Redox OS Kernel is a microkernel that supports `x86_64` systems and
-//! provides Unix-like syscalls for primarily Rust applications.
+//! This crate is the kernel: the first Rust code that owns the machine after
+//! boot. It is a **microkernel**, meaning it keeps only the parts that *must* be
+//! privileged — memory mapping, scheduling, interrupts, and inter-process
+//! communication — while drivers and filesystems run as ordinary userspace
+//! programs. It supports `x86_64` (the primary target) plus in-progress
+//! `aarch64`/`riscv64` ports, and exposes Unix-like syscalls to primarily Rust
+//! applications.
+//!
+//! New to operating systems? Read [`docs/kernel/architecture.md`] first — it is
+//! a beginner's tour of every subsystem mentioned below and assumes no prior OS
+//! knowledge.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../docs/kernel/architecture.md
+//!
+//! ## Where to start reading
+//!
+//! This file ([`main.rs`]) is the crate root: it declares every module and wires
+//! in the inlined dependency crates. A good reading order for newcomers:
+//!
+//! 1. [`startup`] — how the kernel comes up, from the bootloader handoff
+//!    ([`startup::KernelArgs`]) to `kmain`. lerux adds a `startup::direct_boot`
+//!    mode for booting under `qemu -kernel` with no bootloader.
+//! 2. [`memory`] — physical RAM and frame allocation (a thin layer over the
+//!    inlined [`rmm`] crate), then [`context::memory`] for per-process virtual
+//!    address spaces, `mmap`, grants, and page faults.
+//! 3. [`context`] — what a process/thread ("context") is, and the round-robin
+//!    [`context::switch`] scheduler.
+//! 4. [`syscall`] — the user/kernel boundary: how syscalls are dispatched and
+//!    how user memory is safely copied.
+//! 5. [`scheme`] — the "everything is a scheme" layer that lets userspace
+//!    drivers and filesystems plug in (the core microkernel IPC mechanism).
+//!
+//! [`main.rs`]: crate
 //!
 //! ## lerux zero-dep vendoring note
 //!
@@ -15,7 +46,9 @@
 //! into lerux-kernel/src/lerux-*/ (with original module names rebound via #[path]
 //! so the rest of the kernel code is unchanged).
 //! The working sources are under lerux-kernel/; pristine references stay in vendor/.
-//! See docs/vendored.md and vendor/README.md.
+//! Inlining them this way is part of the "Only Rust" goal: the kernel builds with
+//! no external runtime crates. See `docs/vendored.md` and `vendor/README.md`, and
+//! the "inlined crates" section of `docs/kernel/architecture.md`.
 
 #![feature(int_roundings)]
 #![feature(str_split_remainder)]

@@ -1,3 +1,12 @@
+//! Time-related syscalls (`clock_gettime`, nanosleep, and friends).
+//!
+//! These let userspace read the system clocks and sleep for a duration. Sleeping
+//! works by blocking the calling context and registering a deadline with
+//! [`crate::context::timeout`], which wakes it when the time arrives.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 6.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
 use crate::{
     context,
     sync::CleanLockToken,

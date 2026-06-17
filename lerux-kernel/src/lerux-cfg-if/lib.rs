@@ -1,3 +1,12 @@
+//! Inlined vendored crate (`lerux-cfg-if`): the `cfg_if!` macro.
+//!
+//! Copied into the kernel tree (wired via `#[path]` in `main.rs`) to keep zero
+//! external runtime dependencies — see `docs/vendored.md`. The kernel and other
+//! inlined crates use it to pick code by `#[cfg]` without deeply nested
+//! attributes. The code below is upstream; the original crate docs follow.
+//!
+//! ---
+//!
 //! A macro for defining `#[cfg]` if-else statements.
 //!
 //! The macro provided by this crate, `cfg_if`, is similar to the `if/elif` C

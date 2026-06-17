@@ -1,3 +1,17 @@
+//! The Interrupt Descriptor Table (IDT) and its handler registration.
+//!
+//! The **IDT** is a CPU-mandated table with one entry per interrupt/exception
+//! vector (0-255 on x86). Each entry points at the routine the CPU jumps to when
+//! that vector fires — a page fault, a timer tick, a device IRQ, a syscall. This
+//! module builds the table, fills in the handlers defined elsewhere in `arch`,
+//! and loads it into the CPU (`lidt`). Until the IDT is installed, any exception
+//! would triple-fault the machine, which is why [`init_bsp`] runs so early in
+//! boot.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 8 ("Interrupts").
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use core::{
     cell::SyncUnsafeCell,
     mem,

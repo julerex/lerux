@@ -1,3 +1,4 @@
+//! riscv64 trap entry: register save/restore (the x86 `handler.rs` analog).
 use crate::{memory::ArchIntCtx, panic, syscall::IntRegisters};
 
 #[derive(Default)]

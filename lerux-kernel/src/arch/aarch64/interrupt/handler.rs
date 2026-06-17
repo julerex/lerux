@@ -1,3 +1,4 @@
+//! aarch64 interrupt entry: register save/restore (the x86 `handler.rs` analog).
 use crate::{panic, syscall::IntRegisters};
 
 #[derive(Default)]

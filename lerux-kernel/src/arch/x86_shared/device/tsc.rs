@@ -1,3 +1,13 @@
+//! The TSC (Time Stamp Counter): the CPU's high-resolution cycle counter.
+//!
+//! The TSC ticks every CPU cycle, making it the fastest available clock. After
+//! calibrating its frequency against a known timer (like the PIT), the kernel
+//! uses it for fine-grained timekeeping. This driver reads and calibrates it.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 5.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../../docs/kernel/architecture.md
+
 use core::{cell::Cell, ptr::addr_of};
 
 #[cfg(target_arch = "x86_64")]

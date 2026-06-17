@@ -1,3 +1,17 @@
+//! Device tree parsing for non-PC platforms (ARM, RISC-V).
+//!
+//! Where PCs use ACPI, embedded-style platforms describe their hardware with a
+//! **device tree blob (DTB)**: a compact tree of nodes giving the CPUs, memory
+//! ranges, interrupt controller, serial port, etc. This module walks that tree
+//! (using the inlined `fdt` crate) to discover devices the kernel needs during
+//! early boot — notably the interrupt controller ([`irqchip`]) and the console
+//! ([`serial`]).
+//!
+//! See also: [`docs/kernel/architecture.md`] section 8 ("Interrupts and
+//! devices").
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 #[cfg(dtb)]
 pub mod irqchip;
 pub mod serial;

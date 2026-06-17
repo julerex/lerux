@@ -1,3 +1,14 @@
+//! The I/O APIC: routing device interrupts to CPUs.
+//!
+//! Where each CPU has a Local APIC, the **I/O APIC** is a chip that sits between
+//! the devices and the CPUs and decides which CPU's Local APIC each device
+//! interrupt line is delivered to. This driver configures those routing entries
+//! so device IRQs reach the right place.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 8.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../../docs/kernel/architecture.md
+
 use core::{cell::SyncUnsafeCell, fmt, ptr};
 
 use crate::spin::Mutex;

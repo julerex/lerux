@@ -1,3 +1,12 @@
+//! Inlined vendored crate (`lerux-hashbrown`): the `HashMap`/`HashSet` implementation.
+//!
+//! Copied into the kernel tree (wired via `#[path]` in `main.rs`) to keep zero
+//! external runtime dependencies — see `docs/vendored.md`. The kernel uses it
+//! wherever it needs hash maps (scheme tables, futex tables, ACPI lookups). The
+//! code below is upstream; the original crate docs follow.
+//!
+//! ---
+//!
 //! This crate is a Rust port of Google's high-performance [SwissTable] hash
 //! map, adapted to make it a drop-in replacement for Rust's standard `HashMap`
 //! and `HashSet` types.

@@ -1,3 +1,15 @@
+//! The Local APIC: each CPU's own interrupt controller and timer.
+//!
+//! Every x86 CPU has a **Local APIC** (Advanced Programmable Interrupt
+//! Controller). It receives interrupts routed to this CPU, lets the kernel send
+//! inter-processor interrupts to other CPUs, and provides a per-CPU timer the
+//! scheduler can use. This driver programs it via memory-mapped registers (xAPIC)
+//! or MSRs (x2APIC).
+//!
+//! See also: [`docs/kernel/architecture.md`] sections 8 and 9.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../../docs/kernel/architecture.md
+
 use crate::x86::msr::*;
 use core::{
     cell::SyncUnsafeCell,

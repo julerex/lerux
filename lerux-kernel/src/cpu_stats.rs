@@ -1,3 +1,14 @@
+//! Scheduler and CPU statistics, surfaced through the `sys:` scheme.
+//!
+//! Counters tracking how the CPUs spend their time — context switches, time in
+//! the idle vs. user vs. kernel states, and so on. These power the diagnostic
+//! files like `sys:stat` and `sys:cpu` and are useful when investigating
+//! performance or scheduler behavior.
+//!
+//! See also: [`docs/kernel/architecture.md`] sections 5 and 7.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use alloc::vec::Vec;
 use core::{
     fmt,

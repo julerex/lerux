@@ -1,3 +1,13 @@
+//! Inlined vendored crate (`lerux-toml`): **build-time only** TOML parser.
+//!
+//! This crate is used **only by `build.rs`** to parse the kernel's `config.toml`
+//! at compile time. None of this code runs on the target — it is not part of the
+//! kernel binary. It is inlined (see `docs/vendored.md`) so the build has zero
+//! external dependencies. You almost never need to read it; the upstream docs
+//! follow unchanged.
+//!
+//! ---
+//!
 //! A [serde]-compatible [TOML]-parsing library
 //!
 //! TOML itself is a simple, ergonomic, and readable configuration format:

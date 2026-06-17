@@ -1,3 +1,4 @@
+//! Driver for the RISC-V CLINT (Core-Local Interruptor): timer and software IPIs.
 use crate::spin::Mutex;
 use crate::syscall::{Io, Mmio};
 use crate::context::switch::tick;

@@ -1,3 +1,13 @@
+//! Miscellaneous per-CPU x86_64 feature setup.
+//!
+//! Enables assorted optional CPU features during boot (via control registers
+//! like CR4) — things such as SSE/AVX state, user-mode instruction prevention,
+//! and other security/performance bits. Run once per CPU early in startup.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 3.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use crate::x86::controlregs::Cr4;
 
 use crate::{

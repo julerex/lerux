@@ -1,3 +1,4 @@
+//! riscv64 interrupt/trap entry and control.
 use core::arch::asm;
 
 #[macro_use]

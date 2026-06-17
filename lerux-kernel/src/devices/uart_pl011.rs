@@ -1,3 +1,11 @@
+//! Driver for the ARM PL011 UART (the common ARM serial port).
+//!
+//! The ARM counterpart to the 16550: byte read/write to a memory-mapped PL011
+//! UART, used as the console on aarch64 platforms.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 8.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
 #![allow(unused)]
 
 use core::ptr;

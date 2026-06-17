@@ -1,3 +1,13 @@
+//! The legacy PIT (Programmable Interval Timer).
+//!
+//! The PIT is the classic PC timer chip. The kernel can use it as a periodic
+//! tick source (driving the scheduler) and to calibrate faster timers like the
+//! TSC. This driver programs its frequency and handles its interrupt.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 5.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../../docs/kernel/architecture.md
+
 use core::cell::SyncUnsafeCell;
 
 use crate::syscall::io::{Io, Pio};

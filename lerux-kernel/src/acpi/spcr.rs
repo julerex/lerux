@@ -1,3 +1,13 @@
+//! The SPCR: serial console description (ACPI).
+//!
+//! The **SPCR** (Serial Port Console Redirection table) tells the kernel where
+//! the firmware's serial console is and how it is configured, so the kernel can
+//! use the same port for its own console output.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 8.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use super::{find_sdt, sdt::Sdt, GenericAddressStructure};
 use crate::{
     arch::device::serial::COM1,

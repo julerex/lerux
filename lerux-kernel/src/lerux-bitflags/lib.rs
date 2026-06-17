@@ -1,3 +1,10 @@
+//! Inlined vendored crate (`lerux-bitflags`): the `bitflags!` macro.
+//!
+//! Copied into the kernel tree (wired via `#[path]` in `main.rs`) to keep zero
+//! external runtime dependencies — see `docs/vendored.md`. The kernel uses it
+//! everywhere it models hardware/ABI flag bits (page flags, syscall flags, event
+//! flags) as type-safe sets. The code below is upstream.
+
 // Copyright 2014 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.

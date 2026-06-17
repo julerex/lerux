@@ -1,3 +1,14 @@
+//! Architecture-independent serial console abstraction.
+//!
+//! Wraps the concrete UART drivers ([`uart_16550`](crate::devices) on PCs,
+//! [`uart_pl011`](crate::devices) on ARM) behind one `SerialKind` so the rest of
+//! the kernel can write to "the console" without knowing the hardware. This is
+//! the sink behind the log and the `debug:` scheme.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 8.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use crate::syscall::Mmio;
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use crate::syscall::Pio;

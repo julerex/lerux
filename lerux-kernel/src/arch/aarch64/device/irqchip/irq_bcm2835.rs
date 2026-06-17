@@ -1,3 +1,4 @@
+//! Interrupt controller driver for the BCM2835 (original Raspberry Pi).
 use crate::fdt::{node::FdtNode, Fdt};
 use core::ptr::{read_volatile, write_volatile};
 

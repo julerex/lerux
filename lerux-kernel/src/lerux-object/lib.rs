@@ -1,3 +1,12 @@
+//! Inlined vendored crate (`lerux-object`): object-file (ELF) parsing.
+//!
+//! Copied into the kernel tree (wired via `#[path]` in `main.rs`) to keep zero
+//! external runtime dependencies — see `docs/vendored.md`. The kernel uses it to
+//! parse ELF binaries when launching a program (and for symbol info in panic
+//! backtraces). The code below is upstream; the original crate docs follow.
+//!
+//! ---
+//!
 //! # `object`
 //!
 //! The `object` crate provides a unified interface to working with object files

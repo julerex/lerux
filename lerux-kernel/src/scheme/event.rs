@@ -1,3 +1,16 @@
+//! The `event:` scheme: waiting on many file descriptors at once.
+//!
+//! This is the kernel's equivalent of `epoll`/`select`. A program registers the
+//! file descriptors it cares about with an event queue, then reads from
+//! `event:` to be told *which* of them became ready (readable, writable, etc.).
+//! It lets a single thread efficiently multiplex many sources of I/O instead of
+//! blocking on each one in turn. The queue machinery itself lives in
+//! [`crate::event`]; this file is the scheme front-end over it.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 7 ("Schemes").
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use crate::syscall::{EventFlags, O_NONBLOCK};
 use alloc::sync::Arc;
 

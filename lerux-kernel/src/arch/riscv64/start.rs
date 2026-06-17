@@ -1,3 +1,12 @@
+//! riscv64 boot entry: the first Rust on this architecture (the x86 `start.rs` analog).
+//!
+//! Receives control from the firmware/SBI, sets up an initial stack and the
+//! kernel environment, and hands off to the architecture-independent
+//! [`crate::startup::kmain`]. `BOOT_HART_ID` records which hart (CPU) booted.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 3.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
 use core::{
     arch::naked_asm,
     cell::SyncUnsafeCell,

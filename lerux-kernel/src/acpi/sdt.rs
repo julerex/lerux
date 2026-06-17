@@ -1,3 +1,14 @@
+//! The common ACPI table header (`Sdt` = System Description Table).
+//!
+//! Every ACPI table starts with the same header: a 4-byte signature naming the
+//! table, a length, and a checksum. This module defines that header and helpers
+//! to validate and walk it; the specific tables (RSDT, MADT, HPET, …) build on
+//! it.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 8.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 #[derive(Copy, Clone, Debug)]
 #[repr(C, packed)]
 pub struct Sdt {

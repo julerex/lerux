@@ -1,3 +1,14 @@
+//! Discovering the interrupt controller from the device tree.
+//!
+//! Walks the device tree to find the platform's interrupt controller (GIC,
+//! PLIC, etc.) and the interrupt routing for each device, so the kernel can set
+//! up interrupt delivery on DTB platforms. The `IrqCell` type models a device
+//! tree interrupt specifier.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 8.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use super::travel_interrupt_ctrl;
 use crate::{
     arch::device::irqchip::new_irqchip,

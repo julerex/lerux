@@ -1,3 +1,4 @@
+//! aarch64 interrupt-controller drivers (GIC, BCM2835/6), selected by device tree.
 use crate::{
     dtb::irqchip::{InterruptController, IRQ_CHIP},
     fdt::{node::FdtNode, Fdt},

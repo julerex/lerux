@@ -1,3 +1,11 @@
+//! Inlined vendored crate (`lerux-toml_edit`): **build-time only** TOML document model.
+//!
+//! Used only by `build.rs` (via `lerux-toml`) at compile time; never runs on the
+//! target. Inlined for a zero-dependency build (see `docs/vendored.md`). Upstream
+//! docs follow.
+//!
+//! ---
+//!
 //! # `toml_edit`
 //!
 //! This crate allows you to parse and modify toml

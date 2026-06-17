@@ -1,3 +1,13 @@
+//! The GTDT: ARM generic timer description (ACPI on aarch64).
+//!
+//! The **GTDT** (Generic Timer Description Table) tells the kernel how the ARM
+//! architected timer is wired (its interrupt numbers and flags), so it can be
+//! used as the system tick on ACPI-based ARM platforms.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 5.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use alloc::boxed::Box;
 
 use super::{find_sdt, sdt::Sdt};

@@ -1,3 +1,9 @@
+//! x86_64-specific pieces of the syscall ABI.
+//!
+//! Holds the constants and register layouts that are specific to 64-bit x86: the
+//! page size, the kernel/bootstrap metadata region size, and (under the
+//! `userspace` feature) the `syscall!` macro that emits the actual `syscall`
+//! trap instruction. The kernel uses the constants; userspace uses the macro.
 use core::{
     mem,
     ops::{Deref, DerefMut},

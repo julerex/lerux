@@ -1,3 +1,13 @@
+//! x86 timekeeping: reading "now" from the best available timer.
+//!
+//! Bridges the kernel's generic time code to the x86 timer hardware, preferring
+//! the HPET when present and falling back to the PIT. Provides the current
+//! monotonic time the scheduler and `clock_gettime` build on.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 5.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use super::device::{hpet, pit};
 use crate::sync::CleanLockToken;
 

@@ -1,3 +1,18 @@
+//! The `pipe:` scheme: kernel-implemented anonymous pipes.
+//!
+//! A **pipe** is a one-way byte channel: bytes written to one end can be read
+//! from the other, with the kernel buffering in between. This is the classic
+//! Unix `pipe()` primitive, used to connect the output of one process to the
+//! input of another. It lives in the kernel (rather than a userspace scheme)
+//! because it is a fundamental IPC building block.
+//!
+//! Reads block (via a [`WaitCondition`]) when the buffer is empty until a writer
+//! provides data or all writers close; writes block when the buffer is full.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 7 ("Schemes").
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use alloc::{collections::VecDeque, sync::Arc, vec::Vec};
 use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 

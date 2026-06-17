@@ -1,7 +1,29 @@
+//! Signal delivery to the currently running context.
+//!
+//! A **signal** is a Unix-style asynchronous notification — `SIGKILL`,
+//! `SIGSEGV`, etc. — sent to a process to interrupt it or ask it to handle an
+//! event. The kernel cannot deliver a signal at an arbitrary instruction; it
+//! waits for a safe point (typically when returning to userspace) and then runs
+//! this code.
+//!
+//! [`signal_handler`] checks the current context for pending signals: if it is
+//! being force-killed it exits immediately, otherwise it arranges for the
+//! process's registered signal handler to run via the `sigcontrol` shared
+//! structure that the kernel and userspace runtime cooperate through.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 5.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use core::sync::atomic::Ordering;
 
 use crate::{context, sync::CleanLockToken, syscall::SigcontrolFlags};
 
+/// Deliver any pending signal to the current context, at a safe point.
+///
+/// Called when the kernel is about to resume userspace. Force-kill takes effect
+/// here (the context exits); otherwise a pending, unblocked signal is dispatched
+/// to the process's handler.
 pub fn signal_handler(token: &mut CleanLockToken) {
     let context_lock = context::current();
     let context = context_lock.upgradeable_read(token.token());

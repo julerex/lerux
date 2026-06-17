@@ -1,3 +1,37 @@
+//! Early kernel initialization: the handoff from the bootloader to `kmain`.
+//!
+//! This module owns the moment the kernel takes control of the machine. The
+//! architecture-specific entry code (for example
+//! [`arch::x86_shared::start`](crate::arch)) does the very first setup and then
+//! calls [`kmain`], which finishes bringing the kernel up and never returns —
+//! it ends in the scheduler loop ([`run_userspace`]).
+//!
+//! ## What you should already understand
+//!
+//! - A **bootloader** is the program that runs before the kernel; it loads the
+//!   kernel image into memory and describes the machine to it.
+//! - That description arrives as a [`KernelArgs`] struct: where RAM is, where the
+//!   initial userspace image (the *initfs*) lives, and where firmware tables
+//!   (ACPI/RSDP on PCs, a device tree blob on ARM/RISC-V) can be found.
+//! - **initfs / bootstrap**: the first userspace program the kernel runs. On a
+//!   normal boot the kernel maps it and jumps into it; everything else
+//!   (drivers, shell) is started from there.
+//!
+//! ## lerux divergence: direct-boot
+//!
+//! Upstream Redox always boots through a real bootloader. lerux adds a
+//! `direct-boot` mode (see the `direct_boot` submodule) that synthesizes
+//! [`KernelArgs`] so
+//! the kernel can run under `qemu-system-x86_64 -kernel ...` with no bootloader,
+//! for fast kernel development. In that mode `kmain` can skip spawning userspace
+//! entirely (kernel-only smoke testing) unless the `direct-boot-userspace`
+//! feature is enabled.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 3 ("Boot: from CPU reset to
+//! the scheduler").
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use core::{
     hint,
     ptr::NonNull,
@@ -14,6 +48,7 @@ use crate::{
     sync::CleanLockToken,
 };
 
+/// Parsing of the bootloader-supplied physical memory map.
 pub mod memory;
 
 /// lerux-only: synthetic [`KernelArgs`] for QEMU `-kernel` direct-boot (upstream
@@ -22,14 +57,30 @@ pub mod memory;
 #[cfg(feature = "direct-boot")]
 pub mod direct_boot;
 
+/// Everything the bootloader tells the kernel about the machine.
+///
+/// This is the boot contract between the loader and the kernel. The layout is
+/// fixed (`#[repr(C, packed(8))]`) because the bootloader writes these bytes and
+/// the kernel reads them; the two are compiled separately and must agree on the
+/// exact field order and offsets. All addresses are **physical** (raw RAM
+/// addresses), which is why the accessor methods convert them to virtual
+/// addresses (via [`RmmA::phys_to_virt`]) before dereferencing.
+///
+/// Each `*_base`/`*_size` pair describes one region of physical memory:
+/// the kernel image itself, its boot stack, the environment string block, the
+/// hardware-description table, the memory-map array, and the bootstrap/initfs.
 #[repr(C, packed(8))]
 pub(crate) struct KernelArgs {
+    /// Physical base and byte length of the loaded kernel image.
     kernel_base: u64,
     kernel_size: u64,
 
+    /// Physical base and byte length of the initial kernel stack.
     stack_base: u64,
     stack_size: u64,
 
+    /// Physical base and byte length of the boot environment string
+    /// (`key=value` lines passed from the bootloader).
     env_base: u64,
     env_size: u64,
 
@@ -44,6 +95,8 @@ pub(crate) struct KernelArgs {
     pub(crate) hwdesc_base: u64,
     pub(crate) hwdesc_size: u64,
 
+    /// Physical base and byte length of the bootloader's memory-map array
+    /// (the list of [`memory::BootloaderMemoryEntry`] regions).
     areas_base: u64,
     areas_size: u64,
 
@@ -54,6 +107,10 @@ pub(crate) struct KernelArgs {
 }
 
 impl KernelArgs {
+    /// Log every region described by these args to the serial console.
+    ///
+    /// Useful when bringing up a new machine or debugging the boot handoff: it
+    /// confirms the kernel and bootloader agree on where everything lives.
     pub(crate) fn print(&self) {
         // lerux direct-boot: KernelArgs dump at info! (serial); upstream uses debug!
         // because graphical_debug is available from the bootloader framebuffer.
@@ -92,6 +149,8 @@ impl KernelArgs {
         );
     }
 
+    /// Build the [`Bootstrap`] descriptor (initfs location + environment) that
+    /// `kmain` later hands to the first userspace process.
     pub(crate) fn bootstrap(&self) -> Bootstrap {
         Bootstrap {
             base: crate::memory::Frame::containing(crate::memory::PhysicalAddress::new(
@@ -102,6 +161,13 @@ impl KernelArgs {
         }
     }
 
+    /// Borrow the boot environment block as raw bytes.
+    ///
+    /// # Safety / correctness
+    ///
+    /// Reads physical memory the bootloader promised is valid for `env_size`
+    /// bytes; the returned slice is `'static` because the boot environment lives
+    /// for the lifetime of the kernel.
     pub(crate) fn env(&self) -> &'static [u8] {
         unsafe {
             slice::from_raw_parts(
@@ -112,6 +178,13 @@ impl KernelArgs {
         }
     }
 
+    /// Return a pointer to the ACPI RSDP if the bootloader provided one.
+    ///
+    /// The **RSDP** (Root System Description Pointer) is the entry point to the
+    /// ACPI firmware tables on PCs; finding it lets the kernel discover CPUs,
+    /// interrupt controllers, and other hardware. We validate the `"RSD PTR "`
+    /// signature so we never hand ACPI code a device tree (or garbage) by
+    /// mistake.
     pub(crate) fn acpi_rsdp(&self) -> Option<NonNull<u8>> {
         if self.hwdesc_base != 0 {
             let data = unsafe {
@@ -131,6 +204,14 @@ impl KernelArgs {
         }
     }
 
+    /// Return the parsed device tree blob if the bootloader provided one.
+    ///
+    /// A **device tree blob (DTB)** is the ARM/RISC-V equivalent of ACPI: a
+    /// firmware-provided description of the hardware. Only one of [`acpi_rsdp`]
+    /// or [`dtb`] is meaningful on a given machine.
+    ///
+    /// [`acpi_rsdp`]: KernelArgs::acpi_rsdp
+    /// [`dtb`]: KernelArgs::dtb
     pub(crate) fn dtb(&self) -> Option<crate::fdt::Fdt<'static>> {
         if self.hwdesc_base != 0 {
             let data = unsafe {
@@ -147,27 +228,45 @@ impl KernelArgs {
     }
 }
 
+/// Borrow the boot environment string captured at startup.
 pub(crate) fn init_env() -> &'static [u8] {
     BOOTSTRAP.get().expect("BOOTSTRAP was not set").env
 }
 
+/// Entry point of the very first userspace context.
+///
+/// The scheduler runs this on a fresh kernel stack; it jumps into the initfs
+/// bootstrap binary, which becomes PID 1 and starts the rest of the system.
 extern "C" fn userspace_init() {
     let mut token = unsafe { CleanLockToken::new() };
     let bootstrap = BOOTSTRAP.get().expect("BOOTSTRAP was not set");
     unsafe { crate::syscall::process::usermode_bootstrap(bootstrap, &mut token) }
 }
 
+/// Where the first userspace program lives, plus its environment.
 pub(crate) struct Bootstrap {
+    /// First physical frame of the contiguous initfs image.
     pub(crate) base: crate::memory::Frame,
+    /// Number of page-sized frames the initfs image spans.
     pub(crate) page_count: usize,
+    /// Boot environment passed through to the first process.
     env: &'static [u8],
 }
 
+/// Set once by the BSP in [`kmain`]; read by [`userspace_init`].
 static BOOTSTRAP: crate::spin::Once<Bootstrap> = crate::spin::Once::new();
+/// Set by an application processor once it has finished early init; the BSP
+/// waits on this when starting each AP so startup is serialized.
 pub(crate) static AP_READY: AtomicBool = AtomicBool::new(false);
+/// Set by the BSP once core init is done; APs spin on this before proceeding.
 static BSP_READY: AtomicBool = AtomicBool::new(false);
 
-/// This is the kernel entry point for the primary CPU. The arch crate is responsible for calling this
+/// Kernel entry point for the **primary CPU** (the bootstrap processor, BSP).
+///
+/// The architecture-specific startup code calls this after it has set up paging
+/// and the heap. It finishes global initialization (contexts, schemes), spawns
+/// the first userspace process (unless direct-boot is skipping it), and then
+/// enters the scheduler loop, which never returns.
 pub(crate) fn kmain(bootstrap: Bootstrap) -> ! {
     let mut token = unsafe { CleanLockToken::new() };
 
@@ -212,7 +311,12 @@ pub(crate) fn kmain(bootstrap: Bootstrap) -> ! {
     run_userspace(&mut token)
 }
 
-/// This is the main kernel entry point for secondary CPUs
+/// Kernel entry point for the **secondary CPUs** (application processors, APs).
+///
+/// Each AP is started by the trampoline and ends up here. It waits for the BSP
+/// to signal readiness, does its own per-CPU context init, and then joins the
+/// shared scheduler loop. If the kernel was built without `multi_core`, the AP
+/// simply halts forever.
 #[allow(unreachable_code, unused_variables, dead_code)]
 pub(crate) fn kmain_ap(cpu_id: crate::cpu_set::LogicalCpuId) -> ! {
     let mut token = unsafe { CleanLockToken::new() };
@@ -244,6 +348,13 @@ pub(crate) fn kmain_ap(cpu_id: crate::cpu_set::LogicalCpuId) -> ! {
     run_userspace(&mut token);
 }
 
+/// The scheduler loop that every CPU runs forever.
+///
+/// Each iteration: disable interrupts (so the switch is atomic), ask the
+/// scheduler to switch to the next runnable context, then re-enable interrupts.
+/// When there is nothing to run, the CPU halts until the next interrupt instead
+/// of busy-spinning, which saves power. Interrupts must be disabled around the
+/// switch because a timer interrupt mid-switch could corrupt the saved state.
 fn run_userspace(token: &mut CleanLockToken) -> ! {
     loop {
         unsafe {

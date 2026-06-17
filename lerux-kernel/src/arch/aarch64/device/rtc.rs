@@ -1,3 +1,4 @@
+//! aarch64 real-time clock driver (reads wall-clock time at boot).
 use crate::{dtb::get_mmio_address, sync::CleanLockToken, time};
 use core::ptr::read_volatile;
 

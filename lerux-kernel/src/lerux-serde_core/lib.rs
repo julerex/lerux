@@ -1,3 +1,10 @@
+//! Inlined vendored crate (`lerux-serde_core`): **build-time only** serde trait core.
+//!
+//! Used only by `build.rs` at compile time; never runs on the target. Inlined for
+//! a zero-dependency build (see `docs/vendored.md`). Upstream docs follow.
+//!
+//! ---
+//!
 //! Serde is a framework for ***ser***ializing and ***de***serializing Rust data
 //! structures efficiently and generically.
 //!

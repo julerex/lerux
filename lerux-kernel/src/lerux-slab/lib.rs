@@ -1,3 +1,10 @@
+//! Inlined vendored crate (`lerux-slab`): a slab allocator for reusable slots.
+//!
+//! Copied into the kernel tree (wired via `#[path]` in `main.rs`) to keep zero
+//! external runtime dependencies — see `docs/vendored.md`. The kernel uses it to
+//! hand out and recycle small integer-keyed slots (for example tracking handles)
+//! efficiently. The code below is upstream.
+//!
 #![warn(
     missing_debug_implementations,
     missing_docs,

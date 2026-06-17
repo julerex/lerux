@@ -1,3 +1,4 @@
+//! aarch64 syscall/exception entry stubs (the `x86_64::interrupt::syscall` analog).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn do_exception_unhandled() {}
 

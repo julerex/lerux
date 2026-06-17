@@ -1,4 +1,16 @@
-//! Filesystem syscalls
+//! Filesystem syscalls: the file-descriptor and path operations.
+//!
+//! These handlers implement `open`, `close`, `read`, `write`, `dup`, `fpath`,
+//! and friends. In this microkernel almost all of them ultimately route to a
+//! **scheme** (see [`crate::scheme`]): the kernel resolves the path's scheme
+//! prefix, then forwards the operation to the responsible handler — which may be
+//! a kernel scheme or a userspace driver. So "filesystem syscalls" here is really
+//! "the generic file-like interface" that everything in the system is reached
+//! through.
+//!
+//! See also: [`docs/kernel/architecture.md`] sections 6-7.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
 
 use core::num::NonZeroUsize;
 

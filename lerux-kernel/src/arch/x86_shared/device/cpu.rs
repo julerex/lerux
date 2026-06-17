@@ -1,3 +1,13 @@
+//! CPU identification: human-readable reporting of processor features.
+//!
+//! Formats what `cpuid` reports (vendor, model, supported feature flags) into
+//! text, which is surfaced through the `sys:cpu` scheme. Useful for confirming
+//! which CPU features are available on the running machine.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 7.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../../docs/kernel/architecture.md
+
 use core::fmt::{Result, Write};
 
 use crate::arch::cpuid::cpuid;

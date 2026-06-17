@@ -1,3 +1,16 @@
+//! The fast `syscall`/`sysret` entry path on x86_64.
+//!
+//! x86_64 has a dedicated `syscall` instruction (faster than a software
+//! interrupt) for entering the kernel. This module configures the MSRs that tell
+//! the CPU where to jump and how to switch stacks on `syscall`, and provides the
+//! entry stub that saves userspace registers, calls the dispatcher in
+//! [`crate::syscall`], and returns via `sysret`. It also hooks in `ptrace`
+//! pre/post-syscall stops for debugging.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 6 ("System calls").
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use crate::{
     arch::{gdt, interrupt::InterruptStack},
     ptrace,

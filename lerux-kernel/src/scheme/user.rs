@@ -1,3 +1,35 @@
+//! The `user` scheme: how a userspace program becomes a filesystem or driver.
+//!
+//! This is the most important file for understanding the microkernel design.
+//! Most schemes are *not* in the kernel — they are ordinary userspace programs
+//! (a disk driver, a network stack, a filesystem). This module is the bridge
+//! that lets such a program register a scheme name and then receive every
+//! file-like operation made against it.
+//!
+//! ## How it works
+//!
+//! When a driver registers (say) `disk:`, the kernel creates a [`UserInner`]
+//! that owns two message queues. When some other process calls `open("disk:/x")`,
+//! `read`, `write`, etc., the kernel does not handle it directly — it packages
+//! the request as a **submission queue entry** ([`Sqe`]) and hands it to the
+//! driver, then blocks the caller. The driver processes the request and posts a
+//! **completion queue entry** ([`Cqe`]), which wakes the caller with the result.
+//! This is the kernel's primary inter-process communication (IPC) mechanism.
+//!
+//! The trickiest parts here are **memory and file-descriptor passing**: a driver
+//! often needs to share a buffer with, or borrow memory from, the calling
+//! process. That is implemented with the grant/`mmap` machinery from
+//! [`crate::context::memory`] (see `BorrowedFmapSource`, `UnmapVec`, the
+//! `*FdFlags` types), carefully pinned so neither side can pull memory out from
+//! under the other.
+//!
+//! [`UserScheme`] is the kernel-facing handle; [`UserInner`] is the shared state
+//! between the kernel and the registering process.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 7 ("Schemes").
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use crate::{
     slab::Slab,
     syscall::{

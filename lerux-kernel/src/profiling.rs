@@ -1,3 +1,13 @@
+//! Optional sampling profiler for the kernel itself.
+//!
+//! When the `profiling` feature is enabled, this collects periodic samples of
+//! where the kernel is spending CPU time, which can be exported for performance
+//! analysis. It is a development/diagnostic tool and is compiled out otherwise.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 2.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 #[cfg(target_arch = "x86_64")]
 use crate::rmm::Arch;
 use alloc::{boxed::Box, vec::Vec};

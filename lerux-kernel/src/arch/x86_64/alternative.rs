@@ -1,3 +1,15 @@
+//! Runtime code patching based on detected CPU features ("alternatives").
+//!
+//! Some operations have a fast path that only works on newer CPUs. Rather than
+//! branch on a feature flag every time, the kernel compiles in a default
+//! sequence plus alternative sequences, and at boot rewrites the machine code in
+//! place to use the best one the running CPU supports. This module implements
+//! that patching. It is subtle, low-level code; the comments inline explain the
+//! relocation handling.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 3.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
 #![allow(unused_imports)]
 
 use crate::spin::Once;

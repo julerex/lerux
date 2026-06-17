@@ -1,3 +1,12 @@
+//! Inlined vendored crate (`lerux-spinning-top`): a simple spinlock over `lock_api`.
+//!
+//! Copied into the kernel tree (wired via `#[path]` in `main.rs`) to keep zero
+//! external runtime dependencies — see `docs/vendored.md`. The kernel uses it
+//! (notably as the lock inside the heap allocator). The code below is upstream;
+//! the original crate docs follow.
+//!
+//! ---
+//!
 //! Provides a simple spinlock based on the abstractions provided by the [`lock_api`] crate.
 //!
 //! [`lock_api`]: https://docs.rs/lock_api/

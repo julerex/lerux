@@ -19,7 +19,10 @@ See the [root README](../README.md) for a high-level project overview.
   - [trampolines.md](development/trampolines.md) — (Consolidated) SMP trampoline validation story, golden files, and the NASM removal.
   - [redoxfs-unsafe-audit.md](development/redoxfs-unsafe-audit.md) — Post-smoke AI-assisted unsafe review of the vendored filesystem (kept here for reference).
 - `kernel/`
-  - Pointers to kernel-specific notes (rmm, ARM port outline, etc.).
+  - [kernel/architecture.md](kernel/architecture.md) — Beginner-friendly, end-to-end tour of the kernel (boot, memory, scheduling, syscalls, schemes, interrupts, SMP), linking each concept to the annotated source. Start here for the kernel internals.
+  - [kernel/README.md](kernel/README.md) — Kernel directory overview, build, and debugging (GDB/LLDB) notes.
+  - [kernel/rmm.md](kernel/rmm.md) — Primer on the physical memory manager (RMM) and how the memory layers fit together.
+  - Other kernel-specific notes (ARM port outline, etc.).
 - Other historical or component READMEs have been folded into the above or left as thin pointers in their original locations with "see docs/" notes.
 
 ## Building the docs

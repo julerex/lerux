@@ -1,3 +1,22 @@
+//! [`KernelMapper`]: the guarded handle for editing the kernel's page tables.
+//!
+//! The top half of every address space (the upper 128 TiB on x86_64) belongs to
+//! the kernel and is shared by all processes. Editing those mappings is
+//! dangerous if two CPUs do it at once, so this type wraps the kernel
+//! `PageMapper` behind a global, re-entrant spinlock.
+//!
+//! The `const RW: bool` parameter encodes intent in the type: `KernelMapper<false>`
+//! (via [`KernelMapper::lock_ro`]) only reads mappings, while
+//! `KernelMapper<true>` (via [`KernelMapper::lock_rw`]) may modify them. Asking
+//! for write access while the lock is already held read-only is a bug and panics.
+//!
+//! Important: because expanding the kernel heap itself needs this lock, you must
+//! never hold a `KernelMapper` across a heap allocation, or you can deadlock.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 4 ("Memory model").
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use crate::rmm::{PageMapper, TableKind};
 use core::sync::{
     atomic,

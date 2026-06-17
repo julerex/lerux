@@ -1,3 +1,11 @@
+//! Inlined vendored crate (`lerux-toml_write`): **build-time only** TOML writer.
+//!
+//! Used only by `build.rs` (via `lerux-toml`) at compile time; never runs on the
+//! target. Inlined for a zero-dependency build (see `docs/vendored.md`). Upstream
+//! docs follow.
+//!
+//! ---
+//!
 //! A low-level interface for writing out TOML
 //!
 //! Considerations when serializing arbitrary data:

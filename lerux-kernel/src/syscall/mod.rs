@@ -1,6 +1,29 @@
+//! System call dispatch: the front door from userspace into the kernel.
 //!
-//! This module provides syscall definitions and the necessary resources to parse incoming
-//! syscalls
+//! A **system call** is how an unprivileged userspace program asks the kernel to
+//! do something it cannot do itself (open a file, map memory, spawn a process).
+//! The program loads a syscall number and arguments into CPU registers and runs
+//! a trap instruction; the architecture entry code lands in [`syscall`], which
+//! decodes the number and calls the matching handler.
+//!
+//! ## How the pieces fit
+//!
+//! - The shared ABI — the numbers, flags, error codes, and structs that the
+//!   kernel and userspace must agree on — lives in the inlined `redox_syscall`
+//!   crate, re-exported here as `syscall`. (See [`crate::__redox_syscall`].)
+//! - [`syscall`] (the function) is the dispatcher. It is a thin wrapper around an
+//!   inner function returning [`Result`]; the wrapper folds that into a single
+//!   `usize` for userspace via [`Error::mux`] (errors come back as negative
+//!   values).
+//! - The handlers are grouped by topic: [`fs`] (files/schemes), [`process`]
+//!   (spawn/exit/exec), [`futex`] (fast user-space mutex), [`time`], and
+//!   [`debug`].
+//! - [`usercopy`] is the *only* safe way to move bytes across the user/kernel
+//!   boundary; a raw userspace pointer must never be dereferenced directly.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 6 ("System calls").
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
 
 use crate::__redox_syscall as syscall;
 

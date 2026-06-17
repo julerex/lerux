@@ -1,5 +1,11 @@
 # Kernel (vendored from redox-os/kernel)
 
+> **New to operating systems?** Start with **[architecture.md](architecture.md)** — a
+> beginner-friendly, end-to-end tour of the kernel (boot, memory, scheduling,
+> syscalls, schemes, interrupts, SMP) that links each concept to the annotated
+> source files. The source files themselves carry matching module-level
+> documentation (`//!`) that points back to that guide.
+
 > **lerux:** This directory is a vendored copy of upstream [redox-os/kernel](https://gitlab.redox-os.org/redox-os/kernel) (~2026-05). The crate is built from the **repo root** (`../Cargo.toml`), not from here. For every intentional difference from upstream — embedded trampolines, pure-Rust PVH stub, `direct-boot`, QEMU harness — see **[../../docs/vendored.md](../../docs/vendored.md)**.
 >
 > Standalone development: use `just build-direct` / `just qemu-direct` at the repo root ([../../docs/building/standalone.md](../../docs/building/standalone.md)). The sections below about Podman/Redox build system apply to **full Redox-style** builds, not the lerux direct-boot path.

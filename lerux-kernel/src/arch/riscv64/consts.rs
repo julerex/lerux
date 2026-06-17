@@ -1,3 +1,4 @@
+//! The riscv64 virtual memory map: fixed kernel address-space layout.
 use super::CurrentRmmArch;
 use crate::rmm::Arch;
 

@@ -1,3 +1,15 @@
+//! Hardware IRQ handlers (timer, device lines).
+//!
+//! These are the kernel routines the IDT points at for device interrupts. The
+//! most important is the periodic timer IRQ, which advances time and calls into
+//! the scheduler tick. Others forward to userspace drivers via the `irq:`
+//! scheme. Each handler acknowledges the interrupt controller so further
+//! interrupts can arrive.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 8.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../../docs/kernel/architecture.md
+
 use core::sync::atomic::{AtomicUsize, Ordering};
 
 use alloc::vec::Vec;

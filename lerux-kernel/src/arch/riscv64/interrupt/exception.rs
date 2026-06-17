@@ -1,3 +1,4 @@
+//! riscv64 CPU exception handlers, including page faults (the x86 `exception.rs` analog).
 use crate::rmm::VirtualAddress;
 use ::syscall::Exception;
 use core::{arch::naked_asm, sync::atomic::Ordering};

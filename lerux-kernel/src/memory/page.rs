@@ -1,3 +1,16 @@
+//! The [`Page`] type: one page-sized unit of **virtual** address space.
+//!
+//! Where [`Frame`](crate::memory::Frame) names a chunk of physical RAM, `Page`
+//! names a chunk of a virtual address space. The two are connected by page
+//! tables. Working in whole pages (rather than raw byte addresses) is convenient
+//! because the hardware can only map memory at page granularity.
+//!
+//! [`PageIter`] lets you iterate a contiguous range of pages, which is the usual
+//! shape of a mapping operation ("map these N pages").
+//!
+//! See also: [`docs/kernel/architecture.md`] section 4 ("Memory model").
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
 // Some code was borrowed from [Phil Opp's Blog](http://os.phil-opp.com/modifying-page-tables.html)
 
 use crate::rmm::{Arch, VirtualAddress};
@@ -9,7 +22,8 @@ use crate::memory::RmmA;
 pub const PAGE_SIZE: usize = RmmA::PAGE_SIZE;
 pub const PAGE_MASK: usize = RmmA::PAGE_OFFSET_MASK;
 
-/// Page
+/// A single page of virtual address space, identified by its page number
+/// (virtual address divided by [`PAGE_SIZE`]).
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Page {
     number: usize,
@@ -56,6 +70,7 @@ impl Debug for Page {
     }
 }
 
+/// Iterator over a contiguous, half-open range of [`Page`]s.
 pub struct PageIter {
     start: Page,
     end: Page,

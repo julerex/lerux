@@ -1,3 +1,4 @@
+//! `sys:irq` — counts of how many times each hardware interrupt line has fired.
 use alloc::{string::String, vec::Vec};
 use core::fmt::Write;
 

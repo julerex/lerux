@@ -1,3 +1,19 @@
+//! The `proc:` scheme: inspecting and controlling processes.
+//!
+//! This kernel scheme exposes process internals as files, the way Linux exposes
+//! `/proc`. Through it, a debugger or supervisor can read and write another
+//! context's registers, memory, signal state, file descriptors, and grants, and
+//! drive single-stepping via [`crate::ptrace`]. It is the kernel side of
+//! debugging and process management tools.
+//!
+//! Because it can reach into another process's address space and CPU state, this
+//! is privileged, security-sensitive code: every operation validates the caller
+//! and the target context carefully.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 7 ("Schemes").
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use crate::{
     context::{
         self,

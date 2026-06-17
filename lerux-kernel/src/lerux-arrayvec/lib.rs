@@ -1,3 +1,13 @@
+//! Inlined vendored crate (`lerux-arrayvec`): fixed-capacity, stack-backed
+//! vector and string types.
+//!
+//! Copied into the kernel tree (wired via `#[path]` in `main.rs`) to keep zero
+//! external runtime dependencies — see `docs/vendored.md`. The kernel uses it for
+//! bounded buffers that never need the heap (for example context names). The code
+//! below is upstream; the original crate docs follow.
+//!
+//! ---
+//!
 //! **arrayvec** provides the types [`ArrayVec`] and [`ArrayString`]:
 //! array-backed vector and string types, which store their contents inline.
 

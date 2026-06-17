@@ -1,3 +1,4 @@
+//! aarch64 serial console setup (PL011), located via the device tree.
 use crate::fdt::Fdt;
 use alloc::boxed::Box;
 

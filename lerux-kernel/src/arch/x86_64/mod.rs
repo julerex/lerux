@@ -1,3 +1,15 @@
+//! The 64-bit x86 (`x86_64`) port — lerux's primary architecture.
+//!
+//! Re-exports the shared x86 machinery from [`x86_shared`](crate::arch) and adds
+//! the 64-bit-only pieces: long-mode constants ([`consts`]), the 64-bit
+//! interrupt/syscall entry paths ([`interrupt`]), processor feature setup
+//! ([`misc`]), and the `alternative` mechanism for patching code based on
+//! detected CPU features.
+//!
+//! See also: [`docs/kernel/architecture.md`] sections 3, 8, 9.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 pub use crate::arch::x86_shared::*;
 
 pub mod alternative;

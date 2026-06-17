@@ -1,3 +1,10 @@
+//! Inlined vendored crate (`lerux-redox-path`): parsing of Redox scheme paths.
+//!
+//! Copied into the kernel tree (wired via `#[path]` in `main.rs`) to keep zero
+//! external runtime dependencies — see `docs/vendored.md`. The kernel uses it to
+//! split a path like `scheme:rest/of/path` into its scheme name and remainder
+//! when resolving an `open` (see [`crate::scheme`]). The code below is upstream.
+
 #![no_std]
 
 extern crate alloc;

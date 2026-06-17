@@ -1,3 +1,10 @@
+//! Inlined vendored crate (`lerux-bitfield`): macros for packed bit-field structs.
+//!
+//! Copied into the kernel tree (wired via `#[path]` in `main.rs`) to keep zero
+//! external runtime dependencies — see `docs/vendored.md`. The kernel uses it to
+//! describe hardware registers and packed structures where individual bit ranges
+//! have meaning. The code below is upstream.
+//!
 #![deny(
     missing_docs,
     unused_extern_crates,

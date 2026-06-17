@@ -1,3 +1,13 @@
+//! Stopping the machine: shutdown and reset on x86.
+//!
+//! Implements `kstop` / reset: the routines that halt or power off the system
+//! (via ACPI, keyboard-controller reset, or a triple fault as a last resort).
+//! Called on shutdown requests and on unrecoverable errors.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 3.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use crate::{
     context,
     scheme::acpi,

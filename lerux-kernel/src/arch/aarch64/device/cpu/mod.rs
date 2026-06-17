@@ -1,3 +1,4 @@
+//! aarch64 CPU identification reporting (the x86 `device/cpu.rs` analog).
 use core::fmt::{Result, Write};
 
 use crate::arch::device::cpu::registers::{control_regs, id_regs};

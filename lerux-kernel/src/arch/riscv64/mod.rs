@@ -1,3 +1,13 @@
+//! The 64-bit RISC-V (`riscv64`) port.
+//!
+//! Provides the riscv64 equivalents of the x86 arch machinery: SBI-based boot,
+//! paging, trap handling, the PLIC/CLINT interrupt controllers, the timer, and
+//! context switching. A work in progress.
+//!
+//! See also: [`docs/kernel/architecture.md`] sections 3, 8, 9.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 pub mod consts;
 pub mod debug;
 pub mod device;

@@ -1,3 +1,11 @@
+//! Inlined vendored crate (`lerux-x86`): safe wrappers for raw x86/x86_64 CPU access.
+//!
+//! Copied into the kernel tree (wired via `#[path]` in `main.rs`) to keep zero
+//! external runtime dependencies — see `docs/vendored.md`. The kernel uses it
+//! for low-level CPU primitives: reading/writing control registers and MSRs,
+//! the GDT/IDT descriptor types, segment selectors, and paging-related bits.
+//! The code below is upstream; read it only when you need a specific register.
+//!
 #![no_std]
 #![cfg_attr(test, allow(unused_features))]
 #![cfg_attr(all(test, feature = "vmtest"), feature(custom_test_frameworks))]

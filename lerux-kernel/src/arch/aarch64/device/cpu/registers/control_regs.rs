@@ -1,3 +1,4 @@
+//! Safe accessors for aarch64 system/control registers.
 #![allow(unused)]
 
 //! Functions to read and write control registers.

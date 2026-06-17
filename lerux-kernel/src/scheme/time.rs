@@ -1,3 +1,14 @@
+//! The `time:` scheme: a timer source userspace can wait on.
+//!
+//! Opening `time:CLOCK` and reading from it lets a program block until a
+//! requested clock reaches a deadline; the kernel registers the wakeup with
+//! [`crate::context::timeout`] and completes the read when the time arrives.
+//! This is the scheme-shaped counterpart to the time syscalls and powers
+//! timeouts in event loops.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 7 ("Schemes").
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
 #![allow(static_mut_refs)] // for HandleMap + RwLock<L1,...> uninhabited static pattern in this scheme
 use crate::syscall::data::GlobalSchemes;
 use alloc::vec::Vec;

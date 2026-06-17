@@ -1,3 +1,14 @@
+//! The RSDP: the entry point to all ACPI tables.
+//!
+//! The **RSDP** (Root System Description Pointer) is the very first ACPI
+//! structure the kernel finds (the bootloader passes it, or it is searched for
+//! in BIOS memory). It points at the root table (RSDT/XSDT), from which every
+//! other ACPI table is reached. This module validates and parses it.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 8.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use core::ptr::NonNull;
 
 use crate::rmm::PhysicalAddress;

@@ -1,10 +1,20 @@
+//! The syscall error model: errno codes and the [`Error`]/[`Result`] types.
+//!
+//! Syscalls report failure the Unix way, with an integer **errno** (e.g.
+//! `ENOENT`, `EINVAL`). Inside the kernel a failing handler returns
+//! `Err(Error::new(ECODE))`; at the boundary the dispatcher folds the `Result`
+//! into a single `usize` (via `Error::mux`), encoding errors as negative values
+//! that userspace decodes back into an errno. The full list of codes is defined
+//! below.
 use core::{fmt, result};
 
+/// A syscall error: just a Unix errno code.
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub struct Error {
     pub errno: i32,
 }
 
+/// The standard result type for syscall handlers and ABI functions.
 pub type Result<T, E = Error> = result::Result<T, E>;
 
 impl Error {

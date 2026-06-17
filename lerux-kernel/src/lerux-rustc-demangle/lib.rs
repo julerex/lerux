@@ -1,3 +1,12 @@
+//! Inlined vendored crate (`lerux-rustc-demangle`): turn mangled symbols readable.
+//!
+//! Copied into the kernel tree (wired via `#[path]` in `main.rs`) to keep zero
+//! external runtime dependencies — see `docs/vendored.md`. The kernel uses it in
+//! panic backtraces so symbol names print as readable Rust paths instead of the
+//! compiler's mangled form. The code below is upstream; the original docs follow.
+//!
+//! ---
+//!
 //! Demangle Rust compiler symbol names.
 //!
 //! This crate provides a `demangle` function which will return a `Demangle`

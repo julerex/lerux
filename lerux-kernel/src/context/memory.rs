@@ -1,3 +1,50 @@
+//! Per-process virtual memory: address spaces, grants, `mmap`, and page faults.
+//!
+//! This is the policy brain of the kernel's memory system, and the single
+//! hardest file for a newcomer. Read [`crate::memory`] first (physical frames)
+//! and section 4 of [`docs/kernel/architecture.md`], then come back here.
+//!
+//! ## The model in one paragraph
+//!
+//! Every process has an **address space** ([`AddrSpace`]): its own private set of
+//! page tables plus a sorted map of **grants**. A **grant** ([`Grant`]) is a
+//! record of one mapped region of virtual memory — "pages X..Y are backed by
+//! *this* source with *these* permissions." The source ([`Provider`]) might be
+//! freshly zeroed RAM, physical frames shared with another process, memory lent
+//! by a userspace scheme (driver), or a physically-contiguous region for a
+//! driver. The kernel keeps grants as bookkeeping and only writes real page-table
+//! entries when it has to.
+//!
+//! ## Laziness and page faults
+//!
+//! Creating a grant does **not** immediately allocate RAM. The first time the
+//! process touches an unmapped page in that grant, the CPU raises a **page
+//! fault**, and [`try_correcting_page_tables`] decides what to do: lazily
+//! allocate a zeroed frame, copy a shared frame for copy-on-write
+//! ([`CopyMappingsMode`]/[`CowResult`]), or fail (turning into a fault the
+//! process must handle, or death). [`AccessMode`] and [`PfError`] describe the
+//! kind of access and the failure reasons.
+//!
+//! ## Concurrency
+//!
+//! An address space can be used by several CPUs at once, so changing a mapping
+//! requires invalidating stale translations cached in each CPU (the **TLB**).
+//! [`Flusher`] and the `tlb_ack` counter coordinate that "TLB shootdown". The
+//! `L4`/`L5` lock levels (see [`crate::sync`]) enforce a deadlock-free locking
+//! order around [`AddrSpaceWrapper`].
+//!
+//! ## Map of this file
+//!
+//! - [`AddrSpaceWrapper`] / [`AddrSpace`] — a process's whole memory map.
+//! - [`UserGrants`] / [`Grant`] / [`GrantInfo`] / [`Provider`] — individual regions.
+//! - [`PageSpan`] — a range of pages (base + count), the common currency here.
+//! - [`page_flags`] / [`map_flags`] — translate between the syscall `MapFlags`
+//!   bits userspace uses and the hardware [`PageFlags`].
+//! - [`try_correcting_page_tables`] — the page-fault handler entry point.
+//! - [`Flusher`] / [`GenericFlusher`] — TLB invalidation helpers.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use crate::{
     arrayvec::ArrayVec,
     rmm::{Arch as _, PageFlush},
@@ -38,6 +85,9 @@ use super::context::HardBlockedReason;
 
 pub const MMAP_MIN_DEFAULT: usize = PAGE_SIZE;
 
+/// Convert the `MapFlags` userspace passes to `mmap` (PROT_READ/WRITE/EXEC)
+/// into the hardware [`PageFlags`] the page tables understand. Always marks
+/// pages as user-accessible.
 pub fn page_flags(flags: MapFlags) -> PageFlags<RmmA> {
     PageFlags::new()
         .user(true)
@@ -45,6 +95,8 @@ pub fn page_flags(flags: MapFlags) -> PageFlags<RmmA> {
         .write(flags.contains(MapFlags::PROT_WRITE))
     //TODO: PROT_READ
 }
+/// The inverse of [`page_flags`]: report a mapping's permissions back to
+/// userspace as `MapFlags`.
 pub fn map_flags(page_flags: PageFlags<RmmA>) -> MapFlags {
     let mut flags = MapFlags::PROT_READ;
     if page_flags.has_write() {
@@ -94,10 +146,20 @@ impl UnmapResult {
     }
 }
 
+/// A shareable, lockable handle to one [`AddrSpace`].
+///
+/// Wrapped in an `Arc` so several contexts (threads of the same process) can
+/// share one address space. Besides the lock-protected `inner` map, it tracks
+/// which CPUs are currently using this address space (`used_by`) and a counter
+/// (`tlb_ack`) used to confirm those CPUs have flushed stale TLB entries after a
+/// mapping change.
 #[derive(Debug)]
 pub struct AddrSpaceWrapper {
+    /// The actual address space, behind the `L5` lock.
     pub inner: RwLock<L5, AddrSpace>,
+    /// Acknowledgement counter for TLB shootdowns (see [`Flusher`]).
     pub tlb_ack: AtomicU32,
+    /// Set of CPUs that currently have this address space loaded.
     pub used_by: LogicalCpuSet,
 }
 impl AddrSpaceWrapper {
@@ -143,9 +205,17 @@ impl AddrSpaceWrapper {
     }
 }
 
+/// One process's complete virtual memory map.
+///
+/// Combines the live page tables (`table`) with the higher-level record of what
+/// is mapped where (`grants`). The page tables are what the CPU actually uses;
+/// the grants are the kernel's source of truth that drives lazy allocation and
+/// fault handling.
 #[derive(Debug)]
 pub struct AddrSpace {
+    /// The hardware page tables for this address space.
     pub table: Table,
+    /// The sorted set of mapped regions backing those tables.
     pub grants: UserGrants,
     /// Lowest offset for mmap invocations where the user has not already specified the offset
     /// (using MAP_FIXED/MAP_FIXED_NOREPLACE). Cf. Linux's `/proc/sys/vm/mmap_min_addr`, but with
@@ -800,6 +870,13 @@ impl Deref for AddrSpaceSwitchReadGuard {
     }
 }
 
+/// All of a process's grants, plus an index of the free ("hole") regions
+/// between them.
+///
+/// This is essentially the kernel's allocator for one process's *virtual*
+/// address space. The grants are keyed by their starting page so lookups by
+/// address are fast; the two "holes" maps make it fast to find a free gap of a
+/// given size when servicing an `mmap` without a fixed address.
 #[derive(Debug)]
 pub struct UserGrants {
     // Using a BTreeMap for its range method.
@@ -1162,6 +1239,11 @@ impl UserGrants {
     }
 }
 
+/// The metadata for one grant, stored in [`UserGrants`] keyed by its base page.
+///
+/// `page_count` is the length, `flags` are the hardware permissions, `mapped`
+/// tracks whether the page-table entries are still installed, and `provider`
+/// records where the backing memory comes from (see [`Provider`]).
 #[derive(Debug)]
 pub struct GrantInfo {
     page_count: usize,
@@ -1215,12 +1297,19 @@ pub enum Provider {
     },
 }
 
+/// One mapped region of virtual memory: its base page plus its [`GrantInfo`].
+///
+/// A `Grant` is the owned form (base + info together) used while creating,
+/// moving, or destroying a mapping; once installed it lives inside
+/// [`UserGrants`].
 #[derive(Debug)]
 pub struct Grant {
     pub(crate) base: Page,
     pub(crate) info: GrantInfo,
 }
 
+/// A reference to the file/scheme backing a file-mapped grant, plus the byte
+/// offset into that file where the mapping starts.
 #[derive(Clone, Debug)]
 pub struct GrantFileRef {
     pub description: Arc<LockedFileDescription>,
@@ -2378,6 +2467,11 @@ impl Drop for GrantInfo {
 
 pub const DANGLING: usize = 1 << (usize::BITS - 2);
 
+/// The page tables for a user address space.
+///
+/// Thin wrapper over the architecture `PageMapper`. On drop it switches away
+/// from these tables if they are currently loaded and frees the top-level table
+/// frame.
 #[derive(Debug)]
 pub struct Table {
     pub utable: PageMapper,
@@ -2411,23 +2505,38 @@ impl Drop for Table {
     }
 }
 
+/// What kind of access triggered a page fault.
+///
+/// The CPU reports this so the handler can check it against the grant's
+/// permissions (e.g. a write to a read-only grant is a real fault).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum AccessMode {
+    /// The faulting instruction read memory.
     Read,
+    /// The faulting instruction wrote memory.
     Write,
+    /// The CPU tried to fetch an instruction from the page.
     InstrFetch,
 }
 
+/// Why the page-fault handler could not (or would not) fix up a fault.
 #[derive(Debug)]
 pub enum PfError {
+    /// Segmentation violation: the access is genuinely illegal (no grant, or
+    /// wrong permissions). The process should be signalled/killed.
     Segv,
+    /// Out of memory: no physical frame was available to back the page.
     Oom,
+    /// An internal inconsistency that is not fatal to the system.
     NonfatalInternalError,
     // TODO: Handle recursion limit by mapping a zeroed page? Or forbid borrowing borrowed memory,
     // and ensure pages are mapped at grant time?
+    /// Too many levels of borrowed-from-borrowed mappings to resolve.
     RecursionLimitExceeded,
 }
 
+/// Result of a copy-on-write fault fix-up: the fresh exclusive frame, and the
+/// old shared frame (if any) the caller must release after a TLB shootdown.
 pub struct CowResult {
     /// New frame, which has been given an exclusive reference the caller can use.
     pub new_frame: Frame,
@@ -2516,6 +2625,19 @@ pub unsafe fn copy_frame_to_frame_directly(dst: Frame, src: Frame) {
     }
 }
 
+/// The page-fault handler's brain: try to make a faulting access succeed.
+///
+/// Called from the architecture page-fault interrupt handler with the page that
+/// faulted and the kind of access ([`AccessMode`]). It looks up the grant
+/// covering that page in the current address space and does whatever that
+/// grant's [`Provider`] requires: lazily allocate a zeroed frame, perform a
+/// copy-on-write copy, fetch a frame from a backing scheme, etc., then installs
+/// the page-table entry so the faulting instruction can be retried.
+///
+/// Returns `Ok(())` if the fault was fixed (the CPU should retry the access), or
+/// a [`PfError`] describing why it could not be — most importantly
+/// [`PfError::Segv`] for a genuinely illegal access, which leads to the process
+/// being signalled or killed.
 pub fn try_correcting_page_tables(
     faulting_page: Page,
     access: AccessMode,

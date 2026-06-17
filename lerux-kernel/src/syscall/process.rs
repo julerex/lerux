@@ -1,3 +1,19 @@
+//! Process-lifecycle syscalls: creating, replacing, and ending processes.
+//!
+//! These handlers implement the operations that change *what* is running:
+//! spawning a new context, executing a program image, exiting, waiting on
+//! children, and the related identity/credential calls. They sit on top of
+//! [`crate::context`] (the scheduler's data) and [`crate::context::memory`]
+//! (address spaces), and are reached through the dispatcher in
+//! [`crate::syscall`].
+//!
+//! [`usermode_bootstrap`] is the special entry that launches the very first
+//! userspace process from the initfs at boot.
+//!
+//! See also: [`docs/kernel/architecture.md`] sections 5-6.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use alloc::sync::Arc;
 use core::{mem, num::NonZeroUsize};
 

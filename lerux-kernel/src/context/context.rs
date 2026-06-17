@@ -1,3 +1,28 @@
+//! The [`Context`] type: the kernel's representation of a thread of execution.
+//!
+//! A **context** is what other systems call a thread: it bundles the saved CPU
+//! state, a kernel stack, a scheduling [`Status`], a reference to an address
+//! space ([`AddrSpaceWrapper`]), and a table of open file descriptors. (In
+//! Redox/lerux a "process" is essentially a context plus the resources it owns;
+//! several contexts can share one address space, which makes them threads of the
+//! same process.)
+//!
+//! The scheduler in [`crate::context::switch`] moves contexts between the
+//! [`Status`] states below; this file defines the data those transitions act on.
+//!
+//! ## Scheduling states
+//!
+//! - [`Status::Runnable`] — ready to run, waiting only for a CPU.
+//! - [`Status::Blocked`] — waiting on something, but a signal can wake it.
+//! - [`Status::HardBlocked`] — waiting and not signal-wakeable; only an explicit
+//!   unblock for the given [`HardBlockedReason`] will revive it.
+//! - [`Status::Dead`] — finished (optionally with the exception that killed it).
+//!
+//! See also: [`docs/kernel/architecture.md`] section 5 ("Processes and
+//! scheduling").
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use crate::{
     arrayvec::ArrayString,
     syscall::{SigProcControl, Sigcontrol, UPPER_FDTBL_TAG},
@@ -38,6 +63,7 @@ use super::{
 /// The status of a context - used for scheduling
 #[derive(Clone, Debug)]
 pub enum Status {
+    /// Ready to run as soon as a CPU is free.
     Runnable,
 
     // TODO: Rename to SoftBlocked and move status_reason to this variant.
@@ -50,6 +76,7 @@ pub enum Status {
     HardBlocked {
         reason: HardBlockedReason,
     },
+    /// The context has exited; `excp` records the exception that killed it, if any.
     Dead {
         excp: Option<crate::syscall::Exception>,
     },

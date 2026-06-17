@@ -1,3 +1,15 @@
+//! Built-in x86 device drivers the kernel needs for itself.
+//!
+//! These are the few devices the kernel drives directly during boot and
+//! scheduling: the interrupt controllers ([`local_apic`], [`ioapic`], legacy
+//! [`pic`]), the timers ([`pit`], [`hpet`], [`tsc`]) that drive scheduling and
+//! timekeeping, the [`rtc`] real-time clock, and the serial console. Everything
+//! else is left to userspace drivers.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 8.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../../docs/kernel/architecture.md
+
 use core::cell::Cell;
 
 pub mod cpu;

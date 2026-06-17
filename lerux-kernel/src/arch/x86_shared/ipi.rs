@@ -1,3 +1,17 @@
+//! Inter-processor interrupts (IPIs): one CPU poking another.
+//!
+//! Sometimes a CPU needs to make another CPU do something *now* — wake it to run
+//! a newly-runnable context, force it to flush stale TLB entries after a mapping
+//! change ("TLB shootdown"), or trigger a reschedule. An **IPI** is the hardware
+//! mechanism for that: a CPU sends an interrupt to one or more other CPUs via
+//! the APIC. [`IpiKind`] enumerates the reasons, and [`IpiTarget`] selects the
+//! recipients.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 9 ("SMP").
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
+/// Why an inter-processor interrupt is being sent.
 #[derive(Clone, Copy, Debug)]
 #[repr(u8)]
 pub enum IpiKind {

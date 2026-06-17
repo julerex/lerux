@@ -1,3 +1,15 @@
+//! The MADT: discovering CPUs and interrupt controllers.
+//!
+//! The **MADT** (Multiple APIC Description Table) is the ACPI table that lists
+//! every CPU and interrupt controller (Local APICs, I/O APICs, on x86; GIC on
+//! ARM). The kernel parses it during boot to learn how many CPUs exist (so it
+//! can start the application processors) and how interrupts are routed. The
+//! `arch/` submodules hold the per-architecture entry interpretation.
+//!
+//! See also: [`docs/kernel/architecture.md`] sections 8 and 9.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../../docs/kernel/architecture.md
+
 use core::cell::SyncUnsafeCell;
 
 use super::sdt::Sdt;

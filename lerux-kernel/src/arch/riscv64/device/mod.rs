@@ -1,3 +1,4 @@
+//! Built-in riscv64 device setup (interrupt controllers, timer, serial), from the device tree.
 use crate::{
     arch::{device::irqchip::hlic, time},
     dtb::DTB_BINARY,

@@ -1,3 +1,13 @@
+//! The 64-bit ARM (`aarch64`) port.
+//!
+//! Provides the aarch64 equivalents of the x86 arch machinery: boot, paging,
+//! interrupt/exception vectors, the GIC interrupt controller, the generic timer,
+//! and context switching. A work in progress; see `docs/kernel/arm-port-outline.md`.
+//!
+//! See also: [`docs/kernel/architecture.md`] sections 3, 8, 9.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 /// Constants like memory locations
 pub mod consts;
 

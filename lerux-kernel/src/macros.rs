@@ -1,3 +1,10 @@
+//! Kernel-wide convenience macros.
+//!
+//! Defines the logging/printing macros (`print!`, `println!`, and the level
+//! macros like `info!`/`debug!`) that the rest of the kernel uses, routing them
+//! to the kernel log and serial console. Keeping them here makes them available
+//! crate-wide via `#[macro_use]`.
+
 /// Print to console
 #[macro_export]
 macro_rules! print {

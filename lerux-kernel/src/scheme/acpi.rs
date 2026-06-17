@@ -1,3 +1,15 @@
+//! The `acpi:` scheme: exposing firmware ACPI tables to userspace.
+//!
+//! On PCs the firmware provides **ACPI** tables describing power management and
+//! hardware topology. This scheme lets privileged userspace drivers read a
+//! limited, safe subset of those tables so they can do things the kernel
+//! deliberately leaves to userspace. It is the PC analog of the `dtb:` scheme
+//! and is gated behind the `acpi` feature.
+//!
+//! See also: [`docs/kernel/architecture.md`] sections 7-8.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use alloc::{boxed::Box, vec::Vec};
 use core::convert::TryInto;
 

@@ -1,3 +1,12 @@
+//! aarch64 interpretation of MADT entries: discovering the GIC and CPUs.
+//!
+//! Reads the ARM-specific MADT entries (GIC distributor/redistributor, CPU
+//! interfaces) to set up interrupt handling and CPU bring-up on aarch64.
+//!
+//! See also: [`docs/kernel/architecture.md`] sections 8 and 9.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../../../docs/kernel/architecture.md
+
 use alloc::{boxed::Box, vec::Vec};
 
 use super::{Madt, MadtEntry};

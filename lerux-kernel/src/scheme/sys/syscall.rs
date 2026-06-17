@@ -1,3 +1,4 @@
+//! `sys:syscall` — a snapshot of the most recent syscall made by each context.
 use alloc::{string::String, vec::Vec};
 use core::fmt::Write;
 

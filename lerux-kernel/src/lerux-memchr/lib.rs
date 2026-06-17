@@ -1,4 +1,11 @@
+//! Inlined vendored crate (`lerux-memchr`): fast byte search in a slice.
+//!
+//! Copied into the kernel tree (wired via `#[path]` in `main.rs`) to keep zero
+//! external runtime dependencies — see `docs/vendored.md`. This is a trimmed
+//! `memchr`: the kernel uses it to locate a byte within a buffer (for example
+//! finding separators while parsing). The code below is upstream-derived.
 #![no_std]
+/// Return the index of the first occurrence of `needle` in `haystack`, if any.
 #[inline]
 pub fn memchr(needle: u8, haystack: &[u8]) -> Option<usize> {
     haystack.iter().position(|&b| b == needle)

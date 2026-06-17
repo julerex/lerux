@@ -1,3 +1,4 @@
+//! Interrupt controller driver for the BCM2836 (Raspberry Pi 2, multi-core).
 use super::InterruptController;
 use crate::{
     arch::device::{ROOT_IC_IDX, ROOT_IC_IDX_IS_SET},

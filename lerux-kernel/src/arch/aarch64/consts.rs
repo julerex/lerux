@@ -1,3 +1,4 @@
+//! The aarch64 virtual memory map: fixed kernel address-space layout.
 // Because the memory map is so important to not be aliased, it is defined here, in one place
 // The lower 256 PML4 entries are reserved for userspace
 // Each PML4 entry references up to 512 GB of memory

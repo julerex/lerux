@@ -1,3 +1,14 @@
+//! The kernel log: an in-memory ring buffer of recent messages.
+//!
+//! The `info!`/`debug!`/etc. macros funnel here. Messages are appended to a
+//! bounded buffer (and echoed to the serial console / graphical debug output)
+//! so that, even without a filesystem, recent kernel activity can be inspected —
+//! live over serial during bring-up, or later by reading the `sys:log` scheme.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 8.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use crate::spin::{Mutex, MutexGuard};
 use alloc::collections::VecDeque;
 use core::fmt;

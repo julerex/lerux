@@ -1,3 +1,4 @@
+//! `sys:stat` — aggregate scheduler/CPU statistics (time spent per state).
 use core::fmt::Write as _;
 
 use crate::{

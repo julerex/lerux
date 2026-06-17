@@ -1,3 +1,4 @@
+//! riscv64 timekeeping via the `time` CSR / SBI timer.
 use core::{
     arch::asm,
     sync::atomic::{AtomicUsize, Ordering},

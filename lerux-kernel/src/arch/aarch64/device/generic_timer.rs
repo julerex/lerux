@@ -1,3 +1,4 @@
+//! Driver for the ARM architected generic timer (the aarch64 system tick).
 use alloc::boxed::Box;
 
 use super::ic_for_chip;

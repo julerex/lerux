@@ -1,3 +1,11 @@
+//! Inlined vendored crate (`lerux-linked-list-allocator`): the kernel heap algorithm.
+//!
+//! Copied into the kernel tree (wired via `#[path]` in `main.rs`) to keep zero
+//! external runtime dependencies — see `docs/vendored.md`. The kernel's
+//! `#[global_allocator]` (in [`crate::allocator`]) is built on this: it tracks
+//! free memory as a linked list of holes and carves allocations out of them. The
+//! code below is upstream.
+
 // (Top-level #![cfg_attr(feature enable) + #![no_std] + externs removed for submodule inlining into no_std kernel crate root.
 // Kernel root already has no_std + required features. Spinning_top wired via crate::linked_list_allocator:: )
 

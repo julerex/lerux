@@ -1,3 +1,4 @@
+//! riscv64 inter-processor interrupt kinds and targets (the x86 `ipi.rs` analog).
 #[derive(Clone, Copy, Debug)]
 #[repr(u8)]
 pub enum IpiKind {

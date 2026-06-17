@@ -1,3 +1,13 @@
+//! x86 interpretation of MADT entries: starting the other CPUs.
+//!
+//! Reads the Local APIC / I/O APIC entries from the MADT and uses them to bring
+//! up the application processors (via the SMP trampoline) and configure
+//! interrupt routing on x86.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 9.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../../../docs/kernel/architecture.md
+
 use core::{
     hint,
     sync::atomic::{AtomicU8, Ordering},

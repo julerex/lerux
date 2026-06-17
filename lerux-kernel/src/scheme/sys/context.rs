@@ -1,3 +1,4 @@
+//! `sys:context` — a process-list view of every context (the `ps`-style table).
 use alloc::{
     borrow::ToOwned,
     string::{String, ToString},

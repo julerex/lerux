@@ -1,3 +1,13 @@
+//! Discovering the serial console from the device tree.
+//!
+//! On DTB platforms the kernel does not know where the UART is until it reads
+//! the device tree. This module finds the console node, figures out its type and
+//! address, and wires up early serial output accordingly.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 8.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use crate::{fdt::Fdt, spin::Mutex, syscall::Mmio};
 
 use crate::{

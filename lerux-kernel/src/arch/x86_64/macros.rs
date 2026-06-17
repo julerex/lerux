@@ -1,3 +1,8 @@
+//! Small helper macros used by the x86_64 arch code.
+//!
+//! Internal conveniences (such as `expand_bool!`) that keep the interrupt-entry
+//! and feature-detection code readable. Not part of any public interface.
+
 macro_rules! expand_bool(
     ($value:expr_2021) => {
         concat!($value)

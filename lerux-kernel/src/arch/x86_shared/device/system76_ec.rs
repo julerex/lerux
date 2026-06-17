@@ -1,3 +1,13 @@
+//! Driver for the System76 embedded controller (EC) debug interface.
+//!
+//! On System76 hardware this EC exposes a simple I/O-port channel the kernel can
+//! use for early debug output, similar to a serial port. Niche and
+//! hardware-specific; not part of the normal boot path.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 8.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../../docs/kernel/architecture.md
+
 use crate::{
     spin::Mutex,
     syscall::io::{Io, Pio},

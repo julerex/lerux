@@ -1,3 +1,4 @@
+//! Driver for the ARM GIC version 3 (Generic Interrupt Controller).
 use crate::fdt::{node::NodeProperty, Fdt};
 use alloc::vec::Vec;
 use core::arch::asm;

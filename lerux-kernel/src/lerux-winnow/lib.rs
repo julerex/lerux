@@ -1,3 +1,13 @@
+//! Inlined vendored crate (`lerux-winnow`): **build-time only** parser combinators.
+//!
+//! Used only by `build.rs` (it is the parsing engine behind the TOML crates) at
+//! compile time; never runs on the target. Inlined for a zero-dependency build
+//! (see `docs/vendored.md`). This is a large upstream crate with its own tutorial
+//! chapters — you do not need to read any of it to understand the kernel. The
+//! upstream docs follow unchanged.
+//!
+//! ---
+//!
 //! > winnow, making parsing a breeze
 //!
 //! `winnow` is a parser combinator library

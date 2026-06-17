@@ -1,3 +1,4 @@
+//! riscv64 debug-output backend selection (the x86 `debug.rs` analog).
 use crate::spin::MutexGuard;
 
 use crate::{arch::device::serial::COM1, devices::serial::SerialKind};

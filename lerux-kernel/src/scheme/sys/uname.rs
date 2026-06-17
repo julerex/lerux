@@ -1,3 +1,4 @@
+//! `sys:uname` — the OS name and version string (kept as "Redox" for compat).
 use crate::{sync::CleanLockToken, syscall::error::Result};
 use alloc::vec::Vec;
 

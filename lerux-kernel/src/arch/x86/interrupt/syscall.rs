@@ -1,3 +1,13 @@
+//! 32-bit x86 syscall entry (the `x86_64` `syscall.rs` analog).
+//!
+//! Sets up and handles the kernel entry from a userspace syscall on 32-bit x86,
+//! saving registers, calling the dispatcher in [`crate::syscall`], and
+//! returning. See the 64-bit version for the more detailed walkthrough.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 6.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../../docs/kernel/architecture.md
+
 use crate::{
     ptrace,
     sync::CleanLockToken,

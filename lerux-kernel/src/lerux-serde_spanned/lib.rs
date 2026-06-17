@@ -1,3 +1,11 @@
+//! Inlined vendored crate (`lerux-serde_spanned`): **build-time only** spanned values.
+//!
+//! Used only by `build.rs` (via the TOML crates) at compile time; never runs on
+//! the target. Inlined for a zero-dependency build (see `docs/vendored.md`).
+//! Upstream docs follow.
+//!
+//! ---
+//!
 //! A [serde]-compatible spanned Value
 //!
 //! This allows capturing the location, in bytes, for a value in the original parsed document for

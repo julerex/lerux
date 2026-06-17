@@ -1,3 +1,15 @@
+//! The `debug:` scheme: the kernel's serial console as a file.
+//!
+//! Reading and writing `debug:` talks to the serial port (and graphical debug
+//! output, when present). Writing prints to the console; reading returns input
+//! typed on it. During bring-up this is often the only way to see what the
+//! kernel and early userspace are doing, which is why the smoke test asserts on
+//! its output.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 7 ("Schemes").
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use crate::syscall::data::GlobalSchemes;
 
 use crate::{

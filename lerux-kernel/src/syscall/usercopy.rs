@@ -1,3 +1,23 @@
+//! Safely copying memory across the user/kernel boundary.
+//!
+//! A pointer handed to the kernel by a userspace program **cannot be trusted**:
+//! it might be null, point at unmapped memory, or (maliciously) point into the
+//! kernel's own address space. Dereferencing it directly would let a buggy or
+//! hostile program crash or hijack the kernel. This module is the single
+//! chokepoint for all such accesses.
+//!
+//! [`UserSlice`] represents a validated `(base, len)` range in *user* memory.
+//! The two `const` generics encode the allowed direction at the type level:
+//! [`UserSliceRo`] (read-only), [`UserSliceWo`] (write-only), and [`UserSliceRw`]
+//! (both). Construction ([`UserSlice::new`]) rejects any range that reaches into
+//! kernel space, and the actual byte copies go through the architecture's
+//! fault-tolerant `arch_copy_from_user` / `arch_copy_to_user`, which recover
+//! gracefully if the user page turns out to be unmapped.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 6 ("System calls").
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use crate::syscall::dirent::Buffer;
 
 use crate::{
@@ -9,13 +29,18 @@ use crate::arch::{arch_copy_from_user, arch_copy_to_user};
 
 use crate::syscall::error::{Error, Result, EFAULT, EINVAL};
 
+/// A validated range of user memory, with read/write capability encoded in the
+/// type via the `READ`/`WRITE` const generics.
 #[derive(Clone, Copy)]
 pub struct UserSlice<const READ: bool, const WRITE: bool> {
     base: usize,
     len: usize,
 }
+/// A user memory range the kernel may only read from.
 pub type UserSliceRo = UserSlice<true, false>;
+/// A user memory range the kernel may only write to.
 pub type UserSliceWo = UserSlice<false, true>;
+/// A user memory range the kernel may both read and write.
 pub type UserSliceRw = UserSlice<true, true>;
 
 impl<const READ: bool, const WRITE: bool> UserSlice<READ, WRITE> {

@@ -1,3 +1,4 @@
+//! Miscellaneous per-CPU riscv64 feature setup (the `x86_64::misc` analog).
 use core::arch::asm;
 
 use crate::{

@@ -1,3 +1,13 @@
+//! Inlined vendored crate (`lerux-spin`): spinlock-based synchronization primitives.
+//!
+//! Copied into the kernel tree (wired via `#[path]` in `main.rs`) to keep zero
+//! external runtime dependencies — see `docs/vendored.md`. The kernel uses it
+//! for `Mutex`, `RwLock`, and `Once` in a `no_std` context where blocking on the
+//! OS scheduler is not possible (because *this is* the scheduler). The code
+//! below is upstream; the original crate docs follow.
+//!
+//! ---
+//!
 //! This crate provides [spin-based](https://en.wikipedia.org/wiki/Spinlock) versions of the
 //! primitives in `std::sync` and `std::lazy`. Because synchronization is done through spinning,
 //! the primitives are suitable for use in `no_std` environments.

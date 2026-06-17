@@ -1,3 +1,13 @@
+//! The aarch64 exception vector table.
+//!
+//! ARM requires a 16-entry table of fixed-size handler stubs (the "vector
+//! table") that the CPU jumps to for each kind of exception/interrupt at each
+//! privilege level. This pure-Rust `global_asm!` block defines that table and
+//! routes each entry into the Rust handlers.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 8.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
 core::arch::global_asm!(
     "
     //  Exception vector stubs

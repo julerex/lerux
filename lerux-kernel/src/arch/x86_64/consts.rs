@@ -1,3 +1,14 @@
+//! The x86_64 virtual memory map: fixed kernel address-space layout.
+//!
+//! Defines the constant virtual address ranges the kernel reserves for itself —
+//! where the kernel image, the linear physical-memory window, the heap, and
+//! per-CPU areas live in the upper half of the address space. These must not
+//! overlap, so they are all defined here in one authoritative place.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 4.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 // Because the memory map is so important to not be aliased, it is defined here, in one place.
 //
 // - The lower half (256 PML4 entries; 128 TiB) is reserved for userspace. These mappings are

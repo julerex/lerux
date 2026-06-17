@@ -1,3 +1,4 @@
+//! riscv64 interrupt-controller drivers (HLIC, PLIC, CLINT), selected by device tree.
 use self::clint::Clint;
 use crate::{dtb::irqchip::InterruptController, fdt::Fdt};
 use alloc::boxed::Box;

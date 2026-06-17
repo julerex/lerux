@@ -1,3 +1,4 @@
+//! SBI-based timer/IPI driver (the CLINT functionality exposed via SBI calls).
 use crate::{
     context,
     context::timeout,

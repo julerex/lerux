@@ -1,3 +1,4 @@
+//! Driver for the RISC-V HLIC (Hart-Local Interrupt Controller).
 use crate::{
     dtb::irqchip::{InterruptController, InterruptHandler, IrqCell, IrqDesc, IRQ_CHIP},
     fdt::{node::NodeProperty, Fdt},

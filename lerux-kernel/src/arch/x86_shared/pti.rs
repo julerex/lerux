@@ -1,3 +1,13 @@
+//! PTI — Page Table Isolation (a Meltdown mitigation).
+//!
+//! When the `pti` feature is enabled, the kernel keeps separate page tables for
+//! user and kernel mode and switches between them on entry/exit, so userspace
+//! cannot use speculative-execution side channels to read kernel memory. This
+//! module holds the switch logic; it compiles to almost nothing when disabled.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 4.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
 #[cfg(feature = "pti")]
 use core::ptr;
 

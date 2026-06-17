@@ -1,3 +1,4 @@
+//! A no-op interrupt controller, used when no real one is present/needed.
 use crate::{
     fdt::Fdt,
     syscall::{

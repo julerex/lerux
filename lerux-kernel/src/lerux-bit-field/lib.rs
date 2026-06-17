@@ -1,3 +1,12 @@
+//! Inlined vendored crate (`lerux-bit-field`): bit-level get/set on integers.
+//!
+//! Copied into the kernel tree (wired via `#[path]` in `main.rs`) to keep zero
+//! external runtime dependencies — see `docs/vendored.md`. The kernel uses it to
+//! read and write individual bits and bit ranges of integer values (hardware
+//! registers, descriptors). The code below is upstream; the original docs follow.
+//!
+//! ---
+//!
 //! Provides the abstraction of a bit field, which allows for bit-level update and retrieval
 //! operations.
 

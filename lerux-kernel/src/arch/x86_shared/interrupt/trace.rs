@@ -1,3 +1,14 @@
+//! Walking the call stack for backtraces.
+//!
+//! Follows the chain of saved frame pointers to reconstruct the sequence of
+//! function calls that led to the current point. Used by the panic handler and
+//! debugging output to print a backtrace.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 2.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../../docs/kernel/architecture.md
+
+/// A single stack frame in a backtrace: a frame pointer and return address.
 pub struct StackTrace {
     pub fp: usize,
     pub pc_ptr: *const usize,

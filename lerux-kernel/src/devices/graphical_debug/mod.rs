@@ -1,3 +1,14 @@
+//! Optional text output to a bootloader-provided framebuffer.
+//!
+//! When the bootloader passes a graphics framebuffer, this module lets the
+//! kernel draw log text directly on screen during early boot — handy on real
+//! hardware with no serial port. It is a debug convenience, not a real display
+//! driver (those live in userspace), and is unused under direct-boot.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 8.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../../docs/kernel/architecture.md
+
 use crate::spin::Mutex;
 use core::str;
 

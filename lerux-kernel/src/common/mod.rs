@@ -1,3 +1,10 @@
+//! Small shared utilities used across the kernel.
+//!
+//! Grab-bag of low-level helpers that do not belong to any one subsystem:
+//! [`aligned_box`] (heap allocations with a guaranteed alignment, needed for
+//! some hardware structures), [`int_like`] (a macro for making type-safe integer
+//! newtypes), and the [`dbg!`] debugging macro lifted from std.
+
 pub mod aligned_box;
 #[macro_use]
 pub mod int_like;

@@ -1,3 +1,14 @@
+//! Built-in kernel debugger (enabled by the `debugger` feature).
+//!
+//! A small, self-contained facility for inspecting kernel state from the serial
+//! console without an external debugger: it can dump the list of contexts, their
+//! registers, and memory/page-table information. Useful for diagnosing hangs and
+//! crashes during development; compiled out in normal builds.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 2.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use crate::{
     context::{context::SyscallFrame, contexts, Context, ContextLock},
     hashbrown::{HashMap, HashSet},

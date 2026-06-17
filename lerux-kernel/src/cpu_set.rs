@@ -1,3 +1,15 @@
+//! Logical CPU identifiers and sets of CPUs.
+//!
+//! The kernel refers to CPUs by a dense **logical id** ([`LogicalCpuId`]) rather
+//! than the hardware's (possibly sparse) APIC id. [`LogicalCpuSet`] is a bitset
+//! of those ids, used for things like a context's scheduling affinity ("which
+//! CPUs may run this thread") and tracking which CPUs currently use an address
+//! space (for TLB shootdowns).
+//!
+//! See also: [`docs/kernel/architecture.md`] section 9 ("SMP").
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use core::{
     fmt::Display,
     sync::atomic::{AtomicUsize, Ordering},

@@ -1,3 +1,4 @@
+//! Driver for the ARM GIC (Generic Interrupt Controller), v2.
 use super::InterruptController;
 use crate::{
     dtb::{

@@ -1,3 +1,15 @@
+//! The `sys:` scheme: read-only windows into kernel state.
+//!
+//! This scheme exposes diagnostic information as a small set of virtual files —
+//! the analog of parts of Linux's `/proc` and `/sys`. Reading `sys:cpu`,
+//! `sys:uname`, `sys:context`, `sys:iostat`, etc. returns a formatted snapshot
+//! of the corresponding kernel data. Each such file is a tiny submodule in this
+//! directory; this `mod.rs` wires them into the scheme's directory listing and
+//! read dispatch.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 7 ("Schemes").
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
 #![allow(static_mut_refs)] // for HandleMap + RwLock<L1,...> uninhabited static pattern in this scheme
                            // TODO: This scheme can be simplified significantly, and through it, several other APIs where it's
                            // dubious whether they require dedicated schemes (like irq, dtb, acpi). In particular, the kernel

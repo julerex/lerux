@@ -1,3 +1,15 @@
+//! The kernel's notion of wall-clock and monotonic time.
+//!
+//! Tracks the current time so the rest of the kernel can answer
+//! `clock_gettime`, schedule timeouts, and timestamp the log. There are two
+//! clocks: a **monotonic** clock that only ever moves forward (good for
+//! measuring durations) and a **realtime** clock that tracks actual date/time
+//! (and can be adjusted). The hardware timer interrupt advances these counters.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 5.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use crate::{
     sync::{CleanLockToken, Mutex, RwLock, L1},
     syscall::error::{Error, Result, EINVAL},

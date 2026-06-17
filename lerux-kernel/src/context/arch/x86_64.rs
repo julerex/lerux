@@ -1,3 +1,15 @@
+//! x86_64 context switching: the registers a context owns and how to swap them.
+//!
+//! This is the architecture-specific half of the scheduler. It defines the saved
+//! CPU state for a context and the low-level routine that, on a context switch,
+//! saves the outgoing context's registers and loads the incoming one's — so each
+//! context resumes exactly where it was suspended. The generic scheduling policy
+//! lives in [`crate::context::switch`]; this file is the machinery it drives.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 5.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use core::{
     ptr::{addr_of, addr_of_mut},
     sync::atomic::AtomicBool,

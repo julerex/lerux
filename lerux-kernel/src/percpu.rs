@@ -1,3 +1,16 @@
+//! Per-CPU data: state that each CPU owns privately.
+//!
+//! On a multi-core machine, some kernel state must *not* be shared — for example
+//! "which context is this CPU currently running" or this CPU's slice of the
+//! scheduler. Putting such state in a global would require locking and would be
+//! wrong anyway (each CPU needs its own copy). The [`PercpuBlock`] holds that
+//! state, and [`PercpuBlock::current`] returns the block belonging to the CPU
+//! the call runs on (looked up via a CPU register set during boot).
+//!
+//! See also: [`docs/kernel/architecture.md`] section 9 ("SMP").
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use alloc::{
     sync::{Arc, Weak},
     vec::Vec,

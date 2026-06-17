@@ -1,3 +1,13 @@
+//! Framebuffer text renderer for [`graphical_debug`](super).
+//!
+//! Draws characters into the raw framebuffer (a font blitter plus a scrolling
+//! cursor) so kernel log lines appear on screen. Pure pixel-pushing; the higher
+//! level decides what text to show.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 8.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../../docs/kernel/architecture.md
+
 use core::ptr;
 
 pub(super) struct Display {

@@ -1,3 +1,11 @@
+//! Inlined vendored crate (`lerux-serde_derive`): **build-time only** serde derive macros.
+//!
+//! Used only by `build.rs` at compile time (it is a proc-macro crate); never runs
+//! on the target. Inlined for a zero-dependency build (see `docs/vendored.md`).
+//! Upstream docs follow.
+//!
+//! ---
+//!
 //! This crate provides Serde's two derive macros.
 //!
 //! ```edition2021

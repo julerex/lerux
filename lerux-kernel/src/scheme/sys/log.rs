@@ -1,3 +1,4 @@
+//! `sys:log` — the kernel's in-memory log ring buffer, as readable text.
 use alloc::vec::Vec;
 
 use crate::{log::LOG, sync::CleanLockToken, syscall::error::Result};

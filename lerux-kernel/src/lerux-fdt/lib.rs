@@ -1,3 +1,11 @@
+//! Inlined vendored crate (`lerux-fdt`): flattened device tree (DTB) parser.
+//!
+//! Copied into the kernel tree (wired via `#[path]` in `main.rs`) to keep zero
+//! external runtime dependencies — see `docs/vendored.md`. The kernel uses it on
+//! ARM/RISC-V platforms to read the firmware's device tree and discover memory,
+//! CPUs, the interrupt controller, and the serial port. The code below is
+//! upstream.
+
 // This Source Code Form is subject to the terms of the Mozilla Public License,
 // v. 2.0. If a copy of the MPL was not distributed with this file, You can
 // obtain one at https://mozilla.org/MPL/2.0/.

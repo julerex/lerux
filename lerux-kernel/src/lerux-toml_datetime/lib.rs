@@ -1,3 +1,11 @@
+//! Inlined vendored crate (`lerux-toml_datetime`): **build-time only** TOML datetime type.
+//!
+//! Used only by `build.rs` (via `lerux-toml`) at compile time; never runs on the
+//! target. Inlined for a zero-dependency build (see `docs/vendored.md`). Upstream
+//! docs follow.
+//!
+//! ---
+//!
 //! A [TOML]-compatible datetime type
 //!
 //! [TOML]: https://github.com/toml-lang/toml

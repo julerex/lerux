@@ -1,3 +1,4 @@
+//! Miscellaneous per-CPU aarch64 feature setup (the `x86_64::misc` analog).
 use crate::{
     cpu_set::LogicalCpuId,
     memory::{RmmA, RmmArch},

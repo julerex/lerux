@@ -1,3 +1,12 @@
+//! Inlined vendored crate (`lerux-scopeguard`): run cleanup code on scope exit.
+//!
+//! Copied into the kernel tree (wired via `#[path]` in `main.rs`) to keep zero
+//! external runtime dependencies — see `docs/vendored.md`. The kernel uses it to
+//! guarantee cleanup (unlocking, restoring state) even on early return or panic.
+//! The code below is upstream; the original crate docs follow.
+//!
+//! ---
+//!
 //! A scope guard will run a given closure when it goes out of scope,
 //! even if the code between panics.
 //! (as long as panic doesn't abort)

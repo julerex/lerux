@@ -1,3 +1,11 @@
+//! Inlined vendored crate (`lerux-lock-api`): generic lock type scaffolding.
+//!
+//! Copied into the kernel tree (wired via `#[path]` in `main.rs`) to keep zero
+//! external runtime dependencies — see `docs/vendored.md`. It provides the
+//! generic `Mutex`/`RwLock` wrappers that `lerux-spinning-top` and the kernel's
+//! locks build on (separating the "lock API" from the raw spin implementation).
+//! The code below is upstream.
+
 // Copyright 2018 Amanieu d'Antras
 //
 // Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or

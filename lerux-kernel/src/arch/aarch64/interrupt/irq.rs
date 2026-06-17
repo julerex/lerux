@@ -1,3 +1,4 @@
+//! aarch64 hardware IRQ handling: timer tick and device interrupts via the GIC.
 use crate::{arch::device::ROOT_IC_IDX, dtb::irqchip::IRQ_CHIP, sync::CleanLockToken};
 use core::sync::atomic::Ordering;
 

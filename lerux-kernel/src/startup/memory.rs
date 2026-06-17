@@ -1,3 +1,28 @@
+//! Early physical-memory bookkeeping, built from the bootloader's memory map.
+//!
+//! Before the kernel can allocate a single byte, it must know which regions of
+//! physical RAM are safe to use. The bootloader passes a list of regions in
+//! [`KernelArgs`]; this module normalizes that list (aligning each region to
+//! page boundaries, dropping empties) into an in-kernel [`MemoryMap`], and then
+//! [`init`] uses it to build the kernel's own page tables and hand the free
+//! regions to the physical frame allocator.
+//!
+//! ## Key terms
+//!
+//! - A **frame** / **page** is a 4 KiB (`PAGE_SIZE`) chunk of physical / virtual
+//!   memory. Memory is managed in these fixed-size units.
+//! - **Identity mapping** means a virtual address equals its physical address.
+//!   Some early regions (the boot environment, initfs, firmware tables) are
+//!   identity/linear-mapped so the kernel can still reach them after it switches
+//!   to its own page tables.
+//! - A region's [`BootloaderMemoryKind`] tells the kernel whether RAM is free to
+//!   allocate, reserved by firmware, occupied by the kernel image, or a device
+//!   MMIO window.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 4 ("Memory model").
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../docs/kernel/architecture.md
+
 use crate::{
     arch::CurrentRmmArch,
     memory::PAGE_SIZE,
@@ -13,28 +38,48 @@ use core::{
     slice::{self, Iter},
 };
 
+/// What a region of physical memory is used for.
+///
+/// The first four variants mirror the bootloader's `OsMemoryKind` (so the
+/// numeric values must stay in sync). The `0x100`+ variants are added by the
+/// kernel itself while processing the map.
 // Keep synced with OsMemoryKind in bootloader
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(u64)]
 #[allow(dead_code)]
 pub(crate) enum BootloaderMemoryKind {
+    /// Unused map slot / placeholder.
     Null = 0,
+    /// RAM the kernel may allocate freely.
     Free = 1,
+    /// RAM reserved by firmware now, but reclaimable later.
     Reclaim = 2,
+    /// RAM the kernel must never touch (firmware-reserved).
     Reserved = 3,
 
     // These are local to kernel
+    /// The loaded kernel image itself.
     Kernel = 0x100,
+    /// Memory-mapped device (MMIO) window, not real RAM.
     Device = 0x101,
+    /// Region that must keep its identity/linear mapping after the page-table
+    /// switch (e.g. boot env, initfs, firmware tables).
     IdentityMap = 0x102,
 }
 
+/// One region in the bootloader-supplied memory map.
+///
+/// The layout is fixed because the bootloader writes the array and the kernel
+/// reads it (see [`KernelArgs::areas_base`](super::KernelArgs)).
 // Keep synced with OsMemoryEntry in bootloader
 #[derive(Clone, Copy, Debug)]
 #[repr(C, packed(8))]
 pub(crate) struct BootloaderMemoryEntry {
+    /// Physical start address of the region.
     pub base: u64,
+    /// Length of the region in bytes.
     pub size: u64,
+    /// What this region is used for.
     pub kind: BootloaderMemoryKind,
 }
 
@@ -177,6 +222,10 @@ fn register_memory_from_kernel_args(args: &KernelArgs) {
     );
 }
 
+/// Add one region to the global early memory map.
+///
+/// Empty (`size == 0`) and `Null` regions are ignored. Called repeatedly while
+/// digesting [`KernelArgs`] before [`init`] consumes the finished map.
 pub fn register_memory_region(base: usize, size: usize, kind: BootloaderMemoryKind) {
     if kind != Null && size != 0 {
         debug!("Registering {:?} memory {:X} size {:X}", kind, base, size);
@@ -405,6 +454,22 @@ unsafe fn map_memory<A: Arch>(areas: &[MemoryArea], mut bump_allocator: &mut Bum
     }
 }
 
+/// Build the kernel's page tables and arm the physical frame allocator.
+///
+/// This is the central early-memory routine. It reads the normalized memory map
+/// derived from `args`, constructs a fresh set of kernel page tables that map
+/// the kernel image and the linear physical-memory window, switches the CPU to
+/// those tables, and hands every free region to the frame allocator so the rest
+/// of the kernel can allocate memory.
+///
+/// `low_limit` / `high_limit` optionally clamp the usable physical range (used
+/// on some platforms / for testing).
+///
+/// # Safety
+///
+/// Must run exactly once, very early, before any other code relies on paging or
+/// the frame allocator. It reprograms the active page tables, so the caller must
+/// guarantee no other CPU is touching memory management yet.
 pub unsafe fn init(args: &KernelArgs, low_limit: Option<usize>, high_limit: Option<usize>) {
     register_memory_from_kernel_args(args);
 

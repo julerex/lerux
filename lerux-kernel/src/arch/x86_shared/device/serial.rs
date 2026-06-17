@@ -1,3 +1,13 @@
+//! The x86 serial console driver (16550 UART).
+//!
+//! Sets up the PC serial port the kernel uses for console output and the `debug:`
+//! scheme. Serial is the workhorse of OS bring-up: it works extremely early,
+//! needs almost no setup, and is what the QEMU smoke test reads.
+//!
+//! See also: [`docs/kernel/architecture.md`] section 8.
+//!
+//! [`docs/kernel/architecture.md`]: ../../../../../docs/kernel/architecture.md
+
 use crate::{
     devices::{serial::SerialKind, uart_16550::SerialPort},
     memory::map_device_memory,

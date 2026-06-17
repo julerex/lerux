@@ -1,6 +1,9 @@
-# lerux wraps a vendored redox-os/kernel tree under kernel/.
-# The crate root is this file (not kernel/Cargo.toml). See VENDORED.md for
-# divergence from upstream: embedded trampolines, pure-Rust PVH stub, direct-boot.
+# lerux kernel -- now fully self-contained (zero runtime Cargo dependencies).
+# All former external crates (and the build-time toml) are inlined as
+# lerux-* subdirectories directly under lerux-kernel/src/ (wired via
+# #[path] attributes in lerux-kernel/src/main.rs). The pristine
+# references remain in vendor/. See docs/vendored.md.
+# The crate root is still this file.
 
 [workspace]
 resolver = "3"
@@ -25,33 +28,7 @@ edition = "2024"
 
 [[bin]]
 name = "kernel"
-path = "kernel/src/main.rs"
-
-[build-dependencies]
-toml = "0.8"
-
-[dependencies]
-arrayvec = { version = "0.7.4", default-features = false }
-bitfield = "0.13.2"
-bitflags = "2"
-fdt = { git = "https://github.com/repnop/fdt.git", rev = "2fb1409edd1877c714a0aa36b6a7c5351004be54" }
-hashbrown = { version = "0.14.3", default-features = false, features = ["ahash", "inline-more"] }
-linked_list_allocator = "0.9.0"
-redox-path = "0.2.0"
-redox_syscall = { version = "0.8.0", default-features = false }
-rmm = { path = "kernel/rmm", default-features = false }
-slab = { version = "0.4", default-features = false }
-smallvec = { version = "1.15.1", default-features = false }
-spin = { version = "0.9.8" }
-
-[dependencies.object]
-version = "0.37.1"
-default-features = false
-features = ["read_core", "elf"]
-
-[dependencies.rustc-demangle]
-version = "0.1.16"
-default-features = false
+path = "lerux-kernel/src/main.rs"
 
 [lints.clippy]
 # Overflows are very, very bad in kernel code as it may provide an attack vector for
@@ -97,12 +74,8 @@ missing_docs = "allow"
 [lints.rustdoc]
 missing_crate_level_docs = "warn"
 
-[target.'cfg(any(target_arch = "x86", target_arch = "x86_64"))'.dependencies]
-raw-cpuid = "10.2.0"
-x86 = { version = "0.47.0", default-features = false }
-
-[target.'cfg(any(target_arch = "riscv64", target_arch = "riscv32"))'.dependencies]
-sbi-rt = "0.0.3"
+# (raw-cpuid / x86 / sbi-rt inlined under lerux-kernel/src/lerux-{raw-cpuid,x86} and wired via #[path] in main.rs.
+# Zero runtime Cargo dependencies for the kernel binary.)
 
 [features]
 default = [

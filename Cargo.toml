@@ -11,6 +11,7 @@ members = [
     "userspace/initfs",
     "userspace/initfs-tools",
     "lerux-kernel/validation/trampolines",
+    "lerux-kernel/tests/unit",
 ]
 exclude = ["userspace/bootstrap"]
 default-members = ["."]

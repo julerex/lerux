@@ -53,13 +53,13 @@ Requirements: **nasm** (dev/CI only — not needed to build the kernel).
 Unit tests (no nasm required — compares against committed golden files):
 
 ```bash
-cargo test --bin kernel trampoline
+cargo test -p trampoline-validation
 ```
 
 ## CI
 
 The GitHub Actions `trampolines` job runs both `just validate-trampolines` and
-`cargo test --bin kernel trampoline` on every push/PR.
+`cargo test -p trampoline-validation` on every push/PR.
 
 ## After changing trampoline logic
 

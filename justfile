@@ -390,6 +390,8 @@ validate-trampolines:
 test:
     @echo "== trampoline (golden bytes) =="
     cargo test -p trampoline-validation
+    @echo "== kernel unit tests =="
+    cargo test -p kernel-unit-tests
     @echo "== initfs-tools (integration) =="
     cargo test --manifest-path userspace/initfs-tools/Cargo.toml
     @echo "== userspace workspace (selected) =="
@@ -464,11 +466,15 @@ coverage:
     echo "==> Coverage: trampoline golden-byte tests"
     cargo llvm-cov -p trampoline-validation --html --output-dir target/coverage/trampoline || true
 
+    echo "==> Coverage: kernel unit tests"
+    cargo llvm-cov -p kernel-unit-tests --html --output-dir target/coverage/kernel-unit-tests || true
+
     echo "==> Coverage: initfs-tools"
     cargo llvm-cov --manifest-path userspace/initfs-tools/Cargo.toml --html --output-dir target/coverage/initfs-tools || true
 
     echo "==> Coverage summary (text) for quick view"
     cargo llvm-cov -p trampoline-validation --summary-only || true
+    cargo llvm-cov -p kernel-unit-tests --summary-only || true
 
     echo "==> Combined / top-level report (best effort)"
     cargo llvm-cov --workspace --html --output-dir target/coverage/overall --ignore-filename-regex '(/redoxfs/|/lerux-filesystem/|/vendor/|/target/|validation/trampolines/asm)' || true

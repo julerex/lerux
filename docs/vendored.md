@@ -268,7 +268,7 @@ The remaining notes below are for any stragglers or future reference (as of last
 1. Identify upstream commit on [redox-os/kernel](https://gitlab.redox-os.org/redox-os/kernel) (or relevant repo).
 2. Diff against current `kernel/` (the adapted build tree); apply lerux-only commits on top (direct-boot, trampolines, etc.). The pristine source snapshot in `vendor/redox-kernel/` may also be refreshed from the reference checkout.
 3. Update **Upstream revision** and **Last synced** in this file (and dates in `vendor/README.md` for new snapshots).
-4. Run `just build-direct`, `just smoke`, `just validate-trampolines`, and `cargo test --bin kernel trampoline`. Re-run `cargo vendor` (or equivalent) + the inlining copies under `lerux-kernel/src/lerux-*` (plus cleanup) if any of the inlined crates or the pristine kernel snapshot need refreshing; prune irrelevant large crates (e.g. winapi-*) as before.
+4. Run `just build-direct`, `just smoke`, `just validate-trampolines`, and `cargo test -p trampoline-validation`. Re-run `cargo vendor` (or equivalent) + the inlining copies under `lerux-kernel/src/lerux-*` (plus cleanup) if any of the inlined crates or the pristine kernel snapshot need refreshing; prune irrelevant large crates (e.g. winapi-*) as before.
 5. Note breaking syscall or ABI changes against planned userspace vendoring.
 6. After changes to `vendor/`, remove any `.git` dirs (to keep plain source trees) and update `vendor/README.md` with the vendoring date. Re-copy the affected sources into the lerux-* locations under lerux-kernel/src/ and verify the kernel still builds with zero runtime cargo deps.
 

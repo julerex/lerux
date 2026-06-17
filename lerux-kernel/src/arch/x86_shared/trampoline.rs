@@ -42,30 +42,3 @@ pub static TRAMPOLINE: &[u8] =
 
 #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
 pub static TRAMPOLINE: &[u8] = &[]; // Never used; other arches do not have this trampoline.
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn x86_64_trampoline_matches_nasm_golden() {
-        let golden =
-            include_bytes!("../../../validation/trampolines/expected/trampoline_x86_64.bin");
-        assert_eq!(super::TRAMPOLINE, golden.as_slice());
-        assert_eq!(golden.len(), 202);
-        // BSP patches these fields before SIPI (acpi/madt/arch/x86.rs).
-        assert_eq!(&golden[8..40], &[0u8; 32]);
-    }
-
-    #[test]
-    fn x86_trampoline_golden_file_is_valid() {
-        let golden = include_bytes!("../../../validation/trampolines/expected/trampoline_x86.bin");
-        assert_eq!(golden.len(), 175);
-        assert_eq!(&golden[8..40], &[0u8; 32]);
-    }
-
-    #[test]
-    #[cfg(target_arch = "x86")]
-    fn x86_trampoline_matches_nasm_golden() {
-        let golden = include_bytes!("../../../validation/trampolines/expected/trampoline_x86.bin");
-        assert_eq!(super::TRAMPOLINE, golden.as_slice());
-    }
-}

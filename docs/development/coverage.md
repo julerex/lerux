@@ -82,7 +82,7 @@ Recent additions: ramfs docs + 2 tests (file_data_size, construction), kernel me
 ## Related
 - Plan: see root-level planning docs (now under `docs/`).
 - Tests live next to code using `#[cfg(test)] mod tests { ... }` (preferred) or `tests/` integration dirs.
-- Existing test entry points: `cargo test --bin kernel trampoline`, `just test-initfs`, `cargo test -p rmm --features std`.
+- Existing test entry points: `cargo test -p kernel-unit-tests`, `cargo test -p trampoline-validation`, `just test-initfs`, `cargo test -p rmm --features std`.
 
 ## Future
 Once the pure runtime port and block drivers land, revisit whether some previously excepted paths become unit-testable via the new abstractions.

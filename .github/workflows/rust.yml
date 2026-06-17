@@ -184,7 +184,7 @@ jobs:
         toolchain: nightly-2026-05-24
         components: rust-src, llvm-tools
     - uses: extractions/setup-just@v2
-    - name: Host unit tests (rmm + kernel cfg(test) + initfs-tools + workspace pieces)
+    - name: Host unit tests (kernel-unit-tests + trampoline-validation + initfs-tools + workspace pieces)
       run: |
         export PATH="$(dirname "$(rustc --print target-libdir)")/bin:$PATH"
         just test

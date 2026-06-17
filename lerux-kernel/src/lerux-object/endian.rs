@@ -1,8 +1,10 @@
 //! Types for compile-time and run-time endianness.
 
 use crate::object::pod::Pod;
-use core::fmt::{self, Debug};
-use core::marker::PhantomData;
+use core::{
+    fmt::{self, Debug},
+    marker::PhantomData,
+};
 
 /// A trait for using an endianness specification.
 ///

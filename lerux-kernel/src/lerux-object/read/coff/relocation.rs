@@ -1,11 +1,13 @@
 use alloc::fmt;
 use core::slice;
 
-use crate::object::endian::LittleEndian as LE;
-use crate::object::pe;
-use crate::object::read::{
-    ReadRef, Relocation, RelocationEncoding, RelocationFlags, RelocationKind, RelocationTarget,
-    SymbolIndex,
+use crate::object::{
+    endian::LittleEndian as LE,
+    pe,
+    read::{
+        ReadRef, Relocation, RelocationEncoding, RelocationFlags, RelocationKind, RelocationTarget,
+        SymbolIndex,
+    },
 };
 
 use super::{CoffFile, CoffHeader};

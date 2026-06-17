@@ -4,9 +4,7 @@
 
 use crate::__redox_syscall as syscall;
 
-pub use syscall::{
-    dirent::DirentHeader, CallFlags, EventFlags, RwFlags, EINVAL, StdFsCallKind,
-};
+pub use syscall::{dirent::DirentHeader, CallFlags, EventFlags, RwFlags, StdFsCallKind, EINVAL};
 
 pub use syscall::*;
 

@@ -1,13 +1,15 @@
 //! Helper for writing COFF files.
-use alloc::string::String;
-use alloc::vec::Vec;
+use alloc::{string::String, vec::Vec};
 use core::mem;
 
-use crate::object::endian::{LittleEndian as LE, U16Bytes, U32Bytes, U16, U32};
-use crate::object::pe;
-use crate::object::write::string::{StringId, StringTable};
-use crate::object::write::util;
-use crate::object::write::{Error, Result, WritableBuffer};
+use crate::object::{
+    endian::{LittleEndian as LE, U16Bytes, U32Bytes, U16, U32},
+    pe,
+    write::{
+        string::{StringId, StringTable},
+        util, Error, Result, WritableBuffer,
+    },
+};
 
 /// A helper for writing COFF files.
 ///

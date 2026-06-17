@@ -1,8 +1,8 @@
 #![allow(static_mut_refs)] // for HandleMap + RwLock<L1,...> uninhabited static pattern in this scheme
-// TODO: This scheme can be simplified significantly, and through it, several other APIs where it's
-// dubious whether they require dedicated schemes (like irq, dtb, acpi). In particular, the kernel
-// could abandon the filesystem-like APIs here in favor of SYS_CALL, and instead let userspace wrap
-// those to say shell-accessible fs-like APIs.
+                           // TODO: This scheme can be simplified significantly, and through it, several other APIs where it's
+                           // dubious whether they require dedicated schemes (like irq, dtb, acpi). In particular, the kernel
+                           // could abandon the filesystem-like APIs here in favor of SYS_CALL, and instead let userspace wrap
+                           // those to say shell-accessible fs-like APIs.
 
 use crate::syscall::{
     dirent::{DirEntry, DirentBuf, DirentKind},

@@ -4,15 +4,17 @@ pub mod serial;
 
 #[cfg(dtb)]
 use crate::dtb::irqchip::IrqCell;
-use crate::startup::memory::{register_memory_region, BootloaderMemoryKind};
-use core::slice;
-use crate::fdt::{
-    node::{FdtNode, NodeProperty},
-    standard_nodes::MemoryRegion,
-    Fdt,
+use crate::{
+    fdt::{
+        node::{FdtNode, NodeProperty},
+        standard_nodes::MemoryRegion,
+        Fdt,
+    },
+    rmm::PhysicalAddress,
+    spin::once::Once,
+    startup::memory::{register_memory_region, BootloaderMemoryKind},
 };
-use crate::rmm::PhysicalAddress;
-use crate::spin::once::Once;
+use core::slice;
 
 /// Represents the in-memory DTB (DeviceTree) binary.
 pub static DTB_BINARY: Once<&'static [u8]> = Once::new();

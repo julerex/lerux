@@ -1,8 +1,10 @@
 use core::slice;
 
-use crate::object::endian::LittleEndian as LE;
-use crate::object::pe;
-use crate::object::read::{Error, ReadError, ReadRef, Result};
+use crate::object::{
+    endian::LittleEndian as LE,
+    pe,
+    read::{Error, ReadError, ReadRef, Result},
+};
 
 use super::{
     DelayLoadImportTable, ExportTable, ImportTable, RelocationBlockIterator, ResourceDirectory,

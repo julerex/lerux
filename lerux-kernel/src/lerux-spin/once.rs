@@ -526,10 +526,10 @@ impl<'a> Drop for Finish<'a> {
 mod tests {
     use std::prelude::v1::*;
 
-    use std::sync::atomic::AtomicU32;
-    use std::sync::mpsc::channel;
-    use std::sync::Arc;
-    use std::thread;
+    use std::{
+        sync::{atomic::AtomicU32, mpsc::channel, Arc},
+        thread,
+    };
 
     use super::*;
 
@@ -761,9 +761,10 @@ mod tests {
     #[test]
     fn call_once_test() {
         for _ in 0..20 {
-            use std::sync::atomic::AtomicUsize;
-            use std::sync::Arc;
-            use std::time::Duration;
+            use std::{
+                sync::{atomic::AtomicUsize, Arc},
+                time::Duration,
+            };
             let share = Arc::new(AtomicUsize::new(0));
             let once = Arc::new(Once::<_, Spin>::new());
             let mut hs = Vec::new();

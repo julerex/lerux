@@ -12,17 +12,18 @@ cfg_if! {
 }
 // (extern crate alloc handled at kernel root; removed for inlined module cleanliness)
 
-#[cfg(feature = "atomic-polyfill")]
-use portable_atomic as atomic;
 #[cfg(not(feature = "atomic-polyfill"))]
 use core::sync::atomic;
+#[cfg(feature = "atomic-polyfill")]
+use portable_atomic as atomic;
 
 use alloc::boxed::Box;
 use atomic::{AtomicUsize, Ordering};
-use core::any::{Any, TypeId};
-use core::fmt;
-use core::hash::BuildHasher;
-use core::hash::Hasher;
+use core::{
+    any::{Any, TypeId},
+    fmt,
+    hash::{BuildHasher, Hasher},
+};
 
 pub(crate) const PI: [u64; 4] = [
     0x243f_6a88_85a3_08d3,
@@ -334,7 +335,11 @@ impl RandomState {
 /// NOTE: For safety this trait impl is only available available if either of the flags `runtime-rng` (on by default) or
 /// `compile-time-rng` are enabled. This is to prevent weakly keyed maps from being accidentally created. Instead one of
 /// constructors for [RandomState] must be used.
-#[cfg(any(feature = "compile-time-rng", feature = "runtime-rng", feature = "no-rng"))]
+#[cfg(any(
+    feature = "compile-time-rng",
+    feature = "runtime-rng",
+    feature = "no-rng"
+))]
 impl Default for RandomState {
     #[inline]
     fn default() -> Self {

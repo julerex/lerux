@@ -4,14 +4,16 @@
 //! triggering from schemes, and delivery to userspace via event queues or
 //! blocking reads. Integrates with the wait queue / condition machinery.
 
+use crate::{
+    hashbrown::{hash_map::DefaultHashBuilder, HashMap},
+    smallvec::SmallVec,
+    syscall::data::GlobalSchemes,
+};
 use alloc::sync::Arc;
 use core::{
     hash::{Hash, Hasher},
     sync::atomic::{AtomicUsize, Ordering},
 };
-use crate::hashbrown::{hash_map::DefaultHashBuilder, HashMap};
-use crate::smallvec::SmallVec;
-use crate::syscall::data::GlobalSchemes;
 
 use crate::{
     context,

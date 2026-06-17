@@ -1,9 +1,11 @@
 use crate::ahash::RandomState;
-use std::collections::{hash_set, HashSet};
-use std::fmt::{self, Debug};
-use std::hash::{BuildHasher, Hash};
-use std::iter::FromIterator;
-use std::ops::{BitAnd, BitOr, BitXor, Deref, DerefMut, Sub};
+use std::{
+    collections::{hash_set, HashSet},
+    fmt::{self, Debug},
+    hash::{BuildHasher, Hash},
+    iter::FromIterator,
+    ops::{BitAnd, BitOr, BitXor, Deref, DerefMut, Sub},
+};
 
 #[cfg(feature = "serde")]
 use serde::{
@@ -56,7 +58,10 @@ impl<T> AHashSet<T, RandomState> {
     /// This craetes a hashset with the specified capacity using [RandomState::new].
     /// See the documentation in [RandomSource] for notes about key strength.
     pub fn with_capacity(capacity: usize) -> Self {
-        AHashSet(HashSet::with_capacity_and_hasher(capacity, RandomState::new()))
+        AHashSet(HashSet::with_capacity_and_hasher(
+            capacity,
+            RandomState::new(),
+        ))
     }
 }
 
@@ -296,7 +301,11 @@ where
 /// NOTE: For safety this trait impl is only available available if either of the flags `runtime-rng` (on by default) or
 /// `compile-time-rng` are enabled. This is to prevent weakly keyed maps from being accidentally created. Instead one of
 /// constructors for [RandomState] must be used.
-#[cfg(any(feature = "compile-time-rng", feature = "runtime-rng", feature = "no-rng"))]
+#[cfg(any(
+    feature = "compile-time-rng",
+    feature = "runtime-rng",
+    feature = "no-rng"
+))]
 impl<T> Default for AHashSet<T, RandomState> {
     /// Creates an empty `AHashSet<T, S>` with the `Default` value for the hasher.
     #[inline]
@@ -325,7 +334,10 @@ where
         hash_set.map(|hash_set| Self(hash_set))
     }
 
-    fn deserialize_in_place<D: Deserializer<'de>>(deserializer: D, place: &mut Self) -> Result<(), D::Error> {
+    fn deserialize_in_place<D: Deserializer<'de>>(
+        deserializer: D,
+        place: &mut Self,
+    ) -> Result<(), D::Error> {
         HashSet::deserialize_in_place(deserializer, place)
     }
 }

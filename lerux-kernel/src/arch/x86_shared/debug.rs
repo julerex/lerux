@@ -5,12 +5,12 @@ use crate::spin::MutexGuard;
 use crate::devices::serial::SerialKind;
 #[cfg(feature = "lpss_debug")]
 use crate::devices::uart_16550::SerialPort;
+#[cfg(feature = "qemu_debug")]
+use crate::syscall::io::Io;
 #[cfg(feature = "lpss_debug")]
 use crate::syscall::io::Mmio;
 #[cfg(feature = "qemu_debug")]
 use crate::syscall::io::Pio;
-#[cfg(feature = "qemu_debug")]
-use crate::syscall::io::Io;
 
 use super::device::serial::{COM1, LPSS};
 #[cfg(feature = "system76_ec_debug")]

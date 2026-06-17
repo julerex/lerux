@@ -7,8 +7,10 @@
 
 #![allow(missing_docs)]
 
-use crate::object::endian::{BigEndian, Endian, U64Bytes, U16, U32, U64};
-use crate::object::pod::Pod;
+use crate::object::{
+    endian::{BigEndian, Endian, U64Bytes, U16, U32, U64},
+    pod::Pod,
+};
 
 // Definitions from "/usr/include/mach/machine.h".
 

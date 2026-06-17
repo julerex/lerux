@@ -41,14 +41,11 @@ extern crate alloc;
 #[macro_use]
 mod bitflags;
 
-
 // Re-export bitflags items at the crate root so $crate:: paths emitted by the inlined
 // bitflags! macro resolve correctly (bitflags is inlined via #[path], not a separate crate).
 #[doc(hidden)]
 pub use bitflags::__private;
-pub use bitflags::{Bits, BitFlags, Flag, Flags};
-pub use bitflags::iter;
-pub use bitflags::parser;
+pub use bitflags::{iter, parser, BitFlags, Bits, Flag, Flags};
 #[path = "lerux-rmm/lib.rs"]
 mod rmm;
 

@@ -1,10 +1,10 @@
 use core::mem;
 
-use crate::object::endian::*;
-use crate::object::macho;
-use crate::object::write::string::*;
-use crate::object::write::util::*;
-use crate::object::write::*;
+use crate::object::{
+    endian::*,
+    macho,
+    write::{string::*, util::*, *},
+};
 
 #[derive(Default, Clone, Copy)]
 struct SectionOffsets {

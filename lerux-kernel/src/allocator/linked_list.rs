@@ -7,13 +7,11 @@
 //! The `Allocator` is a zero-sized type implementing `GlobalAlloc`. Initialization
 //! must happen early via `init` before any allocations.
 
-use crate::memory::KernelMapper;
+use crate::{linked_list_allocator::Heap, memory::KernelMapper, spin::Mutex};
 use core::{
     alloc::{GlobalAlloc, Layout},
     ptr::NonNull,
 };
-use crate::linked_list_allocator::Heap;
-use crate::spin::Mutex;
 
 static HEAP: Mutex<Option<Heap>> = Mutex::new(None);
 

@@ -1,6 +1,4 @@
-use alloc::borrow::Cow;
-use alloc::string::String;
-use alloc::vec::Vec;
+use alloc::{borrow::Cow, string::String, vec::Vec};
 use core::fmt;
 
 /// A byte slice.

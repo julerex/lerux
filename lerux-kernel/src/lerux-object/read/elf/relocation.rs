@@ -1,14 +1,14 @@
-use alloc::fmt;
-use alloc::vec::Vec;
-use core::fmt::Debug;
-use core::slice;
+use alloc::{fmt, vec::Vec};
+use core::{fmt::Debug, slice};
 
-use crate::object::elf;
-use crate::object::endian::{self, Endianness};
-use crate::object::pod::Pod;
-use crate::object::read::{
-    self, Bytes, Error, ReadError, ReadRef, Relocation, RelocationEncoding, RelocationFlags,
-    RelocationKind, RelocationTarget, SectionIndex, SymbolIndex,
+use crate::object::{
+    elf,
+    endian::{self, Endianness},
+    pod::Pod,
+    read::{
+        self, Bytes, Error, ReadError, ReadRef, Relocation, RelocationEncoding, RelocationFlags,
+        RelocationKind, RelocationTarget, SectionIndex, SymbolIndex,
+    },
 };
 
 use super::{ElfFile, FileHeader, SectionHeader, SectionTable};
@@ -101,9 +101,7 @@ impl<'data, Elf: FileHeader> Iterator for ElfRelocationIterator<'data, Elf> {
 
     fn next(&mut self) -> Option<Self::Item> {
         match self {
-            ElfRelocationIterator::Rel(i, endian) => {
-                i.next().map(|r| Crel::from_rel(r, *endian))
-            }
+            ElfRelocationIterator::Rel(i, endian) => i.next().map(|r| Crel::from_rel(r, *endian)),
             ElfRelocationIterator::Rela(i, endian, is_mips64el) => {
                 i.next().map(|r| Crel::from_rela(r, *endian, *is_mips64el))
             }

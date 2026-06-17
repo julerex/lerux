@@ -1,11 +1,8 @@
 //! Support for reading Wasm files.
 //!
 //! [`WasmFile`] implements the [`Object`] trait for Wasm files.
-use alloc::boxed::Box;
-use alloc::vec::Vec;
-use core::marker::PhantomData;
-use core::ops::Range;
-use core::{slice, str};
+use alloc::{boxed::Box, vec::Vec};
+use core::{marker::PhantomData, ops::Range, slice, str};
 use wasmparser as wp;
 
 use crate::object::read::{

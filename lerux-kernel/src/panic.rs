@@ -6,13 +6,15 @@ use core::{panic::PanicInfo, slice};
 use crate::object::elf::FileHeader32 as FileHeader;
 #[cfg(target_pointer_width = "64")]
 use crate::object::elf::FileHeader64 as FileHeader;
-use crate::object::{
-    elf,
-    read::elf::{FileHeader as _, Sym as _},
-    NativeEndian,
+use crate::{
+    object::{
+        elf,
+        read::elf::{FileHeader as _, Sym as _},
+        NativeEndian,
+    },
+    rmm::VirtualAddress,
+    rustc_demangle::demangle,
 };
-use crate::rmm::VirtualAddress;
-use crate::rustc_demangle::demangle;
 
 use crate::{
     arch::{
@@ -82,10 +84,9 @@ pub unsafe fn stack_trace() {
         let mapper = KernelMapper::lock_ro();
 
         let kernel_ptr = crate::kernel_executable_offsets::KERNEL_OFFSET() as *const u8;
-        let elf_header: &FileHeader<NativeEndian> = crate::object::pod::from_bytes(slice::from_raw_parts(
-            kernel_ptr,
-            size_of::<FileHeader<NativeEndian>>(),
-        ))
+        let elf_header: &FileHeader<NativeEndian> = crate::object::pod::from_bytes(
+            slice::from_raw_parts(kernel_ptr, size_of::<FileHeader<NativeEndian>>()),
+        )
         .unwrap()
         .0;
 

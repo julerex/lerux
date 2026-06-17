@@ -1,8 +1,6 @@
 //! Functions and data-structures for working with descriptor tables.
 use crate::x86::segmentation::SegmentSelector;
-use core::arch::asm;
-use core::fmt;
-use core::mem::size_of;
+use core::{arch::asm, fmt, mem::size_of};
 
 /// A struct describing a pointer to a descriptor table (GDT / IDT).
 /// This is in a format suitable for giving to 'lgdt' or 'lidt'.

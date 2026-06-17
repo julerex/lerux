@@ -15,7 +15,11 @@
 #![cfg_attr(
     all(
         feature = "std",
-        any(feature = "compile-time-rng", feature = "runtime-rng", feature = "no-rng")
+        any(
+            feature = "compile-time-rng",
+            feature = "runtime-rng",
+            feature = "no-rng"
+        )
     ),
     doc = r##"
 # Basic Usage
@@ -257,11 +261,8 @@ impl Default for AHasher {
 #[cfg(feature = "std")]
 #[cfg(test)]
 mod test {
-    use crate::ahash::convert::Convert;
-    use crate::ahash::specialize::CallHasher;
-    use crate::ahash::*;
-    use core::hash::Hash;
-    use core::hash::Hasher;
+    use crate::ahash::{convert::Convert, specialize::CallHasher, *};
+    use core::hash::{Hash, Hasher};
     use std::collections::HashMap;
 
     #[test]
@@ -357,4 +358,6 @@ mod test {
         assert_eq!(h1, h2);
     }
 }
-pub mod cfg_if { pub use crate::cfg_if::*; }
+pub mod cfg_if {
+    pub use crate::cfg_if::*;
+}

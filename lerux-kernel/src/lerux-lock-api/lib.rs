@@ -85,9 +85,7 @@
 //! - `arc_lock`: Enables locking from an `Arc`. This enables types such as `ArcMutexGuard`. Note that this
 //!   requires the `alloc` crate to be present.
 
-
 #[macro_use]
-
 #[cfg(feature = "arc_lock")]
 extern crate alloc;
 

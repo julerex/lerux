@@ -1,9 +1,10 @@
-use core::fmt::Debug;
-use core::{iter, slice, str};
+use core::{fmt::Debug, iter, slice, str};
 
-use crate::object::elf;
-use crate::object::endian::{Endianness, U32Bytes};
-use crate::object::read::{self, ComdatKind, ObjectComdat, ReadError, ReadRef, SectionIndex, SymbolIndex};
+use crate::object::{
+    elf,
+    endian::{Endianness, U32Bytes},
+    read::{self, ComdatKind, ObjectComdat, ReadError, ReadRef, SectionIndex, SymbolIndex},
+};
 
 use super::{ElfFile, FileHeader, SectionHeader, Sym};
 

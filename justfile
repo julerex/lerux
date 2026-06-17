@@ -392,13 +392,13 @@ validate-trampolines:
     "{{justfile_directory()}}/lerux-kernel/validation/trampolines/validate-trampolines.sh"
 
 # Host unit tests for crates that support them without the custom kernel target or cross.
-# This is the fast, native "cargo test" surface (rmm under std, kernel cfg(test) modules,
-# initfs-tools integration, etc.). Does not include redoxfs (excluded per request).
+# rmm is inlined under lerux-kernel/src/lerux-rmm/ (no standalone -p rmm crate).
+# Trampoline golden-byte checks use the standalone trampoline-validation workspace crate
+# (lerux-kernel/validation/trampolines/) to avoid compiling all inlined vendor #[cfg(test)]
+# modules when validating bytes.
 test:
-    @echo "== rmm (std feature) =="
-    cargo test -p rmm --features std
-    @echo "== kernel (host tests, e.g. trampoline) =="
-    cargo test --bin kernel trampoline
+    @echo "== trampoline (golden bytes) =="
+    cargo test -p trampoline-validation
     @echo "== initfs-tools (integration) =="
     cargo test --manifest-path userspace/initfs-tools/Cargo.toml
     @echo "== userspace workspace (selected) =="
@@ -421,18 +421,14 @@ coverage:
     mkdir -p target/coverage
     export RUSTFLAGS="${RUSTFLAGS:-} -C instrument-coverage"
 
-    echo "==> Coverage: rmm (std)"
-    cargo llvm-cov -p rmm --features std --html --output-dir target/coverage/rmm || true
-
-    echo "==> Coverage: kernel host tests (trampoline + any other cfg(test))"
-    cargo llvm-cov --bin kernel --test trampoline --html --output-dir target/coverage/kernel || true
+    echo "==> Coverage: trampoline golden-byte tests"
+    cargo llvm-cov -p trampoline-validation --html --output-dir target/coverage/trampoline || true
 
     echo "==> Coverage: initfs-tools"
     cargo llvm-cov --manifest-path userspace/initfs-tools/Cargo.toml --html --output-dir target/coverage/initfs-tools || true
 
     echo "==> Coverage summary (text) for quick view"
-    cargo llvm-cov -p rmm --features std --summary-only || true
-    cargo llvm-cov --bin kernel --test trampoline --summary-only || true
+    cargo llvm-cov -p trampoline-validation --summary-only || true
 
     echo "==> Combined / top-level report (best effort)"
     cargo llvm-cov --workspace --html --output-dir target/coverage/overall --ignore-filename-regex '(/redoxfs/|/vendor/|/target/|validation/trampolines/asm)' || true
@@ -444,9 +440,8 @@ coverage:
 # Build rustdoc for the main crates (includes private items while we are filling docs).
 # After docstring work this should be clean (modulo the scoped "public + key internals" rule).
 docs:
-    @echo "==> rustdoc (kernel + rmm + userspace libs, private items)"
+    @echo "==> rustdoc (kernel + userspace libs, private items)"
     cargo doc --no-deps --document-private-items --bin kernel -Z build-std=core,alloc || true
-    cargo doc -p rmm --features std --document-private-items || true
     cargo doc --manifest-path userspace/initfs/Cargo.toml --document-private-items || true
     cargo doc --manifest-path userspace/initfs-tools/Cargo.toml --document-private-items || true
     @echo "Docs in target/doc/. See also the markdown docs now centralized under docs/."

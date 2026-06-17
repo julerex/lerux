@@ -1,7 +1,7 @@
 use core::{cell::SyncUnsafeCell, fmt, ptr};
 
-use alloc::vec::Vec;
 use crate::spin::Mutex;
+use alloc::vec::Vec;
 
 use super::{local_apic::ApicId, pic};
 use crate::{

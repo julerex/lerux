@@ -8,8 +8,8 @@
 //! The queue is protected by a level-2 mutex and integrates with the lock token
 //! system for safe nesting with other kernel locks.
 
-use alloc::collections::VecDeque;
 use crate::syscall::{EAGAIN, EINTR};
+use alloc::collections::VecDeque;
 
 use crate::{
     sync::{CleanLockToken, LockToken, Mutex, WaitCondition, L1, L2},

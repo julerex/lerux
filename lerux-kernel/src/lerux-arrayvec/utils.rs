@@ -1,5 +1,4 @@
-use core::marker::PhantomData;
-use core::mem::MaybeUninit;
+use core::{marker::PhantomData, mem::MaybeUninit};
 
 pub(crate) struct MakeMaybeUninit<T, const N: usize>(PhantomData<fn() -> T>);
 
@@ -8,4 +7,3 @@ impl<T, const N: usize> MakeMaybeUninit<T, N> {
 
     pub(crate) const ARRAY: [MaybeUninit<T>; N] = [Self::VALUE; N];
 }
-

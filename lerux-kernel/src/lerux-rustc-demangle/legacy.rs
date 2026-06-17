@@ -1,5 +1,4 @@
-use core::char;
-use core::fmt;
+use core::{char, fmt};
 
 /// Representation of a demangled symbol name.
 pub struct Demangle<'a> {

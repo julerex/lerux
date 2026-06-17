@@ -1,14 +1,16 @@
-use crate::hashbrown::raw::{
-    Allocator, Bucket, Global, RawDrain, RawExtractIf, RawIntoIter, RawIter, RawTable,
+use crate::hashbrown::{
+    raw::{Allocator, Bucket, Global, RawDrain, RawExtractIf, RawIntoIter, RawIter, RawTable},
+    Equivalent, TryReserveError,
 };
-use crate::hashbrown::{Equivalent, TryReserveError};
-use core::borrow::Borrow;
-use core::fmt::{self, Debug};
-use core::hash::{BuildHasher, Hash};
-use core::iter::FusedIterator;
-use core::marker::PhantomData;
-use core::mem;
-use core::ops::Index;
+use core::{
+    borrow::Borrow,
+    fmt::{self, Debug},
+    hash::{BuildHasher, Hash},
+    iter::FusedIterator,
+    marker::PhantomData,
+    mem,
+    ops::Index,
+};
 
 /// Default hasher for `HashMap`.
 pub type DefaultHashBuilder = core::hash::BuildHasherDefault<crate::ahash::AHasher>;
@@ -6697,21 +6699,23 @@ fn assert_covariance() {
 
 #[cfg(test)]
 mod test_map {
-    use super::DefaultHashBuilder;
-    use super::Entry::{Occupied, Vacant};
-    use super::EntryRef;
-    use super::{HashMap, RawEntryMut};
-    use alloc::string::{String, ToString};
-    use alloc::sync::Arc;
+    use super::{
+        DefaultHashBuilder,
+        Entry::{Occupied, Vacant},
+        EntryRef, HashMap, RawEntryMut,
+    };
+    use alloc::{
+        string::{String, ToString},
+        sync::Arc,
+    };
     use allocator_api2::alloc::{AllocError, Allocator, Global};
-    use core::alloc::Layout;
-    use core::ptr::NonNull;
-    use core::sync::atomic::{AtomicI8, Ordering};
+    use core::{
+        alloc::Layout,
+        ptr::NonNull,
+        sync::atomic::{AtomicI8, Ordering},
+    };
     use rand::{rngs::SmallRng, Rng, SeedableRng};
-    use std::borrow::ToOwned;
-    use std::cell::RefCell;
-    use std::usize;
-    use std::vec::Vec;
+    use std::{borrow::ToOwned, cell::RefCell, usize, vec::Vec};
 
     #[test]
     fn test_zero_capacities() {

@@ -1,6 +1,8 @@
-use crate::dtb::irqchip::{InterruptController, IRQ_CHIP};
+use crate::{
+    dtb::irqchip::{InterruptController, IRQ_CHIP},
+    fdt::{node::FdtNode, Fdt},
+};
 use alloc::boxed::Box;
-use crate::fdt::{node::FdtNode, Fdt};
 
 pub(crate) mod gic;
 pub(crate) mod gicv3;

@@ -12,11 +12,15 @@ mod size_hint {
 
 mod map {
     use crate::hashbrown::raw::Allocator;
-    use core::fmt;
-    use core::hash::{BuildHasher, Hash};
-    use core::marker::PhantomData;
-    use serde::de::{Deserialize, Deserializer, MapAccess, Visitor};
-    use serde::ser::{Serialize, Serializer};
+    use core::{
+        fmt,
+        hash::{BuildHasher, Hash},
+        marker::PhantomData,
+    };
+    use serde::{
+        de::{Deserialize, Deserializer, MapAccess, Visitor},
+        ser::{Serialize, Serializer},
+    };
 
     use crate::hashbrown::hash_map::HashMap;
 
@@ -98,11 +102,15 @@ mod map {
 
 mod set {
     use crate::hashbrown::raw::Allocator;
-    use core::fmt;
-    use core::hash::{BuildHasher, Hash};
-    use core::marker::PhantomData;
-    use serde::de::{Deserialize, Deserializer, SeqAccess, Visitor};
-    use serde::ser::{Serialize, Serializer};
+    use core::{
+        fmt,
+        hash::{BuildHasher, Hash},
+        marker::PhantomData,
+    };
+    use serde::{
+        de::{Deserialize, Deserializer, SeqAccess, Visitor},
+        ser::{Serialize, Serializer},
+    };
 
     use crate::hashbrown::hash_set::HashSet;
 

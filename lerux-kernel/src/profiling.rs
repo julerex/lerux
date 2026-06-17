@@ -1,11 +1,11 @@
+#[cfg(target_arch = "x86_64")]
+use crate::rmm::Arch;
 use alloc::{boxed::Box, vec::Vec};
 use core::{
     cell::{SyncUnsafeCell, UnsafeCell},
     mem::size_of,
     sync::atomic::{AtomicBool, AtomicPtr, AtomicU32, AtomicUsize, Ordering},
 };
-#[cfg(target_arch = "x86_64")]
-use crate::rmm::Arch;
 
 #[cfg(feature = "profiling")]
 use crate::arch::{idt::Idt, interrupt::irq::aux_timer};

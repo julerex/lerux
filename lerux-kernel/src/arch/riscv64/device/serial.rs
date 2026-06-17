@@ -1,5 +1,5 @@
-use alloc::boxed::Box;
 use crate::fdt::Fdt;
+use alloc::boxed::Box;
 
 pub use crate::dtb::serial::COM1;
 use crate::{

@@ -1,10 +1,12 @@
 use core::{fmt, slice};
 
-use crate::object::endian::Endianness;
-use crate::object::macho;
-use crate::object::read::{
-    ReadRef, Relocation, RelocationEncoding, RelocationFlags, RelocationKind, RelocationTarget,
-    SectionIndex, SymbolIndex,
+use crate::object::{
+    endian::Endianness,
+    macho,
+    read::{
+        ReadRef, Relocation, RelocationEncoding, RelocationFlags, RelocationKind, RelocationTarget,
+        SectionIndex, SymbolIndex,
+    },
 };
 
 use super::{MachHeader, MachOFile};

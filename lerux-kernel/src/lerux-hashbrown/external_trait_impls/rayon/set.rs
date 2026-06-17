@@ -1,11 +1,15 @@
 //! Rayon extensions for `HashSet`.
 
 use super::map;
-use crate::hashbrown::hash_set::HashSet;
-use crate::hashbrown::raw::{Allocator, Global};
+use crate::hashbrown::{
+    hash_set::HashSet,
+    raw::{Allocator, Global},
+};
 use core::hash::{BuildHasher, Hash};
-use rayon::iter::plumbing::UnindexedConsumer;
-use rayon::iter::{FromParallelIterator, IntoParallelIterator, ParallelExtend, ParallelIterator};
+use rayon::iter::{
+    plumbing::UnindexedConsumer, FromParallelIterator, IntoParallelIterator, ParallelExtend,
+    ParallelIterator,
+};
 
 /// Parallel iterator over elements of a consumed set.
 ///

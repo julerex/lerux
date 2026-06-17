@@ -1,7 +1,9 @@
-use core::alloc::Layout;
-use core::mem;
-use core::mem::{align_of, size_of};
-use core::ptr::NonNull;
+use core::{
+    alloc::Layout,
+    mem,
+    mem::{align_of, size_of},
+    ptr::NonNull,
+};
 
 use super::align_up;
 

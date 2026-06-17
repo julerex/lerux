@@ -8,13 +8,11 @@ extern crate std;
 // Force the spin lock path (our inlined spinning_top) for the kernel allocator use.
 #[cfg(feature = "use_spin")]
 use core::alloc::GlobalAlloc;
-use core::alloc::Layout;
 #[cfg(feature = "alloc_ref")]
 use core::alloc::{AllocError, Allocator};
-use core::mem::MaybeUninit;
 #[cfg(feature = "use_spin")]
 use core::ops::Deref;
-use core::ptr::NonNull;
+use core::{alloc::Layout, mem::MaybeUninit, ptr::NonNull};
 #[cfg(test)]
 use hole::Hole;
 use hole::HoleList;

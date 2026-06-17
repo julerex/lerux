@@ -1,9 +1,8 @@
-use crate::hashbrown::raw::Bucket;
-use crate::hashbrown::raw::{Allocator, Global, RawIter, RawIterRange, RawTable};
-use crate::hashbrown::scopeguard::guard;
-use core::marker::PhantomData;
-use core::mem;
-use core::ptr::NonNull;
+use crate::hashbrown::{
+    raw::{Allocator, Bucket, Global, RawIter, RawIterRange, RawTable},
+    scopeguard::guard,
+};
+use core::{marker::PhantomData, mem, ptr::NonNull};
 use rayon::iter::{
     plumbing::{self, Folder, UnindexedConsumer, UnindexedProducer},
     ParallelIterator,

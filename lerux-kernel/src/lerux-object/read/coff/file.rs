@@ -1,12 +1,15 @@
 use alloc::vec::Vec;
 use core::fmt::Debug;
 
-use crate::object::endian::LittleEndian as LE;
-use crate::object::pe;
-use crate::object::pod::Pod;
-use crate::object::read::{
-    self, Architecture, Export, FileFlags, Import, NoDynamicRelocationIterator, Object, ObjectKind,
-    ObjectSection, ReadError, ReadRef, Result, SectionIndex, SubArchitecture, SymbolIndex,
+use crate::object::{
+    endian::LittleEndian as LE,
+    pe,
+    pod::Pod,
+    read::{
+        self, Architecture, Export, FileFlags, Import, NoDynamicRelocationIterator, Object,
+        ObjectKind, ObjectSection, ReadError, ReadRef, Result, SectionIndex, SubArchitecture,
+        SymbolIndex,
+    },
 };
 
 use super::{

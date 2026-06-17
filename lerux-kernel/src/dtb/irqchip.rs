@@ -1,11 +1,13 @@
 use super::travel_interrupt_ctrl;
 use crate::{
-    arch::device::irqchip::new_irqchip, cpu_set::LogicalCpuId, scheme::irq::irq_trigger,
+    arch::device::irqchip::new_irqchip,
+    cpu_set::LogicalCpuId,
+    fdt::{node::NodeProperty, Fdt},
+    scheme::irq::irq_trigger,
     sync::CleanLockToken,
+    syscall::{Error, Result, EINVAL},
 };
 use alloc::{boxed::Box, vec::Vec};
-use crate::fdt::{node::NodeProperty, Fdt};
-use crate::syscall::{Error, Result, EINVAL};
 
 pub trait InterruptHandler {
     fn irq_handler(&mut self, irq: u32, token: &mut CleanLockToken);

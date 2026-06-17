@@ -1,5 +1,5 @@
-use ::syscall::Exception;
 use crate::rmm::VirtualAddress;
+use ::syscall::Exception;
 
 use crate::{
     context::signal::excp_handler,

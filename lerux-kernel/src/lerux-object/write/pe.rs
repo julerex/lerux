@@ -1,12 +1,12 @@
 //! Helper for writing PE files.
-use alloc::string::String;
-use alloc::vec::Vec;
+use alloc::{string::String, vec::Vec};
 use core::mem;
 
-use crate::object::endian::{LittleEndian as LE, *};
-use crate::object::pe;
-use crate::object::write::util;
-use crate::object::write::{Error, Result, WritableBuffer};
+use crate::object::{
+    endian::{LittleEndian as LE, *},
+    pe,
+    write::{util, Error, Result, WritableBuffer},
+};
 
 /// A helper for writing PE files.
 ///

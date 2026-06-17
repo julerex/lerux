@@ -4,8 +4,8 @@ use core::{
     sync::atomic::{AtomicU32, Ordering},
 };
 
-use alloc::boxed::Box;
 use crate::hashbrown::{hash_map::DefaultHashBuilder, HashMap};
+use alloc::boxed::Box;
 
 use crate::x86::{
     dtables::{self, DescriptorTablePointer},

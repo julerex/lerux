@@ -25,14 +25,13 @@ macro_rules! assert_capacity_limit_const {
     };
 }
 
-mod arrayvec_impl;
-mod arrayvec;
 mod array_string;
+mod arrayvec;
+mod arrayvec_impl;
 mod char;
 mod errors;
 mod utils;
 
-pub use self::array_string::ArrayString;
-pub use self::errors::CapacityError;
+pub use self::{array_string::ArrayString, errors::CapacityError};
 
 pub use self::arrayvec::{ArrayVec, Drain, IntoIter};

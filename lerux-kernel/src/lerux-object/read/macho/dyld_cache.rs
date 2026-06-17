@@ -1,11 +1,17 @@
-use alloc::string::{String, ToString};
-use alloc::vec::Vec;
-use core::fmt::{self, Debug};
-use core::{mem, slice};
+use alloc::{
+    string::{String, ToString},
+    vec::Vec,
+};
+use core::{
+    fmt::{self, Debug},
+    mem, slice,
+};
 
-use crate::object::endian::{Endian, Endianness, U16, U32, U64};
-use crate::object::macho;
-use crate::object::read::{Architecture, Error, File, ReadError, ReadRef, Result};
+use crate::object::{
+    endian::{Endian, Endianness, U16, U32, U64},
+    macho,
+    read::{Architecture, Error, File, ReadError, ReadRef, Result},
+};
 
 /// A parsed representation of the dyld shared cache.
 #[derive(Debug)]

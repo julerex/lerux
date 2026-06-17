@@ -1,8 +1,10 @@
 use core::slice;
 
-use crate::object::endian::{LittleEndian as LE, U16};
-use crate::object::pe;
-use crate::object::read::{Bytes, Error, ReadError, Result};
+use crate::object::{
+    endian::{LittleEndian as LE, U16},
+    pe,
+    read::{Bytes, Error, ReadError, Result},
+};
 
 /// An iterator over the relocation blocks in the `.reloc` section of a PE file.
 ///

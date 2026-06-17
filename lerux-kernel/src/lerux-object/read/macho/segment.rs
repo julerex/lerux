@@ -1,10 +1,11 @@
-use core::fmt::Debug;
-use core::{result, slice, str};
+use core::{fmt::Debug, result, slice, str};
 
-use crate::object::endian::{self, Endianness};
-use crate::object::macho;
-use crate::object::pod::Pod;
-use crate::object::read::{self, ObjectSegment, ReadError, ReadRef, Result, SegmentFlags};
+use crate::object::{
+    endian::{self, Endianness},
+    macho,
+    pod::Pod,
+    read::{self, ObjectSegment, ReadError, ReadRef, Result, SegmentFlags},
+};
 
 use super::{LoadCommandData, MachHeader, MachOFile, Section};
 

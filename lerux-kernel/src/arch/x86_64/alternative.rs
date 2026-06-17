@@ -58,7 +58,9 @@ pub unsafe fn early_init(bsp: bool) {
             // userspace-accessible pages, with the necessary exception of when RFLAGS.AC = 1. This
             // limits user-memory accesses to the UserSlice wrapper, so that no data outside of
             // usercopy functions can be accidentally accessed by the kernel.
-            crate::x86::controlregs::cr4_write(crate::x86::controlregs::cr4() | crate::x86::controlregs::Cr4::CR4_ENABLE_SMAP);
+            crate::x86::controlregs::cr4_write(
+                crate::x86::controlregs::cr4() | crate::x86::controlregs::Cr4::CR4_ENABLE_SMAP,
+            );
             // Clear CLAC in (the probably unlikely) case the bootloader set it earlier.
             crate::x86::bits64::rflags::clac();
 
@@ -92,9 +94,9 @@ pub unsafe fn early_init(bsp: bool) {
 
             let mut xcr0 = crate::x86::controlregs::Xcr0::XCR0_FPU_MMX_STATE
                 | crate::x86::controlregs::Xcr0::XCR0_SSE_STATE;
-            crate::x86::controlregs::xcr0_write(
-                crate::x86::controlregs::Xcr0::from_bits_truncate(xcr0.bits()),
-            );
+            crate::x86::controlregs::xcr0_write(crate::x86::controlregs::Xcr0::from_bits_truncate(
+                xcr0.bits(),
+            ));
             let ext_state_info = cpuid()
                 .get_extended_state_info()
                 .expect("must be present if XSAVE is supported");

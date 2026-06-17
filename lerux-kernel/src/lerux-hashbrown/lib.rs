@@ -130,9 +130,7 @@ pub mod hash_table {
     }
 }
 
-pub use crate::hashbrown::map::HashMap;
-pub use crate::hashbrown::set::HashSet;
-pub use crate::hashbrown::table::HashTable;
+pub use crate::hashbrown::{map::HashMap, set::HashSet, table::HashTable};
 
 #[cfg(feature = "equivalent")]
 pub use equivalent::Equivalent;

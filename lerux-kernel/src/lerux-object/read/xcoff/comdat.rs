@@ -2,8 +2,10 @@
 
 use core::fmt::Debug;
 
-use crate::object::read::{self, ComdatKind, ObjectComdat, ReadRef, Result, SectionIndex, SymbolIndex};
-use crate::object::xcoff;
+use crate::object::{
+    read::{self, ComdatKind, ObjectComdat, ReadRef, Result, SectionIndex, SymbolIndex},
+    xcoff,
+};
 
 use super::{FileHeader, XcoffFile};
 

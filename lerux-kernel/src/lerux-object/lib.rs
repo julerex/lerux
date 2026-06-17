@@ -50,7 +50,7 @@
 #[cfg(feature = "cargo-all")]
 compile_error!("'--all-features' is not supported; use '--features all' instead");
 
-use crate::memchr as memchr;
+use crate::memchr;
 
 mod common;
 pub use common::*;

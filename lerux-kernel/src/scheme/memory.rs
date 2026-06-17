@@ -1,7 +1,7 @@
 use core::num::NonZeroUsize;
 
-use alloc::sync::Arc;
 use crate::rmm::PhysicalAddress;
+use alloc::sync::Arc;
 
 use crate::{
     context::{

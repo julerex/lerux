@@ -3,11 +3,11 @@
 // and
 // https://github.com/mvdnes/spin-rs/tree/7516c8037d3d15712ba4d8499ab075e97a19d778
 
+use crate::lock_api::{GuardSend, RawMutex};
 use core::{
     hint,
     sync::atomic::{AtomicBool, Ordering},
 };
-use crate::lock_api::{GuardSend, RawMutex};
 
 /// Provides mutual exclusion based on spinning on an `AtomicBool`.
 ///

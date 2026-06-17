@@ -1,8 +1,6 @@
 #![allow(clippy::len_without_is_empty)]
 
-use core::convert::TryInto;
-use core::ops::Range;
-use core::{mem, result};
+use core::{convert::TryInto, mem, ops::Range, result};
 
 use crate::object::pod::{from_bytes, slice_from_bytes, Pod};
 

@@ -1,6 +1,5 @@
-use crate::info;
+use crate::{fdt::Fdt, info};
 use core::sync::atomic::{AtomicUsize, Ordering};
-use crate::fdt::Fdt;
 
 pub mod cpu;
 pub mod generic_timer;

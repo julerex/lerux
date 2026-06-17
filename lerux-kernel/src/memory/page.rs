@@ -1,7 +1,7 @@
 // Some code was borrowed from [Phil Opp's Blog](http://os.phil-opp.com/modifying-page-tables.html)
 
-use core::fmt::Debug;
 use crate::rmm::{Arch, VirtualAddress};
+use core::fmt::Debug;
 
 use crate::memory::RmmA;
 

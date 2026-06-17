@@ -1,10 +1,11 @@
-use core::fmt::Debug;
-use core::{slice, str};
+use core::{fmt::Debug, slice, str};
 
-use crate::object::elf;
-use crate::object::endian::{self, Endianness};
-use crate::object::pod::{self, Pod};
-use crate::object::read::{self, ObjectSegment, ReadError, ReadRef, SegmentFlags};
+use crate::object::{
+    elf,
+    endian::{self, Endianness},
+    pod::{self, Pod},
+    read::{self, ObjectSegment, ReadError, ReadRef, SegmentFlags},
+};
 
 use super::{ElfFile, FileHeader, NoteIterator};
 

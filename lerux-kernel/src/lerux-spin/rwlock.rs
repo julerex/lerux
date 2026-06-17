@@ -938,10 +938,14 @@ unsafe impl lock_api::RawRwLockUpgradeDowngrade for RwLock<()> {
 mod tests {
     use std::prelude::v1::*;
 
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::mpsc::channel;
-    use std::sync::Arc;
-    use std::thread;
+    use std::{
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            mpsc::channel,
+            Arc,
+        },
+        thread,
+    };
 
     type RwLock<T> = super::RwLock<T>;
 

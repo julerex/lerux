@@ -5,8 +5,10 @@ use core::ptr::NonNull;
 
 use alloc::{boxed::Box, string::String, vec::Vec};
 
-use crate::hashbrown::HashMap;
-use crate::spin::{Once, RwLock};
+use crate::{
+    hashbrown::HashMap,
+    spin::{Once, RwLock},
+};
 
 use crate::memory::{KernelMapper, PageFlags, PhysicalAddress, RmmA, RmmArch};
 

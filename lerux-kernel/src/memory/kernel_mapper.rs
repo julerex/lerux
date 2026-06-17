@@ -1,8 +1,8 @@
+use crate::rmm::{PageMapper, TableKind};
 use core::sync::{
     atomic,
     atomic::{AtomicU32, AtomicUsize, Ordering},
 };
-use crate::rmm::{PageMapper, TableKind};
 
 const NO_PROCESSOR: u32 = !0;
 static LOCK_OWNER: AtomicU32 = AtomicU32::new(NO_PROCESSOR);

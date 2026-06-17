@@ -1,10 +1,11 @@
 //! Description of the data-structures for IA-32e paging mode.
 
-
-use core::convert::{From, Into};
-use core::fmt;
-use core::hash::{Hash, Hasher};
-use core::ops;
+use core::{
+    convert::{From, Into},
+    fmt,
+    hash::{Hash, Hasher},
+    ops,
+};
 
 macro_rules! check_flag {
     ($doc:meta, $fun:ident, $flag:expr) => {
@@ -1477,7 +1478,12 @@ pub struct PDEntry(pub u64);
 
 impl fmt::Debug for PDEntry {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "PDEntry {{ {:#x}, {:#x} }}", self.address(), self.flags().bits())
+        write!(
+            f,
+            "PDEntry {{ {:#x}, {:#x} }}",
+            self.address(),
+            self.flags().bits()
+        )
     }
 }
 
@@ -1571,7 +1577,12 @@ pub struct PTEntry(pub u64);
 
 impl fmt::Debug for PTEntry {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "PTEntry {{ {:#x}, {:#x} }}", self.address(), self.flags().bits())
+        write!(
+            f,
+            "PTEntry {{ {:#x}, {:#x} }}",
+            self.address(),
+            self.flags().bits()
+        )
     }
 }
 

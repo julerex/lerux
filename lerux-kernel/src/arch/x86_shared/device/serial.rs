@@ -1,9 +1,9 @@
 use crate::{
     devices::{serial::SerialKind, uart_16550::SerialPort},
     memory::map_device_memory,
+    spin::Mutex,
     syscall::io::{Mmio, Pio},
 };
-use crate::spin::Mutex;
 
 pub static COM1: Mutex<SerialKind> = Mutex::new(SerialKind::NotPresent);
 pub static COM2: Mutex<SerialKind> = Mutex::new(SerialKind::NotPresent);

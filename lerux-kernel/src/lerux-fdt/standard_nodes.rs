@@ -32,7 +32,10 @@ impl<'b, 'a: 'b> Chosen<'b, 'a> {
             .and_then(|n| core::str::from_utf8(&n.value[..n.value.len() - 1]).ok())
             .map(Self::split_stdinout_property)
             .and_then(|(name, params)| {
-                self.node.header.find_node(name).map(|node| StdInOutPath::new(node, params))
+                self.node
+                    .header
+                    .find_node(name)
+                    .map(|node| StdInOutPath::new(node, params))
             })
     }
 
@@ -47,7 +50,10 @@ impl<'b, 'a: 'b> Chosen<'b, 'a> {
             .and_then(|n| core::str::from_utf8(&n.value[..n.value.len() - 1]).ok())
             .map(Self::split_stdinout_property)
             .and_then(|(name, params)| {
-                self.node.header.find_node(name).map(|node| StdInOutPath::new(node, params))
+                self.node
+                    .header
+                    .find_node(name)
+                    .map(|node| StdInOutPath::new(node, params))
             })
             .or_else(|| self.stdout())
     }
@@ -100,7 +106,11 @@ impl<'b, 'a: 'b> Root<'b, 'a> {
         self.node
             .properties()
             .find(|p| p.name == "model")
-            .and_then(|p| core::str::from_utf8(p.value).map(|s| s.trim_end_matches('\0')).ok())
+            .and_then(|p| {
+                core::str::from_utf8(p.value)
+                    .map(|s| s.trim_end_matches('\0'))
+                    .ok()
+            })
             .unwrap()
     }
 
@@ -133,18 +143,28 @@ impl<'b, 'a: 'b> Aliases<'b, 'a> {
         self.node
             .properties()
             .find(|p| p.name == alias)
-            .and_then(|p| core::str::from_utf8(p.value).map(|s| s.trim_end_matches('\0')).ok())
+            .and_then(|p| {
+                core::str::from_utf8(p.value)
+                    .map(|s| s.trim_end_matches('\0'))
+                    .ok()
+            })
     }
 
     /// Attempt to find the node specified by the given alias
     pub fn resolve_node(self, alias: &str) -> Option<FdtNode<'b, 'a>> {
-        self.resolve(alias).and_then(|name| self.header.find_node(name))
+        self.resolve(alias)
+            .and_then(|name| self.header.find_node(name))
     }
 
     /// Returns an iterator over all of the available aliases
     pub fn all(self) -> impl Iterator<Item = (&'a str, &'a str)> + 'b {
         self.node.properties().filter_map(|p| {
-            Some((p.name, core::str::from_utf8(p.value).map(|s| s.trim_end_matches('\0')).ok()?))
+            Some((
+                p.name,
+                core::str::from_utf8(p.value)
+                    .map(|s| s.trim_end_matches('\0'))
+                    .ok()?,
+            ))
         })
     }
 }
@@ -251,7 +271,10 @@ pub struct Compatible<'a> {
 impl<'a> Compatible<'a> {
     /// First compatible string
     pub fn first(self) -> &'a str {
-        CStr::new(self.data).expect("expected C str").as_str().unwrap()
+        CStr::new(self.data)
+            .expect("expected C str")
+            .as_str()
+            .unwrap()
     }
 
     /// Returns an iterator over all available compatible strings

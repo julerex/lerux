@@ -1,10 +1,10 @@
-use core::convert::TryInto;
-use core::fmt::Debug;
+use core::{convert::TryInto, fmt::Debug};
 
-use crate::object::elf;
-use crate::object::endian;
-use crate::object::pod::Pod;
-use crate::object::read::{ReadError, Result, StringTable};
+use crate::object::{
+    elf, endian,
+    pod::Pod,
+    read::{ReadError, Result, StringTable},
+};
 
 /// A trait for generic access to [`elf::Dyn32`] and [`elf::Dyn64`].
 #[allow(missing_docs)]

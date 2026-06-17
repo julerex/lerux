@@ -578,10 +578,14 @@ unsafe impl<R: RelaxStrategy> lock_api_crate::RawMutex for FairMutex<(), R> {
 mod tests {
     use std::prelude::v1::*;
 
-    use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::mpsc::channel;
-    use std::sync::Arc;
-    use std::thread;
+    use std::{
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            mpsc::channel,
+            Arc,
+        },
+        thread,
+    };
 
     type FairMutex<T> = super::FairMutex<T>;
 

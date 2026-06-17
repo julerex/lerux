@@ -61,7 +61,7 @@ jobs:
     - name: Trampoline bytes match NASM (script)
       run: just validate-trampolines
     - name: Trampoline bytes match NASM (unit tests)
-      run: cargo test --bin kernel trampoline
+      run: cargo test -p trampoline-validation
 
   smoke:
     runs-on: ubuntu-latest

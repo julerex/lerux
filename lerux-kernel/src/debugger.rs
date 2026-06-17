@@ -1,12 +1,12 @@
 use crate::{
     context::{context::SyscallFrame, contexts, Context, ContextLock},
+    hashbrown::{HashMap, HashSet},
     memory::{
         get_page_info, the_zeroed_frame, Frame, RefCount, RmmA, RmmArch, TableKind, PAGE_SIZE,
     },
     sync::CleanLockToken,
 };
 use alloc::sync::Arc;
-use crate::hashbrown::{HashMap, HashSet};
 
 /// Super unsafe due to page table switching and raw pointers!
 pub unsafe fn debugger(target_id: Option<*const ContextLock>, token: &mut CleanLockToken) {
@@ -275,8 +275,7 @@ unsafe fn check_page_table_consistency(
                 };
 
                 for p1i in 0..512 {
-                    use crate::memory::Page;
-                    use crate::rmm::VirtualAddress;
+                    use crate::{memory::Page, rmm::VirtualAddress};
 
                     let (physaddr, flags) = match unsafe { p1.entry(p1i) } {
                         Some(e) => {

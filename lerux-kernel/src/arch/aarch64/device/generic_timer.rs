@@ -8,11 +8,11 @@ use crate::{
         get_interrupt,
         irqchip::{register_irq, InterruptHandler, IRQ_CHIP},
     },
+    fdt::Fdt,
     scheme::irq::irq_trigger,
     sync::CleanLockToken,
     time,
 };
-use crate::fdt::Fdt;
 
 bitflags! {
     struct TimerCtrlFlags: u32 {

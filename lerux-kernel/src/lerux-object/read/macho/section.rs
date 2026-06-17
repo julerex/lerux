@@ -1,12 +1,13 @@
-use core::fmt::Debug;
-use core::{fmt, result, slice, str};
+use core::{fmt, fmt::Debug, result, slice, str};
 
-use crate::object::endian::{self, Endianness};
-use crate::object::macho;
-use crate::object::pod::Pod;
-use crate::object::read::{
-    self, gnu_compression, CompressedData, CompressedFileRange, ObjectSection, ReadError, ReadRef,
-    RelocationMap, Result, SectionFlags, SectionIndex, SectionKind,
+use crate::object::{
+    endian::{self, Endianness},
+    macho,
+    pod::Pod,
+    read::{
+        self, gnu_compression, CompressedData, CompressedFileRange, ObjectSection, ReadError,
+        ReadRef, RelocationMap, Result, SectionFlags, SectionIndex, SectionKind,
+    },
 };
 
 use super::{MachHeader, MachOFile, MachORelocationIterator};

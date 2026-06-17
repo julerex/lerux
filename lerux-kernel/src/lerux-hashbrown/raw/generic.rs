@@ -1,5 +1,4 @@
-use super::bitmask::BitMask;
-use super::EMPTY;
+use super::{bitmask::BitMask, EMPTY};
 use core::{mem, ptr};
 
 // Use the native word size as the group size. Using a 64-bit group size on

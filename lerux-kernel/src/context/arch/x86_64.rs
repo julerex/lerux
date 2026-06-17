@@ -5,12 +5,16 @@ use core::{
 
 use crate::syscall::FloatRegisters;
 
-use crate::{arch::interrupt::InterruptStack, context::context::Kstack, memory::RmmA};
+use crate::{
+    arch::interrupt::InterruptStack,
+    context::context::Kstack,
+    memory::RmmA,
+    rmm::{Arch, VirtualAddress},
+    spin::Once,
+    syscall::{error::*, EnvRegisters},
+    x86::msr,
+};
 use core::mem::offset_of;
-use crate::rmm::{Arch, VirtualAddress};
-use crate::spin::Once;
-use crate::syscall::{error::*, EnvRegisters};
-use crate::x86::msr;
 
 /// This must be used by the kernel to ensure that context switches are done atomically
 /// Compare and exchange this to true when beginning a context switch on any CPU

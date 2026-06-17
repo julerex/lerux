@@ -1,12 +1,14 @@
-use core::marker::PhantomData;
-use core::{cmp, iter, slice, str};
+use core::{cmp, iter, marker::PhantomData, slice, str};
 
-use crate::object::endian::LittleEndian as LE;
-use crate::object::pe;
-use crate::object::pe::ImageSectionHeader;
-use crate::object::read::{
-    self, CompressedData, CompressedFileRange, ObjectSection, ObjectSegment, ReadError, ReadRef,
-    Relocation, RelocationMap, Result, SectionFlags, SectionIndex, SectionKind, SegmentFlags,
+use crate::object::{
+    endian::LittleEndian as LE,
+    pe,
+    pe::ImageSectionHeader,
+    read::{
+        self, CompressedData, CompressedFileRange, ObjectSection, ObjectSegment, ReadError,
+        ReadRef, Relocation, RelocationMap, Result, SectionFlags, SectionIndex, SectionKind,
+        SegmentFlags,
+    },
 };
 
 use super::{ImageNtHeaders, PeFile, SectionTable};

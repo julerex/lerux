@@ -1,11 +1,13 @@
 use crate::{
-    arch::interrupt::InterruptStack, context::context::Kstack, memory::RmmA, percpu::PercpuBlock,
-    syscall::FloatRegisters,
+    arch::interrupt::InterruptStack,
+    context::context::Kstack,
+    memory::RmmA,
+    percpu::PercpuBlock,
+    rmm::{Arch, VirtualAddress},
+    spin::Once,
+    syscall::{error::*, EnvRegisters, FloatRegisters},
 };
 use core::{mem::offset_of, sync::atomic::AtomicBool};
-use crate::rmm::{Arch, VirtualAddress};
-use crate::spin::Once;
-use crate::syscall::{error::*, EnvRegisters};
 
 pub static CONTEXT_SWITCH_LOCK: AtomicBool = AtomicBool::new(false);
 

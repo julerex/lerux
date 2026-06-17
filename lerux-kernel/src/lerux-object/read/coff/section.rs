@@ -1,12 +1,13 @@
-use core::convert::TryFrom;
-use core::{iter, result, slice, str};
+use core::{convert::TryFrom, iter, result, slice, str};
 
-use crate::object::endian::LittleEndian as LE;
-use crate::object::pe;
-use crate::object::read::util::StringTable;
-use crate::object::read::{
-    self, CompressedData, CompressedFileRange, Error, ObjectSection, ObjectSegment, ReadError,
-    ReadRef, RelocationMap, Result, SectionFlags, SectionIndex, SectionKind, SegmentFlags,
+use crate::object::{
+    endian::LittleEndian as LE,
+    pe,
+    read::{
+        self, util::StringTable, CompressedData, CompressedFileRange, Error, ObjectSection,
+        ObjectSegment, ReadError, ReadRef, RelocationMap, Result, SectionFlags, SectionIndex,
+        SectionKind, SegmentFlags,
+    },
 };
 
 use super::{CoffFile, CoffHeader, CoffRelocationIterator};

@@ -1,7 +1,4 @@
-use crate::ahash::convert::*;
-use crate::ahash::operations::*;
-use crate::ahash::random_state::PI;
-use crate::ahash::RandomState;
+use crate::ahash::{convert::*, operations::*, random_state::PI, RandomState};
 use core::hash::Hasher;
 
 /// A `Hasher` for hashing an arbitrary stream of bytes.
@@ -362,9 +359,7 @@ impl Hasher for AHasherStr {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ahash::convert::Convert;
-    use crate::ahash::operations::aesenc;
-    use crate::ahash::RandomState;
+    use crate::ahash::{convert::Convert, operations::aesenc, RandomState};
     use std::hash::{BuildHasher, Hasher};
     #[test]
     fn test_sanity() {
@@ -379,8 +374,7 @@ mod tests {
     #[cfg(feature = "compile-time-rng")]
     #[test]
     fn test_builder() {
-        use std::collections::HashMap;
-        use std::hash::BuildHasherDefault;
+        use std::{collections::HashMap, hash::BuildHasherDefault};
 
         let mut map = HashMap::<u32, u64, BuildHasherDefault<AHasher>>::default();
         map.insert(1, 3);

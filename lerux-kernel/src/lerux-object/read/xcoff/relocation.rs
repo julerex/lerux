@@ -1,14 +1,15 @@
 use alloc::fmt;
-use core::fmt::Debug;
-use core::slice;
+use core::{fmt::Debug, slice};
 
-use crate::object::endian::BigEndian as BE;
-use crate::object::pod::Pod;
-use crate::object::read::{
-    ReadRef, Relocation, RelocationEncoding, RelocationFlags, RelocationKind, RelocationTarget,
-    SymbolIndex,
+use crate::object::{
+    endian::BigEndian as BE,
+    pod::Pod,
+    read::{
+        ReadRef, Relocation, RelocationEncoding, RelocationFlags, RelocationKind, RelocationTarget,
+        SymbolIndex,
+    },
+    xcoff,
 };
-use crate::object::xcoff;
 
 use super::{FileHeader, SectionHeader, XcoffFile};
 

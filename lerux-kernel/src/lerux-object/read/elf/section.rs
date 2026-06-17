@@ -1,13 +1,14 @@
-use core::fmt::Debug;
-use core::{iter, slice, str};
+use core::{fmt::Debug, iter, slice, str};
 
-use crate::object::elf;
-use crate::object::endian::{self, Endianness, U32Bytes};
-use crate::object::pod::{self, Pod};
-use crate::object::read::{
-    self, gnu_compression, CompressedData, CompressedFileRange, CompressionFormat, Error,
-    ObjectSection, ReadError, ReadRef, RelocationMap, SectionFlags, SectionIndex, SectionKind,
-    StringTable,
+use crate::object::{
+    elf,
+    endian::{self, Endianness, U32Bytes},
+    pod::{self, Pod},
+    read::{
+        self, gnu_compression, CompressedData, CompressedFileRange, CompressionFormat, Error,
+        ObjectSection, ReadError, ReadRef, RelocationMap, SectionFlags, SectionIndex, SectionKind,
+        StringTable,
+    },
 };
 
 use super::{

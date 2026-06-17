@@ -1,4 +1,3 @@
-
 //! A scope guard will run a given closure when it goes out of scope,
 //! even if the code between panics.
 //! (as long as panic doesn't abort)
@@ -185,11 +184,13 @@
 #[cfg(not(any(test, feature = "use_std")))]
 extern crate core as std;
 
-use std::fmt;
-use std::marker::PhantomData;
-use std::mem::ManuallyDrop;
-use std::ops::{Deref, DerefMut};
-use std::ptr;
+use std::{
+    fmt,
+    marker::PhantomData,
+    mem::ManuallyDrop,
+    ops::{Deref, DerefMut},
+    ptr,
+};
 
 /// Controls in which cases the associated code should be run
 pub trait Strategy {
@@ -485,9 +486,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::cell::Cell;
-    use std::panic::catch_unwind;
-    use std::panic::AssertUnwindSafe;
+    use std::{
+        cell::Cell,
+        panic::{catch_unwind, AssertUnwindSafe},
+    };
 
     #[test]
     fn test_defer() {

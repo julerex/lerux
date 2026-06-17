@@ -1,10 +1,11 @@
 //! TODO: Support the segment for XCOFF when auxiliary file header and loader section is ready.
 
-use core::fmt::Debug;
-use core::str;
+use core::{fmt::Debug, str};
 
-use crate::object::read::{self, ObjectSegment, ReadRef, Result, SegmentFlags};
-use crate::object::xcoff;
+use crate::object::{
+    read::{self, ObjectSegment, ReadRef, Result, SegmentFlags},
+    xcoff,
+};
 
 use super::{FileHeader, XcoffFile};
 

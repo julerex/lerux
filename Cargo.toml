@@ -10,6 +10,7 @@ resolver = "3"
 members = [
     "userspace/initfs",
     "userspace/initfs-tools",
+    "lerux-kernel/validation/trampolines",
 ]
 exclude = ["userspace/bootstrap"]
 default-members = ["."]

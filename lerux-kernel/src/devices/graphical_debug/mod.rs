@@ -1,5 +1,5 @@
-use core::str;
 use crate::spin::Mutex;
+use core::str;
 
 pub use self::debug::DebugDisplay;
 

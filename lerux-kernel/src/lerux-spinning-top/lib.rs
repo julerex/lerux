@@ -25,7 +25,6 @@
 //! }
 //! ```
 
-
 /// The spinlock implemenation is based on the abstractions provided by the `lock_api` crate.
 pub(crate) use crate::lock_api;
 

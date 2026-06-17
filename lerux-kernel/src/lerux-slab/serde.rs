@@ -1,8 +1,9 @@
-use core::fmt;
-use core::marker::PhantomData;
+use core::{fmt, marker::PhantomData};
 
-use serde::de::{Deserialize, Deserializer, MapAccess, Visitor};
-use serde::ser::{Serialize, SerializeMap, Serializer};
+use serde::{
+    de::{Deserialize, Deserializer, MapAccess, Visitor},
+    ser::{Serialize, SerializeMap, Serializer},
+};
 
 use super::{builder::Builder, Slab};
 

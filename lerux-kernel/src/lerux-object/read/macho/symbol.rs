@@ -1,15 +1,15 @@
 use alloc::vec::Vec;
-use core::fmt::Debug;
-use core::{fmt, slice, str};
+use core::{fmt, fmt::Debug, slice, str};
 
-use crate::object::endian::{self, Endianness};
-use crate::object::macho;
-use crate::object::pod::Pod;
-use crate::object::read::util::StringTable;
-use crate::object::read::{
-    self, ObjectMap, ObjectMapEntry, ObjectMapFile, ObjectSymbol, ObjectSymbolTable, ReadError,
-    ReadRef, Result, SectionIndex, SectionKind, SymbolFlags, SymbolIndex, SymbolKind, SymbolMap,
-    SymbolMapEntry, SymbolScope, SymbolSection,
+use crate::object::{
+    endian::{self, Endianness},
+    macho,
+    pod::Pod,
+    read::{
+        self, util::StringTable, ObjectMap, ObjectMapEntry, ObjectMapFile, ObjectSymbol,
+        ObjectSymbolTable, ReadError, ReadRef, Result, SectionIndex, SectionKind, SymbolFlags,
+        SymbolIndex, SymbolKind, SymbolMap, SymbolMapEntry, SymbolScope, SymbolSection,
+    },
 };
 
 use super::{MachHeader, MachOFile};

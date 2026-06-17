@@ -6,8 +6,10 @@ mod description;
 pub use self::description::{Counter, EventDescription, MSRIndex, PebsType, Tuple};
 
 use crate::x86::cpuid;
-use core::fmt::{Error, Result, Write};
-use core::str;
+use core::{
+    fmt::{Error, Result, Write},
+    str,
+};
 use phf;
 
 const MODEL_LEN: usize = 30;

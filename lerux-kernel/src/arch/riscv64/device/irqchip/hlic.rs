@@ -1,11 +1,11 @@
 use crate::{
     dtb::irqchip::{InterruptController, InterruptHandler, IrqCell, IrqDesc, IRQ_CHIP},
+    fdt::{node::NodeProperty, Fdt},
     sync::CleanLockToken,
+    syscall::{Error, EINVAL},
 };
 use alloc::vec::Vec;
 use core::arch::asm;
-use crate::fdt::{node::NodeProperty, Fdt};
-use crate::syscall::{Error, EINVAL};
 
 // This is a hart-local interrupt controller, a root of irqchip tree
 // An example DTS:

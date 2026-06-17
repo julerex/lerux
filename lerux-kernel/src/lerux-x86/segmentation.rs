@@ -1,8 +1,7 @@
 //! Functionality to manipulate segment registers, build segement
 //! descriptors and selectors.
 
-use core::arch::asm;
-use core::fmt;
+use core::{arch::asm, fmt};
 
 use crate::x86::Ring;
 

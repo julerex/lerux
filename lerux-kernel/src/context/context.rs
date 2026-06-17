@@ -73,9 +73,7 @@ pub enum Status {
 
     /// Not currently runnable, and cannot be runnable until manually unblocked, depending on what
     /// reason.
-    HardBlocked {
-        reason: HardBlockedReason,
-    },
+    HardBlocked { reason: HardBlockedReason },
     /// The context has exited; `excp` records the exception that killed it, if any.
     Dead {
         excp: Option<crate::syscall::Exception>,

@@ -1,5 +1,16 @@
 # RedoxFS
 
+## Frozen reference copy (lerux)
+
+This tree is the **frozen behavioral reference** for RedoxFS in lerux. Do not edit
+implementation code here except to add or adjust **tests** that define the expected
+behavior. All refactors and the lerux-owned fork live in
+[`userspace/lerux-filesystem/`](../lerux-filesystem/).
+
+Run the reference test suite: `just test-redoxfs` (67 host tests as of 2026-06-17).
+
+---
+
 This is the default filesystem of Redox OS inspired by [ZFS](https://docs.freebsd.org/en/books/handbook/zfs/) and adapted to a microkernel architecture.
 
 (It's a replacement for [TFS](https://gitlab.redox-os.org/redox-os/tfs))

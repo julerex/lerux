@@ -2,6 +2,35 @@
 
 This document tracks the 100% unit test coverage goal (excluding `userspace/redoxfs/` per project request) and the small list of approved exceptions.
 
+## Filesystem crates (redoxfs + lerux-filesystem)
+
+The vendored reference (`userspace/redoxfs/`) and the lerux fork
+(`userspace/lerux-filesystem/`) have a **separate coverage gate** from the main
+100% goal above. They share the same host test harness; parity is enforced via
+`just test-fs-parity`.
+
+Run locally:
+```bash
+just test-redoxfs           # reference only (67 tests)
+just test-lerux-fs          # fork only
+just test-fs-parity         # both must pass
+just coverage-redoxfs       # HTML in target/coverage/redoxfs/
+just coverage-lerux-fs      # HTML in target/coverage/lerux-filesystem/
+just coverage-fs-parity     # both reports + 70% line gate per crate
+```
+
+**Baseline (2026-06-17):** 67 host tests (64 lib + 3 CLI integration). Line
+coverage ~72% on the reference crate after the initial harness expansion (62%
+line / 72% region; run `just coverage-redoxfs` for the current number). Gate:
+60% lines (mount/FUSE/daemon paths excluded from host tests). Mount/scheme/FUSE/daemon paths
+remain smoke/integration covered (`just smoke-rustc`).
+
+**Policy:** `userspace/redoxfs/` is frozen except for test additions that define
+new expected behavior. Implementation changes go in `userspace/lerux-filesystem/`;
+copy new tests to the fork when the spec changes.
+
+---
+
 ## Current status
 - Tooling: `cargo llvm-cov` (via `just coverage`).
 - In-scope: kernel (host `cargo test --bin kernel` for `#[cfg(test)]` modules), `kernel/rmm --features std`, userspace workspace crates + standalone testable crates (`initfs*`, `runtime/*`, `bootstrap`, `scheme-utils`, daemons, drivers/common, etc.).

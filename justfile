@@ -63,7 +63,11 @@ userspace_out := justfile_directory() + "/userspace/target/" + userspace_target 
 staging_bin := justfile_directory() + "/userspace/initfs-staging/bin"
 toolchain_url := "https://static.redox-os.org/toolchain/x86_64-unknown-redox/relibc-install.tar.gz"
 
-# Standalone crates outside the main userspace workspace (redoxfs has its own manifest + older dep pins).
+# Standalone FS crates outside the main userspace workspace (own manifests + dep pins).
+# lerux-filesystem is the working fork; redoxfs/ is the frozen reference for tests.
+lerux_fs_manifest := justfile_directory() + "/userspace/lerux-filesystem/Cargo.toml"
+lerux_fs_target_dir := justfile_directory() + "/userspace/lerux-filesystem/target"
+lerux_fs_out := lerux_fs_target_dir + "/" + userspace_target + "/release"
 redoxfs_manifest := justfile_directory() + "/userspace/redoxfs/Cargo.toml"
 redoxfs_target_dir := justfile_directory() + "/userspace/redoxfs/target"
 redoxfs_out := redoxfs_target_dir + "/" + userspace_target + "/release"
@@ -119,33 +123,20 @@ build-bootstrap:
         -Z build-std-features=compiler-builtins-mem
     cp userspace/bootstrap/target/{{userspace_target}}/release/bootstrap "{{build_dir}}/bootstrap.elf"
 
-# Cross-build the vendored redoxfs (standalone manifest) for the rustc-hosting smoke.
-# Produces the scheme daemon ("redoxfs") that init will exec via the 50_rootfs / redoxfs.service.
+# Cross-build lerux-filesystem (RedoxFS-compatible fork) for the rustc-hosting smoke.
+# Produces the scheme daemon ("redoxfs" binary name) staged via 50_rootfs.service.
 # Uses the same hybrid sysroot + rust-lld + build-std flags as other early userspace.
-#
-# Post-green (Only Rust runtime port): long-term goal is to build the daemon against
-# userspace/runtime/ (no_std + redox-rt) instead of the relibc hybrid sysroot, so we
-# can eventually drop vendor/relibc/ and the toolchain tarball for this component.
-# See docs/redoxfs-unsafe-audit.md and userspace/runtime/redox-rt for the target model.
-# For now the hybrid path keeps the smoke green while we audit unsafe and prepare the port.
 build-redoxfs: build-sysroot
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p "{{build_dir}}"
-    # For the default (hybrid) smoke path we build with --features std only.
-    # This avoids activating the optional `redox-rt` dep (which wants libredox ^0.1.17),
-    # preventing version conflicts with the libredox used by the std feature / redox-scheme.
-    # The guard lets us reuse a previous successful cross artifact from the crate's own
-    # target dir (typical on a dev machine after the first build). On a clean CI it will
-    # run the cross; with fewer constraints on libredox the hope is that the pinned
-    # redox_syscall + redox-scheme will resolve without the E0277 errors.
-    if [ ! -f "{{redoxfs_out}}/redoxfs" ]; then
+    if [ ! -f "{{lerux_fs_out}}/redoxfs" ]; then
         export PATH="{{userspace_toolchain}}:$PATH"
         export RUST_TARGET_PATH="{{justfile_directory()}}/targets"
         export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="{{userspace_rustflags}}"
         export CARGO_TARGET_X86_64_UNKNOWN_REDOX_LINKER=rust-lld
         {{redox_cargo}} build --release \
-            --manifest-path "{{redoxfs_manifest}}" \
+            --manifest-path "{{lerux_fs_manifest}}" \
             --target {{userspace_target_spec}} \
             -Z build-std=std,core,alloc,compiler_builtins \
             -Z build-std-features=compiler-builtins-mem \
@@ -153,8 +144,8 @@ build-redoxfs: build-sysroot
             --features std \
             --bin redoxfs
     fi
-    cp "{{redoxfs_out}}/redoxfs" "{{build_dir}}/redoxfs"
-    echo "build/redoxfs present for default/hybrid path."
+    cp "{{lerux_fs_out}}/redoxfs" "{{build_dir}}/redoxfs"
+    echo "build/redoxfs present for default/hybrid path (from lerux-filesystem)."
 
 # Build for the redoxfs scheme daemon when the RUNTIME_REDOXFS=1 path is selected.
 # Links against userspace/runtime (redox-rt) with static crt; avoids relibc crt*.o.
@@ -172,9 +163,9 @@ build-redoxfs-runtime: build-sysroot
         -Z build-std=core,alloc,compiler_builtins \
         -Z build-std-features=compiler-builtins-mem \
         -Z json-target-spec || true
-    if [ ! -f "{{redoxfs_out}}/redoxfs" ]; then
+    if [ ! -f "{{lerux_fs_out}}/redoxfs" ]; then
         {{redox_cargo}} build --release \
-            --manifest-path "{{redoxfs_manifest}}" \
+            --manifest-path "{{lerux_fs_manifest}}" \
             --target {{userspace_target_spec}} \
             -Z build-std=std,core,alloc,compiler_builtins \
             -Z build-std-features=compiler-builtins-mem \
@@ -182,8 +173,8 @@ build-redoxfs-runtime: build-sysroot
             --features std,redox-daemon \
             --bin redoxfs
     fi
-    cp "{{redoxfs_out}}/redoxfs" "{{build_dir}}/redoxfs-runtime"
-    echo "redoxfs runtime binary staged (RUNTIME_REDOXFS=1 path; hybrid std + redox-daemon feature)."
+    cp "{{lerux_fs_out}}/redoxfs" "{{build_dir}}/redoxfs-runtime"
+    echo "redoxfs runtime binary staged (RUNTIME_REDOXFS=1 path; from lerux-filesystem)."
 
 # Cross-build the tiny rustc stand-in stub (for RUSTC_SUCCESS_MARKERS).
 build-rustc-smoke: build-sysroot
@@ -306,12 +297,12 @@ smoke-userspace: build-direct-userspace
 build-redoxfs-test-image: build-rustc-smoke
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "==> Building host redoxfs tools (mkfs, populate) from userspace/redoxfs"
-    cargo build --manifest-path userspace/redoxfs/Cargo.toml --release --bin redoxfs-mkfs --bin redoxfs-populate
+    echo "==> Building host redoxfs tools (mkfs, populate) from userspace/lerux-filesystem"
+    cargo build --manifest-path userspace/lerux-filesystem/Cargo.toml --release --bin redoxfs-mkfs --bin redoxfs-populate
     echo "==> Creating tiny test image (64M) at /tmp/lerux-rustc-test.img"
     dd if=/dev/zero of=/tmp/lerux-rustc-test.img bs=1M count=64
-    cargo run --manifest-path userspace/redoxfs/Cargo.toml --release --bin redoxfs-mkfs -- /tmp/lerux-rustc-test.img
-    cargo run --manifest-path userspace/redoxfs/Cargo.toml --release --bin redoxfs-populate -- \
+    cargo run --manifest-path userspace/lerux-filesystem/Cargo.toml --release --bin redoxfs-mkfs -- /tmp/lerux-rustc-test.img
+    cargo run --manifest-path userspace/lerux-filesystem/Cargo.toml --release --bin redoxfs-populate -- \
         /tmp/lerux-rustc-test.img "{{build_dir}}/rustc-smoke"
     echo "==> Populated /tmp/lerux-rustc-test.img with cross-compiled rustc stub"
 
@@ -319,11 +310,11 @@ build-redoxfs-test-image: build-rustc-smoke
 smoke-rustc-disk: build-direct-userspace build-rustc-smoke
     #!/usr/bin/env bash
     set -euo pipefail
-    cargo build --manifest-path userspace/redoxfs/Cargo.toml --release --bin redoxfs-mkfs --bin redoxfs-populate
+    cargo build --manifest-path userspace/lerux-filesystem/Cargo.toml --release --bin redoxfs-mkfs --bin redoxfs-populate
     echo "==> Creating compact initfs disk image (8M) for DiskFile smoke"
     dd if=/dev/zero of=/tmp/lerux-rustc-initfs.img bs=1M count=8
-    cargo run --manifest-path userspace/redoxfs/Cargo.toml --release --bin redoxfs-mkfs -- /tmp/lerux-rustc-initfs.img
-    cargo run --manifest-path userspace/redoxfs/Cargo.toml --release --bin redoxfs-populate -- \
+    cargo run --manifest-path userspace/lerux-filesystem/Cargo.toml --release --bin redoxfs-mkfs -- /tmp/lerux-rustc-initfs.img
+    cargo run --manifest-path userspace/lerux-filesystem/Cargo.toml --release --bin redoxfs-populate -- \
         /tmp/lerux-rustc-initfs.img "{{build_dir}}/rustc-smoke"
     mkdir -p userspace/initfs-staging/disk
     cp /tmp/lerux-rustc-initfs.img userspace/initfs-staging/disk/rustc-test.img
@@ -405,6 +396,55 @@ test:
     cargo test --manifest-path userspace/Cargo.toml --workspace || echo "(some members may need extra setup; run per-crate as needed)"
     @echo "Host unit tests complete. For full coverage report use: just coverage"
 
+# Host unit tests for the vendored redoxfs reference (frozen behavioral spec).
+test-redoxfs:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "==> redoxfs (std, default features)"
+    cargo test --manifest-path userspace/redoxfs/Cargo.toml
+    echo "==> redoxfs (no_std lib tests)"
+    cargo test --manifest-path userspace/redoxfs/Cargo.toml --no-default-features --lib
+
+# Host unit tests for lerux-filesystem (working fork).
+test-lerux-fs:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "==> lerux-filesystem (std, default features)"
+    cargo test --manifest-path userspace/lerux-filesystem/Cargo.toml
+    echo "==> lerux-filesystem (no_std lib tests)"
+    cargo test --manifest-path userspace/lerux-filesystem/Cargo.toml --no-default-features --lib
+
+# Parity gate: both FS crates must pass the same host test suite.
+test-fs-parity: test-redoxfs test-lerux-fs
+
+# Coverage for the vendored redoxfs reference (separate from main 100% gate).
+coverage-redoxfs:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rustup component add llvm-tools-preview 2>/dev/null || true
+    if ! command -v cargo-llvm-cov >/dev/null 2>&1; then
+        cargo install cargo-llvm-cov --locked --quiet || echo "cargo-llvm-cov install may have issues; ensure it is on PATH"
+    fi
+    mkdir -p target/coverage
+    cargo llvm-cov --manifest-path userspace/redoxfs/Cargo.toml \
+        --html --output-dir target/coverage/redoxfs \
+        --summary-only --fail-under-lines 60
+
+# Side-by-side FS coverage reports (reference + fork).
+coverage-fs-parity: coverage-redoxfs coverage-lerux-fs
+
+coverage-lerux-fs:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rustup component add llvm-tools-preview 2>/dev/null || true
+    if ! command -v cargo-llvm-cov >/dev/null 2>&1; then
+        cargo install cargo-llvm-cov --locked --quiet || echo "cargo-llvm-cov install may have issues; ensure it is on PATH"
+    fi
+    mkdir -p target/coverage
+    cargo llvm-cov --manifest-path userspace/lerux-filesystem/Cargo.toml \
+        --html --output-dir target/coverage/lerux-filesystem \
+        --summary-only --fail-under-lines 60
+
 # Generate coverage report aiming for 100% on in-scope code (excludes redoxfs + vendor).
 # Uses cargo-llvm-cov (installs on demand for local dev; CI jobs already provision llvm-tools).
 # See docs/development/coverage.md for exceptions policy, ignore config, and how to run pieces.
@@ -431,7 +471,7 @@ coverage:
     cargo llvm-cov -p trampoline-validation --summary-only || true
 
     echo "==> Combined / top-level report (best effort)"
-    cargo llvm-cov --workspace --html --output-dir target/coverage/overall --ignore-filename-regex '(/redoxfs/|/vendor/|/target/|validation/trampolines/asm)' || true
+    cargo llvm-cov --workspace --html --output-dir target/coverage/overall --ignore-filename-regex '(/redoxfs/|/lerux-filesystem/|/vendor/|/target/|validation/trampolines/asm)' || true
 
     echo "Reports written under target/coverage/. Open target/coverage/*/html/index.html"
     echo "See docs/development/coverage.md for the 100% goal, approved exceptions, and update steps."

@@ -1,4 +1,4 @@
-#![crate_name = "redoxfs"]
+#![crate_name = "lerux_filesystem"]
 #![crate_type = "lib"]
 #![cfg_attr(not(feature = "std"), no_std)]
 // Used often in generating redox_syscall errors

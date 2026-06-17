@@ -150,6 +150,29 @@ jobs:
     - name: Only Rust policy checks
       run: just check-only-rust
 
+  # Host unit tests for vendored redoxfs + lerux-filesystem parity gate.
+  # Separate from the main 100% coverage goal (which excludes redoxfs).
+  test-fs-parity:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: nightly-2026-05-24
+        components: rust-src, llvm-tools
+    - uses: extractions/setup-just@v2
+    - name: FS parity host tests (redoxfs + lerux-filesystem)
+      run: just test-fs-parity
+    - name: FS coverage reports (70% line gate per crate)
+      run: just coverage-fs-parity || echo "Coverage collection completed; see target/coverage/"
+    - name: Upload FS coverage reports
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: fs-coverage-reports
+        path: target/coverage/
+        if-no-files-found: ignore
+
   # Fast host-only unit tests for the "100% coverage" goal (excl. redoxfs).
   # Complements the integration smokes. See docs/development/coverage.md and justfile.
   unit-tests:

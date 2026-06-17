@@ -432,6 +432,8 @@ All "Plan to first green" items delivered (harness, staging, service, image mkfs
 - All verifs green after each batch (no_std, 39 tests, cross build-redoxfs + new runtime recipe).
 See audit doc for full status. Smoke path remains the gate. Incremental, reviewable changes only. To test the no_std path for redoxfs: RUNTIME_REDOXFS=1 just smoke-rustc (or build-direct-userspace).
 
+**2026-06-17: lerux-filesystem fork + test harness.** Expanded the frozen `userspace/redoxfs/` reference to 67 host tests (64 lib + 3 CLI) with ~62% line coverage; forked the working copy to `userspace/lerux-filesystem/` (`lerux_filesystem` crate, guest binaries still named `redoxfs*`). Recipes: `just test-redoxfs`, `just test-lerux-fs`, `just test-fs-parity`, `just coverage-redoxfs`, `just coverage-fs-parity`. Build/smoke paths now cross-build from lerux-filesystem; redoxfs remains the behavioral spec.
+
 ## How to Use This Document
 
 - Add new items as they come up in discussion.

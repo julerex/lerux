@@ -1,6 +1,6 @@
 [package]
-name = "redoxfs"
-description = "The Redox Filesystem"
+name = "lerux-filesystem"
+description = "Lerux filesystem (RedoxFS-compatible fork for lerux)"
 repository = "https://gitlab.redox-os.org/redox-os/redoxfs"
 version = "0.9.0"
 license-file = "LICENSE"
@@ -9,16 +9,12 @@ authors = ["Jeremy Soller <jackpot51@gmail.com>"]
 edition = "2021"
 
 [workspace]
-# Standalone crate (vendored base-first for the rustc-hosting smoke). Keep its target/ and
-# build independent from the userspace/ workspace (like bootstrap and the new rustc-smoke).
+# Standalone crate (lerux fork of vendored redoxfs). Keep its target/ and build
+# independent from the userspace/ workspace (like bootstrap and rustc-smoke).
 # just recipes supply the full cross RUSTFLAGS/sysroot for the x86_64-unknown-redox target.
-#
-# Post-green note (runtime port): the lib already supports `#![cfg_attr(not(feature = "std"), no_std)]`.
-# Future: add a "redox" or "no-std-daemon" build path that links against userspace/runtime/redox-rt
-# instead of relibc for the scheme daemon binary (drop direct libc + libredox where possible).
 
 [lib]
-name = "redoxfs"
+name = "lerux_filesystem"
 path = "src/lib.rs"
 
 [[bin]]

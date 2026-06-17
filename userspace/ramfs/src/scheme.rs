@@ -288,7 +288,7 @@ impl SchemeSync for Scheme {
     }
     fn unlinkat(&mut self, dirfd: usize, path: &str, flags: usize, ctx: &CallerCtx) -> Result<()> {
         {
-            if !self.handles.get(dirfd)?.as_inode()? != Filesystem::ROOT_INODE {
+            if self.handles.get(dirfd)?.as_inode()? != Filesystem::ROOT_INODE {
                 return Err(Error::new(EACCES));
             }
         }

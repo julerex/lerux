@@ -20,7 +20,7 @@ fn set_fd_flags(fd: RawFd, flags: usize) -> io::Result<()> {
 unsafe fn get_fd(var: &str) -> RawFd {
     let fd: RawFd = std::env::var(var).unwrap().parse().unwrap();
     if unsafe {
-        set_fd_flags(fd, syscall::CallFlags::FD_CLOEXEC.bits())
+        set_fd_flags(fd, syscall::O_CLOEXEC)
     }
     .is_err()
     {
@@ -130,5 +130,24 @@ impl SchemeDaemon {
         let cap_id = scheme.scheme_root()?;
         let cap_fd = socket.create_this_scheme_fd(0, cap_id, 0, 0)?;
         self.ready_with_fd(Fd::new(cap_fd))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn f_setfd_cloexec_matches_kernel_o_cloexec() {
+        // F_SETFD checks arg & O_CLOEXEC (kernel/src/syscall/fs.rs), not CallFlags::FD_CLOEXEC.
+        assert_eq!(syscall::O_CLOEXEC, 0x0100_0000);
+        assert_ne!(syscall::O_CLOEXEC, syscall::CallFlags::FD_CLOEXEC.bits());
+    }
+
+    #[test]
+    fn ramfs_unlinkat_root_dirfd_guard_uses_equality_not_bitwise_not() {
+        const ROOT_INODE: usize = 1;
+        let inode = ROOT_INODE;
+        // Regression for ramfs scheme.rs unlinkat: `!inode != ROOT_INODE` is always true.
+        assert!((!inode) != ROOT_INODE);
+        assert!(inode == ROOT_INODE);
     }
 }

@@ -16,6 +16,7 @@ See the [root README](../README.md) for a high-level project overview.
 - `development/`
   - [coverage.md](development/coverage.md) — 100% unit test coverage goal (excl. redoxfs), tooling (`just coverage`), and the small approved list of exceptions.
   - [qemu.md](development/qemu.md) — (Consolidated from the old qemu/ tree README) QEMU harness, loader details, boot handoff.
+  - [qemu-x86-boot-sequence.md](development/qemu-x86-boot-sequence.md) — Detailed step-by-step of what executes when the direct-boot lerux kernel image boots under `qemu -kernel` on x86_64 (PVH stub → kstart → kmain → scheduler), with source pointers and real logs.
   - [trampolines.md](development/trampolines.md) — (Consolidated) SMP trampoline validation story, golden files, and the NASM removal.
   - [redoxfs-unsafe-audit.md](development/redoxfs-unsafe-audit.md) — Post-smoke AI-assisted unsafe review of the vendored filesystem (kept here for reference).
 - `kernel/`

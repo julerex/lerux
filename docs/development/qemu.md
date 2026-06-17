@@ -95,4 +95,6 @@ You should see the loader run and (once we improve module loading) the kernel's 
 - `kernel/src/startup/mod.rs` and `arch/x86_shared/start.rs`.
 - Limine documentation (the linker script has comments about Limine compatibility).
 
+**Detailed boot walk-through**: see [qemu-x86-boot-sequence.md](qemu-x86-boot-sequence.md) for a line-by-line account from the Xen PVH note through `kstart`, `start`, `kmain`, and the scheduler (with exact source locations and real serial output).
+
 Let's get this thing booting!

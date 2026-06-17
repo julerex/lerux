@@ -367,7 +367,7 @@ check-only-rust *ARGS:
 
 # Verify embedded SMP trampoline bytes match NASM sources (requires nasm).
 validate-trampolines:
-    "{{justfile_directory()}}/kernel/validation/trampolines/validate-trampolines.sh"
+    "{{justfile_directory()}}/lerux-kernel/validation/trampolines/validate-trampolines.sh"
 
 # Host unit tests for crates that support them without the custom kernel target or cross.
 # This is the fast, native "cargo test" surface (rmm under std, kernel cfg(test) modules,

@@ -2,7 +2,9 @@
 
 This file tracks code copied into lerux from upstream projects (especially Redox), how it differs from upstream, and what still depends on external registries. See [plan.md](plan.md) for the **vendor everything** policy: no build-time dependencies on Redox GitLab or other moving upstream trees.
 
-**Convention:** vendored trees live under `kernel/`, `userspace/`, or `vendor/` (pick one layout per import; document each row below). Reference trees such as `../tryredox/base` are **not** part of lerux and are not listed here as vendored—only what is **in this repository**.
+**Convention:** vendored trees live under `kernel/`, `userspace/`, or `vendor/` (pick one layout per import; document each row below). The `vendor/` directory now consolidates the pristine upstream Redox kernel source snapshot plus all crate dependencies (and many transitives) of lerux as plain source trees. Reference trees such as `../tryredox/base` are **not** part of lerux and are not listed here as vendored—only what is **in this repository**.
+
+Detailed per-subdirectory vendoring dates, sources, and cleanup notes live in `vendor/README.md`.
 
 ---
 
@@ -14,15 +16,16 @@ When you vendor a new component:
 2. Add a row to the table below with upstream URL, version or commit, license, and lerux path.
 3. List **lerux-specific changes** (patches, features, deleted files).
 4. If the import came from a reference checkout, record that commit in **Upstream revision** (or `TBD` until someone pins it).
-5. For crates.io dependencies you intend to vendor later, note them under [External dependencies (not yet vendored)](#external-dependencies-not-yet-vendored).
+5. For crates.io dependencies (or bulk via `cargo vendor`), place under `vendor/<name>-<ver>/` (or appropriate subdir). After mass vendoring, run cleanup: `rm -rf` any `.git` dirs to produce plain source trees; prune large/irrelevant crates (e.g. winapi-* Windows platform sources). Document per-subdir dates and details in `vendor/README.md`.
+6. Update this file's tables (and the External dependencies section) and cross-reference `vendor/README.md`.
 
-When syncing from upstream Redox, bump **Upstream revision**, re-apply lerux patches, and note the date in **Last synced**.
+When syncing from upstream Redox, bump **Upstream revision**, re-apply lerux patches, and note the date in **Last synced**. Re-vendor the pristine snapshot to `vendor/redox-kernel/` if refreshing from reference.
 
 ---
 
 ## Kernel divergence from upstream (lerux patches)
 
-Most of `kernel/` is unmodified Redox code (~2026-05 import). The items below are **intentional lerux changes** on top of upstream; re-check them on every kernel sync. Terminology: [docs/GLOSSARY.md](docs/GLOSSARY.md). Postmortem on an earlier trampoline mistake: [docs/trampoline-bytes-postmortem.md](docs/trampoline-bytes-postmortem.md).
+Most of the working kernel tree at `kernel/` is unmodified Redox code (~2026-05 import, with subsequent updates). A pristine upstream snapshot of the Redox kernel source is also maintained as a plain source tree at `vendor/redox-kernel/` (see vendored table below). The items below are **intentional lerux changes** on top of upstream; re-check them on every kernel sync. Terminology: [docs/GLOSSARY.md](docs/GLOSSARY.md). Postmortem on an earlier trampoline mistake: [docs/trampoline-bytes-postmortem.md](docs/trampoline-bytes-postmortem.md).
 
 ### What stays the same
 
@@ -57,20 +60,25 @@ Building **without** `direct-boot` still targets a normal Redox-style kernel but
 
 | Component | In-repo path | Upstream | Upstream revision | License | Last synced | Lerux-specific changes |
 |-----------|--------------|----------|-------------------|---------|-------------|-------------------------|
-| Redox kernel | `kernel/` | [redox-os/kernel](https://gitlab.redox-os.org/redox-os/kernel) | `TBD` (initial import ~2026-05; pin commit on next sync) | MIT (`kernel/LICENSE`) | 2026-05 | Direct-boot PVH stub in Rust; SMP trampolines from NASM golden files (`include_bytes!`); `just validate-trampolines` + CI; `direct-boot` embeds initfs; `direct-boot-userspace` spawns bootstrap; no nasm/cc in kernel build |
-| RMM (memory manager) | `kernel/rmm/` | Same kernel tree / [redox-os/rmm](https://gitlab.redox-os.org/redox-os/rmm) | `TBD` (bundled with kernel import) | MIT | 2026-05 | Path dependency from root `Cargo.toml`; no separate remote |
+| Redox kernel (working / adapted tree) | `kernel/` | [redox-os/kernel](https://gitlab.redox-os.org/redox-os/kernel) | `TBD` (initial import ~2026-05; pin commit on next sync) | MIT (`kernel/LICENSE`) | 2026-05 | Direct-boot PVH stub in Rust; SMP trampolines from NASM golden files (`include_bytes!`); `just validate-trampolines` + CI; `direct-boot` embeds initfs; `direct-boot-userspace` spawns bootstrap; no nasm/cc in kernel build |
+| Pristine Redox kernel source (plain source tree) | `vendor/redox-kernel/` | [redox-os/kernel](https://gitlab.redox-os.org/redox-os/kernel) | Copied 2026-06-16 from reference checkout `~/repos/redox/redox_org/kernel` (matching vendored revision) | MIT | 2026-06-16 | Full upstream snapshot for reference / offline use. `.git` removed 2026-06-16 (plain source tree, no VCS metadata). Working adapted copy with lerux patches remains at root `kernel/`. Winapi crates pruned from broader vendoring in same cleanup. |
+| RMM (memory manager) | inlined under `lerux-kernel/src/lerux-rmm/` (from vendor/redox-kernel/rmm) | Same kernel tree / [redox-os/rmm](https://gitlab.redox-os.org/redox-os/rmm) | `TBD` (bundled with kernel import) | MIT | 2026-06-16 (inlining) | Previously a path dep; now fully inlined (no Cargo dep) as `lerux-rmm` under the kernel src tree (original module name rebound via #[path] so kernel code is unchanged). Old top-level lerux-kernel/rmm/ cleaned up. |
+
+**Zero Cargo dependencies for the kernel (2026-06-16 change)**: All former runtime crates from the root Cargo.toml (arrayvec, bitfield, bitflags, fdt, hashbrown + ahash, linked_list_allocator + spinning_top/lock_api/scopeguard, object + memchr, raw-cpuid, redox-path, redox_syscall (bound as "syscall"), rustc-demangle, slab, smallvec, spin, x86, plus the build-dep toml + its host closure serde*/winnow*/toml_edit* etc.) have been copied from their `vendor/*` snapshots and placed as plain source trees in `lerux-kernel/src/lerux-*/` (subdirectories under lerux-kernel/src with the requested lerux-* prefix). The kernel entry point binds the *original* module names via `#[path = "lerux-xxx/lib.rs"] mod original_name;` (and equivalent inside build.rs for the toml family), so the bulk of the kernel source requires no use-site changes. The root Cargo.toml now has no runtime [dependencies] (and no [build-dependencies] toml). The vendored originals in `vendor/` remain the reference snapshots (see also the dedicated `vendor/README.md` for per-subdir dates and the post-vendoring cleanup history). This achieves the "ZERO cargo dependencies" goal while preserving the Redox kernel logic and lerux adaptations.
+
 | initfs (reader) | `userspace/initfs/` | [base/initfs](https://gitlab.redox-os.org/redox-os/base) | `TBD` (copied from `tryredox/base/initfs` 2026-05-30) | MIT | 2026-05-30 | Standalone crate in root workspace; `plain` from crates.io |
 | initfs archiver (host) | `userspace/initfs-tools/` | [base/initfs/tools](https://gitlab.redox-os.org/redox-os/base) | `TBD` (copied from `tryredox/base/initfs/tools` 2026-05-30) | MIT | 2026-05-30 | `redox-initfs-ar` / `redox-initfs-dump`; path dep to `userspace/initfs` |
 | bootstrap | `userspace/bootstrap/` | [base/bootstrap](https://gitlab.redox-os.org/redox-os/base) | `TBD` (copied from `tryredox/base/bootstrap` 2026-05-30) | MIT | 2026-05-30 | Own `[workspace]`; `redox-rt` path to `userspace/runtime/redox-rt`; git dep removed |
 | userspace runtime | `userspace/runtime/` | [relibc/redox-rt + generic-rt](https://gitlab.redox-os.org/redox-os/relibc) | `TBD` (forked from `tryredox/relibc` 2026-05-30) | MIT | 2026-05-30 | Lerux-owned `no_std` runtime; bootstrap links here; init/daemons still on `.toolchain` relibc until step 2 |
-| relibc (partial) | `vendor/relibc/` | [redox-os/relibc](https://gitlab.redox-os.org/redox-os/relibc) | `TBD` (copied from `tryredox/relibc` 2026-05-30) | MIT / BSD | 2026-05-31 | Snapshot for init/daemon link; **`redox-rt` / `generic-rt`** bundled under `vendor/relibc/` for relibc build; **`userspace/runtime/`** used by bootstrap only; sysroot via **`scripts/build-sysroot.sh`** |
+| relibc (partial) | `vendor/relibc/` | [redox-os/relibc](https://gitlab.redox-os.org/redox-os/relibc) | `TBD` (copied from `tryredox/relibc` 2026-05-30) | MIT / BSD | 2026-05-31 | Snapshot for init/daemon link; **`redox-rt` / `generic-rt`** bundled under `vendor/relibc/` for relibc build; **`userspace/runtime/`** used by bootstrap only; sysroot via **`scripts/build-sysroot.sh`**. `.git` removed 2026-06-16 (plain source tree). |
 | init | `userspace/init/` | [base/init](https://gitlab.redox-os.org/redox-os/base) | `TBD` (copied from `tryredox/base/init` 2026-05-30) | MIT | 2026-05-31 | Static link via in-tree sysroot + `targets/x86_64-unknown-redox.json`; no workspace `libc` crate |
 | logd, zerod, randd, ramfs | `userspace/{logd,zerod,randd,ramfs}/` | [base/*](https://gitlab.redox-os.org/redox-os/base) | `TBD` (copied from `tryredox/base` 2026-05-30) | MIT | 2026-05-30 | Minimal early daemons; staged into `initfs-staging/bin/` |
 | rtcd | `userspace/drivers/rtcd/` | [base/drivers/rtcd](https://gitlab.redox-os.org/redox-os/base) | `TBD` (copied from `tryredox/base/drivers/rtcd` 2026-05-30) | MIT | 2026-05-30 | Required by trimmed `00_runtime.target` |
 | daemon, scheme-utils | `userspace/daemon/`, `userspace/scheme-utils/` | [base/*](https://gitlab.redox-os.org/redox-os/base) | `TBD` (copied from `tryredox/base` 2026-05-30) | MIT | 2026-05-30 | Shared daemon plumbing for logd/zerod/randd/ramfs/rtcd |
 | config (userspace) | `userspace/config/` | [base/config](https://gitlab.redox-os.org/redox-os/base) | `TBD` (copied from `tryredox/base/config` 2026-05-30) | MIT | 2026-05-30 | Build-time config for daemons |
-| redox-log | `vendor/redox-log/` | [redox-os/redox-log](https://gitlab.redox-os.org/redox-os/redox-log) | `TBD` (copied from `tryredox/redox-log` 2026-05-30) | MIT | 2026-05-30 | Logging crate for daemons |
+| redox-log | `vendor/redox-log/` | [redox-os/redox-log](https://gitlab.redox-os.org/redox-os/redox-log) | `TBD` (copied from `tryredox/redox-log` 2026-05-30) | MIT | 2026-05-30 | Logging crate for daemons. `.git` removed 2026-06-16 (plain source tree). |
 | redoxfs | `userspace/redoxfs/` | [redox-os/redoxfs](https://gitlab.redox-os.org/redox-os/redoxfs) | TBD (copied from ../tryredox/redoxfs 2026-06) | MIT | 2026-06 | Base-first import to support rustc-hosting goal (real FS for source trees/artifacts); minimal mechanical integration only (DiskMemory/DiskFile backends, scheme provider); no FUSE; preserves Redox scheme interface for compatibility with "rustc built for redox"; AI-driven unsafe/idiom cleanup and own-path changes (started post-green: runtime port for no_std daemon under RUNTIME_REDOXFS flag, SAFETY docs, partial bin/mount.rs port to redox-rt/syscall; wired into build/smoke path behind flag). |
+| All crate dependencies (kernel + workspace) | `vendor/<name>-<ver>/` (e.g. `ahash-0.8.12/`, `hashbrown-0.14.5/`, `redox-path-0.2.0/`, `redox_syscall-0.8.0/`, `fdt-0.2.0-alpha1/`, `spin-0.9.8/`, `x86-0.47.0/`, `object-0.37.3/`, `rustc-demangle-0.1.27/`, `sbi-rt-0.0.3/`, and ~80+ others including transitives) | crates.io (and the one git dep for fdt); Redox crates from their published sources | Exact versions from `Cargo.lock` on 2026-06-16 | Various (MIT/Apache/etc.) | 2026-06-16 | Captured via `cargo vendor --versioned-dirs` for full offline / "vendor everything" compliance. Includes all direct + transitive deps of the lerux kernel and workspace (initfs tools, etc.). Winapi-* crates (large Windows platform sources) pruned 2026-06-16 as irrelevant. See `vendor/README.md` for full list and per-subdir dates. |
 | initfs staging | `userspace/initfs-staging/` | lerux + upstream units | — | MIT | 2026-05-31 | `bin/` + trimmed `lib/init.d/`; **no** dynamic `libc.so` / `ld64` (static ELFs) |
 | QEMU bring-up (loader scripts, docs) | `qemu/` | lerux-original + Redox boot concepts | — | MIT (lerux) | — | Custom loader / `KernelArgs` handoff; `smoke-test.sh` supports `USERSPACE_SMOKE=1` |
 
@@ -216,29 +224,32 @@ flowchart TB
 
 | Area | `tryredox` status | Lerux implication |
 |------|-------------------|-------------------|
-| Kernel / syscall / relibc | Present | Kernel already in lerux; vendor relibc + syscall in-tree when enabling userspace |
-| `base` (initfs, bootstrap, daemons, drivers) | Present | Primary source for Phase A–B vendoring |
+| Kernel / syscall / relibc | Present | Adapted kernel + RMM at root `kernel/`; pristine kernel source snapshot at `vendor/redox-kernel/` (2026-06-16); relibc and redox-log at `vendor/` (plain trees post-2026-06-16 cleanup); syscall + path crates vendored in `vendor/` |
+| `base` (initfs, bootstrap, daemons, drivers) | Present | Primary source for Phase A–B vendoring (many now in `userspace/` or `vendor/`) |
 | Bootloader | In `tryredox/` | Keep lerux `qemu/` path or vendor `bootloader` / UEFI tree |
 | Utils / packaging / shell | In `tryredox/` | Not needed for first bootstrap milestone; needed for “real” Redox image parity |
-| `acpi`, `redox-log`, `orbclient` | In `tryredox/` | Vendor in-tree when building `base` or `orbital` inside lerux |
+| `acpi`, `redox-log`, `orbclient` | In `tryredox/` | Vendor in-tree when building `base` or `orbital` inside lerux (redox-log already in `vendor/`) |
 | Desktop | In `tryredox/` (Tier 3) | Defer for lerux until after minimal userspace |
+| Third-party crates (hashbrown, spin, object, etc.) | N/A (upstream crates.io/git) | All relevant kernel + workspace deps vendored into `vendor/<name>-<ver>/` (2026-06-16) for full offline compliance |
 
-When cloning new reference repos into `tryredox/`, update the tables above and note the date.
+When cloning new reference repos into `tryredox/`, update the tables above and note the date. For bulk crate or snapshot updates directly into `vendor/`, follow the vendoring steps above and record details (including cleanup like .git removal and pruning) in both this file and `vendor/README.md`.
 
 ---
 
-## External dependencies (not yet vendored)
+## External dependencies (now inlined for zero-dep kernel)
 
-These are pulled at build time from **crates.io** or **git** today. Per project policy, git remotes (especially Redox) should be eliminated by vendoring; crates.io crates may stay until explicitly copied in-tree.
+As of the 2026-06-16 zero-cargo-deps change, the kernel has *no* runtime [dependencies] (and the former build-dep toml is also inlined). All the crates previously listed here (redox_syscall, redox-path, fdt, hashbrown, spin, object, etc. and their transitives) plus the build-time toml family have been copied from `vendor/` into `lerux-kernel/src/lerux-*/` (see the big note in the Vendored in-tree table above). The entries in `vendor/` remain the canonical snapshots (with dates in `vendor/README.md`). Winapi-* were pruned earlier in the same vendoring effort.
+
+The remaining notes below are for any stragglers or future reference (as of last update).
 
 | Crate / dependency | Source | Version / revision | Used by | Vendoring status |
 |--------------------|--------|--------------------|---------|------------------|
-| `redox_syscall` | crates.io | 0.8.0 | Root kernel | OK for now; pin in `Cargo.lock`; consider in-tree if API fork needed |
-| `redox-path` | crates.io | 0.2.0 | Root kernel | OK for now |
-| `fdt` | git `github.com/repnop/fdt` | `2fb1409e…` | Root kernel (`Cargo.toml`) | **Should vendor** into `vendor/fdt/` (non-Redox but still git dep) |
-| Other kernel deps | crates.io | see `Cargo.lock` | Root kernel | Audit periodically; vendor if supply-chain or offline build matters |
+| `redox_syscall` | crates.io | 0.8.0 | Root kernel | **Vendored** into `vendor/redox_syscall-0.8.0/` (2026-06-16) |
+| `redox-path` | crates.io | 0.2.0 | Root kernel | **Vendored** into `vendor/redox-path-0.2.0/` (2026-06-16) |
+| `fdt` | git `github.com/repnop/fdt` | `2fb1409e…` | Root kernel (`Cargo.toml`) | **Vendored** into `vendor/fdt-0.2.0-alpha1/` (2026-06-16) |
+| Other kernel + workspace deps | crates.io (see `Cargo.lock`) | Various (pinned in lock) | Root kernel + initfs-tools, etc. | **Vendored** into `vendor/<name>-<ver>/` (2026-06-16; ~80+ entries including transitives like syn, serde, toml, etc.) |
 
-**Not allowed long-term:** `git = "https://gitlab.redox-os.org/redox-os/…"` (or equivalent) in lerux manifests.
+**Not allowed long-term:** `git = "https://gitlab.redox-os.org/redox-os/…"` (or equivalent) in lerux manifests. Crates.io or git sources should be vendored into `vendor/`.
 
 ---
 
@@ -254,10 +265,11 @@ These are pulled at build time from **crates.io** or **git** today. Per project 
 ## Sync procedure (kernel / large imports)
 
 1. Identify upstream commit on [redox-os/kernel](https://gitlab.redox-os.org/redox-os/kernel) (or relevant repo).
-2. Diff against current `kernel/`; apply lerux-only commits on top (direct-boot, trampolines, etc.).
-3. Update **Upstream revision** and **Last synced** in this file.
-4. Run `just build-direct`, `just smoke`, `just validate-trampolines`, and `cargo test --bin kernel trampoline`.
+2. Diff against current `kernel/` (the adapted build tree); apply lerux-only commits on top (direct-boot, trampolines, etc.). The pristine source snapshot in `vendor/redox-kernel/` may also be refreshed from the reference checkout.
+3. Update **Upstream revision** and **Last synced** in this file (and dates in `vendor/README.md` for new snapshots).
+4. Run `just build-direct`, `just smoke`, `just validate-trampolines`, and `cargo test --bin kernel trampoline`. Re-run `cargo vendor` (or equivalent) + the inlining copies under `lerux-kernel/src/lerux-*` (plus cleanup) if any of the inlined crates or the pristine kernel snapshot need refreshing; prune irrelevant large crates (e.g. winapi-*) as before.
 5. Note breaking syscall or ABI changes against planned userspace vendoring.
+6. After changes to `vendor/`, remove any `.git` dirs (to keep plain source trees) and update `vendor/README.md` with the vendoring date. Re-copy the affected sources into the lerux-* locations under lerux-kernel/src/ and verify the kernel still builds with zero runtime cargo deps.
 
 ---
 
@@ -268,3 +280,4 @@ These are pulled at build time from **crates.io** or **git** today. Per project 
 - [README.md](README.md) — project overview
 - [docs/GLOSSARY.md](docs/GLOSSARY.md) — terminology
 - [docs/trampoline-bytes-postmortem.md](docs/trampoline-bytes-postmortem.md) — trampoline byte-array incident
+- `vendor/README.md` — per-subdirectory vendoring dates, sources, and cleanup notes for everything under `vendor/` (kernel snapshot + all crate deps)

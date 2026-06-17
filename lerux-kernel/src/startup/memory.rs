@@ -1,16 +1,16 @@
 use crate::{
     arch::CurrentRmmArch,
     memory::PAGE_SIZE,
+    rmm::{
+        Arch, BumpAllocator, MemoryArea, PageFlags, PageMapper, PhysicalAddress, TableKind,
+        VirtualAddress, KILOBYTE, MEGABYTE,
+    },
     startup::{memory::BootloaderMemoryKind::Null, KernelArgs},
 };
 use core::{
     cell::SyncUnsafeCell,
     cmp::{max, min},
     slice::{self, Iter},
-};
-use crate::rmm::{
-    Arch, BumpAllocator, MemoryArea, PageFlags, PageMapper, PhysicalAddress, TableKind,
-    VirtualAddress, KILOBYTE, MEGABYTE,
 };
 
 // Keep synced with OsMemoryKind in bootloader

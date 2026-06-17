@@ -2,10 +2,12 @@
 use crate::hashbrown::raw::RawTable;
 use crate::hashbrown::{Equivalent, TryReserveError};
 use alloc::borrow::ToOwned;
-use core::fmt;
-use core::hash::{BuildHasher, Hash};
-use core::iter::{Chain, FusedIterator};
-use core::ops::{BitAnd, BitOr, BitXor, Sub};
+use core::{
+    fmt,
+    hash::{BuildHasher, Hash},
+    iter::{Chain, FusedIterator},
+    ops::{BitAnd, BitOr, BitXor, Sub},
+};
 
 use super::map::{self, DefaultHashBuilder, HashMap, Keys};
 use crate::hashbrown::raw::{Allocator, Global, RawExtractIf};
@@ -2500,8 +2502,7 @@ fn assert_covariance() {
 
 #[cfg(test)]
 mod test_set {
-    use super::super::map::DefaultHashBuilder;
-    use super::HashSet;
+    use super::{super::map::DefaultHashBuilder, HashSet};
     use std::vec::Vec;
 
     #[test]

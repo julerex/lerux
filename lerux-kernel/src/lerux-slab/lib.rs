@@ -130,9 +130,13 @@ mod serde;
 mod builder;
 
 use alloc::vec::{self, Vec};
-use core::iter::{self, FromIterator, FusedIterator};
-use core::mem::MaybeUninit;
-use core::{fmt, mem, ops, slice};
+use core::{
+    fmt,
+    iter::{self, FromIterator, FusedIterator},
+    mem,
+    mem::MaybeUninit,
+    ops, slice,
+};
 
 /// Pre-allocated storage for a uniform data type
 ///

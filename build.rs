@@ -13,16 +13,22 @@ use std::{env, path::Path, process::Command};
 
 /// Minimal parser for the exact shape used by parse_kconfig.
 /// Returns the inner features map for the requested arch (or None).
-fn parse_simple_arch_features(s: &str, arch: &str) -> Option<std::collections::BTreeMap<String, String>> {
+fn parse_simple_arch_features(
+    s: &str,
+    arch: &str,
+) -> Option<std::collections::BTreeMap<String, String>> {
     let mut in_arch_section = false;
     let mut in_features = false;
     let mut out = std::collections::BTreeMap::new();
     for raw in s.lines() {
         let line = raw.trim();
-        if line.is_empty() || line.starts_with('#') { continue; }
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
         if line.starts_with('[') && line.ends_with(']') {
-            let sec = &line[1..line.len()-1].trim();
-            in_arch_section = sec == &format!("arch.{arch}") || sec.starts_with(&format!("arch.{arch}."));
+            let sec = &line[1..line.len() - 1].trim();
+            in_arch_section =
+                sec == &format!("arch.{arch}") || sec.starts_with(&format!("arch.{arch}."));
             in_features = false;
             continue;
         }
@@ -34,11 +40,17 @@ fn parse_simple_arch_features(s: &str, arch: &str) -> Option<std::collections::B
             if let Some((k, v)) = line.split_once('=') {
                 let k = k.trim().trim_matches(|c| c == '"' || c == '\'').to_owned();
                 let v = v.trim().trim_matches(|c| c == '"' || c == '\'').to_owned();
-                if !k.is_empty() { out.insert(k, v); }
+                if !k.is_empty() {
+                    out.insert(k, v);
+                }
             }
         }
     }
-    if out.is_empty() { None } else { Some(out) }
+    if out.is_empty() {
+        None
+    } else {
+        Some(out)
+    }
 }
 
 fn parse_kconfig(arch: &str) -> Option<()> {

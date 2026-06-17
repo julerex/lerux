@@ -1,12 +1,12 @@
 //! Rayon extensions for `HashTable`.
 
 use super::raw::{RawIntoParIter, RawParDrain, RawParIter};
-use crate::hashbrown::hash_table::HashTable;
-use crate::hashbrown::raw::{Allocator, Global};
-use core::fmt;
-use core::marker::PhantomData;
-use rayon::iter::plumbing::UnindexedConsumer;
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use crate::hashbrown::{
+    hash_table::HashTable,
+    raw::{Allocator, Global},
+};
+use core::{fmt, marker::PhantomData};
+use rayon::iter::{plumbing::UnindexedConsumer, IntoParallelIterator, ParallelIterator};
 
 /// Parallel iterator over shared references to entries in a map.
 ///

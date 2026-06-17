@@ -203,8 +203,10 @@ impl<'a> Fdt<'a> {
         }
 
         let tmp_header = core::slice::from_raw_parts(ptr, core::mem::size_of::<FdtHeader>());
-        let real_size =
-            FdtHeader::from_bytes(&mut FdtData::new(tmp_header)).unwrap().totalsize.get() as usize;
+        let real_size = FdtHeader::from_bytes(&mut FdtData::new(tmp_header))
+            .unwrap()
+            .totalsize
+            .get() as usize;
 
         Self::new(core::slice::from_raw_parts(ptr, real_size))
     }
@@ -226,16 +228,26 @@ impl<'a> Fdt<'a> {
     /// Return the `/aliases` node, if one exists
     pub fn aliases(&self) -> Option<Aliases<'_, 'a>> {
         Some(Aliases {
-            node: node::find_node(&mut FdtData::new(self.structs_block()), "/aliases", self, None)?,
+            node: node::find_node(
+                &mut FdtData::new(self.structs_block()),
+                "/aliases",
+                self,
+                None,
+            )?,
             header: self,
         })
     }
 
     /// Searches for the `/chosen` node, which is always available
     pub fn chosen(&self) -> Chosen<'_, 'a> {
-        node::find_node(&mut FdtData::new(self.structs_block()), "/chosen", self, None)
-            .map(|node| Chosen { node })
-            .expect("/chosen is required")
+        node::find_node(
+            &mut FdtData::new(self.structs_block()),
+            "/chosen",
+            self,
+            None,
+        )
+        .map(|node| Chosen { node })
+        .expect("/chosen is required")
     }
 
     /// Return the `/cpus` node, which is always available
@@ -250,7 +262,9 @@ impl<'a> Fdt<'a> {
 
     /// Returns the memory node, which is always available
     pub fn memory(&self) -> Memory<'_, 'a> {
-        Memory { node: self.find_node("/memory").expect("requires memory node") }
+        Memory {
+            node: self.find_node("/memory").expect("requires memory node"),
+        }
     }
 
     /// Returns an iterator over the memory reservations
@@ -276,7 +290,9 @@ impl<'a> Fdt<'a> {
 
     /// Return the root (`/`) node, which is always available
     pub fn root(&self) -> Root<'_, 'a> {
-        Root { node: self.find_node("/").expect("/ is a required node") }
+        Root {
+            node: self.find_node("/").expect("/ is a required node"),
+        }
     }
 
     /// Returns the first node that matches the node path, if you want all that
@@ -299,7 +315,9 @@ impl<'a> Fdt<'a> {
     /// one of the strings inside of `with`
     pub fn find_compatible(&self, with: &[&str]) -> Option<node::FdtNode<'_, 'a>> {
         self.all_nodes().find(|n| {
-            n.compatible().and_then(|compats| compats.all().find(|c| with.contains(c))).is_some()
+            n.compatible()
+                .and_then(|compats| compats.all().find(|c| with.contains(c)))
+                .is_some()
         })
     }
 
@@ -343,7 +361,10 @@ impl<'a> Fdt<'a> {
     pub fn find_all_nodes(&self, path: &'a str) -> impl Iterator<Item = node::FdtNode<'_, 'a>> {
         let mut done = false;
         let only_root = path == "/";
-        let valid_path = path.chars().fold(0, |acc, c| acc + if c == '/' { 1 } else { 0 }) >= 1;
+        let valid_path = path
+            .chars()
+            .fold(0, |acc, c| acc + if c == '/' { 1 } else { 0 })
+            >= 1;
 
         let mut path_split = path.rsplitn(2, '/');
         let child_name = path_split.next().unwrap();
@@ -416,7 +437,9 @@ impl<'a> Fdt<'a> {
     }
 
     fn str_at_offset(&self, offset: usize) -> &'a str {
-        self.cstr_at_offset(offset).as_str().expect("not utf-8 cstr")
+        self.cstr_at_offset(offset)
+            .as_str()
+            .expect("not utf-8 cstr")
     }
 
     fn strings_block(&self) -> &'a [u8] {

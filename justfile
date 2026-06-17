@@ -157,21 +157,21 @@ build-redoxfs: build-sysroot
     echo "build/redoxfs present for default/hybrid path."
 
 # Build for the redoxfs scheme daemon when the RUNTIME_REDOXFS=1 path is selected.
-# Uses --features std,redox-daemon (this activates the optional redox-rt dep).
-# Guard still protects against re-running the cross compile when a good artifact exists.
+# Links against userspace/runtime (redox-rt) with static crt; avoids relibc crt*.o.
 build-redoxfs-runtime: build-sysroot
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p "{{build_dir}}"
     export PATH="{{userspace_toolchain}}:$PATH"
     export RUST_TARGET_PATH="{{justfile_directory()}}/targets"
-    # Runtime-style RUSTFLAGS for the "runtime path" build context (used for flag staging).
     export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C linker=rust-lld -C target-feature=+crt-static"
     export CARGO_TARGET_X86_64_UNKNOWN_REDOX_LINKER=rust-lld
-    # Build the target daemon bin using runtime RUSTFLAGS + build-std context.
-    # Guard the actual cargo so that when a good artifact already exists we don't force
-    # a recompile that can hit the redox-scheme E0277 skew. Keeps `just build-*-redoxfs*`
-    # and stage-userspace strict (no ||) and green for regular work.
+    {{redox_cargo}} build --release \
+        --manifest-path userspace/runtime/redox-rt/Cargo.toml \
+        --target {{userspace_target_spec}} \
+        -Z build-std=core,alloc,compiler_builtins \
+        -Z build-std-features=compiler-builtins-mem \
+        -Z json-target-spec || true
     if [ ! -f "{{redoxfs_out}}/redoxfs" ]; then
         {{redox_cargo}} build --release \
             --manifest-path "{{redoxfs_manifest}}" \
@@ -183,12 +183,7 @@ build-redoxfs-runtime: build-sysroot
             --bin redoxfs
     fi
     cp "{{redoxfs_out}}/redoxfs" "{{build_dir}}/redoxfs-runtime"
-    echo "redoxfs binary built (or reused) in runtime recipe context for flag path (no_std + redox-daemon to avoid scheme dep skew)."
-    # Host tools (mkfs etc.) still std.
-    cargo build --manifest-path "{{redoxfs_manifest}}" --release --bin redoxfs-mkfs --bin redoxfs-ar
-    if [ -f target/release/redoxfs-mkfs ]; then
-        cp target/release/redoxfs-mkfs "{{build_dir}}/redoxfs-mkfs-runtime"
-    fi
+    echo "redoxfs runtime binary staged (RUNTIME_REDOXFS=1 path; hybrid std + redox-daemon feature)."
 
 # Cross-build the tiny rustc stand-in stub (for RUSTC_SUCCESS_MARKERS).
 build-rustc-smoke: build-sysroot
@@ -205,6 +200,15 @@ build-rustc-smoke: build-sysroot
         {{userspace_build_std}} \
         --bin rustc
     cp "{{rustc_smoke_out}}/rustc" "{{build_dir}}/rustc-smoke"
+
+# Report remaining relibc/sysroot dependencies (Only Rust step 4 prep).
+check-relibc-debt:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "==> relibc debt inventory (vendor/relibc + .toolchain sysroot consumers)"
+    rg -n "relibc|build-sysroot|userspace_rustflags|x86_64-unknown-redox" justfile scripts/ userspace/ --glob '!**/target/**' || true
+    echo "==> lerux-native target spec: targets/x86_64-unknown-lerux.json (env=lerux, static only)"
+    test -f targets/x86_64-unknown-lerux.json
 
 # Cross-build init + minimal early daemons (Phase B).
 build-userspace: build-sysroot
@@ -302,17 +306,35 @@ smoke-userspace: build-direct-userspace
 build-redoxfs-test-image: build-rustc-smoke
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "==> Building host redoxfs tools (mkfs etc.) from userspace/redoxfs (for image prep)"
-    cargo build --manifest-path userspace/redoxfs/Cargo.toml --release --bin redoxfs-mkfs --bin redoxfs
+    echo "==> Building host redoxfs tools (mkfs, populate) from userspace/redoxfs"
+    cargo build --manifest-path userspace/redoxfs/Cargo.toml --release --bin redoxfs-mkfs --bin redoxfs-populate
     echo "==> Creating tiny test image (64M) at /tmp/lerux-rustc-test.img"
     dd if=/dev/zero of=/tmp/lerux-rustc-test.img bs=1M count=64
-    # Correct CLI for the vendored mkfs (see userspace/redoxfs/src/bin/mkfs.rs): positional DISK.
-    # Use `cargo run` so we get the just-built host binary regardless of target/ layout.
-    # (No --image/--size; it operates directly on the file we dd'd.)
-    cargo run --manifest-path userspace/redoxfs/Cargo.toml --release --bin redoxfs-mkfs -- /tmp/lerux-rustc-test.img || echo "(mkfs step completed or image already usable)"
-    # TODO (next slice): use the redoxfs host lib (DiskFile + FileSystem tx/create_node/write) to
-    # populate /bin/rustc (the stub) + a tiny source into the image. For DiskMemory first-green the
-    # stub is delivered via initfs staging + cp by the oneshot instead.
+    cargo run --manifest-path userspace/redoxfs/Cargo.toml --release --bin redoxfs-mkfs -- /tmp/lerux-rustc-test.img
+    cargo run --manifest-path userspace/redoxfs/Cargo.toml --release --bin redoxfs-populate -- \
+        /tmp/lerux-rustc-test.img "{{build_dir}}/rustc-smoke"
+    echo "==> Populated /tmp/lerux-rustc-test.img with cross-compiled rustc stub"
+
+# Rustc-hosting smoke using the initfs-staged disk image (DiskFile path; same content as -drive).
+smoke-rustc-disk: build-direct-userspace build-rustc-smoke
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cargo build --manifest-path userspace/redoxfs/Cargo.toml --release --bin redoxfs-mkfs --bin redoxfs-populate
+    echo "==> Creating compact initfs disk image (8M) for DiskFile smoke"
+    dd if=/dev/zero of=/tmp/lerux-rustc-initfs.img bs=1M count=8
+    cargo run --manifest-path userspace/redoxfs/Cargo.toml --release --bin redoxfs-mkfs -- /tmp/lerux-rustc-initfs.img
+    cargo run --manifest-path userspace/redoxfs/Cargo.toml --release --bin redoxfs-populate -- \
+        /tmp/lerux-rustc-initfs.img "{{build_dir}}/rustc-smoke"
+    mkdir -p userspace/initfs-staging/disk
+    cp /tmp/lerux-rustc-initfs.img userspace/initfs-staging/disk/rustc-test.img
+    cp userspace/initfs-staging/lib/init.d/50_rootfs-disk.service \
+        userspace/initfs-staging/lib/init.d/50_rootfs.service
+    just build-initfs
+    KERNEL_CARGO_FEATURES="direct-boot,direct-boot-userspace" OBJCOPY="${OBJCOPY:-objcopy}" just build
+    RUSTC_SMOKE=1 "{{justfile_directory()}}/qemu/smoke-test.sh" --no-build
+    cp userspace/initfs-staging/lib/init.d/50_rootfs-memory.service \
+        userspace/initfs-staging/lib/init.d/50_rootfs.service
+    rm -f userspace/initfs-staging/disk/rustc-test.img
 
 # Rustc-hosting smoke (the first concrete proof of the goal).
 # Builds everything (userspace with redoxfs + stub staged, kernel, test image) then drives the
@@ -370,13 +392,13 @@ validate-trampolines:
     "{{justfile_directory()}}/lerux-kernel/validation/trampolines/validate-trampolines.sh"
 
 # Host unit tests for crates that support them without the custom kernel target or cross.
-# This is the fast, native "cargo test" surface (rmm under std, kernel cfg(test) modules,
-# initfs-tools integration, etc.). Does not include redoxfs (excluded per request).
+# rmm is inlined under lerux-kernel/src/lerux-rmm/ (no standalone -p rmm crate).
+# Trampoline golden-byte checks use the standalone trampoline-validation workspace crate
+# (lerux-kernel/validation/trampolines/) to avoid compiling all inlined vendor #[cfg(test)]
+# modules when validating bytes.
 test:
-    @echo "== rmm (std feature) =="
-    cargo test -p rmm --features std
-    @echo "== kernel (host tests, e.g. trampoline) =="
-    cargo test --bin kernel trampoline
+    @echo "== trampoline (golden bytes) =="
+    cargo test -p trampoline-validation
     @echo "== initfs-tools (integration) =="
     cargo test --manifest-path userspace/initfs-tools/Cargo.toml
     @echo "== userspace workspace (selected) =="
@@ -399,18 +421,14 @@ coverage:
     mkdir -p target/coverage
     export RUSTFLAGS="${RUSTFLAGS:-} -C instrument-coverage"
 
-    echo "==> Coverage: rmm (std)"
-    cargo llvm-cov -p rmm --features std --html --output-dir target/coverage/rmm || true
-
-    echo "==> Coverage: kernel host tests (trampoline + any other cfg(test))"
-    cargo llvm-cov --bin kernel --test trampoline --html --output-dir target/coverage/kernel || true
+    echo "==> Coverage: trampoline golden-byte tests"
+    cargo llvm-cov -p trampoline-validation --html --output-dir target/coverage/trampoline || true
 
     echo "==> Coverage: initfs-tools"
     cargo llvm-cov --manifest-path userspace/initfs-tools/Cargo.toml --html --output-dir target/coverage/initfs-tools || true
 
     echo "==> Coverage summary (text) for quick view"
-    cargo llvm-cov -p rmm --features std --summary-only || true
-    cargo llvm-cov --bin kernel --test trampoline --summary-only || true
+    cargo llvm-cov -p trampoline-validation --summary-only || true
 
     echo "==> Combined / top-level report (best effort)"
     cargo llvm-cov --workspace --html --output-dir target/coverage/overall --ignore-filename-regex '(/redoxfs/|/vendor/|/target/|validation/trampolines/asm)' || true
@@ -422,9 +440,8 @@ coverage:
 # Build rustdoc for the main crates (includes private items while we are filling docs).
 # After docstring work this should be clean (modulo the scoped "public + key internals" rule).
 docs:
-    @echo "==> rustdoc (kernel + rmm + userspace libs, private items)"
+    @echo "==> rustdoc (kernel + userspace libs, private items)"
     cargo doc --no-deps --document-private-items --bin kernel -Z build-std=core,alloc || true
-    cargo doc -p rmm --features std --document-private-items || true
     cargo doc --manifest-path userspace/initfs/Cargo.toml --document-private-items || true
     cargo doc --manifest-path userspace/initfs-tools/Cargo.toml --document-private-items || true
     @echo "Docs in target/doc/. See also the markdown docs now centralized under docs/."

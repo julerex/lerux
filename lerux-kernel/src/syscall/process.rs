@@ -3,8 +3,7 @@ use core::{mem, num::NonZeroUsize};
 
 use crate::__redox_syscall as syscall;
 
-use crate::rmm::Arch;
-use crate::syscall::data::GlobalSchemes;
+use crate::{rmm::Arch, syscall::data::GlobalSchemes};
 
 use crate::{
     context::{

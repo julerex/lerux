@@ -1,11 +1,14 @@
-use core::marker::PhantomData;
-use core::mem;
+use core::{marker::PhantomData, mem};
 
-use crate::object::endian::Endian;
-use crate::object::macho;
-use crate::object::pod::Pod;
-use crate::object::read::macho::{MachHeader, SymbolTable};
-use crate::object::read::{Bytes, Error, ReadError, ReadRef, Result, StringTable};
+use crate::object::{
+    endian::Endian,
+    macho,
+    pod::Pod,
+    read::{
+        macho::{MachHeader, SymbolTable},
+        Bytes, Error, ReadError, ReadRef, Result, StringTable,
+    },
+};
 
 /// An iterator for the load commands from a [`MachHeader`].
 #[derive(Debug, Default, Clone, Copy)]

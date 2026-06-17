@@ -79,7 +79,11 @@ pub(crate) fn shuffle_and_add(base: u128, to_add: u128) -> u128 {
     add_by_64s(shuffled, to_add.convert()).convert()
 }
 
-#[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2", not(miri)))]
+#[cfg(all(
+    any(target_arch = "x86", target_arch = "x86_64"),
+    target_feature = "sse2",
+    not(miri)
+))]
 #[inline(always)]
 pub(crate) fn add_by_64s(a: [u64; 2], b: [u64; 2]) -> [u64; 2] {
     unsafe {
@@ -91,13 +95,21 @@ pub(crate) fn add_by_64s(a: [u64; 2], b: [u64; 2]) -> [u64; 2] {
     }
 }
 
-#[cfg(not(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "sse2", not(miri))))]
+#[cfg(not(all(
+    any(target_arch = "x86", target_arch = "x86_64"),
+    target_feature = "sse2",
+    not(miri)
+)))]
 #[inline(always)]
 pub(crate) fn add_by_64s(a: [u64; 2], b: [u64; 2]) -> [u64; 2] {
     [a[0].wrapping_add(b[0]), a[1].wrapping_add(b[1])]
 }
 
-#[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "aes", not(miri)))]
+#[cfg(all(
+    any(target_arch = "x86", target_arch = "x86_64"),
+    target_feature = "aes",
+    not(miri)
+))]
 #[allow(unused)]
 #[inline(always)]
 pub(crate) fn aesenc(value: u128, xor: u128) -> u128 {
@@ -112,8 +124,18 @@ pub(crate) fn aesenc(value: u128, xor: u128) -> u128 {
 }
 
 #[cfg(any(
-    all(feature = "nightly-arm-aes", target_arch = "aarch64", target_feature = "aes", not(miri)),
-    all(feature = "nightly-arm-aes", target_arch = "arm", target_feature = "aes", not(miri)),
+    all(
+        feature = "nightly-arm-aes",
+        target_arch = "aarch64",
+        target_feature = "aes",
+        not(miri)
+    ),
+    all(
+        feature = "nightly-arm-aes",
+        target_arch = "arm",
+        target_feature = "aes",
+        not(miri)
+    ),
 ))]
 #[allow(unused)]
 #[inline(always)]
@@ -127,7 +149,11 @@ pub(crate) fn aesenc(value: u128, xor: u128) -> u128 {
     xor ^ value
 }
 
-#[cfg(all(any(target_arch = "x86", target_arch = "x86_64"), target_feature = "aes", not(miri)))]
+#[cfg(all(
+    any(target_arch = "x86", target_arch = "x86_64"),
+    target_feature = "aes",
+    not(miri)
+))]
 #[allow(unused)]
 #[inline(always)]
 pub(crate) fn aesdec(value: u128, xor: u128) -> u128 {
@@ -142,8 +168,18 @@ pub(crate) fn aesdec(value: u128, xor: u128) -> u128 {
 }
 
 #[cfg(any(
-    all(feature = "nightly-arm-aes", target_arch = "aarch64", target_feature = "aes", not(miri)),
-    all(feature = "nightly-arm-aes", target_arch = "arm", target_feature = "aes", not(miri)),
+    all(
+        feature = "nightly-arm-aes",
+        target_arch = "aarch64",
+        target_feature = "aes",
+        not(miri)
+    ),
+    all(
+        feature = "nightly-arm-aes",
+        target_arch = "arm",
+        target_feature = "aes",
+        not(miri)
+    ),
 ))]
 #[allow(unused)]
 #[inline(always)]
@@ -357,17 +393,21 @@ mod test {
         let mut shuffled = shuffle(numbered);
         for count in 0..100 {
             // println!("{:>16x}", shuffled);
-            assert_ne!(numbered, shuffled, "Equal after {} vs {:x}", count, shuffled);
+            assert_ne!(
+                numbered, shuffled,
+                "Equal after {} vs {:x}",
+                count, shuffled
+            );
             shuffled = shuffle(shuffled);
         }
     }
 
     #[test]
     fn test_add_length() {
-        let enc : [u64; 2] = [50, u64::MAX];
-        let mut enc : u128 = enc.convert();
+        let enc: [u64; 2] = [50, u64::MAX];
+        let mut enc: u128 = enc.convert();
         add_in_length(&mut enc, u64::MAX);
-        let enc : [u64; 2] = enc.convert();
+        let enc: [u64; 2] = enc.convert();
         assert_eq!(enc[1], u64::MAX);
         assert_eq!(enc[0], 49);
     }

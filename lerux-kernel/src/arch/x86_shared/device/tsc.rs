@@ -6,8 +6,7 @@ use core::arch::x86_64::__cpuid;
 #[cfg(target_arch = "x86")]
 use core::arch::x86::__cpuid;
 
-use crate::rmm::Arch;
-use crate::spin::Once;
+use crate::{rmm::Arch, spin::Once};
 
 use crate::{memory::allocate_frame, percpu::PercpuBlock};
 
@@ -67,8 +66,8 @@ pub fn monotonic_absolute() -> Option<u128> {
             if cur_version & 1 == 1 {
                 continue;
             }
-            let elapsed_ticks =
-                crate::x86::time::rdtsc().saturating_sub(addr_of!((*ptr).tsc_timestamp).read_volatile());
+            let elapsed_ticks = crate::x86::time::rdtsc()
+                .saturating_sub(addr_of!((*ptr).tsc_timestamp).read_volatile());
             let tsc_shift = addr_of!((*ptr).tsc_shift).read_volatile();
             let elapsed = if tsc_shift >= 0 {
                 elapsed_ticks.checked_shl(tsc_shift as u32).unwrap()

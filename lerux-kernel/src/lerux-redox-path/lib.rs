@@ -259,7 +259,7 @@ impl<'a> fmt::Display for RedoxPath<'a> {
 /// "." and empty segments "//" will be removed.
 /// ".." will be resolved by backing up one directory, except at the root,
 /// where ".." will be ignored and removed.
-/// 
+///
 /// For old format schemes,
 /// given a cwd of "scheme:/path", this function will turn "foo" into "scheme:/path/foo".
 /// "/foo" will turn into "file:/foo". "bar:/foo" will be used directly, as it is already
@@ -280,7 +280,9 @@ pub fn canonicalize_using_cwd<'a>(cwd_opt: Option<&str>, path: &'a str) -> Optio
 /// Make a path that is relative to the root of a scheme into a full path,
 /// following the rules of [`canonicalize_using_cwd`].
 pub fn canonicalize_using_scheme<'a>(scheme: &str, path: &'a str) -> Option<String> {
-    let scheme_path = RedoxPath::from_absolute("/scheme")?.join(scheme)?.to_string();
+    let scheme_path = RedoxPath::from_absolute("/scheme")?
+        .join(scheme)?
+        .to_string();
     canonicalize_using_cwd(Some(&scheme_path), path)
 }
 

@@ -1,3 +1,11 @@
+use crate::{
+    slab::Slab,
+    syscall::{
+        schemev2::{Cqe, CqeOpcode, Opcode, Sqe, SqeFlags},
+        CallFlags, FmoveFdFlags, FobtainFdFlags, MunmapFlags, RecvFdFlags, SchemeSocketCall,
+        SendFdFlags, StdFsCallKind, MAP_FIXED_NOREPLACE,
+    },
+};
 use alloc::{
     sync::{Arc, Weak},
     vec::Vec,
@@ -5,12 +13,6 @@ use alloc::{
 use core::{
     mem::{self, size_of, ManuallyDrop},
     num::NonZeroUsize,
-};
-use crate::slab::Slab;
-use crate::syscall::{
-    schemev2::{Cqe, CqeOpcode, Opcode, Sqe, SqeFlags},
-    CallFlags, FmoveFdFlags, FobtainFdFlags, MunmapFlags, RecvFdFlags, SchemeSocketCall,
-    SendFdFlags, StdFsCallKind, MAP_FIXED_NOREPLACE,
 };
 
 use crate::{

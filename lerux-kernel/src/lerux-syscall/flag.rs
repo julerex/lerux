@@ -224,6 +224,7 @@ pub enum ContextStatus {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(usize)]
+#[allow(clippy::enum_clike_unportable_variant)] // ForceKill uses usize::MAX by design
 pub enum ContextVerb {
     Stop = 1,
     Unstop = 2,

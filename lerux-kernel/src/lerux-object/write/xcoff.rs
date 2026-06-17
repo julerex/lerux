@@ -1,9 +1,9 @@
 use core::mem;
 
-use crate::object::endian::{BigEndian as BE, I16, U16, U32};
-use crate::object::write::string::*;
-use crate::object::write::util::*;
-use crate::object::write::*;
+use crate::object::{
+    endian::{BigEndian as BE, I16, U16, U32},
+    write::{string::*, util::*, *},
+};
 
 use crate::object::xcoff;
 

@@ -1,14 +1,14 @@
 use alloc::vec::Vec;
-use core::convert::TryInto;
-use core::fmt::Debug;
-use core::mem;
+use core::{convert::TryInto, fmt::Debug, mem};
 
-use crate::object::elf;
-use crate::object::endian::{self, Endian, Endianness, U32};
-use crate::object::pod::Pod;
-use crate::object::read::{
-    self, util, Architecture, ByteString, Bytes, Error, Export, FileFlags, Import, Object,
-    ObjectKind, ReadError, ReadRef, SectionIndex, StringTable, SymbolIndex,
+use crate::object::{
+    elf,
+    endian::{self, Endian, Endianness, U32},
+    pod::Pod,
+    read::{
+        self, util, Architecture, ByteString, Bytes, Error, Export, FileFlags, Import, Object,
+        ObjectKind, ReadError, ReadRef, SectionIndex, StringTable, SymbolIndex,
+    },
 };
 
 use super::{

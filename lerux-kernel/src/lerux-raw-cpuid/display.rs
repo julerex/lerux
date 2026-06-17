@@ -5,7 +5,10 @@ use crate::raw_cpuid::{
     SgxSectionInfo, SoCVendorBrand, TopologyType,
 };
 
-use termimad::{minimad::TextTemplate, minimad::TextTemplateExpander, MadSkin};
+use termimad::{
+    minimad::{TextTemplate, TextTemplateExpander},
+    MadSkin,
+};
 
 pub fn raw() {
     let _leafs_with_subleafs = &[0x04, 0x0d, 0x0f, 0x10, 0x12];

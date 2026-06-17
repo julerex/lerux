@@ -1,9 +1,9 @@
 use core::str;
 
-use crate::object::endian::LittleEndian as LE;
-use crate::object::pe;
-use crate::object::read::{
-    self, ComdatKind, ObjectComdat, ReadError, ReadRef, Result, SectionIndex, SymbolIndex,
+use crate::object::{
+    endian::LittleEndian as LE,
+    pe,
+    read::{self, ComdatKind, ObjectComdat, ReadError, ReadRef, Result, SectionIndex, SymbolIndex},
 };
 
 use super::{CoffFile, CoffHeader, ImageSymbol};

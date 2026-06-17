@@ -1,17 +1,19 @@
 use alloc::vec::Vec;
-use core::fmt::Debug;
-use core::{mem, str};
+use core::{fmt::Debug, mem, str};
 
 use core::convert::TryInto;
 
-use crate::object::endian::{LittleEndian as LE, U32};
-use crate::object::pe;
-use crate::object::pod::{self, Pod};
-use crate::object::read::coff::{CoffCommon, CoffSymbol, CoffSymbolIterator, CoffSymbolTable, SymbolTable};
-use crate::object::read::{
-    self, Architecture, ByteString, Bytes, CodeView, ComdatKind, Error, Export, FileFlags, Import,
-    NoDynamicRelocationIterator, Object, ObjectComdat, ObjectKind, ReadError, ReadRef, Result,
-    SectionIndex, SubArchitecture, SymbolIndex,
+use crate::object::{
+    endian::{LittleEndian as LE, U32},
+    pe,
+    pod::{self, Pod},
+    read::{
+        self,
+        coff::{CoffCommon, CoffSymbol, CoffSymbolIterator, CoffSymbolTable, SymbolTable},
+        Architecture, ByteString, Bytes, CodeView, ComdatKind, Error, Export, FileFlags, Import,
+        NoDynamicRelocationIterator, Object, ObjectComdat, ObjectKind, ReadError, ReadRef, Result,
+        SectionIndex, SubArchitecture, SymbolIndex,
+    },
 };
 
 use super::{

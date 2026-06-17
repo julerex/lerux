@@ -54,7 +54,12 @@ impl<'b, 'a: 'b> FdtNode<'b, 'a> {
         props: &'a [u8],
         parent_props: Option<&'a [u8]>,
     ) -> Self {
-        Self { name, header, props, parent_props }
+        Self {
+            name,
+            header,
+            props,
+            parent_props,
+        }
     }
 
     /// Returns an iterator over the available properties of the node
@@ -120,7 +125,12 @@ impl<'b, 'a: 'b> FdtNode<'b, 'a> {
                         stream.skip(4 - (full_name_len % 4));
                     }
 
-                    Some(Self::new(unit_name, self.header, stream.remaining(), Some(self.props)))
+                    Some(Self::new(
+                        unit_name,
+                        self.header,
+                        stream.remaining(),
+                        Some(self.props),
+                    ))
                 };
 
                 stream = FdtData::new(origin);
@@ -172,7 +182,10 @@ impl<'b, 'a: 'b> FdtNode<'b, 'a> {
                         _ => return None,
                     };
 
-                    Some(MemoryRegion { starting_address, size })
+                    Some(MemoryRegion {
+                        starting_address,
+                        size,
+                    })
                 }));
                 break;
             }
@@ -284,7 +297,10 @@ impl<'b, 'a: 'b> FdtNode<'b, 'a> {
     pub fn interrupt_parent(self) -> Option<FdtNode<'b, 'a>> {
         self.properties()
             .find(|p| p.name == "interrupt-parent")
-            .and_then(|p| self.header.find_phandle(BigEndianU32::from_bytes(p.value)?.get()))
+            .and_then(|p| {
+                self.header
+                    .find_phandle(BigEndianU32::from_bytes(p.value)?.get())
+            })
     }
 
     /// `#interrupt-cells` property
@@ -350,8 +366,12 @@ impl<'b, 'a: 'b> FdtNode<'b, 'a> {
         let mut cell_sizes = CellSizes::default();
 
         if let Some(parent) = self.parent_props {
-            let parent =
-                FdtNode { name: "", props: parent, header: self.header, parent_props: None };
+            let parent = FdtNode {
+                name: "",
+                props: parent,
+                header: self.header,
+                parent_props: None,
+            };
             cell_sizes = parent.cell_sizes();
         }
 
@@ -362,7 +382,10 @@ impl<'b, 'a: 'b> FdtNode<'b, 'a> {
         let mut interrupt_cells = None;
         let parent = self
             .property("interrupt-parent")
-            .and_then(|p| self.header.find_phandle(BigEndianU32::from_bytes(p.value)?.get()))
+            .and_then(|p| {
+                self.header
+                    .find_phandle(BigEndianU32::from_bytes(p.value)?.get())
+            })
             .or_else(|| {
                 Some(FdtNode {
                     name: "",
@@ -391,7 +414,10 @@ pub struct CellSizes {
 
 impl Default for CellSizes {
     fn default() -> Self {
-        CellSizes { address_cells: 2, size_cells: 1 }
+        CellSizes {
+            address_cells: 2,
+            size_cells: 1,
+        }
     }
 }
 
@@ -424,7 +450,9 @@ pub(crate) fn find_node<'b, 'a: 'b>(
         _ => return None,
     }
 
-    let unit_name = CStr::new(stream.remaining()).expect("unit name C str").as_str()?;
+    let unit_name = CStr::new(stream.remaining())
+        .expect("unit name C str")
+        .as_str()?;
 
     let full_name_len = unit_name.len() + 1;
     skip_4_aligned(stream, full_name_len);
@@ -442,7 +470,12 @@ pub(crate) fn find_node<'b, 'a: 'b>(
 
     let next_part = match parts.next() {
         None | Some("") => {
-            return Some(FdtNode::new(unit_name, header, stream.remaining(), parent_props))
+            return Some(FdtNode::new(
+                unit_name,
+                header,
+                stream.remaining(),
+                parent_props,
+            ))
         }
         Some(part) => part,
     };
@@ -501,7 +534,10 @@ pub(crate) fn all_nodes<'b, 'a: 'b>(header: &'b Fdt<'a>) -> impl Iterator<Item =
             _ => return None,
         }
 
-        let unit_name = CStr::new(stream.remaining()).expect("unit name C str").as_str().unwrap();
+        let unit_name = CStr::new(stream.remaining())
+            .expect("unit name C str")
+            .as_str()
+            .unwrap();
         let full_name_len = unit_name.len() + 1;
         skip_4_aligned(&mut stream, full_name_len);
 
@@ -533,7 +569,10 @@ pub(crate) fn all_nodes<'b, 'a: 'b>(header: &'b Fdt<'a>) -> impl Iterator<Item =
 pub(crate) fn skip_current_node<'a>(stream: &mut FdtData<'a>, header: &Fdt<'a>) {
     assert_eq!(stream.u32().unwrap().get(), FDT_BEGIN_NODE, "bad node");
 
-    let unit_name = CStr::new(stream.remaining()).expect("unit_name C str").as_str().unwrap();
+    let unit_name = CStr::new(stream.remaining())
+        .expect("unit_name C str")
+        .as_str()
+        .unwrap();
     let full_name_len = unit_name.len() + 1;
     skip_4_aligned(stream, full_name_len);
 
@@ -571,7 +610,9 @@ impl<'a> NodeProperty<'a> {
 
     /// Attempt to parse the property value as a `&str`
     pub fn as_str(self) -> Option<&'a str> {
-        core::str::from_utf8(self.value).map(|s| s.trim_end_matches('\0')).ok()
+        core::str::from_utf8(self.value)
+            .map(|s| s.trim_end_matches('\0'))
+            .ok()
     }
 
     /// Attempts to parse the property value as a list of [`&str`].
@@ -597,7 +638,10 @@ impl<'a> NodeProperty<'a> {
 
         skip_4_aligned(stream, data_len);
 
-        NodeProperty { name: header.str_at_offset(prop.name_offset.get() as usize), value: data }
+        NodeProperty {
+            name: header.str_at_offset(prop.name_offset.get() as usize),
+            value: data,
+        }
     }
 }
 

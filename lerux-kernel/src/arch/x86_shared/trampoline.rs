@@ -17,7 +17,7 @@
 //!
 //! ```text
 //! just validate-trampolines          # byte-for-byte check (requires nasm)
-//! cargo test --bin kernel trampoline   # host unit tests vs golden files
+//! cargo test -p trampoline-validation  # host unit tests vs golden files
 //! ```
 //!
 //! After editing the `.asm` files: `./validate-trampolines.sh refresh`, then

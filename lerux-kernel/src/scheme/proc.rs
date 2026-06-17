@@ -20,7 +20,13 @@ use crate::{
 };
 
 use super::{CallerCtx, KernelSchemes, OpenResult};
-use crate::syscall::{ProcSchemeAttrs, SigProcControl, Sigcontrol};
+use crate::{
+    hashbrown::{
+        hash_map::{DefaultHashBuilder, Entry},
+        HashMap,
+    },
+    syscall::{data::GlobalSchemes, ProcSchemeAttrs, SigProcControl, Sigcontrol},
+};
 use alloc::{
     boxed::Box,
     string::String,
@@ -33,11 +39,6 @@ use core::{
     slice, str,
     sync::atomic::{AtomicUsize, Ordering},
 };
-use crate::hashbrown::{
-    hash_map::{DefaultHashBuilder, Entry},
-    HashMap,
-};
-use crate::syscall::data::GlobalSchemes;
 
 fn read_from(dst: UserSliceWo, src: &[u8], offset: u64) -> Result<usize> {
     let avail_src = usize::try_from(offset)

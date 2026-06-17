@@ -8,11 +8,13 @@ use core::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use crate::smallvec::SmallVec;
-use crate::spin::{Mutex, Once};
-use crate::syscall::{
-    data::GlobalSchemes,
-    dirent::{DirEntry, DirentBuf, DirentKind},
+use crate::{
+    smallvec::SmallVec,
+    spin::{Mutex, Once},
+    syscall::{
+        data::GlobalSchemes,
+        dirent::{DirEntry, DirentBuf, DirentKind},
+    },
 };
 
 use crate::context::file::InternalFlags;

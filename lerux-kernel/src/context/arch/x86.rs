@@ -1,7 +1,9 @@
+use crate::{
+    rmm::{Arch, VirtualAddress},
+    spin::Once,
+    syscall::{error::*, EnvRegisters},
+};
 use core::{mem::offset_of, sync::atomic::AtomicBool};
-use crate::rmm::{Arch, VirtualAddress};
-use crate::spin::Once;
-use crate::syscall::{error::*, EnvRegisters};
 
 use crate::{
     arch::{

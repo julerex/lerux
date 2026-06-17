@@ -2,10 +2,12 @@
 
 use core::mem;
 
-use crate::object::endian::{LittleEndian as LE, U32};
-use crate::object::pe;
-use crate::object::pod::bytes_of_slice;
-use crate::object::read::{Bytes, ReadRef};
+use crate::object::{
+    endian::{LittleEndian as LE, U32},
+    pe,
+    pod::bytes_of_slice,
+    read::{Bytes, ReadRef},
+};
 
 /// Parsed information about a Rich Header.
 #[derive(Debug, Clone, Copy)]

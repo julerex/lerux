@@ -4,7 +4,6 @@
 //! The upper 32 bits of RFLAGS register is reserved.
 //! The lower 32 bits of RFLAGS is the same as EFLAGS.
 
-
 use crate::x86::Ring;
 
 #[cfg(target_arch = "x86_64")]

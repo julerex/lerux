@@ -1,8 +1,9 @@
 use core::convert::TryInto;
 
-use crate::object::elf;
-use crate::object::endian;
-use crate::object::read::{Bytes, Error, ReadError, Result};
+use crate::object::{
+    elf, endian,
+    read::{Bytes, Error, ReadError, Result},
+};
 
 use super::FileHeader;
 

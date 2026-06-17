@@ -8,6 +8,10 @@
 
 // TODO: Move handling of the global namespace to userspace.
 
+use crate::{
+    hashbrown::hash_map::{self, DefaultHashBuilder, HashMap},
+    spin::Once,
+};
 use alloc::{
     sync::{Arc, Weak},
     vec::Vec,
@@ -16,14 +20,12 @@ use core::{
     str,
     sync::atomic::{AtomicUsize, Ordering},
 };
-use crate::hashbrown::hash_map::{self, DefaultHashBuilder, HashMap};
-use crate::spin::Once;
 
 // The inlined vendor (redox_syscall) is available at the crate root as `syscall`
 // (via pub use in main.rs). Force the name into scope for this module so the
 // existing `use crate::syscall::...` and the items it re-exports (FileHandle etc. for
 // the scheme children) continue to work.
-use crate::syscall as syscall;
+use crate::syscall;
 
 use crate::syscall::{
     data::{GlobalSchemes, NewFdParams, StdFsCallMeta},

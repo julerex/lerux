@@ -4,10 +4,9 @@ use crate::{
     event,
     scheme::{self, SchemeId},
     sync::{CleanLockToken, RwLock, L6},
-    syscall::error::Result,
+    syscall::{error::Result, schemev2::NewFdFlags, RwFlags, O_APPEND, O_NONBLOCK},
 };
 use alloc::sync::Arc;
-use crate::syscall::{RwFlags, O_APPEND, O_NONBLOCK, schemev2::NewFdFlags};
 
 pub type LockedFileDescription = RwLock<L6, FileDescription>;
 

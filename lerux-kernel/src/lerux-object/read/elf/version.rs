@@ -1,7 +1,9 @@
 use alloc::vec::Vec;
 
-use crate::object::read::{Bytes, ReadError, ReadRef, Result, StringTable, SymbolIndex};
-use crate::object::{elf, endian};
+use crate::object::{
+    elf, endian,
+    read::{Bytes, ReadError, ReadRef, Result, StringTable, SymbolIndex},
+};
 
 use super::FileHeader;
 

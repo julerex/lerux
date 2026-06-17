@@ -2,10 +2,7 @@ use crate::smallvec::{smallvec, SmallVec};
 
 use std::iter::FromIterator;
 
-use alloc::borrow::ToOwned;
-use alloc::boxed::Box;
-use alloc::rc::Rc;
-use alloc::{vec, vec::Vec};
+use alloc::{borrow::ToOwned, boxed::Box, rc::Rc, vec, vec::Vec};
 
 #[test]
 pub fn test_zero() {
@@ -523,8 +520,7 @@ fn test_ord() {
 
 #[test]
 fn test_hash() {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::Hash;
+    use std::{collections::hash_map::DefaultHasher, hash::Hash};
 
     {
         let mut a: SmallVec<[u32; 2]> = SmallVec::new();
@@ -943,9 +939,7 @@ const fn const_new_inline_args() -> SmallVec<[i32; 2]> {
 }
 #[cfg(feature = "const_new")]
 const fn const_new_with_len() -> SmallVec<[i32; 4]> {
-    unsafe {
-        SmallVec::<[i32; 4]>::from_const_with_len_unchecked([2, 5, 7, 0], 3)
-    }
+    unsafe { SmallVec::<[i32; 4]>::from_const_with_len_unchecked([2, 5, 7, 0], 3) }
 }
 
 #[test]

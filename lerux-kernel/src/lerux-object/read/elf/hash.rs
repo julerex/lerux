@@ -1,8 +1,10 @@
 use core::mem;
 
-use crate::object::elf;
-use crate::object::endian::{U32, U64};
-use crate::object::read::{ReadError, ReadRef, Result, SymbolIndex};
+use crate::object::{
+    elf,
+    endian::{U32, U64},
+    read::{ReadError, ReadRef, Result, SymbolIndex},
+};
 
 use super::{FileHeader, Sym, SymbolTable, Version, VersionTable};
 

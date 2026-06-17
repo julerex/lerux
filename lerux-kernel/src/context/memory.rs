@@ -1,9 +1,14 @@
+use crate::{
+    arrayvec::ArrayVec,
+    rmm::{Arch as _, PageFlush},
+    smallvec::SmallVec,
+    syscall::{error::*, flag::MapFlags, GrantFlags, MunmapFlags},
+};
 use alloc::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
     vec::Vec,
 };
-use crate::arrayvec::ArrayVec;
 use core::{
     cmp,
     fmt::Debug,
@@ -12,9 +17,6 @@ use core::{
     ops::{Bound, Deref},
     sync::atomic::{AtomicU32, Ordering},
 };
-use crate::rmm::{Arch as _, PageFlush};
-use crate::smallvec::SmallVec;
-use crate::syscall::{error::*, flag::MapFlags, GrantFlags, MunmapFlags};
 
 use crate::{
     context::file::LockedFileDescription,

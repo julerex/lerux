@@ -1,6 +1,5 @@
 //! Processor state stored in the EFLAGS register.
 
-
 use crate::x86::Ring;
 use core::arch::asm;
 

@@ -184,9 +184,13 @@ impl BarrierWaitResult {
 mod tests {
     use std::prelude::v1::*;
 
-    use std::sync::mpsc::{channel, TryRecvError};
-    use std::sync::Arc;
-    use std::thread;
+    use std::{
+        sync::{
+            mpsc::{channel, TryRecvError},
+            Arc,
+        },
+        thread,
+    };
 
     type Barrier = super::Barrier;
 

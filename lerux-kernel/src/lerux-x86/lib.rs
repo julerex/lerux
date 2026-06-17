@@ -52,9 +52,7 @@ pub mod cpuid {
 
 #[cfg(not(test))]
 mod std {
-    pub use core::fmt;
-    pub use core::ops;
-    pub use core::option;
+    pub use core::{fmt, ops, option};
 }
 
 #[cfg(all(test, feature = "vmtest"))]
@@ -141,5 +139,5 @@ mod test {
         }
     }
 }
-pub use segmentation::SegmentSelector;
 pub use controlregs::{Cr0, Cr4, Xcr0};
+pub use segmentation::SegmentSelector;

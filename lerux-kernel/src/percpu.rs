@@ -7,8 +7,7 @@ use core::{
     sync::atomic::{AtomicBool, AtomicPtr, Ordering},
 };
 
-use crate::rmm::Arch;
-use crate::syscall::PtraceFlags;
+use crate::{rmm::Arch, syscall::PtraceFlags};
 
 use crate::{
     arch::device::ArchPercpuMisc,

@@ -4,11 +4,11 @@ use crate::{
         get_mmio_address,
         irqchip::{InterruptController, InterruptHandler, IrqCell, IrqDesc, IRQ_CHIP},
     },
+    fdt::Fdt,
     sync::CleanLockToken,
+    syscall::{Error, Io, Mmio, EINVAL},
 };
 use core::{mem, num::NonZero, sync::atomic::Ordering};
-use crate::fdt::Fdt;
-use crate::syscall::{Error, Io, Mmio, EINVAL};
 
 #[repr(packed(4))]
 #[repr(C)]

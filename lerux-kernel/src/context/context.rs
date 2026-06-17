@@ -1,11 +1,13 @@
+use crate::{
+    arrayvec::ArrayString,
+    syscall::{SigProcControl, Sigcontrol, UPPER_FDTBL_TAG},
+};
 use alloc::{collections::BTreeSet, sync::Arc, vec::Vec};
-use crate::arrayvec::ArrayString;
 use core::{
     mem::{self, size_of, ManuallyDrop},
     num::NonZeroUsize,
     sync::atomic::{AtomicU32, Ordering},
 };
-use crate::syscall::{SigProcControl, Sigcontrol, UPPER_FDTBL_TAG};
 
 use crate::{
     arch::interrupt::InterruptStack,

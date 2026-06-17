@@ -9,9 +9,7 @@
 //! the following file formats: [COFF](coff::Writer), [ELF](elf::Writer),
 //! and [PE](pe::Writer).
 
-use alloc::borrow::Cow;
-use alloc::string::String;
-use alloc::vec::Vec;
+use alloc::{borrow::Cow, string::String, vec::Vec};
 use core::{fmt, result, str};
 #[cfg(not(feature = "std"))]
 use hashbrown::HashMap;

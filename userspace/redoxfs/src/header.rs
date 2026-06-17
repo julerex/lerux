@@ -7,6 +7,11 @@ use xts_mode::{get_tweak_default, Xts128};
 
 use crate::{AllocList, BlockPtr, KeySlot, ReleaseList, Tree, BLOCK_SIZE, SIGNATURE, VERSION};
 
+#[cfg(feature = "std")]
+use getrandom;
+#[cfg(feature = "std")]
+use uuid;
+
 pub const HEADER_RING: u64 = 256;
 
 /// The header of the filesystem
@@ -43,7 +48,19 @@ impl Header {
     pub fn new(size: u64) -> Header {
         #[cfg(feature = "std")]
         {
-            let uuid = uuid::Uuid::new_v4();
+            // Prefer OS entropy; fall back to a fixed smoke UUID when randd has no source
+            // (common in direct-boot QEMU) so FileSystem::create does not abort.
+            let uuid = {
+                let mut bytes = [0u8; 16];
+                if getrandom::getrandom(&mut bytes).is_ok() {
+                    uuid::Uuid::from_bytes(bytes)
+                } else {
+                    uuid::Uuid::from_bytes([
+                        0x53, 0x6d, 0x6f, 0x6b, 0x65, 0x2d, 0x49, 0x6e, 0x52, 0x61, 0x6d, 0x00,
+                        0x00, 0x00, 0x00, 0x01,
+                    ])
+                }
+            };
             let mut header = Header {
                 signature: *SIGNATURE,
                 version: VERSION.into(),

@@ -155,7 +155,7 @@ This is the first tangible proof of the project goal. The stub is a bootstrap/va
 
 Next per plan: accelerate pure runtime port (especially for vendored components), AI co-pilot unsafe audit on redoxfs (allocator/block/fs layers first), smallest block exposure + flip to real DiskFile image, etc. See PLAN.md §8 and the post-green list.
 
-**2026-06-15 post-green start:** Kicked off the runtime port + redoxfs unsafe audit phase across all requested fronts (SAFETY comments + rewrite, runtime build prep in just/Cargo, deep-dive on transaction.rs, divergence measurement, doc updates). Created `docs/redoxfs-unsafe-audit.md`. First changes: improved SAFETY docs in disk/memory.rs, allocator.rs, transaction.rs + small cleanup. Verified no_std lib, tests, and cross builds remain green. See the audit doc for the living plan.
+**2026-06-17: Real redoxfs integration.** `50_rootfs.service` now execs the vendored `redoxfs` daemon (`--memory data`) via `mount_via_init` + `daemon::SchemeDaemon`. The cross-compiled rustc stub is pre-populated into the in-RAM filesystem before mount; `55_rustc-smoke.service` (oneshot) execs it from `/scheme/data/bin/rustc`. DiskFile path: `just smoke-rustc-disk` uses `--disk-file` with an initfs-staged 8 MiB image (copied to logging ramfs for writable I/O). Host image population via `redoxfs-populate` + `just build-redoxfs-test-image`. All smokes green (`smoke`, `smoke-userspace`, `smoke-rustc`, `smoke-rustc-disk`, `RUNTIME_REDOXFS=1 smoke-rustc`, `check-only-rust`).
 
 - `Redox OS starting...`
 - `Memory:`

@@ -1,6 +1,6 @@
+use crate::fdt::{node::NodeProperty, Fdt};
 use alloc::vec::Vec;
 use core::arch::asm;
-use crate::fdt::{node::NodeProperty, Fdt};
 
 use super::{gic::GicDistIf, InterruptController};
 use crate::{
@@ -9,10 +9,10 @@ use crate::{
         irqchip::{InterruptHandler, IrqCell, IrqDesc},
     },
     sync::CleanLockToken,
-};
-use crate::syscall::{
-    error::{Error, EINVAL},
-    Result,
+    syscall::{
+        error::{Error, EINVAL},
+        Result,
+    },
 };
 
 #[derive(Debug)]

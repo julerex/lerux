@@ -4,14 +4,14 @@ use crate::{
         get_mmio_address,
         irqchip::{InterruptHandler, IrqCell, IrqDesc},
     },
+    fdt::{node::FdtNode, Fdt},
     sync::CleanLockToken,
+    syscall::{
+        error::{Error, EINVAL},
+        Result,
+    },
 };
 use core::ptr::{read_volatile, write_volatile};
-use crate::fdt::{node::FdtNode, Fdt};
-use crate::syscall::{
-    error::{Error, EINVAL},
-    Result,
-};
 
 static GICD_CTLR: u32 = 0x000;
 static GICD_TYPER: u32 = 0x004;

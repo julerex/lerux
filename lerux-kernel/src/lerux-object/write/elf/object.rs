@@ -1,9 +1,9 @@
 use alloc::vec::Vec;
 
-use crate::object::write::elf::writer::*;
-use crate::object::write::string::StringId;
-use crate::object::write::*;
-use crate::object::{elf, pod};
+use crate::object::{
+    elf, pod,
+    write::{elf::writer::*, string::StringId, *},
+};
 
 #[derive(Clone, Copy)]
 struct ComdatOffsets {

@@ -5,17 +5,17 @@ use crate::{
         get_mmio_address,
         irqchip::{InterruptHandler, IrqCell, IrqDesc},
     },
+    fdt::{node::FdtNode, Fdt},
     sync::CleanLockToken,
+    syscall::{
+        error::{Error, EINVAL},
+        Result,
+    },
 };
 use core::{
     arch::asm,
     ptr::{read_volatile, write_volatile},
     sync::atomic::Ordering,
-};
-use crate::fdt::{node::FdtNode, Fdt};
-use crate::syscall::{
-    error::{Error, EINVAL},
-    Result,
 };
 
 const LOCAL_CONTROL: u32 = 0x000;

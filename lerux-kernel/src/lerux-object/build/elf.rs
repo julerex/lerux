@@ -1,19 +1,21 @@
 //! This module provides a [`Builder`] for reading, modifying, and then writing ELF files.
 use alloc::vec::Vec;
-use core::convert::TryInto;
-use core::fmt;
-use core::marker::PhantomData;
+use core::{convert::TryInto, fmt, marker::PhantomData};
 #[cfg(not(feature = "std"))]
 use hashbrown::HashMap;
 #[cfg(feature = "std")]
 use std::collections::HashMap;
 
-use crate::object::build::{ByteString, Bytes, Error, Id, IdPrivate, Item, Result, Table};
-use crate::object::elf;
-use crate::object::read::elf::{Dyn, FileHeader, ProgramHeader, Rela, SectionHeader, Sym};
-use crate::object::read::{self, FileKind, ReadRef};
-use crate::object::write;
-use crate::object::Endianness;
+use crate::object::{
+    build::{ByteString, Bytes, Error, Id, IdPrivate, Item, Result, Table},
+    elf,
+    read::{
+        self,
+        elf::{Dyn, FileHeader, ProgramHeader, Rela, SectionHeader, Sym},
+        FileKind, ReadRef,
+    },
+    write, Endianness,
+};
 
 /// A builder for reading, modifying, and then writing ELF files.
 ///

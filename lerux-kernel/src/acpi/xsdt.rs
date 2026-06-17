@@ -1,6 +1,6 @@
+use crate::rmm::PhysicalAddress;
 use alloc::boxed::Box;
 use core::convert::TryFrom;
-use crate::rmm::PhysicalAddress;
 
 use super::{rxsdt::Rxsdt, sdt::Sdt};
 

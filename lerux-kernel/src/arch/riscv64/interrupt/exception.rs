@@ -1,6 +1,6 @@
+use crate::rmm::VirtualAddress;
 use ::syscall::Exception;
 use core::{arch::naked_asm, sync::atomic::Ordering};
-use crate::rmm::VirtualAddress;
 
 use crate::{
     arch::{device::irqchip, start::BOOT_HART_ID},

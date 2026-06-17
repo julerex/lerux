@@ -1,8 +1,9 @@
 //! Data-structures / interpretation for extended leafs (>= 0x8000_0000)
-use core::fmt::{self, Debug, Display, Formatter};
-use core::mem::size_of;
-use core::slice;
-use core::str;
+use core::{
+    fmt::{self, Debug, Display, Formatter},
+    mem::size_of,
+    slice, str,
+};
 
 use crate::raw_cpuid::{get_bits, CpuIdResult, Vendor};
 

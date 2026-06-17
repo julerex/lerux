@@ -102,17 +102,17 @@ pub mod native_cpuid {
     }
 }
 
-use core::fmt::{self, Debug, Formatter};
-use core::mem::size_of;
-use core::slice;
-use core::str;
+use core::{
+    fmt::{self, Debug, Formatter},
+    mem::size_of,
+    slice, str,
+};
 
 pub use extended::*;
 
 #[cfg(not(test))]
 mod std {
-    pub use core::ops;
-    pub use core::option;
+    pub use core::{ops, option};
 }
 
 /// Macro which queries cpuid directly.

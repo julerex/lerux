@@ -1,8 +1,6 @@
 use core::fmt::Debug;
 
-use crate::object::elf;
-use crate::object::endian;
-use crate::object::pod::Pod;
+use crate::object::{elf, endian, pod::Pod};
 
 /// A trait for generic access to [`elf::CompressionHeader32`] and [`elf::CompressionHeader64`].
 #[allow(missing_docs)]

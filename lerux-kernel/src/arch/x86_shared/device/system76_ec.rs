@@ -1,5 +1,7 @@
-use crate::spin::Mutex;
-use crate::syscall::io::{Io, Pio};
+use crate::{
+    spin::Mutex,
+    syscall::io::{Io, Pio},
+};
 
 pub static SYSTEM76_EC: Mutex<Option<System76Ec>> = Mutex::new(None);
 

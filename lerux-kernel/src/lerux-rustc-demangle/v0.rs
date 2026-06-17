@@ -1,5 +1,4 @@
-use core::convert::TryFrom;
-use core::{char, fmt, iter, mem, str};
+use core::{char, convert::TryFrom, fmt, iter, mem, str};
 
 #[allow(unused_macros)]
 macro_rules! write {

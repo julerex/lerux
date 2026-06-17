@@ -1,9 +1,9 @@
-use crate::ahash::convert::*;
-use crate::ahash::operations::folded_multiply;
-use crate::ahash::operations::read_small;
-use crate::ahash::operations::MULTIPLE;
-use crate::ahash::random_state::PI;
-use crate::ahash::RandomState;
+use crate::ahash::{
+    convert::*,
+    operations::{folded_multiply, read_small, MULTIPLE},
+    random_state::PI,
+    RandomState,
+};
 use core::hash::Hasher;
 
 const ROT: u32 = 23; //17
@@ -110,7 +110,8 @@ impl AHasher {
     #[inline(always)]
     fn large_update(&mut self, new_data: u128) {
         let block: [u64; 2] = new_data.convert();
-        let combined = folded_multiply(block[0] ^ self.extra_keys[0], block[1] ^ self.extra_keys[1]);
+        let combined =
+            folded_multiply(block[0] ^ self.extra_keys[0], block[1] ^ self.extra_keys[1]);
         self.buffer = (self.buffer.wrapping_add(self.pad) ^ combined).rotate_left(ROT);
     }
 
@@ -142,7 +143,7 @@ impl Hasher for AHasher {
 
     #[inline]
     fn write_u64(&mut self, i: u64) {
-        self.update(i as u64);
+        self.update(i);
     }
 
     #[inline]
@@ -315,7 +316,8 @@ impl Hasher for AHasherStr {
             self.0.write(bytes)
         } else {
             let value = read_small(bytes);
-            self.0.buffer = folded_multiply(value[0] ^ self.0.buffer, value[1] ^ self.0.extra_keys[1]);
+            self.0.buffer =
+                folded_multiply(value[0] ^ self.0.buffer, value[1] ^ self.0.extra_keys[1]);
             self.0.pad = self.0.pad.wrapping_add(bytes.len() as u64);
         }
     }

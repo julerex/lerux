@@ -1,14 +1,16 @@
 //! Helper for writing ELF files.
-use alloc::string::String;
-use alloc::vec::Vec;
+use alloc::{string::String, vec::Vec};
 use core::mem;
 
-use crate::object::elf;
-use crate::object::endian::*;
-use crate::object::pod;
-use crate::object::write::string::{StringId, StringTable};
-use crate::object::write::util;
-use crate::object::write::{Error, Result, WritableBuffer};
+use crate::object::{
+    elf,
+    endian::*,
+    pod,
+    write::{
+        string::{StringId, StringTable},
+        util, Error, Result, WritableBuffer,
+    },
+};
 
 const ALIGN_SYMTAB_SHNDX: usize = 4;
 const ALIGN_HASH: usize = 4;

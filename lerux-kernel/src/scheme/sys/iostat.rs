@@ -53,11 +53,7 @@ fn inner(fpath_user: UserSliceRw, token: &mut CleanLockToken) -> Result<Vec<u8>>
                 let _ = write!(
                     string,
                     "{} {:>4}: {:>8} {:>8} {:>08X}: ",
-                    if fd & UPPER_FDTBL_TAG == 0 {
-                        " "
-                    } else {
-                        "U"
-                    },
+                    if fd & UPPER_FDTBL_TAG == 0 { " " } else { "U" },
                     fd & !UPPER_FDTBL_TAG,
                     scheme.get(),
                     number,

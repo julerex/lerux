@@ -1,13 +1,19 @@
 //! Rayon extensions for `HashMap`.
 
 use super::raw::{RawIntoParIter, RawParDrain, RawParIter};
-use crate::hashbrown::hash_map::HashMap;
-use crate::hashbrown::raw::{Allocator, Global};
-use core::fmt;
-use core::hash::{BuildHasher, Hash};
-use core::marker::PhantomData;
-use rayon::iter::plumbing::UnindexedConsumer;
-use rayon::iter::{FromParallelIterator, IntoParallelIterator, ParallelExtend, ParallelIterator};
+use crate::hashbrown::{
+    hash_map::HashMap,
+    raw::{Allocator, Global},
+};
+use core::{
+    fmt,
+    hash::{BuildHasher, Hash},
+    marker::PhantomData,
+};
+use rayon::iter::{
+    plumbing::UnindexedConsumer, FromParallelIterator, IntoParallelIterator, ParallelExtend,
+    ParallelIterator,
+};
 
 /// Parallel iterator over shared references to entries in a map.
 ///
@@ -465,8 +471,10 @@ where
 #[cfg(test)]
 mod test_par_map {
     use alloc::vec::Vec;
-    use core::hash::{Hash, Hasher};
-    use core::sync::atomic::{AtomicUsize, Ordering};
+    use core::{
+        hash::{Hash, Hasher},
+        sync::atomic::{AtomicUsize, Ordering},
+    };
 
     use rayon::prelude::*;
 

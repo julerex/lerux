@@ -1,11 +1,11 @@
-use core::fmt::Debug;
-use core::mem;
+use core::{fmt::Debug, mem};
 
-use crate::object::elf;
-use crate::object::endian::{self, U32};
-use crate::object::pod::Pod;
-use crate::object::read::util;
-use crate::object::read::{self, Bytes, Error, ReadError};
+use crate::object::{
+    elf,
+    endian::{self, U32},
+    pod::Pod,
+    read::{self, util, Bytes, Error, ReadError},
+};
 
 use super::FileHeader;
 

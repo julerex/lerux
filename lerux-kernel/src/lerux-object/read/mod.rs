@@ -41,8 +41,7 @@
 //! }
 //! ```
 
-use alloc::borrow::Cow;
-use alloc::vec::Vec;
+use alloc::{borrow::Cow, vec::Vec};
 use core::{fmt, result};
 
 #[cfg(not(feature = "std"))]
@@ -157,7 +156,8 @@ impl<T> ReadError<T> for Option<T> {
     target_pointer_width = "32",
     feature = "elf"
 ))]
-pub type NativeFile<'data, R = &'data [u8]> = elf::ElfFile32<'data, crate::object::endian::Endianness, R>;
+pub type NativeFile<'data, R = &'data [u8]> =
+    elf::ElfFile32<'data, crate::object::endian::Endianness, R>;
 
 /// The native executable file for the target platform.
 #[cfg(all(
@@ -166,7 +166,8 @@ pub type NativeFile<'data, R = &'data [u8]> = elf::ElfFile32<'data, crate::objec
     target_pointer_width = "64",
     feature = "elf"
 ))]
-pub type NativeFile<'data, R = &'data [u8]> = elf::ElfFile64<'data, crate::object::endian::Endianness, R>;
+pub type NativeFile<'data, R = &'data [u8]> =
+    elf::ElfFile64<'data, crate::object::endian::Endianness, R>;
 
 /// The native executable file for the target platform.
 #[cfg(all(target_os = "macos", target_pointer_width = "32", feature = "macho"))]

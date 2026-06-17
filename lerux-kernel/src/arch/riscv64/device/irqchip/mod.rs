@@ -1,7 +1,6 @@
 use self::clint::Clint;
-use crate::dtb::irqchip::InterruptController;
+use crate::{dtb::irqchip::InterruptController, fdt::Fdt};
 use alloc::boxed::Box;
-use crate::fdt::Fdt;
 
 pub(crate) mod hlic;
 mod plic;

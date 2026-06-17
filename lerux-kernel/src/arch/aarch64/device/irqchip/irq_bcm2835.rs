@@ -1,5 +1,5 @@
-use core::ptr::{read_volatile, write_volatile};
 use crate::fdt::{node::FdtNode, Fdt};
+use core::ptr::{read_volatile, write_volatile};
 
 use super::InterruptController;
 use crate::{
@@ -8,10 +8,10 @@ use crate::{
         irqchip::{InterruptHandler, IrqCell, IrqDesc, IRQ_CHIP},
     },
     sync::CleanLockToken,
-};
-use crate::syscall::{
-    error::{Error, EINVAL},
-    Result,
+    syscall::{
+        error::{Error, EINVAL},
+        Result,
+    },
 };
 
 #[inline(always)]

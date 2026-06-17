@@ -1,15 +1,16 @@
-use core::fmt::Debug;
-use core::mem;
+use core::{fmt::Debug, mem};
 
 use alloc::vec::Vec;
 
-use crate::object::endian::BigEndian as BE;
-use crate::object::pod::Pod;
-use crate::object::read::{
-    self, Architecture, Error, Export, FileFlags, Import, NoDynamicRelocationIterator, Object,
-    ObjectKind, ObjectSection, ReadError, ReadRef, Result, SectionIndex, SymbolIndex,
+use crate::object::{
+    endian::BigEndian as BE,
+    pod::Pod,
+    read::{
+        self, Architecture, Error, Export, FileFlags, Import, NoDynamicRelocationIterator, Object,
+        ObjectKind, ObjectSection, ReadError, ReadRef, Result, SectionIndex, SymbolIndex,
+    },
+    xcoff,
 };
-use crate::object::xcoff;
 
 use super::{
     CsectAux, FileAux, Rel, SectionHeader, SectionTable, Symbol, SymbolTable, XcoffComdat,

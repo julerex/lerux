@@ -1,7 +1,9 @@
-use crate::fdt::Fdt;
-use crate::syscall::{
-    error::{Error, EINVAL},
-    Result,
+use crate::{
+    fdt::Fdt,
+    syscall::{
+        error::{Error, EINVAL},
+        Result,
+    },
 };
 
 use super::InterruptController;

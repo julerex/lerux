@@ -1,6 +1,6 @@
+use crate::spin::{Mutex, MutexGuard};
 use alloc::collections::VecDeque;
 use core::fmt;
-use crate::spin::{Mutex, MutexGuard};
 
 use crate::devices::graphical_debug::{DebugDisplay, DEBUG_DISPLAY};
 

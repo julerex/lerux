@@ -7,21 +7,23 @@ use core::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-pub use kernel_mapper::KernelMapper;
 use crate::spin::Mutex;
+pub use kernel_mapper::KernelMapper;
 
-pub use crate::arch::CurrentRmmArch as RmmA;
+pub use crate::{
+    arch::CurrentRmmArch as RmmA,
+    rmm::{Arch as RmmArch, PageFlags, PhysicalAddress, TableKind, VirtualAddress},
+};
 use crate::{
     context::{
         self,
         memory::{AccessMode, PfError},
     },
     kernel_executable_offsets::{__usercopy_end, __usercopy_start},
+    rmm::{BumpAllocator, FrameAllocator, FrameCount, FrameUsage},
     sync::CleanLockToken,
     syscall::error::{Error, ENOMEM},
 };
-pub use crate::rmm::{Arch as RmmArch, PageFlags, PhysicalAddress, TableKind, VirtualAddress};
-use crate::rmm::{BumpAllocator, FrameAllocator, FrameCount, FrameUsage};
 
 mod kernel_mapper;
 pub mod page;

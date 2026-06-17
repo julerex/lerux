@@ -1,7 +1,7 @@
 #![allow(static_mut_refs)] // for HandleMap + RwLock<L1,...> uninhabited static pattern in this scheme
+use crate::syscall::data::GlobalSchemes;
 use alloc::vec::Vec;
 use core::{fmt, str};
-use crate::syscall::data::GlobalSchemes;
 
 use crate::{
     context::{file::InternalFlags, timeout},

@@ -2,8 +2,7 @@
 // v. 2.0. If a copy of the MPL was not distributed with this file, You can
 // obtain one at https://mozilla.org/MPL/2.0/.
 
-use core::convert::TryInto;
-use core::ffi::CStr as FfiCStr;
+use core::{convert::TryInto, ffi::CStr as FfiCStr};
 
 pub struct CStr<'a>(&'a FfiCStr);
 
@@ -32,7 +31,9 @@ impl BigEndianU32 {
     }
 
     pub(crate) fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        Some(BigEndianU32(u32::from_be_bytes(bytes.get(..4)?.try_into().unwrap())))
+        Some(BigEndianU32(u32::from_be_bytes(
+            bytes.get(..4)?.try_into().unwrap(),
+        )))
     }
 }
 
@@ -46,7 +47,9 @@ impl BigEndianU64 {
     }
 
     pub(crate) fn from_bytes(bytes: &[u8]) -> Option<Self> {
-        Some(BigEndianU64(u64::from_be_bytes(bytes.get(..8)?.try_into().unwrap())))
+        Some(BigEndianU64(u64::from_be_bytes(
+            bytes.get(..8)?.try_into().unwrap(),
+        )))
     }
 }
 

@@ -1,16 +1,16 @@
 use alloc::fmt;
-use core::convert::TryInto;
-use core::fmt::Debug;
-use core::marker::PhantomData;
-use core::str;
+use core::{convert::TryInto, fmt::Debug, marker::PhantomData, str};
 
-use crate::object::endian::{BigEndian as BE, U32Bytes};
-use crate::object::pod::{bytes_of, Pod};
-use crate::object::read::{
-    self, Bytes, Error, ObjectSymbol, ObjectSymbolTable, ReadError, ReadRef, Result, SectionIndex,
-    StringTable, SymbolFlags, SymbolIndex, SymbolKind, SymbolScope, SymbolSection,
+use crate::object::{
+    endian::{BigEndian as BE, U32Bytes},
+    pod::{bytes_of, Pod},
+    read::{
+        self, Bytes, Error, ObjectSymbol, ObjectSymbolTable, ReadError, ReadRef, Result,
+        SectionIndex, StringTable, SymbolFlags, SymbolIndex, SymbolKind, SymbolScope,
+        SymbolSection,
+    },
+    xcoff,
 };
-use crate::object::xcoff;
 
 use super::{FileHeader, XcoffFile};
 

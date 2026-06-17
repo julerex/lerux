@@ -3,10 +3,10 @@
 //! These are used by some Windows linkers as a more compact way to describe
 //! dynamically imported symbols.
 
-use crate::object::endian::LittleEndian as LE;
-use crate::object::pe;
-use crate::object::read::{
-    Architecture, ByteString, Bytes, Error, ReadError, ReadRef, Result, SubArchitecture,
+use crate::object::{
+    endian::LittleEndian as LE,
+    pe,
+    read::{Architecture, ByteString, Bytes, Error, ReadError, ReadRef, Result, SubArchitecture},
 };
 
 /// A Windows short form description of a symbol to import.

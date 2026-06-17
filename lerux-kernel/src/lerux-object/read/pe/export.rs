@@ -1,9 +1,11 @@
 use alloc::vec::Vec;
 use core::fmt::Debug;
 
-use crate::object::endian::{LittleEndian as LE, U16Bytes, U32Bytes};
-use crate::object::pe;
-use crate::object::read::{ByteString, Bytes, Error, ReadError, ReadRef, Result};
+use crate::object::{
+    endian::{LittleEndian as LE, U16Bytes, U32Bytes},
+    pe,
+    read::{ByteString, Bytes, Error, ReadError, ReadRef, Result},
+};
 
 /// Where an export is pointing to.
 #[derive(Clone, Copy)]

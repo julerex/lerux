@@ -1,10 +1,10 @@
 use alloc::string::String;
-use core::convert::TryInto;
-use core::fmt;
-use core::marker::PhantomData;
+use core::{convert::TryInto, fmt, marker::PhantomData};
 
-use crate::object::pod::{from_bytes, slice_from_bytes, Pod};
-use crate::object::read::ReadRef;
+use crate::object::{
+    pod::{from_bytes, slice_from_bytes, Pod},
+    read::ReadRef,
+};
 
 /// A newtype for byte slices.
 ///

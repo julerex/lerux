@@ -177,6 +177,19 @@ impl<'a, D: Disk> Transaction<'a, D> {
         unsafe { self.deallocate(ctx, addr) };
     }
 
+    /// Like [`deallocate_block`] but uses [`deallocate_late`] for post-sync paths.
+    fn deallocate_block_late<T: BlockTrait>(
+        &mut self,
+        ctx: &mut dyn AllocCtx,
+        ptr: BlockPtr<T>,
+    ) -> bool {
+        if ptr.is_null() {
+            return false;
+        }
+        self.deallocate_late(ctx, ptr.addr());
+        true
+    }
+
     unsafe fn deallocate_block<T: BlockTrait>(
         &mut self,
         ctx: &mut dyn AllocCtx,

@@ -1,7 +1,9 @@
 //! Virtualize processor hardware for multiple software environments using Virtual Machine Extensions.
 
-use crate::x86::bits64::rflags::{self, RFlags};
-use crate::x86::vmx::{Result, VmFail};
+use crate::x86::{
+    bits64::rflags::{self, RFlags},
+    vmx::{Result, VmFail},
+};
 use core::arch::asm;
 
 /// Helper used to extract VMX-specific Result in accordance with

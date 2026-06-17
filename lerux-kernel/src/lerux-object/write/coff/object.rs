@@ -1,10 +1,10 @@
 use alloc::vec::Vec;
 
-use crate::object::endian::*;
-use crate::object::pe as coff;
-use crate::object::write::coff::writer;
-use crate::object::write::util::*;
-use crate::object::write::*;
+use crate::object::{
+    endian::*,
+    pe as coff,
+    write::{coff::writer, util::*, *},
+};
 
 #[derive(Default, Clone, Copy)]
 struct SectionOffsets {

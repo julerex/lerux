@@ -1,9 +1,5 @@
-use alloc::boxed::Box;
-use alloc::vec::Vec;
-use core::cell::RefCell;
-use core::convert::TryInto;
-use core::mem;
-use core::ops::Range;
+use alloc::{boxed::Box, vec::Vec};
+use core::{cell::RefCell, convert::TryInto, mem, ops::Range};
 #[cfg(feature = "std")]
 use std::io::{Read, Seek, SeekFrom};
 

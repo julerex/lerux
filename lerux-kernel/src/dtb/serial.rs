@@ -1,6 +1,4 @@
-use crate::fdt::Fdt;
-use crate::spin::Mutex;
-use crate::syscall::Mmio;
+use crate::{fdt::Fdt, spin::Mutex, syscall::Mmio};
 
 use crate::{
     devices::{serial::SerialKind, uart_16550, uart_pl011},

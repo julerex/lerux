@@ -1,8 +1,8 @@
+use crate::x86::msr::*;
 use core::{
     cell::SyncUnsafeCell,
     ptr::{read_volatile, write_volatile},
 };
-use crate::x86::msr::*;
 
 use crate::{
     arch::{cpuid::cpuid, ipi::IpiKind},

@@ -1,11 +1,13 @@
 use alloc::{boxed::Box, vec::Vec};
 use core::convert::TryInto;
 
-use crate::spin::{Mutex, Once};
-use crate::syscall::{
-    data::GlobalSchemes,
-    dirent::{DirEntry, DirentBuf, DirentKind},
-    EIO,
+use crate::{
+    spin::{Mutex, Once},
+    syscall::{
+        data::GlobalSchemes,
+        dirent::{DirEntry, DirentBuf, DirentKind},
+        EIO,
+    },
 };
 
 use crate::{

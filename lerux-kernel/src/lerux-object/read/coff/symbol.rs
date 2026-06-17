@@ -1,17 +1,16 @@
-use alloc::fmt;
-use alloc::vec::Vec;
-use core::convert::TryInto;
-use core::fmt::Debug;
-use core::str;
+use alloc::{fmt, vec::Vec};
+use core::{convert::TryInto, fmt::Debug, str};
 
 use super::{CoffCommon, CoffHeader, SectionTable};
-use crate::object::endian::{LittleEndian as LE, U32Bytes};
-use crate::object::pe;
-use crate::object::pod::{bytes_of, bytes_of_slice, Pod};
-use crate::object::read::util::StringTable;
-use crate::object::read::{
-    self, Bytes, ObjectSymbol, ObjectSymbolTable, ReadError, ReadRef, Result, SectionIndex,
-    SymbolFlags, SymbolIndex, SymbolKind, SymbolMap, SymbolMapEntry, SymbolScope, SymbolSection,
+use crate::object::{
+    endian::{LittleEndian as LE, U32Bytes},
+    pe,
+    pod::{bytes_of, bytes_of_slice, Pod},
+    read::{
+        self, util::StringTable, Bytes, ObjectSymbol, ObjectSymbolTable, ReadError, ReadRef,
+        Result, SectionIndex, SymbolFlags, SymbolIndex, SymbolKind, SymbolMap, SymbolMapEntry,
+        SymbolScope, SymbolSection,
+    },
 };
 
 /// A table of symbol entries in a COFF or PE file.

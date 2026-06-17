@@ -1,7 +1,5 @@
 use crate::ahash::RandomState;
-use core::hash::BuildHasher;
-use core::hash::Hash;
-use core::hash::Hasher;
+use core::hash::{BuildHasher, Hash, Hasher};
 
 // (extern crate alloc handled at kernel root for inlined build)
 
@@ -23,6 +21,7 @@ where
     T: Hash + ?Sized,
 {
     #[inline]
+    #[allow(clippy::manual_hash_one)]
     fn get_hash<H: Hash + ?Sized>(value: &H, random_state: &RandomState) -> u64 {
         let mut hasher = random_state.build_hasher();
         value.hash(&mut hasher);
@@ -36,6 +35,7 @@ where
     T: Hash + ?Sized,
 {
     #[inline]
+    #[allow(clippy::manual_hash_one)]
     default fn get_hash<H: Hash + ?Sized>(value: &H, random_state: &RandomState) -> u64 {
         let mut hasher = random_state.build_hasher();
         value.hash(&mut hasher);
@@ -71,7 +71,7 @@ call_hasher_impl_u64!(&i16);
 call_hasher_impl_u64!(&i32);
 call_hasher_impl_u64!(&i64);
 
-macro_rules! call_hasher_impl_fixed_length{
+macro_rules! call_hasher_impl_fixed_length {
     ($typ:ty) => {
         #[cfg(specialize)]
         impl CallHasher for $typ {
@@ -169,11 +169,26 @@ mod test {
     #[test]
     pub fn test_ref_independent() {
         let build_hasher = RandomState::with_seeds(1, 2, 3, 4);
-        assert_eq!(u8::get_hash(&&1, &build_hasher), u8::get_hash(&1, &build_hasher));
-        assert_eq!(u16::get_hash(&&2, &build_hasher), u16::get_hash(&2, &build_hasher));
-        assert_eq!(u32::get_hash(&&3, &build_hasher), u32::get_hash(&3, &build_hasher));
-        assert_eq!(u64::get_hash(&&4, &build_hasher), u64::get_hash(&4, &build_hasher));
-        assert_eq!(u128::get_hash(&&5, &build_hasher), u128::get_hash(&5, &build_hasher));
+        assert_eq!(
+            u8::get_hash(&&1, &build_hasher),
+            u8::get_hash(&1, &build_hasher)
+        );
+        assert_eq!(
+            u16::get_hash(&&2, &build_hasher),
+            u16::get_hash(&2, &build_hasher)
+        );
+        assert_eq!(
+            u32::get_hash(&&3, &build_hasher),
+            u32::get_hash(&3, &build_hasher)
+        );
+        assert_eq!(
+            u64::get_hash(&&4, &build_hasher),
+            u64::get_hash(&4, &build_hasher)
+        );
+        assert_eq!(
+            u128::get_hash(&&5, &build_hasher),
+            u128::get_hash(&5, &build_hasher)
+        );
         assert_eq!(
             str::get_hash(&"test", &build_hasher),
             str::get_hash("test", &build_hasher)
@@ -189,11 +204,26 @@ mod test {
         );
 
         let build_hasher = RandomState::with_seeds(10, 20, 30, 40);
-        assert_eq!(u8::get_hash(&&&1, &build_hasher), u8::get_hash(&1, &build_hasher));
-        assert_eq!(u16::get_hash(&&&2, &build_hasher), u16::get_hash(&2, &build_hasher));
-        assert_eq!(u32::get_hash(&&&3, &build_hasher), u32::get_hash(&3, &build_hasher));
-        assert_eq!(u64::get_hash(&&&4, &build_hasher), u64::get_hash(&4, &build_hasher));
-        assert_eq!(u128::get_hash(&&&5, &build_hasher), u128::get_hash(&5, &build_hasher));
+        assert_eq!(
+            u8::get_hash(&&&1, &build_hasher),
+            u8::get_hash(&1, &build_hasher)
+        );
+        assert_eq!(
+            u16::get_hash(&&&2, &build_hasher),
+            u16::get_hash(&2, &build_hasher)
+        );
+        assert_eq!(
+            u32::get_hash(&&&3, &build_hasher),
+            u32::get_hash(&3, &build_hasher)
+        );
+        assert_eq!(
+            u64::get_hash(&&&4, &build_hasher),
+            u64::get_hash(&4, &build_hasher)
+        );
+        assert_eq!(
+            u128::get_hash(&&&5, &build_hasher),
+            u128::get_hash(&5, &build_hasher)
+        );
         assert_eq!(
             str::get_hash(&&"test", &build_hasher),
             str::get_hash("test", &build_hasher)

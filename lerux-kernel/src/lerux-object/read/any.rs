@@ -1,5 +1,4 @@
-use alloc::fmt;
-use alloc::vec::Vec;
+use alloc::{fmt, vec::Vec};
 use core::marker::PhantomData;
 
 #[allow(unused_imports)] // Unused for Wasm

@@ -4,7 +4,6 @@ use core::{
     slice,
 };
 
-
 pub struct CallerCtx {
     pub pid: usize,
     pub uid: u32,

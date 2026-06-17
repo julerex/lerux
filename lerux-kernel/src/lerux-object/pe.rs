@@ -9,8 +9,10 @@
 
 use core::convert::TryInto;
 
-use crate::object::endian::{I32Bytes, LittleEndian as LE, U16Bytes, U32Bytes, I32, U16, U32, U64};
-use crate::object::pod::Pod;
+use crate::object::{
+    endian::{I32Bytes, LittleEndian as LE, U16Bytes, U32Bytes, I32, U16, U32, U64},
+    pod::Pod,
+};
 
 /// MZ
 pub const IMAGE_DOS_SIGNATURE: u16 = 0x5A4D;

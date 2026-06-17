@@ -20,12 +20,13 @@
 //! }
 //! ```
 
-use core::convert::TryInto;
-use core::slice;
+use core::{convert::TryInto, slice};
 
-use crate::object::archive;
-use crate::object::endian::{BigEndian as BE, LittleEndian as LE, U16Bytes, U32Bytes, U64Bytes};
-use crate::object::read::{self, Bytes, Error, ReadError, ReadRef};
+use crate::object::{
+    archive,
+    endian::{BigEndian as BE, LittleEndian as LE, U16Bytes, U32Bytes, U64Bytes},
+    read::{self, Bytes, Error, ReadError, ReadRef},
+};
 
 /// The kind of archive format.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

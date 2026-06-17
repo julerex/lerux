@@ -1,10 +1,10 @@
 use crate::{
     arch::{device::irqchip::hlic, time},
     dtb::DTB_BINARY,
-};
-use crate::fdt::{
-    node::{FdtNode, NodeProperty},
-    Fdt,
+    fdt::{
+        node::{FdtNode, NodeProperty},
+        Fdt,
+    },
 };
 
 pub mod cpu;

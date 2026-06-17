@@ -10,7 +10,9 @@ use crate::{
     cpu_set::LogicalCpuId,
     cpu_stats::{self, CpuState},
     percpu::PercpuBlock,
+    smallvec::SmallVec,
     sync::{ArcRwLockWriteGuard, CleanLockToken, L4},
+    syscall::PtraceFlags,
 };
 use alloc::sync::Arc;
 use core::{
@@ -18,8 +20,6 @@ use core::{
     hint, mem,
     sync::atomic::Ordering,
 };
-use crate::smallvec::SmallVec;
-use crate::syscall::PtraceFlags;
 
 enum UpdateResult {
     CanSwitch,

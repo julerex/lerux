@@ -2,8 +2,8 @@
 
 use core::num::NonZeroUsize;
 
-use alloc::{string::String, sync::Arc, vec::Vec};
 use crate::redox_path::RedoxPath;
+use alloc::{string::String, sync::Arc, vec::Vec};
 
 use crate::{
     context::{

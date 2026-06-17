@@ -1,9 +1,13 @@
 use self::RustcEntry::*;
-use crate::hashbrown::map::{make_hash, Drain, HashMap, IntoIter, Iter, IterMut};
-use crate::hashbrown::raw::{Allocator, Bucket, Global, RawTable};
-use core::fmt::{self, Debug};
-use core::hash::{BuildHasher, Hash};
-use core::mem;
+use crate::hashbrown::{
+    map::{make_hash, Drain, HashMap, IntoIter, Iter, IterMut},
+    raw::{Allocator, Bucket, Global, RawTable},
+};
+use core::{
+    fmt::{self, Debug},
+    hash::{BuildHasher, Hash},
+    mem,
+};
 
 impl<K, V, S, A> HashMap<K, V, S, A>
 where

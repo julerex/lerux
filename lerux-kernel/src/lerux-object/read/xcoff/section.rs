@@ -1,13 +1,14 @@
-use core::fmt::Debug;
-use core::{iter, result, slice, str};
+use core::{fmt::Debug, iter, result, slice, str};
 
-use crate::object::endian::BigEndian as BE;
-use crate::object::pod::Pod;
-use crate::object::read::{
-    self, CompressedData, CompressedFileRange, Error, ObjectSection, ReadError, ReadRef,
-    RelocationMap, Result, SectionFlags, SectionIndex, SectionKind,
+use crate::object::{
+    endian::BigEndian as BE,
+    pod::Pod,
+    read::{
+        self, CompressedData, CompressedFileRange, Error, ObjectSection, ReadError, ReadRef,
+        RelocationMap, Result, SectionFlags, SectionIndex, SectionKind,
+    },
+    xcoff,
 };
-use crate::object::xcoff;
 
 use super::{AuxHeader, FileHeader, Rel, XcoffFile, XcoffRelocationIterator};
 

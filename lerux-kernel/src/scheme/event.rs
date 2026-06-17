@@ -1,5 +1,5 @@
-use alloc::sync::Arc;
 use crate::syscall::{EventFlags, O_NONBLOCK};
+use alloc::sync::Arc;
 
 use crate::{
     context::file::InternalFlags,

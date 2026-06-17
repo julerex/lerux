@@ -10,10 +10,9 @@ use crate::{
     syscall::{data::PtraceEvent, error::*, flag::*, ptrace_event},
 };
 
+use crate::{spin::Mutex, syscall::data::GlobalSchemes};
 use alloc::{collections::VecDeque, sync::Arc};
 use core::cmp;
-use crate::spin::Mutex;
-use crate::syscall::data::GlobalSchemes;
 
 //  ____                _
 // / ___|  ___  ___ ___(_) ___  _ __  ___

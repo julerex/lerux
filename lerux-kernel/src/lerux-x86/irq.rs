@@ -1,9 +1,7 @@
 //! Shared interrupt description and set-up code.
 //! See the `bits*::irq` modules for arch-specific portions.
 
-
-use core::arch::asm;
-use core::fmt;
+use core::{arch::asm, fmt};
 
 /// x86 Exception description (see also Intel Vol. 3a Chapter 6).
 #[derive(Debug)]

@@ -1,12 +1,11 @@
-use crate::hashbrown::alloc::alloc::{handle_alloc_error, Layout};
-use crate::hashbrown::scopeguard::{guard, ScopeGuard};
-use crate::hashbrown::TryReserveError;
-use core::iter::FusedIterator;
-use core::marker::PhantomData;
-use core::mem;
-use core::mem::MaybeUninit;
-use core::ptr::NonNull;
-use core::{hint, ptr};
+use crate::hashbrown::{
+    alloc::alloc::{handle_alloc_error, Layout},
+    scopeguard::{guard, ScopeGuard},
+    TryReserveError,
+};
+use core::{
+    hint, iter::FusedIterator, marker::PhantomData, mem, mem::MaybeUninit, ptr, ptr::NonNull,
+};
 
 cfg_if! {
     // Use the SSE2 implementation if possible: it allows us to scan 16 buckets
@@ -45,8 +44,7 @@ pub(crate) use self::alloc::{do_alloc, Allocator, Global};
 
 mod bitmask;
 
-use self::bitmask::BitMaskIter;
-use self::imp::Group;
+use self::{bitmask::BitMaskIter, imp::Group};
 
 // Branch prediction hint. This is currently only available on nightly but it
 // consistently improves performance by 10-15%.
@@ -2853,7 +2851,10 @@ impl RawTableInner {
         table_layout: TableLayout,
         capacity: usize,
         fallibility: Fallibility,
-    ) -> Result<crate::hashbrown::scopeguard::ScopeGuard<Self, impl FnMut(&mut Self) + 'a>, TryReserveError>
+    ) -> Result<
+        crate::hashbrown::scopeguard::ScopeGuard<Self, impl FnMut(&mut Self) + 'a>,
+        TryReserveError,
+    >
     where
         A: Allocator,
     {
@@ -4672,8 +4673,7 @@ mod test_map {
     /// ARE ZERO, EVEN IF WE HAVE `FULL` CONTROL BYTES.
     #[test]
     fn test_catch_panic_clone_from() {
-        use ::alloc::sync::Arc;
-        use ::alloc::vec::Vec;
+        use ::alloc::{sync::Arc, vec::Vec};
         use allocator_api2::alloc::{AllocError, Allocator, Global};
         use core::sync::atomic::{AtomicI8, Ordering};
         use std::thread;

@@ -4,10 +4,5 @@ default_dependencies = false
 requires_weak = ["50_rootfs.service"]
 
 [service]
-cmd = "/data/bin/rustc"
-# The 50_rootfs (memory redoxfs) success callback does the mkdir + cp of the cross-compiled
-# stub (staged as /scheme/initfs/bin/rustc) into /data/bin/rustc right after mount.
-# This oneshot therefore runs the stub *from the mounted FS*, causing it to print
-# "rustc --version" (when invoked) + "lerux-bootstrap-compiled".
-# Combined with "redoxfs mounted" from the daemon, this satisfies the smoke harness.
-# (If the cp races for some reason the stub is also directly available as "rustc" from initfs.)
+cmd = "/scheme/data/bin/rustc"
+type = "oneshot"

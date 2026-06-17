@@ -20,4 +20,4 @@ pub use self::stub::mount;
 mod redox;
 
 #[cfg(target_os = "redox")]
-pub use self::redox::mount;
+pub use self::redox::{mount, mount_via_init};

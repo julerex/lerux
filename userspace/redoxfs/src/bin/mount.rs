@@ -1,8 +1,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 extern crate alloc;
 
-#[cfg(feature = "std")]
-extern crate libc;
+#[cfg(all(target_os = "redox", feature = "std"))]
+extern crate daemon;
 extern crate redoxfs;
 #[cfg(all(target_os = "redox", feature = "std"))]
 extern crate syscall;
@@ -153,7 +153,7 @@ fn print_usage_exit() -> ! {
 
 #[cfg(feature = "std")]
 fn usage() {
-    eprintln!("redoxfs [--no-daemon|-d] [--uuid] [disk or uuid] [mountpoint] [block in hex]");
+    eprintln!("redoxfs [--no-daemon|-d] [--memory MOUNTPOINT] [--disk-file PATH MOUNTPOINT] [--uuid] [disk or uuid] [mountpoint] [block in hex]");
 }
 
 #[cfg(feature = "std")]
@@ -366,6 +366,8 @@ fn main() {
     let mut args = env::args().skip(1);
 
     let mut daemonise = true;
+    let mut memory_mode = false;
+    let mut disk_file_path: Option<String> = None;
     let mut disk_id: Option<DiskId> = None;
     let mut mountpoint: Option<String> = None;
     let mut block_opt: Option<u64> = None;
@@ -373,6 +375,33 @@ fn main() {
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "--no-daemon" | "-d" => daemonise = false,
+
+            "--disk-file" => {
+                #[cfg(not(target_os = "redox"))]
+                print_err_exit("--disk-file is only supported on Redox");
+                #[cfg(target_os = "redox")]
+                {
+                    let path = match args.next() {
+                        Some(path) => path,
+                        None => print_err_exit("no disk file path provided for --disk-file"),
+                    };
+                    let mnt = match args.next() {
+                        Some(mnt) => mnt,
+                        None => print_err_exit("no mountpoint provided for --disk-file"),
+                    };
+                    disk_file_path = Some(path);
+                    mountpoint = Some(mnt);
+                }
+            }
+
+            "--memory" => {
+                #[cfg(not(target_os = "redox"))]
+                print_err_exit("--memory is only supported on Redox");
+                #[cfg(target_os = "redox")]
+                {
+                    memory_mode = true;
+                }
+            }
 
             "--uuid" if disk_id.is_none() => {
                 disk_id = Some(DiskId::Uuid(
@@ -386,9 +415,13 @@ fn main() {
                 ));
             }
 
-            disk if disk_id.is_none() => disk_id = Some(DiskId::Path(disk.to_owned())),
+            disk if disk_id.is_none() && !memory_mode && disk_file_path.is_none() => {
+                disk_id = Some(DiskId::Path(disk.to_owned()));
+            }
 
-            mnt if disk_id.is_some() && mountpoint.is_none() => mountpoint = Some(mnt.to_owned()),
+            mnt if (disk_id.is_some() || memory_mode || disk_file_path.is_some()) && mountpoint.is_none() => {
+                mountpoint = Some(mnt.to_owned());
+            }
 
             opts if mountpoint.is_some() => match u64::from_str_radix(opts, 16) {
                 Ok(block) => block_opt = Some(block),
@@ -397,6 +430,50 @@ fn main() {
 
             _ => print_usage_exit(),
         }
+    }
+
+    #[cfg(target_os = "redox")]
+    if let Some(disk_path) = disk_file_path {
+        let Some(mountpoint) = mountpoint else {
+            print_err_exit("no mountpoint provided for --disk-file");
+        };
+        if disk_id.is_some() || block_opt.is_some() || memory_mode {
+            print_err_exit("--disk-file does not accept disk, memory, or block arguments");
+        }
+        if daemonise {
+            daemon::SchemeDaemon::new(|scheme_daemon| {
+                disk_file_daemon(&disk_path, &mountpoint, scheme_daemon)
+            });
+        } else {
+            eprintln!("redoxfs: --disk-file requires daemon mode under init");
+            process::exit(1);
+        }
+    }
+
+    #[cfg(target_os = "redox")]
+    if memory_mode {
+        let Some(mountpoint) = mountpoint else {
+            print_err_exit("no mountpoint provided for --memory");
+        };
+        if disk_id.is_some() || block_opt.is_some() {
+            print_err_exit("--memory does not accept disk or block arguments");
+        }
+        if daemonise {
+            daemon::SchemeDaemon::new(|scheme_daemon| memory_daemon(&mountpoint, scheme_daemon));
+        } else {
+            eprintln!("redoxfs: --memory requires daemon mode under init");
+            process::exit(1);
+        }
+    }
+
+    #[cfg(not(target_os = "redox"))]
+    if memory_mode {
+        print_err_exit("--memory is only supported on Redox");
+    }
+
+    #[cfg(not(target_os = "redox"))]
+    if disk_file_path.is_some() {
+        print_err_exit("--disk-file is only supported on Redox");
     }
 
     let Some(disk_id) = disk_id else {
@@ -437,102 +514,178 @@ fn main() {
     }
 }
 
-/// In-RAM smoke path (used for the rustc-hosting smoke to provide a writable /data fs
-/// and deliver the rustc stub via the initfs oneshot).
-/// Now available without `std` (DiskMemory and FileSystem::create are un-gated in the lib).
-/// std-only blocks inside (e.g. the pre-mount rustc copy using std::fs) remain cfg-gated.
-#[cfg(target_os = "redox")]
-fn memory_daemon(mountpoint: &str, daemonise: bool) -> ! {
-    #[cfg(feature = "std")]
+/// In-RAM smoke path: DiskMemory backend, init scheme registration, rustc stub delivery.
+#[cfg(all(target_os = "redox", feature = "std"))]
+fn populate_rustc_stub(
+    filesystem: &mut FileSystem<redoxfs::DiskMemory>,
+    ctime_secs: u64,
+    ctime_nanos: u32,
+) {
+    use redoxfs::{Node, TreePtr};
+
+    let rustc_bytes = match std::fs::read("/scheme/initfs/bin/rustc") {
+        Ok(bytes) => bytes,
+        Err(err) => {
+            log::error!("redoxfs memory: failed to read rustc stub: {}", err);
+            return;
+        }
+    };
+
+    let root = TreePtr::<Node>::root();
+    let bin_dir = match filesystem.tx(|tx| {
+        tx.create_node(
+            root,
+            "bin",
+            Node::MODE_DIR | 0o755,
+            ctime_secs,
+            ctime_nanos,
+        )
+    }) {
+        Ok(dir) => dir,
+        Err(err) => {
+            log::error!("redoxfs memory: failed to create bin dir: {}", err);
+            return;
+        }
+    };
+
+    let rustc_node = match filesystem.tx(|tx| {
+        tx.create_node(
+            bin_dir.ptr(),
+            "rustc",
+            Node::MODE_FILE | 0o755,
+            ctime_secs,
+            ctime_nanos,
+        )
+    }) {
+        Ok(node) => node,
+        Err(err) => {
+            log::error!("redoxfs memory: failed to create rustc node: {}", err);
+            return;
+        }
+    };
+
+    if let Err(err) = filesystem.tx(|tx| {
+        tx.write_node(
+            rustc_node.ptr(),
+            0,
+            &rustc_bytes,
+            ctime_secs,
+            ctime_nanos,
+        )
+    }) {
+        log::error!("redoxfs memory: failed to write rustc stub: {}", err);
+        return;
+    }
+
+    if let Err(err) = filesystem.tx(|tx| tx.sync(true)) {
+        log::error!("redoxfs memory: failed to sync rustc stub: {}", err);
+    }
+}
+
+/// In-RAM smoke path: DiskMemory backend, init scheme registration, rustc stub delivery.
+#[cfg(all(target_os = "redox", feature = "std"))]
+fn memory_daemon(mountpoint: &str, scheme_daemon: daemon::SchemeDaemon) -> ! {
     use std::time;
 
-    #[cfg(feature = "std")]
     let (ctime_secs, ctime_nanos) = {
         let ctime = time::SystemTime::now()
             .duration_since(time::UNIX_EPOCH)
             .unwrap();
         (ctime.as_secs(), ctime.subsec_nanos())
     };
-    #[cfg(not(feature = "std"))]
-    let (ctime_secs, ctime_nanos) = (0u64, 0u32);
 
     let disk = redoxfs::DiskMemory::new(64 * 1024 * 1024);
 
-    let filesystem = match FileSystem::create(
-        disk,
-        None,
-        ctime_secs,
-        ctime_nanos,
-    ) {
+    let mut filesystem = match FileSystem::create(disk, None, ctime_secs, ctime_nanos) {
         Ok(fs) => fs,
         Err(err) => {
-            #[cfg(feature = "std")]
             log::error!("redoxfs memory: failed to create in-RAM filesystem: {}", err);
-            #[cfg(feature = "std")]
             process::exit(1);
-            #[cfg(not(feature = "std"))]
-            loop {}
         }
     };
 
-    #[cfg(feature = "std")]
-    eprintln!("redoxfs mounted");
+    populate_rustc_stub(&mut filesystem, ctime_secs, ctime_nanos);
 
-    #[cfg(feature = "std")]
-    {
-        let _ = std::fs::create_dir_all("/data/bin");
-        if std::fs::copy("/scheme/initfs/bin/rustc", "/data/bin/rustc").is_ok() {
-            let _ = std::process::Command::new("/data/bin/rustc").arg("--version").status();
-            let _ = std::process::Command::new("/data/bin/rustc").status();
-        } else {
-            let _ = std::process::Command::new("/scheme/initfs/bin/rustc").arg("--version").status();
-            let _ = std::process::Command::new("/scheme/initfs/bin/rustc").status();
-        }
-    }
-
-    match redoxfs::mount(filesystem, mountpoint, |mounted_path| {
+    if let Err(err) = redoxfs::mount_via_init(filesystem, mountpoint, scheme_daemon, |_mounted_path| {
+        eprintln!("redoxfs mounted");
         capability_mode();
-
-        #[cfg(feature = "std")]
-        log::info!(
-            "mounted filesystem (memory) to {}",
-            mounted_path.display()
-        );
+        log::info!("mounted filesystem (memory) to /scheme/{}", mountpoint);
     }) {
-        Ok(()) => {
-            #[cfg(feature = "std")]
-            if !daemonise {
-                process::exit(0);
-            }
-            loop {
-                #[cfg(feature = "std")]
-                std::thread::park();
-                #[cfg(not(feature = "std"))]
-                core::hint::spin_loop();
-            }
-        }
-        Err(err) => {
-            #[cfg(feature = "std")]
-            log::error!("redoxfs memory: failed to mount to {}: {}", mountpoint, err);
-            #[cfg(feature = "std")]
-            process::exit(1);
-            #[cfg(not(feature = "std"))]
-            loop {}
-        }
+        log::error!("redoxfs memory: failed to mount to {}: {}", mountpoint, err);
+        process::exit(1);
     }
+
+    process::exit(0);
+}
+
+/// File-backed smoke path: open a disk image (e.g. staged in initfs) via DiskFile.
+#[cfg(all(target_os = "redox", feature = "std"))]
+fn disk_file_daemon(disk_path: &str, mountpoint: &str, scheme_daemon: daemon::SchemeDaemon) -> ! {
+    // Initfs files are read-only; copy to the logging ramfs for writable block I/O.
+    let open_path = if disk_path.starts_with("/scheme/initfs/") {
+        let writable = "/scheme/logging/rustc-disk.img";
+        match std::fs::copy(disk_path, writable) {
+            Ok(_) => writable,
+            Err(err) => {
+                log::error!(
+                    "redoxfs disk: failed to copy {} to {}: {}",
+                    disk_path,
+                    writable,
+                    err
+                );
+                process::exit(1);
+            }
+        }
+    } else {
+        disk_path
+    };
+
+    let disk = match DiskFile::open(open_path).map(DiskCache::new) {
+        Ok(disk) => disk,
+        Err(err) => {
+            log::error!("redoxfs disk: failed to open image {}: {}", open_path, err);
+            process::exit(1);
+        }
+    };
+
+    let filesystem = match FileSystem::open(disk, None, None, true) {
+        Ok(fs) => fs,
+        Err(err) => {
+            log::error!("redoxfs disk: failed to open filesystem on {}: {}", open_path, err);
+            process::exit(1);
+        }
+    };
+
+    if let Err(err) = redoxfs::mount_via_init(filesystem, mountpoint, scheme_daemon, |_mounted_path| {
+        eprintln!("redoxfs mounted");
+        capability_mode();
+        log::info!("mounted filesystem (disk file {}) to /scheme/{}", disk_path, mountpoint);
+    }) {
+        log::error!("redoxfs disk: failed to mount {} at {}: {}", disk_path, mountpoint, err);
+        process::exit(1);
+    }
+
+    process::exit(0);
 }
 
 #[cfg(all(target_os = "redox", not(feature = "std")))]
 fn main() {
-    // no_std + runtime entrypoint for the daemon under RUNTIME_REDOXFS flag.
-    // The memory_daemon (in-RAM smoke fs for rustc copy + markers) is currently
-    // behind feature="std" because DiskMemory/create/mount helpers in the lib are.
-    // Once those are available no_std (additive lift of their cfgs + any internal std uses),
-    // call memory_daemon("/data", true); here.
-    // For now this keeps the bin compilable as no_std (lib already is); full smoke under
-    // pure no_std daemon will follow after lib adjustments and redox-rt wiring.
-    // Placeholder to satisfy bin main + allow build/link of no_std path.
-    loop {
-        core::hint::spin_loop();
-    }
+    use redoxfs::DiskMemory;
+
+    daemon::SchemeDaemon::new(|scheme_daemon| {
+        let disk = DiskMemory::new(64 * 1024 * 1024);
+        let filesystem = match FileSystem::create(disk, None, 0, 0) {
+            Ok(fs) => fs,
+            Err(_) => loop {},
+        };
+
+        if redoxfs::mount_via_init(filesystem, "data", scheme_daemon, |_mounted_path| {
+            capability_mode();
+        })
+        .is_err()
+        {
+            loop {}
+        }
+        loop {}
+    });
 }

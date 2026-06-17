@@ -49,6 +49,12 @@ doc = false
 required-features = ["std"]
 
 [[bin]]
+name = "redoxfs-populate"
+path = "src/bin/populate.rs"
+doc = false
+required-features = ["std"]
+
+[[bin]]
 name = "redoxfs-resize"
 path = "src/bin/resize.rs"
 doc = false
@@ -68,7 +74,7 @@ log = { version = "0.4.14", default-features = false, optional = true }
 lz4_flex = { version = "0.11", default-features = false, features = ["checked-decode"] }
 parse-size = { version = "1", optional = true }
 range-tree = { version = "0.1", optional = true }
-redox_syscall = "0.7.5"
+redox_syscall = "0.8.0"
 seahash = { version = "4.1.0", default-features = false }
 termion = { version = "4", optional = true }
 uuid = { version = "1.4", default-features = false }
@@ -106,7 +112,8 @@ redox-daemon = []
 fuser = { version = "0.16", optional = true }
 
 [target.'cfg(target_os = "redox")'.dependencies]
-libredox = { version = "0.1.13", optional = true }
+daemon = { path = "../daemon" }
+libredox = { version = "0.1.17", optional = true }
 redox-path = "0.3.0"
 redox-scheme = { version = "0.11.0", optional = true }
 # no_std runtime for daemon under redox-daemon feature

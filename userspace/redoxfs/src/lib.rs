@@ -36,6 +36,8 @@ pub use self::header::{Header, HEADER_RING};
 pub use self::key::{Key, KeySlot, Salt};
 #[cfg(feature = "std")]
 pub use self::mount::mount;
+#[cfg(target_os = "redox")]
+pub use self::mount::mount_via_init;
 pub use self::node::{Node, NodeFlags, NodeLevel, NodeLevelData};
 pub use self::record::RecordRaw;
 pub use self::transaction::Transaction;
@@ -55,9 +57,9 @@ mod filesystem;
 mod header;
 mod htree;
 mod key;
-#[cfg(all(feature = "std", not(fuzzing)))]
+#[cfg(all(not(fuzzing)))]
 mod mount;
-#[cfg(all(feature = "std", fuzzing))]
+#[cfg(all(fuzzing))]
 pub mod mount;
 mod node;
 mod record;

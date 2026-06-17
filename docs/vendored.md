@@ -2,7 +2,7 @@
 
 This file tracks code copied into lerux from upstream projects (especially Redox), how it differs from upstream, and what still depends on external registries. See [plan.md](plan.md) for the **vendor everything** policy: no build-time dependencies on Redox GitLab or other moving upstream trees.
 
-**Convention:** vendored trees live under `kernel/`, `userspace/`, or `vendor/` (pick one layout per import; document each row below). The `vendor/` directory now consolidates the pristine upstream Redox kernel source snapshot plus all crate dependencies (and many transitives) of lerux as plain source trees. Reference trees such as `../tryredox/base` are **not** part of lerux and are not listed here as vendored—only what is **in this repository**.
+**Convention:** vendored trees live under `kernel/`, `userspace/`, or `vendor/` (pick one layout per import; document each row below). The `vendor/` directory now consolidates the pristine upstream Redox kernel source snapshot plus all crate dependencies (and many transitives) of lerux as plain source trees. External reference trees are **not** part of lerux and are not listed here as vendored—only what is **in this repository**.
 
 Detailed per-subdirectory vendoring dates, sources, and cleanup notes live in `vendor/README.md`.
 
@@ -62,22 +62,23 @@ Building **without** `direct-boot` still targets a normal Redox-style kernel but
 |-----------|--------------|----------|-------------------|---------|-------------|-------------------------|
 | Redox kernel (working / adapted tree) | `kernel/` | [redox-os/kernel](https://gitlab.redox-os.org/redox-os/kernel) | `TBD` (initial import ~2026-05; pin commit on next sync) | MIT (`kernel/LICENSE`) | 2026-05 | Direct-boot PVH stub in Rust; SMP trampolines from NASM golden files (`include_bytes!`); `just validate-trampolines` + CI; `direct-boot` embeds initfs; `direct-boot-userspace` spawns bootstrap; no nasm/cc in kernel build |
 | Pristine Redox kernel source (plain source tree) | `vendor/redox-kernel/` | [redox-os/kernel](https://gitlab.redox-os.org/redox-os/kernel) | Copied 2026-06-16 from reference checkout `~/repos/redox/redox_org/kernel` (matching vendored revision) | MIT | 2026-06-16 | Full upstream snapshot for reference / offline use. `.git` removed 2026-06-16 (plain source tree, no VCS metadata). Working adapted copy with lerux patches remains at root `kernel/`. Winapi crates pruned from broader vendoring in same cleanup. |
+| Pristine Redox bootloader source (plain source tree) | `vendor/redox-bootloader/` | [redox-os/bootloader](https://gitlab.redox-os.org/redox-os/bootloader) | Copied 2026-06-17 from reference checkout `/home/julian/repos/redox/redox_org/bootloader` (commit 2a718991b3deb343746f2dbb0ee9b3e63a4c47d8) | MIT | 2026-06-17 | Full upstream snapshot for reference / offline use. `.git`, `.gitignore`, `.gitlab-ci.yml` and `.helix` removed (plain source tree). |
 | RMM (memory manager) | inlined under `lerux-kernel/src/lerux-rmm/` (from vendor/redox-kernel/rmm) | Same kernel tree / [redox-os/rmm](https://gitlab.redox-os.org/redox-os/rmm) | `TBD` (bundled with kernel import) | MIT | 2026-06-16 (inlining) | Previously a path dep; now fully inlined (no Cargo dep) as `lerux-rmm` under the kernel src tree (original module name rebound via #[path] so kernel code is unchanged). Old top-level lerux-kernel/rmm/ cleaned up. |
 
 **Zero Cargo dependencies for the kernel (2026-06-16 change)**: All former runtime crates from the root Cargo.toml (arrayvec, bitfield, bitflags, fdt, hashbrown + ahash, linked_list_allocator + spinning_top/lock_api/scopeguard, object + memchr, raw-cpuid, redox-path, redox_syscall (bound as "syscall"), rustc-demangle, slab, smallvec, spin, x86, plus the build-dep toml + its host closure serde*/winnow*/toml_edit* etc.) have been copied from their `vendor/*` snapshots and placed as plain source trees in `lerux-kernel/src/lerux-*/` (subdirectories under lerux-kernel/src with the requested lerux-* prefix). The kernel entry point binds the *original* module names via `#[path = "lerux-xxx/lib.rs"] mod original_name;` (and equivalent inside build.rs for the toml family), so the bulk of the kernel source requires no use-site changes. The root Cargo.toml now has no runtime [dependencies] (and no [build-dependencies] toml). The vendored originals in `vendor/` remain the reference snapshots (see also the dedicated `vendor/README.md` for per-subdir dates and the post-vendoring cleanup history). This achieves the "ZERO cargo dependencies" goal while preserving the Redox kernel logic and lerux adaptations.
 
-| initfs (reader) | `userspace/initfs/` | [base/initfs](https://gitlab.redox-os.org/redox-os/base) | `TBD` (copied from `tryredox/base/initfs` 2026-05-30) | MIT | 2026-05-30 | Standalone crate in root workspace; `plain` from crates.io |
-| initfs archiver (host) | `userspace/initfs-tools/` | [base/initfs/tools](https://gitlab.redox-os.org/redox-os/base) | `TBD` (copied from `tryredox/base/initfs/tools` 2026-05-30) | MIT | 2026-05-30 | `redox-initfs-ar` / `redox-initfs-dump`; path dep to `userspace/initfs` |
-| bootstrap | `userspace/bootstrap/` | [base/bootstrap](https://gitlab.redox-os.org/redox-os/base) | `TBD` (copied from `tryredox/base/bootstrap` 2026-05-30) | MIT | 2026-05-30 | Own `[workspace]`; `redox-rt` path to `userspace/runtime/redox-rt`; git dep removed |
-| userspace runtime | `userspace/runtime/` | [relibc/redox-rt + generic-rt](https://gitlab.redox-os.org/redox-os/relibc) | `TBD` (forked from `tryredox/relibc` 2026-05-30) | MIT | 2026-05-30 | Lerux-owned `no_std` runtime; bootstrap links here; init/daemons still on `.toolchain` relibc until step 2 |
-| relibc (partial) | `vendor/relibc/` | [redox-os/relibc](https://gitlab.redox-os.org/redox-os/relibc) | `TBD` (copied from `tryredox/relibc` 2026-05-30) | MIT / BSD | 2026-05-31 | Snapshot for init/daemon link; **`redox-rt` / `generic-rt`** bundled under `vendor/relibc/` for relibc build; **`userspace/runtime/`** used by bootstrap only; sysroot via **`scripts/build-sysroot.sh`**. `.git` removed 2026-06-16 (plain source tree). |
-| init | `userspace/init/` | [base/init](https://gitlab.redox-os.org/redox-os/base) | `TBD` (copied from `tryredox/base/init` 2026-05-30) | MIT | 2026-05-31 | Static link via in-tree sysroot + `targets/x86_64-unknown-redox.json`; no workspace `libc` crate |
-| logd, zerod, randd, ramfs | `userspace/{logd,zerod,randd,ramfs}/` | [base/*](https://gitlab.redox-os.org/redox-os/base) | `TBD` (copied from `tryredox/base` 2026-05-30) | MIT | 2026-05-30 | Minimal early daemons; staged into `initfs-staging/bin/` |
-| rtcd | `userspace/drivers/rtcd/` | [base/drivers/rtcd](https://gitlab.redox-os.org/redox-os/base) | `TBD` (copied from `tryredox/base/drivers/rtcd` 2026-05-30) | MIT | 2026-05-30 | Required by trimmed `00_runtime.target` |
-| daemon, scheme-utils | `userspace/daemon/`, `userspace/scheme-utils/` | [base/*](https://gitlab.redox-os.org/redox-os/base) | `TBD` (copied from `tryredox/base` 2026-05-30) | MIT | 2026-05-30 | Shared daemon plumbing for logd/zerod/randd/ramfs/rtcd |
-| config (userspace) | `userspace/config/` | [base/config](https://gitlab.redox-os.org/redox-os/base) | `TBD` (copied from `tryredox/base/config` 2026-05-30) | MIT | 2026-05-30 | Build-time config for daemons |
-| redox-log | `vendor/redox-log/` | [redox-os/redox-log](https://gitlab.redox-os.org/redox-os/redox-log) | `TBD` (copied from `tryredox/redox-log` 2026-05-30) | MIT | 2026-05-30 | Logging crate for daemons. `.git` removed 2026-06-16 (plain source tree). |
-| redoxfs (frozen reference) | `userspace/redoxfs/` | [redox-os/redoxfs](https://gitlab.redox-os.org/redox-os/redoxfs) | TBD (copied from ../tryredox/redoxfs 2026-06) | MIT | 2026-06 | **Frozen behavioral reference** for the test harness (`just test-redoxfs`, 67 host tests). Do not edit implementation except tests. Original base-first import for rustc-hosting smoke. |
+| initfs (reader) | `userspace/initfs/` | [base/initfs](https://gitlab.redox-os.org/redox-os/base) | `TBD` (from upstream [redox-os/base](https://gitlab.redox-os.org/redox-os/base) 2026-05-30) | MIT | 2026-05-30 | Standalone crate in root workspace; `plain` from crates.io |
+| initfs archiver (host) | `userspace/initfs-tools/` | [base/initfs/tools](https://gitlab.redox-os.org/redox-os/base) | `TBD` (from upstream [redox-os/base](https://gitlab.redox-os.org/redox-os/base) 2026-05-30) | MIT | 2026-05-30 | `redox-initfs-ar` / `redox-initfs-dump`; path dep to `userspace/initfs` |
+| bootstrap | `userspace/bootstrap/` | [base/bootstrap](https://gitlab.redox-os.org/redox-os/base) | `TBD` (from upstream [redox-os/base](https://gitlab.redox-os.org/redox-os/base) 2026-05-30) | MIT | 2026-05-30 | Own `[workspace]`; `redox-rt` path to `userspace/runtime/redox-rt`; git dep removed |
+| userspace runtime | `userspace/runtime/` | [relibc/redox-rt + generic-rt](https://gitlab.redox-os.org/redox-os/relibc) | `TBD` (from upstream [redox-os/relibc](https://gitlab.redox-os.org/redox-os/relibc) 2026-05-30) | MIT | 2026-05-30 | Lerux-owned `no_std` runtime; bootstrap links here; init/daemons still on `.toolchain` relibc until step 2 |
+| relibc (partial) | `vendor/relibc/` | [redox-os/relibc](https://gitlab.redox-os.org/redox-os/relibc) | `TBD` (from upstream [redox-os/relibc](https://gitlab.redox-os.org/redox-os/relibc) 2026-05-30) | MIT / BSD | 2026-05-31 | Snapshot for init/daemon link; **`redox-rt` / `generic-rt`** bundled under `vendor/relibc/` for relibc build; **`userspace/runtime/`** used by bootstrap only; sysroot via **`scripts/build-sysroot.sh`**. `.git` removed 2026-06-16 (plain source tree). |
+| init | `userspace/init/` | [base/init](https://gitlab.redox-os.org/redox-os/base) | `TBD` (from upstream [redox-os/base](https://gitlab.redox-os.org/redox-os/base) 2026-05-30) | MIT | 2026-05-31 | Static link via in-tree sysroot + `targets/x86_64-unknown-redox.json`; no workspace `libc` crate |
+| logd, zerod, randd, ramfs | `userspace/{logd,zerod,randd,ramfs}/` | [base/*](https://gitlab.redox-os.org/redox-os/base) | `TBD` (from upstream [redox-os/base](https://gitlab.redox-os.org/redox-os/base) 2026-05-30) | MIT | 2026-05-30 | Minimal early daemons; staged into `initfs-staging/bin/` |
+| rtcd | `userspace/drivers/rtcd/` | [base/drivers/rtcd](https://gitlab.redox-os.org/redox-os/base) | `TBD` (from upstream [redox-os/base](https://gitlab.redox-os.org/redox-os/base) 2026-05-30) | MIT | 2026-05-30 | Required by trimmed `00_runtime.target` |
+| daemon, scheme-utils | `userspace/daemon/`, `userspace/scheme-utils/` | [base/*](https://gitlab.redox-os.org/redox-os/base) | `TBD` (from upstream [redox-os/base](https://gitlab.redox-os.org/redox-os/base) 2026-05-30) | MIT | 2026-05-30 | Shared daemon plumbing for logd/zerod/randd/ramfs/rtcd |
+| config (userspace) | `userspace/config/` | [base/config](https://gitlab.redox-os.org/redox-os/base) | `TBD` (from upstream [redox-os/base](https://gitlab.redox-os.org/redox-os/base) 2026-05-30) | MIT | 2026-05-30 | Build-time config for daemons |
+| redox-log | `vendor/redox-log/` | [redox-os/redox-log](https://gitlab.redox-os.org/redox-os/redox-log) | `TBD` (from upstream [redox-os/redox-log](https://gitlab.redox-os.org/redox-os/redox-log) 2026-05-30) | MIT | 2026-05-30 | Logging crate for daemons. `.git` removed 2026-06-16 (plain source tree). |
+| redoxfs (frozen reference) | `userspace/redoxfs/` | [redox-os/redoxfs](https://gitlab.redox-os.org/redox-os/redoxfs) | TBD (from upstream [redox-os/redoxfs](https://gitlab.redox-os.org/redox-os/redoxfs) 2026-06) | MIT | 2026-06 | **Frozen behavioral reference** for the test harness (`just test-redoxfs`, 67 host tests). Do not edit implementation except tests. Original base-first import for rustc-hosting smoke. |
 | lerux-filesystem | `userspace/lerux-filesystem/` | Fork of `userspace/redoxfs/` | 2026-06-17 fork | MIT | 2026-06-17 | Lerux-owned working copy (`lerux_filesystem` crate); preserves RedoxFS on-disk format and guest binary names (`redoxfs`, `redoxfs-mkfs`, …). Built/cross-staged by `just build-redoxfs` / smoke recipes. Parity gate: `just test-fs-parity`. |
 | All crate dependencies (kernel + workspace) | `vendor/<name>-<ver>/` (e.g. `ahash-0.8.12/`, `hashbrown-0.14.5/`, `redox-path-0.2.0/`, `redox_syscall-0.8.0/`, `fdt-0.2.0-alpha1/`, `spin-0.9.8/`, `x86-0.47.0/`, `object-0.37.3/`, `rustc-demangle-0.1.27/`, `sbi-rt-0.0.3/`, and ~80+ others including transitives) | crates.io (and the one git dep for fdt); Redox crates from their published sources | Exact versions from `Cargo.lock` on 2026-06-16 | Various (MIT/Apache/etc.) | 2026-06-16 | Captured via `cargo vendor --versioned-dirs` for full offline / "vendor everything" compliance. Includes all direct + transitive deps of the lerux kernel and workspace (initfs tools, etc.). Winapi-* crates (large Windows platform sources) pruned 2026-06-16 as irrelevant. See `vendor/README.md` for full list and per-subdir dates. |
 | initfs staging | `userspace/initfs-staging/` | lerux + upstream units | — | MIT | 2026-05-31 | `bin/` + trimmed `lib/init.d/`; **no** dynamic `libc.so` / `ld64` (static ELFs) |
@@ -87,7 +88,7 @@ Building **without** `direct-boot` still targets a normal Redox-style kernel but
 
 ## Planned vendoring (from Redox base / userspace roadmap)
 
-Source reference: `tryredox/base` (or upstream [redox-os/base](https://gitlab.redox-os.org/redox-os/base)). Phase B minimal daemons are vendored; remaining rows are Phase C+.
+Source reference: upstream [redox-os/base](https://gitlab.redox-os.org/redox-os/base). Phase B minimal daemons are vendored; remaining rows are Phase C+.
 
 | Planned component | Suggested path | Upstream (reference) | Notes |
 |-------------------|----------------|----------------------|--------|
@@ -96,20 +97,16 @@ Source reference: `tryredox/base` (or upstream [redox-os/base](https://gitlab.re
 
 ---
 
-## Reference tree: `tryredox` vs [gitlab.redox-os.org/redox-os](https://gitlab.redox-os.org/redox-os)
+## Upstream Redox components
 
-The sibling directory `../tryredox/` (or your local clone of the same layout) holds **reference checkouts** for studying and copying into lerux. It is **not** vendored into lerux and is **not** required to build lerux.
+Redox OS components are hosted at https://gitlab.redox-os.org/redox-os/. The lists below provide guidance on which upstream pieces may be relevant for vendoring decisions. All material that lerux actually uses must be copied into this tree (see "How to update this file" above). No external sibling clones are required.
 
-This section records what is present under `tryredox/` versus what the upstream Redox project treats as fundamental. Sources: official [redox](https://gitlab.redox-os.org/redox-os/redox/-/blob/master/README.md) README, `tryredox/redox/config/base.toml`, `config/minimal.toml`, `config/desktop-minimal.toml`, and `tryredox/redox/recipes/core/*/recipe.toml`. (GitLab’s group browser may require login; repo lists are also defined by the build system recipes.)
-
-**Population (2026-05-30):** Tier 1–3 repos and Tier 5 core recipe repos were added via `git clone --depth 1` into `../tryredox/`. **`acpi`** was cloned with `-b redox-6.x`. Tier 4 **toolchain** forks (`gcc`, `llvm-project`, `rust`, `binutils-gdb`) were **not** cloned (multi‑GB; only needed for full upstream image cooks).
-
-### What `tryredox` already has (top-level git clones)
+### What upstream provides (high-level inventory)
 
 | Directory | GitLab repo | Role |
 |-----------|-------------|------|
 | `kernel/` | [kernel](https://gitlab.redox-os.org/redox-os/kernel) | Microkernel |
-| `base/` | [base](https://gitlab.redox-os.org/redox-os/base) | Daemons, drivers, **bootstrap** (inside this repo, not a sibling), initfs, init, … |
+| `base/` | [base](https://gitlab.redox-os.org/redox-os/base) | Daemons, drivers, **bootstrap** (inside this repo), initfs, init, … |
 | `relibc/` | [relibc](https://gitlab.redox-os.org/redox-os/relibc) | C/POSIX runtime, `redox-rt`, `libredox` |
 | `syscall/` | [syscall](https://gitlab.redox-os.org/redox-os/syscall) | `redox_syscall` ABI crate |
 | `redoxfs/` | [redoxfs](https://gitlab.redox-os.org/redox-os/redoxfs) | Default filesystem |
@@ -120,19 +117,17 @@ This section records what is present under `tryredox/` versus what the upstream 
 | `book/` | [book](https://gitlab.redox-os.org/redox-os/book) | Documentation (not runtime) |
 | `uefi/` | [uefi](https://gitlab.redox-os.org/redox-os/uefi) | UEFI-related boot support |
 
-Also present: `redox-master/` (typically **no** `.git`) — looks like another snapshot/copy of the build tree, not a separate upstream project.
+**Coverage note:** The upstream set is strong on kernel, runtime, syscall ABI, `base`, filesystem, and build orchestration, but does not include everything needed to produce a standard bootable image from `config/base.toml` without additional components.
 
-**Coverage:** roughly **11 git checkouts** — strong on kernel, runtime, syscall ABI, `base`, filesystem, and build orchestration — but **not** enough to produce a standard bootable image from `config/base.toml` without cloning more repos at cook time.
+**Not a top-level sibling:** `bootstrap` lives under `base/bootstrap/`.
 
-**Not missing:** `bootstrap` — it lives under `base/bootstrap/`, not as a top-level sibling.
+### Tier 1 — Minimal **bootable** Redox image components
 
-### Tier 1 — Minimal **bootable** Redox image
+Required by `redox/config/base.toml` (`[packages]`) and/or `config/minimal.toml`. Each has a `recipes/core/*/recipe.toml` on GitLab:
 
-Required by `tryredox/redox/config/base.toml` (`[packages]`) and/or `config/minimal.toml`. Each has a `recipes/core/*/recipe.toml` on GitLab; **now cloned** under `tryredox/` (unless noted):
-
-| Repo (`tryredox/`) | Why it matters |
-|--------------|----------------|
-| [bootloader](https://gitlab.redox-os.org/redox-os/bootloader) | Loads kernel + initfs; `bootloader = {}` in `base.toml` |
+| Repo | Why it matters |
+|------|----------------|
+| [bootloader](https://gitlab.redox-os.org/redox-os/bootloader) | Loads kernel + initfs; `bootloader = {}` in `base.toml` (pristine snapshot vendored to `vendor/redox-bootloader/`) |
 | [ion](https://gitlab.redox-os.org/redox-os/ion) | Default shell (`minimal.toml`, users in `base.toml`) |
 | [coreutils](https://gitlab.redox-os.org/redox-os/coreutils) | Basic Unix utilities |
 | [extrautils](https://gitlab.redox-os.org/redox-os/extrautils) | `dmesg`, `less`, etc. (`minimal.toml`) |
@@ -143,13 +138,11 @@ Required by `tryredox/redox/config/base.toml` (`[packages]`) and/or `config/mini
 | [netutils](https://gitlab.redox-os.org/redox-os/netutils) | `ping`, DHCP-related tools, etc. (`base.toml`) |
 | [binutils](https://gitlab.redox-os.org/redox-os/binutils) | Redox toolchain / linking (core recipe) |
 
-**Also cloned:** [installer](https://gitlab.redox-os.org/redox-os/installer) — image build (`server.toml`, book).
+**Also relevant:** [installer](https://gitlab.redox-os.org/redox-os/installer) — image build.
 
-With Tier 1–3 present locally, `tryredox/redox/` cooks can use local source trees if recipes/paths are pointed at siblings (default recipes still use Git URLs unless patched).
+### Tier 2 — Fundamental GitLab dependencies of `base` / `orbital`
 
-### Tier 2 — **Fundamental GitLab dependencies** of `base` / `orbital`
-
-Referenced from `tryredox/base/Cargo.toml`, `orbital`, or drivers. **Now cloned** under `tryredox/` (lerux vendoring should still copy in-tree, not use these remotes):
+Referenced from `base/Cargo.toml`, `orbital`, or drivers:
 
 | Repo | Pulled by |
 |------|-----------|
@@ -159,39 +152,37 @@ Referenced from `tryredox/base/Cargo.toml`, `orbital`, or drivers. **Now cloned*
 | [orbclient](https://gitlab.redox-os.org/redox-os/orbclient) | Orbital, graphics/input drivers (workspace may use crates.io version; recipes still track GitLab) |
 | [liborbital](https://gitlab.redox-os.org/redox-os/liborbital) | C/C++ Orbital clients (graphics / portability path) |
 
-For lerux’s **vendor everything** policy, Tier 2 matters as much as Tier 1 when copying from `tryredox/base` or `orbital`.
+For lerux’s **vendor everything** policy, Tier 2 matters as much as Tier 1.
 
 ### Tier 3 — README “essential” / minimal **desktop**
 
-From the Redox README and `config/desktop-minimal.toml` — **now cloned** (with `orbital/`):
+From the Redox README and `config/desktop-minimal.toml`:
 
-| Repo (`tryredox/`) | Role |
-|--------------|------|
+| Repo | Role |
+|------|------|
 | [termion](https://gitlab.redox-os.org/redox-os/termion) | Terminal library (README essential list) |
 | **orbclient** | See Tier 2 |
 | [orbterm](https://gitlab.redox-os.org/redox-os/orbterm) | Terminal emulator |
 | [orbutils](https://gitlab.redox-os.org/redox-os/orbutils) | Orbital utilities |
 | [orbdata](https://gitlab.redox-os.org/redox-os/orbdata) | Orbital data / assets |
 
-With Tier 3 siblings present, `desktop-minimal.toml` package sources are available locally for study and vendoring.
-
 ### Tier 4 — Build infrastructure (not OS runtime)
 
-| Repo | In `tryredox/`? | Role |
-|------|-----------------|------|
-| Toolchain forks under `redox/recipes/dev/` | **No** (size) | [gcc](https://gitlab.redox-os.org/redox-os/gcc), [llvm-project](https://gitlab.redox-os.org/redox-os/llvm-project), [rust](https://gitlab.redox-os.org/redox-os/rust), [binutils-gdb](https://gitlab.redox-os.org/redox-os/binutils-gdb) — clone separately if doing full upstream image builds |
+| Repo | Availability | Role |
+|------|--------------|------|
+| Toolchain forks under `redox/recipes/dev/` | Separate clones (large) | [gcc](https://gitlab.redox-os.org/redox-os/gcc), [llvm-project](https://gitlab.redox-os.org/redox-os/llvm-project), [rust](https://gitlab.redox-os.org/redox-os/rust), [binutils-gdb](https://gitlab.redox-os.org/redox-os/binutils-gdb) — clone separately if doing full upstream image builds |
 
 ### Tier 5 — Other `recipes/core/` repos (useful, not always “minimal”)
 
-**Cloned 2026-05-30:** [findutils](https://gitlab.redox-os.org/redox-os/findutils), [dash](https://gitlab.redox-os.org/redox-os/dash), [contain](https://gitlab.redox-os.org/redox-os/contain), [profiled](https://gitlab.redox-os.org/redox-os/profiled), [strace-redox](https://gitlab.redox-os.org/redox-os/strace-redox), [openlibm](https://gitlab.redox-os.org/redox-os/openlibm), [dlmalloc-rs](https://gitlab.redox-os.org/redox-os/dlmalloc-rs).
+Useful extras include: [findutils](https://gitlab.redox-os.org/redox-os/findutils), [dash](https://gitlab.redox-os.org/redox-os/dash), [contain](https://gitlab.redox-os.org/redox-os/contain), [profiled](https://gitlab.redox-os.org/redox-os/profiled), [strace-redox](https://gitlab.redox-os.org/redox-os/strace-redox), [openlibm](https://gitlab.redox-os.org/redox-os/openlibm), [dlmalloc-rs](https://gitlab.redox-os.org/redox-os/dlmalloc-rs).
 
 Defer for lerux until after Phases A–B in [plan.md](plan.md): full desktop extras, games, WIP recipes, COSMIC, etc.
 
-### Boot-path diagram (`tryredox` vs gaps)
+### Boot-path diagram (upstream Redox components)
 
 ```mermaid
 flowchart TB
-  subgraph have [In tryredox]
+  subgraph core [Core upstream]
     BLD[redox build]
     K[kernel]
     B[base + bootstrap]
@@ -200,7 +191,7 @@ flowchart TB
     FS[redoxfs]
     RX[redoxer]
   end
-  subgraph miss_boot [Tier 1 — boot/image utils]
+  subgraph t1 [Tier 1 — boot/image utils]
     BOOT[bootloader]
     ION[ion]
     CU[coreutils / extrautils / userutils]
@@ -208,7 +199,7 @@ flowchart TB
     NET[netdb / netutils]
     BI[binutils]
   end
-  subgraph miss_dep [Tier 2 — base/orbital deps]
+  subgraph t2 [Tier 2 — base/orbital deps]
     ACPI[acpi]
     RLOG[redox-log]
     OC[orbclient]
@@ -216,24 +207,22 @@ flowchart TB
   BOOT --> K
   K --> B
   B --> R
-  B --> miss_dep
-  BLD --> have
-  BLD --> miss_boot
+  B --> t2
+  BLD --> core
+  BLD --> t1
 ```
 
 ### Summary for lerux vendoring
 
-| Area | `tryredox` status | Lerux implication |
-|------|-------------------|-------------------|
-| Kernel / syscall / relibc | Present | Adapted kernel + RMM at root `kernel/`; pristine kernel source snapshot at `vendor/redox-kernel/` (2026-06-16); relibc and redox-log at `vendor/` (plain trees post-2026-06-16 cleanup); syscall + path crates vendored in `vendor/` |
-| `base` (initfs, bootstrap, daemons, drivers) | Present | Primary source for Phase A–B vendoring (many now in `userspace/` or `vendor/`) |
-| Bootloader | In `tryredox/` | Keep lerux `qemu/` path or vendor `bootloader` / UEFI tree |
-| Utils / packaging / shell | In `tryredox/` | Not needed for first bootstrap milestone; needed for “real” Redox image parity |
-| `acpi`, `redox-log`, `orbclient` | In `tryredox/` | Vendor in-tree when building `base` or `orbital` inside lerux (redox-log already in `vendor/`) |
-| Desktop | In `tryredox/` (Tier 3) | Defer for lerux until after minimal userspace |
+| Area | Upstream status | Lerux implication |
+|------|-----------------|-------------------|
+| Kernel / syscall / relibc | Present upstream | Adapted kernel + RMM at root `kernel/`; pristine kernel source snapshot at `vendor/redox-kernel/` (2026-06-16); relibc and redox-log at `vendor/` (plain trees post-2026-06-16 cleanup); syscall + path crates vendored in `vendor/` |
+| `base` (initfs, bootstrap, daemons, drivers) | Present upstream | Primary source for Phase A–B vendoring (many now in `userspace/` or `vendor/`) |
+| Bootloader | Present upstream (snapshot vendored) | Pristine source at `vendor/redox-bootloader/` (2026-06-17). lerux still uses direct-boot + temporary qemu/ loaders; long-term plan is lerux-owned Rust bootloader (see plan.md). |
+| Utils / packaging / shell | Available upstream | Not needed for first bootstrap milestone; needed for “real” Redox image parity |
+| `acpi`, `redox-log`, `orbclient` | Available upstream | Vendor in-tree when building `base` or `orbital` inside lerux (redox-log already in `vendor/`) |
+| Desktop | Available upstream (Tier 3) | Defer for lerux until after minimal userspace |
 | Third-party crates (hashbrown, spin, object, etc.) | N/A (upstream crates.io/git) | All relevant kernel + workspace deps vendored into `vendor/<name>-<ver>/` (2026-06-16) for full offline compliance |
-
-When cloning new reference repos into `tryredox/`, update the tables above and note the date. For bulk crate or snapshot updates directly into `vendor/`, follow the vendoring steps above and record details (including cleanup like .git removal and pruning) in both this file and `vendor/README.md`.
 
 ---
 

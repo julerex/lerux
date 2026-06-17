@@ -139,7 +139,7 @@ Files: `src/mount/redox/{scheme.rs, resource.rs}`, `src/bin/mount.rs`
 - First SAFETY comments + small documentation improvements in DiskMemory and allocator (high-risk allocator paths).
 - Deep-dive on transaction.rs completed (read insert/remove/sync tree logic, child_nodes, release_unused; added SAFETY docs to allocate/deallocate, read_block_or_empty, read_record, write_block; documented CoW + delayed-dealloc ordering that is central to durability).
 - Runtime integration kickoff advanced: redox-rt/proc.rs explored (fexec_impl, grants, TCB, addrspace); added concrete notes in justfile (target path) + Cargo.toml (no_std readiness + future "redox-daemon" feature sketch). Lib is already no_std.
-- Divergence measurement: done vs ../tryredox/redoxfs (build artifacts + our audit changes + [workspace] addition).
+- Divergence measurement: done vs upstream redoxfs reference (redox-os/redoxfs) (build artifacts + our audit changes + [workspace] addition).
 - All builds/tests (no_std check, host tests x39, cross build-redoxfs) verified green after edits.
 
 Ready for incremental landing with review. This pass added:

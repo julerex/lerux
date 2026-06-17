@@ -18,7 +18,7 @@ This section records decisions from the 2026-05-30 design review. Use it as the 
 
 | In scope | Out of scope |
 |----------|----------------|
-| Kernel, boot stubs, bootloader (when shipped), every initfs ELF | Host-only recipes, CI, reference trees (`../tryredox/`) |
+| Kernel, boot stubs, bootloader (when shipped), every initfs ELF | Host-only recipes, CI, external reference clones |
 
 #### Userspace runtime
 
@@ -102,7 +102,7 @@ Target recipe: **`just check-only-rust`** (or a dedicated CI job) implementing t
 - The full upstream Redox `make install` / sysroot as the primary development loop
 - `redoxer` or other tools that pull moving targets from external Redox trees unless vendored and pinned
 
-When adopting components from upstream Redox (e.g. the reference tree under `tryredox/base`), **copy them into lerux** (e.g. `userspace/`, `vendor/`) and:
+When adopting components from upstream Redox, **copy them into lerux** (e.g. `userspace/`, `vendor/`) and:
 
 - Replace `path = "../…"` and `git = "https://gitlab.redox-os.org/…"` with **in-tree paths**
 - Pin versions in the lerux workspace; document provenance in [vendored.md](vendored.md)
@@ -139,14 +139,9 @@ The kernel expects a contiguous physical **bootstrap/initfs** blob. The first us
 
 ---
 
-## Reference: `tryredox` (upstream layout, not a dependency)
+## Redox `base` structure (for vendoring reference)
 
-The sibling directory `../tryredox/` holds local clones for study and copying into lerux. It is **not** part of lerux and must not be required to build lerux.
-
-- **`tryredox/base`** — daemons, drivers, bootstrap, initfs, init (primary source for userspace Phases A–B).
-- **Full GitLab gap analysis** — what `tryredox` has vs missing repos (Tiers 1–5), boot diagram, and lerux implications: [vendored.md § Reference tree: tryredox](vendored.md#reference-tree-tryredox-vs-gitlabredox-osorgredox-os).
-
-Summary: `tryredox` already has **kernel, base, relibc, syscall, redoxfs, redox, redoxer, orbital, acid, book, uefi** (~11 git repos). It is **missing Tier 1** boot/image pieces (**bootloader**, **ion**, **coreutils**, **pkgutils**, **net** utils, **binutils**, …) and **Tier 2** git deps of `base` (**acpi**, **redox-log**, **orbclient**, …). See [vendored.md](vendored.md) for the complete tier tables.
+The following describes key parts of upstream Redox's `base` (see GitLab at https://gitlab.redox-os.org/redox-os/base). This information is useful when deciding what to vendor. Lerux progress is measured by what has actually been copied into `userspace/` or `vendor/`.
 
 ### What `base` contains (high level)
 
@@ -428,7 +423,7 @@ All "Plan to first green" items delivered (harness, staging, service, image mkfs
 - Runtime integration advanced: `build-redoxfs-runtime` recipe (full flags, no_std lib path + target bin attempt), `redox-daemon` feature, just/Cargo notes.
 - Wired the runtime recipe into `build-direct-userspace` / `stage-userspace` / smoke *behind RUNTIME_REDOXFS=1 env flag* (see justfile: conditional build/cp in stage-userspace; default remains hybrid so existing `just smoke-rustc` is 100% unchanged/green). build-direct-userspace and smoke-rustc now document the flag.
 - Deep dive on transaction.rs (ordering, deallocs, tree ops; `deallocate_late` helper + 4 call sites cleaned as small rewrite).
-- Divergence vs ../tryredox + doc updates (PLAN, NOTES, audit).
+- Divergence vs upstream reference + doc updates (PLAN, NOTES, audit).
 - All verifs green after each batch (no_std, 39 tests, cross build-redoxfs + new runtime recipe).
 See audit doc for full status. Smoke path remains the gate. Incremental, reviewable changes only. To test the no_std path for redoxfs: RUNTIME_REDOXFS=1 just smoke-rustc (or build-direct-userspace).
 
@@ -440,6 +435,6 @@ See audit doc for full status. Smoke path remains the gate. Incremental, reviewa
 - Move completed items to a "Done" section or strike them through.
 - Use checkboxes for tracking progress.
 - Feel free to re-prioritize as the project evolves.
-- **`tryredox/`** is reference material only; lerux progress is measured by what is **vendored under this repo** (see [VENDORED.md](VENDORED.md#reference-tree-tryredox-vs-gitlabredox-osorgredox-os) for coverage vs GitLab).
+- Upstream Redox is reference material only; lerux progress is measured by what is **vendored under this repo** (see [VENDORED.md](vendored.md) for coverage vs GitLab).
 
 This document is intentionally broad — it exists to prevent good ideas from being lost.

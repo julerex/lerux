@@ -46,7 +46,7 @@ Key distinctions to resolve:
 - Kernel core logic, RMM, schemes, syscalls: intentionally low divergence (kept for ABI compat and upstream merge potential).
 - Boot, build, and "Only Rust" surface: high divergence (lerux-specific).
 - Userspace: mixed — vendored base pieces + custom runtime; transitional relibc debt for sysroot.
-- Scope of "all Redox": Currently selective/prioritized (kernel + Phase A/B userspace). Pruned large unused reference material (e.g. full cookbook recipes, cranelift, redoxfs build artifacts). Reference material lives in external ../tryredox/ only. The rustc-hosting goal does not require a full desktop or all recipes, but *does* require a userspace surface large enough for rustc (real FS, richer process/IO model, stdlib support) — this will drive more selective vendoring from base/ than the current minimal daemons.
+- Scope of "all Redox": Currently selective/prioritized (kernel + Phase A/B userspace). Pruned large unused reference material (e.g. full cookbook recipes, cranelift, redoxfs build artifacts). Reference material is drawn from upstream Redox repositories on GitLab; only the actually vendored subsets live inside lerux. The rustc-hosting goal does not require a full desktop or all recipes, but *does* require a userspace surface large enough for rustc (real FS, richer process/IO model, stdlib support) — this will drive more selective vendoring from base/ than the current minimal daemons.
 
 ## Open distinctions requiring resolution via grilling
 
@@ -219,7 +219,7 @@ Actions taken:
 
 **Next vendoring priority driven by rustc-hosting goal: redoxfs sources**
 
-Decision: The immediate next item to vendor from the Redox base is the redoxfs sources (from the external `../tryredox/redoxfs` reference tree, ~1.7M pure-Rust crate with 35 .rs files, significant `unsafe` in allocator/block/filesystem layers, and a `mount/redox/scheme.rs` implementation using `redox_scheme` + `syscall`).
+Decision: The immediate next item to vendor from the Redox base is the redoxfs sources (from upstream [redox-os/redoxfs](https://gitlab.redox-os.org/redox-os/redoxfs), ~1.7M pure-Rust crate with 35 .rs files, significant `unsafe` in allocator/block/filesystem layers, and a `mount/redox/scheme.rs` implementation using `redox_scheme` + `syscall`).
 
 Rationale (accepted):
 - Current `userspace/ramfs` is explicitly early-logging only (BTreeMap + IndexMap in-memory, backed by /scheme/memory).
@@ -247,7 +247,7 @@ Implications observed in code/docs (to be confirmed in grilling):
 - This goal makes the "gradually replacing non-Rust" work higher-stakes in userspace (the runtime that rustc and its output programs will use must be solid and preferably pure-Rust).
 - Divergence must preserve enough Redox ABI compatibility that a "rustc built for redox" can run without immediate porting (e.g., the scheme FS interface used by std/libredox).
 
-Cross-reference: Current ramfs is explicitly "useful for early logging" (userspace/ramfs/Cargo.toml). redoxfs (pure Rust, 35 .rs, heavy unsafe in block/fs layers) selected as next from ../tryredox reference. No mentions of rustc hosting or compiler in current PLAN or VENDORED beyond toolchain build notes. The 2026-06 decision explicitly pulls a real FS forward for this goal.
+Cross-reference: Current ramfs is explicitly "useful for early logging" (userspace/ramfs/Cargo.toml). redoxfs (pure Rust, 35 .rs, heavy unsafe in block/fs layers) selected as next from upstream Redox (redox-os/redoxfs). No mentions of rustc hosting or compiler in current PLAN or VENDORED beyond toolchain build notes. The 2026-06 decision explicitly pulls a real FS forward for this goal.
 
 ## Resolved decision (2026-06, Question 3)
 

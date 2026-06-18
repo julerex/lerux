@@ -288,7 +288,7 @@ impl SchemeSync for Scheme {
     }
     fn unlinkat(&mut self, dirfd: usize, path: &str, flags: usize, ctx: &CallerCtx) -> Result<()> {
         {
-            if !self.handles.get(dirfd)?.as_inode()? != Filesystem::ROOT_INODE {
+            if self.handles.get(dirfd)?.as_inode()? != Filesystem::ROOT_INODE {
                 return Err(Error::new(EACCES));
             }
         }
@@ -421,7 +421,8 @@ impl SchemeSync for Scheme {
 
         Ok(())
     }
-    fn fchown(&mut self, inode: usize, uid: u32, gid: u32, _ctx: &CallerCtx) -> Result<()> {
+    fn fchown(&mut self, fd: usize, uid: u32, gid: u32, _ctx: &CallerCtx) -> Result<()> {
+        let inode = self.handles.get(fd)?.as_inode()?;
         let file = self
             .filesystem
             .files

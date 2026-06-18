@@ -1,3 +1,4 @@
+#[cfg(target_arch = "aarch64")]
 use std::arch::asm;
 
 use rand_chacha::ChaCha20Rng;
@@ -31,6 +32,22 @@ use sha2::{Digest, Sha256};
 const DEFAULT_PRNG_MODE: u16 = 0o644;
 // Rand crate recommends at least 256 bits of entropy to seed the RNG
 const SEED_BYTES: usize = 32;
+/// Retries for hardware RNG instructions that can transiently fail.
+const HW_RNG_RETRIES: usize = 16;
+
+#[cfg(target_arch = "x86_64")]
+fn rdrand_u64() -> Option<u64> {
+    use std::arch::x86_64::_rdrand64_step;
+
+    let mut rand = 0u64;
+    for _ in 0..HW_RNG_RETRIES {
+        // CF=1 means the instruction returned a random value; CF=0 leaves dest unchanged.
+        if unsafe { _rdrand64_step(&mut rand) == 1 } {
+            return Some(rand);
+        }
+    }
+    None
+}
 
 /// Create a true random seed for the RNG if hardware support is present.
 /// On Intel x64 from rdrand instruction.
@@ -42,16 +59,15 @@ fn create_rdrand_seed() -> [u8; SEED_BYTES] {
     #[cfg(target_arch = "x86_64")]
     {
         if CpuId::new().get_feature_info().unwrap().has_rdrand() {
+            let mut failure = false;
             for i in 0..SEED_BYTES / 8 {
-                // We get 8 bytes at a time from rdrand instruction
-                let rand: u64;
-                unsafe {
-                    asm!("rdrand rax", out("rax") rand);
-                }
-
+                let Some(rand) = rdrand_u64() else {
+                    failure = true;
+                    break;
+                };
                 rng[i * 8..(i * 8 + 8)].copy_from_slice(&rand.to_le_bytes());
             }
-            have_seeded = true;
+            have_seeded = !failure;
         }
     }
     #[cfg(target_arch = "aarch64")]
@@ -246,7 +262,7 @@ fn test_scheme_perms() {
     assert!(scheme.open_inner("/", O_RDONLY, &ctx).is_err());
 
     scheme.prng_stat.st_mode = MODE_CHR | 0o400;
-    let mut fd = match scheme.open("", O_RDONLY, &ctx).unwrap() {
+    let mut fd = match scheme.open_inner("", O_RDONLY, &ctx).unwrap() {
         OpenResult::ThisScheme { number, .. } => number,
         _ => panic!(),
     };
@@ -466,4 +482,18 @@ fn daemon(daemon: daemon::SchemeDaemon) -> ! {
 
 fn main() {
     daemon::SchemeDaemon::new(daemon);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(target_arch = "x86_64")]
+    #[test]
+    fn rdrand_u64_checks_success_flag() {
+        if !CpuId::new().get_feature_info().unwrap().has_rdrand() {
+            return;
+        }
+        assert!(rdrand_u64().is_some());
+    }
 }

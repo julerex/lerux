@@ -17,7 +17,7 @@ fn parse_simple_arch_features(
     s: &str,
     arch: &str,
 ) -> Option<std::collections::BTreeMap<String, String>> {
-    let mut in_arch_section = false;
+    let features_section = format!("arch.{arch}.features");
     let mut in_features = false;
     let mut out = std::collections::BTreeMap::new();
     for raw in s.lines() {
@@ -26,17 +26,12 @@ fn parse_simple_arch_features(
             continue;
         }
         if line.starts_with('[') && line.ends_with(']') {
-            let sec = &line[1..line.len() - 1].trim();
-            in_arch_section =
-                sec == &format!("arch.{arch}") || sec.starts_with(&format!("arch.{arch}."));
-            in_features = false;
+            let sec = line[1..line.len() - 1].trim();
+            // config.toml.example uses `[arch.x86_64.features]` (dotted table header).
+            in_features = sec == features_section;
             continue;
         }
-        if in_arch_section && (line == "features" || line.starts_with("features")) {
-            in_features = true;
-            continue;
-        }
-        if in_arch_section && in_features {
+        if in_features {
             if let Some((k, v)) = line.split_once('=') {
                 let k = k.trim().trim_matches(|c| c == '"' || c == '\'').to_owned();
                 let v = v.trim().trim_matches(|c| c == '"' || c == '\'').to_owned();
@@ -50,6 +45,27 @@ fn parse_simple_arch_features(
         None
     } else {
         Some(out)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_simple_arch_features;
+
+    #[test]
+    fn parse_config_toml_example_features() {
+        let config = std::fs::read_to_string("config.toml.example").unwrap();
+        let features = parse_simple_arch_features(&config, "x86_64").expect("x86_64 features");
+        assert_eq!(features.get("smap").map(String::as_str), Some("auto"));
+        assert_eq!(features.get("fsgsbase").map(String::as_str), Some("auto"));
+        assert_eq!(features.get("xsave").map(String::as_str), Some("auto"));
+        assert_eq!(features.get("xsaveopt").map(String::as_str), Some("auto"));
+    }
+
+    #[test]
+    fn parse_missing_arch_returns_none() {
+        let config = std::fs::read_to_string("config.toml.example").unwrap();
+        assert!(parse_simple_arch_features(&config, "aarch64").is_none());
     }
 }
 

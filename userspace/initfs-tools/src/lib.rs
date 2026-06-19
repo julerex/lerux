@@ -194,18 +194,22 @@ fn allocate_and_write_file(state: &mut State, mut file: &File) -> Result<WriteRe
         let allowed_length =
             usize::try_from(allowed_length).expect("expected buffer size not to be outside usize");
 
-        file.read(&mut state.buffer[..allowed_length])
+        let read_len = file
+            .read(&mut state.buffer[..allowed_length])
             .context("failed to read from source file")?;
+        if read_len == 0 {
+            break;
+        }
 
         write_all_at(
             &state.file,
-            &state.buffer[..allowed_length],
+            &state.buffer[..read_len],
             u64::from(offset + relative_offset),
             "allocate_and_write_file buffer chunk",
         )
         .context("failed to write source file into destination image")?;
 
-        relative_offset += buffer_size;
+        relative_offset += u32::try_from(read_len).expect("read length fits in u32");
     }
 
     Ok(WriteResult { size, offset })

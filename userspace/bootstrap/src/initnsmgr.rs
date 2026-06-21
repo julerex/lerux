@@ -31,9 +31,15 @@ impl Namespace {
         while cursor < buf.len() {
             let len = read_num::<usize>(&buf[cursor..])?;
             cursor += mem::size_of::<usize>();
-            let name = String::from_utf8(Vec::from(&buf[cursor..cursor + len]))
+            let Some(end) = cursor.checked_add(len) else {
+                return Err(Error::new(EINVAL));
+            };
+            if end > buf.len() {
+                return Err(Error::new(EINVAL));
+            }
+            let name = String::from_utf8(Vec::from(&buf[cursor..end]))
                 .map_err(|_| Error::new(EINVAL))?;
-            cursor += len;
+            cursor = end;
             if name.ends_with('*') {
                 let prefix = &name[..name.len() - 1];
                 for (registered_name, fd) in &self.schemes {

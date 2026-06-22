@@ -139,8 +139,12 @@ pub fn futex(
                         if !addr.is_multiple_of(8) {
                             return Err(Error::new(EINVAL));
                         }
+                        let accessible_addr =
+                            crate::memory::RmmA::phys_to_virt(target_physaddr).data();
                         (
-                            unsafe { (*(addr as *const AtomicU64)).load(Ordering::SeqCst) },
+                            unsafe {
+                                (*(accessible_addr as *const AtomicU64)).load(Ordering::SeqCst)
+                            },
                             val as u64,
                         )
                     }

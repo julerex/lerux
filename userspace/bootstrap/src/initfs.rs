@@ -376,7 +376,7 @@ impl SchemeSync for InitFsScheme {
             return Err(Error::new(EINVAL));
         }
 
-        Ok(data.as_ptr() as usize)
+        Ok(data.as_ptr() as usize + offset as usize)
     }
 }
 

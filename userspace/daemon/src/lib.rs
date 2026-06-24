@@ -19,10 +19,8 @@ fn set_fd_flags(fd: RawFd, flags: usize) -> io::Result<()> {
 
 unsafe fn get_fd(var: &str) -> RawFd {
     let fd: RawFd = std::env::var(var).unwrap().parse().unwrap();
-    if unsafe {
-        set_fd_flags(fd, syscall::CallFlags::FD_CLOEXEC.bits())
-    }
-    .is_err()
+    // F_SETFD expects O_CLOEXEC (0x0100_0000), not CallFlags::FD_CLOEXEC (1 << 15).
+    if set_fd_flags(fd, syscall::O_CLOEXEC).is_err()
     {
         panic!(
             "daemon: failed to set CLOEXEC flag for {var} fd: {}",
@@ -130,5 +128,18 @@ impl SchemeDaemon {
         let cap_id = scheme.scheme_root()?;
         let cap_fd = socket.create_this_scheme_fd(0, cap_id, 0, 0)?;
         self.ready_with_fd(Fd::new(cap_fd))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn f_setfd_cloexec_uses_o_cloexec_not_call_flags() {
+        assert_eq!(syscall::O_CLOEXEC, 0x0100_0000);
+        assert_ne!(
+            syscall::CallFlags::FD_CLOEXEC.bits(),
+            syscall::O_CLOEXEC,
+            "F_SETFD must use O_CLOEXEC; CallFlags::FD_CLOEXEC is for syscall::call* only"
+        );
     }
 }

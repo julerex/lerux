@@ -1,0 +1,13 @@
+[unit]
+description = "Virtio-backed redoxfs rootfs for rustc-hosting smoke"
+default_dependencies = false
+requires_weak = [
+    "00_randd.service",
+    "ramfs@logging.service",
+    "40_drivers.target",
+]
+
+[service]
+cmd = "redoxfs"
+args = ["--first-disk", "data"]
+type = { scheme = "data" }

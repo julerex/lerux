@@ -1,0 +1,9 @@
+[unit]
+description = "PCI driver spawner (initfs driver manifest)"
+default_dependencies = false
+requires_weak = ["00_pcid.service"]
+
+[service]
+cmd = "pcid-spawner"
+args = ["--initfs"]
+type = "oneshot"

@@ -427,6 +427,8 @@ See audit doc for full status. Smoke path remains the gate. Incremental, reviewa
 
 **2026-06-17: lerux-filesystem fork + test harness.** Expanded the frozen `userspace/redoxfs/` reference to 67 host tests (64 lib + 3 CLI) with ~62% line coverage; forked the working copy to `userspace/lerux-filesystem/` (`lerux_filesystem` crate, guest binaries still named `redoxfs*`). Recipes: `just test-redoxfs`, `just test-lerux-fs`, `just test-fs-parity`, `just coverage-redoxfs`, `just coverage-fs-parity`. Build/smoke paths now cross-build from lerux-filesystem; redoxfs remains the behavioral spec.
 
+**2026-06-27: virtio-blk block driver slice (GREEN).** Vendored pcid + virtio-blk stack; `just smoke-rustc-virtio` proves QEMU `-drive if=virtio` → `disk.*` → redoxfs → rustc markers. Skips hwd/acpid for first bring-up (pcid legacy PCI config). Default `smoke-rustc` unchanged (DiskMemory). CI: non-blocking `smoke-rustc-virtio` job. Deferred: synthetic RSDP, acpid/hwd, flip default smoke to virtio.
+
 ## How to Use This Document
 
 - Add new items as they come up in discussion.

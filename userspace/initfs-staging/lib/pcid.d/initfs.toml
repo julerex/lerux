@@ -1,0 +1,9 @@
+## Drivers for initfs (virtio-blk only; trimmed for lerux QEMU smoke)
+
+[[drivers]]
+name = "virtio-blk"
+class = 1
+subclass = 0
+vendor = 0x1AF4
+device = 0x1001
+command = ["/scheme/initfs/lib/drivers/virtio-blkd"]

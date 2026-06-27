@@ -153,7 +153,7 @@ fn print_usage_exit() -> ! {
 
 #[cfg(feature = "std")]
 fn usage() {
-    eprintln!("redoxfs [--no-daemon|-d] [--memory MOUNTPOINT] [--disk-file PATH MOUNTPOINT] [--uuid] [disk or uuid] [mountpoint] [block in hex]");
+    eprintln!("redoxfs [--no-daemon|-d] [--memory MOUNTPOINT] [--disk-file PATH MOUNTPOINT] [--first-disk MOUNTPOINT] [--uuid] [disk or uuid] [mountpoint] [block in hex]");
 }
 
 #[cfg(feature = "std")]
@@ -306,6 +306,62 @@ fn filesystem_by_uuid(
     None
 }
 
+/// Scan `/scheme` for the first `disk` category block device (e.g. virtio-blkd's `disk.*`).
+#[cfg(all(target_os = "redox", feature = "std"))]
+fn first_block_disk_path() -> Option<String> {
+    use std::fs;
+
+    use redox_path::RedoxPath;
+
+    let mut schemes = Vec::new();
+    match fs::read_dir("/scheme") {
+        Ok(entries) => {
+            for entry_res in entries {
+                if let Ok(entry) = entry_res {
+                    if let Some(disk) = entry.path().to_str() {
+                        if RedoxPath::from_absolute(disk)
+                            .unwrap_or(RedoxPath::from_absolute("/")?)
+                            .is_scheme_category("disk")
+                        {
+                            schemes.push(disk.to_owned());
+                        }
+                    }
+                }
+            }
+        }
+        Err(err) => {
+            log::debug!("first-disk: failed to list /scheme: {}", err);
+            return None;
+        }
+    }
+
+    schemes.sort();
+    for disk in schemes {
+        match fs::read_dir(&disk) {
+            Ok(entries) => {
+                let mut devices = Vec::new();
+                for entry_res in entries {
+                    if let Ok(entry) = entry_res {
+                        if let Ok(path) = entry.path().into_os_string().into_string() {
+                            devices.push(path);
+                        }
+                    }
+                }
+                devices.sort();
+                if let Some(path) = devices.into_iter().next() {
+                    log::info!("first-disk: selected {}", path);
+                    return Some(path);
+                }
+            }
+            Err(err) => {
+                log::debug!("first-disk: failed to list '{}': {}", disk, err);
+            }
+        }
+    }
+
+    None
+}
+
 #[cfg(feature = "std")]
 fn daemon(
     disk_id: &DiskId,
@@ -367,6 +423,7 @@ fn main() {
 
     let mut daemonise = true;
     let mut memory_mode = false;
+    let mut first_disk_mode = false;
     let mut disk_file_path: Option<String> = None;
     let mut disk_id: Option<DiskId> = None;
     let mut mountpoint: Option<String> = None;
@@ -403,6 +460,15 @@ fn main() {
                 }
             }
 
+            "--first-disk" => {
+                #[cfg(not(target_os = "redox"))]
+                print_err_exit("--first-disk is only supported on Redox");
+                #[cfg(target_os = "redox")]
+                {
+                    first_disk_mode = true;
+                }
+            }
+
             "--uuid" if disk_id.is_none() => {
                 disk_id = Some(DiskId::Uuid(
                     match args.next().as_deref().map(Uuid::parse_str) {
@@ -415,11 +481,13 @@ fn main() {
                 ));
             }
 
-            disk if disk_id.is_none() && !memory_mode && disk_file_path.is_none() => {
+            disk if disk_id.is_none() && !memory_mode && !first_disk_mode && disk_file_path.is_none() => {
                 disk_id = Some(DiskId::Path(disk.to_owned()));
             }
 
-            mnt if (disk_id.is_some() || memory_mode || disk_file_path.is_some()) && mountpoint.is_none() => {
+            mnt if (disk_id.is_some() || memory_mode || first_disk_mode || disk_file_path.is_some())
+                && mountpoint.is_none() =>
+            {
                 mountpoint = Some(mnt.to_owned());
             }
 
@@ -466,9 +534,32 @@ fn main() {
         }
     }
 
+    #[cfg(target_os = "redox")]
+    if first_disk_mode {
+        let Some(mountpoint) = mountpoint else {
+            print_err_exit("no mountpoint provided for --first-disk");
+        };
+        if disk_id.is_some() || block_opt.is_some() || disk_file_path.is_some() || memory_mode {
+            print_err_exit("--first-disk does not accept other disk arguments");
+        }
+        if daemonise {
+            daemon::SchemeDaemon::new(|scheme_daemon| {
+                first_disk_daemon(&mountpoint, scheme_daemon)
+            });
+        } else {
+            eprintln!("redoxfs: --first-disk requires daemon mode under init");
+            process::exit(1);
+        }
+    }
+
     #[cfg(not(target_os = "redox"))]
     if memory_mode {
         print_err_exit("--memory is only supported on Redox");
+    }
+
+    #[cfg(not(target_os = "redox"))]
+    if first_disk_mode {
+        print_err_exit("--first-disk is only supported on Redox");
     }
 
     #[cfg(not(target_os = "redox"))]
@@ -616,6 +707,71 @@ fn memory_daemon(mountpoint: &str, scheme_daemon: daemon::SchemeDaemon) -> ! {
     }
 
     process::exit(0);
+}
+
+/// Block-device smoke path: open the first `disk` category scheme (virtio-blk, etc.).
+#[cfg(all(target_os = "redox", feature = "std"))]
+fn first_disk_daemon(mountpoint: &str, scheme_daemon: daemon::SchemeDaemon) -> ! {
+    use std::thread;
+    use std::time::Duration;
+
+    const RETRIES: u32 = 60;
+
+    for attempt in 0..RETRIES {
+        if let Some(disk_path) = first_block_disk_path() {
+            let disk = match DiskFile::open(&disk_path).map(DiskCache::new) {
+                Ok(disk) => disk,
+                Err(err) => {
+                    log::error!("redoxfs first-disk: failed to open {}: {}", disk_path, err);
+                    process::exit(1);
+                }
+            };
+
+            let filesystem = match FileSystem::open(disk, None, None, true) {
+                Ok(fs) => fs,
+                Err(err) => {
+                    log::error!(
+                        "redoxfs first-disk: failed to open filesystem on {}: {}",
+                        disk_path,
+                        err
+                    );
+                    process::exit(1);
+                }
+            };
+
+            if let Err(err) =
+                lerux_filesystem::mount_via_init(filesystem, mountpoint, scheme_daemon, |_mounted_path| {
+                    eprintln!("redoxfs mounted");
+                    capability_mode();
+                    log::info!(
+                        "mounted filesystem (block device {}) to /scheme/{}",
+                        disk_path,
+                        mountpoint
+                    );
+                })
+            {
+                log::error!(
+                    "redoxfs first-disk: failed to mount {} at {}: {}",
+                    disk_path,
+                    mountpoint,
+                    err
+                );
+                process::exit(1);
+            }
+
+            process::exit(0);
+        }
+
+        log::debug!(
+            "redoxfs first-disk: waiting for disk scheme (attempt {}/{})",
+            attempt + 1,
+            RETRIES
+        );
+        thread::sleep(Duration::from_millis(500));
+    }
+
+    log::error!("redoxfs first-disk: no disk scheme found under /scheme after {RETRIES} attempts");
+    process::exit(1);
 }
 
 /// File-backed smoke path: open a disk image (e.g. staged in initfs) via DiskFile.

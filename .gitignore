@@ -49,5 +49,6 @@ config.toml
 
 # Userspace initfs staging build outputs
 userspace/initfs-staging/bin/
+userspace/initfs-staging/lib/drivers/
 userspace/initfs-staging/lib/ld64.so.1
 userspace/initfs-staging/lib/libc.so

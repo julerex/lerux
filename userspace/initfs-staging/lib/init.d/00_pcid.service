@@ -1,0 +1,8 @@
+[unit]
+description = "PCI bus enumerator"
+default_dependencies = false
+requires_weak = ["00_logd.service", "ramfs@logging.service"]
+
+[service]
+cmd = "pcid"
+type = { scheme = "pci" }

@@ -11,20 +11,38 @@ members = [
     "ramfs",
     "drivers/common",
     "drivers/rtcd",
+    "drivers/executor",
+    "drivers/pcid",
+    "drivers/pcid-spawner",
+    "drivers/virtio-core",
+    "drivers/storage/driver-block",
+    "drivers/storage/partitionlib",
+    "drivers/storage/virtio-blkd",
 ]
 exclude = ["bootstrap", "initfs", "initfs-tools", "rustc-smoke", "redoxfs", "lerux-filesystem"]
 
 [workspace.dependencies]
 anyhow = "1"
+bitflags = "2"
+bincode = "1.2"
+crossbeam-queue = "0.3.8"
+fdt = "0.1.5"
+futures = { version = "0.3.28", features = ["executor"] }
+libc = "0.2.181"
 log = "0.4"
 libredox = "0.1.17"
+pico-args = { version = "0.5", features = ["combined-flags"] }
 plain = "0.2.3"
+redox_event = "0.4.7"
 redox-log = { path = "../vendor/redox-log" }
 redox-scheme = "0.11.1"
 redox_syscall = { version = "0.8.0", features = ["std"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 slab = "0.4.9"
+spin = "0.10"
+static_assertions = "1.1.0"
+thiserror = "2"
 toml = "1"
 
 [workspace.lints.rust]

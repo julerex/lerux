@@ -75,6 +75,13 @@ Building **without** `direct-boot` still targets a normal Redox-style kernel but
 | init | `userspace/init/` | [base/init](https://gitlab.redox-os.org/redox-os/base) | `TBD` (from upstream [redox-os/base](https://gitlab.redox-os.org/redox-os/base) 2026-05-30) | MIT | 2026-05-31 | Static link via in-tree sysroot + `targets/x86_64-unknown-redox.json`; no workspace `libc` crate |
 | logd, zerod, randd, ramfs | `userspace/{logd,zerod,randd,ramfs}/` | [base/*](https://gitlab.redox-os.org/redox-os/base) | `TBD` (from upstream [redox-os/base](https://gitlab.redox-os.org/redox-os/base) 2026-05-30) | MIT | 2026-05-30 | Minimal early daemons; staged into `initfs-staging/bin/` |
 | rtcd | `userspace/drivers/rtcd/` | [base/drivers/rtcd](https://gitlab.redox-os.org/redox-os/base) | `TBD` (from upstream [redox-os/base](https://gitlab.redox-os.org/redox-os/base) 2026-05-30) | MIT | 2026-05-30 | Required by trimmed `00_runtime.target` |
+| pcid | `userspace/drivers/pcid/` | [base/drivers/pcid](https://gitlab.redox-os.org/redox-os/base) | Reference checkout 2026-06-27 | MIT | 2026-06-27 | PCI enumeration (`/scheme/pci`); legacy config fallback without ACPI |
+| pcid-spawner | `userspace/drivers/pcid-spawner/` | [base/drivers/pcid-spawner](https://gitlab.redox-os.org/redox-os/base) | Reference checkout 2026-06-27 | MIT | 2026-06-27 | Spawns virtio-blkd from `lib/pcid.d/initfs.toml` |
+| virtio-core | `userspace/drivers/virtio-core/` | [base/drivers/virtio-core](https://gitlab.redox-os.org/redox-os/base) | Reference checkout 2026-06-27 | MIT | 2026-06-27 | VirtIO transport library |
+| virtio-blkd | `userspace/drivers/storage/virtio-blkd/` | [base/drivers/storage/virtio-blkd](https://gitlab.redox-os.org/redox-os/base) | Reference checkout 2026-06-27 | MIT | 2026-06-27 | VirtIO block scheme daemon (`disk.*`) |
+| driver-block | `userspace/drivers/storage/driver-block/` | [base/drivers/storage/driver-block](https://gitlab.redox-os.org/redox-os/base) | Reference checkout 2026-06-27 | MIT | 2026-06-27 | Shared block scheme code for virtio-blkd |
+| executor | `userspace/drivers/executor/` | [base/drivers/executor](https://gitlab.redox-os.org/redox-os/base) | Reference checkout 2026-06-27 | MIT | 2026-06-27 | Async executor for driver-block |
+| partitionlib | `userspace/drivers/storage/partitionlib/` | [base/drivers/storage/partitionlib](https://gitlab.redox-os.org/redox-os/base) | Reference checkout 2026-06-27 | MIT | 2026-06-27 | Partition table helpers (driver-block dep) |
 | daemon, scheme-utils | `userspace/daemon/`, `userspace/scheme-utils/` | [base/*](https://gitlab.redox-os.org/redox-os/base) | `TBD` (from upstream [redox-os/base](https://gitlab.redox-os.org/redox-os/base) 2026-05-30) | MIT | 2026-05-30 | Shared daemon plumbing for logd/zerod/randd/ramfs/rtcd |
 | config (userspace) | `userspace/config/` | [base/config](https://gitlab.redox-os.org/redox-os/base) | `TBD` (from upstream [redox-os/base](https://gitlab.redox-os.org/redox-os/base) 2026-05-30) | MIT | 2026-05-30 | Build-time config for daemons |
 | redox-log | `vendor/redox-log/` | [redox-os/redox-log](https://gitlab.redox-os.org/redox-os/redox-log) | `TBD` (from upstream [redox-os/redox-log](https://gitlab.redox-os.org/redox-os/redox-log) 2026-05-30) | MIT | 2026-05-30 | Logging crate for daemons. `.git` removed 2026-06-16 (plain source tree). |
@@ -93,7 +100,7 @@ Source reference: upstream [redox-os/base](https://gitlab.redox-os.org/redox-os/
 | Planned component | Suggested path | Upstream (reference) | Notes |
 |-------------------|----------------|----------------------|--------|
 | libredox (full in-tree) | `vendor/libredox/` | relibc / crates.io | bootstrap still uses crates.io `libredox` 0.1.17 |
-| Drivers (pcid, virtio, …) | `userspace/drivers/` or `vendor/drivers/` | `base/drivers` | Phase C in [plan.md](plan.md) |
+| Drivers (pcid, virtio, …) | `userspace/drivers/` | `base/drivers` | **Partial (2026-06-27):** pcid + virtio-blk stack vendored for `just smoke-rustc-virtio`; acpid/hwd/net deferred |
 
 ---
 

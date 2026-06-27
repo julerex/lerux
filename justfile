@@ -55,6 +55,7 @@ redox_cargo := userspace_toolchain + "/cargo"
 userspace_target := "x86_64-unknown-redox"
 userspace_target_spec := justfile_directory() + "/targets/x86_64-unknown-redox.json"
 userspace_bins := "init logd zerod randd ramfs rtcd"
+driver_bins := "pcid pcid-spawner virtio-blkd"
 # Static link: in-tree relibc sysroot + Redox libgcc_eh (rustc liblibc) + build-std panic_abort.
 userspace_rustflags := "-C target-feature=+crt-static -C link-arg=" + redox_lib + "/crt1.o -C link-arg=" + redox_lib + "/crti.o -C link-arg=-L" + redox_lib + " -C link-arg=-L" + redox_gcc_lib + " -C link-arg=-lgcc_eh -C link-arg=-lc -C link-arg=" + redox_lib + "/crtn.o -C link-arg=--allow-multiple-definition"
 userspace_build_std := "-Z build-std=std,panic_abort,core,alloc,compiler_builtins -Z build-std-features=compiler-builtins-mem -Z json-target-spec"
@@ -213,7 +214,8 @@ build-userspace: build-sysroot
         --manifest-path userspace/Cargo.toml \
         --target {{userspace_target_spec}} \
         {{userspace_build_std}} \
-        -p init -p logd -p zerod -p randd -p ramfs -p rtcd
+        -p init -p logd -p zerod -p randd -p ramfs -p rtcd \
+        -p pcid -p pcid-spawner -p virtio-blkd
 
 # Copy cross-built userspace binaries into initfs staging.
 stage-userspace: build-userspace build-rustc-smoke
@@ -223,6 +225,11 @@ stage-userspace: build-userspace build-rustc-smoke
     for bin in {{userspace_bins}}; do
     cp "{{userspace_out}}/$bin" "{{staging_bin}}/$bin"
     done
+    for bin in {{driver_bins}}; do
+    cp "{{userspace_out}}/$bin" "{{staging_bin}}/$bin"
+    done
+    mkdir -p userspace/initfs-staging/lib/drivers userspace/initfs-staging/lib/pcid.d
+    cp "{{userspace_out}}/virtio-blkd" userspace/initfs-staging/lib/drivers/virtio-blkd
     cp "{{userspace_out}}/zerod" "{{staging_bin}}/nulld"
     # Stage the rustc stub so a oneshot can cp it onto the mounted FS and exec it from /data/bin/rustc.
     cp "{{build_dir}}/rustc-smoke" "{{staging_bin}}/rustc"
@@ -305,6 +312,18 @@ build-redoxfs-test-image: build-rustc-smoke
     cargo run --manifest-path userspace/lerux-filesystem/Cargo.toml --release --bin redoxfs-populate -- \
         /tmp/lerux-rustc-test.img "{{build_dir}}/rustc-smoke"
     echo "==> Populated /tmp/lerux-rustc-test.img with cross-compiled rustc stub"
+
+# Rustc-hosting smoke via QEMU virtio-blk (-drive) → pcid → virtio-blkd → redoxfs --first-disk.
+smoke-rustc-virtio: build-direct-userspace build-redoxfs-test-image
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cp userspace/initfs-staging/lib/init.d/50_rootfs-virtio.service \
+        userspace/initfs-staging/lib/init.d/50_rootfs.service
+    just build-initfs
+    KERNEL_CARGO_FEATURES="direct-boot,direct-boot-userspace" OBJCOPY="${OBJCOPY:-objcopy}" just build
+    RUSTC_SMOKE=1 RUSTC_VIRTIO_SMOKE=1 "{{justfile_directory()}}/qemu/smoke-test.sh" --no-build
+    cp userspace/initfs-staging/lib/init.d/50_rootfs-memory.service \
+        userspace/initfs-staging/lib/init.d/50_rootfs.service
 
 # Rustc-hosting smoke using the initfs-staged disk image (DiskFile path; same content as -drive).
 smoke-rustc-disk: build-direct-userspace build-rustc-smoke

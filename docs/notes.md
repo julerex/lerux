@@ -157,6 +157,20 @@ Next per plan: accelerate pure runtime port (especially for vendored components)
 
 **2026-06-17: Real redoxfs integration.** `50_rootfs.service` now execs the vendored `redoxfs` daemon (`--memory data`) via `mount_via_init` + `daemon::SchemeDaemon`. The cross-compiled rustc stub is pre-populated into the in-RAM filesystem before mount; `55_rustc-smoke.service` (oneshot) execs it from `/scheme/data/bin/rustc`. DiskFile path: `just smoke-rustc-disk` uses `--disk-file` with an initfs-staged 8 MiB image (copied to logging ramfs for writable I/O). Host image population via `redoxfs-populate` + `just build-redoxfs-test-image`. All smokes green (`smoke`, `smoke-userspace`, `smoke-rustc`, `smoke-rustc-disk`, `RUNTIME_REDOXFS=1 smoke-rustc`, `check-only-rust`).
 
+**2026-06-27: Virtio-blk block exposure.** Vendored `pcid`, `pcid-spawner`, `virtio-core`, `virtio-blkd` (+ `driver-block`, `executor`, `partitionlib`) from Redox `base/drivers`. Init units: `00_pcid.service`, `40_pcid-spawner-initfs.service`, `40_drivers.target`, `50_rootfs-virtio.service` (`redoxfs --first-disk data`). `just smoke-rustc-virtio` attaches QEMU `-drive` populated image, virtio-blkd exposes `disk.*`, redoxfs mounts it, rustc markers pass. Serial excerpt:
+
+```
+pcid-spawner: spawn "/scheme/initfs/lib/drivers/virtio-blkd"
+virtio-blk: initiating startup sequence :^)
+virtio-blk: disk size: 131072 sectors and block size of 512 bytes
+redoxfs mounted
+rustc --version
+lerux-bootstrap-compiled
+SMOKE TEST PASSED: virtio-blk + redoxfs + bootstrap rustc on lerux (RUSTC + virtio markers present).
+```
+
+Default `just smoke-rustc` remains on DiskMemory (`50_rootfs-memory.service`).
+
 - `Redox OS starting...`
 - `Memory:`
 - `Paging: new kernel page tables active`

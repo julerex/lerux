@@ -40,7 +40,11 @@ KERNEL="$BUILD_DIR/kernel"
 # Bump default for the rustc smoke (larger initfs with redoxfs + stub + services can stress the
 # direct-boot synthetic memory map / reservations). 512M was fine for Phase B minimal; 1G+ is safe.
 MEMORY="${MEMORY:-1024}"
-TIMEOUT="${TIMEOUT:-90}"
+if [ "${RUSTC_VIRTIO_SMOKE:-0}" = "1" ]; then
+    TIMEOUT="${TIMEOUT:-180}"
+else
+    TIMEOUT="${TIMEOUT:-90}"
+fi
 SERIAL_LOG="${SERIAL_LOG:-$REPO_ROOT/qemu-serial.log}"
 
 BUILD_KERNEL=1
@@ -78,6 +82,11 @@ RUSTC_SUCCESS_MARKERS=(
     "redoxfs mounted"
     "rustc --version"
     "lerux-bootstrap-compiled"
+)
+# virtio-blk chain markers (when RUSTC_VIRTIO_SMOKE=1).
+VIRTIO_SUCCESS_MARKERS=(
+    "pcid-spawner: spawn"
+    "virtio-blk: initiating startup"
 )
 USERSPACE_FAIL_MARKERS=(
     "direct-boot mode: skipping userspace bootstrap"
@@ -242,6 +251,16 @@ elif [ "${RUSTC_SMOKE:-0}" = "1" ]; then
             fail=1
         fi
     done
+    if [ "${RUSTC_VIRTIO_SMOKE:-0}" = "1" ]; then
+        for m in "${VIRTIO_SUCCESS_MARKERS[@]}"; do
+            if log_has "$m"; then
+                printf '  [ ok ] %s\n' "$m"
+            else
+                printf '  [MISS] %s\n' "$m"
+                fail=1
+            fi
+        done
+    fi
 else
     for m in "${REQUIRED_MARKERS[@]}" "$SUCCESS_MARKER"; do
         if log_has "$m"; then
@@ -269,7 +288,11 @@ if [ "$fail" -eq 0 ]; then
     if [ "${USERSPACE_SMOKE:-0}" = "1" ]; then
         echo "SMOKE TEST PASSED: direct-boot reached init and early daemons."
     elif [ "${RUSTC_SMOKE:-0}" = "1" ]; then
-        echo "SMOKE TEST PASSED: redoxfs mounted + bootstrap rustc ran and compiled on lerux (RUSTC markers present)."
+        if [ "${RUSTC_VIRTIO_SMOKE:-0}" = "1" ]; then
+            echo "SMOKE TEST PASSED: virtio-blk + redoxfs + bootstrap rustc on lerux (RUSTC + virtio markers present)."
+        else
+            echo "SMOKE TEST PASSED: redoxfs mounted + bootstrap rustc ran and compiled on lerux (RUSTC markers present)."
+        fi
     else
         echo "SMOKE TEST PASSED: direct-boot reached the kmain idle loop."
     fi

@@ -3,7 +3,8 @@
 //! The two x86 variants share most of their low-level machinery, so it lives
 //! here and each arch module re-exports it. This includes the **GDT** (segment
 //! descriptors), **IDT** (interrupt vector table), interrupt/exception entry,
-//! inter-processor interrupts ([`ipi`]), paging glue, the SMP [`trampoline`],
+//! inter-processor interrupts ([`ipi`]), paging glue, the SMP [`trampoline`]
+//! (assembled from `lerux-kernel/src/asm/` via nasm in `build.rs`),
 //! and serial/timer device access.
 //!
 //! Key terms: the **GDT** and **IDT** are small CPU-mandated tables. The GDT
@@ -52,10 +53,7 @@ pub mod stop;
 pub mod time;
 pub mod trampoline;
 
-/// PVH 32->64-bit boot stub for direct-boot (lerux: pure-Rust global_asm!, no C toolchain).
-/// Upstream used `pvh_boot.S` + `cc`. Not present in upstream when `direct-boot` is disabled.
-#[cfg(all(target_arch = "x86_64", feature = "direct-boot"))]
-pub mod pvh_boot;
+
 
 #[cfg(target_arch = "x86")]
 pub use crate::rmm::x86::X86Arch as CurrentRmmArch;

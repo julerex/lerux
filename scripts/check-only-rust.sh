@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Only Rust enforcement checks (see PLAN.md).
+# Only Rust enforcement checks (see docs/plan.md).
+# C sources are forbidden outside the relibc debt allowlist; asm (.asm/.S/.s) is allowed.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -17,27 +18,23 @@ for arg in "$@"; do
     esac
 done
 
-echo "== Only Rust: source policy =="
+echo "== Only Rust: C source policy =="
 violations=()
 while IFS= read -r -d '' path; do
     case "$path" in
         vendor/relibc/*) continue ;;
-        vendor/relibc/redox-rt/*) continue ;;
-        vendor/relibc/generic-rt/*) continue ;;
-        qemu/*.S) continue ;;
-        kernel/validation/trampolines/asm/*) continue ;;
         *)
             violations+=("$path")
             ;;
     esac
-done < <(find kernel userspace vendor -type f \( -name '*.c' -o -name '*.S' -o -name '*.asm' \) -print0 2>/dev/null || true)
+done < <(find lerux-kernel userspace vendor -type f -name '*.c' -print0 2>/dev/null || true)
 
 if ((${#violations[@]} > 0)); then
-    echo "Disallowed C/asm sources outside allowlist:" >&2
+    echo "Disallowed C sources outside allowlist:" >&2
     printf '  %s\n' "${violations[@]}" >&2
     exit 1
 fi
-echo "OK: no disallowed C/asm outside allowlist"
+echo "OK: no disallowed C outside allowlist"
 
 echo "== Only Rust: ELF audit (initfs staging + bootstrap) =="
 audit_elf() {

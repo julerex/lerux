@@ -1,13 +1,11 @@
 #!/usr/bin/env bash
 #
-# Validate embedded SMP trampoline bytes against the original NASM sources.
+# Validate SMP trampoline NASM sources under lerux-kernel/src/asm/.
 #
 # Usage:
 #   ./validate-trampolines.sh              # check (default)
-#   ./validate-trampolines.sh refresh      # regenerate expected/*.bin from asm/
-#   ./validate-trampolines.sh print-rust   # print Rust arrays for manual paste
 #
-# Requires: nasm (not part of the kernel build; dev/CI validation only)
+# Requires: nasm
 #
 set -euo pipefail
 
@@ -16,11 +14,9 @@ PY="$SCRIPT_DIR/compare_trampoline_bytes.py"
 
 cmd="${1:-check}"
 case "$cmd" in
-  check)           exec python3 "$PY" check ;;
-  refresh|refresh-expected) exec python3 "$PY" refresh-expected ;;
-  print-rust|update) exec python3 "$PY" print-rust ;;
+  check) exec python3 "$PY" check ;;
   *)
-    echo "usage: $0 [check|refresh|print-rust]" >&2
+    echo "usage: $0 [check]" >&2
     exit 2
     ;;
 esac

@@ -378,7 +378,7 @@ check:
 check-only-rust *ARGS:
     "{{justfile_directory()}}/scripts/check-only-rust.sh" {{ARGS}}
 
-# Verify embedded SMP trampoline bytes match NASM sources (requires nasm).
+# Verify SMP trampoline NASM sources assemble correctly (requires nasm).
 validate-trampolines:
     "{{justfile_directory()}}/lerux-kernel/validation/trampolines/validate-trampolines.sh"
 

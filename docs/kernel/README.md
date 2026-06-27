@@ -18,9 +18,9 @@ Redox OS Microkernel
 
 ## Requirements
 
-No external assemblers (e.g. nasm) are required. The kernel builds with only a recent nightly Rust toolchain (see `../rust-toolchain.toml`).
+**nasm** is required for x86/x86_64 kernel builds (SMP trampolines in `lerux-kernel/src/asm/`). **clang** is additionally required for `direct-boot` builds (`pvh_boot.S`). See `../rust-toolchain.toml` for the Rust toolchain pin.
 
-> **lerux note**: The last nasm dependency (SMP trampolines) was removed to achieve the "Only Rust" goal. The binary images are embedded as data in `src/arch/x86_shared/trampoline.rs`.
+> **lerux note**: Trampolines are assembled at build time via nasm in `build.rs` and included from `OUT_DIR`. The PVH stub is `lerux-kernel/src/arch/x86_shared/pvh_boot.S`, compiled when the `direct-boot` feature is enabled.
 
 ## Building The Documentation
 

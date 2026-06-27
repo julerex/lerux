@@ -12,7 +12,7 @@
 //!
 //! Pair with:
 //! - `linkers/x86_64-direct.ld` (PVH note + stub placement)
-//! - `arch/x86_shared/pvh_boot.rs` (32→64-bit entry for QEMU `-kernel`)
+//! - `arch/x86_shared/pvh_boot.S` (32→64-bit entry for QEMU `-kernel`, assembled in build.rs)
 //! - `startup/mod.rs` (`kmain` skips userspace bootstrap unless `direct-boot-userspace`)
 //!
 //! This is intended for fast kernel development and bring-up testing only.

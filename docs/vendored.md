@@ -43,10 +43,10 @@ Upstream ships the kernel as the crate root. lerux wraps it: `Cargo.toml` and `b
 
 | Change | Upstream | lerux |
 |--------|----------|-------|
-| SMP trampolines | `nasm` in `build.rs` | Golden `.bin` from `kernel/validation/trampolines/asm/` via `include_bytes!`; validated by `just validate-trampolines` |
-| PVH boot stub | `pvh_boot.S` + `cc` | `pvh_boot.rs` (`global_asm!`); `direct-boot` feature only |
+| SMP trampolines | `nasm` in `build.rs` | Same: `lerux-kernel/src/asm/*/trampoline.asm` → `OUT_DIR/trampoline` |
+| PVH boot stub | `pvh_boot.S` + `cc` | Same: `lerux-kernel/src/arch/x86_shared/pvh_boot.S`; `direct-boot` feature only |
 | Boot args | Redox bootloader supplies `KernelArgs` | `direct-boot` synthesizes args in `direct_boot.rs` for `qemu -kernel` |
-| `build.rs` | nasm + cc on x86 | CPU features from `config.toml`; embeds `build/initfs.bin` when `direct-boot` |
+| `build.rs` | nasm + cc on x86 | nasm for trampolines; cc/clang for `pvh_boot.S` when `direct-boot`; embeds `build/initfs.bin` when `direct-boot` |
 | CI | Upstream GitLab | `.github/workflows/rust.yml`: fmt, clippy, check, **trampolines**, **initfs**, smoke |
 | Userspace bootstrap | Always spawned from initfs | `direct-boot` skips spawn; `direct-boot-userspace` spawns when bootstrap ELF is in initfs |
 | SSE for userspace | Upstream sets CR4 via boot path | `early_init` sets `CR4_ENABLE_SSE` (+ `CR4_ENABLE_OS_XSAVE` when XSAVE present) so bootstrap/init can use SSE |

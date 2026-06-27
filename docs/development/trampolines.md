@@ -1,36 +1,18 @@
-# SMP Trampoline Byte Validation
+# SMP Trampoline Validation
 
-This directory validates that the embedded SMP AP trampoline bytes in
-`kernel/src/arch/x86_shared/trampoline.rs` are **byte-for-byte identical** to
-what the original NASM sources produce.
+SMP AP trampoline binaries are assembled at kernel build time from NASM sources in
+`lerux-kernel/src/asm/{x86,x86_64}/trampoline.asm` via `build.rs`. The output is
+included in [`lerux-kernel/src/arch/x86_shared/trampoline.rs`](../../lerux-kernel/src/arch/x86_shared/trampoline.rs)
+from `OUT_DIR/trampoline`.
 
 ## Layout
 
 | Path | Purpose |
 |------|---------|
-| `asm/trampoline_x86_64.asm` | NASM source (from upstream `src/asm/x86_64/trampoline.asm`) |
-| `asm/trampoline_x86.asm` | NASM source (from upstream `src/asm/x86/trampoline.asm`) |
-| `expected/*.bin` | Golden binaries assembled from `asm/` (embedded via `include_bytes!`) |
-| `compare_trampoline_bytes.py` | Assemble + compare logic |
+| `lerux-kernel/src/asm/x86_64/trampoline.asm` | NASM source (x86_64 SMP bring-up) |
+| `lerux-kernel/src/asm/x86/trampoline.asm` | NASM source (32-bit x86 variant) |
+| `compare_trampoline_bytes.py` | Assemble + verify size/invariants |
 | `validate-trampolines.sh` | Shell wrapper |
-
-## Why this exists
-
-As part of the lerux "Only Rust Redox" goal, the last external assembler
-dependency (nasm for AP bring-up trampolines) was removed from the **kernel
-build**. Upstream `redox-os/kernel` still assembled these via nasm in
-`build.rs`; see root [docs/vendored.md](../../docs/vendored.md).
-
-The kernel embeds the golden `.bin` files directly:
-
-```rust
-pub static TRAMPOLINE: &[u8] =
-    include_bytes!("../../../validation/trampolines/expected/trampoline_x86_64.bin");
-```
-
-Because the trampoline contains baked absolute addresses and a GDT at fixed
-offsets under `ORG 0x8000`, any drift from the NASM output would cause APs to
-triple-fault silently during SMP bring-up.
 
 ## Running validation
 
@@ -40,33 +22,25 @@ From the repo root:
 just validate-trampolines
 ```
 
-Or from this directory:
+Requirements: **nasm** (also required for kernel builds on x86).
+
+Unit tests (no nasm required — checks asm sources are present):
 
 ```bash
-./validate-trampolines.sh          # check (default)
-./validate-trampolines.sh refresh  # regenerate expected/*.bin after asm edits
-./validate-trampolines.sh print-rust  # print inline Rust arrays (legacy)
-```
-
-Requirements: **nasm** (dev/CI only — not needed to build the kernel).
-
-Unit tests (no nasm required — compares against committed golden files):
-
-```bash
-cargo test --bin kernel trampoline
+cargo test -p trampoline-validation
 ```
 
 ## CI
 
-The GitHub Actions `trampolines` job runs both `just validate-trampolines` and
-`cargo test --bin kernel trampoline` on every push/PR.
+The GitHub Actions `trampolines` job runs `just validate-trampolines` and
+`cargo test -p trampoline-validation` on every push/PR. The `check` job also
+requires nasm because `build.rs` assembles trampolines during `make check`.
 
 ## After changing trampoline logic
 
-1. Edit the `.asm` file(s) in `asm/`.
-2. `./validate-trampolines.sh refresh` — updates `expected/*.bin`.
-3. `./validate-trampolines.sh` — confirm pass.
-4. Commit `asm/`, `expected/`, and any `trampoline.rs` changes together.
+1. Edit the `.asm` file(s) in `lerux-kernel/src/asm/`.
+2. `./validate-trampolines.sh` — confirm pass.
+3. Rebuild the kernel and run SMP smoke if applicable.
 
 ## Notes on the bytes
 

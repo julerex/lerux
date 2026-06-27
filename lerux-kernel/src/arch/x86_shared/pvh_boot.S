@@ -1,34 +1,17 @@
-//! PVH 32->64-bit boot stub for direct-boot (QEMU `-kernel`), in pure Rust via
-//! `core::arch::global_asm!` (assembled by rustc/LLVM — no C toolchain).
-//!
-//! ## lerux divergence from upstream Redox
-//!
-//! Upstream compiled `pvh_boot.S` with `cc`/`clang` in `build.rs`. lerux inlines
-//! the same stub here and gates the module on `feature = "direct-boot"`.
-//!
-//! The section placement (`.note.Xen`, `.pvh.text`, `.pvh.gdt`) and the fixed physical
-//! addresses below are matched by `linkers/x86_64-direct.ld`. QEMU reads the Xen
-//! ELF note to find the 32-bit entry point, sets up an initial environment, and
-//! jumps to `pvh_start32`, which builds preliminary page tables, enables long
-//! mode, and tail-calls the Rust entry point `kstart`.
-//!
-//! All addresses are physical constants so this stub needs no relocations (apart
-//! from the absolute reference to `kstart`).
-
-// Assembled with AT&T syntax to mirror the original stub verbatim. `.set` is used
-// instead of C `#define` since global_asm! is not run through the C preprocessor.
-core::arch::global_asm!(
-    r#"
-    .set PVH_ENTRY,        0x00100020
-    .set PVH_PML4,         0x00108000
-    .set PVH_PDPT_LOW,     0x00109000
-    .set PVH_PD_LOW,       0x0010a000
-    .set PVH_PDPT_HIGH,    0x0010b000
-    .set PVH_PD_HIGH,      0x0010f000
-    .set KERNEL_PHYS_BASE, 0x00200000
-    .set PVH_STACK32,      0x0010c000
-    .set PVH_STACK64,      0x0010d000
-    .set PVH_GDT,          0x0010e000
+/* PVH 32-bit entry for QEMU -kernel (direct-boot).
+ * All addresses are physical constants so this file needs no relocations.
+ * Assembled via cc/clang in build.rs when the direct-boot feature is enabled.
+ */
+#define PVH_ENTRY        0x00100020
+#define PVH_PML4         0x00108000
+#define PVH_PDPT_LOW     0x00109000
+#define PVH_PD_LOW       0x0010a000
+#define PVH_PDPT_HIGH    0x0010b000
+#define PVH_PD_HIGH      0x0010f000
+#define KERNEL_PHYS_BASE 0x00200000
+#define PVH_STACK32      0x0010c000
+#define PVH_STACK64      0x0010d000
+#define PVH_GDT          0x0010e000
 
     .section .note.Xen, "a", @note
     .align 4
@@ -137,6 +120,3 @@ gdt_table:
     .quad 0x0000000000000000
     .quad 0x00AF9A000000FFFF
     .quad 0x00AF92000000FFFF
-"#,
-    options(att_syntax)
-);

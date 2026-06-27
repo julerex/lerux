@@ -13,10 +13,10 @@ See **[vendored.md](vendored.md)** for the full divergence list: what changed, w
 ## Current Status (Phase 1)
 
 - Kernel source vendored under `kernel/` (copy of redox-os/kernel as of 2026-05).
-- "Only Rust" milestones achieved: the external assembler/compiler build dependencies have been removed.
-  - SMP AP trampolines are now plain `&[u8]` data (see `kernel/src/arch/x86_shared/trampoline.rs`) — no `nasm`.
-  - The direct-boot PVH boot stub is now pure Rust via `core::arch::global_asm!` (see `kernel/src/arch/x86_shared/pvh_boot.rs`); the `cc`/`clang` build dependency it required has been dropped from `build.rs` and `Cargo.toml`.
-- Direct-boot (`just qemu-direct`) boots through early bring-up to the idle loop with no C toolchain required (see [docs/building/standalone.md](docs/building/standalone.md)).
+- Kernel low-level code uses checked-in asm sources assembled at build time:
+  - SMP AP trampolines: `lerux-kernel/src/asm/*/trampoline.asm` via **nasm** (`build.rs`).
+  - Direct-boot PVH stub: `lerux-kernel/src/arch/x86_shared/pvh_boot.S` via **clang/gcc** (`build.rs`, `direct-boot` feature).
+- Host build requirements for x86 kernel: **nasm**; for direct-boot builds also **clang** (see [docs/building/standalone.md](docs/building/standalone.md)).
 - The kernel remains a drop-in buildable Redox kernel with all its existing features and multi-architecture support.
 
 ## Goals
@@ -27,8 +27,8 @@ See **[vendored.md](vendored.md)** for the full divergence list: what changed, w
 
 ## Building
 
-- **Standalone / direct-boot (lerux):** [docs/building/standalone.md](docs/building/standalone.md) — `just build-direct`, no Redox image or C toolchain.
-- **Full Redox-style build:** [docs/kernel/README.md](docs/kernel/README.md) — still requires the Redox build system when not using `direct-boot`. The nasm requirement listed in upstream docs **does not apply** to lerux kernel builds.
+- **Standalone / direct-boot (lerux):** [docs/building/standalone.md](docs/building/standalone.md) — `just build-direct` (requires nasm + clang).
+- **Full Redox-style build:** [docs/kernel/README.md](docs/kernel/README.md) — still requires the Redox build system when not using `direct-boot`.
 
 ## QEMU Bring-up
 

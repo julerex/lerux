@@ -2,6 +2,52 @@
 
 use std::{env, path::Path, process::Command};
 
+fn assemble_trampoline(arch: &str, out_dir: &str) {
+    let asm = format!("lerux-kernel/src/asm/{arch}/trampoline.asm");
+    println!("cargo:rerun-if-changed={asm}");
+
+    let status = Command::new("nasm")
+        .arg("-f")
+        .arg("bin")
+        .arg("-o")
+        .arg(format!("{out_dir}/trampoline"))
+        .arg(&asm)
+        .status()
+        .unwrap_or_else(|e| panic!("failed to run nasm for {asm}: {e}"));
+    if !status.success() {
+        panic!("nasm failed for {asm} with exit status {status}");
+    }
+}
+
+fn assemble_pvh_boot() {
+    let asm = "lerux-kernel/src/arch/x86_shared/pvh_boot.S";
+    println!("cargo:rerun-if-changed={asm}");
+
+    let mut build = cc::Build::new();
+    build
+        .file(asm)
+        .flag("-nostdlib")
+        .flag("-ffreestanding")
+        .flag("-fno-stack-protector")
+        .flag("-mno-red-zone")
+        .flag("-fno-pic")
+        .flag("-fno-pie")
+        .flag("-mcmodel=large");
+
+    if Command::new("clang")
+        .arg("--version")
+        .status()
+        .is_ok_and(|s| s.success())
+    {
+        build
+            .compiler("clang")
+            .flag("-target")
+            .flag("x86_64-unknown-none");
+    }
+
+    build.compile("pvh_boot");
+}
+
 // The build-dep "toml" (and its closure) has been inlined under
 // lerux-kernel/src/lerux-toml* (per the zero-cargo-deps request and
 // "place under lerux-kernel/src/lerux-*" rule). For the build script
@@ -99,20 +145,20 @@ fn main() {
 
     let arch_str = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
 
+    let out_dir = env::var("OUT_DIR").unwrap();
+
     match &*arch_str {
         "aarch64" => {
             println!("cargo::rustc-cfg=dtb");
         }
-        "x86" | "x86_64" => {
-            // lerux divergence from upstream redox-os/kernel build.rs:
-            //
-            // Upstream invoked nasm (SMP trampolines from src/asm/*/trampoline.asm)
-            // and cc/clang (pvh_boot.S). lerux embeds trampoline bytes in
-            // lerux-kernel/src/arch/x86_shared/trampoline.rs and assembles the PVH stub
-            // via core::arch::global_asm! in lerux-kernel/src/arch/x86_shared/pvh_boot.rs
-            // (direct-boot feature only). No external assembler or C compiler here.
-            //
-            // See VENDORED.md at the repo root.
+        "x86" => {
+            assemble_trampoline("x86", &out_dir);
+        }
+        "x86_64" => {
+            assemble_trampoline("x86_64", &out_dir);
+            if env::var("CARGO_FEATURE_DIRECT_BOOT").is_ok() {
+                assemble_pvh_boot();
+            }
         }
         "riscv64" => {
             println!("cargo::rustc-cfg=dtb");

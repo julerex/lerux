@@ -33,9 +33,9 @@ This section records decisions from the 2026-05-30 design review. Use it as the 
 
 #### Low-level CPU code
 
-- **Rust-authored only** in kernel and userspace: `global_asm!`, `asm!`, `#[naked]` in `.rs` are allowed.
-- **Not allowed** long term: standalone `.S` / `.asm`, NASM, `include_bytes!` of machine code that was not produced by `rustc`/LLVM in this build.
-- **Debt:** SMP trampoline golden `.bin` files (from NASM validation); rewrite in Rust before calling scope A done for the kernel.
+- **Rust inline asm** in kernel and userspace: `global_asm!`, `asm!`, `#[naked]` in `.rs` are allowed.
+- **Standalone asm** (`.asm`, `.S`) is allowed when assembled at build time via **nasm** or **clang/gcc** (`build.rs`). Sources live under `lerux-kernel/src/asm/` and `lerux-kernel/src/arch/x86_shared/pvh_boot.S`.
+- **C sources** remain forbidden outside the relibc debt allowlist.
 
 #### Boot chain
 
@@ -61,10 +61,10 @@ CI and local checks should prove the policy, not only smoke serial output:
 |-------|---------|
 | **Smoke** | `just smoke` / `just smoke-userspace` — boot path still works |
 | **ELF audit** | Every initfs ELF: no `NEEDED` on relibc/libc; static lerux runtime only |
-| **Source policy** | Fail on new `*.c`, `*.S`, `*.asm` under `kernel/`, `userspace/`, `vendor/` except a shrinking allowlist |
-| **Trampolines** | `just validate-trampolines` until NASM golden path is removed |
+| **Source policy** | Fail on new `*.c` under `lerux-kernel/`, `userspace/`, `vendor/` except `vendor/relibc/` |
+| **Trampolines** | `just validate-trampolines` — verifies NASM sources under `lerux-kernel/src/asm/` assemble correctly |
 
-Target recipe: **`just check-only-rust`** (or a dedicated CI job) implementing the above. Allowlist until deleted: `vendor/relibc/`, `qemu/*.S`, trampoline validation asm under `kernel/validation/trampolines/asm/`.
+Target recipe: **`just check-only-rust`** (or a dedicated CI job) implementing the above. C allowlist until deleted: `vendor/relibc/`.
 
 #### Only Rust migration sequence
 
@@ -72,7 +72,7 @@ Target recipe: **`just check-only-rust`** (or a dedicated CI job) implementing t
 2. [x] Port **`init`** + early daemons to **in-tree relibc sysroot** (`just build-sysroot`); drop workspace **`libc`** crate; static initfs ELFs (no `libc.so` staging).
 3. Turn on **enforcement gates** (allowlist shrinks as debt is removed). — **`just check-only-rust`** (ELF audit + source policy; CI job `check-only-rust`).
 4. Remove **`vendor/relibc/`** and relibc tarball download from `just`.
-5. SMP trampolines → Rust **`global_asm!`**; drop NASM golden embed path.
+5. [x] SMP trampolines assembled from **`lerux-kernel/src/asm/`** via nasm in `build.rs`; PVH stub via `pvh_boot.S` + cc.
 6. Introduce **`x86_64-unknown-lerux`** target (custom JSON + in-tree sysroot).
 7. Rust **bootloader** + installable image.
 8. Delete or quarantine **`qemu/loader.S`** boot asm.
@@ -81,7 +81,7 @@ Target recipe: **`just check-only-rust`** (or a dedicated CI job) implementing t
 
 - Direct-boot userspace smoke passes.
 - Initfs ELFs pass enforcement (no relibc; lerux runtime only).
-- Kernel has no non–Rust-authored executing machine code on the boot/SMP path.
+- Kernel boot/SMP path uses checked-in asm sources assembled at build time (no hand-embedded machine-code arrays).
 - `vendor/relibc/` removed; dev loop does not download the relibc toolchain tarball.
 
 #### Only Rust current debt
@@ -90,9 +90,7 @@ Target recipe: **`just check-only-rust`** (or a dedicated CI job) implementing t
 |------|----------|-------|
 | `init` + daemons via **`libc`** + `.toolchain/` relibc | Runtime / executables | **Step 2 done:** in-tree `build-sysroot`; still relibc not `userspace/runtime/` |
 | `vendor/relibc/` + `.toolchain/` tarball **`libc.a`** | Runtime | Step 2: **`just build-sysroot`**; only **`lib/gcc`** fetched for `libgcc_eh` |
-| SMP trampoline **`.bin`** from NASM | CPU code | Use `just validate-trampolines` until Rust rewrite |
 | **`qemu/loader.S`**, MBR stub | Boot chain | Not the product path; remove with Rust bootloader |
-| PVH stub in **`pvh_boot.rs`** | — | Aligned (Rust `global_asm!`) |
 
 ### Vendor everything (no live Redox repo dependencies)
 

@@ -24,7 +24,7 @@ Key distinctions to resolve:
 : Decisions that intentionally diverge for "Only Rust" goals, standalone development experience, or future AI-driven evolution. Examples observed: direct-boot feature with synthetic boot args and pure-Rust PVH stub, root-level workspace + justfile tooling, custom userspace runtime fork, quarantined QEMU asm loaders, "Redox" string retained in uname for compat.
 
 **Only Rust**
-: Policy that only machine code produced by the Rust toolchain (rustc/LLVM, global_asm!, asm!) may execute on the target machine from CPU reset through userspace processes. Host tooling (just, cargo, smoke scripts) is out of scope. See PLAN.md for migration sequence and enforcement (ELF audit, source allowlist in check-only-rust.sh).
+: Policy that userspace and kernel avoid C runtime code on the target; C sources are forbidden outside the relibc debt allowlist. Standalone asm (`.asm`, `.S`) is allowed when assembled at build time via nasm or clang/gcc. Rust inline asm (`global_asm!`, `asm!`) remains allowed. Host tooling (just, cargo, smoke scripts) is out of scope. See PLAN.md for migration sequence and enforcement (ELF audit, C-source policy in check-only-rust.sh).
 
 **Vendoring (selective)**
 : Copying needed upstream components into the lerux tree (kernel/, userspace/, vendor/) with pinned provenance documented in VENDORED.md. "Vendor everything" means no live Redox git deps at build time for required pieces. Does **not** mean vendoring the entire Redox distribution or reference tree. Scope is driven by the concrete goal of hosting a Redox-built rustc (see below), not by breadth for its own sake. Recent prunings (cookbook, rustc_codegen_cranelift, redoxfs build artifacts) are consistent with this.
@@ -33,7 +33,7 @@ Key distinctions to resolve:
 : Measured primarily in VENDORED.md (kernel patches, build layout, boot paths) and PLAN.md (Only Rust debt, phases). Includes both intentional (pure-Rust rewrites) and transitional (remaining relibc sysroot use).
 
 **Non-Rust replacement**
-: The gradual elimination of executed C, standalone asm (NASM/.S not produced by rustc), and foreign runtime code. Current status (post-cleanup): near-zero on product boot/userspace path; remaining items are quarantined (qemu/*.S) or validation-only (trampoline asm sources whose output is golden-binned and embedded).
+: The gradual elimination of executed C and foreign runtime code. Standalone asm is permitted at build time (nasm/cc). Current status: C debt is primarily `vendor/relibc/`; product kernel path uses asm sources in `lerux-kernel/src/asm/` and `pvh_boot.S`.
 
 **AI assistance**
 : (Term introduced in user query; not yet visible in existing docs or code artifacts.) To be defined: is this primarily for code porting/rewriting during replacement, for design exploration, for generating tests/docs, or other? How does it interact with vendoring order and "base" fidelity?

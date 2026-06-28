@@ -17,6 +17,18 @@ if ! command -v qemu-system-aarch64 >/dev/null 2>&1; then
     fi
 fi
 
+if ! command -v qemu-system-riscv64 >/dev/null 2>&1; then
+    if qemu_riscv_bin="$(bash "${root}/scripts/install-qemu-riscv.sh" 2>/dev/null)"; then
+        paths+=("${qemu_riscv_bin}")
+    fi
+fi
+
+if ! command -v riscv64-unknown-elf-gcc >/dev/null 2>&1; then
+    if riscv_bin="$(bash "${root}/scripts/install-riscv-toolchain.sh" 2>/dev/null)"; then
+        paths+=("${riscv_bin}")
+    fi
+fi
+
 joined="${PATH}"
 for p in "${paths[@]}"; do
     joined="${p}:${joined}"

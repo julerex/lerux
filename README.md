@@ -23,10 +23,10 @@ pip install pexpect   # if needed
 just test
 ```
 
-All CI smoke tests locally (SDK must include `qemu_virt_aarch64` and `x86_64_generic`):
+All CI smoke tests locally (SDK must include `qemu_virt_aarch64`, `x86_64_generic`, and `qemu_virt_riscv64`):
 
 ```bash
-MICROKIT_BOARDS=qemu_virt_aarch64,x86_64_generic just build-sdk
+MICROKIT_BOARDS=qemu_virt_aarch64,x86_64_generic,qemu_virt_riscv64 just build-sdk
 just test-all
 ```
 
@@ -35,7 +35,7 @@ just test-all
 GitHub Actions (`.github/workflows/rust.yml`) on every push to `main`:
 
 1. **sdk** — build Docker image, fetch sources, build Microkit SDK once for both boards (cached)
-2. **smoke** (matrix) — `just test`, `BOARD=x86_64_generic just test`, `just test-virtio`
+2. **smoke** (matrix) — `just test`, `BOARD=x86_64_generic just test`, `just test-riscv`, `just test-virtio`
 
 ## Architecture
 
@@ -45,7 +45,7 @@ GitHub Actions (`.github/workflows/rust.yml`) on every push to `main`:
 | System framework | [seL4/microkit](https://github.com/seL4/microkit) SDK |
 | Userspace | Rust protection domains in `userspace/pds/` via `sel4-microkit` |
 | Utilities | Shared crates in `userspace/crates/` (`lerux-logging`, `lerux-ipc`, `lerux-sync`) |
-| Serial console | Driver PD + IPC client PDs — PL011 (aarch64) or NS16550/COM1 (x86) |
+| Serial console | Driver PD + IPC client PDs — PL011 (aarch64), NS16550 MMIO (riscv64), or NS16550/COM1 (x86) |
 
 Version pins: [`deps/versions.toml`](deps/versions.toml).
 
@@ -58,6 +58,14 @@ x86_64 QEMU PC (`x86_64_generic`):
 ```bash
 MICROKIT_BOARDS=qemu_virt_aarch64,x86_64_generic just build-sdk
 BOARD=x86_64_generic just run
+```
+
+RISC-V QEMU virt (`qemu_virt_riscv64`):
+
+```bash
+MICROKIT_BOARDS=qemu_virt_aarch64,x86_64_generic,qemu_virt_riscv64 just build-sdk
+BOARD=qemu_virt_riscv64 just run
+# or: just test-riscv
 ```
 
 Virtio block + net drivers on aarch64 virt (`qemu_virt_aarch64_virtio`):

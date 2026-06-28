@@ -23,6 +23,19 @@ BOARDS: dict[str, dict[str, Any]] = {
             "serial_irq": 33,
         },
     },
+    "qemu_virt_riscv64": {
+        "arch": "riscv64",
+        "microkit_board": "qemu_virt_riscv64",
+        "target": "riscv64-sel4-microkit",
+        "target_triple": "riscv64-sel4-microkit",
+        "template": "serial-hello.system.template",
+        "pds": ["hello", "serial-driver"],
+        "qemu": "riscv64",
+        "system_vars": {
+            "serial_mmio_phys_addr": "0x1_000_0000",
+            "serial_irq": 10,
+        },
+    },
     "qemu_virt_aarch64_echo": {
         "arch": "aarch64",
         "microkit_board": "qemu_virt_aarch64",

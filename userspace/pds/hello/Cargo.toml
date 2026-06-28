@@ -7,6 +7,7 @@ license = "MIT"
 [features]
 board-qemu_virt_aarch64 = ["serial-ipc"]
 board-qemu_virt_aarch64_virtio = ["serial-ipc", "virtio"]
+board-qemu_virt_riscv64 = ["serial-ipc"]
 board-x86_64_generic = ["serial-ipc"]
 serial-ipc = ["lerux-logging/serial"]
 virtio = [

@@ -96,6 +96,7 @@ run: image
     case "${qemu}" in
         aarch64) just qemu-aarch64 ;;
         aarch64_virtio) just qemu-aarch64-virtio ;;
+        riscv64) just qemu-riscv64 ;;
         x86_64) just qemu-x86_64 ;;
         *) echo "error: unsupported qemu profile ${qemu}" >&2; exit 1 ;;
     esac
@@ -126,6 +127,15 @@ qemu-aarch64-virtio:
         -netdev user,id=netdev0 \
         -device virtio-blk-device,drive=blkdev0 \
         -blockdev node-name=blkdev0,read-only=on,driver=file,filename="${disk}"
+
+qemu-riscv64:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export PATH="$(bash scripts/host-path.sh)"
+    exec qemu-system-riscv64 \
+        -machine virt -m size=2G \
+        -nographic -serial mon:stdio \
+        -kernel {{board_build}}/loader.img
 
 qemu-x86_64:
     #!/usr/bin/env bash
@@ -185,6 +195,14 @@ test: image
                 -device virtio-blk-device,drive=blkdev0 \
                 -blockdev node-name=blkdev0,read-only=on,driver=file,filename="${disk}"
             ;;
+        riscv64)
+            exec python3 scripts/test.py \
+                --expect "lerux: Hello from Rust on seL4 Microkit!" \
+                qemu-system-riscv64 \
+                -machine virt -m size=2G \
+                -nographic -serial mon:stdio \
+                -kernel {{board_build}}/loader.img
+            ;;
         x86_64)
             sdk="$(just sdk-path)"
             kernel="${sdk}/board/{{board}}/{{config}}/elf/sel4_32.elf"
@@ -212,12 +230,17 @@ test-virtio:
 test-echo:
     BOARD=qemu_virt_aarch64_echo just test
 
-# Run all CI smoke tests (requires SDK with aarch64 + x86_64 boards)
+# RISC-V virt smoke test (NS16550 MMIO UART)
+test-riscv:
+    BOARD=qemu_virt_riscv64 just test
+
+# Run all CI smoke tests (requires SDK with aarch64 + x86_64 + riscv64 boards)
 test-all:
     #!/usr/bin/env bash
     set -euo pipefail
     just test
     BOARD=x86_64_generic just test
+    just test-riscv
     just test-virtio
     just test-echo
 

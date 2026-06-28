@@ -5,7 +5,7 @@ RUN apt-get update -q && apt-get install -y --no-install-recommends \
     build-essential curl git ca-certificates \
     cmake ninja-build device-tree-compiler libxml2-utils \
     python3 python3-venv python3-pip \
-    qemu-system-arm qemu-system-x86 qemu-utils ipxe-qemu \
+    qemu-system-arm qemu-system-x86 qemu-system-misc qemu-utils ipxe-qemu \
     libclang-dev \
     python3-pexpect \
     xz-utils \
@@ -28,5 +28,8 @@ RUN cargo install just --locked
 
 # Match rust-toolchain.toml before building lerux PDs
 COPY rust-toolchain.toml /work/rust-toolchain.toml
+COPY scripts/install-riscv-toolchain.sh /work/scripts/install-riscv-toolchain.sh
 WORKDIR /work
+RUN chmod +x scripts/install-riscv-toolchain.sh && scripts/install-riscv-toolchain.sh
+ENV PATH="/work/deps/toolchains/riscv64-unknown-elf/bin:${PATH}"
 RUN rustup show

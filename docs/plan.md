@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-06-28 (Phase 8)
+Last updated: 2026-06-29 (Phase 9)
 
 ## Phase 1 — Bring-up
 
@@ -52,6 +52,15 @@ Last updated: 2026-06-28 (Phase 8)
 - [x] `lerux-interface-types` crate with postcard RPC messages
 - [x] `echo-server` + `echo-client` PDs using `lerux-ipc`
 - [ ] Optional: timer/RTC/init PD vertical slice
+
+## Phase 9 — RISC-V bring-up
+
+- [x] Microkit board: `qemu_virt_riscv64` (QEMU RISC-V virt)
+- [x] `riscv64-sel4-microkit.json` target spec in `support/targets/`
+- [x] NS16550 MMIO serial driver PD at `0x1_000_0000` (PLIC IRQ 10)
+- [x] `BOARD=qemu_virt_riscv64 just run` / `just test-riscv`
+- [x] RISC-V toolchain + QEMU in Docker image
+- [x] RISC-V smoke job in GitHub Actions
 
 ## Version alignment
 

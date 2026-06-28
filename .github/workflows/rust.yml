@@ -7,9 +7,9 @@ on:
     branches: [main]
 
 env:
-  MICROKIT_BOARDS: qemu_virt_aarch64,x86_64_generic
+  MICROKIT_BOARDS: qemu_virt_aarch64,x86_64_generic,qemu_virt_riscv64
   # GHA cache keys cannot contain commas; keep in sync with MICROKIT_BOARDS.
-  SDK_CACHE_SUFFIX: virt-aarch64-x86
+  SDK_CACHE_SUFFIX: virt-aarch64-x86-riscv
 
 jobs:
   sdk:
@@ -67,6 +67,7 @@ jobs:
                 sdk="$(find deps/workspace/microkit/release -maxdepth 1 -type d -name "microkit-sdk*" | sort | tail -1)"
                 [[ -n "${sdk}" ]] || return 1
                 [[ -d "${sdk}/board/qemu_virt_aarch64/debug/include" ]] || return 1
+                [[ -d "${sdk}/board/qemu_virt_riscv64/debug/include" ]] || return 1
                 [[ -f "${sdk}/board/x86_64_generic/debug/elf/sel4_32.elf" ]] || return 1
               }
               if sdk_ready; then
@@ -145,6 +146,8 @@ jobs:
             command: just test
           - id: x86_64
             command: BOARD=x86_64_generic just test
+          - id: riscv64
+            command: just test-riscv
           - id: virtio
             command: just disk-img && just test-virtio
           - id: echo

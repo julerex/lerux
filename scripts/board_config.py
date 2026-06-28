@@ -26,10 +26,12 @@ BOARDS: dict[str, dict[str, Any]] = {
         "arch": "x86_64",
         "target": "x86_64-sel4-microkit",
         "target_triple": "x86_64-sel4-microkit",
-        "template": "hello.system.template",
-        "pds": ["hello"],
+        "template": "serial-hello-x86.system.template",
+        "pds": ["hello", "serial-driver"],
         "qemu": "x86_64",
-        "system_vars": {},
+        "system_vars": {
+            "serial_ioport_addr": "0x3f8",
+        },
     },
 }
 

@@ -3,14 +3,14 @@
 
 use sel4_microkit::{protection_domain, Channel, Handler, Infallible};
 
-#[cfg(feature = "board-qemu_virt_aarch64")]
+#[cfg(feature = "serial-ipc")]
 use embedded_hal_nb::serial::Write as _;
-#[cfg(feature = "board-qemu_virt_aarch64")]
+#[cfg(feature = "serial-ipc")]
 use sel4_microkit_driver_adapters::serial::client::Client as SerialClient;
 
 const MESSAGE: &str = "lerux: Hello from Rust on seL4 Microkit!\n";
 
-#[cfg(feature = "board-qemu_virt_aarch64")]
+#[cfg(feature = "serial-ipc")]
 const SERIAL_DRIVER: Channel = Channel::new(0);
 
 #[protection_domain]
@@ -26,7 +26,7 @@ impl Handler for HandlerImpl {
 }
 
 fn write_message() {
-    #[cfg(feature = "board-qemu_virt_aarch64")]
+    #[cfg(feature = "serial-ipc")]
     {
         let mut serial = SerialClient::new(SERIAL_DRIVER);
         for b in MESSAGE.bytes() {
@@ -34,7 +34,7 @@ fn write_message() {
         }
     }
 
-    #[cfg(not(feature = "board-qemu_virt_aarch64"))]
+    #[cfg(not(feature = "serial-ipc"))]
     {
         sel4_microkit::debug_println!("{MESSAGE}");
     }

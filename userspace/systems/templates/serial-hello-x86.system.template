@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<system>
+    <protection_domain name="serial_driver" priority="2" stack_size="0x10_000">
+        <program_image path="serial-driver.elf" />
+        <ioport id="0" addr="{serial_ioport_addr}" size="8" setvar_id="com1_ioport_id" setvar_addr="com1_ioport_addr" />
+    </protection_domain>
+
+    <protection_domain name="hello" priority="1" stack_size="0x10_000">
+        <program_image path="hello.elf" />
+    </protection_domain>
+
+    <channel>
+        <end pd="serial_driver" id="1" />
+        <end pd="hello" id="0" pp="true" />
+    </channel>
+</system>

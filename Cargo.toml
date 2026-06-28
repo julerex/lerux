@@ -6,6 +6,7 @@ members = ["userspace/pds/hello", "userspace/pds/serial-driver"]
 sel4 = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
 sel4-microkit = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
 sel4-pl011-driver = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
+sel4-driver-interfaces = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
 sel4-microkit-driver-adapters = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
 sel4-microkit-simple-ipc = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
 embedded-hal-nb = "1.0"

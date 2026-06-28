@@ -30,7 +30,7 @@ just test
 | Kernel | [seL4/seL4](https://github.com/seL4/seL4) — built by `build_sdk.py` |
 | System framework | [seL4/microkit](https://github.com/seL4/microkit) SDK |
 | Userspace | Rust protection domains in `userspace/pds/` via `sel4-microkit` |
-| Serial console | PL011 driver PD + IPC client PDs (see `serial-driver`, `hello`) |
+| Serial console | Driver PD + IPC client PDs — PL011 (aarch64) or NS16550/COM1 (x86) |
 
 Version pins: [`deps/versions.toml`](deps/versions.toml).
 

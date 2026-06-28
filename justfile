@@ -61,11 +61,9 @@ build-pd crate:
     source "{{root}}/scripts/libclang-env.sh"
     mkdir -p "{{board_build}}"
     features=()
-    if [[ "{{board}}" == "qemu_virt_aarch64" ]]; then
-        case "{{crate}}" in
-            hello|serial-driver) features+=(--features board-qemu_virt_aarch64) ;;
-        esac
-    fi
+    case "{{crate}}" in
+        hello|serial-driver) features+=(--features "board-{{board}}") ;;
+    esac
     SEL4_INCLUDE_DIRS="${sdk}/board/{{board}}/{{config}}/include" \
         cargo build --release -p {{crate}} \
             "${features[@]}" \

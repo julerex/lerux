@@ -6,8 +6,12 @@ license = "MIT"
 
 [features]
 board-qemu_virt_aarch64 = ["sel4-pl011-driver"]
+board-x86_64_generic = []
 
 [dependencies]
+sel4 = { workspace = true }
 sel4-microkit = { workspace = true }
+sel4-driver-interfaces = { workspace = true }
 sel4-pl011-driver = { workspace = true, optional = true }
 sel4-microkit-driver-adapters = { workspace = true }
+embedded-hal-nb = { workspace = true }

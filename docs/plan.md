@@ -19,7 +19,7 @@ Last updated: 2026-06-28 (Phase 2)
 
 - [x] Microkit board: `x86_64_generic` (QEMU generic PC; not `qemu_x86_64`)
 - [x] `x86_64-sel4-microkit.json` target spec in `support/targets/`
-- [x] `BOARD=x86_64_generic just run` (hello PD via kernel debug serial; userspace serial driver is aarch64-only for now)
+- [x] `BOARD=x86_64_generic just run` (NS16550 COM1 driver PD over I/O port 0x3f8)
 
 ## Phase 4 — Utilities
 

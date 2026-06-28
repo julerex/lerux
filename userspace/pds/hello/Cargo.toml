@@ -5,7 +5,9 @@ edition = "2024"
 license = "MIT"
 
 [features]
-board-qemu_virt_aarch64 = ["dep:embedded-hal-nb", "dep:sel4-microkit-driver-adapters"]
+board-qemu_virt_aarch64 = ["serial-ipc"]
+board-x86_64_generic = ["serial-ipc"]
+serial-ipc = ["dep:embedded-hal-nb", "dep:sel4-microkit-driver-adapters"]
 
 [dependencies]
 sel4-microkit = { workspace = true }

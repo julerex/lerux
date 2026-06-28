@@ -74,6 +74,16 @@ jobs:
               fi
             '
 
+      - name: Normalize SDK path for host
+        run: |
+          set -euo pipefail
+          sdk="$(find deps/workspace/microkit/release -maxdepth 1 -type d -name 'microkit-sdk-*' | sort | tail -1)"
+          if [[ -z "${sdk}" ]]; then
+            echo "error: SDK not found under deps/workspace/microkit/release" >&2
+            exit 1
+          fi
+          echo "$(realpath "${sdk}")" > deps/.sdk-path
+
       - name: Save workspace cache
         if: steps.workspace-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
@@ -94,6 +104,10 @@ jobs:
         run: |
           set -euo pipefail
           sdk="$(cat deps/.sdk-path)"
+          if [[ ! -d "${sdk}" ]]; then
+            echo "error: SDK path from deps/.sdk-path does not exist: ${sdk}" >&2
+            exit 1
+          fi
           mkdir -p sdk-bundle
           cp deps/.sdk-path sdk-bundle/
           cp -a "${sdk}" sdk-bundle/microkit-sdk

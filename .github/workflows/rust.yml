@@ -75,6 +75,8 @@ jobs:
                 just build-sdk
               fi
             '
+          # Docker runs as root; host steps need write access under deps/.
+          sudo chown -R "$(id -u):$(id -g)" deps
 
       - name: Normalize SDK path for host
         run: |
@@ -84,6 +86,7 @@ jobs:
             echo "error: SDK not found under deps/workspace/microkit/release" >&2
             exit 1
           fi
+          rm -f deps/.sdk-path
           echo "$(realpath "${sdk}")" > deps/.sdk-path
 
       - name: Save workspace cache
@@ -183,6 +186,7 @@ jobs:
             bash -c 'set -euo pipefail
               ${{ matrix.command }}
             '
+          sudo chown -R "$(id -u):$(id -g)" build deps
 
       - name: Save Cargo build cache
         uses: actions/cache/save@v4

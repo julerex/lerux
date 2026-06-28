@@ -10,8 +10,9 @@ The seL4 kernel is **not vendored** — it is cloned into `deps/workspace/` and 
 
 ```bash
 just fetch          # clone seL4 15.0.0 + microkit 2.2.0
-just build-sdk      # build Microkit SDK from source (needs aarch64-none-elf-gcc)
-# or: just fetch-sdk   # download prebuilt SDK 2.2.0 if the toolchain is not installed
+just build-sdk      # build Microkit SDK from source (auto-downloads ARM toolchain if needed)
+# or: just fetch-sdk   # download prebuilt SDK 2.2.0 (no compile step)
+# MICROKIT_BOARDS=qemu_virt_aarch64,qemu_x86_64 just build-sdk  # add boards
 just run            # build hello PD, assemble loader.img, boot QEMU
 ```
 

@@ -7,7 +7,7 @@ Last updated: 2026-06-28 (seL4 pivot)
 - [x] Pivot from Redox kernel to seL4 + Microkit
 - [x] `just fetch` / `just build-sdk` / `just run` for aarch64 virt
 - [x] Single hello protection domain
-- [ ] CI smoke test in Docker
+- [x] CI smoke test in Docker
 
 ## Phase 2 — Multi-PD IPC
 

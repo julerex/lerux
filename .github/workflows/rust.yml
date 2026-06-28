@@ -6,20 +6,162 @@ on:
   pull_request:
     branches: [main]
 
+env:
+  MICROKIT_BOARDS: qemu_virt_aarch64,x86_64_generic
+
 jobs:
-  smoke-aarch64:
+  sdk:
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build dev image
-        run: docker build -t lerux-dev -f docker/Dockerfile .
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - name: Fetch, build SDK, smoke test
+      - name: Build dev image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          tags: lerux-dev
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Restore workspace cache
+        uses: actions/cache/restore@v4
+        id: workspace-cache
+        with:
+          path: deps/workspace
+          key: workspace-${{ hashFiles('deps/versions.toml', 'scripts/fetch.sh') }}
+          restore-keys: |
+            workspace-
+
+      - name: Restore SDK cache
+        uses: actions/cache/restore@v4
+        id: sdk-cache
+        with:
+          path: |
+            deps/.sdk-path
+            deps/workspace/microkit/release
+          key: sdk-${{ hashFiles('deps/versions.toml', 'scripts/fetch.sh') }}-${{ env.MICROKIT_BOARDS }}
+          restore-keys: |
+            sdk-${{ hashFiles('deps/versions.toml', 'scripts/fetch.sh') }}-
+            sdk-
+
+      - name: Fetch and build SDK
+        run: |
+          docker run --rm \
+            -e MICROKIT_BOARDS="${{ env.MICROKIT_BOARDS }}" \
+            -v "${{ github.workspace }}:/work" -w /work lerux-dev \
+            bash -c 'set -euo pipefail
+              just fetch
+              sdk_ready() {
+                [[ -f deps/.sdk-path ]] || return 1
+                local sdk
+                sdk="$(cat deps/.sdk-path)"
+                [[ -d "${sdk}" ]] || return 1
+                [[ -d "${sdk}/board/qemu_virt_aarch64/debug/include" ]] || return 1
+                [[ -f "${sdk}/board/x86_64_generic/debug/elf/sel4_32.elf" ]] || return 1
+              }
+              if sdk_ready; then
+                echo "==> SDK cache hit, skipping build-sdk"
+              else
+                just build-sdk
+              fi
+            '
+
+      - name: Save workspace cache
+        if: steps.workspace-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: deps/workspace
+          key: workspace-${{ hashFiles('deps/versions.toml', 'scripts/fetch.sh') }}
+
+      - name: Save SDK cache
+        if: steps.sdk-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            deps/.sdk-path
+            deps/workspace/microkit/release
+          key: sdk-${{ hashFiles('deps/versions.toml', 'scripts/fetch.sh') }}-${{ env.MICROKIT_BOARDS }}
+
+      - name: Upload SDK bundle
+        run: |
+          set -euo pipefail
+          sdk="$(cat deps/.sdk-path)"
+          mkdir -p sdk-bundle
+          cp deps/.sdk-path sdk-bundle/
+          cp -a "${sdk}" sdk-bundle/microkit-sdk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdk
+          path: sdk-bundle/
+          retention-days: 1
+
+  smoke:
+    needs: sdk
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: aarch64
+            command: just test
+          - id: x86_64
+            command: BOARD=x86_64_generic just test
+          - id: virtio
+            command: just disk-img && just test-virtio
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build dev image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          tags: lerux-dev
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: sdk
+          path: sdk-bundle
+
+      - name: Install SDK from artifact
+        run: |
+          set -euo pipefail
+          mkdir -p deps/workspace/microkit/release
+          cp -a sdk-bundle/microkit-sdk deps/workspace/microkit/release/
+          echo "/work/deps/workspace/microkit/release/$(basename sdk-bundle/microkit-sdk)" > deps/.sdk-path
+
+      - name: Restore Cargo build cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            build
+          key: build-${{ matrix.id }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            build-${{ matrix.id }}-
+
+      - name: Smoke test (${{ matrix.id }})
         run: |
           docker run --rm -v "${{ github.workspace }}:/work" -w /work lerux-dev \
             bash -c 'set -euo pipefail
-              just fetch
-              just build-sdk
-              just test'
+              ${{ matrix.command }}
+            '
+
+      - name: Save Cargo build cache
+        uses: actions/cache/save@v4
+        with:
+          path: build
+          key: build-${{ matrix.id }}-${{ hashFiles('Cargo.lock') }}

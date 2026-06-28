@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-06-28 (Phase 4)
+Last updated: 2026-06-28 (Phase 5)
 
 ## Phase 1 — Bring-up
 
@@ -27,6 +27,31 @@ Last updated: 2026-06-28 (Phase 4)
 - [x] `lerux-ipc` — typed postcard RPC re-exports (`sel4-microkit-simple-ipc`)
 - [x] `lerux-sync` — notification mutex aliases on `sel4-sync`
 - [x] Virtio block/net driver PDs (`virtio-blk-driver`, `virtio-net-driver`) on `qemu_virt_aarch64_virtio`
+
+## Phase 5 — CI & Ops
+
+- [x] x86_64 smoke job in GitHub Actions
+- [x] Virtio smoke job in GitHub Actions
+- [x] Single SDK build (`MICROKIT_BOARDS=qemu_virt_aarch64,x86_64_generic`) shared across smoke jobs
+- [x] GHA caching for workspace, SDK, and per-board `build/` targets
+- [x] `just test-all` local CI mirror
+
+## Phase 6 — Virtio block I/O
+
+- [ ] Map client DMA + blk ring buffers into a client PD
+- [ ] Read block 0 from `support/disk.img` via shared ring buffers
+- [ ] Extend `just test-virtio` to verify block data
+
+## Phase 7 — x86 serial IRQ/RX
+
+- [ ] COM1 IRQ in x86 system template
+- [ ] IRQ-driven RX in `ns16550.rs`
+
+## Phase 8 — Custom IPC and minimal services
+
+- [ ] `interface-types` crate with postcard RPC messages
+- [ ] New server + client PD using `lerux-ipc`
+- [ ] Optional: timer/RTC/init PD vertical slice
 
 ## Version alignment
 

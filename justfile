@@ -200,6 +200,14 @@ test: image
 test-virtio:
     BOARD=qemu_virt_aarch64_virtio just test
 
+# Run all CI smoke tests (requires SDK with aarch64 + x86_64 boards)
+test-all:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    just test
+    BOARD=x86_64_generic just test
+    just test-virtio
+
 # Empty disk image for virtio-blk QEMU device
 disk-img:
     #!/usr/bin/env bash

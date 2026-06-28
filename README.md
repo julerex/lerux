@@ -23,6 +23,20 @@ pip install pexpect   # if needed
 just test
 ```
 
+All CI smoke tests locally (SDK must include `qemu_virt_aarch64` and `x86_64_generic`):
+
+```bash
+MICROKIT_BOARDS=qemu_virt_aarch64,x86_64_generic just build-sdk
+just test-all
+```
+
+## CI
+
+GitHub Actions (`.github/workflows/rust.yml`) on every push to `main`:
+
+1. **sdk** — build Docker image, fetch sources, build Microkit SDK once for both boards (cached)
+2. **smoke** (matrix) — `just test`, `BOARD=x86_64_generic just test`, `just test-virtio`
+
 ## Architecture
 
 | Layer | Source |

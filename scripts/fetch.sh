@@ -20,6 +20,10 @@ clone_or_checkout() {
         git -C "${dest}" fetch --tags origin
         git -C "${dest}" checkout "${tag}"
     else
+        if [[ -e "${dest}" ]]; then
+            echo "==> ${name}: removing existing non-repository path at ${dest}"
+            rm -rf "${dest}"
+        fi
         echo "==> ${name}: cloning ${tag}"
         git clone --branch "${tag}" --depth 1 "${url}" "${dest}"
     fi

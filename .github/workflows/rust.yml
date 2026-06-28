@@ -44,9 +44,7 @@ jobs:
         uses: actions/cache/restore@v4
         id: sdk-cache
         with:
-          path: |
-            deps/.sdk-path
-            deps/workspace/microkit/release
+          path: deps/sdk-cache
           key: sdk-${{ hashFiles('deps/versions.toml', 'scripts/fetch.sh') }}-${{ env.SDK_CACHE_SUFFIX }}
           restore-keys: |
             sdk-${{ hashFiles('deps/versions.toml', 'scripts/fetch.sh') }}-
@@ -59,11 +57,15 @@ jobs:
             -v "${{ github.workspace }}:/work" -w /work lerux-dev \
             bash -c 'set -euo pipefail
               just fetch
+              if [[ -d deps/sdk-cache/microkit-sdk ]]; then
+                mkdir -p deps/workspace/microkit/release
+                rm -rf deps/workspace/microkit/release/microkit-sdk*
+                cp -a deps/sdk-cache/microkit-sdk deps/workspace/microkit/release/
+              fi
               sdk_ready() {
-                [[ -f deps/.sdk-path ]] || return 1
                 local sdk
-                sdk="$(cat deps/.sdk-path)"
-                [[ -d "${sdk}" ]] || return 1
+                sdk="$(find deps/workspace/microkit/release -maxdepth 1 -type d -name "microkit-sdk*" | sort | tail -1)"
+                [[ -n "${sdk}" ]] || return 1
                 [[ -d "${sdk}/board/qemu_virt_aarch64/debug/include" ]] || return 1
                 [[ -f "${sdk}/board/x86_64_generic/debug/elf/sel4_32.elf" ]] || return 1
               }
@@ -77,7 +79,7 @@ jobs:
       - name: Normalize SDK path for host
         run: |
           set -euo pipefail
-          sdk="$(find deps/workspace/microkit/release -maxdepth 1 -type d -name 'microkit-sdk-*' | sort | tail -1)"
+          sdk="$(find deps/workspace/microkit/release -maxdepth 1 -type d -name 'microkit-sdk*' | sort | tail -1)"
           if [[ -z "${sdk}" ]]; then
             echo "error: SDK not found under deps/workspace/microkit/release" >&2
             exit 1
@@ -91,13 +93,19 @@ jobs:
           path: deps/workspace
           key: workspace-${{ hashFiles('deps/versions.toml', 'scripts/fetch.sh') }}
 
+      - name: Stage SDK for cache
+        run: |
+          set -euo pipefail
+          sdk="$(cat deps/.sdk-path)"
+          mkdir -p deps/sdk-cache
+          rm -rf deps/sdk-cache/microkit-sdk
+          cp -a "${sdk}" deps/sdk-cache/microkit-sdk
+
       - name: Save SDK cache
         if: steps.sdk-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
-          path: |
-            deps/.sdk-path
-            deps/workspace/microkit/release
+          path: deps/sdk-cache
           key: sdk-${{ hashFiles('deps/versions.toml', 'scripts/fetch.sh') }}-${{ env.SDK_CACHE_SUFFIX }}
 
       - name: Upload SDK bundle

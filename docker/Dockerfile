@@ -17,7 +17,7 @@ RUN set -eux; \
       "https://developer.arm.com/-/media/Files/downloads/gnu/12.2.rel1/binrel/arm-gnu-toolchain-12.2.rel1-x86_64-aarch64-none-elf.tar.xz"; \
     tar -xf /tmp/arm-gnu.tar.xz -C /opt; \
     rm /tmp/arm-gnu.tar.xz
-ENV PATH="/opt/arm-gnu-toolchain-12.2.Rel1-x86_64-aarch64-none-elf/bin:${PATH}"
+ENV PATH="/opt/arm-gnu-toolchain-12.2.rel1-x86_64-aarch64-none-elf/bin:${PATH}"
 
 # Rust (toolchain pinned by rust-toolchain.toml in repo)
 RUN curl -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile minimal

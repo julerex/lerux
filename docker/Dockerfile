@@ -5,7 +5,7 @@ RUN apt-get update -q && apt-get install -y --no-install-recommends \
     build-essential curl git ca-certificates \
     cmake ninja-build device-tree-compiler libxml2-utils \
     python3 python3-venv python3-pip \
-    qemu-system-arm qemu-utils \
+    qemu-system-arm qemu-utils ipxe-qemu \
     libclang-dev \
     python3-pexpect \
     xz-utils \

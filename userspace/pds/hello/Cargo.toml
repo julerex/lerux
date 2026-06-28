@@ -9,10 +9,28 @@ board-qemu_virt_aarch64 = ["serial-ipc"]
 board-qemu_virt_aarch64_virtio = ["serial-ipc", "virtio"]
 board-x86_64_generic = ["serial-ipc"]
 serial-ipc = ["lerux-logging/serial"]
-virtio = ["dep:sel4-driver-interfaces", "dep:sel4-microkit-driver-adapters"]
+virtio = [
+    "dep:async-unsync",
+    "dep:sel4-driver-interfaces",
+    "dep:sel4-microkit-driver-adapters",
+    "dep:sel4-shared-memory",
+    "dep:sel4-shared-ring-buffer",
+    "dep:sel4-shared-ring-buffer-block-io",
+    "dep:sel4-shared-ring-buffer-block-io-types",
+    "dep:sel4-shared-ring-buffer-bookkeeping",
+    "dep:sel4-abstract-allocator",
+    "sel4-microkit/alloc",
+]
 
 [dependencies]
+async-unsync = { version = "0.3.0", default-features = false, optional = true }
 sel4-microkit = { workspace = true }
 sel4-driver-interfaces = { workspace = true, optional = true }
 sel4-microkit-driver-adapters = { workspace = true, optional = true }
+sel4-shared-memory = { workspace = true, optional = true }
+sel4-shared-ring-buffer = { workspace = true, optional = true }
+sel4-shared-ring-buffer-block-io = { workspace = true, optional = true }
+sel4-shared-ring-buffer-block-io-types = { workspace = true, optional = true }
+sel4-shared-ring-buffer-bookkeeping = { workspace = true, optional = true, features = ["async-unsync"] }
+sel4-abstract-allocator = { workspace = true, optional = true }
 lerux-logging = { path = "../../crates/lerux-logging" }

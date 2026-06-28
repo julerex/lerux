@@ -1,0 +1,1 @@
+pub const VIRTIO_BLK_CLIENT_DMA_SIZE: usize = 0x200_000;

@@ -25,6 +25,9 @@ sel4-virtio-hal-impl = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.
 sel4-shared-memory = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
 sel4-shared-ring-buffer = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
 sel4-shared-ring-buffer-block-io-types = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
+sel4-shared-ring-buffer-block-io = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
+sel4-shared-ring-buffer-bookkeeping = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
+sel4-abstract-allocator = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
 virtio-drivers = { version = "0.13.0", default-features = false }
 embedded-hal-nb = "1.0"
 lock_api = "0.4.14"

@@ -1,8 +1,11 @@
 #![no_std]
 #![no_main]
 
+#[cfg(feature = "virtio")]
+extern crate alloc;
+
 use lerux_logging::log;
-use sel4_microkit::{protection_domain, Channel, Handler, Infallible};
+use sel4_microkit::{protection_domain, Channel, ChannelSet, Handler, Infallible};
 
 #[cfg(feature = "serial-ipc")]
 use lerux_logging::serial;
@@ -10,13 +13,35 @@ use lerux_logging::serial;
 use lerux_logging::debug;
 
 #[cfg(feature = "virtio")]
+use alloc::rc::Rc;
+#[cfg(feature = "virtio")]
+use async_unsync::semaphore::Semaphore;
+#[cfg(feature = "virtio")]
+use core::task::Poll;
+#[cfg(feature = "virtio")]
+use sel4_abstract_allocator::WithAlignmentBound;
+#[cfg(feature = "virtio")]
+use sel4_abstract_allocator::basic::BasicAllocator;
+#[cfg(feature = "virtio")]
 use sel4_driver_interfaces::block::GetBlockDeviceLayout;
 #[cfg(feature = "virtio")]
 use sel4_driver_interfaces::net::GetNetDeviceMeta;
 #[cfg(feature = "virtio")]
+use sel4_microkit::memory_region_symbol;
+#[cfg(feature = "virtio")]
 use sel4_microkit_driver_adapters::block::client::Client as BlockClient;
 #[cfg(feature = "virtio")]
 use sel4_microkit_driver_adapters::net::client::Client as NetClient;
+#[cfg(feature = "virtio")]
+use sel4_shared_memory::SharedMemoryRef;
+#[cfg(feature = "virtio")]
+use sel4_shared_ring_buffer::RingBuffers;
+#[cfg(feature = "virtio")]
+use sel4_shared_ring_buffer_block_io::OwnedSharedRingBufferBlockIO;
+
+
+#[cfg(feature = "virtio")]
+mod config;
 
 #[cfg(feature = "serial-ipc")]
 const SERIAL_DRIVER: Channel = Channel::new(0);
@@ -25,12 +50,32 @@ const NET_DRIVER: Channel = Channel::new(1);
 #[cfg(feature = "virtio")]
 const BLK_DRIVER: Channel = Channel::new(2);
 
-#[protection_domain]
+#[cfg(feature = "virtio")]
+type BlkIo = OwnedSharedRingBufferBlockIO<Rc<Semaphore>, WithAlignmentBound<BasicAllocator>, fn()>;
+
+#[cfg(feature = "virtio")]
+struct BlkRead {
+    io: BlkIo,
+    request_index: usize,
+    buf: [u8; 512],
+    done: bool,
+}
+
+struct HandlerImpl {
+    #[cfg(feature = "virtio")]
+    blk_read: Option<BlkRead>,
+}
+
+#[cfg_attr(feature = "virtio", protection_domain(heap_size = 64 * 1024))]
+#[cfg_attr(not(feature = "virtio"), protection_domain)]
 fn init() -> HandlerImpl {
     init_logging();
     log::info!("lerux: Hello from Rust on seL4 Microkit!");
     probe_virtio();
-    HandlerImpl
+    HandlerImpl {
+        #[cfg(feature = "virtio")]
+        blk_read: Some(start_blk_read()),
+    }
 }
 
 fn init_logging() {
@@ -64,8 +109,73 @@ fn probe_virtio() {
 #[cfg(not(feature = "virtio"))]
 fn probe_virtio() {}
 
-struct HandlerImpl;
+#[cfg(feature = "virtio")]
+fn start_blk_read() -> BlkRead {
+    let notify_block: fn() = || BLK_DRIVER.notify();
+
+    let dma_region = unsafe {
+        SharedMemoryRef::<'static, _>::new(memory_region_symbol!(
+            virtio_blk_client_dma_vaddr: *mut [u8],
+            n = config::VIRTIO_BLK_CLIENT_DMA_SIZE
+        ))
+    };
+
+    let bounce_buffer_allocator =
+        WithAlignmentBound::new(BasicAllocator::new(dma_region.as_ptr().len()), 1);
+
+    let ring_buffers = RingBuffers::from_ptrs_using_default_initialization_strategy_for_role(
+        unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_blk_free: *mut _)) },
+        unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_blk_used: *mut _)) },
+        notify_block,
+    );
+
+    let mut io = OwnedSharedRingBufferBlockIO::new(dma_region, bounce_buffer_allocator, ring_buffers);
+
+    let sem = io.slot_set_semaphore().clone();
+    let mut reservation = sem.try_reserve(1).unwrap().expect("blk slot reservation");
+    let request_index = io.issue_read_request(&mut reservation, 0, 512).unwrap();
+
+    BlkRead {
+        io,
+        request_index,
+        buf: [0; 512],
+        done: false,
+    }
+}
+
+#[cfg(feature = "virtio")]
+fn finish_blk_read(blk: &mut BlkRead) {
+    blk.io.poll().unwrap();
+    match blk
+        .io
+        .poll_read_request(blk.request_index, &mut blk.buf, None)
+        .unwrap()
+    {
+        Poll::Ready(Ok(())) => {
+            log::info!(
+                "virtio-blk: MBR sig 0x{:02x} 0x{:02x}",
+                blk.buf[510],
+                blk.buf[511]
+            );
+            blk.done = true;
+        }
+        Poll::Pending => {}
+        Poll::Ready(Err(_)) => panic!("virtio-blk read failed"),
+    }
+}
 
 impl Handler for HandlerImpl {
     type Error = Infallible;
+
+    fn notified(&mut self, #[cfg_attr(not(feature = "virtio"), allow(unused_variables))] channels: ChannelSet) -> Result<(), Self::Error> {
+        #[cfg(feature = "virtio")]
+        if channels.contains(BLK_DRIVER) {
+            if let Some(blk) = &mut self.blk_read {
+                if !blk.done {
+                    finish_blk_read(blk);
+                }
+            }
+        }
+        Ok(())
+    }
 }

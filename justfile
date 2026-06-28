@@ -168,6 +168,7 @@ test: image
                 --expect "lerux: Hello from Rust on seL4 Microkit!" \
                 --expect "virtio-blk:" \
                 --expect "virtio-net: MAC" \
+                --expect "virtio-blk: MBR sig" \
                 qemu-system-aarch64 \
                 -machine virt,virtualization=on -cpu cortex-a53 -m size=2G \
                 -serial mon:stdio -nographic \
@@ -208,12 +209,13 @@ test-all:
     BOARD=x86_64_generic just test
     just test-virtio
 
-# Empty disk image for virtio-blk QEMU device
+# Disk image for virtio-blk QEMU device (MBR boot signature at bytes 510–511)
 disk-img:
     #!/usr/bin/env bash
     set -euo pipefail
     mkdir -p "{{root}}/support"
     qemu-img create -f raw "{{root}}/support/disk.img" 4M
+    printf '\x55\xAA' | dd of="{{root}}/support/disk.img" bs=1 seek=510 conv=notrunc status=none
 
 clean:
     rm -rf {{build_dir}} target deps/.sdk-path

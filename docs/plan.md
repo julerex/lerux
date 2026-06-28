@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-06-28 (Phase 5)
+Last updated: 2026-06-28 (Phase 6)
 
 ## Phase 1 — Bring-up
 
@@ -38,9 +38,9 @@ Last updated: 2026-06-28 (Phase 5)
 
 ## Phase 6 — Virtio block I/O
 
-- [ ] Map client DMA + blk ring buffers into a client PD
-- [ ] Read block 0 from `support/disk.img` via shared ring buffers
-- [ ] Extend `just test-virtio` to verify block data
+- [x] Map client DMA + blk ring buffers into a client PD
+- [x] Read block 0 from `support/disk.img` via shared ring buffers
+- [x] Extend `just test-virtio` to verify block data
 
 ## Phase 7 — x86 serial IRQ/RX
 

@@ -10,7 +10,6 @@ system_file := board_build + "/system.system"
 root := justfile_directory()
 workspace := root + "/deps/workspace"
 sdk_path_file := root + "/deps/.sdk-path"
-target_spec := root + "/support/targets/aarch64-sel4-microkit.json"
 
 export RUST_TARGET_PATH := root + "/support/targets"
 export RUSTC_BOOTSTRAP := "1"
@@ -45,27 +44,37 @@ system:
         -o "{{system_file}}"
 
 # Build all protection-domain ELFs for the selected board
-build: system (build-pd "hello") (build-pd "serial-driver")
+build: system
+    #!/usr/bin/env bash
+    set -euo pipefail
+    pds="$(python3 "{{root}}/scripts/board_config.py" "{{board}}" pds)"
+    for crate in ${pds}; do
+        just build-pd "${crate}"
+    done
 
 build-pd crate:
     #!/usr/bin/env bash
     set -euo pipefail
     sdk="$(just sdk-path)"
+    target_triple="$(python3 "{{root}}/scripts/board_config.py" "{{board}}" target_triple)"
+    target_spec="{{root}}/support/targets/${target_triple}.json"
     source "{{root}}/scripts/libclang-env.sh"
     mkdir -p "{{board_build}}"
     features=()
-    if [[ "{{crate}}" == "serial-driver" ]]; then
-        features+=(--features "board-{{board}}")
+    if [[ "{{board}}" == "qemu_virt_aarch64" ]]; then
+        case "{{crate}}" in
+            hello|serial-driver) features+=(--features board-qemu_virt_aarch64) ;;
+        esac
     fi
     SEL4_INCLUDE_DIRS="${sdk}/board/{{board}}/{{config}}/include" \
         cargo build --release -p {{crate}} \
             "${features[@]}" \
             --target-dir "{{board_build}}/target" \
-            --target "{{target_spec}}" \
+            --target "${target_spec}" \
             -Z json-target-spec \
             -Z build-std=core,alloc,compiler_builtins \
             -Z build-std-features=compiler-builtins-mem
-    cp "{{board_build}}/target/aarch64-sel4-microkit/release/{{crate}}.elf" "{{board_build}}/"
+    cp "{{board_build}}/target/${target_triple}/release/{{crate}}.elf" "{{board_build}}/"
 
 # Assemble loader.img via the Microkit tool
 image: build
@@ -79,9 +88,16 @@ image: build
         -r "{{board_build}}/report.txt" \
         -o "{{board_build}}/loader.img"
 
-# Boot in QEMU (aarch64 virt)
+# Boot in QEMU for the selected board
 run: image
-    just qemu-aarch64
+    #!/usr/bin/env bash
+    set -euo pipefail
+    qemu="$(python3 "{{root}}/scripts/board_config.py" "{{board}}" qemu)"
+    case "${qemu}" in
+        aarch64) just qemu-aarch64 ;;
+        x86_64) just qemu-x86_64 ;;
+        *) echo "error: unsupported qemu profile ${qemu}" >&2; exit 1 ;;
+    esac
 
 qemu-aarch64:
     #!/usr/bin/env bash
@@ -92,20 +108,52 @@ qemu-aarch64:
         -serial mon:stdio -nographic \
         -device loader,file={{board_build}}/loader.img,addr=0x70000000,cpu-num=0
 
-# x86_64 bring-up (after SDK build; requires x86_64-sel4-microkit target spec)
 qemu-x86_64:
-    @echo "Set BOARD=qemu_x86_64 and add support/targets/x86_64-sel4-microkit.json"
-    @echo "Then: qemu-system-x86_64 -m 2G -serial mon:stdio -nographic -kernel {{board_build}}/loader.img"
+    #!/usr/bin/env bash
+    set -euo pipefail
+    sdk="$(just sdk-path)"
+    kernel="${sdk}/board/{{board}}/{{config}}/elf/sel4_32.elf"
+    if [[ ! -f "${kernel}" ]]; then
+        echo "error: missing ${kernel}; run MICROKIT_BOARDS={{board}} just build-sdk" >&2
+        exit 1
+    fi
+    exec qemu-system-x86_64 \
+        -cpu qemu64,+fsgsbase,+pdpe1gb,+xsaveopt,+xsave \
+        -m 2G \
+        -display none \
+        -serial mon:stdio \
+        -kernel "${kernel}" \
+        -initrd {{board_build}}/loader.img
 
 # Serial smoke test
 test: image
     #!/usr/bin/env bash
     set -euo pipefail
+    qemu="$(python3 "{{root}}/scripts/board_config.py" "{{board}}" qemu)"
     export PATH="$(bash scripts/host-path.sh)"
-    exec python3 scripts/test.py qemu-system-aarch64 \
-        -machine virt,virtualization=on -cpu cortex-a53 -m size=2G \
-        -serial mon:stdio -nographic \
-        -device loader,file={{board_build}}/loader.img,addr=0x70000000,cpu-num=0
+    case "${qemu}" in
+        aarch64)
+            exec python3 scripts/test.py qemu-system-aarch64 \
+                -machine virt,virtualization=on -cpu cortex-a53 -m size=2G \
+                -serial mon:stdio -nographic \
+                -device loader,file={{board_build}}/loader.img,addr=0x70000000,cpu-num=0
+            ;;
+        x86_64)
+            sdk="$(just sdk-path)"
+            kernel="${sdk}/board/{{board}}/{{config}}/elf/sel4_32.elf"
+            exec python3 scripts/test.py qemu-system-x86_64 \
+                -cpu qemu64,+fsgsbase,+pdpe1gb,+xsaveopt,+xsave \
+                -m 2G \
+                -display none \
+                -serial mon:stdio \
+                -kernel "${kernel}" \
+                -initrd {{board_build}}/loader.img
+            ;;
+        *)
+            echo "error: unsupported qemu profile ${qemu}" >&2
+            exit 1
+            ;;
+    esac
 
 clean:
     rm -rf {{build_dir}} target deps/.sdk-path

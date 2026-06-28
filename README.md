@@ -38,7 +38,12 @@ Version pins: [`deps/versions.toml`](deps/versions.toml).
 
 Default: `qemu_virt_aarch64` (QEMU ARM virt). Override with `BOARD=... just run`.
 
-x86_64 PC99/QEMU support is planned — the build is parameterized by `BOARD`; see [`docs/plan.md`](docs/plan.md).
+x86_64 QEMU PC (`x86_64_generic`):
+
+```bash
+MICROKIT_BOARDS=qemu_virt_aarch64,x86_64_generic just build-sdk
+BOARD=x86_64_generic just run
+```
 
 ## Documentation
 

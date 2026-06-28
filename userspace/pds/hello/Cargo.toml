@@ -4,7 +4,10 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT"
 
+[features]
+board-qemu_virt_aarch64 = ["dep:embedded-hal-nb", "dep:sel4-microkit-driver-adapters"]
+
 [dependencies]
-embedded-hal-nb = { workspace = true }
 sel4-microkit = { workspace = true }
-sel4-microkit-driver-adapters = { workspace = true }
+embedded-hal-nb = { workspace = true, optional = true }
+sel4-microkit-driver-adapters = { workspace = true, optional = true }

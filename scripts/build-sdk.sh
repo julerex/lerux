@@ -16,15 +16,36 @@ if [[ ! -d "${microkit}" || ! -d "${sel4}" ]]; then
     exit 1
 fi
 
-if ! command -v aarch64-none-elf-gcc >/dev/null 2>&1; then
-    echo "==> Installing ARM GNU toolchain into deps/toolchains/"
-    arm_bin="$(bash "${root}/scripts/install-arm-toolchain.sh")"
-    export PATH="${arm_bin}:${PATH}"
+needs_arm=false
+needs_x86=false
+IFS=',' read -ra board_list <<< "${boards}"
+for b in "${board_list[@]}"; do
+    case "${b}" in
+        qemu_virt_aarch64|qemu_virt_riscv64|*aarch64*|*riscv*)
+            needs_arm=true
+            ;;
+        x86_64_generic|x86_64_generic_vtx|*x86*)
+            needs_x86=true
+            ;;
+    esac
+done
+
+if [[ "${needs_arm}" == true ]]; then
+    if ! command -v aarch64-none-elf-gcc >/dev/null 2>&1; then
+        echo "==> Installing ARM GNU toolchain into deps/toolchains/"
+        arm_bin="$(bash "${root}/scripts/install-arm-toolchain.sh")"
+        export PATH="${arm_bin}:${PATH}"
+    fi
+
+    if ! command -v aarch64-none-elf-gcc >/dev/null 2>&1; then
+        echo "error: aarch64-none-elf-gcc not found after install attempt" >&2
+        echo "Run: just fetch-sdk  (prebuilt SDK fallback)" >&2
+        exit 1
+    fi
 fi
 
-if ! command -v aarch64-none-elf-gcc >/dev/null 2>&1; then
-    echo "error: aarch64-none-elf-gcc not found after install attempt" >&2
-    echo "Run: just fetch-sdk  (prebuilt SDK fallback)" >&2
+if [[ "${needs_x86}" == true ]] && ! command -v x86_64-linux-gnu-gcc >/dev/null 2>&1; then
+    echo "error: x86_64-linux-gnu-gcc required for x86_64 boards" >&2
     exit 1
 fi
 
@@ -46,7 +67,14 @@ if ! command -v xmllint >/dev/null 2>&1; then
     export PATH="${xml_bin}:${PATH}"
 fi
 
-for tool in qemu-system-aarch64 dtc xmllint cmake ninja python3; do
+required_tools=(dtc xmllint cmake ninja python3)
+if [[ "${needs_arm}" == true ]]; then
+    required_tools+=(qemu-system-aarch64)
+fi
+if [[ "${needs_x86}" == true ]]; then
+    required_tools+=(qemu-system-x86_64)
+fi
+for tool in "${required_tools[@]}"; do
     if ! command -v "${tool}" >/dev/null 2>&1; then
         echo "error: ${tool} not found in PATH" >&2
         exit 1
@@ -55,9 +83,17 @@ done
 
 # Microkit SDK build needs several rustup targets (tool + capDL initialiser).
 if command -v rustup >/dev/null 2>&1; then
-    rustup target add x86_64-unknown-linux-musl aarch64-unknown-none
+    rustup target add x86_64-unknown-linux-musl
     rustup toolchain install nightly-2026-03-18 -c rust-src 2>/dev/null || true
-    rustup target add x86_64-unknown-linux-musl aarch64-unknown-none --toolchain nightly-2026-03-18 2>/dev/null || true
+    rustup target add x86_64-unknown-linux-musl --toolchain nightly-2026-03-18 2>/dev/null || true
+    if [[ "${needs_arm}" == true ]]; then
+        rustup target add aarch64-unknown-none
+        rustup target add aarch64-unknown-none --toolchain nightly-2026-03-18 2>/dev/null || true
+    fi
+    if [[ "${needs_x86}" == true ]]; then
+        rustup target add x86_64-unknown-none
+        rustup target add x86_64-unknown-none --toolchain nightly-2026-03-18 2>/dev/null || true
+    fi
 fi
 
 # bindgen (capDL initialiser + lerux PDs) needs libclang.

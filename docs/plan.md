@@ -9,17 +9,17 @@ Last updated: 2026-06-28 (Phase 2)
 - [x] Single hello protection domain
 - [x] CI smoke test in Docker
 
-## Phase 2 — Multi-PD IPC (current)
+## Phase 2 — Multi-PD IPC
 
 - [x] Serial driver PD (PL011 on virt) — `userspace/pds/serial-driver/`
 - [x] Two-PD system with Microkit channels (hello client + serial_driver)
 - [x] Board-templated `.system` files — `userspace/systems/templates/` + `scripts/generate-system.py`
 
-## Phase 3 — x86_64
+## Phase 3 — x86_64 (current)
 
-- Confirm Microkit board name (`qemu_x86_64` or pc99) after SDK build
-- Add `x86_64-sel4-microkit.json` target spec (generate via `sel4-generate-target-specs` if needed)
-- `BOARD=qemu_x86_64 just run`
+- [x] Microkit board: `x86_64_generic` (QEMU generic PC; not `qemu_x86_64`)
+- [x] `x86_64-sel4-microkit.json` target spec in `support/targets/`
+- [x] `BOARD=x86_64_generic just run` (hello PD via kernel debug serial; userspace serial driver is aarch64-only for now)
 
 ## Phase 4 — Utilities
 

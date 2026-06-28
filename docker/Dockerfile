@@ -27,7 +27,6 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 RUN cargo install just --locked
 
 # Match rust-toolchain.toml before building lerux PDs
-COPY rust-toolchain.toml /tmp/rust-toolchain.toml
-RUN rustup toolchain install nightly-2026-03-18 -c rust-src rustfmt clippy
-
+COPY rust-toolchain.toml /work/rust-toolchain.toml
 WORKDIR /work
+RUN rustup show

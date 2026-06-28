@@ -16,6 +16,8 @@ clone_or_checkout() {
     local dest="${workspace}/${name}"
 
     if [[ -d "${dest}/.git" ]]; then
+        # CI restores cached repos owned by a different user than the Docker root user.
+        git config --global --add safe.directory "${dest}" 2>/dev/null || true
         echo "==> ${name}: already cloned, checking out ${tag}"
         git -C "${dest}" fetch --tags origin
         git -C "${dest}" checkout "${tag}"

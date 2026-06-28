@@ -185,6 +185,7 @@ test: image
                 --expect "lerux: Hello from Rust on seL4 Microkit!" \
                 --expect "virtio-blk:" \
                 --expect "virtio-net: MAC" \
+                --expect "virtio-net: TX ok" \
                 --expect "virtio-blk: MBR sig" \
                 qemu-system-aarch64 \
                 -machine virt,virtualization=on -cpu cortex-a53 -m size=2G \

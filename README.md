@@ -72,7 +72,7 @@ Virtio block + net drivers on aarch64 virt (`qemu_virt_aarch64_virtio`):
 
 ```bash
 just disk-img          # 4 MiB empty disk for virtio-blk
-just test-virtio       # serial + virtio-blk + virtio-net smoke test
+just test-virtio       # serial + virtio-blk read + virtio-net TX smoke test
 ```
 
 ## Documentation

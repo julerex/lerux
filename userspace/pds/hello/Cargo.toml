@@ -19,7 +19,9 @@ virtio = [
     "dep:sel4-shared-ring-buffer-block-io",
     "dep:sel4-shared-ring-buffer-block-io-types",
     "dep:sel4-shared-ring-buffer-bookkeeping",
+    "dep:sel4-shared-ring-buffer-smoltcp",
     "dep:sel4-abstract-allocator",
+    "dep:smoltcp",
     "sel4-microkit/alloc",
 ]
 
@@ -34,4 +36,6 @@ sel4-shared-ring-buffer-block-io = { workspace = true, optional = true }
 sel4-shared-ring-buffer-block-io-types = { workspace = true, optional = true }
 sel4-shared-ring-buffer-bookkeeping = { workspace = true, optional = true, features = ["async-unsync"] }
 sel4-abstract-allocator = { workspace = true, optional = true }
+sel4-shared-ring-buffer-smoltcp = { workspace = true, optional = true }
+smoltcp = { workspace = true, optional = true, features = ["medium-ethernet", "proto-ipv4", "socket-udp"] }
 lerux-logging = { path = "../../crates/lerux-logging" }

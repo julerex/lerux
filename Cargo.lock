@@ -443,6 +443,8 @@ dependencies = [
  "sel4-shared-ring-buffer-block-io",
  "sel4-shared-ring-buffer-block-io-types",
  "sel4-shared-ring-buffer-bookkeeping",
+ "sel4-shared-ring-buffer-smoltcp",
+ "smoltcp",
 ]
 
 [[package]]
@@ -800,6 +802,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "sel4-abstract-rc"
+version = "0.1.0"
+source = "git+https://github.com/seL4/rust-sel4?tag=v4.0.0#7a2321f2d84310ba7a09fe7f5988e6dcecde3566"
+
+[[package]]
 name = "sel4-alloca"
 version = "0.1.0"
 source = "git+https://github.com/seL4/rust-sel4?tag=v4.0.0#7a2321f2d84310ba7a09fe7f5988e6dcecde3566"
@@ -1100,6 +1107,22 @@ version = "0.1.0"
 source = "git+https://github.com/seL4/rust-sel4?tag=v4.0.0#7a2321f2d84310ba7a09fe7f5988e6dcecde3566"
 dependencies = [
  "async-unsync",
+]
+
+[[package]]
+name = "sel4-shared-ring-buffer-smoltcp"
+version = "0.1.0"
+source = "git+https://github.com/seL4/rust-sel4?tag=v4.0.0#7a2321f2d84310ba7a09fe7f5988e6dcecde3566"
+dependencies = [
+ "lock_api",
+ "log",
+ "one-shot-mutex",
+ "sel4-abstract-allocator",
+ "sel4-abstract-rc",
+ "sel4-shared-memory",
+ "sel4-shared-ring-buffer",
+ "sel4-shared-ring-buffer-bookkeeping",
+ "smoltcp",
 ]
 
 [[package]]

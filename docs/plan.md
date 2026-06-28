@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-06-29 (Phase 9)
+Last updated: 2026-06-29 (Phase 10)
 
 ## Phase 1 — Bring-up
 
@@ -61,6 +61,13 @@ Last updated: 2026-06-29 (Phase 9)
 - [x] `BOARD=qemu_virt_riscv64 just run` / `just test-riscv`
 - [x] RISC-V toolchain + QEMU in Docker image
 - [x] RISC-V smoke job in GitHub Actions
+
+## Phase 10 — Virtio net I/O
+
+- [x] Map virtio-net shared memory regions into hello PD
+- [x] `sel4-shared-ring-buffer-smoltcp` client in hello
+- [x] UDP TX smoke to QEMU user netdev (`10.0.2.2`)
+- [x] Extend `just test-virtio` to expect `virtio-net: TX ok`
 
 ## Version alignment
 

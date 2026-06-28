@@ -42,6 +42,8 @@ use sel4_shared_ring_buffer_block_io::OwnedSharedRingBufferBlockIO;
 
 #[cfg(feature = "virtio")]
 mod config;
+#[cfg(feature = "virtio")]
+mod net;
 
 #[cfg(feature = "serial-ipc")]
 const SERIAL_DRIVER: Channel = Channel::new(0);
@@ -64,17 +66,22 @@ struct BlkRead {
 struct HandlerImpl {
     #[cfg(feature = "virtio")]
     blk_read: Option<BlkRead>,
+    #[cfg(feature = "virtio")]
+    net_tx: Option<net::NetTx>,
 }
 
-#[cfg_attr(feature = "virtio", protection_domain(heap_size = 64 * 1024))]
+#[cfg_attr(feature = "virtio", protection_domain(heap_size = 512 * 1024))]
 #[cfg_attr(not(feature = "virtio"), protection_domain)]
 fn init() -> HandlerImpl {
     init_logging();
     log::info!("lerux: Hello from Rust on seL4 Microkit!");
-    probe_virtio();
+    #[cfg(feature = "virtio")]
+    let (blk_read, net_tx) = probe_virtio();
     HandlerImpl {
         #[cfg(feature = "virtio")]
-        blk_read: Some(start_blk_read()),
+        blk_read: Some(blk_read),
+        #[cfg(feature = "virtio")]
+        net_tx: Some(net_tx),
     }
 }
 
@@ -87,7 +94,7 @@ fn init_logging() {
 }
 
 #[cfg(feature = "virtio")]
-fn probe_virtio() {
+fn probe_virtio() -> (BlkRead, net::NetTx) {
     let mut blk = BlockClient::new(BLK_DRIVER);
     let block_size = blk.get_block_size().unwrap();
     let num_blocks = blk.get_num_blocks().unwrap();
@@ -104,6 +111,10 @@ fn probe_virtio() {
         mac.0[4],
         mac.0[5],
     );
+
+    let mut net_tx = net::NetTx::new(mac);
+    net_tx.poll();
+    (start_blk_read(), net_tx)
 }
 
 #[cfg(not(feature = "virtio"))]
@@ -169,10 +180,19 @@ impl Handler for HandlerImpl {
 
     fn notified(&mut self, #[cfg_attr(not(feature = "virtio"), allow(unused_variables))] channels: ChannelSet) -> Result<(), Self::Error> {
         #[cfg(feature = "virtio")]
-        if channels.contains(BLK_DRIVER) {
-            if let Some(blk) = &mut self.blk_read {
-                if !blk.done {
-                    finish_blk_read(blk);
+        {
+            if channels.contains(BLK_DRIVER) {
+                if let Some(blk) = &mut self.blk_read {
+                    if !blk.done {
+                        finish_blk_read(blk);
+                    }
+                }
+            }
+            if channels.contains(NET_DRIVER) {
+                if let Some(net_tx) = &mut self.net_tx {
+                    if !net_tx.is_done() {
+                        net_tx.poll();
+                    }
                 }
             }
         }

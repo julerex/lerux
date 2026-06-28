@@ -41,6 +41,7 @@ build-pd crate:
     #!/usr/bin/env bash
     set -euo pipefail
     sdk="$(just sdk-path)"
+    source "{{root}}/scripts/libclang-env.sh"
     mkdir -p "{{board_build}}"
     SEL4_INCLUDE_DIRS="${sdk}/board/{{board}}/{{config}}/include" \
         cargo build --release -p {{crate}} \
@@ -68,7 +69,10 @@ run: image
     just qemu-aarch64
 
 qemu-aarch64:
-    qemu-system-aarch64 \
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export PATH="$(bash scripts/host-path.sh)"
+    exec qemu-system-aarch64 \
         -machine virt,virtualization=on -cpu cortex-a53 -m size=2G \
         -serial mon:stdio -nographic \
         -device loader,file={{board_build}}/loader.img,addr=0x70000000,cpu-num=0
@@ -80,7 +84,10 @@ qemu-x86_64:
 
 # Serial smoke test
 test: image
-    python3 scripts/test.py qemu-system-aarch64 \
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export PATH="$(bash scripts/host-path.sh)"
+    exec python3 scripts/test.py qemu-system-aarch64 \
         -machine virt,virtualization=on -cpu cortex-a53 -m size=2G \
         -serial mon:stdio -nographic \
         -device loader,file={{board_build}}/loader.img,addr=0x70000000,cpu-num=0

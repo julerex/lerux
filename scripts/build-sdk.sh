@@ -28,21 +28,44 @@ if ! command -v aarch64-none-elf-gcc >/dev/null 2>&1; then
     exit 1
 fi
 
-for tool in qemu-system-aarch64 cmake ninja python3; do
+if ! command -v qemu-system-aarch64 >/dev/null 2>&1; then
+    echo "==> Installing QEMU into deps/toolchains/" >&2
+    qemu_bin="$(bash "${root}/scripts/install-qemu.sh")"
+    export PATH="${qemu_bin}:${PATH}"
+fi
+
+if ! command -v dtc >/dev/null 2>&1; then
+    echo "==> Installing device-tree-compiler into deps/toolchains/" >&2
+    dtc_bin="$(bash "${root}/scripts/install-dtc.sh")"
+    export PATH="${dtc_bin}:${PATH}"
+fi
+
+if ! command -v xmllint >/dev/null 2>&1; then
+    echo "==> Installing xmllint into deps/toolchains/" >&2
+    xml_bin="$(bash "${root}/scripts/install-xmllint.sh")"
+    export PATH="${xml_bin}:${PATH}"
+fi
+
+for tool in qemu-system-aarch64 dtc xmllint cmake ninja python3; do
     if ! command -v "${tool}" >/dev/null 2>&1; then
         echo "error: ${tool} not found in PATH" >&2
-        [[ "${tool}" == "qemu-system-aarch64" ]] && echo "Install: sudo apt install qemu-system-arm" >&2
         exit 1
     fi
 done
 
-# Microkit SDK build compiles its tool for x86_64-unknown-linux-musl (default rustup toolchain).
+# Microkit SDK build needs several rustup targets (tool + capDL initialiser).
 if command -v rustup >/dev/null 2>&1; then
-    rustup target add x86_64-unknown-linux-musl
-    # rust-sel4 initialiser in SDK build may need nightly
+    rustup target add x86_64-unknown-linux-musl aarch64-unknown-none
     rustup toolchain install nightly-2026-03-18 -c rust-src 2>/dev/null || true
-    rustup target add x86_64-unknown-linux-musl --toolchain nightly-2026-03-18 2>/dev/null || true
+    rustup target add x86_64-unknown-linux-musl aarch64-unknown-none --toolchain nightly-2026-03-18 2>/dev/null || true
 fi
+
+# bindgen (capDL initialiser + lerux PDs) needs libclang.
+if ! find /usr/lib -name 'libclang.so' 2>/dev/null | grep -q .; then
+    bash "${root}/scripts/install-libclang.sh"
+fi
+# shellcheck disable=SC1091
+source "${root}/scripts/libclang-env.sh"
 
 cd "${microkit}"
 

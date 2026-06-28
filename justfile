@@ -152,8 +152,15 @@ test: image
     export PATH="$(bash scripts/host-path.sh)"
     case "${qemu}" in
         aarch64)
+            expects=(--expect "lerux: Hello from Rust on seL4 Microkit!")
+            if [[ "{{board}}" == "qemu_virt_aarch64_echo" ]]; then
+                expects=(
+                    --expect "lerux-echo: pong"
+                    --expect "lerux-echo: lerux"
+                )
+            fi
             exec python3 scripts/test.py \
-                --expect "lerux: Hello from Rust on seL4 Microkit!" \
+                "${expects[@]}" \
                 qemu-system-aarch64 \
                 -machine virt,virtualization=on -cpu cortex-a53 -m size=2G \
                 -serial mon:stdio -nographic \
@@ -201,6 +208,10 @@ test: image
 test-virtio:
     BOARD=qemu_virt_aarch64_virtio just test
 
+# Custom IPC smoke test (echo-server + echo-client on aarch64 virt)
+test-echo:
+    BOARD=qemu_virt_aarch64_echo just test
+
 # Run all CI smoke tests (requires SDK with aarch64 + x86_64 boards)
 test-all:
     #!/usr/bin/env bash
@@ -208,6 +219,7 @@ test-all:
     just test
     BOARD=x86_64_generic just test
     just test-virtio
+    just test-echo
 
 # Disk image for virtio-blk QEMU device (MBR boot signature at bytes 510–511)
 disk-img:

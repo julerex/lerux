@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-06-28 (Phase 7)
+Last updated: 2026-06-28 (Phase 8)
 
 ## Phase 1 — Bring-up
 
@@ -49,8 +49,8 @@ Last updated: 2026-06-28 (Phase 7)
 
 ## Phase 8 — Custom IPC and minimal services
 
-- [ ] `interface-types` crate with postcard RPC messages
-- [ ] New server + client PD using `lerux-ipc`
+- [x] `lerux-interface-types` crate with postcard RPC messages
+- [x] `echo-server` + `echo-client` PDs using `lerux-ipc`
 - [ ] Optional: timer/RTC/init PD vertical slice
 
 ## Version alignment

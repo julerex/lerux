@@ -147,6 +147,8 @@ jobs:
             command: BOARD=x86_64_generic just test
           - id: virtio
             command: just disk-img && just test-virtio
+          - id: echo
+            command: just test-echo
     steps:
       - uses: actions/checkout@v4
 

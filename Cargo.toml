@@ -3,10 +3,13 @@ resolver = "3"
 members = [
     "userspace/pds/hello",
     "userspace/pds/serial-driver",
+    "userspace/pds/echo-server",
+    "userspace/pds/echo-client",
     "userspace/pds/virtio-blk-driver",
     "userspace/pds/virtio-net-driver",
     "userspace/crates/lerux-logging",
     "userspace/crates/lerux-ipc",
+    "userspace/crates/lerux-interface-types",
     "userspace/crates/lerux-sync",
 ]
 

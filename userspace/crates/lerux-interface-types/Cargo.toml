@@ -1,0 +1,9 @@
+[package]
+name = "lerux-interface-types"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Postcard-serialized RPC message types shared between lerux protection domains"
+
+[dependencies]
+serde = { workspace = true }

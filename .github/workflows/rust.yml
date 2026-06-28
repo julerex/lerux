@@ -100,6 +100,8 @@ jobs:
         run: |
           set -euo pipefail
           sdk="$(cat deps/.sdk-path)"
+          chmod -R a+rX "${sdk}"
+          find "${sdk}/bin" -type f -exec chmod a+x {} +
           mkdir -p deps/sdk-cache
           rm -rf deps/sdk-cache/microkit-sdk
           cp -a "${sdk}" deps/sdk-cache/microkit-sdk
@@ -119,6 +121,8 @@ jobs:
             echo "error: SDK path from deps/.sdk-path does not exist: ${sdk}" >&2
             exit 1
           fi
+          chmod -R a+rX "${sdk}"
+          find "${sdk}/bin" -type f -exec chmod a+x {} +
           mkdir -p sdk-bundle
           cp deps/.sdk-path sdk-bundle/
           cp -a "${sdk}" sdk-bundle/microkit-sdk
@@ -169,7 +173,10 @@ jobs:
           set -euo pipefail
           mkdir -p deps/workspace/microkit/release
           cp -a sdk-bundle/microkit-sdk deps/workspace/microkit/release/
-          echo "/work/deps/workspace/microkit/release/$(basename sdk-bundle/microkit-sdk)" > deps/.sdk-path
+          sdk="deps/workspace/microkit/release/$(basename sdk-bundle/microkit-sdk)"
+          chmod -R a+rX "${sdk}"
+          find "${sdk}/bin" -type f -exec chmod a+x {} +
+          echo "/work/${sdk}" > deps/.sdk-path
 
       - name: Restore Cargo build cache
         uses: actions/cache/restore@v4
@@ -184,6 +191,9 @@ jobs:
         run: |
           docker run --rm -v "${{ github.workspace }}:/work" -w /work lerux-dev \
             bash -c 'set -euo pipefail
+              sdk="$(tr -d "\n" < deps/.sdk-path)"
+              chmod -R a+rX "${sdk}"
+              find "${sdk}/bin" -type f -exec chmod a+x {} +
               ${{ matrix.command }}
             '
           sudo chown -R "$(id -u):$(id -g)" build deps

@@ -1,10 +1,13 @@
 [package]
-name = "hello"
+name = "serial-driver"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
 
+[features]
+board-qemu_virt_aarch64 = ["sel4-pl011-driver"]
+
 [dependencies]
-embedded-hal-nb = { workspace = true }
 sel4-microkit = { workspace = true }
+sel4-pl011-driver = { workspace = true, optional = true }
 sel4-microkit-driver-adapters = { workspace = true }

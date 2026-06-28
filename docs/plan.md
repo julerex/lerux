@@ -1,19 +1,19 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-06-28 (seL4 pivot)
+Last updated: 2026-06-28 (Phase 2)
 
-## Phase 1 — Bring-up (current)
+## Phase 1 — Bring-up
 
 - [x] Pivot from Redox kernel to seL4 + Microkit
 - [x] `just fetch` / `just build-sdk` / `just run` for aarch64 virt
 - [x] Single hello protection domain
 - [x] CI smoke test in Docker
 
-## Phase 2 — Multi-PD IPC
+## Phase 2 — Multi-PD IPC (current)
 
-- Add serial driver PD (PL011 on virt)
-- Two-PD system with Microkit channels (pattern: [rust-microkit-demo](https://github.com/seL4/rust-microkit-demo))
-- Template `.system` files for board-specific MMIO addresses
+- [x] Serial driver PD (PL011 on virt) — `userspace/pds/serial-driver/`
+- [x] Two-PD system with Microkit channels (hello client + serial_driver)
+- [x] Board-templated `.system` files — `userspace/systems/templates/` + `scripts/generate-system.py`
 
 ## Phase 3 — x86_64
 

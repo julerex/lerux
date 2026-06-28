@@ -5,6 +5,7 @@ build_dir := env_var_or_default("BUILD", "build")
 board := env_var_or_default("BOARD", "qemu_virt_aarch64")
 config := env_var_or_default("CONFIG", "debug")
 board_build := build_dir + "/" + board
+system_file := board_build + "/system.system"
 
 root := justfile_directory()
 workspace := root + "/deps/workspace"
@@ -34,8 +35,17 @@ sdk-path:
     elif [ -f {{sdk_path_file}} ]; then cat {{sdk_path_file}}; \
     else echo "error: run 'just build-sdk' or set MICROKIT_SDK" >&2; exit 1; fi
 
+# Render board-specific Microkit system description
+system:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{board_build}}"
+    python3 "{{root}}/scripts/generate-system.py" \
+        --board "{{board}}" \
+        -o "{{system_file}}"
+
 # Build all protection-domain ELFs for the selected board
-build: (build-pd "hello")
+build: system (build-pd "hello") (build-pd "serial-driver")
 
 build-pd crate:
     #!/usr/bin/env bash
@@ -43,8 +53,13 @@ build-pd crate:
     sdk="$(just sdk-path)"
     source "{{root}}/scripts/libclang-env.sh"
     mkdir -p "{{board_build}}"
+    features=()
+    if [[ "{{crate}}" == "serial-driver" ]]; then
+        features+=(--features "board-{{board}}")
+    fi
     SEL4_INCLUDE_DIRS="${sdk}/board/{{board}}/{{config}}/include" \
         cargo build --release -p {{crate}} \
+            "${features[@]}" \
             --target-dir "{{board_build}}/target" \
             --target "{{target_spec}}" \
             -Z json-target-spec \
@@ -57,7 +72,7 @@ image: build
     #!/usr/bin/env bash
     set -euo pipefail
     sdk="$(just sdk-path)"
-    "${sdk}/bin/microkit" "{{root}}/userspace/systems/hello.system" \
+    "${sdk}/bin/microkit" "{{system_file}}" \
         --search-path "{{board_build}}" \
         --board "{{board}}" \
         --config "{{config}}" \

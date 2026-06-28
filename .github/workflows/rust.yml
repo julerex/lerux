@@ -8,6 +8,8 @@ on:
 
 env:
   MICROKIT_BOARDS: qemu_virt_aarch64,x86_64_generic
+  # GHA cache keys cannot contain commas; keep in sync with MICROKIT_BOARDS.
+  SDK_CACHE_SUFFIX: virt-aarch64-x86
 
 jobs:
   sdk:
@@ -45,7 +47,7 @@ jobs:
           path: |
             deps/.sdk-path
             deps/workspace/microkit/release
-          key: sdk-${{ hashFiles('deps/versions.toml', 'scripts/fetch.sh') }}-${{ env.MICROKIT_BOARDS }}
+          key: sdk-${{ hashFiles('deps/versions.toml', 'scripts/fetch.sh') }}-${{ env.SDK_CACHE_SUFFIX }}
           restore-keys: |
             sdk-${{ hashFiles('deps/versions.toml', 'scripts/fetch.sh') }}-
             sdk-
@@ -86,7 +88,7 @@ jobs:
           path: |
             deps/.sdk-path
             deps/workspace/microkit/release
-          key: sdk-${{ hashFiles('deps/versions.toml', 'scripts/fetch.sh') }}-${{ env.MICROKIT_BOARDS }}
+          key: sdk-${{ hashFiles('deps/versions.toml', 'scripts/fetch.sh') }}-${{ env.SDK_CACHE_SUFFIX }}
 
       - name: Upload SDK bundle
         run: |

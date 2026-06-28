@@ -1,0 +1,16 @@
+[package]
+name = "virtio-net-driver"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[dependencies]
+log = { workspace = true }
+sel4-microkit = { workspace = true }
+sel4-microkit-driver-adapters = { workspace = true }
+sel4-shared-memory = { workspace = true }
+sel4-shared-ring-buffer = { workspace = true }
+sel4-virtio-hal-impl = { workspace = true }
+sel4-virtio-net = { workspace = true }
+virtio-drivers = { workspace = true, features = ["alloc"] }
+lerux-logging = { path = "../../crates/lerux-logging" }

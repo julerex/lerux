@@ -12,6 +12,7 @@ from typing import Any
 BOARDS: dict[str, dict[str, Any]] = {
     "qemu_virt_aarch64": {
         "arch": "aarch64",
+        "microkit_board": "qemu_virt_aarch64",
         "target": "aarch64-sel4-microkit",
         "target_triple": "aarch64-sel4-microkit",
         "template": "serial-hello.system.template",
@@ -22,8 +23,25 @@ BOARDS: dict[str, dict[str, Any]] = {
             "serial_irq": 33,
         },
     },
+    "qemu_virt_aarch64_virtio": {
+        "arch": "aarch64",
+        "microkit_board": "qemu_virt_aarch64",
+        "target": "aarch64-sel4-microkit",
+        "target_triple": "aarch64-sel4-microkit",
+        "template": "virtio-hello.system.template",
+        "pds": ["hello", "serial-driver", "virtio-blk-driver", "virtio-net-driver"],
+        "qemu": "aarch64_virtio",
+        "system_vars": {
+            "serial_mmio_phys_addr": "0x9_000_000",
+            "serial_irq": 33,
+            "virtio_mmio_phys_addr": "0xa003000",
+            "virtio_blk_irq": 78,
+            "virtio_net_irq": 79,
+        },
+    },
     "x86_64_generic": {
         "arch": "x86_64",
+        "microkit_board": "x86_64_generic",
         "target": "x86_64-sel4-microkit",
         "target_triple": "x86_64-sel4-microkit",
         "template": "serial-hello-x86.system.template",

@@ -1,0 +1,10 @@
+[package]
+name = "lerux-sync"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "lerux sync helpers built on sel4-sync"
+
+[dependencies]
+lock_api = { workspace = true }
+sel4-sync = { workspace = true }

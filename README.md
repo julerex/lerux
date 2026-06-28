@@ -30,6 +30,7 @@ just test
 | Kernel | [seL4/seL4](https://github.com/seL4/seL4) — built by `build_sdk.py` |
 | System framework | [seL4/microkit](https://github.com/seL4/microkit) SDK |
 | Userspace | Rust protection domains in `userspace/pds/` via `sel4-microkit` |
+| Utilities | Shared crates in `userspace/crates/` (`lerux-logging`, `lerux-ipc`, `lerux-sync`) |
 | Serial console | Driver PD + IPC client PDs — PL011 (aarch64) or NS16550/COM1 (x86) |
 
 Version pins: [`deps/versions.toml`](deps/versions.toml).
@@ -43,6 +44,13 @@ x86_64 QEMU PC (`x86_64_generic`):
 ```bash
 MICROKIT_BOARDS=qemu_virt_aarch64,x86_64_generic just build-sdk
 BOARD=x86_64_generic just run
+```
+
+Virtio block + net drivers on aarch64 virt (`qemu_virt_aarch64_virtio`):
+
+```bash
+just disk-img          # 4 MiB empty disk for virtio-blk
+just test-virtio       # serial + virtio-blk + virtio-net smoke test
 ```
 
 ## Documentation

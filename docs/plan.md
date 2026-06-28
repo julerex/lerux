@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-06-28 (Phase 2)
+Last updated: 2026-06-28 (Phase 4)
 
 ## Phase 1 — Bring-up
 
@@ -15,7 +15,7 @@ Last updated: 2026-06-28 (Phase 2)
 - [x] Two-PD system with Microkit channels (hello client + serial_driver)
 - [x] Board-templated `.system` files — `userspace/systems/templates/` + `scripts/generate-system.py`
 
-## Phase 3 — x86_64 (current)
+## Phase 3 — x86_64
 
 - [x] Microkit board: `x86_64_generic` (QEMU generic PC; not `qemu_x86_64`)
 - [x] `x86_64-sel4-microkit.json` target spec in `support/targets/`
@@ -23,8 +23,10 @@ Last updated: 2026-06-28 (Phase 2)
 
 ## Phase 4 — Utilities
 
-- Shared Rust crates for IPC helpers, logging, sync (`sel4-sync`, `sel4-logging`)
-- Optional virtio block/net drivers from rust-sel4 examples
+- [x] `lerux-logging` — debug-print and serial-IPC sinks on `sel4-logging`
+- [x] `lerux-ipc` — typed postcard RPC re-exports (`sel4-microkit-simple-ipc`)
+- [x] `lerux-sync` — notification mutex aliases on `sel4-sync`
+- [x] Virtio block/net driver PDs (`virtio-blk-driver`, `virtio-net-driver`) on `qemu_virt_aarch64_virtio`
 
 ## Version alignment
 

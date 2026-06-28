@@ -1,0 +1,19 @@
+[package]
+name = "virtio-blk-driver"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[dependencies]
+lerux-logging = { path = "../../crates/lerux-logging" }
+log = { workspace = true }
+sel4 = { workspace = true }
+sel4-driver-interfaces = { workspace = true }
+sel4-microkit = { workspace = true }
+sel4-microkit-driver-adapters = { workspace = true }
+sel4-shared-memory = { workspace = true }
+sel4-shared-ring-buffer = { workspace = true }
+sel4-shared-ring-buffer-block-io-types = { workspace = true }
+sel4-virtio-blk = { workspace = true }
+sel4-virtio-hal-impl = { workspace = true }
+virtio-drivers = { workspace = true }

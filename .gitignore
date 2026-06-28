@@ -4,6 +4,7 @@
 
 # lerux build output
 /build/
+/support/disk.img
 /.toolchain/
 /target/
 # Redox-era initfs binaries (obsolete after seL4 pivot)

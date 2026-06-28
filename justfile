@@ -64,7 +64,8 @@ build-pd crate:
     case "{{crate}}" in
         hello|serial-driver) features+=(--features "board-{{board}}") ;;
     esac
-    SEL4_INCLUDE_DIRS="${sdk}/board/{{board}}/{{config}}/include" \
+    microkit_board="$(python3 "{{root}}/scripts/board_config.py" "{{board}}" microkit_board)"
+    SEL4_INCLUDE_DIRS="${sdk}/board/${microkit_board}/{{config}}/include" \
         cargo build --release -p {{crate}} \
             "${features[@]}" \
             --target-dir "{{board_build}}/target" \
@@ -79,9 +80,10 @@ image: build
     #!/usr/bin/env bash
     set -euo pipefail
     sdk="$(just sdk-path)"
+    microkit_board="$(python3 "{{root}}/scripts/board_config.py" "{{board}}" microkit_board)"
     "${sdk}/bin/microkit" "{{system_file}}" \
         --search-path "{{board_build}}" \
-        --board "{{board}}" \
+        --board "${microkit_board}" \
         --config "{{config}}" \
         -r "{{board_build}}/report.txt" \
         -o "{{board_build}}/loader.img"
@@ -93,6 +95,7 @@ run: image
     qemu="$(python3 "{{root}}/scripts/board_config.py" "{{board}}" qemu)"
     case "${qemu}" in
         aarch64) just qemu-aarch64 ;;
+        aarch64_virtio) just qemu-aarch64-virtio ;;
         x86_64) just qemu-x86_64 ;;
         *) echo "error: unsupported qemu profile ${qemu}" >&2; exit 1 ;;
     esac
@@ -105,6 +108,24 @@ qemu-aarch64:
         -machine virt,virtualization=on -cpu cortex-a53 -m size=2G \
         -serial mon:stdio -nographic \
         -device loader,file={{board_build}}/loader.img,addr=0x70000000,cpu-num=0
+
+qemu-aarch64-virtio:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    export PATH="$(bash scripts/host-path.sh)"
+    disk="{{root}}/support/disk.img"
+    if [[ ! -f "${disk}" ]]; then
+        echo "error: missing ${disk}; run 'just disk-img'" >&2
+        exit 1
+    fi
+    exec qemu-system-aarch64 \
+        -machine virt,virtualization=on -cpu cortex-a53 -m size=2G \
+        -serial mon:stdio -nographic \
+        -device loader,file={{board_build}}/loader.img,addr=0x70000000,cpu-num=0 \
+        -device virtio-net-device,netdev=netdev0 \
+        -netdev user,id=netdev0 \
+        -device virtio-blk-device,drive=blkdev0 \
+        -blockdev node-name=blkdev0,read-only=on,driver=file,filename="${disk}"
 
 qemu-x86_64:
     #!/usr/bin/env bash
@@ -131,15 +152,37 @@ test: image
     export PATH="$(bash scripts/host-path.sh)"
     case "${qemu}" in
         aarch64)
-            exec python3 scripts/test.py qemu-system-aarch64 \
+            exec python3 scripts/test.py \
+                --expect "lerux: Hello from Rust on seL4 Microkit!" \
+                qemu-system-aarch64 \
                 -machine virt,virtualization=on -cpu cortex-a53 -m size=2G \
                 -serial mon:stdio -nographic \
                 -device loader,file={{board_build}}/loader.img,addr=0x70000000,cpu-num=0
             ;;
+        aarch64_virtio)
+            disk="{{root}}/support/disk.img"
+            if [[ ! -f "${disk}" ]]; then
+                just disk-img
+            fi
+            exec python3 scripts/test.py \
+                --expect "lerux: Hello from Rust on seL4 Microkit!" \
+                --expect "virtio-blk:" \
+                --expect "virtio-net: MAC" \
+                qemu-system-aarch64 \
+                -machine virt,virtualization=on -cpu cortex-a53 -m size=2G \
+                -serial mon:stdio -nographic \
+                -device loader,file={{board_build}}/loader.img,addr=0x70000000,cpu-num=0 \
+                -device virtio-net-device,netdev=netdev0 \
+                -netdev user,id=netdev0 \
+                -device virtio-blk-device,drive=blkdev0 \
+                -blockdev node-name=blkdev0,read-only=on,driver=file,filename="${disk}"
+            ;;
         x86_64)
             sdk="$(just sdk-path)"
             kernel="${sdk}/board/{{board}}/{{config}}/elf/sel4_32.elf"
-            exec python3 scripts/test.py qemu-system-x86_64 \
+            exec python3 scripts/test.py \
+                --expect "lerux: Hello from Rust on seL4 Microkit!" \
+                qemu-system-x86_64 \
                 -cpu qemu64,+fsgsbase,+pdpe1gb,+xsaveopt,+xsave \
                 -m 2G \
                 -display none \
@@ -152,6 +195,17 @@ test: image
             exit 1
             ;;
     esac
+
+# Virtio smoke test (serial + virtio-blk + virtio-net on aarch64 virt)
+test-virtio:
+    BOARD=qemu_virt_aarch64_virtio just test
+
+# Empty disk image for virtio-blk QEMU device
+disk-img:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p "{{root}}/support"
+    qemu-img create -f raw "{{root}}/support/disk.img" 4M
 
 clean:
     rm -rf {{build_dir}} target deps/.sdk-path

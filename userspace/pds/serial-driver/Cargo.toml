@@ -6,9 +6,11 @@ license = "MIT"
 
 [features]
 board-qemu_virt_aarch64 = ["sel4-pl011-driver"]
+board-qemu_virt_aarch64_virtio = ["board-qemu_virt_aarch64"]
 board-x86_64_generic = []
 
 [dependencies]
+lerux-logging = { path = "../../crates/lerux-logging" }
 sel4 = { workspace = true }
 sel4-microkit = { workspace = true }
 sel4-driver-interfaces = { workspace = true }

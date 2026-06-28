@@ -1,0 +1,11 @@
+[package]
+name = "lerux-ipc"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "lerux IPC helpers built on sel4-microkit-simple-ipc"
+
+[dependencies]
+serde = { workspace = true }
+sel4-microkit = { workspace = true }
+sel4-microkit-simple-ipc = { workspace = true }

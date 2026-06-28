@@ -1,9 +1,0 @@
-[unit]
-description = "File-backed redoxfs rootfs for rustc-hosting smoke (DiskFile via initfs-staged image)"
-default_dependencies = false
-requires_weak = ["00_randd.service", "ramfs@logging.service"]
-
-[service]
-cmd = "redoxfs"
-args = ["--disk-file", "/scheme/initfs/disk/rustc-test.img", "data"]
-type = { scheme = "data" }

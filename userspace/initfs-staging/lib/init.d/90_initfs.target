@@ -1,6 +1,0 @@
-[unit]
-description = "initfs finalized"
-requires_weak = [
-    "50_rootfs.service",
-    "55_rustc-smoke.service",
-]

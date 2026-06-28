@@ -1,9 +1,0 @@
-[unit]
-description = "In-RAM redoxfs rootfs for rustc-hosting smoke (DiskMemory backend)"
-default_dependencies = false
-requires_weak = ["00_randd.service", "ramfs@logging.service"]
-
-[service]
-cmd = "redoxfs"
-args = ["--memory", "data"]
-type = { scheme = "data" }

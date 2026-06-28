@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-
-set -e
-
-export RUST_TARGET_PATH="${PWD}/targets"
-export RUSTFLAGS="-C debuginfo=2"
-cargo clippy --bin kernel --release --target x86_64-unknown-none "$@"

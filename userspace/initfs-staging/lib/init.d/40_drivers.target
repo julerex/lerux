@@ -1,7 +1,0 @@
-[unit]
-description = "Block device drivers (PCI + virtio-blk)"
-default_dependencies = false
-requires_weak = [
-    "00_pcid.service",
-    "40_pcid-spawner-initfs.service",
-]

@@ -1,8 +1,0 @@
-[unit]
-description = "Emit RUSTC_SUCCESS_MARKERS from the mounted redoxfs (exec stub copied by 50_rootfs)"
-default_dependencies = false
-requires_weak = ["50_rootfs.service"]
-
-[service]
-cmd = "/scheme/data/bin/rustc"
-type = "oneshot"

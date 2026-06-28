@@ -1,0 +1,13 @@
+# Pinned versions for external seL4 ecosystem dependencies.
+# Source checkouts live in deps/workspace/ (gitignored).
+
+[repos]
+sel4 = { remote = "https://github.com/seL4/seL4.git", tag = "15.0.0" }
+microkit = { remote = "https://github.com/seL4/microkit.git", tag = "2.2.0" }
+
+[rust]
+rust_sel4 = { remote = "https://github.com/seL4/rust-sel4.git", tag = "v4.0.0" }
+
+[boards]
+default = "qemu_virt_aarch64"
+config = "debug"

@@ -1,0 +1,33 @@
+# Development/CI image: build Microkit SDK from source + run lerux smoke test.
+FROM debian:bookworm
+
+RUN apt-get update -q && apt-get install -y --no-install-recommends \
+    build-essential curl git ca-certificates \
+    cmake ninja-build device-tree-compiler libxml2-utils \
+    python3 python3-venv python3-pip \
+    qemu-system-arm qemu-utils \
+    libclang-dev \
+    python3-pexpect \
+    xz-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+# ARM GNU bare-metal toolchain (Microkit SDK build requirement)
+RUN set -eux; \
+    curl -fsSL -o /tmp/arm-gnu.tar.xz \
+      "https://developer.arm.com/-/media/Files/downloads/gnu/12.2.rel1/binrel/arm-gnu-toolchain-12.2.rel1-x86_64-aarch64-none-elf.tar.xz"; \
+    tar -xf /tmp/arm-gnu.tar.xz -C /opt; \
+    rm /tmp/arm-gnu.tar.xz
+ENV PATH="/opt/arm-gnu-toolchain-12.2.Rel1-x86_64-aarch64-none-elf/bin:${PATH}"
+
+# Rust (toolchain pinned by rust-toolchain.toml in repo)
+RUN curl -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path --profile minimal
+ENV PATH="/root/.cargo/bin:${PATH}"
+
+# just
+RUN cargo install just --locked
+
+# Match rust-toolchain.toml before building lerux PDs
+COPY rust-toolchain.toml /tmp/rust-toolchain.toml
+RUN rustup toolchain install nightly-2026-03-18 -c rust-src rustfmt clippy
+
+WORKDIR /work

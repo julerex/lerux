@@ -1,60 +1,49 @@
 # lerux
 
-**Only Rust Redox**
+Rust userspace on the [seL4](https://sel4.systems/) microkernel, using [seL4 Microkit](https://github.com/seL4/microkit) for static system layout and [rust-sel4](https://github.com/seL4/rust-sel4) for userspace APIs.
 
-A pure-Rust take on the Redox operating system, starting with a vendored and adapted version of the Redox microkernel.
+The seL4 kernel is **not vendored** — it is cloned into `deps/workspace/` and built from source via the Microkit SDK build. All lerux-owned code is Rust protection domains and build orchestration.
 
-## Relationship to upstream Redox
+## Quick start
 
-The tree under `kernel/` is a **vendored copy** of [redox-os/kernel](https://gitlab.redox-os.org/redox-os/kernel) (~2026-05). Most kernel logic, syscalls, and schemes are unchanged Redox code. lerux-specific work lives at the **repo root** (build, QEMU harness, direct-boot) and in a **small set of kernel patches** (embedded trampolines, pure-Rust PVH stub, `direct-boot` boot path).
+**Prerequisites:** Linux, `git`, `just`, `rustup`, `python3`, `cmake`, `ninja`, `qemu-system-aarch64`, `libclang-dev` (for `bindgen` when building PDs), and optionally the [ARM GNU bare-metal toolchain](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads) (`aarch64-none-elf-gcc`, 12.2.Rel1) for `just build-sdk`.
 
-See **[vendored.md](vendored.md)** for the full divergence list: what changed, what stayed the same, and what is still planned.
+```bash
+just fetch          # clone seL4 15.0.0 + microkit 2.2.0
+just build-sdk      # build Microkit SDK from source (needs aarch64-none-elf-gcc)
+# or: just fetch-sdk   # download prebuilt SDK 2.2.0 if the toolchain is not installed
+just run            # build hello PD, assemble loader.img, boot QEMU
+```
 
-## Current Status (Phase 1)
+Smoke test:
 
-- Kernel source vendored under `kernel/` (copy of redox-os/kernel as of 2026-05).
-- Kernel low-level code uses checked-in asm sources assembled at build time:
-  - SMP AP trampolines: `lerux-kernel/src/asm/*/trampoline.asm` via **nasm** (`build.rs`).
-  - Direct-boot PVH stub: `lerux-kernel/src/arch/x86_shared/pvh_boot.S` via **clang/gcc** (`build.rs`, `direct-boot` feature).
-- Host build requirements for x86 kernel: **nasm**; for direct-boot builds also **clang** (see [docs/building/standalone.md](docs/building/standalone.md)).
-- The kernel remains a drop-in buildable Redox kernel with all its existing features and multi-architecture support.
+```bash
+pip install pexpect   # if needed
+just test
+```
 
-## Goals
+## Architecture
 
-- Eliminate non-Rust code wherever practical (assembly, build-time codegen in other languages, etc.).
-- Keep the excellent Redox kernel design while making the implementation "only Rust".
-- Long-term: a complete, bootable, multi-user Redox-like system built from this foundation.
+| Layer | Source |
+|-------|--------|
+| Kernel | [seL4/seL4](https://github.com/seL4/seL4) — built by `build_sdk.py` |
+| System framework | [seL4/microkit](https://github.com/seL4/microkit) SDK |
+| Userspace | Rust crates in `userspace/pds/` via `sel4-microkit` |
 
-## Building
+Version pins: [`deps/versions.toml`](deps/versions.toml).
 
-- **Standalone / direct-boot (lerux):** [docs/building/standalone.md](docs/building/standalone.md) — `just build-direct` (requires nasm + clang).
-- **Full Redox-style build:** [docs/kernel/README.md](docs/kernel/README.md) — still requires the Redox build system when not using `direct-boot`.
+## Boards
 
-## QEMU Bring-up
+Default: `qemu_virt_aarch64` (QEMU ARM virt). Override with `BOARD=... just run`.
 
-See [docs/development/qemu.md](docs/development/qemu.md) for how to boot the kernel under QEMU for development and smoke testing. A minimal loader + launch script is provided so you can iterate quickly without the full Redox build system.
+x86_64 PC99/QEMU support is planned — the build is parameterized by `BOARD`; see [`docs/plan.md`](docs/plan.md).
 
 ## Documentation
 
-All significant project documentation now lives under [docs/](docs/README.md).
-
-| Doc | Purpose |
-|-----|---------|
-| [docs/README.md](docs/README.md) | Index + organization of the docs tree |
-| [docs/glossary.md](docs/GLOSSARY.md) | Terms and concepts (boot, validation, Redox, lerux-specific names) |
-| [docs/plan.md](docs/plan.md) | Roadmap, Only Rust policy, phases, and open questions |
-| [docs/context.md](docs/context.md) | Domain language and resolved decisions (including the rustc-hosting goal) |
-| [docs/vendored.md](docs/vendored.md) | Vendoring policy, upstream inventory, kernel divergence, and sync procedure |
-| [docs/notes.md](docs/notes.md) | Verified direct-boot facts, serial logs, and GDB recipes |
-| [docs/building/standalone.md](docs/building/standalone.md) | Direct-boot build and run instructions |
-| [docs/development/coverage.md](docs/development/coverage.md) | 100% unit test coverage goal, tooling, and approved exceptions (excl. redoxfs) |
-
-Upstream snapshots and sync policy: see [docs/vendored.md](docs/vendored.md). Lerux does not depend on live Redox GitLab repos at build time.
+- [docs/README.md](docs/README.md) — index
+- [docs/seL4-whitepaper.pdf](docs/seL4-whitepaper.pdf) — seL4 overview
+- [docs.sel4.systems](https://docs.sel4.systems/) — official tutorials and manuals
 
 ## License
 
-MIT (same as upstream Redox components we incorporate). See [docs/vendored.md](docs/vendored.md) for per-component attribution.
-
-## Contributing
-
-This is early-stage personal research. Issues and PRs discussing "Only Rust" refactoring approaches are welcome.
+MIT for lerux-owned code. seL4 kernel is GPL-2.0-only; rust-sel4 crates are BSD-2-Clause.

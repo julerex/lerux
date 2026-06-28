@@ -18,8 +18,7 @@ use ns16550::Driver as Ns16550Driver;
 // Channel 1: IPC to the client PD (matches <end pd="serial_driver" id="1">).
 const CLIENT: Channel = Channel::new(1);
 
-// Channel 0 is only used for IRQ notification on aarch64 (<irq id="0">).
-#[cfg(feature = "board-qemu_virt_aarch64")]
+// Channel 0: IRQ notification (<irq id="0">).
 const DEVICE: Channel = Channel::new(0);
 
 #[cfg(feature = "board-qemu_virt_aarch64")]
@@ -36,9 +35,7 @@ fn init() -> impl Handler {
 #[protection_domain]
 fn init() -> impl Handler {
     debug::init().unwrap();
-    log::info!("serial driver: NS16550 COM1");
+    log::info!("serial driver: NS16550 COM1 (IRQ RX)");
     let driver = Ns16550Driver::from_system_vars();
-    // Polling driver: no IRQ channel; DEVICE is unused but required by HandlerImpl.
-    let device = Channel::new(0);
-    HandlerImpl::new(driver, device, CLIENT)
+    HandlerImpl::new(driver, DEVICE, CLIENT)
 }

@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-06-28 (Phase 6)
+Last updated: 2026-06-28 (Phase 7)
 
 ## Phase 1 — Bring-up
 
@@ -44,8 +44,8 @@ Last updated: 2026-06-28 (Phase 6)
 
 ## Phase 7 — x86 serial IRQ/RX
 
-- [ ] COM1 IRQ in x86 system template
-- [ ] IRQ-driven RX in `ns16550.rs`
+- [x] COM1 IRQ in x86 system template
+- [x] IRQ-driven RX in `ns16550.rs`
 
 ## Phase 8 — Custom IPC and minimal services
 

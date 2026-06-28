@@ -49,6 +49,9 @@ BOARDS: dict[str, dict[str, Any]] = {
         "qemu": "x86_64",
         "system_vars": {
             "serial_ioport_addr": "0x3f8",
+            # COM1 ISA IRQ 4 → IOAPIC pin 4; vector 48 is the first user IRQ slot on pc99.
+            "serial_ioapic_pin": 4,
+            "serial_ioapic_vector": 48,
         },
     },
 }

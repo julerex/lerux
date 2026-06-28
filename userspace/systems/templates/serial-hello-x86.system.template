@@ -3,6 +3,7 @@
     <protection_domain name="serial_driver" priority="2" stack_size="0x10_000">
         <program_image path="serial-driver.elf" />
         <ioport id="0" addr="{serial_ioport_addr}" size="8" setvar_id="com1_ioport_id" setvar_addr="com1_ioport_addr" />
+        <irq pin="{serial_ioapic_pin}" vector="{serial_ioapic_vector}" id="0" trigger="level" polarity="high" />
     </protection_domain>
 
     <protection_domain name="hello" priority="1" stack_size="0x10_000">

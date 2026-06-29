@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Build qemu-system-aarch64 with SP804 timers on the virt machine (rust-sel4 patch).
 # Installs to deps/toolchains/qemu-sp804/ when stock QEMU lacks 0x90d0000 SP804.
+# stdout must be only the install bin/ path (justfile captures it for PATH); log to stderr.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"

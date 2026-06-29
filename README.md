@@ -2,7 +2,7 @@
 
 Rust userspace on the [seL4](https://sel4.systems/) microkernel, using [seL4 Microkit](https://github.com/seL4/microkit) for static system layout and [rust-sel4](https://github.com/seL4/rust-sel4) for userspace APIs.
 
-The seL4 kernel is **not vendored** — it is cloned into `deps/workspace/` and built from source via the Microkit SDK build. All lerux-owned code is Rust protection domains and build orchestration.
+The seL4 kernel is **not vendored** — it is cloned into `deps/workspace/` and built from source via the Microkit SDK. All lerux-owned code is Rust protection domains and build orchestration.
 
 ## Quick start
 
@@ -12,7 +12,6 @@ The seL4 kernel is **not vendored** — it is cloned into `deps/workspace/` and 
 just fetch          # clone seL4 15.0.0 + microkit 2.2.0
 just build-sdk      # build Microkit SDK from source (auto-downloads ARM toolchain if needed)
 # or: just fetch-sdk   # download prebuilt SDK 2.2.0 (no compile step)
-# MICROKIT_BOARDS=qemu_virt_aarch64,qemu_x86_64 just build-sdk  # add boards
 just run            # build hello PD, assemble loader.img, boot QEMU
 ```
 
@@ -23,7 +22,7 @@ pip install pexpect   # if needed
 just test
 ```
 
-All CI smoke tests locally (SDK must include `qemu_virt_aarch64`, `x86_64_generic`, and `qemu_virt_riscv64`):
+Full local CI mirror (SDK must include aarch64, x86_64, and RISC-V boards):
 
 ```bash
 MICROKIT_BOARDS=qemu_virt_aarch64,x86_64_generic,qemu_virt_riscv64 just build-sdk
@@ -32,10 +31,7 @@ just test-all
 
 ## CI
 
-GitHub Actions (`.github/workflows/rust.yml`) on every push to `main`:
-
-1. **sdk** — build Docker image, fetch sources, build Microkit SDK once for all boards (cached)
-2. **smoke** (matrix, 10 jobs) — `just test`, `BOARD=x86_64_generic just test`, `just test-riscv`, `just test-virtio`, `just test-echo`, `just test-x86-echo`, `just test-riscv-echo`, `just test-riscv-virtio`, `just test-init`, `just test-composed`
+GitHub Actions runs on every push to `main`: one **sdk** job (SDK + patched SP804 QEMU), then **10 smoke** matrix jobs. Details: [`docs/ci.md`](docs/ci.md).
 
 ## Architecture
 
@@ -53,53 +49,31 @@ Version pins: [`deps/versions.toml`](deps/versions.toml).
 
 Default: `qemu_virt_aarch64` (QEMU ARM virt). Override with `BOARD=... just run`.
 
-x86_64 QEMU PC (`x86_64_generic`):
+| Goal | Board | Command |
+|------|-------|---------|
+| Serial hello | `qemu_virt_aarch64` | `just test` |
+| Echo IPC | `qemu_virt_aarch64_echo` | `just test-echo` |
+| Virtio blk/net | `qemu_virt_aarch64_virtio` | `just disk-img && just test-virtio` |
+| RTC + timer | `qemu_virt_aarch64_init` | `just test-init` |
+| Init + virtio | `qemu_virt_aarch64_composed` | `just disk-img && just test-composed` |
+| x86 serial / echo | `x86_64_generic` / `_echo` | `BOARD=x86_64_generic just test` / `just test-x86-echo` |
+| RISC-V serial / echo / virtio | `qemu_virt_riscv64` variants | `just test-riscv` / `just test-riscv-echo` / `just test-riscv-virtio` |
 
-```bash
-MICROKIT_BOARDS=qemu_virt_aarch64,x86_64_generic just build-sdk
-BOARD=x86_64_generic just run
-# echo IPC: BOARD=x86_64_generic_echo just test  (or: just test-x86-echo)
-```
+Full board reference: [`docs/boards.md`](docs/boards.md).
 
-RISC-V QEMU virt (`qemu_virt_riscv64`):
-
-```bash
-MICROKIT_BOARDS=qemu_virt_aarch64,x86_64_generic,qemu_virt_riscv64 just build-sdk
-BOARD=qemu_virt_riscv64 just run
-# or: just test-riscv
-```
-
-Virtio block + net drivers on aarch64 virt (`qemu_virt_aarch64_virtio`):
-
-```bash
-just disk-img          # 4 MiB empty disk for virtio-blk
-just test-virtio       # serial + virtio-blk read + virtio-net TX smoke test
-```
-
-Init / timer smoke on aarch64 virt (`qemu_virt_aarch64_init`):
-
-```bash
-just test-init         # PL031 RTC + SP804 timer via boot-init
-```
-
-Stock QEMU `virt` does not model SP804 at `0x90d0000`. The init test builds or reuses a patched QEMU via [`scripts/install-qemu-sp804.sh`](scripts/install-qemu-sp804.sh) (patch: [`support/qemu/arm-virt-sp804.patch`](support/qemu/arm-virt-sp804.patch); needs `libglib2.0-dev` and `libpixman-1-dev`, included in the Docker image).
-
-Init is **aarch64 virt only** — rust-sel4 ships PL031/SP804 drivers for that platform, not for RISC-V or x86. See the cross-arch table in [`docs/plan.md`](docs/plan.md).
-
-Composed system on aarch64 virt (`qemu_virt_aarch64_composed`):
-
-```bash
-just disk-img
-just test-composed   # boot-init RTC/timer (serial) + hello virtio blk/net (debug-print)
-```
-
-Uses patched SP804 QEMU (same as init) plus virtio devices. `boot-init` owns the serial channel; `hello` logs via kernel debug-print.
+**Init and composed** need patched QEMU for SP804 at `0x90d0000` — see [`scripts/install-qemu-sp804.sh`](scripts/install-qemu-sp804.sh) (Docker image includes build deps). Init is **aarch64 virt only**; cross-arch parity is in [`docs/plan.md`](docs/plan.md).
 
 ## Documentation
 
-- [docs/README.md](docs/README.md) — index
-- [docs/seL4-whitepaper.pdf](docs/seL4-whitepaper.pdf) — seL4 overview
-- [docs.sel4.systems](https://docs.sel4.systems/) — official tutorials and manuals
+| Doc | Purpose |
+|-----|---------|
+| [docs/README.md](docs/README.md) | Documentation index |
+| [docs/context.md](docs/context.md) | Domain language and decisions |
+| [docs/plan.md](docs/plan.md) | Roadmap and smoke parity table |
+| [docs/boards.md](docs/boards.md) | Board and QEMU profile reference |
+| [docs/ci.md](docs/ci.md) | CI pipeline, caches, troubleshooting |
+| [docs/seL4-whitepaper.pdf](docs/seL4-whitepaper.pdf) | seL4 overview (reference) |
+| [docs.sel4.systems](https://docs.sel4.systems/) | Official tutorials and manuals |
 
 ## License
 

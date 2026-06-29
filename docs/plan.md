@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-06-29 (Phase 15)
+Last updated: 2026-06-29 (Phase 16)
 
 ## Phase 1 — Bring-up
 
@@ -105,6 +105,7 @@ Last updated: 2026-06-29 (Phase 15)
 | Echo IPC | yes | yes | yes |
 | Virtio blk/net | yes | yes | no (PCI virtio; deferred) |
 | Init RTC+timer | yes | no | no |
+| Composed init+virtio | yes | no | no |
 
 Init (`just test-init`) uses PL031 + SP804 drivers from rust-sel4 v4.0.0, which target QEMU aarch64 virt MMIO only. RISC-V virt and x86 PC do not expose those devices in stock QEMU, and there are no equivalent rust-sel4 driver crates yet.
 
@@ -116,6 +117,17 @@ Init (`just test-init`) uses PL031 + SP804 drivers from rust-sel4 v4.0.0, which 
 - [x] Patched SP804 QEMU + virtio blk/net in one smoke test
 - [x] CI matrix job `composed` with SP804 QEMU cache
 - [x] boot-init notifies hello before virtio probe (avoids serial/debug interleaving)
+
+## Phase 16 — Docs and CI hardening
+
+- [x] [`docs/boards.md`](boards.md) — board/QEMU reference table
+- [x] [`docs/ci.md`](ci.md) — pipeline, smoke matrix, caches, troubleshooting
+- [x] README trimmed; links to detailed docs
+- [x] SP804 QEMU built once in **sdk** job (init/composed smoke only restore)
+- [x] QEMU cache includes install prefix + source tree + tarball
+- [x] Cache save on smoke failure (`if: always()` for `build/`)
+- [x] Workflow concurrency (cancel stale runs); `permissions: contents: read`
+- [x] Smoke jobs verify SP804 QEMU binary is executable after cache restore
 
 ## Version alignment
 

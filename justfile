@@ -403,7 +403,7 @@ test-riscv-virtio:
 test-init:
     BOARD=qemu_virt_aarch64_init just test
 
-# Composed smoke: boot-init (serial) + hello virtio (debug-print) on patched QEMU
+# Composed smoke: boot-init (serial) + hello virtio (debug-print; gated on init notify)
 test-composed:
     BOARD=qemu_virt_aarch64_composed just test
 

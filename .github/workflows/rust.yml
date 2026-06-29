@@ -6,10 +6,18 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 env:
   MICROKIT_BOARDS: qemu_virt_aarch64,x86_64_generic,qemu_virt_riscv64
   # GHA cache keys cannot contain commas; keep in sync with MICROKIT_BOARDS.
   SDK_CACHE_SUFFIX: virt-aarch64-x86-riscv
+  QEMU_SP804_CACHE_KEY: qemu-sp804-${{ hashFiles('support/qemu/arm-virt-sp804.patch', 'scripts/install-qemu-sp804.sh') }}
 
 jobs:
   sdk:
@@ -114,6 +122,41 @@ jobs:
           path: deps/sdk-cache
           key: sdk-${{ hashFiles('deps/versions.toml', 'scripts/fetch.sh') }}-${{ env.SDK_CACHE_SUFFIX }}
 
+      - name: Restore SP804 QEMU cache
+        uses: actions/cache/restore@v4
+        id: qemu-sp804-cache
+        with:
+          path: |
+            deps/toolchains/qemu-sp804
+            deps/toolchains/qemu-6.2.0-src
+            deps/toolchains/qemu-6.2.0.tar.xz
+          key: ${{ env.QEMU_SP804_CACHE_KEY }}
+          restore-keys: |
+            qemu-sp804-
+
+      - name: Build SP804 QEMU
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/work" -w /work lerux-dev \
+            bash -c 'set -euo pipefail
+              if [[ -x deps/toolchains/qemu-sp804/bin/qemu-system-aarch64 ]]; then
+                echo "==> SP804 QEMU cache hit"
+              else
+                bash scripts/install-qemu-sp804.sh >/dev/null
+              fi
+            '
+          sudo chown -R "$(id -u):$(id -g)" deps
+          chmod +x deps/toolchains/qemu-sp804/bin/qemu-system-aarch64 2>/dev/null || true
+
+      - name: Save SP804 QEMU cache
+        if: always() && steps.qemu-sp804-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            deps/toolchains/qemu-sp804
+            deps/toolchains/qemu-6.2.0-src
+            deps/toolchains/qemu-6.2.0.tar.xz
+          key: ${{ env.QEMU_SP804_CACHE_KEY }}
+
       - name: Upload SDK bundle
         run: |
           set -euo pipefail
@@ -195,6 +238,7 @@ jobs:
 
       - name: Restore Cargo build cache
         uses: actions/cache/restore@v4
+        id: build-cache
         with:
           path: |
             build
@@ -205,14 +249,28 @@ jobs:
       - name: Restore SP804 QEMU cache
         if: matrix.id == 'init' || matrix.id == 'composed'
         uses: actions/cache/restore@v4
-        id: qemu-sp804-cache
         with:
-          path: deps/toolchains/qemu-sp804
-          key: qemu-sp804-${{ hashFiles('support/qemu/arm-virt-sp804.patch', 'scripts/install-qemu-sp804.sh') }}
+          path: |
+            deps/toolchains/qemu-sp804
+            deps/toolchains/qemu-6.2.0-src
+            deps/toolchains/qemu-6.2.0.tar.xz
+          key: ${{ env.QEMU_SP804_CACHE_KEY }}
           restore-keys: |
             qemu-sp804-
 
+      - name: Ensure SP804 QEMU executable
+        if: matrix.id == 'init' || matrix.id == 'composed'
+        run: |
+          set -euo pipefail
+          qemu="deps/toolchains/qemu-sp804/bin/qemu-system-aarch64"
+          if [[ ! -x "${qemu}" ]]; then
+            echo "error: missing ${qemu}; sdk job should have built or cached SP804 QEMU" >&2
+            exit 1
+          fi
+          chmod +x "${qemu}"
+
       - name: Smoke test (${{ matrix.id }})
+        id: smoke
         run: |
           docker run --rm -v "${{ github.workspace }}:/work" -w /work lerux-dev \
             bash -c 'set -euo pipefail
@@ -224,14 +282,8 @@ jobs:
           sudo chown -R "$(id -u):$(id -g)" build deps
 
       - name: Save Cargo build cache
+        if: always() && steps.build-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: build
           key: build-${{ matrix.id }}-${{ hashFiles('Cargo.lock') }}
-
-      - name: Save SP804 QEMU cache
-        if: (matrix.id == 'init' || matrix.id == 'composed') && steps.qemu-sp804-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: deps/toolchains/qemu-sp804
-          key: qemu-sp804-${{ hashFiles('support/qemu/arm-virt-sp804.patch', 'scripts/install-qemu-sp804.sh') }}

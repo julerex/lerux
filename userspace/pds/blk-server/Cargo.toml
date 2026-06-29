@@ -1,0 +1,28 @@
+[package]
+name = "blk-server"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[lints]
+workspace = true
+
+[features]
+board-qemu_virt_aarch64_blk = []
+board-qemu_virt_riscv64_blk = []
+board-x86_64_generic_blk = []
+
+[dependencies]
+async-unsync = { version = "0.3.0", default-features = false }
+lerux-interface-types = { path = "../../crates/lerux-interface-types" }
+lerux-ipc = { path = "../../crates/lerux-ipc" }
+lerux-logging = { path = "../../crates/lerux-logging" }
+sel4-abstract-allocator = { workspace = true }
+sel4-driver-interfaces = { workspace = true }
+sel4-microkit = { workspace = true, features = ["alloc"] }
+sel4-microkit-driver-adapters = { workspace = true }
+sel4-shared-memory = { workspace = true }
+sel4-shared-ring-buffer = { workspace = true }
+sel4-shared-ring-buffer-block-io = { workspace = true }
+sel4-shared-ring-buffer-block-io-types = { workspace = true }
+sel4-shared-ring-buffer-bookkeeping = { workspace = true, features = ["async-unsync"] }

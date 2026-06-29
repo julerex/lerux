@@ -103,6 +103,18 @@ test-riscv-virtio:
 test-riscv-http:
     BOARD=qemu_virt_riscv64_http just test
 
+# Block IPC smoke test (blk-server + blk-client on aarch64 virt)
+test-blk:
+    just disk-img && BOARD=qemu_virt_aarch64_blk just test
+
+# Block IPC smoke test on RISC-V virt
+test-riscv-blk:
+    just disk-img && BOARD=qemu_virt_riscv64_blk just test
+
+# Block IPC smoke test on x86_64 q35 (PCI virtio-blk)
+test-x86-blk:
+    just disk-img && BOARD=x86_64_generic_blk just test
+
 # Timer/RTC/init smoke test (PL031 + SP804 via patched QEMU; see support/qemu/)
 test-init:
     BOARD=qemu_virt_aarch64_init just test

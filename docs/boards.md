@@ -9,6 +9,7 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `qemu_virt_aarch64` | aarch64 | `just test` | hello + serial |
 | `qemu_virt_aarch64_echo` | aarch64 | `just test-echo` | echo client/server + serial |
 | `qemu_virt_aarch64_virtio` | aarch64 | `just test-virtio` | hello + serial + virtio blk/net |
+| `qemu_virt_aarch64_blk` | aarch64 | `just test-blk` | blk client/server + serial + virtio-blk |
 | `qemu_virt_aarch64_init` | aarch64 | `just test-init` | boot-init + PL031 + SP804 + serial |
 | `qemu_virt_aarch64_composed` | aarch64 | `just test-composed` | boot-init + hello virtio + all drivers |
 | `qemu_virt_aarch64_http` | aarch64 | `just test-http` | serial + virtio-net + http-server |
@@ -16,10 +17,12 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `qemu_virt_riscv64` | riscv64 | `just test-riscv` | hello + serial (MMIO UART) |
 | `qemu_virt_riscv64_echo` | riscv64 | `just test-riscv-echo` | echo + serial |
 | `qemu_virt_riscv64_virtio` | riscv64 | `just test-riscv-virtio` | hello + serial + virtio |
+| `qemu_virt_riscv64_blk` | riscv64 | `just test-riscv-blk` | blk client/server + serial + virtio-blk |
 | `qemu_virt_riscv64_http` | riscv64 | `just test-riscv-http` | serial + virtio-net + http-server |
 | `x86_64_generic` | x86_64 | `BOARD=x86_64_generic just test` | hello + serial (COM1) |
 | `x86_64_generic_echo` | x86_64 | `just test-x86-echo` | echo + serial |
 | `x86_64_generic_virtio` | x86_64 | `just test-x86-virtio` | hello + serial + virtio-pci blk/net |
+| `x86_64_generic_blk` | x86_64 | `just test-x86-blk` | blk client/server + serial + virtio-pci blk |
 | `x86_64_generic_http` | x86_64 | `just test-x86-http` | serial + virtio-pci net + http-server |
 
 ## SDK boards
@@ -39,14 +42,17 @@ CI sets this via `MICROKIT_BOARDS` in the workflow env.
 | `aarch64` | hello, echo | stock `qemu-system-aarch64` virt |
 | `aarch64_init` | init | patched SP804 QEMU |
 | `aarch64_virtio` | virtio | virtio-net + virtio-blk + `disk.img` |
+| `aarch64_blk` | blk | virtio-blk + `disk.img` |
 | `aarch64_composed` | composed | patched SP804 QEMU + virtio + `disk.img` |
 | `aarch64_http` | http | virtio-net + `hostfwd=tcp::18080-:8080` |
 | `aarch64_http_composed` | http-composed | patched SP804 QEMU + virtio-net + `hostfwd` |
 | `riscv64` | riscv hello/echo | `-kernel loader.img` |
 | `riscv64_virtio` | riscv virtio | MMIO virtio buses + `disk.img` |
+| `riscv64_blk` | riscv blk | MMIO virtio-blk bus.0 + `disk.img` |
 | `riscv64_http` | riscv http | MMIO virtio-net bus.1 + `hostfwd=tcp::18080-:8080` |
 | `x86_64` | x86 hello/echo | `-machine q35` + `-kernel sel4_32.elf` + `-initrd loader.img` |
 | `x86_64_virtio` | x86 virtio | q35 + PCI virtio-blk/net + `disk.img` |
+| `x86_64_blk` | x86 blk | q35 + PCI virtio-blk + `disk.img` |
 | `x86_64_http` | x86 http | q35 + PCI virtio-net + `hostfwd=tcp::18080-:8080` |
 
 ## Composed board

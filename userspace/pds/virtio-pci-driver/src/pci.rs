@@ -1,14 +1,27 @@
 use lerux_virtio_hal::HalImpl;
 use lerux_virtio_pci::create_pci_transport_ioport;
 use sel4_microkit::var;
+#[cfg(any(
+    feature = "board-x86_64_generic_virtio",
+    feature = "board-x86_64_generic_http"
+))]
+use virtio_drivers::device::net::VirtIONet;
 use virtio_drivers::{
-    device::{blk::VirtIOBlk, net::VirtIONet},
+    device::blk::VirtIOBlk,
     transport::{pci::PciTransport, DeviceType, Transport},
 };
 
 use crate::config;
 
+#[cfg(any(
+    feature = "board-x86_64_generic_virtio",
+    feature = "board-x86_64_generic_http"
+))]
 const NET_QUEUE_SIZE: usize = 16;
+#[cfg(any(
+    feature = "board-x86_64_generic_virtio",
+    feature = "board-x86_64_generic_http"
+))]
 const NET_BUFFER_LEN: usize = 2048;
 
 pub fn init_hal() {
@@ -39,6 +52,10 @@ pub fn create_virtio_blk(ioport_id: u32, ioport_addr: u16) -> VirtIOBlk<HalImpl,
     VirtIOBlk::<HalImpl, PciTransport>::new(transport).unwrap()
 }
 
+#[cfg(any(
+    feature = "board-x86_64_generic_virtio",
+    feature = "board-x86_64_generic_http"
+))]
 pub fn create_virtio_net(
     ioport_id: u32,
     ioport_addr: u16,

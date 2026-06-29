@@ -3,31 +3,65 @@
 
 extern crate alloc;
 
-#[cfg(feature = "board-x86_64_generic_virtio")]
+#[cfg(any(
+    feature = "board-x86_64_generic_virtio",
+    feature = "board-x86_64_generic_blk"
+))]
 use alloc::boxed::Box;
-#[cfg(feature = "board-x86_64_generic_virtio")]
+#[cfg(any(
+    feature = "board-x86_64_generic_virtio",
+    feature = "board-x86_64_generic_blk"
+))]
 use alloc::collections::BTreeMap;
-#[cfg(feature = "board-x86_64_generic_virtio")]
+#[cfg(any(
+    feature = "board-x86_64_generic_virtio",
+    feature = "board-x86_64_generic_blk"
+))]
 use core::pin::Pin;
 
 use lerux_logging::{debug, log};
 use sel4_microkit::{
     memory_region_symbol, protection_domain, Channel, ChannelSet, Handler, Infallible, MessageInfo,
 };
-#[cfg(feature = "board-x86_64_generic_virtio")]
+#[cfg(any(
+    feature = "board-x86_64_generic_virtio",
+    feature = "board-x86_64_generic_blk"
+))]
 use sel4_microkit_driver_adapters::block::driver::handle_client_request;
+#[cfg(any(
+    feature = "board-x86_64_generic_virtio",
+    feature = "board-x86_64_generic_http"
+))]
 use sel4_microkit_driver_adapters::net::driver::HandlerImpl as NetHandlerImpl;
 use sel4_shared_memory::SharedMemoryRef;
 use sel4_shared_ring_buffer::{roles::Use, RingBuffers};
-#[cfg(feature = "board-x86_64_generic_virtio")]
+#[cfg(any(
+    feature = "board-x86_64_generic_virtio",
+    feature = "board-x86_64_generic_blk"
+))]
 use sel4_shared_ring_buffer_block_io_types::{
     BlockIORequest, BlockIORequestStatus, BlockIORequestType,
 };
-#[cfg(feature = "board-x86_64_generic_virtio")]
+#[cfg(any(
+    feature = "board-x86_64_generic_virtio",
+    feature = "board-x86_64_generic_blk"
+))]
 use sel4_virtio_blk::GetBlockDeviceLayoutWrapper;
+#[cfg(any(
+    feature = "board-x86_64_generic_virtio",
+    feature = "board-x86_64_generic_http"
+))]
 use sel4_virtio_net::DeviceWrapper;
-#[cfg(feature = "board-x86_64_generic_virtio")]
+#[cfg(any(
+    feature = "board-x86_64_generic_virtio",
+    feature = "board-x86_64_generic_blk"
+))]
 use virtio_drivers::device::blk::*;
+#[cfg(any(
+    feature = "board-x86_64_generic_virtio",
+    feature = "board-x86_64_generic_http",
+    feature = "board-x86_64_generic_blk"
+))]
 use virtio_drivers::transport::pci::PciTransport;
 
 mod config;
@@ -36,9 +70,16 @@ mod pci;
 use config::channels;
 use lerux_virtio_hal::HalImpl;
 
-#[cfg(feature = "board-x86_64_generic_virtio")]
+#[cfg(any(
+    feature = "board-x86_64_generic_virtio",
+    feature = "board-x86_64_generic_blk"
+))]
 const BLK_QUEUE_SIZE: usize = 4;
 
+#[cfg(any(
+    feature = "board-x86_64_generic_virtio",
+    feature = "board-x86_64_generic_http"
+))]
 fn create_net_handler(
     mut net_dev: virtio_drivers::device::net::VirtIONet<HalImpl, PciTransport, 16>,
 ) -> NetHandlerImpl<DeviceWrapper<HalImpl, PciTransport>> {
@@ -76,56 +117,77 @@ fn create_net_handler(
     )
 }
 
+#[cfg(any(
+    feature = "board-x86_64_generic_virtio",
+    feature = "board-x86_64_generic_blk"
+))]
+fn create_blk_handler(mut blk_dev: VirtIOBlk<HalImpl, PciTransport>) -> BlkHandler {
+    let blk_client_region = unsafe {
+        SharedMemoryRef::<'static, _>::new(memory_region_symbol!(
+            virtio_blk_client_dma_vaddr: *mut [u8],
+            n = config::VIRTIO_BLK_CLIENT_DMA_SIZE
+        ))
+    };
+    let notify_blk_client: fn() = || channels::BLK_CLIENT.notify();
+    let blk_ring_buffers = RingBuffers::<'_, Use, fn(), BlockIORequest>::from_ptrs_using_default_initialization_strategy_for_role(
+        unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_blk_free: *mut _)) },
+        unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_blk_used: *mut _)) },
+        notify_blk_client,
+    );
+
+    blk_dev.ack_interrupt();
+    channels::BLK_DEVICE.irq_ack().unwrap();
+    log::info!("virtio-blk driver ready");
+
+    BlkHandler {
+        dev: blk_dev,
+        client_region: blk_client_region,
+        ring_buffers: blk_ring_buffers,
+        pending: BTreeMap::new(),
+    }
+}
+
+#[cfg(feature = "board-x86_64_generic_blk")]
+#[protection_domain(heap_size = 768 * 1024)]
+fn init() -> BlkHandler {
+    debug::init().unwrap();
+    pci::init_hal();
+    let (ioport_id, ioport_addr) = pci::ioport_config();
+    create_blk_handler(pci::create_virtio_blk(ioport_id, ioport_addr))
+}
+
+#[cfg(feature = "board-x86_64_generic_http")]
+#[protection_domain(heap_size = 768 * 1024)]
+fn init() -> NetHandlerImpl<DeviceWrapper<HalImpl, PciTransport>> {
+    debug::init().unwrap();
+    pci::init_hal();
+    let (ioport_id, ioport_addr) = pci::ioport_config();
+    create_net_handler(pci::create_virtio_net(ioport_id, ioport_addr))
+}
+
+#[cfg(feature = "board-x86_64_generic_virtio")]
 #[protection_domain(heap_size = 768 * 1024)]
 fn init() -> ComboHandler {
     debug::init().unwrap();
     pci::init_hal();
 
     let (ioport_id, ioport_addr) = pci::ioport_config();
-    let net_dev = pci::create_virtio_net(ioport_id, ioport_addr);
-
-    #[cfg(feature = "board-x86_64_generic_virtio")]
-    let blk = {
-        let mut blk_dev = pci::create_virtio_blk(ioport_id, ioport_addr);
-        let blk_client_region = unsafe {
-            SharedMemoryRef::<'static, _>::new(memory_region_symbol!(
-                virtio_blk_client_dma_vaddr: *mut [u8],
-                n = config::VIRTIO_BLK_CLIENT_DMA_SIZE
-            ))
-        };
-        let notify_blk_client: fn() = || channels::BLK_CLIENT.notify();
-        let blk_ring_buffers = RingBuffers::<'_, Use, fn(), BlockIORequest>::from_ptrs_using_default_initialization_strategy_for_role(
-            unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_blk_free: *mut _)) },
-            unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_blk_used: *mut _)) },
-            notify_blk_client,
-        );
-
-        blk_dev.ack_interrupt();
-        channels::BLK_DEVICE.irq_ack().unwrap();
-        log::info!("virtio-blk driver ready");
-
-        BlkHandler {
-            dev: blk_dev,
-            client_region: blk_client_region,
-            ring_buffers: blk_ring_buffers,
-            pending: BTreeMap::new(),
-        }
-    };
-
     ComboHandler {
-        #[cfg(feature = "board-x86_64_generic_virtio")]
-        blk,
-        net: create_net_handler(net_dev),
+        blk: create_blk_handler(pci::create_virtio_blk(ioport_id, ioport_addr)),
+        net: create_net_handler(pci::create_virtio_net(ioport_id, ioport_addr)),
     }
 }
 
+#[cfg(feature = "board-x86_64_generic_virtio")]
 struct ComboHandler {
-    #[cfg(feature = "board-x86_64_generic_virtio")]
     blk: BlkHandler,
     net: NetHandlerImpl<DeviceWrapper<HalImpl, PciTransport>>,
 }
 
-#[cfg(feature = "board-x86_64_generic_virtio")]
+#[cfg(any(
+    feature = "board-x86_64_generic_virtio",
+    feature = "board-x86_64_generic_blk"
+))]
 struct BlkHandler {
     dev: VirtIOBlk<HalImpl, PciTransport>,
     client_region: SharedMemoryRef<'static, [u8]>,
@@ -133,14 +195,20 @@ struct BlkHandler {
     pending: BTreeMap<u16, Pin<Box<BlkPendingEntry>>>,
 }
 
-#[cfg(feature = "board-x86_64_generic_virtio")]
+#[cfg(any(
+    feature = "board-x86_64_generic_virtio",
+    feature = "board-x86_64_generic_blk"
+))]
 struct BlkPendingEntry {
     client_req: BlockIORequest,
     virtio_req: BlkReq,
     virtio_resp: BlkResp,
 }
 
-#[cfg(feature = "board-x86_64_generic_virtio")]
+#[cfg(any(
+    feature = "board-x86_64_generic_virtio",
+    feature = "board-x86_64_generic_blk"
+))]
 fn buf_ptr_for_req(
     client_region: &mut SharedMemoryRef<'static, [u8]>,
     req: &BlockIORequest,
@@ -153,7 +221,10 @@ fn buf_ptr_for_req(
         .as_raw_ptr()
 }
 
-#[cfg(feature = "board-x86_64_generic_virtio")]
+#[cfg(any(
+    feature = "board-x86_64_generic_virtio",
+    feature = "board-x86_64_generic_blk"
+))]
 impl BlkHandler {
     fn complete_virtio_read(
         &mut self,
@@ -261,11 +332,12 @@ impl BlkHandler {
         channels::BLK_DEVICE.irq_ack().unwrap();
     }
 
-    fn notified(&mut self, channels: ChannelSet) -> bool {
+    fn drive_notified(&mut self, channels: ChannelSet) -> bool {
         if !channels.contains(channels::BLK_DEVICE) && !channels.contains(channels::BLK_CLIENT) {
             return false;
         }
-        let notify = self.complete_used_requests() | self.issue_pending_requests();
+        // Issue before complete so a CLIENT notify can poll the used ring when IRQ is late.
+        let notify = self.issue_pending_requests() | self.complete_used_requests();
         if notify {
             self.ring_buffers.notify();
         }
@@ -275,19 +347,37 @@ impl BlkHandler {
         true
     }
 
-    fn protected(&mut self, channel: Channel, msg_info: MessageInfo) -> MessageInfo {
+    fn drive_protected(&mut self, channel: Channel, msg_info: MessageInfo) -> MessageInfo {
         assert_eq!(channel, channels::BLK_CLIENT);
         handle_client_request(&mut GetBlockDeviceLayoutWrapper(&self.dev), msg_info)
     }
 }
 
+#[cfg(feature = "board-x86_64_generic_blk")]
+impl Handler for BlkHandler {
+    type Error = Infallible;
+
+    fn notified(&mut self, channels: ChannelSet) -> Result<(), Self::Error> {
+        self.drive_notified(channels);
+        Ok(())
+    }
+
+    fn protected(
+        &mut self,
+        channel: Channel,
+        msg_info: MessageInfo,
+    ) -> Result<MessageInfo, Self::Error> {
+        Ok(self.drive_protected(channel, msg_info))
+    }
+}
+
+#[cfg(feature = "board-x86_64_generic_virtio")]
 impl Handler for ComboHandler {
     type Error = Infallible;
 
     fn notified(&mut self, channels: ChannelSet) -> Result<(), Self::Error> {
-        #[cfg(feature = "board-x86_64_generic_virtio")]
         if channels.contains(channels::BLK_DEVICE) || channels.contains(channels::BLK_CLIENT) {
-            self.blk.notified(channels);
+            self.blk.drive_notified(channels);
         }
         if channels.contains(channels::NET_DEVICE) || channels.contains(channels::NET_CLIENT) {
             self.net.notified(channels)?;
@@ -300,9 +390,8 @@ impl Handler for ComboHandler {
         channel: Channel,
         msg_info: MessageInfo,
     ) -> Result<MessageInfo, Self::Error> {
-        #[cfg(feature = "board-x86_64_generic_virtio")]
         if channel == channels::BLK_CLIENT {
-            return Ok(self.blk.protected(channel, msg_info));
+            return Ok(self.blk.drive_protected(channel, msg_info));
         }
         if channel == channels::NET_CLIENT {
             self.net.protected(channel, msg_info)

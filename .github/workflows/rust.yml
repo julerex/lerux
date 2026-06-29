@@ -295,6 +295,12 @@ jobs:
             command: just test-riscv-http
           - id: x86-virtio
             command: just disk-img && just test-x86-virtio
+          - id: blk
+            command: just test-blk
+          - id: riscv-blk
+            command: just test-riscv-blk
+          - id: x86-blk
+            command: just test-x86-blk
     steps:
       - uses: actions/checkout@v4
 

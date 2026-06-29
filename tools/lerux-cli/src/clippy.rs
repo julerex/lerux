@@ -61,6 +61,14 @@ const AARCH64_CRATES: &[ClippyCrate<'_>] = &[
         name: "echo-client",
         feature: None,
     },
+    ClippyCrate {
+        name: "blk-server",
+        feature: Some("board-qemu_virt_aarch64_blk"),
+    },
+    ClippyCrate {
+        name: "blk-client",
+        feature: None,
+    },
 ];
 
 const RISCV64_CRATES: &[ClippyCrate<'_>] = &[
@@ -84,6 +92,14 @@ const RISCV64_CRATES: &[ClippyCrate<'_>] = &[
         name: "virtio-net-driver",
         feature: Some("board-qemu_virt_riscv64_virtio"),
     },
+    ClippyCrate {
+        name: "blk-server",
+        feature: Some("board-qemu_virt_riscv64_blk"),
+    },
+    ClippyCrate {
+        name: "blk-client",
+        feature: None,
+    },
 ];
 
 const X86_64_CRATES: &[ClippyCrate<'_>] = &[
@@ -100,6 +116,10 @@ const X86_64_CRATES: &[ClippyCrate<'_>] = &[
         feature: Some("board-x86_64_generic_virtio"),
     },
     ClippyCrate {
+        name: "virtio-pci-driver",
+        feature: Some("board-x86_64_generic_blk"),
+    },
+    ClippyCrate {
         name: "virtio-blk-driver",
         feature: Some("board-x86_64_generic_virtio"),
     },
@@ -110,6 +130,14 @@ const X86_64_CRATES: &[ClippyCrate<'_>] = &[
     ClippyCrate {
         name: "http-server",
         feature: Some("board-x86_64_generic_http"),
+    },
+    ClippyCrate {
+        name: "blk-server",
+        feature: Some("board-x86_64_generic_blk"),
+    },
+    ClippyCrate {
+        name: "blk-client",
+        feature: None,
     },
 ];
 

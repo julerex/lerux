@@ -57,6 +57,7 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
         }
         "aarch64_init"
         | "aarch64_virtio"
+        | "aarch64_blk"
         | "aarch64_composed"
         | "aarch64_http"
         | "aarch64_http_composed" => {
@@ -82,6 +83,23 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
                 "aarch64_virtio" | "aarch64_composed"
             ) {
                 ensure_disk(&disk)?;
+                c.args([
+                    "-device",
+                    "virtio-net-device,netdev=netdev0",
+                    "-netdev",
+                    "user,id=netdev0",
+                    "-device",
+                    "virtio-blk-device,drive=blkdev0",
+                    "-blockdev",
+                    &format!(
+                        "node-name=blkdev0,read-only=on,driver=file,filename={}",
+                        path_str(&disk)
+                    ),
+                ]);
+            } else if ctx.board.qemu.as_str() == "aarch64_blk" {
+                ensure_disk(&disk)?;
+                // Net device occupies the first virtio-mmio slot; blk stays at +0xc00
+                // in the same page (see virtio-blk-driver VIRTIO_BLK_MMIO_OFFSET).
                 c.args([
                     "-device",
                     "virtio-net-device,netdev=netdev0",
@@ -150,6 +168,29 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
             ]);
             c
         }
+        "riscv64_blk" => {
+            ensure_disk(&disk)?;
+            let mut c = Command::new("qemu-system-riscv64");
+            c.args([
+                "-machine",
+                "virt",
+                "-m",
+                "size=2G",
+                "-nographic",
+                "-serial",
+                "mon:stdio",
+                "-kernel",
+                &path_str(&loader),
+                "-device",
+                "virtio-blk-device,bus=virtio-mmio-bus.0,drive=blkdev0",
+                "-blockdev",
+                &format!(
+                    "node-name=blkdev0,read-only=on,driver=file,filename={}",
+                    path_str(&disk)
+                ),
+            ]);
+            c
+        }
         "riscv64_http" => {
             let mut c = Command::new("qemu-system-riscv64");
             c.args([
@@ -169,7 +210,9 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
             ]);
             c
         }
-        "x86_64" | "x86_64_virtio" | "x86_64_http" => x86_command(ctx, &loader, &disk)?,
+        "x86_64" | "x86_64_virtio" | "x86_64_blk" | "x86_64_http" => {
+            x86_command(ctx, &loader, &disk)?
+        }
         other => bail!("unsupported qemu profile {other}"),
     };
 
@@ -226,6 +269,18 @@ fn x86_command(ctx: &QemuContext, loader: &Path, disk: &Path) -> Result<Command>
                 "virtio-net-pci,id=net0,addr=0x4.0x0,netdev=netdev0",
                 "-netdev",
                 "user,id=netdev0",
+            ]);
+        }
+        "x86_64_blk" => {
+            ensure_disk(disk)?;
+            c.args([
+                "-device",
+                "virtio-blk-pci,id=blk0,addr=0x3.0x0,drive=blkdev0",
+                "-blockdev",
+                &format!(
+                    "node-name=blkdev0,read-only=on,driver=file,filename={}",
+                    path_str(disk)
+                ),
             ]);
         }
         "x86_64_http" => {
@@ -318,8 +373,8 @@ pub fn print_http_hint(ctx: &QemuContext) {
 
 pub fn ensure_qemu_binary(root: &Path, profile: &str) -> Result<()> {
     let binary = match profile {
-        "riscv64" | "riscv64_virtio" | "riscv64_http" => "qemu-system-riscv64",
-        "x86_64" | "x86_64_virtio" | "x86_64_http" => "qemu-system-x86_64",
+        "riscv64" | "riscv64_virtio" | "riscv64_blk" | "riscv64_http" => "qemu-system-riscv64",
+        "x86_64" | "x86_64_virtio" | "x86_64_blk" | "x86_64_http" => "qemu-system-x86_64",
         _ => "qemu-system-aarch64",
     };
     let path = host_path(root);

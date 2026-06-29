@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-06-29 (Phase 22)
+Last updated: 2026-06-29 (Phase 23)
 
 ## Phase 1 — Bring-up
 
@@ -107,6 +107,7 @@ Last updated: 2026-06-29 (Phase 22)
 | Init RTC+timer | yes | no | no |
 | Composed init+virtio | yes | no | no |
 | HTTP over virtio-net | yes | yes | yes |
+| Block IPC service | yes | yes | yes |
 
 Init (`just test-init`) uses PL031 + SP804 drivers from rust-sel4 v4.0.0, which target QEMU aarch64 virt MMIO only. RISC-V virt and x86 PC do not expose those devices in stock QEMU, and there are no equivalent rust-sel4 driver crates yet.
 
@@ -175,6 +176,17 @@ Init (`just test-init`) uses PL031 + SP804 drivers from rust-sel4 v4.0.0, which 
 - [x] HTTP port cleanup covers aarch64, RISC-V, and x86 QEMU hostfwd on 18080
 - [x] CI matrix job `riscv-http` (15 smoke jobs total)
 - [x] Cross-arch HTTP parity table updated (RISC-V → yes)
+
+## Phase 23 — Block service over IPC
+
+- [x] `BlockRequest` / `BlockResponse` in `lerux-interface-types` (Poll-based async RPC)
+- [x] `blk-server` PD — virtio ring-buffer client + postcard RPC server
+- [x] `blk-client` PD — reads LBA 0, logs MBR signature
+- [x] `blk.system.template` / `blk-riscv.system.template` / `blk-x86.system.template`
+- [x] Boards `qemu_virt_aarch64_blk`, `qemu_virt_riscv64_blk`, `x86_64_generic_blk`
+- [x] `virtio-pci-driver` blk-only board feature for x86
+- [x] `just test-blk` / `just test-riscv-blk` / `just test-x86-blk`
+- [x] CI matrix jobs `blk`, `riscv-blk`, `x86-blk` (18 smoke jobs total)
 
 ## Version alignment
 

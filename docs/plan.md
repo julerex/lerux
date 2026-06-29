@@ -51,7 +51,7 @@ Last updated: 2026-06-29 (Phase 11)
 
 - [x] `lerux-interface-types` crate with postcard RPC messages
 - [x] `echo-server` + `echo-client` PDs using `lerux-ipc`
-- [x] Optional: timer/RTC/init PD vertical slice (`pl031-driver`, `boot-init`; `sp804-driver` built, deferred from init smoke)
+- [x] Optional: timer/RTC/init PD vertical slice (`pl031-driver`, `boot-init`, `sp804-driver`)
 
 ## Phase 9 — RISC-V bring-up
 
@@ -74,7 +74,14 @@ Last updated: 2026-06-29 (Phase 11)
 - [x] Echo IPC on `qemu_virt_riscv64_echo` (`just test-riscv-echo`)
 - [x] Virtio block/net on `qemu_virt_riscv64_virtio` (`just test-riscv-virtio`; QEMU needs `bus=virtio-mmio-bus.N`)
 - [x] TCP loopback RX smoke (`virtio-net: TCP RX ok`) on virtio boards
-- [x] Timer/RTC/init smoke on `qemu_virt_aarch64_init` (`just test-init`)
+- [x] RTC smoke on `qemu_virt_aarch64_init` (`just test-init`)
+
+## Phase 12 — SP804 timer in init smoke
+
+- [x] Wire `sp804-driver` into `init.system.template` (MMIO `0x90d0000`, IRQ 43)
+- [x] `boot-init` reads elapsed time via `TimerClient` after RTC
+- [x] Patched QEMU for virt SP804 (`scripts/install-qemu-sp804.sh`; rust-sel4 `arm-virt-sp804` patch)
+- [x] `just test-init` expects `lerux-init: timer ok` and `lerux-init: init ok`
 
 ## Version alignment
 

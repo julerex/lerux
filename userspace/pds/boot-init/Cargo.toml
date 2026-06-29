@@ -7,5 +7,6 @@ license = "MIT"
 [dependencies]
 lerux-logging = { path = "../../crates/lerux-logging", features = ["serial"] }
 rtcc = "0.4"
+sel4-driver-interfaces = { workspace = true }
 sel4-microkit = { workspace = true }
 sel4-microkit-driver-adapters = { workspace = true }

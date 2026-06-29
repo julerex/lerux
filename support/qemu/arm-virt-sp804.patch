@@ -1,0 +1,132 @@
+From 7994b0d17da7dbf1cf2da3e6555914e23559b23e Mon Sep 17 00:00:00 2001
+From: Axel Heider <axel.heider@hensoldt.net>
+Date: Wed, 30 Nov 2022 18:14:29 +0100
+Subject: [PATCH] hw/arm/virt: add 2x sp804 timer
+
+Add 2x sp804 timer devices.
+
+Co-Authored-by: Florian Hauschild <florian.hauschild@hensoldt.net>
+Signed-off-by: Axel Heider <axel.heider@hensoldt.net>
+---
+ docs/system/arm/virt.rst |  1 +
+ hw/arm/Kconfig           |  1 +
+ hw/arm/virt.c            | 47 ++++++++++++++++++++++++++++++++++++++++
+ include/hw/arm/virt.h    |  2 ++
+ 4 files changed, 51 insertions(+)
+
+diff --git a/docs/system/arm/virt.rst b/docs/system/arm/virt.rst
+index 26fcba00b7..a6317e8ff2 100644
+--- a/docs/system/arm/virt.rst
++++ b/docs/system/arm/virt.rst
+@@ -28,6 +28,7 @@ The virt board supports:
+ - Flash memory
+ - One PL011 UART
+ - An RTC
++- Two SP804 Dual-Timers
+ - The fw_cfg device that allows a guest to obtain data from QEMU
+ - A PL061 GPIO controller
+ - An optional SMMUv3 IOMMU
+diff --git a/hw/arm/Kconfig b/hw/arm/Kconfig
+index 893a7bff66..e17ca74b62 100644
+--- a/hw/arm/Kconfig
++++ b/hw/arm/Kconfig
+@@ -20,6 +20,7 @@ config ARM_VIRT
+     select PL011 # UART
+     select PL031 # RTC
+     select PL061 # GPIO
++    select ARM_TIMER # sp804
+     select GPIO_PWR
+     select PLATFORM_BUS
+     select SMBIOS
+diff --git a/hw/arm/virt.c b/hw/arm/virt.c
+index a9a913aead..6f7120b666 100644
+--- a/hw/arm/virt.c
++++ b/hw/arm/virt.c
+@@ -176,6 +176,8 @@ static const MemMapEntry base_memmap[] = {
+     [VIRT_NVDIMM_ACPI] =        { 0x09090000, NVDIMM_ACPI_IO_LEN},
+     [VIRT_PVTIME] =             { 0x090a0000, 0x00010000 },
+     [VIRT_SECURE_GPIO] =        { 0x090b0000, 0x00001000 },
++    [VIRT_TIMER0] =             { 0x090c0000, 0x00001000 },
++    [VIRT_TIMER1] =             { 0x090d0000, 0x00001000 },
+     [VIRT_MMIO] =               { 0x0a000000, 0x00000200 },
+     /* ...repeating for a total of NUM_VIRTIO_TRANSPORTS, each of that size */
+     [VIRT_PLATFORM_BUS] =       { 0x0c000000, 0x02000000 },
+@@ -218,6 +220,8 @@ static const int a15irqmap[] = {
+     [VIRT_GPIO] = 7,
+     [VIRT_SECURE_UART] = 8,
+     [VIRT_ACPI_GED] = 9,
++    [VIRT_TIMER0] = 10,
++    [VIRT_TIMER1] = 11,
+     [VIRT_MMIO] = 16, /* ...to 16 + NUM_VIRTIO_TRANSPORTS - 1 */
+     [VIRT_GIC_V2M] = 48, /* ...to 48 + NUM_GICV2M_SPIS - 1 */
+     [VIRT_SMMU] = 74,    /* ...to 74 + NUM_SMMU_IRQS - 1 */
+@@ -252,6 +256,46 @@ static bool ns_el2_virt_timer_present(void)
+         arm_feature(env, ARM_FEATURE_EL2) && cpu_isar_feature(aa64_vh, cpu);
+ }
+ 
++static void create_timer(const VirtMachineState *vms, int timer_id)
++{
++    switch (timer_id) {
++        case VIRT_TIMER0:
++        case VIRT_TIMER1:
++            break;
++        default:
++            error_report("timer ID %d unsupported", timer_id);
++            exit(1);
++    }
++
++    MemMapEntry *entry = &(vms->memmap[timer_id]);
++    int irq = vms->irqmap[timer_id];
++    MachineState *ms = MACHINE(vms);
++
++    sysbus_create_simple("sp804", entry->base, qdev_get_gpio_in(vms->gic, irq));
++
++    char *nodename = g_strdup_printf("/sp804@%" PRIx64, entry->base);
++    qemu_fdt_add_subnode(ms->fdt, nodename);
++
++    const char compat[] = "arm,sp804\0arm,primecell";
++    qemu_fdt_setprop(ms->fdt, nodename, "compatible", compat, sizeof(compat));
++
++    const char clocknames[] = "timerclk0\0timerclk1\0apb_pclk";
++    qemu_fdt_setprop(ms->fdt, nodename, "clock-names",
++                         clocknames, sizeof(clocknames));
++
++    qemu_fdt_setprop_sized_cells(ms->fdt, nodename, "reg", 2, entry->base,
++                                 2, entry->size);
++
++    qemu_fdt_setprop_cells(ms->fdt, nodename, "interrupts",
++                           GIC_FDT_IRQ_TYPE_SPI, irq,
++                           GIC_FDT_IRQ_FLAGS_LEVEL_HI);
++
++    qemu_fdt_setprop_cells(ms->fdt, nodename, "clocks",
++                               vms->clock_phandle, vms->clock_phandle);
++
++    g_free(nodename);
++}
++
+ static void create_fdt(VirtMachineState *vms)
+ {
+     MachineState *ms = MACHINE(vms);
+@@ -2303,6 +2347,9 @@ static void machvirt_init(MachineState *machine)
+ 
+     create_rtc(vms);
+ 
++    create_timer(vms, VIRT_TIMER0);
++    create_timer(vms, VIRT_TIMER1);
++
+     create_pcie(vms);
+ 
+     if (has_ged && aarch64 && firmware_loaded && virt_is_acpi_enabled(vms)) {
+diff --git a/include/hw/arm/virt.h b/include/hw/arm/virt.h
+index bb486d36b1..ede34b51ed 100644
+--- a/include/hw/arm/virt.h
++++ b/include/hw/arm/virt.h
+@@ -76,6 +76,8 @@ enum {
+     VIRT_ACPI_GED,
+     VIRT_NVDIMM_ACPI,
+     VIRT_PVTIME,
++    VIRT_TIMER0,
++    VIRT_TIMER1,
+     VIRT_LOWMEMMAP_LAST,
+ };
+ 

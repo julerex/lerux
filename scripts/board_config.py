@@ -72,13 +72,15 @@ BOARDS: dict[str, dict[str, Any]] = {
         "target": "aarch64-sel4-microkit",
         "target_triple": "aarch64-sel4-microkit",
         "template": "init.system.template",
-        "pds": ["boot-init", "serial-driver", "pl031-driver"],
+        "pds": ["boot-init", "serial-driver", "pl031-driver", "sp804-driver"],
         "qemu": "aarch64_init",
         "system_vars": {
             "serial_mmio_phys_addr": "0x9_000_000",
             "serial_irq": 33,
             "pl031_mmio_phys_addr": "0x9010000",
             "pl031_irq": 34,
+            "sp804_mmio_phys_addr": "0x90d0000",
+            "sp804_irq": 43,
         },
     },
     "qemu_virt_aarch64_echo": {

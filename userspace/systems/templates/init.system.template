@@ -2,6 +2,7 @@
 <system>
     <memory_region name="serial_mmio" size="0x1_000" phys_addr="{serial_mmio_phys_addr}" />
     <memory_region name="pl031_mmio" size="0x1000" phys_addr="{pl031_mmio_phys_addr}" />
+    <memory_region name="sp804_mmio" size="0x1000" phys_addr="{sp804_mmio_phys_addr}" />
 
     <protection_domain name="serial_driver" priority="2" stack_size="0x10_000">
         <program_image path="serial-driver.elf" />
@@ -13,6 +14,12 @@
         <program_image path="pl031-driver.elf" />
         <map mr="pl031_mmio" vaddr="0x5_000_000_000" perms="rw" cached="false" setvar_vaddr="pl031_mmio_vaddr" />
         <irq irq="{pl031_irq}" id="0" />
+    </protection_domain>
+
+    <protection_domain name="sp804_driver" priority="4" stack_size="0x10_000">
+        <program_image path="sp804-driver.elf" />
+        <map mr="sp804_mmio" vaddr="0x5_001_000_000" perms="rw" cached="false" setvar_vaddr="sp804_mmio_vaddr" />
+        <irq irq="{sp804_irq}" id="0" />
     </protection_domain>
 
     <protection_domain name="boot_init" priority="1" stack_size="0x10_000">
@@ -27,5 +34,10 @@
     <channel>
         <end pd="pl031_driver" id="1" />
         <end pd="boot_init" id="1" pp="true" />
+    </channel>
+
+    <channel>
+        <end pd="sp804_driver" id="1" />
+        <end pd="boot_init" id="2" pp="true" />
     </channel>
 </system>

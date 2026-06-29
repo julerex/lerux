@@ -97,6 +97,7 @@ run: image
     qemu="$(python3 "{{root}}/scripts/board_config.py" "{{board}}" qemu)"
     case "${qemu}" in
         aarch64) just qemu-aarch64 ;;
+        aarch64_init) just qemu-aarch64-init ;;
         aarch64_virtio) just qemu-aarch64-virtio ;;
         riscv64) just qemu-riscv64 ;;
         riscv64_virtio) just qemu-riscv64-virtio ;;
@@ -108,6 +109,17 @@ qemu-aarch64:
     #!/usr/bin/env bash
     set -euo pipefail
     export PATH="$(bash scripts/host-path.sh)"
+    exec qemu-system-aarch64 \
+        -machine virt,virtualization=on -cpu cortex-a53 -m size=2G \
+        -serial mon:stdio -nographic \
+        -device loader,file={{board_build}}/loader.img,addr=0x70000000,cpu-num=0
+
+# aarch64 virt with SP804 timers at 0x90d0000 (patched QEMU; see support/qemu/)
+qemu-aarch64-init:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    sp804_qemu="$(bash scripts/install-qemu-sp804.sh)"
+    export PATH="${sp804_qemu}:$(bash scripts/host-path.sh)"
     exec qemu-system-aarch64 \
         -machine virt,virtualization=on -cpu cortex-a53 -m size=2G \
         -serial mon:stdio -nographic \
@@ -182,24 +194,29 @@ test: image
     qemu="$(python3 "{{root}}/scripts/board_config.py" "{{board}}" qemu)"
     export PATH="$(bash scripts/host-path.sh)"
     case "${qemu}" in
-        aarch64|aarch64_init)
-            expects=()
-            if [[ "{{board}}" == "qemu_virt_aarch64_init" ]]; then
-                expects=(
-                    --expect "lerux-init: RTC"
-                    --expect "lerux-init: init ok"
-                )
-            else
-                expects=(--expect "lerux: Hello from Rust on seL4 Microkit!")
-            fi
+        aarch64)
+            expects=(--expect "lerux: Hello from Rust on seL4 Microkit!")
             if [[ "{{board}}" == "qemu_virt_aarch64_echo" ]]; then
                 expects=(
                     --expect "lerux-echo: pong"
                     --expect "lerux-echo: lerux"
                 )
             fi
+            export PATH="$(bash scripts/host-path.sh)"
             exec python3 scripts/test.py \
                 "${expects[@]}" \
+                qemu-system-aarch64 \
+                -machine virt,virtualization=on -cpu cortex-a53 -m size=2G \
+                -serial mon:stdio -nographic \
+                -device loader,file={{board_build}}/loader.img,addr=0x70000000,cpu-num=0
+            ;;
+        aarch64_init)
+            sp804_qemu="$(bash scripts/install-qemu-sp804.sh)"
+            export PATH="${sp804_qemu}:$(bash scripts/host-path.sh)"
+            exec python3 scripts/test.py \
+                --expect "lerux-init: RTC" \
+                --expect "lerux-init: timer ok" \
+                --expect "lerux-init: init ok" \
                 qemu-system-aarch64 \
                 -machine virt,virtualization=on -cpu cortex-a53 -m size=2G \
                 -serial mon:stdio -nographic \

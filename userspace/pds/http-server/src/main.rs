@@ -48,29 +48,11 @@ fn prime_net_stack(http_net: &mut net::HttpNet) {
     }
 }
 
-#[cfg(feature = "board-x86_64_generic_http")]
-fn wait_for_inbound(http_net: &mut net::HttpNet) {
-    log::info!("lerux-http: waiting for GET / (host: curl http://127.0.0.1:18080/)");
-    while !http_net.is_served() {
-        http_net.poll();
-    }
-    for _ in 0..500 {
-        http_net.poll();
-    }
-}
-
 fn drive_net(http_net: &mut net::HttpNet) {
-    let mut flush_after_serve = 0;
-    for _ in 0..4000 {
-        http_net.poll();
-        if http_net.is_served() {
-            flush_after_serve = 500;
-        }
-        if flush_after_serve > 0 {
-            flush_after_serve -= 1;
-            if flush_after_serve == 0 {
-                break;
-            }
+    http_net.poll();
+    if http_net.is_served() {
+        for _ in 0..20 {
+            http_net.poll();
         }
     }
 }
@@ -82,10 +64,6 @@ fn init_with_net() -> HandlerImpl {
     let mac = log_net_mac(&mut net_client);
     let mut http_net = net::HttpNet::new(mac);
     prime_net_stack(&mut http_net);
-    // x86 PCI virtio-net: stay in init and poll shared rings until the smoke
-    // test curls; post-init driver notifications alone are unreliable there.
-    #[cfg(feature = "board-x86_64_generic_http")]
-    wait_for_inbound(&mut http_net);
     HandlerImpl {
         net: Some(http_net),
     }

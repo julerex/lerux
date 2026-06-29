@@ -210,6 +210,8 @@ jobs:
             command: just test-http-composed
           - id: x86-http
             command: just test-x86-http
+          - id: x86-virtio
+            command: just disk-img && just test-x86-virtio
     steps:
       - uses: actions/checkout@v4
 

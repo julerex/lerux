@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-06-29 (Phase 19)
+Last updated: 2026-06-29 (Phase 21)
 
 ## Phase 1 — Bring-up
 
@@ -103,7 +103,7 @@ Last updated: 2026-06-29 (Phase 19)
 |-------|---------|--------|-----|
 | Serial hello | yes | yes | yes |
 | Echo IPC | yes | yes | yes |
-| Virtio blk/net | yes | yes | no (PCI virtio; deferred) |
+| Virtio blk/net | yes | yes | yes |
 | Init RTC+timer | yes | no | no |
 | Composed init+virtio | yes | no | no |
 | HTTP over virtio-net | yes | no | yes |
@@ -140,6 +140,13 @@ Init (`just test-init`) uses PL031 + SP804 drivers from rust-sel4 v4.0.0, which 
 - [x] `scripts/test.py` `--curl URL EXPECT` for HTTP smoke
 - [x] CI matrix jobs `http` and `http-composed` (12 smoke jobs total)
 
+## Phase 18 — x86 PCI virtio
+
+- [x] `virtio-pci-driver` PD — combined virtio-blk + virtio-net over PCI ECAM on q35
+- [x] `lerux-virtio-hal` + `lerux-virtio-pci` crates (ECAM, I/O ports, shared HAL)
+- [x] `virtio-hello-x86.system.template` — hello + serial + virtio-pci-driver
+- [x] Board `x86_64_generic_virtio` (`just test-x86-virtio`); blk MBR read + net TX + TCP RX (host echo on 18080)
+
 ## Phase 19 — x86 HTTP inbound (hostfwd)
 
 - [x] `x86_64_generic_http` uses `virtio-pci-driver` (net-only) instead of standalone `virtio-net-driver`
@@ -147,6 +154,18 @@ Init (`just test-init`) uses PL031 + SP804 drivers from rust-sel4 v4.0.0, which 
 - [x] `http-server` net poll: drain device ring in a loop, UDP TX priming, listen on all guest addresses
 - [x] `just test-x86-http` — serial `lerux-http: listening` then host `curl` via `hostfwd` `18080→8080`
 - [x] CI matrix job `x86-http` (13 smoke jobs total)
+
+## Phase 20 — CI and docs hygiene
+
+- [x] CI matrix job `x86-virtio` (`just disk-img && just test-x86-virtio`; 14 smoke jobs total)
+- [x] Document Phase 18 in plan; fix cross-arch virtio parity table (x86 → yes)
+- [x] Sync smoke job counts across README, ci.md, and context.md
+
+## Phase 21 — x86 HTTP notification fix
+
+- [x] Remove `wait_for_inbound` init-time polling workaround in `http-server` (virtio-pci IRQ channel 3 + ring notify path is reliable post-init)
+- [x] Simplify `drive_net` to one notification-driven poll round (+ post-serve flush)
+- [x] Update x86 HTTP operational docs (guest returns from `init()` after `listening`; inbound via driver notifications)
 
 ## Version alignment
 

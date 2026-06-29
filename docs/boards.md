@@ -66,7 +66,7 @@ See [plan.md](plan.md) Phase 15.
 
 ### x86 HTTP inbound (operational notes)
 
-On x86, passive inbound TCP via post-init driver notifications is unreliable. `http-server` therefore **stays in `init()` and polls shared rings until the first `GET /` is served** (`wait_for_inbound` in `userspace/pds/http-server/src/main.rs`). After serial shows `lerux-http: listening`, the guest is waiting for a host connection — not hung.
+On x86, `http-server` returns from `init()` after printing `lerux-http: listening` and handles inbound `GET /` via virtio-pci-driver notifications (same model as aarch64 HTTP).
 
 **Automated smoke (preferred):**
 

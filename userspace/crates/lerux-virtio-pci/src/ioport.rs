@@ -45,7 +45,7 @@ impl IoPortCam {
             let ret = ipc
                 .inner_mut()
                 .seL4_X86_IOPort_In32(self.ioport_cap(), port);
-            ret.result as u32
+            ret.result
         })
     }
 }

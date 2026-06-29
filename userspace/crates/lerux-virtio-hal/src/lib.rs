@@ -133,7 +133,7 @@ unsafe impl Hal for HalImpl {
         assert!(!buffer.is_empty());
         let layout = Layout::from_size_align(buffer.len(), 1).unwrap();
         let bounce_buffer_range = state.bounce_buffer_allocator.allocate(layout).unwrap();
-        let buffer_slice = buffer.as_ref();
+        let buffer_slice = unsafe { buffer.as_ref() };
         state
             .dma_region
             .as_mut_ptr()
@@ -149,7 +149,7 @@ unsafe impl Hal for HalImpl {
             start..(start + buffer.len())
         };
         if direction != BufferDirection::DriverToDevice {
-            let buffer_slice = buffer.as_mut();
+            let buffer_slice = unsafe { buffer.as_mut() };
             state
                 .dma_region
                 .as_mut_ptr()

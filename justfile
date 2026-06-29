@@ -22,6 +22,12 @@ check:
     cargo fmt --all --check
     cargo clippy -p lerux-cli -p lerux-interface-types --all-targets -- -D warnings
 
+# Cross-target clippy for PD + shared userspace crates (requires SDK)
+check-pd:
+    {{lerux}} clippy
+
+check-all: check check-pd
+
 # Clone seL4 + microkit into deps/workspace/
 fetch:
     {{lerux}} fetch

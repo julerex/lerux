@@ -14,6 +14,7 @@ pub const VIRTIO_BLK_MMIO_OFFSET: usize = 0;
 ))]
 pub const VIRTIO_BLK_MMIO_OFFSET: usize = 0xc00;
 
+#[cfg(not(feature = "board-x86_64_generic_virtio"))]
 pub const VIRTIO_BLK_MMIO_SIZE: usize = 0x200;
 pub const VIRTIO_BLK_DRIVER_DMA_SIZE: usize = 0x200_000;
 pub const VIRTIO_BLK_CLIENT_DMA_SIZE: usize = 0x200_000;
@@ -37,8 +38,6 @@ pub mod pci {
     pub const BLK_BAR4_PHYS: u64 = 0xfed1_0000;
     pub const BLK_BAR4_VADDR: usize = BLK_BAR4_PHYS as usize;
     pub const BLK_BAR4_SIZE: usize = 0x4000;
-
-    pub const BLK_BAR_PADDRS: &[u64] = &[BLK_BAR1_PHYS, BLK_BAR4_PHYS];
 
     pub const BLK_BAR_REGIONS: &[BarRegion] = &[
         BarRegion {

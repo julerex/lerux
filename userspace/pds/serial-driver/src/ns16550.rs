@@ -70,7 +70,7 @@ impl Driver {
         let port = self.base_port + offset;
         with_ipc_buffer_mut(|ipc| {
             let ret = ipc.inner_mut().seL4_X86_IOPort_In8(self.ioport_cap(), port);
-            ret.result as u8
+            ret.result
         })
     }
 

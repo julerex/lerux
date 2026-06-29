@@ -10,7 +10,7 @@ const LOG_LEVEL: LevelFilter = LevelFilter::Info;
 
 static LOGGER: Logger = LoggerBuilder::const_default()
     .level_filter(LOG_LEVEL)
-    .filter(|meta| default_filter(meta))
+    .filter(default_filter)
     .write(|s| sel4::debug_print!("{s}"))
     .build();
 

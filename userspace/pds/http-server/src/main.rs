@@ -111,10 +111,10 @@ impl Handler for HandlerImpl {
             self.net_pending = false;
         }
 
-        if channels.contains(NET_DRIVER) {
-            if let Some(http_net) = &mut self.net {
-                drive_net(http_net);
-            }
+        if channels.contains(NET_DRIVER)
+            && let Some(http_net) = &mut self.net
+        {
+            drive_net(http_net);
         }
         Ok(())
     }

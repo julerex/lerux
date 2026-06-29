@@ -19,6 +19,10 @@ pub const VIRTIO_NET_MMIO_OFFSET: usize = 0;
 ))]
 pub const VIRTIO_NET_MMIO_OFFSET: usize = 0xe00;
 
+#[cfg(not(any(
+    feature = "board-x86_64_generic_virtio",
+    feature = "board-x86_64_generic_http"
+)))]
 pub const VIRTIO_NET_MMIO_SIZE: usize = 0x200;
 pub const VIRTIO_NET_DRIVER_DMA_SIZE: usize = 0x200_000;
 pub const VIRTIO_NET_CLIENT_DMA_SIZE: usize = 0x200_000;

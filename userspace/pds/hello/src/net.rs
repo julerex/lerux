@@ -26,6 +26,11 @@ const GUEST_IP: Ipv4Address = Ipv4Address::new(10, 0, 2, 15);
 const HOST_IP: Ipv4Address = Ipv4Address::new(10, 0, 2, 2);
 const TCP_ECHO_PORT: u16 = 18080;
 
+type NetRingBuffers = (
+    RingBuffers<'static, sel4_shared_ring_buffer::roles::Provide, fn()>,
+    RingBuffers<'static, sel4_shared_ring_buffer::roles::Provide, fn()>,
+);
+
 struct SocketArena {
     storage: [SocketStorage<'static>; 2],
     udp_rx_meta: [PacketMetadata; 1],
@@ -77,12 +82,7 @@ fn create_dma_region() -> SharedMemoryRef<'static, [u8]> {
     }
 }
 
-fn create_net_ring_buffers(
-    notify_net: fn(),
-) -> (
-    RingBuffers<'static, sel4_shared_ring_buffer::roles::Provide, fn()>,
-    RingBuffers<'static, sel4_shared_ring_buffer::roles::Provide, fn()>,
-) {
+fn create_net_ring_buffers(notify_net: fn()) -> NetRingBuffers {
     let rx_ring_buffers = RingBuffers::from_ptrs_using_default_initialization_strategy_for_role(
         unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_net_rx_free: *mut _)) },
         unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_net_rx_used: *mut _)) },
@@ -208,18 +208,17 @@ impl NetIo {
     fn poll_tcp_client(&mut self, sockets: &mut SocketSet<'static>) {
         let arena = unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_ARENA) };
         let tcp_cli = sockets.get_mut::<TcpSocket>(arena.tcp_cli_handle.unwrap());
-        if !self.tcp_client_sent && tcp_cli.may_send() {
-            if tcp_cli.send_slice(b"lerux-tcp").is_ok() {
-                self.tcp_client_sent = true;
-            }
+        if !self.tcp_client_sent && tcp_cli.may_send() && tcp_cli.send_slice(b"lerux-tcp").is_ok() {
+            self.tcp_client_sent = true;
         }
         if !self.tcp_rx_done && tcp_cli.may_recv() {
             let mut buf = [0u8; 16];
-            if let Ok(len) = tcp_cli.recv_slice(&mut buf) {
-                if len >= 9 && &buf[..9] == b"lerux-tcp" {
-                    log::info!("virtio-net: TCP RX ok");
-                    self.tcp_rx_done = true;
-                }
+            if let Ok(len) = tcp_cli.recv_slice(&mut buf)
+                && len >= 9
+                && &buf[..9] == b"lerux-tcp"
+            {
+                log::info!("virtio-net: TCP RX ok");
+                self.tcp_rx_done = true;
             }
         }
     }

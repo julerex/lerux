@@ -28,6 +28,11 @@ const HOST_IP: Ipv4Address = Ipv4Address::new(10, 0, 2, 2);
 const HTTP_RESPONSE: &[u8] =
     b"HTTP/1.1 200 OK\r\nContent-Length: 14\r\nConnection: close\r\n\r\nlerux: HTTP ok";
 
+type NetRingBuffers = (
+    RingBuffers<'static, sel4_shared_ring_buffer::roles::Provide, fn()>,
+    RingBuffers<'static, sel4_shared_ring_buffer::roles::Provide, fn()>,
+);
+
 struct SocketArena {
     storage: [SocketStorage<'static>; 2],
     udp_rx_meta: [PacketMetadata; 1],
@@ -78,12 +83,7 @@ fn create_dma_region() -> SharedMemoryRef<'static, [u8]> {
     }
 }
 
-fn create_net_ring_buffers(
-    notify_net: fn(),
-) -> (
-    RingBuffers<'static, sel4_shared_ring_buffer::roles::Provide, fn()>,
-    RingBuffers<'static, sel4_shared_ring_buffer::roles::Provide, fn()>,
-) {
+fn create_net_ring_buffers(notify_net: fn()) -> NetRingBuffers {
     let rx_ring_buffers = RingBuffers::from_ptrs_using_default_initialization_strategy_for_role(
         unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_net_rx_free: *mut _)) },
         unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_net_rx_used: *mut _)) },
@@ -232,12 +232,14 @@ impl HttpNet {
             return;
         }
         let mut buf = [0u8; 256];
-        if let Ok(len) = tcp.recv_slice(&mut buf) {
-            if len >= 4 && &buf[..4] == b"GET " && tcp.may_send() {
-                let _ = tcp.send_slice(HTTP_RESPONSE);
-                log::info!("lerux-http: served GET /");
-                self.served = true;
-            }
+        if let Ok(len) = tcp.recv_slice(&mut buf)
+            && len >= 4
+            && &buf[..4] == b"GET "
+            && tcp.may_send()
+        {
+            let _ = tcp.send_slice(HTTP_RESPONSE);
+            log::info!("lerux-http: served GET /");
+            self.served = true;
         }
     }
 

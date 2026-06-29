@@ -194,6 +194,69 @@ jobs:
           path: sdk-bundle/
           retention-days: 1
 
+  check-pd:
+    needs: sdk
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build dev image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          tags: lerux-dev
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: sdk
+          path: sdk-bundle
+
+      - name: Install SDK from artifact
+        run: |
+          set -euo pipefail
+          mkdir -p deps/workspace/microkit/release
+          cp -a sdk-bundle/microkit-sdk deps/workspace/microkit/release/
+          sdk="deps/workspace/microkit/release/$(basename sdk-bundle/microkit-sdk)"
+          chmod -R a+rX "${sdk}"
+          find "${sdk}/bin" -type f -exec chmod a+x {} +
+          echo "/work/${sdk}" > deps/.sdk-path
+
+      - name: Restore clippy cache
+        uses: actions/cache/restore@v4
+        id: clippy-cache
+        with:
+          path: build/clippy
+          key: clippy-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            clippy-
+
+      - name: Cross-target clippy
+        id: clippy
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/work" -w /work lerux-dev \
+            bash -c 'set -euo pipefail
+              sdk="$(tr -d "\n" < deps/.sdk-path)"
+              chmod -R a+rX "${sdk}"
+              find "${sdk}/bin" -type f -exec chmod a+x {} +
+              just check-pd
+            '
+          sudo chown -R "$(id -u):$(id -g)" build deps
+
+      - name: Save clippy cache
+        if: always() && steps.clippy-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: build/clippy
+          key: clippy-${{ hashFiles('Cargo.lock') }}
+
   smoke:
     needs: sdk
     runs-on: ubuntu-latest

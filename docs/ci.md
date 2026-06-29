@@ -6,17 +6,20 @@ GitHub Actions workflow: [`.github/workflows/rust.yml`](../.github/workflows/rus
 
 1. **check** — `just check` (`cargo fmt --all --check` + clippy on host crates; no SDK).
 2. **sdk** — Docker image, fetch sources, build Microkit SDK (cached), **prebuild patched SP804 QEMU** (cached), upload SDK artifact.
-3. **smoke** — 15 parallel matrix jobs; each restores SDK artifact, per-job `build/` cache, and SP804 QEMU (init/composed/http-composed only).
+3. **check-pd** — `just check-pd` (cross-target clippy on PD + shared userspace crates; needs SDK artifact).
+4. **smoke** — 15 parallel matrix jobs; each restores SDK artifact, per-job `build/` cache, and SP804 QEMU (init/composed/http-composed only).
 
 ```mermaid
 flowchart LR
   check[check job]
   sdk[sdk job]
+  checkPd[check-pd job]
   smoke[smoke matrix x15]
+  sdk --> checkPd
   sdk --> smoke
 ```
 
-Local mirror: `just check` (format + clippy for `lerux-cli` and `lerux-interface-types`).
+Local mirror: `just check` (format + clippy for `lerux-cli` and `lerux-interface-types`); `just check-pd` after `just build-sdk` (or `just check-all` for both).
 
 ## Smoke matrix
 
@@ -48,6 +51,7 @@ Local mirror: `just test-all` (requires full SDK; creates `support/disk.img` onc
 | SDK | versions + `SDK_CACHE_SUFFIX` | sdk |
 | SP804 QEMU | patch + `install-qemu-sp804.sh` | sdk (build), smoke init/composed/http-composed (restore) |
 | Per-smoke `build/` | `Cargo.lock` + matrix job id | smoke |
+| `build/clippy/` | `Cargo.lock` | check-pd |
 
 SP804 QEMU is built once in the **sdk** job so `init`, `composed`, and `http-composed` do not each cold-build QEMU (~4 min). Cache paths include install prefix, source tree, and tarball.
 

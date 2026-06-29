@@ -1,6 +1,7 @@
 mod board;
 mod build;
 mod build_sdk;
+mod clippy;
 mod disk_img;
 mod fetch;
 mod install;
@@ -53,6 +54,13 @@ enum Commands {
         tool: InstallTool,
     },
     DiskImg,
+    /// Cross-target clippy for PD and shared userspace crates (requires SDK).
+    Clippy {
+        #[arg(long, default_value = "build")]
+        build_dir: String,
+        #[arg(long, default_value = "debug")]
+        config: String,
+    },
     Build {
         #[arg(long, default_value = "qemu_virt_aarch64")]
         board: String,
@@ -148,6 +156,9 @@ fn main() -> Result<()> {
             println!("{}", bin.display());
         }
         Commands::DiskImg => disk_img::disk_img(&root)?,
+        Commands::Clippy { build_dir, config } => {
+            clippy::clippy_workspace(&root, &build_dir, &config)?;
+        }
         Commands::Build {
             board,
             build_dir,

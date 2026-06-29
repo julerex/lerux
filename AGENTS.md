@@ -102,13 +102,19 @@ Run before finishing Rust changes:
 just check
 ```
 
-This runs `cargo fmt --all --check` and clippy on host crates (`lerux-cli`, `lerux-interface-types`). Full-workspace clippy for seL4-dependent crates requires `SEL4_INCLUDE_DIRS` from a built SDK (`just build-sdk`).
+This runs `cargo fmt --all --check` and clippy on host crates (`lerux-cli`, `lerux-interface-types`). After PD or shared userspace crate changes, also run:
+
+```bash
+just check-pd
+```
+
+`check-pd` runs cross-target clippy on all PD and shared userspace crates (one pass per arch). It requires a built SDK (`just build-sdk`) for `SEL4_INCLUDE_DIRS`. `just check-all` runs both.
 
 PD changes may need a full board build (`just build` or `just build-pd <crate>`) because targets are seL4 cross-compile profiles.
 
 Workspace `[lints]` in the root `Cargo.toml` sets clippy defaults; each crate inherits them via `[lints] workspace = true`.
 
-CI runs `just check` in a dedicated job before the SDK/smoke pipeline.
+CI runs `just check` before the SDK pipeline and `just check-pd` after the SDK artifact is ready (in parallel with smoke).
 
 ## What not to do
 

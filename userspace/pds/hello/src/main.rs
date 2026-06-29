@@ -249,18 +249,18 @@ impl HandlerImpl {
     }
 
     fn handle_blk_driver(&mut self) {
-        if let Some(blk) = &mut self.blk_read {
-            if !blk.done {
-                finish_blk_read(blk);
-            }
+        if let Some(blk) = &mut self.blk_read
+            && !blk.done
+        {
+            finish_blk_read(blk);
         }
     }
 
     fn handle_net_driver(&mut self) {
-        if let Some(net_io) = &mut self.net_io {
-            if !net_io.is_done() {
-                net_io.poll();
-            }
+        if let Some(net_io) = &mut self.net_io
+            && !net_io.is_done()
+        {
+            net_io.poll();
         }
     }
 }

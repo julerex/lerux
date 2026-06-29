@@ -32,7 +32,7 @@ fn serial_write(s: &str) {
 
 static LOGGER: Logger = LoggerBuilder::const_default()
     .level_filter(LOG_LEVEL)
-    .filter(|meta| default_filter(meta))
+    .filter(default_filter)
     .write(serial_write)
     .build();
 

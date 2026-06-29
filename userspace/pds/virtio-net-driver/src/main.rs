@@ -48,6 +48,11 @@ type NetTransport = virtio_drivers::transport::pci::PciTransport;
 )))]
 type NetTransport = virtio_drivers::transport::mmio::MmioTransport<'static>;
 
+type NetRingBuffers = (
+    RingBuffers<'static, Use, fn()>,
+    RingBuffers<'static, Use, fn()>,
+);
+
 fn create_client_region() -> SharedMemoryRef<'static, [u8]> {
     unsafe {
         SharedMemoryRef::<'static, _>::new(memory_region_symbol!(
@@ -57,12 +62,7 @@ fn create_client_region() -> SharedMemoryRef<'static, [u8]> {
     }
 }
 
-fn create_net_ring_buffers(
-    notify_client: fn(),
-) -> (
-    RingBuffers<'static, Use, fn()>,
-    RingBuffers<'static, Use, fn()>,
-) {
+fn create_net_ring_buffers(notify_client: fn()) -> NetRingBuffers {
     let rx_ring_buffers =
         RingBuffers::<'_, Use, fn()>::from_ptrs_using_default_initialization_strategy_for_role(
             unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_net_rx_free: *mut _)) },

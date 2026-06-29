@@ -29,7 +29,7 @@ lerux builds **Rust-only userspace** on the formally verified [seL4](https://sel
 | Userspace model | seL4 Microkit (static PD layout) |
 | Userspace language | Rust only (no musllibc/relibc in lerux code) |
 | First platform | aarch64 QEMU virt; x86_64 parameterized for follow-up |
-| Dependency fetch | `scripts/fetch.sh` git clones (pinned tags) |
+| Dependency fetch | `lerux fetch` git clones (pinned tags) |
 
 ## Platform parity
 

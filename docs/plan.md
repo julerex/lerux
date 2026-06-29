@@ -13,7 +13,7 @@ Last updated: 2026-06-29 (Phase 21)
 
 - [x] Serial driver PD (PL011 on virt) — `userspace/pds/serial-driver/`
 - [x] Two-PD system with Microkit channels (hello client + serial_driver)
-- [x] Board-templated `.system` files — `userspace/systems/templates/` + `scripts/generate-system.py`
+- [x] Board-templated `.system` files — `userspace/systems/templates/` + `lerux system`
 
 ## Phase 3 — x86_64
 
@@ -80,7 +80,7 @@ Last updated: 2026-06-29 (Phase 21)
 
 - [x] Wire `sp804-driver` into `init.system.template` (MMIO `0x90d0000`, IRQ 43)
 - [x] `boot-init` reads elapsed time via `TimerClient` after RTC
-- [x] Patched QEMU for virt SP804 (`scripts/install-qemu-sp804.sh`; rust-sel4 `arm-virt-sp804` patch)
+- [x] Patched QEMU for virt SP804 (`lerux install sp804-qemu`; rust-sel4 `arm-virt-sp804` patch)
 - [x] `just test-init` expects `lerux-init: timer ok` and `lerux-init: init ok`
 
 ## Phase 13 — Ops and docs
@@ -137,7 +137,7 @@ Init (`just test-init`) uses PL031 + SP804 drivers from rust-sel4 v4.0.0, which 
 - [x] Board `qemu_virt_aarch64_http` (`just test-http`); host `curl` via QEMU `hostfwd` `18080→8080`
 - [x] `http-composed.system.template` — boot-init + init drivers + virtio-net + http-server (6 PDs)
 - [x] Board `qemu_virt_aarch64_http_composed` (`just test-http-composed`); boot-init notify gate before net
-- [x] `scripts/test.py` `--curl URL EXPECT` for HTTP smoke
+- [x] `lerux test` HTTP smoke checks (`--curl URL EXPECT` via `lerux smoke`)
 - [x] CI matrix jobs `http` and `http-composed` (12 smoke jobs total)
 
 ## Phase 18 — x86 PCI virtio

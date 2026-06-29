@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+    "tools/lerux-cli",
     "userspace/pds/hello",
     "userspace/pds/serial-driver",
     "userspace/pds/echo-server",

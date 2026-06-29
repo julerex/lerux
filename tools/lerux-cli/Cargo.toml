@@ -1,0 +1,22 @@
+[package]
+name = "lerux-cli"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "lerux"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+ureq = { version = "3", default-features = false, features = ["rustls"] }
+tar = "0.4"
+xz2 = "0.1"
+flate2 = "1"
+which = "7"
+regex = "1"
+tempfile = "3"

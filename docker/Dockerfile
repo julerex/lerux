@@ -8,7 +8,6 @@ RUN apt-get update -q && apt-get install -y --no-install-recommends \
     qemu-system-arm qemu-system-x86 qemu-system-misc qemu-utils ipxe-qemu \
     libglib2.0-dev libpixman-1-dev pkg-config \
     libclang-dev \
-    python3-pexpect \
     xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
@@ -29,8 +28,11 @@ RUN cargo install just --locked
 
 # Match rust-toolchain.toml before building lerux PDs
 COPY rust-toolchain.toml /work/rust-toolchain.toml
-COPY scripts/install-riscv-toolchain.sh /work/scripts/install-riscv-toolchain.sh
+COPY tools/lerux-cli /work/tools/lerux-cli
+COPY support/boards.toml /work/support/boards.toml
+COPY Cargo.toml /work/Cargo.toml
+COPY Cargo.lock /work/Cargo.lock
 WORKDIR /work
-RUN chmod +x scripts/install-riscv-toolchain.sh && scripts/install-riscv-toolchain.sh
+RUN cargo build -q -p lerux-cli && cargo run -q -p lerux-cli -- install riscv-toolchain
 ENV PATH="/work/deps/toolchains/riscv64-unknown-elf/bin:${PATH}"
 RUN rustup show

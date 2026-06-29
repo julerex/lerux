@@ -6,7 +6,7 @@ The seL4 kernel is **not vendored** — it is cloned into `deps/workspace/` and 
 
 ## Quick start
 
-**Prerequisites:** Linux, `git`, `just`, `rustup`, `python3`, `cmake`, `ninja`, `qemu-system-aarch64`, `libclang-dev` (for `bindgen` when building PDs), and optionally the [ARM GNU bare-metal toolchain](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads) (`aarch64-none-elf-gcc`, 12.2.Rel1) for `just build-sdk`.
+**Prerequisites:** Linux, `git`, `just`, `rustup`, `cmake`, `ninja`, `qemu-system-aarch64`, `libclang-dev` (for `bindgen` when building PDs), and optionally the [ARM GNU bare-metal toolchain](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads) (`aarch64-none-elf-gcc`, 12.2.Rel1) for `just build-sdk`. Python 3 is only required for `just build-sdk` (upstream Microkit `build_sdk.py`).
 
 ```bash
 just fetch          # clone seL4 15.0.0 + microkit 2.2.0
@@ -18,7 +18,6 @@ just run            # build hello PD, assemble loader.img, boot QEMU
 Smoke test:
 
 ```bash
-pip install pexpect   # if needed
 just test
 ```
 
@@ -64,7 +63,7 @@ Default: `qemu_virt_aarch64` (QEMU ARM virt). Override with `BOARD=... just run`
 
 Full board reference: [`docs/boards.md`](docs/boards.md).
 
-**Init and composed** need patched QEMU for SP804 at `0x90d0000` — see [`scripts/install-qemu-sp804.sh`](scripts/install-qemu-sp804.sh) (Docker image includes build deps). Init is **aarch64 virt only**; cross-arch parity is in [`docs/plan.md`](docs/plan.md).
+**Init and composed** need patched QEMU for SP804 at `0x90d0000` — run `cargo run -p lerux-cli -- install sp804-qemu` (Docker image includes build deps). Init is **aarch64 virt only**; cross-arch parity is in [`docs/plan.md`](docs/plan.md).
 
 ## Documentation
 

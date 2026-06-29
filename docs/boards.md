@@ -1,6 +1,6 @@
 # Boards
 
-Board names are the `BOARD=` value for `just run`, `just test`, and `just build`. Metadata lives in [`scripts/board_config.py`](../scripts/board_config.py).
+Board names are the `BOARD=` value for `just run`, `just test`, and `just build`. Metadata lives in [`support/boards.toml`](../support/boards.toml).
 
 ## Reference
 
@@ -74,7 +74,7 @@ On x86, `http-server` returns from `init()` after printing `lerux-http: listenin
 just test-x86-http
 ```
 
-`scripts/test.py` retries `curl` for up to 30s and always terminates QEMU in a `finally` block (avoids orphan instances on port 18080).
+`lerux test` retries HTTP checks for up to 30s and always terminates QEMU on exit (avoids orphan instances on port 18080).
 
 **Interactive QEMU:**
 
@@ -89,14 +89,14 @@ sleep 1 && curl http://127.0.0.1:18080/
 | Consumer | Command / context |
 |----------|-------------------|
 | x86/aarch64 HTTP hostfwd | `just test-x86-http`, `just test-http`, `just qemu-x86_64-http` |
-| TCP echo (virtio outbound tests) | `just test-x86-virtio`, `scripts/tcp-echo-server.py 18080` |
+| TCP echo (virtio outbound tests) | `just test-x86-virtio`, `cargo run -p lerux-cli -- tcp-echo 18080` |
 
 Do **not** run background QEMU and `just test-x86-http` concurrently. A stale QEMU or leftover `tcp-echo-server` on 18080 makes `curl` hit the wrong endpoint and time out even when the new guest has reached `listening`.
 
 **Cleanup before retry:**
 
 ```bash
-pkill -f 'scripts/tcp-echo-server.py 18080'
+pkill -f 'tcp-echo 18080'
 pkill -f 'qemu-system-x86_64.*hostfwd=tcp::18080-:8080'
 just test-x86-http
 ```

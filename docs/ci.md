@@ -39,7 +39,7 @@ Local mirror: `just test-all` (requires full SDK; creates `support/disk.img` onc
 
 | Cache | Key inputs | Restored in |
 |-------|------------|-------------|
-| Workspace | `deps/versions.toml`, `scripts/fetch.sh` | sdk |
+| Workspace | `deps/versions.toml`, `tools/lerux-cli` | sdk |
 | SDK | versions + `SDK_CACHE_SUFFIX` | sdk |
 | SP804 QEMU | patch + `install-qemu-sp804.sh` | sdk (build), smoke init/composed/http-composed (restore) |
 | Per-smoke `build/` | `Cargo.lock` + matrix job id | smoke |
@@ -50,13 +50,13 @@ Caches are saved with `if: always()` when the artifact exists, so a failing smok
 
 ## Patched QEMU
 
-Stock QEMU `virt` lacks SP804 at `0x90d0000`. Init, composed, and http-composed smokes use [`scripts/install-qemu-sp804.sh`](../scripts/install-qemu-sp804.sh). The script prints **only** the install `bin` directory on stdout (build logs go to stderr) so `justfile` can prepend it to `PATH` safely.
+Stock QEMU `virt` lacks SP804 at `0x90d0000`. Init, composed, and http-composed smokes use `cargo run -p lerux-cli -- install sp804-qemu`. The installer prints **only** the install `bin` directory on stdout (build logs go to stderr).
 
 ## Troubleshooting
 
 | Symptom | Likely cause |
 |---------|----------------|
-| `Argument list too long` on `python3` | Corrupted `PATH` from capturing QEMU build stdout — fixed in `install-qemu-sp804.sh` |
+| `Argument list too long` on `python3` | Corrupted `PATH` from capturing QEMU build stdout — fixed in SP804 installer stderr/stdout split |
 | Init passes, timer times out | Stock QEMU used instead of patched build — check `which qemu-system-aarch64` |
 | Composed flaky on `init ok` | Serial/debug interleaving — `boot-init` notifies `hello` before virtio (composed-sync) |
 | `x86-http`: serial shows `listening`, `curl` times out | Stale QEMU or `tcp-echo-server` on host **18080** — see [boards.md — x86 HTTP inbound](boards.md#x86-http-inbound-operational-notes); smoke recipe kills both before start |

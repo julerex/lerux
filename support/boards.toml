@@ -1,0 +1,139 @@
+[qemu_virt_aarch64]
+arch = "aarch64"
+microkit_board = "qemu_virt_aarch64"
+target = "aarch64-sel4-microkit"
+target_triple = "aarch64-sel4-microkit"
+template = "serial-hello.system.template"
+pds = ["hello", "serial-driver"]
+qemu = "aarch64"
+system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33 }
+
+[qemu_virt_riscv64]
+arch = "riscv64"
+microkit_board = "qemu_virt_riscv64"
+target = "riscv64-sel4-microkit"
+target_triple = "riscv64-sel4-microkit"
+template = "serial-hello.system.template"
+pds = ["hello", "serial-driver"]
+qemu = "riscv64"
+system_vars = { serial_mmio_phys_addr = "0x1_000_0000", serial_irq = 10 }
+
+[qemu_virt_riscv64_echo]
+arch = "riscv64"
+microkit_board = "qemu_virt_riscv64"
+target = "riscv64-sel4-microkit"
+target_triple = "riscv64-sel4-microkit"
+template = "echo.system.template"
+pds = ["echo-client", "echo-server", "serial-driver"]
+qemu = "riscv64"
+system_vars = { serial_mmio_phys_addr = "0x1_000_0000", serial_irq = 10 }
+
+[qemu_virt_riscv64_virtio]
+arch = "riscv64"
+microkit_board = "qemu_virt_riscv64"
+target = "riscv64-sel4-microkit"
+target_triple = "riscv64-sel4-microkit"
+template = "virtio-hello-riscv.system.template"
+pds = ["hello", "serial-driver", "virtio-blk-driver", "virtio-net-driver"]
+qemu = "riscv64_virtio"
+system_vars = { serial_mmio_phys_addr = "0x1_000_0000", serial_irq = 10, virtio_blk_mmio_phys_addr = "0x10_001_000", virtio_net_mmio_phys_addr = "0x10_002_000", virtio_blk_irq = 1, virtio_net_irq = 2 }
+
+[qemu_virt_aarch64_init]
+arch = "aarch64"
+microkit_board = "qemu_virt_aarch64"
+target = "aarch64-sel4-microkit"
+target_triple = "aarch64-sel4-microkit"
+template = "init.system.template"
+pds = ["boot-init", "serial-driver", "pl031-driver", "sp804-driver"]
+qemu = "aarch64_init"
+system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, pl031_mmio_phys_addr = "0x9010000", pl031_irq = 34, sp804_mmio_phys_addr = "0x90d0000", sp804_irq = 43 }
+
+[qemu_virt_aarch64_echo]
+arch = "aarch64"
+microkit_board = "qemu_virt_aarch64"
+target = "aarch64-sel4-microkit"
+target_triple = "aarch64-sel4-microkit"
+template = "echo.system.template"
+pds = ["echo-client", "echo-server", "serial-driver"]
+qemu = "aarch64"
+system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33 }
+
+[qemu_virt_aarch64_virtio]
+arch = "aarch64"
+microkit_board = "qemu_virt_aarch64"
+target = "aarch64-sel4-microkit"
+target_triple = "aarch64-sel4-microkit"
+template = "virtio-hello.system.template"
+pds = ["hello", "serial-driver", "virtio-blk-driver", "virtio-net-driver"]
+qemu = "aarch64_virtio"
+system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_blk_irq = 78, virtio_net_irq = 79 }
+
+[qemu_virt_aarch64_http]
+arch = "aarch64"
+microkit_board = "qemu_virt_aarch64"
+target = "aarch64-sel4-microkit"
+target_triple = "aarch64-sel4-microkit"
+template = "http-virtio.system.template"
+pds = ["http-server", "serial-driver", "virtio-net-driver"]
+qemu = "aarch64_http"
+system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_net_irq = 79 }
+
+[qemu_virt_aarch64_http_composed]
+arch = "aarch64"
+microkit_board = "qemu_virt_aarch64"
+target = "aarch64-sel4-microkit"
+target_triple = "aarch64-sel4-microkit"
+template = "http-composed.system.template"
+pds = ["boot-init", "http-server", "serial-driver", "pl031-driver", "sp804-driver", "virtio-net-driver"]
+qemu = "aarch64_http_composed"
+system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, pl031_mmio_phys_addr = "0x9010000", pl031_irq = 34, sp804_mmio_phys_addr = "0x90d0000", sp804_irq = 43, virtio_mmio_phys_addr = "0xa003000", virtio_net_irq = 79 }
+
+[qemu_virt_aarch64_composed]
+arch = "aarch64"
+microkit_board = "qemu_virt_aarch64"
+target = "aarch64-sel4-microkit"
+target_triple = "aarch64-sel4-microkit"
+template = "composed.system.template"
+pds = ["boot-init", "hello", "serial-driver", "pl031-driver", "sp804-driver", "virtio-blk-driver", "virtio-net-driver"]
+qemu = "aarch64_composed"
+system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, pl031_mmio_phys_addr = "0x9010000", pl031_irq = 34, sp804_mmio_phys_addr = "0x90d0000", sp804_irq = 43, virtio_mmio_phys_addr = "0xa003000", virtio_blk_irq = 78, virtio_net_irq = 79 }
+
+[x86_64_generic]
+arch = "x86_64"
+microkit_board = "x86_64_generic"
+target = "x86_64-sel4-microkit"
+target_triple = "x86_64-sel4-microkit"
+template = "serial-hello-x86.system.template"
+pds = ["hello", "serial-driver"]
+qemu = "x86_64"
+system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48 }
+
+[x86_64_generic_echo]
+arch = "x86_64"
+microkit_board = "x86_64_generic"
+target = "x86_64-sel4-microkit"
+target_triple = "x86_64-sel4-microkit"
+template = "echo-x86.system.template"
+pds = ["echo-client", "echo-server", "serial-driver"]
+qemu = "x86_64"
+system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48 }
+
+[x86_64_generic_virtio]
+arch = "x86_64"
+microkit_board = "x86_64_generic"
+target = "x86_64-sel4-microkit"
+target_triple = "x86_64-sel4-microkit"
+template = "virtio-hello-x86.system.template"
+pds = ["hello", "serial-driver", "virtio-pci-driver"]
+qemu = "x86_64_virtio"
+system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48, virtio_blk_bar1_phys_addr = "0xfed0_0000", virtio_blk_bar4_phys_addr = "0xfed1_0000", virtio_net_bar1_phys_addr = "0xfed2_0000", virtio_net_bar4_phys_addr = "0xfed3_0000", virtio_blk_ioapic_pin = 10, virtio_blk_ioapic_vector = 49, virtio_net_ioapic_pin = 11, virtio_net_ioapic_vector = 50, virtio_blk_driver_dma_phys_addr = "0x6000_0000", virtio_net_client_dma_phys_addr = "0x6040_0000", virtio_net_rx_free_phys_addr = "0x6060_0000", virtio_net_rx_used_phys_addr = "0x6080_0000", virtio_net_tx_free_phys_addr = "0x60a0_0000", virtio_net_tx_used_phys_addr = "0x60c0_0000", virtio_blk_client_dma_phys_addr = "0x60e0_0000", virtio_blk_free_phys_addr = "0x6100_0000", virtio_blk_used_phys_addr = "0x6120_0000" }
+
+[x86_64_generic_http]
+arch = "x86_64"
+microkit_board = "x86_64_generic"
+target = "x86_64-sel4-microkit"
+target_triple = "x86_64-sel4-microkit"
+template = "http-virtio-x86.system.template"
+pds = ["http-server", "serial-driver", "virtio-pci-driver"]
+qemu = "x86_64_http"
+system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48, virtio_net_bar1_phys_addr = "0xfed2_0000", virtio_net_bar4_phys_addr = "0xfed3_0000", virtio_net_ioapic_pin = 11, virtio_net_ioapic_vector = 50, virtio_net_driver_dma_phys_addr = "0x6000_0000", virtio_net_client_dma_phys_addr = "0x6020_0000", virtio_net_rx_free_phys_addr = "0x6040_0000", virtio_net_rx_used_phys_addr = "0x6060_0000", virtio_net_tx_free_phys_addr = "0x6080_0000", virtio_net_tx_used_phys_addr = "0x60a0_0000" }

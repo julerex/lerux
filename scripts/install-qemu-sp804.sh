@@ -44,7 +44,7 @@ fi
 
 if ! grep -q VIRT_TIMER1 "${src_dir}/hw/arm/virt.c" 2>/dev/null; then
     echo "==> Applying arm-virt-sp804 patch" >&2
-    patch -d "${src_dir}" -p1 < "${patch}"
+    patch -d "${src_dir}" -p1 < "${patch}" >&2
 fi
 
 if [[ ! -f "${src_dir}/build/config.status" ]]; then

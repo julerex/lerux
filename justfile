@@ -118,7 +118,7 @@ qemu-aarch64:
 qemu-aarch64-init:
     #!/usr/bin/env bash
     set -euo pipefail
-    sp804_qemu="$(bash scripts/install-qemu-sp804.sh)"
+    sp804_qemu="$(bash scripts/install-qemu-sp804.sh | tail -1)"
     export PATH="${sp804_qemu}:$(bash scripts/host-path.sh)"
     exec qemu-system-aarch64 \
         -machine virt,virtualization=on -cpu cortex-a53 -m size=2G \
@@ -212,7 +212,7 @@ test: image
                 -device loader,file={{board_build}}/loader.img,addr=0x70000000,cpu-num=0
             ;;
         aarch64_init)
-            sp804_qemu="$(bash scripts/install-qemu-sp804.sh)"
+            sp804_qemu="$(bash scripts/install-qemu-sp804.sh | tail -1)"
             export PATH="${sp804_qemu}:$(bash scripts/host-path.sh)"
             exec python3 scripts/test.py \
                 --expect "lerux-init: RTC" \

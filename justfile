@@ -213,6 +213,10 @@ test: image
             python3 scripts/tcp-echo-server.py 18080 &
             tcp_echo_pid=$!
             trap 'kill "${tcp_echo_pid}" 2>/dev/null || true' EXIT
+            for _ in $(seq 1 100); do
+                if python3 scripts/tcp-echo-server.py --probe 18080; then break; fi
+                sleep 0.05
+            done
             exec python3 scripts/test.py \
                 --expect "lerux: Hello from Rust on seL4 Microkit!" \
                 --expect "virtio-blk:" \
@@ -252,6 +256,10 @@ test: image
             python3 scripts/tcp-echo-server.py 18080 &
             tcp_echo_pid=$!
             trap 'kill "${tcp_echo_pid}" 2>/dev/null || true' EXIT
+            for _ in $(seq 1 100); do
+                if python3 scripts/tcp-echo-server.py --probe 18080; then break; fi
+                sleep 0.05
+            done
             exec python3 scripts/test.py \
                 --expect "lerux: Hello from Rust on seL4 Microkit!" \
                 --expect "virtio-blk:" \

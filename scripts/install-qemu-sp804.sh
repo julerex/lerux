@@ -53,28 +53,28 @@ if [[ ! -f "${src_dir}/build/config.status" ]]; then
     (
         cd "${src_dir}"
         ./configure \
-        --prefix="${install_prefix}" \
-        --target-list=aarch64-softmmu \
-        --disable-werror \
-        --disable-docs \
-        --disable-gtk \
-        --disable-sdl \
-        --disable-vnc \
-        --disable-curses \
-        --audio-drv-list= \
-        --disable-capstone \
-        --disable-libusb \
-        --disable-usb-redir \
-        --disable-vhost-user \
-        --disable-vhost-vdpa
-    )
+            --prefix="${install_prefix}" \
+            --target-list=aarch64-softmmu \
+            --disable-werror \
+            --disable-docs \
+            --disable-gtk \
+            --disable-sdl \
+            --disable-vnc \
+            --disable-curses \
+            --audio-drv-list= \
+            --disable-capstone \
+            --disable-libusb \
+            --disable-usb-redir \
+            --disable-vhost-user \
+            --disable-vhost-vdpa
+    ) >&2
 else
     echo "==> Reusing existing SP804 QEMU build tree" >&2
 fi
 
 echo "==> Building SP804 QEMU" >&2
-make -C "${src_dir}/build" -j"$(nproc)"
-make -C "${src_dir}/build" install
+make -C "${src_dir}/build" -j"$(nproc)" >&2
+make -C "${src_dir}/build" install >&2
 
 if [[ ! -x "${qemu_bin}" ]]; then
     echo "error: SP804 QEMU build failed" >&2

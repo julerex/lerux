@@ -34,8 +34,8 @@ just test-all
 
 GitHub Actions (`.github/workflows/rust.yml`) on every push to `main`:
 
-1. **sdk** — build Docker image, fetch sources, build Microkit SDK once for both boards (cached)
-2. **smoke** (matrix) — `just test`, `BOARD=x86_64_generic just test`, `just test-riscv`, `just test-virtio`
+1. **sdk** — build Docker image, fetch sources, build Microkit SDK once for all boards (cached)
+2. **smoke** (matrix, 8 jobs) — `just test`, `BOARD=x86_64_generic just test`, `just test-riscv`, `just test-virtio`, `just test-echo`, `just test-riscv-echo`, `just test-riscv-virtio`, `just test-init`
 
 ## Architecture
 
@@ -74,6 +74,14 @@ Virtio block + net drivers on aarch64 virt (`qemu_virt_aarch64_virtio`):
 just disk-img          # 4 MiB empty disk for virtio-blk
 just test-virtio       # serial + virtio-blk read + virtio-net TX smoke test
 ```
+
+Init / timer smoke on aarch64 virt (`qemu_virt_aarch64_init`):
+
+```bash
+just test-init         # PL031 RTC + SP804 timer via boot-init
+```
+
+Stock QEMU `virt` does not model SP804 at `0x90d0000`. The init test builds or reuses a patched QEMU via [`scripts/install-qemu-sp804.sh`](scripts/install-qemu-sp804.sh) (patch: [`support/qemu/arm-virt-sp804.patch`](support/qemu/arm-virt-sp804.patch); needs `libglib2.0-dev` and `libpixman-1-dev`, included in the Docker image).
 
 ## Documentation
 

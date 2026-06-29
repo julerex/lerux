@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-06-29 (Phase 11)
+Last updated: 2026-06-29 (Phase 13)
 
 ## Phase 1 — Bring-up
 
@@ -82,6 +82,13 @@ Last updated: 2026-06-29 (Phase 11)
 - [x] `boot-init` reads elapsed time via `TimerClient` after RTC
 - [x] Patched QEMU for virt SP804 (`scripts/install-qemu-sp804.sh`; rust-sel4 `arm-virt-sp804` patch)
 - [x] `just test-init` expects `lerux-init: timer ok` and `lerux-init: init ok`
+
+## Phase 13 — Ops and docs
+
+- [x] GHA cache for patched QEMU (`deps/toolchains/qemu-sp804`) on init smoke job
+- [x] README: full smoke matrix, init board section, SP804 QEMU note
+- [x] `install-qemu-sp804.sh`: reuse build tree when install binary missing but configure done
+- [x] Plan/README/justfile comment hygiene
 
 ## Version alignment
 

@@ -137,7 +137,7 @@ jobs:
   smoke:
     needs: sdk
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -198,6 +198,16 @@ jobs:
           restore-keys: |
             build-${{ matrix.id }}-
 
+      - name: Restore SP804 QEMU cache
+        if: matrix.id == 'init'
+        uses: actions/cache/restore@v4
+        id: qemu-sp804-cache
+        with:
+          path: deps/toolchains/qemu-sp804
+          key: qemu-sp804-${{ hashFiles('support/qemu/arm-virt-sp804.patch', 'scripts/install-qemu-sp804.sh') }}
+          restore-keys: |
+            qemu-sp804-
+
       - name: Smoke test (${{ matrix.id }})
         run: |
           docker run --rm -v "${{ github.workspace }}:/work" -w /work lerux-dev \
@@ -214,3 +224,10 @@ jobs:
         with:
           path: build
           key: build-${{ matrix.id }}-${{ hashFiles('Cargo.lock') }}
+
+      - name: Save SP804 QEMU cache
+        if: matrix.id == 'init' && steps.qemu-sp804-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: deps/toolchains/qemu-sp804
+          key: qemu-sp804-${{ hashFiles('support/qemu/arm-virt-sp804.patch', 'scripts/install-qemu-sp804.sh') }}

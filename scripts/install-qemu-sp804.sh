@@ -47,11 +47,12 @@ if ! grep -q VIRT_TIMER1 "${src_dir}/hw/arm/virt.c" 2>/dev/null; then
     patch -d "${src_dir}" -p1 < "${patch}"
 fi
 
-echo "==> Configuring SP804 QEMU (aarch64-softmmu only)" >&2
-rm -rf "${src_dir}/build"
-(
-    cd "${src_dir}"
-    ./configure \
+if [[ ! -f "${src_dir}/build/config.status" ]]; then
+    echo "==> Configuring SP804 QEMU (aarch64-softmmu only)" >&2
+    rm -rf "${src_dir}/build"
+    (
+        cd "${src_dir}"
+        ./configure \
         --prefix="${install_prefix}" \
         --target-list=aarch64-softmmu \
         --disable-werror \
@@ -66,7 +67,10 @@ rm -rf "${src_dir}/build"
         --disable-usb-redir \
         --disable-vhost-user \
         --disable-vhost-vdpa
-)
+    )
+else
+    echo "==> Reusing existing SP804 QEMU build tree" >&2
+fi
 
 echo "==> Building SP804 QEMU" >&2
 make -C "${src_dir}/build" -j"$(nproc)"

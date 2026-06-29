@@ -332,7 +332,7 @@ test-riscv-echo:
 test-riscv-virtio:
     BOARD=qemu_virt_riscv64_virtio just test
 
-# Timer/RTC/init smoke test (PL031 RTC + boot-init on aarch64 virt)
+# Timer/RTC/init smoke test (PL031 + SP804 via patched QEMU; see support/qemu/)
 test-init:
     BOARD=qemu_virt_aarch64_init just test
 

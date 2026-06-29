@@ -174,9 +174,10 @@ qemu-x86_64:
     #!/usr/bin/env bash
     set -euo pipefail
     sdk="$(just sdk-path)"
-    kernel="${sdk}/board/{{board}}/{{config}}/elf/sel4_32.elf"
+    microkit_board="$(python3 "{{root}}/scripts/board_config.py" "{{board}}" microkit_board)"
+    kernel="${sdk}/board/${microkit_board}/{{config}}/elf/sel4_32.elf"
     if [[ ! -f "${kernel}" ]]; then
-        echo "error: missing ${kernel}; run MICROKIT_BOARDS={{board}} just build-sdk" >&2
+        echo "error: missing ${kernel}; run MICROKIT_BOARDS=${microkit_board} just build-sdk" >&2
         exit 1
     fi
     exec qemu-system-x86_64 \
@@ -295,9 +296,17 @@ test: image
             ;;
         x86_64)
             sdk="$(just sdk-path)"
-            kernel="${sdk}/board/{{board}}/{{config}}/elf/sel4_32.elf"
+            microkit_board="$(python3 "{{root}}/scripts/board_config.py" "{{board}}" microkit_board)"
+            kernel="${sdk}/board/${microkit_board}/{{config}}/elf/sel4_32.elf"
+            expects=(--expect "lerux: Hello from Rust on seL4 Microkit!")
+            if [[ "{{board}}" == "x86_64_generic_echo" ]]; then
+                expects=(
+                    --expect "lerux-echo: pong"
+                    --expect "lerux-echo: lerux"
+                )
+            fi
             exec python3 scripts/test.py \
-                --expect "lerux: Hello from Rust on seL4 Microkit!" \
+                "${expects[@]}" \
                 qemu-system-x86_64 \
                 -cpu qemu64,+fsgsbase,+pdpe1gb,+xsaveopt,+xsave \
                 -m 2G \
@@ -319,6 +328,10 @@ test-virtio:
 # Custom IPC smoke test (echo-server + echo-client on aarch64 virt)
 test-echo:
     BOARD=qemu_virt_aarch64_echo just test
+
+# Echo IPC smoke test on x86_64 generic PC
+test-x86-echo:
+    BOARD=x86_64_generic_echo just test
 
 # RISC-V virt smoke test (NS16550 MMIO UART)
 test-riscv:
@@ -347,6 +360,7 @@ test-all:
     just test-virtio
     just test-riscv-virtio
     just test-echo
+    just test-x86-echo
     just test-init
 
 # Disk image for virtio-blk QEMU device (MBR boot signature at bytes 510–511)

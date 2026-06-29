@@ -31,6 +31,10 @@ lerux builds **Rust-only userspace** on the formally verified [seL4](https://sel
 | First platform | aarch64 QEMU virt; x86_64 parameterized for follow-up |
 | Dependency fetch | `scripts/fetch.sh` git clones (pinned tags) |
 
+## Platform parity
+
+Echo IPC and virtio smoke tests run on aarch64 and RISC-V virt; x86 has serial hello and echo IPC. RTC/timer init (`boot-init` + PL031/SP804) is aarch64 virt only until rust-sel4 adds drivers for other platforms. Details: [`plan.md`](plan.md) Phase 14 table.
+
 ## Boundaries
 
 - **In scope:** Rust PD crates, `.system` files, build/CI, docs

@@ -152,6 +152,8 @@ jobs:
             command: just disk-img && just test-virtio
           - id: echo
             command: just test-echo
+          - id: x86-echo
+            command: just test-x86-echo
           - id: riscv-echo
             command: just test-riscv-echo
           - id: riscv-virtio

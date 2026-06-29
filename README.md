@@ -35,7 +35,7 @@ just test-all
 GitHub Actions (`.github/workflows/rust.yml`) on every push to `main`:
 
 1. **sdk** — build Docker image, fetch sources, build Microkit SDK once for all boards (cached)
-2. **smoke** (matrix, 8 jobs) — `just test`, `BOARD=x86_64_generic just test`, `just test-riscv`, `just test-virtio`, `just test-echo`, `just test-riscv-echo`, `just test-riscv-virtio`, `just test-init`
+2. **smoke** (matrix, 9 jobs) — `just test`, `BOARD=x86_64_generic just test`, `just test-riscv`, `just test-virtio`, `just test-echo`, `just test-x86-echo`, `just test-riscv-echo`, `just test-riscv-virtio`, `just test-init`
 
 ## Architecture
 
@@ -58,6 +58,7 @@ x86_64 QEMU PC (`x86_64_generic`):
 ```bash
 MICROKIT_BOARDS=qemu_virt_aarch64,x86_64_generic just build-sdk
 BOARD=x86_64_generic just run
+# echo IPC: BOARD=x86_64_generic_echo just test  (or: just test-x86-echo)
 ```
 
 RISC-V QEMU virt (`qemu_virt_riscv64`):
@@ -82,6 +83,8 @@ just test-init         # PL031 RTC + SP804 timer via boot-init
 ```
 
 Stock QEMU `virt` does not model SP804 at `0x90d0000`. The init test builds or reuses a patched QEMU via [`scripts/install-qemu-sp804.sh`](scripts/install-qemu-sp804.sh) (patch: [`support/qemu/arm-virt-sp804.patch`](support/qemu/arm-virt-sp804.patch); needs `libglib2.0-dev` and `libpixman-1-dev`, included in the Docker image).
+
+Init is **aarch64 virt only** — rust-sel4 ships PL031/SP804 drivers for that platform, not for RISC-V or x86. See the cross-arch table in [`docs/plan.md`](docs/plan.md).
 
 ## Documentation
 

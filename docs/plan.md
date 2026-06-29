@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-06-29 (Phase 13)
+Last updated: 2026-06-29 (Phase 14)
 
 ## Phase 1 — Bring-up
 
@@ -89,6 +89,24 @@ Last updated: 2026-06-29 (Phase 13)
 - [x] README: full smoke matrix, init board section, SP804 QEMU note
 - [x] `install-qemu-sp804.sh`: reuse build tree when install binary missing but configure done
 - [x] Plan/README/justfile comment hygiene
+
+## Phase 14 — Cross-arch echo and init parity
+
+- [x] x86 echo IPC smoke (`x86_64_generic_echo`, `just test-x86-echo`)
+- [x] `echo-x86.system.template` (COM1 ioport + IOAPIC IRQ)
+- [x] CI matrix job `x86-echo`
+- [x] Cross-arch smoke parity documented (init remains aarch64-only)
+
+### Cross-arch smoke parity
+
+| Smoke | aarch64 | RISC-V | x86 |
+|-------|---------|--------|-----|
+| Serial hello | yes | yes | yes |
+| Echo IPC | yes | yes | yes |
+| Virtio blk/net | yes | yes | no (PCI virtio; deferred) |
+| Init RTC+timer | yes | no | no |
+
+Init (`just test-init`) uses PL031 + SP804 drivers from rust-sel4 v4.0.0, which target QEMU aarch64 virt MMIO only. RISC-V virt and x86 PC do not expose those devices in stock QEMU, and there are no equivalent rust-sel4 driver crates yet.
 
 ## Version alignment
 

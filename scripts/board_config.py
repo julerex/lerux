@@ -127,6 +127,20 @@ BOARDS: dict[str, dict[str, Any]] = {
             "serial_ioapic_vector": 48,
         },
     },
+    "x86_64_generic_echo": {
+        "arch": "x86_64",
+        "microkit_board": "x86_64_generic",
+        "target": "x86_64-sel4-microkit",
+        "target_triple": "x86_64-sel4-microkit",
+        "template": "echo-x86.system.template",
+        "pds": ["echo-client", "echo-server", "serial-driver"],
+        "qemu": "x86_64",
+        "system_vars": {
+            "serial_ioport_addr": "0x3f8",
+            "serial_ioapic_pin": 4,
+            "serial_ioapic_vector": 48,
+        },
+    },
 }
 
 

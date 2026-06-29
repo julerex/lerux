@@ -99,6 +99,7 @@ run: image
         aarch64) just qemu-aarch64 ;;
         aarch64_init) just qemu-aarch64-init ;;
         aarch64_virtio) just qemu-aarch64-virtio ;;
+        aarch64_composed) just qemu-aarch64-composed ;;
         riscv64) just qemu-riscv64 ;;
         riscv64_virtio) just qemu-riscv64-virtio ;;
         x86_64) just qemu-x86_64 ;;
@@ -129,6 +130,26 @@ qemu-aarch64-virtio:
     #!/usr/bin/env bash
     set -euo pipefail
     export PATH="$(bash scripts/host-path.sh)"
+    disk="{{root}}/support/disk.img"
+    if [[ ! -f "${disk}" ]]; then
+        echo "error: missing ${disk}; run 'just disk-img'" >&2
+        exit 1
+    fi
+    exec qemu-system-aarch64 \
+        -machine virt,virtualization=on -cpu cortex-a53 -m size=2G \
+        -serial mon:stdio -nographic \
+        -device loader,file={{board_build}}/loader.img,addr=0x70000000,cpu-num=0 \
+        -device virtio-net-device,netdev=netdev0 \
+        -netdev user,id=netdev0 \
+        -device virtio-blk-device,drive=blkdev0 \
+        -blockdev node-name=blkdev0,read-only=on,driver=file,filename="${disk}"
+
+# aarch64 virt: SP804 timers + virtio blk/net (patched QEMU; see support/qemu/)
+qemu-aarch64-composed:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    sp804_qemu="$(bash scripts/install-qemu-sp804.sh | tail -1)"
+    export PATH="${sp804_qemu}:$(bash scripts/host-path.sh)"
     disk="{{root}}/support/disk.img"
     if [[ ! -f "${disk}" ]]; then
         echo "error: missing ${disk}; run 'just disk-img'" >&2
@@ -251,6 +272,40 @@ test: image
                 -device virtio-blk-device,drive=blkdev0 \
                 -blockdev node-name=blkdev0,read-only=on,driver=file,filename="${disk}"
             ;;
+        aarch64_composed)
+            disk="{{root}}/support/disk.img"
+            if [[ ! -f "${disk}" ]]; then
+                just disk-img
+            fi
+            sp804_qemu="$(bash scripts/install-qemu-sp804.sh | tail -1)"
+            export PATH="${sp804_qemu}:$(bash scripts/host-path.sh)"
+            python3 scripts/tcp-echo-server.py 18080 &
+            tcp_echo_pid=$!
+            trap 'kill "${tcp_echo_pid}" 2>/dev/null || true' EXIT
+            for _ in $(seq 1 100); do
+                if python3 scripts/tcp-echo-server.py --probe 18080; then break; fi
+                sleep 0.05
+            done
+            # boot-init (serial) and hello (debug-print) log concurrently.
+            exec python3 scripts/test.py --unordered --timeout 90 \
+                --expect "lerux-init: RTC" \
+                --expect "lerux-init: timer ok" \
+                --expect "lerux-init: init ok" \
+                --expect "lerux: Hello from Rust on seL4 Microkit!" \
+                --expect "virtio-blk:" \
+                --expect "virtio-net: MAC" \
+                --expect "virtio-net: TX ok" \
+                --expect "virtio-net: TCP RX ok" \
+                --expect "virtio-blk: MBR sig" \
+                qemu-system-aarch64 \
+                -machine virt,virtualization=on -cpu cortex-a53 -m size=2G \
+                -serial mon:stdio -nographic \
+                -device loader,file={{board_build}}/loader.img,addr=0x70000000,cpu-num=0 \
+                -device virtio-net-device,netdev=netdev0 \
+                -netdev user,id=netdev0 \
+                -device virtio-blk-device,drive=blkdev0 \
+                -blockdev node-name=blkdev0,read-only=on,driver=file,filename="${disk}"
+            ;;
         riscv64)
             expects=(--expect "lerux: Hello from Rust on seL4 Microkit!")
             if [[ "{{board}}" == "qemu_virt_riscv64_echo" ]]; then
@@ -349,6 +404,10 @@ test-riscv-virtio:
 test-init:
     BOARD=qemu_virt_aarch64_init just test
 
+# Composed smoke: boot-init (serial) + hello virtio (debug-print) on patched QEMU
+test-composed:
+    BOARD=qemu_virt_aarch64_composed just test
+
 # Run all CI smoke tests (requires SDK with aarch64 + x86_64 + riscv64 boards)
 test-all:
     #!/usr/bin/env bash
@@ -362,6 +421,8 @@ test-all:
     just test-echo
     just test-x86-echo
     just test-init
+    just disk-img
+    just test-composed
 
 # Disk image for virtio-blk QEMU device (MBR boot signature at bytes 510–511)
 disk-img:

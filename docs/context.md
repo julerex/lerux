@@ -33,7 +33,7 @@ lerux builds **Rust-only userspace** on the formally verified [seL4](https://sel
 
 ## Platform parity
 
-Echo IPC and virtio smoke tests run on aarch64 and RISC-V virt; x86 has serial hello and echo IPC. RTC/timer init (`boot-init` + PL031/SP804) is aarch64 virt only until rust-sel4 adds drivers for other platforms. Details: [`plan.md`](plan.md) Phase 14 table.
+Echo IPC and virtio smoke tests run on aarch64 and RISC-V virt; x86 has serial hello and echo IPC. RTC/timer init (`boot-init` + PL031/SP804) is aarch64 virt only until rust-sel4 adds drivers for other platforms. The composed board (`qemu_virt_aarch64_composed`) runs boot-init and hello+virtio together in one system. Details: [`plan.md`](plan.md).
 
 ## Boundaries
 

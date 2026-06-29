@@ -160,6 +160,8 @@ jobs:
             command: just disk-img && just test-riscv-virtio
           - id: init
             command: just test-init
+          - id: composed
+            command: just disk-img && just test-composed
     steps:
       - uses: actions/checkout@v4
 
@@ -201,7 +203,7 @@ jobs:
             build-${{ matrix.id }}-
 
       - name: Restore SP804 QEMU cache
-        if: matrix.id == 'init'
+        if: matrix.id == 'init' || matrix.id == 'composed'
         uses: actions/cache/restore@v4
         id: qemu-sp804-cache
         with:
@@ -228,7 +230,7 @@ jobs:
           key: build-${{ matrix.id }}-${{ hashFiles('Cargo.lock') }}
 
       - name: Save SP804 QEMU cache
-        if: matrix.id == 'init' && steps.qemu-sp804-cache.outputs.cache-hit != 'true'
+        if: (matrix.id == 'init' || matrix.id == 'composed') && steps.qemu-sp804-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: deps/toolchains/qemu-sp804

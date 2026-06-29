@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-06-29 (Phase 14)
+Last updated: 2026-06-29 (Phase 15)
 
 ## Phase 1 — Bring-up
 
@@ -107,6 +107,15 @@ Last updated: 2026-06-29 (Phase 14)
 | Init RTC+timer | yes | no | no |
 
 Init (`just test-init`) uses PL031 + SP804 drivers from rust-sel4 v4.0.0, which target QEMU aarch64 virt MMIO only. RISC-V virt and x86 PC do not expose those devices in stock QEMU, and there are no equivalent rust-sel4 driver crates yet.
+
+## Phase 15 — Composed aarch64 system
+
+- [x] `composed.system.template`: boot-init + hello + init drivers + virtio drivers (7 PDs)
+- [x] Board `qemu_virt_aarch64_composed` (`just test-composed`)
+- [x] `boot-init` uses serial IPC for RTC/timer; `hello` uses virtio with debug-print (serial-driver is single-client)
+- [x] Patched SP804 QEMU + virtio blk/net in one smoke test
+- [x] CI matrix job `composed` with SP804 QEMU cache
+- [x] `scripts/test.py --unordered` for concurrent PD log lines
 
 ## Version alignment
 

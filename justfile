@@ -62,7 +62,7 @@ build-pd crate:
     mkdir -p "{{board_build}}"
     features=()
     case "{{crate}}" in
-        hello|serial-driver|virtio-blk-driver|virtio-net-driver)
+        hello|boot-init|serial-driver|virtio-blk-driver|virtio-net-driver)
             features+=(--features "board-{{board}}")
             ;;
     esac
@@ -286,8 +286,7 @@ test: image
                 if python3 scripts/tcp-echo-server.py --probe 18080; then break; fi
                 sleep 0.05
             done
-            # boot-init (serial) and hello (debug-print) log concurrently.
-            exec python3 scripts/test.py --unordered --timeout 90 \
+            exec python3 scripts/test.py \
                 --expect "lerux-init: RTC" \
                 --expect "lerux-init: timer ok" \
                 --expect "lerux-init: init ok" \

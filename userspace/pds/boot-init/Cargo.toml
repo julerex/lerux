@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT"
 
+[features]
+board-qemu_virt_aarch64_init = []
+board-qemu_virt_aarch64_composed = []
+
 [dependencies]
 lerux-logging = { path = "../../crates/lerux-logging", features = ["serial"] }
 rtcc = "0.4"

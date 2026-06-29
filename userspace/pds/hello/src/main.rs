@@ -47,6 +47,8 @@ mod net;
 
 #[cfg(feature = "serial-ipc")]
 const SERIAL_DRIVER: Channel = Channel::new(0);
+#[cfg(feature = "composed-sync")]
+const BOOT_INIT: Channel = Channel::new(0);
 #[cfg(feature = "virtio")]
 const NET_DRIVER: Channel = Channel::new(1);
 #[cfg(feature = "virtio")]
@@ -64,6 +66,8 @@ struct BlkRead {
 }
 
 struct HandlerImpl {
+    #[cfg(all(feature = "virtio", feature = "composed-sync"))]
+    virtio_pending: bool,
     #[cfg(feature = "virtio")]
     blk_read: Option<BlkRead>,
     #[cfg(feature = "virtio")]
@@ -74,14 +78,27 @@ struct HandlerImpl {
 #[cfg_attr(not(feature = "virtio"), protection_domain)]
 fn init() -> HandlerImpl {
     init_logging();
-    log::info!("lerux: Hello from Rust on seL4 Microkit!");
-    #[cfg(feature = "virtio")]
-    let (blk_read, net_io) = probe_virtio();
-    HandlerImpl {
-        #[cfg(feature = "virtio")]
-        blk_read: Some(blk_read),
-        #[cfg(feature = "virtio")]
-        net_io: Some(net_io),
+    #[cfg(all(feature = "virtio", feature = "composed-sync"))]
+    {
+        return HandlerImpl {
+            virtio_pending: true,
+            blk_read: None,
+            net_io: None,
+        };
+    }
+    #[cfg(all(feature = "virtio", not(feature = "composed-sync")))]
+    {
+        log::info!("lerux: Hello from Rust on seL4 Microkit!");
+        let (blk_read, net_io) = probe_virtio();
+        return HandlerImpl {
+            blk_read: Some(blk_read),
+            net_io: Some(net_io),
+        };
+    }
+    #[cfg(not(feature = "virtio"))]
+    {
+        log::info!("lerux: Hello from Rust on seL4 Microkit!");
+        HandlerImpl {}
     }
 }
 
@@ -186,6 +203,14 @@ impl Handler for HandlerImpl {
     fn notified(&mut self, #[cfg_attr(not(feature = "virtio"), allow(unused_variables))] channels: ChannelSet) -> Result<(), Self::Error> {
         #[cfg(feature = "virtio")]
         {
+            #[cfg(feature = "composed-sync")]
+            if self.virtio_pending && channels.contains(BOOT_INIT) {
+                log::info!("lerux: Hello from Rust on seL4 Microkit!");
+                let (blk_read, net_io) = probe_virtio();
+                self.blk_read = Some(blk_read);
+                self.net_io = Some(net_io);
+                self.virtio_pending = false;
+            }
             if channels.contains(BLK_DRIVER) {
                 if let Some(blk) = &mut self.blk_read {
                     if !blk.done {

@@ -115,7 +115,7 @@ Init (`just test-init`) uses PL031 + SP804 drivers from rust-sel4 v4.0.0, which 
 - [x] `boot-init` uses serial IPC for RTC/timer; `hello` uses virtio with debug-print (serial-driver is single-client)
 - [x] Patched SP804 QEMU + virtio blk/net in one smoke test
 - [x] CI matrix job `composed` with SP804 QEMU cache
-- [x] `scripts/test.py --unordered` for concurrent PD log lines
+- [x] boot-init notifies hello before virtio probe (avoids serial/debug interleaving)
 
 ## Version alignment
 

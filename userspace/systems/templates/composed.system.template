@@ -99,4 +99,9 @@
         <end pd="virtio_blk_driver" id="1" />
         <end pd="hello" id="2" pp="true" />
     </channel>
+
+    <channel>
+        <end pd="boot_init" id="3" />
+        <end pd="hello" id="0" />
+    </channel>
 </system>

@@ -5,12 +5,12 @@ GitHub Actions workflow: [`.github/workflows/rust.yml`](../.github/workflows/rus
 ## Pipeline
 
 1. **sdk** — Docker image, fetch sources, build Microkit SDK (cached), **prebuild patched SP804 QEMU** (cached), upload SDK artifact.
-2. **smoke** — 12 parallel matrix jobs; each restores SDK artifact, per-job `build/` cache, and SP804 QEMU (init/composed/http-composed only).
+2. **smoke** — 13 parallel matrix jobs; each restores SDK artifact, per-job `build/` cache, and SP804 QEMU (init/composed/http-composed only).
 
 ```mermaid
 flowchart LR
   sdk[sdk job]
-  smoke[smoke matrix x12]
+  smoke[smoke matrix x13]
   sdk --> smoke
 ```
 
@@ -30,6 +30,7 @@ flowchart LR
 | `composed` | `just disk-img && just test-composed` | init + virtio in one system |
 | `http` | `just test-http` | virtio-net HTTP `GET /` via hostfwd |
 | `http-composed` | `just test-http-composed` | init + HTTP; patched QEMU |
+| `x86-http` | `just test-x86-http` | x86 q35 PCI virtio-net HTTP via hostfwd |
 
 Local mirror: `just test-all` (requires full SDK; creates `support/disk.img` once).
 
@@ -57,4 +58,8 @@ Stock QEMU `virt` lacks SP804 at `0x90d0000`. Init, composed, and http-composed 
 | `Argument list too long` on `python3` | Corrupted `PATH` from capturing QEMU build stdout — fixed in `install-qemu-sp804.sh` |
 | Init passes, timer times out | Stock QEMU used instead of patched build — check `which qemu-system-aarch64` |
 | Composed flaky on `init ok` | Serial/debug interleaving — `boot-init` notifies `hello` before virtio (composed-sync) |
+| `x86-http`: serial shows `listening`, `curl` times out | Stale QEMU or `tcp-echo-server` on host **18080** — see [boards.md — x86 HTTP inbound](boards.md#x86-http-inbound-operational-notes); smoke recipe kills both before start |
+| `x86-http`: QEMU appears stuck at `listening` | Expected without `curl` — x86 guest blocks in `init()` until first request; use `just test-x86-http` or curl from another terminal |
+| `x86-virtio` fails `TCP RX ok` after `x86-http` | Usually port **18080** still in use; kill stale QEMU/echo server, rerun virtio test |
+| Piping `just test … \| tail` shows no output then SIGTERM | `tail` buffers until the command exits; run smoke tests without `tail` when debugging |
 | `libglib2.0-dev` missing locally | Install build deps or use Docker (`lerux-dev` image) |

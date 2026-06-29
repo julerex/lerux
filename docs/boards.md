@@ -18,6 +18,8 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `qemu_virt_riscv64_virtio` | riscv64 | `just test-riscv-virtio` | hello + serial + virtio |
 | `x86_64_generic` | x86_64 | `BOARD=x86_64_generic just test` | hello + serial (COM1) |
 | `x86_64_generic_echo` | x86_64 | `just test-x86-echo` | echo + serial |
+| `x86_64_generic_virtio` | x86_64 | `just test-x86-virtio` | hello + serial + virtio-pci blk/net |
+| `x86_64_generic_http` | x86_64 | `just test-x86-http` | serial + virtio-pci net + http-server |
 
 ## SDK boards
 
@@ -41,7 +43,9 @@ CI sets this via `MICROKIT_BOARDS` in the workflow env.
 | `aarch64_http_composed` | http-composed | patched SP804 QEMU + virtio-net + `hostfwd` |
 | `riscv64` | riscv hello/echo | `-kernel loader.img` |
 | `riscv64_virtio` | riscv virtio | MMIO virtio buses + `disk.img` |
-| `x86_64` | x86 boards | `-kernel sel4_32.elf` + `-initrd loader.img` |
+| `x86_64` | x86 hello/echo | `-machine q35` + `-kernel sel4_32.elf` + `-initrd loader.img` |
+| `x86_64_virtio` | x86 virtio | q35 + PCI virtio-blk/net + `disk.img` |
+| `x86_64_http` | x86 http | q35 + PCI virtio-net + `hostfwd=tcp::18080-:8080` |
 
 ## Composed board
 
@@ -57,3 +61,44 @@ See [plan.md](plan.md) Phase 15.
 `qemu_virt_aarch64_http` serves `GET /` on guest port **8080** (`10.0.2.15`). QEMU user netdev forwards host `127.0.0.1:18080` → guest `:8080`; smoke uses `curl` after serial shows `lerux-http: listening`.
 
 `qemu_virt_aarch64_http_composed` runs boot-init (RTC + SP804) then http-server over virtio-net — same notify gate as composed hello. See [plan.md](plan.md) Phase 17.
+
+`x86_64_generic_http` uses the same HTTP PD and hostfwd layout on QEMU **q35** with PCI virtio-net via `virtio-pci-driver` (net-only). See [plan.md](plan.md) Phase 19.
+
+### x86 HTTP inbound (operational notes)
+
+On x86, passive inbound TCP via post-init driver notifications is unreliable. `http-server` therefore **stays in `init()` and polls shared rings until the first `GET /` is served** (`wait_for_inbound` in `userspace/pds/http-server/src/main.rs`). After serial shows `lerux-http: listening`, the guest is waiting for a host connection — not hung.
+
+**Automated smoke (preferred):**
+
+```bash
+just test-x86-http
+```
+
+`scripts/test.py` retries `curl` for up to 30s and always terminates QEMU in a `finally` block (avoids orphan instances on port 18080).
+
+**Interactive QEMU:**
+
+```bash
+BOARD=x86_64_generic_http just qemu-x86_64-http
+# other terminal, after "listening" (brief pause or retry helps):
+sleep 1 && curl http://127.0.0.1:18080/
+```
+
+**Port 18080 — one listener at a time.** Host port 18080 is shared by:
+
+| Consumer | Command / context |
+|----------|-------------------|
+| x86/aarch64 HTTP hostfwd | `just test-x86-http`, `just test-http`, `just qemu-x86_64-http` |
+| TCP echo (virtio outbound tests) | `just test-x86-virtio`, `scripts/tcp-echo-server.py 18080` |
+
+Do **not** run background QEMU and `just test-x86-http` concurrently. A stale QEMU or leftover `tcp-echo-server` on 18080 makes `curl` hit the wrong endpoint and time out even when the new guest has reached `listening`.
+
+**Cleanup before retry:**
+
+```bash
+pkill -f 'scripts/tcp-echo-server.py 18080'
+pkill -f 'qemu-system-x86_64.*hostfwd=tcp::18080-:8080'
+just test-x86-http
+```
+
+`just qemu-x86_64-http` and the `x86_64_http` smoke recipe run the same `pkill` patterns before starting QEMU.

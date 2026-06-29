@@ -271,7 +271,13 @@ qemu-x86_64-virtio:
 qemu-x86_64-http:
     #!/usr/bin/env bash
     set -euo pipefail
+    pkill -f "scripts/tcp-echo-server.py 18080" 2>/dev/null || true
+    pkill -f "qemu-system-x86_64.*hostfwd=tcp::18080-:8080" 2>/dev/null || true
+    sleep 0.5
+    echo "Guest listens on :8080; hostfwd maps 127.0.0.1:18080. In another terminal:" >&2
+    echo "  curl http://127.0.0.1:18080/" >&2
     sdk="$(just sdk-path)"
+    export PATH="$(bash scripts/host-path.sh)"
     microkit_board="$(python3 "{{root}}/scripts/board_config.py" "{{board}}" microkit_board)"
     kernel="${sdk}/board/${microkit_board}/{{config}}/elf/sel4_32.elf"
     exec qemu-system-x86_64 \
@@ -509,6 +515,9 @@ test: image
                 -netdev user,id=netdev0
             ;;
         x86_64_http)
+            pkill -f "scripts/tcp-echo-server.py 18080" 2>/dev/null || true
+            pkill -f "qemu-system-x86_64.*hostfwd=tcp::18080-:8080" 2>/dev/null || true
+            sleep 0.5
             sdk="$(just sdk-path)"
             microkit_board="$(python3 "{{root}}/scripts/board_config.py" "{{board}}" microkit_board)"
             kernel="${sdk}/board/${microkit_board}/{{config}}/elf/sel4_32.elf"

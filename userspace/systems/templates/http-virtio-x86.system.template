@@ -3,7 +3,7 @@
     <memory_region name="virtio_net_bar1" size="0x1000" phys_addr="{virtio_net_bar1_phys_addr}" />
     <memory_region name="virtio_net_bar4" size="0x4000" phys_addr="{virtio_net_bar4_phys_addr}" />
 
-    <memory_region name="virtio_net_driver_dma" size="0x200_000" phys_addr="{virtio_net_driver_dma_phys_addr}" page_size="0x200_000" />
+    <memory_region name="virtio_pci_driver_dma" size="0x200_000" phys_addr="{virtio_net_driver_dma_phys_addr}" page_size="0x200_000" />
     <memory_region name="virtio_net_client_dma" size="0x200_000" phys_addr="{virtio_net_client_dma_phys_addr}" page_size="0x200_000" />
     <memory_region name="virtio_net_rx_free" size="0x200_000" phys_addr="{virtio_net_rx_free_phys_addr}" page_size="0x200_000"/>
     <memory_region name="virtio_net_rx_used" size="0x200_000" phys_addr="{virtio_net_rx_used_phys_addr}" page_size="0x200_000"/>
@@ -16,19 +16,19 @@
         <irq pin="{serial_ioapic_pin}" vector="{serial_ioapic_vector}" id="0" trigger="level" polarity="high" />
     </protection_domain>
 
-    <protection_domain name="virtio_net_driver" priority="4" stack_size="0x10_000">
-        <program_image path="virtio-net-driver.elf" />
+    <protection_domain name="virtio_pci_driver" priority="4" stack_size="0x10_000">
+        <program_image path="virtio-pci-driver.elf" />
         <ioport id="0" addr="0xcf8" size="8" setvar_id="pci_config_ioport_id" setvar_addr="pci_config_ioport_addr" />
         <map mr="virtio_net_bar1" vaddr="{virtio_net_bar1_phys_addr}" perms="rw" cached="false" />
         <map mr="virtio_net_bar4" vaddr="{virtio_net_bar4_phys_addr}" perms="rw" cached="false" />
-        <map mr="virtio_net_driver_dma" vaddr="0x7_000_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_driver_dma_vaddr" />
-        <setvar symbol="virtio_net_driver_dma_paddr" region_paddr="virtio_net_driver_dma" />
+        <map mr="virtio_pci_driver_dma" vaddr="0x8_000_000_000" perms="rw" cached="true" setvar_vaddr="virtio_blk_driver_dma_vaddr" />
+        <setvar symbol="virtio_blk_driver_dma_paddr" region_paddr="virtio_pci_driver_dma" />
         <map mr="virtio_net_client_dma" vaddr="0x1_000_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_client_dma_vaddr" />
         <map mr="virtio_net_rx_free" vaddr="0x2_000_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_rx_free" />
         <map mr="virtio_net_rx_used" vaddr="0x2_001_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_rx_used" />
         <map mr="virtio_net_tx_free" vaddr="0x2_002_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_tx_free" />
         <map mr="virtio_net_tx_used" vaddr="0x2_003_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_tx_used" />
-        <irq pin="{virtio_net_ioapic_pin}" vector="{virtio_net_ioapic_vector}" id="0" trigger="level" polarity="high" />
+        <irq pin="{virtio_net_ioapic_pin}" vector="{virtio_net_ioapic_vector}" id="3" trigger="level" polarity="high" />
     </protection_domain>
 
     <protection_domain name="http_server" priority="1" stack_size="0x10_000">
@@ -46,7 +46,7 @@
     </channel>
 
     <channel>
-        <end pd="virtio_net_driver" id="1" />
+        <end pd="virtio_pci_driver" id="1" />
         <end pd="http_server" id="1" pp="true" />
     </channel>
 </system>

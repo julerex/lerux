@@ -42,11 +42,52 @@ fn init_composed_sync() -> HandlerImpl {
     }
 }
 
+fn prime_net_stack(http_net: &mut net::HttpNet) {
+    for _ in 0..2000 {
+        http_net.poll();
+    }
+}
+
+#[cfg(feature = "board-x86_64_generic_http")]
+fn wait_for_inbound(http_net: &mut net::HttpNet) {
+    log::info!("lerux-http: waiting for GET / (host: curl http://127.0.0.1:18080/)");
+    while !http_net.is_served() {
+        http_net.poll();
+    }
+    for _ in 0..500 {
+        http_net.poll();
+    }
+}
+
+fn drive_net(http_net: &mut net::HttpNet) {
+    let mut flush_after_serve = 0;
+    for _ in 0..4000 {
+        http_net.poll();
+        if http_net.is_served() {
+            flush_after_serve = 500;
+        }
+        if flush_after_serve > 0 {
+            flush_after_serve -= 1;
+            if flush_after_serve == 0 {
+                break;
+            }
+        }
+    }
+}
+
 #[cfg(not(feature = "composed-sync"))]
 fn init_with_net() -> HandlerImpl {
     log::info!("lerux-http: starting");
+    let mut net_client = NetClient::new(NET_DRIVER);
+    let mac = log_net_mac(&mut net_client);
+    let mut http_net = net::HttpNet::new(mac);
+    prime_net_stack(&mut http_net);
+    // x86 PCI virtio-net: stay in init and poll shared rings until the smoke
+    // test curls; post-init driver notifications alone are unreliable there.
+    #[cfg(feature = "board-x86_64_generic_http")]
+    wait_for_inbound(&mut http_net);
     HandlerImpl {
-        net: Some(start_net()),
+        net: Some(http_net),
     }
 }
 
@@ -73,13 +114,12 @@ fn log_net_mac(net_client: &mut NetClient) -> sel4_driver_interfaces::net::MacAd
     mac
 }
 
+#[cfg(feature = "composed-sync")]
 fn start_net() -> net::HttpNet {
     let mut net_client = NetClient::new(NET_DRIVER);
     let mac = log_net_mac(&mut net_client);
     let mut http_net = net::HttpNet::new(mac);
-    for _ in 0..2000 {
-        http_net.poll();
-    }
+    prime_net_stack(&mut http_net);
     http_net
 }
 
@@ -95,12 +135,7 @@ impl Handler for HandlerImpl {
 
         if channels.contains(NET_DRIVER) {
             if let Some(http_net) = &mut self.net {
-                for _ in 0..200 {
-                    http_net.poll();
-                    if http_net.is_served() {
-                        break;
-                    }
-                }
+                drive_net(http_net);
             }
         }
         Ok(())

@@ -57,6 +57,7 @@ Default: `qemu_virt_aarch64` (QEMU ARM virt). Override with `BOARD=... just run`
 | RTC + timer | `qemu_virt_aarch64_init` | `just test-init` |
 | Init + virtio | `qemu_virt_aarch64_composed` | `just disk-img && just test-composed` |
 | HTTP over virtio-net | `qemu_virt_aarch64_http` | `just test-http` |
+| x86 HTTP over virtio-net | `x86_64_generic_http` | `just test-x86-http` |
 | Init + HTTP | `qemu_virt_aarch64_http_composed` | `just test-http-composed` |
 | x86 serial / echo | `x86_64_generic` / `_echo` | `BOARD=x86_64_generic just test` / `just test-x86-echo` |
 | RISC-V serial / echo / virtio | `qemu_virt_riscv64` variants | `just test-riscv` / `just test-riscv-echo` / `just test-riscv-virtio` |

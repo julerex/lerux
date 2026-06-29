@@ -247,7 +247,7 @@ BOARDS: dict[str, dict[str, Any]] = {
         "target": "x86_64-sel4-microkit",
         "target_triple": "x86_64-sel4-microkit",
         "template": "http-virtio-x86.system.template",
-        "pds": ["http-server", "serial-driver", "virtio-net-driver"],
+        "pds": ["http-server", "serial-driver", "virtio-pci-driver"],
         "qemu": "x86_64_http",
         "system_vars": {
             "serial_ioport_addr": "0x3f8",

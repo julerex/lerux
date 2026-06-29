@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-06-29 (Phase 16)
+Last updated: 2026-06-29 (Phase 19)
 
 ## Phase 1 — Bring-up
 
@@ -106,7 +106,7 @@ Last updated: 2026-06-29 (Phase 16)
 | Virtio blk/net | yes | yes | no (PCI virtio; deferred) |
 | Init RTC+timer | yes | no | no |
 | Composed init+virtio | yes | no | no |
-| HTTP over virtio-net | yes | no | no |
+| HTTP over virtio-net | yes | no | yes |
 
 Init (`just test-init`) uses PL031 + SP804 drivers from rust-sel4 v4.0.0, which target QEMU aarch64 virt MMIO only. RISC-V virt and x86 PC do not expose those devices in stock QEMU, and there are no equivalent rust-sel4 driver crates yet.
 
@@ -139,6 +139,14 @@ Init (`just test-init`) uses PL031 + SP804 drivers from rust-sel4 v4.0.0, which 
 - [x] Board `qemu_virt_aarch64_http_composed` (`just test-http-composed`); boot-init notify gate before net
 - [x] `scripts/test.py` `--curl URL EXPECT` for HTTP smoke
 - [x] CI matrix jobs `http` and `http-composed` (12 smoke jobs total)
+
+## Phase 19 — x86 HTTP inbound (hostfwd)
+
+- [x] `x86_64_generic_http` uses `virtio-pci-driver` (net-only) instead of standalone `virtio-net-driver`
+- [x] `http-virtio-x86.system.template` — virtio PCI driver IRQ channel 3, shared ring layout with virtio hello
+- [x] `http-server` net poll: drain device ring in a loop, UDP TX priming, listen on all guest addresses
+- [x] `just test-x86-http` — serial `lerux-http: listening` then host `curl` via `hostfwd` `18080→8080`
+- [x] CI matrix job `x86-http` (13 smoke jobs total)
 
 ## Version alignment
 

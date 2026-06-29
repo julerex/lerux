@@ -3,8 +3,11 @@
 
 extern crate alloc;
 
+#[cfg(feature = "board-x86_64_generic_virtio")]
 use alloc::boxed::Box;
+#[cfg(feature = "board-x86_64_generic_virtio")]
 use alloc::collections::BTreeMap;
+#[cfg(feature = "board-x86_64_generic_virtio")]
 use core::pin::Pin;
 
 use lerux_logging::{debug, log};
@@ -12,21 +15,21 @@ use sel4_microkit::{
     memory_region_symbol, protection_domain, Channel, ChannelSet, Handler, Infallible,
     MessageInfo,
 };
-use sel4_microkit_driver_adapters::{
-    block::driver::handle_client_request,
-    net::driver::HandlerImpl as NetHandlerImpl,
-};
+#[cfg(feature = "board-x86_64_generic_virtio")]
+use sel4_microkit_driver_adapters::block::driver::handle_client_request;
+use sel4_microkit_driver_adapters::net::driver::HandlerImpl as NetHandlerImpl;
 use sel4_shared_memory::SharedMemoryRef;
 use sel4_shared_ring_buffer::{roles::Use, RingBuffers};
+#[cfg(feature = "board-x86_64_generic_virtio")]
 use sel4_shared_ring_buffer_block_io_types::{
     BlockIORequest, BlockIORequestStatus, BlockIORequestType,
 };
+#[cfg(feature = "board-x86_64_generic_virtio")]
 use sel4_virtio_blk::GetBlockDeviceLayoutWrapper;
 use sel4_virtio_net::DeviceWrapper;
-use virtio_drivers::{
-    device::blk::*,
-    transport::pci::PciTransport,
-};
+#[cfg(feature = "board-x86_64_generic_virtio")]
+use virtio_drivers::device::blk::*;
+use virtio_drivers::transport::pci::PciTransport;
 
 mod config;
 mod pci;
@@ -34,31 +37,12 @@ mod pci;
 use config::channels;
 use lerux_virtio_hal::HalImpl;
 
+#[cfg(feature = "board-x86_64_generic_virtio")]
 const BLK_QUEUE_SIZE: usize = 4;
 
-#[protection_domain(heap_size = 768 * 1024)]
-fn init() -> ComboHandler {
-    debug::init().unwrap();
-    pci::init_hal();
-
-    let (ioport_id, ioport_addr) = pci::ioport_config();
-    let mut blk_dev = pci::create_virtio_blk(ioport_id, ioport_addr);
-    let mut net_dev = pci::create_virtio_net(ioport_id, ioport_addr);
-
-    let blk_client_region = unsafe {
-        SharedMemoryRef::<'static, _>::new(memory_region_symbol!(
-            virtio_blk_client_dma_vaddr: *mut [u8],
-            n = config::VIRTIO_BLK_CLIENT_DMA_SIZE
-        ))
-    };
-    let notify_blk_client: fn() = || channels::BLK_CLIENT.notify();
-    let blk_ring_buffers =
-        RingBuffers::<'_, Use, fn(), BlockIORequest>::from_ptrs_using_default_initialization_strategy_for_role(
-            unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_blk_free: *mut _)) },
-            unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_blk_used: *mut _)) },
-            notify_blk_client,
-        );
-
+fn create_net_handler(
+    mut net_dev: virtio_drivers::device::net::VirtIONet<HalImpl, PciTransport, 16>,
+) -> NetHandlerImpl<DeviceWrapper<HalImpl, PciTransport>> {
     let net_client_region = unsafe {
         SharedMemoryRef::<'static, _>::new(memory_region_symbol!(
             virtio_net_client_dma_vaddr: *mut [u8],
@@ -79,37 +63,70 @@ fn init() -> ComboHandler {
             notify_net_client,
         );
 
-    blk_dev.ack_interrupt();
-    channels::BLK_DEVICE.irq_ack().unwrap();
-    log::info!("virtio-blk driver ready");
-
     net_dev.ack_interrupt();
     channels::NET_DEVICE.irq_ack().unwrap();
     log::info!("virtio-net driver ready");
 
-    ComboHandler {
-        blk: BlkHandler {
+    NetHandlerImpl::new(
+        DeviceWrapper::new(net_dev),
+        net_client_region,
+        net_rx_ring_buffers,
+        net_tx_ring_buffers,
+        channels::NET_DEVICE,
+        channels::NET_CLIENT,
+    )
+}
+
+#[protection_domain(heap_size = 768 * 1024)]
+fn init() -> ComboHandler {
+    debug::init().unwrap();
+    pci::init_hal();
+
+    let (ioport_id, ioport_addr) = pci::ioport_config();
+    let net_dev = pci::create_virtio_net(ioport_id, ioport_addr);
+
+    #[cfg(feature = "board-x86_64_generic_virtio")]
+    let blk = {
+        let mut blk_dev = pci::create_virtio_blk(ioport_id, ioport_addr);
+        let blk_client_region = unsafe {
+            SharedMemoryRef::<'static, _>::new(memory_region_symbol!(
+                virtio_blk_client_dma_vaddr: *mut [u8],
+                n = config::VIRTIO_BLK_CLIENT_DMA_SIZE
+            ))
+        };
+        let notify_blk_client: fn() = || channels::BLK_CLIENT.notify();
+        let blk_ring_buffers = RingBuffers::<'_, Use, fn(), BlockIORequest>::from_ptrs_using_default_initialization_strategy_for_role(
+            unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_blk_free: *mut _)) },
+            unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_blk_used: *mut _)) },
+            notify_blk_client,
+        );
+
+        blk_dev.ack_interrupt();
+        channels::BLK_DEVICE.irq_ack().unwrap();
+        log::info!("virtio-blk driver ready");
+
+        BlkHandler {
             dev: blk_dev,
             client_region: blk_client_region,
             ring_buffers: blk_ring_buffers,
             pending: BTreeMap::new(),
-        },
-        net: NetHandlerImpl::new(
-            DeviceWrapper::new(net_dev),
-            net_client_region,
-            net_rx_ring_buffers,
-            net_tx_ring_buffers,
-            channels::NET_DEVICE,
-            channels::NET_CLIENT,
-        ),
+        }
+    };
+
+    ComboHandler {
+        #[cfg(feature = "board-x86_64_generic_virtio")]
+        blk,
+        net: create_net_handler(net_dev),
     }
 }
 
 struct ComboHandler {
+    #[cfg(feature = "board-x86_64_generic_virtio")]
     blk: BlkHandler,
     net: NetHandlerImpl<DeviceWrapper<HalImpl, PciTransport>>,
 }
 
+#[cfg(feature = "board-x86_64_generic_virtio")]
 struct BlkHandler {
     dev: VirtIOBlk<HalImpl, PciTransport>,
     client_region: SharedMemoryRef<'static, [u8]>,
@@ -117,12 +134,14 @@ struct BlkHandler {
     pending: BTreeMap<u16, Pin<Box<BlkPendingEntry>>>,
 }
 
+#[cfg(feature = "board-x86_64_generic_virtio")]
 struct BlkPendingEntry {
     client_req: BlockIORequest,
     virtio_req: BlkReq,
     virtio_resp: BlkResp,
 }
 
+#[cfg(feature = "board-x86_64_generic_virtio")]
 fn buf_ptr_for_req(
     client_region: &mut SharedMemoryRef<'static, [u8]>,
     req: &BlockIORequest,
@@ -135,6 +154,7 @@ fn buf_ptr_for_req(
         .as_raw_ptr()
 }
 
+#[cfg(feature = "board-x86_64_generic_virtio")]
 impl BlkHandler {
     fn complete_virtio_read(
         &mut self,
@@ -278,6 +298,7 @@ impl Handler for ComboHandler {
     type Error = Infallible;
 
     fn notified(&mut self, channels: ChannelSet) -> Result<(), Self::Error> {
+        #[cfg(feature = "board-x86_64_generic_virtio")]
         if channels.contains(channels::BLK_DEVICE) || channels.contains(channels::BLK_CLIENT) {
             self.blk.notified(channels);
         }
@@ -292,9 +313,11 @@ impl Handler for ComboHandler {
         channel: Channel,
         msg_info: MessageInfo,
     ) -> Result<MessageInfo, Self::Error> {
+        #[cfg(feature = "board-x86_64_generic_virtio")]
         if channel == channels::BLK_CLIENT {
-            Ok(self.blk.protected(channel, msg_info))
-        } else if channel == channels::NET_CLIENT {
+            return Ok(self.blk.protected(channel, msg_info));
+        }
+        if channel == channels::NET_CLIENT {
             self.net.protected(channel, msg_info)
         } else {
             unreachable!()

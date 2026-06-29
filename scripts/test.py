@@ -89,17 +89,19 @@ def main() -> None:
 
     child = pexpect.spawn(args.cmd[0], args.cmd[1:], encoding="utf-8", timeout=args.timeout)
     child.logfile = sys.stdout
-    if args.unordered:
-        expect_unordered(child, patterns, args.timeout)
-    else:
-        per_pattern = max(30, args.timeout // max(len(patterns), 1))
-        expect_ordered(child, patterns, per_pattern)
+    try:
+        if args.unordered:
+            expect_unordered(child, patterns, args.timeout)
+        else:
+            per_pattern = max(30, args.timeout // max(len(patterns), 1))
+            expect_ordered(child, patterns, per_pattern)
 
-    for url, expect_substr in args.curl:
-        curl_check(url, expect_substr, timeout=30)
+        for url, expect_substr in args.curl:
+            curl_check(url, expect_substr, timeout=30)
 
-    child.terminate(force=True)
-    print("\n==> smoke test passed")
+        print("\n==> smoke test passed")
+    finally:
+        child.terminate(force=True)
 
 
 if __name__ == "__main__":

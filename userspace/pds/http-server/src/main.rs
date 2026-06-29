@@ -26,25 +26,6 @@ struct HandlerImpl {
     net: Option<net::HttpNet>,
 }
 
-#[protection_domain(heap_size = 512 * 1024)]
-fn init() -> HandlerImpl {
-    init_logging();
-    #[cfg(feature = "composed-sync")]
-    {
-        return HandlerImpl {
-            net_pending: true,
-            net: None,
-        };
-    }
-    #[cfg(not(feature = "composed-sync"))]
-    {
-        log::info!("lerux-http: starting");
-        HandlerImpl {
-            net: Some(start_net()),
-        }
-    }
-}
-
 fn init_logging() {
     #[cfg(feature = "serial-ipc")]
     serial::init(SERIAL_DRIVER).unwrap();
@@ -53,8 +34,32 @@ fn init_logging() {
     debug::init().unwrap();
 }
 
-fn start_net() -> net::HttpNet {
-    let mut net_client = NetClient::new(NET_DRIVER);
+#[cfg(feature = "composed-sync")]
+fn init_composed_sync() -> HandlerImpl {
+    HandlerImpl {
+        net_pending: true,
+        net: None,
+    }
+}
+
+#[cfg(not(feature = "composed-sync"))]
+fn init_with_net() -> HandlerImpl {
+    log::info!("lerux-http: starting");
+    HandlerImpl {
+        net: Some(start_net()),
+    }
+}
+
+#[protection_domain(heap_size = 512 * 1024)]
+fn init() -> HandlerImpl {
+    init_logging();
+    #[cfg(feature = "composed-sync")]
+    return init_composed_sync();
+    #[cfg(not(feature = "composed-sync"))]
+    init_with_net()
+}
+
+fn log_net_mac(net_client: &mut NetClient) -> sel4_driver_interfaces::net::MacAddress {
     let mac = net_client.get_mac_address().unwrap();
     log::info!(
         "lerux-http: MAC {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
@@ -65,13 +70,23 @@ fn start_net() -> net::HttpNet {
         mac.0[4],
         mac.0[5],
     );
-    let mut http_net = net::HttpNet::new(mac);
+    mac
+}
+
+fn wait_for_http(http_net: &mut net::HttpNet) {
     for _ in 0..2000 {
         http_net.poll();
         if http_net.is_served() {
             break;
         }
     }
+}
+
+fn start_net() -> net::HttpNet {
+    let mut net_client = NetClient::new(NET_DRIVER);
+    let mac = log_net_mac(&mut net_client);
+    let mut http_net = net::HttpNet::new(mac);
+    wait_for_http(&mut http_net);
     http_net
 }
 

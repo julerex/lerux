@@ -65,62 +65,84 @@ pub struct NetIo {
     done: bool,
 }
 
+fn create_dma_region() -> SharedMemoryRef<'static, [u8]> {
+    unsafe {
+        SharedMemoryRef::<'static, _>::new(memory_region_symbol!(
+            virtio_net_client_dma_vaddr: *mut [u8],
+            n = config::VIRTIO_NET_CLIENT_DMA_SIZE
+        ))
+    }
+}
+
+fn create_net_ring_buffers(
+    notify_net: fn(),
+) -> (
+    RingBuffers<'static, sel4_shared_ring_buffer::roles::Provide, fn()>,
+    RingBuffers<'static, sel4_shared_ring_buffer::roles::Provide, fn()>,
+) {
+    let rx_ring_buffers =
+        RingBuffers::from_ptrs_using_default_initialization_strategy_for_role(
+            unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_net_rx_free: *mut _)) },
+            unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_net_rx_used: *mut _)) },
+            notify_net,
+        );
+    let tx_ring_buffers =
+        RingBuffers::from_ptrs_using_default_initialization_strategy_for_role(
+            unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_net_tx_free: *mut _)) },
+            unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_net_tx_used: *mut _)) },
+            notify_net,
+        );
+    (rx_ring_buffers, tx_ring_buffers)
+}
+
+fn create_net_device(
+    dma_region: SharedMemoryRef<'static, [u8]>,
+    rx_ring_buffers: RingBuffers<'static, sel4_shared_ring_buffer::roles::Provide, fn()>,
+    tx_ring_buffers: RingBuffers<'static, sel4_shared_ring_buffer::roles::Provide, fn()>,
+) -> DeviceImpl<WithAlignmentBound<BasicAllocator>> {
+    let bounce_buffer_allocator =
+        WithAlignmentBound::new(BasicAllocator::new(dma_region.as_ptr().len()), 1);
+    let mut caps = DeviceCapabilities::default();
+    caps.max_transmission_unit = 1500;
+    caps.medium = Medium::Ethernet;
+    DeviceImpl::new(
+        Default::default(),
+        dma_region,
+        bounce_buffer_allocator,
+        rx_ring_buffers,
+        tx_ring_buffers,
+        config::NET_QUEUE_SIZE,
+        config::NET_BUFFER_LEN,
+        caps,
+    )
+    .expect("virtio-net device")
+}
+
+fn configure_iface(
+    device: &mut DeviceImpl<WithAlignmentBound<BasicAllocator>>,
+    mac: MacAddress,
+) -> Interface {
+    let hardware_addr = HardwareAddress::Ethernet(EthernetAddress(mac.0));
+    let mut iface = Interface::new(Config::new(hardware_addr), device, Instant::ZERO);
+    iface.update_ip_addrs(|ip_addrs| {
+        ip_addrs
+            .push(IpCidr::new(IpAddress::Ipv4(GUEST_IP), 24))
+            .expect("guest IPv4 address");
+    });
+    iface
+        .routes_mut()
+        .add_default_ipv4_route(HOST_IP)
+        .expect("default route");
+    iface
+}
+
 impl NetIo {
     pub fn new(mac: MacAddress) -> Self {
         let notify_net: fn() = || NET_DRIVER.notify();
-
-        let dma_region = unsafe {
-            SharedMemoryRef::<'static, _>::new(memory_region_symbol!(
-                virtio_net_client_dma_vaddr: *mut [u8],
-                n = config::VIRTIO_NET_CLIENT_DMA_SIZE
-            ))
-        };
-
-        let bounce_buffer_allocator =
-            WithAlignmentBound::new(BasicAllocator::new(dma_region.as_ptr().len()), 1);
-
-        let rx_ring_buffers =
-            RingBuffers::from_ptrs_using_default_initialization_strategy_for_role(
-                unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_net_rx_free: *mut _)) },
-                unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_net_rx_used: *mut _)) },
-                notify_net,
-            );
-
-        let tx_ring_buffers =
-            RingBuffers::from_ptrs_using_default_initialization_strategy_for_role(
-                unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_net_tx_free: *mut _)) },
-                unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_net_tx_used: *mut _)) },
-                notify_net,
-            );
-
-        let mut caps = DeviceCapabilities::default();
-        caps.max_transmission_unit = 1500;
-        caps.medium = Medium::Ethernet;
-
-        let mut device = DeviceImpl::new(
-            Default::default(),
-            dma_region,
-            bounce_buffer_allocator,
-            rx_ring_buffers,
-            tx_ring_buffers,
-            config::NET_QUEUE_SIZE,
-            config::NET_BUFFER_LEN,
-            caps,
-        )
-        .expect("virtio-net device");
-
-        let hardware_addr = HardwareAddress::Ethernet(EthernetAddress(mac.0));
-        let mut iface = Interface::new(Config::new(hardware_addr), &mut device, Instant::ZERO);
-        iface.update_ip_addrs(|ip_addrs| {
-            ip_addrs
-                .push(IpCidr::new(IpAddress::Ipv4(GUEST_IP), 24))
-                .expect("guest IPv4 address");
-        });
-        iface
-            .routes_mut()
-            .add_default_ipv4_route(HOST_IP)
-            .expect("default route");
-
+        let dma_region = create_dma_region();
+        let (rx_ring_buffers, tx_ring_buffers) = create_net_ring_buffers(notify_net);
+        let mut device = create_net_device(dma_region, rx_ring_buffers, tx_ring_buffers);
+        let iface = configure_iface(&mut device, mac);
         Self {
             device,
             iface,
@@ -132,20 +154,20 @@ impl NetIo {
         }
     }
 
-    fn init_sockets(iface: &mut Interface) {
+    fn init_udp_socket(sockets: &mut SocketSet<'static>) -> SocketHandle {
         let arena = unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_ARENA) };
-        if arena.initialized {
-            return;
-        }
-
-        let mut sockets = SocketSet::new(&mut arena.storage[..]);
-
         let udp_socket = UdpSocket::new(
             PacketBuffer::new(&mut arena.udp_rx_meta[..], &mut arena.udp_rx_payload[..]),
             PacketBuffer::new(&mut arena.udp_tx_meta[..], &mut arena.udp_tx_payload[..]),
         );
-        arena.udp_handle = Some(sockets.add(udp_socket));
+        sockets.add(udp_socket)
+    }
 
+    fn init_tcp_client_socket(
+        sockets: &mut SocketSet<'static>,
+        iface: &mut Interface,
+    ) -> SocketHandle {
+        let arena = unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_ARENA) };
         let mut tcp_cli = TcpSocket::new(
             TcpSocketBuffer::new(&mut arena.tcp_cli_rx[..]),
             TcpSocketBuffer::new(&mut arena.tcp_cli_tx[..]),
@@ -155,31 +177,35 @@ impl NetIo {
         tcp_cli
             .connect(iface.context(), remote, local)
             .expect("tcp connect");
-        arena.tcp_cli_handle = Some(sockets.add(tcp_cli));
+        sockets.add(tcp_cli)
+    }
 
+    fn init_sockets(iface: &mut Interface) {
+        let arena = unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_ARENA) };
+        if arena.initialized {
+            return;
+        }
+        let mut sockets = SocketSet::new(&mut arena.storage[..]);
+        arena.udp_handle = Some(Self::init_udp_socket(&mut sockets));
+        arena.tcp_cli_handle = Some(Self::init_tcp_client_socket(&mut sockets, iface));
         arena.initialized = true;
     }
 
-    pub fn poll(&mut self) {
-        if self.done {
+    fn poll_udp_tx(&mut self, sockets: &mut SocketSet<'static>) {
+        if self.udp_tx_done {
             return;
         }
-
-        self.device.poll();
-        Self::init_sockets(&mut self.iface);
-
         let arena = unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_ARENA) };
-        let mut sockets = SocketSet::new(&mut arena.storage[..]);
-
-        if !self.udp_tx_done {
-            let local = IpListenEndpoint::from((IpAddress::Ipv4(GUEST_IP), 4242));
-            let remote = IpEndpoint::new(IpAddress::Ipv4(HOST_IP), 12345);
-            let udp = sockets.get_mut::<UdpSocket>(arena.udp_handle.unwrap());
-            if udp.bind(local).is_ok() && udp.send_slice(b"lerux-net", remote).is_ok() {
-                self.udp_tx_done = true;
-            }
+        let local = IpListenEndpoint::from((IpAddress::Ipv4(GUEST_IP), 4242));
+        let remote = IpEndpoint::new(IpAddress::Ipv4(HOST_IP), 12345);
+        let udp = sockets.get_mut::<UdpSocket>(arena.udp_handle.unwrap());
+        if udp.bind(local).is_ok() && udp.send_slice(b"lerux-net", remote).is_ok() {
+            self.udp_tx_done = true;
         }
+    }
 
+    fn poll_tcp_client(&mut self, sockets: &mut SocketSet<'static>) {
+        let arena = unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_ARENA) };
         let tcp_cli = sockets.get_mut::<TcpSocket>(arena.tcp_cli_handle.unwrap());
         if !self.tcp_client_sent && tcp_cli.may_send() {
             if tcp_cli.send_slice(b"lerux-tcp").is_ok() {
@@ -195,18 +221,31 @@ impl NetIo {
                 }
             }
         }
+    }
 
-        self.iface
-            .poll(Instant::ZERO, &mut self.device, &mut sockets);
-
+    fn update_completion_state(&mut self) {
         if self.udp_tx_done && !self.udp_tx_logged {
             log::info!("virtio-net: TX ok");
             self.udp_tx_logged = true;
         }
-
         if self.udp_tx_done && self.tcp_rx_done {
             self.done = true;
         }
+    }
+
+    pub fn poll(&mut self) {
+        if self.done {
+            return;
+        }
+        self.device.poll();
+        Self::init_sockets(&mut self.iface);
+        let arena = unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_ARENA) };
+        let mut sockets = SocketSet::new(&mut arena.storage[..]);
+        self.poll_udp_tx(&mut sockets);
+        self.poll_tcp_client(&mut sockets);
+        self.iface
+            .poll(Instant::ZERO, &mut self.device, &mut sockets);
+        self.update_completion_state();
     }
 
     pub fn is_done(&self) -> bool {

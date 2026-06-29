@@ -19,11 +19,7 @@ const APP: Channel = Channel::new(3);
 
 struct HandlerImpl;
 
-#[protection_domain]
-fn init() -> HandlerImpl {
-    serial::init(SERIAL_DRIVER).unwrap();
-
-    let mut rtc = RtcClient::new(RTC_DRIVER);
+fn log_rtc(rtc: &mut RtcClient) {
     let dt = rtc.datetime().unwrap();
     log::info!(
         "lerux-init: RTC {:04}-{:02}-{:02}",
@@ -31,20 +27,35 @@ fn init() -> HandlerImpl {
         dt.month(),
         dt.day()
     );
+}
 
-    let mut timer = TimerClient::new(TIMER_DRIVER);
+fn log_timer(timer: &mut TimerClient) {
     let elapsed = timer.get_time().unwrap();
     log::info!("lerux-init: timer {}ms", elapsed.as_millis());
     log::info!("lerux-init: timer ok");
+}
 
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_composed",
+    feature = "board-qemu_virt_aarch64_http_composed"
+))]
+fn notify_app() {
+    APP.notify();
+}
+
+#[protection_domain]
+fn init() -> HandlerImpl {
+    serial::init(SERIAL_DRIVER).unwrap();
+    let mut rtc = RtcClient::new(RTC_DRIVER);
+    log_rtc(&mut rtc);
+    let mut timer = TimerClient::new(TIMER_DRIVER);
+    log_timer(&mut timer);
     log::info!("lerux-init: init ok");
-
     #[cfg(any(
         feature = "board-qemu_virt_aarch64_composed",
         feature = "board-qemu_virt_aarch64_http_composed"
     ))]
-    APP.notify();
-
+    notify_app();
     HandlerImpl
 }
 

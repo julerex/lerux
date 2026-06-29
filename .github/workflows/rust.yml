@@ -17,7 +17,6 @@ env:
   MICROKIT_BOARDS: qemu_virt_aarch64,x86_64_generic,qemu_virt_riscv64
   # GHA cache keys cannot contain commas; keep in sync with MICROKIT_BOARDS.
   SDK_CACHE_SUFFIX: virt-aarch64-x86-riscv
-  QEMU_SP804_CACHE_KEY: qemu-sp804-${{ hashFiles('support/qemu/arm-virt-sp804.patch', 'scripts/install-qemu-sp804.sh') }}
 
 jobs:
   sdk:
@@ -130,7 +129,7 @@ jobs:
             deps/toolchains/qemu-sp804
             deps/toolchains/qemu-6.2.0-src
             deps/toolchains/qemu-6.2.0.tar.xz
-          key: ${{ env.QEMU_SP804_CACHE_KEY }}
+          key: qemu-sp804-${{ hashFiles('support/qemu/arm-virt-sp804.patch', 'scripts/install-qemu-sp804.sh') }}
           restore-keys: |
             qemu-sp804-
 
@@ -155,7 +154,7 @@ jobs:
             deps/toolchains/qemu-sp804
             deps/toolchains/qemu-6.2.0-src
             deps/toolchains/qemu-6.2.0.tar.xz
-          key: ${{ env.QEMU_SP804_CACHE_KEY }}
+          key: qemu-sp804-${{ hashFiles('support/qemu/arm-virt-sp804.patch', 'scripts/install-qemu-sp804.sh') }}
 
       - name: Upload SDK bundle
         run: |
@@ -258,7 +257,7 @@ jobs:
             deps/toolchains/qemu-sp804
             deps/toolchains/qemu-6.2.0-src
             deps/toolchains/qemu-6.2.0.tar.xz
-          key: ${{ env.QEMU_SP804_CACHE_KEY }}
+          key: qemu-sp804-${{ hashFiles('support/qemu/arm-virt-sp804.patch', 'scripts/install-qemu-sp804.sh') }}
           restore-keys: |
             qemu-sp804-
 

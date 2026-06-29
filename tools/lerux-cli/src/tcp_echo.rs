@@ -1,9 +1,13 @@
-use std::io::{Read, Write};
-use std::net::{SocketAddr, TcpListener};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::thread;
-use std::time::Duration;
+use std::{
+    io::{Read, Write},
+    net::{SocketAddr, TcpListener},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    thread,
+    time::Duration,
+};
 
 use anyhow::{Context, Result};
 
@@ -21,10 +25,10 @@ pub fn tcp_echo(port: u16) -> Result<()> {
     let handle = thread::spawn(move || {
         if let Ok((mut conn, _)) = listener.accept() {
             let mut buf = [0u8; 64];
-            if let Ok(n) = conn.read(&mut buf) {
-                if n > 0 {
-                    let _ = conn.write_all(&buf[..n]);
-                }
+            if let Ok(n) = conn.read(&mut buf)
+                && n > 0
+            {
+                let _ = conn.write_all(&buf[..n]);
             }
             done_thread.store(true, Ordering::SeqCst);
         }

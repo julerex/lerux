@@ -9,8 +9,8 @@ pub struct LibclangEnv {
 
 pub fn libclang_env(root: &Path) -> LibclangEnv {
     if !system_libclang_present() {
-        let lib = toolchains_dir(root)
-            .join("libclang/usr/lib/x86_64-linux-gnu/libclang-14.so.14.0.0");
+        let lib =
+            toolchains_dir(root).join("libclang/usr/lib/x86_64-linux-gnu/libclang-14.so.14.0.0");
         if !lib.exists() {
             let _ = install_libclang(root);
         }

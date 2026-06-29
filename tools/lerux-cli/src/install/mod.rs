@@ -3,9 +3,9 @@ mod tarball;
 
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 
-use crate::process::{self, command_on_path, download, ensure_dir, run_checked};
+use crate::process::{self, binary_parent, command_on_path, download, ensure_dir, run_checked};
 
 pub use deb::install_deb_tool;
 pub use tarball::extract_tar_xz;
@@ -20,14 +20,17 @@ pub fn install_arm_toolchain(root: &Path) -> Result<PathBuf> {
             "==> aarch64-none-elf-gcc already on PATH: {}",
             path.display()
         );
-        return Ok(path.parent().unwrap().to_path_buf());
+        return binary_parent(&path);
     }
 
     let toolchains = toolchains_dir(root);
     if let Some(install_dir) = find_dir(&toolchains, "arm-gnu-toolchain-*-aarch64-none-elf") {
         let bin = install_dir.join("bin/aarch64-none-elf-gcc");
         if bin.is_file() {
-            eprintln!("==> ARM toolchain already installed at {}", install_dir.display());
+            eprintln!(
+                "==> ARM toolchain already installed at {}",
+                install_dir.display()
+            );
             return Ok(install_dir.join("bin"));
         }
     }
@@ -55,7 +58,7 @@ pub fn install_riscv_toolchain(root: &Path) -> Result<PathBuf> {
                 "==> riscv64-unknown-elf-gcc already on PATH: {}",
                 path.display()
             );
-            return Ok(path.parent().unwrap().to_path_buf());
+            return binary_parent(&path);
         }
     }
 
@@ -63,7 +66,10 @@ pub fn install_riscv_toolchain(root: &Path) -> Result<PathBuf> {
     let wrapper_dir = toolchains.join("riscv64-unknown-elf/bin");
     let wrapper_gcc = wrapper_dir.join("riscv64-unknown-elf-gcc");
     if wrapper_gcc.is_file() {
-        eprintln!("==> RISC-V toolchain already installed under {}", toolchains.display());
+        eprintln!(
+            "==> RISC-V toolchain already installed under {}",
+            toolchains.display()
+        );
         return Ok(wrapper_dir);
     }
 
@@ -147,7 +153,7 @@ fn install_qemu_deb(
 ) -> Result<PathBuf> {
     if let Ok(path) = which::which(binary) {
         eprintln!("==> {binary} already on PATH: {}", path.display());
-        return Ok(path.parent().unwrap().to_path_buf());
+        return binary_parent(&path);
     }
 
     let toolchains = toolchains_dir(root);
@@ -212,7 +218,14 @@ pub fn install_libclang(root: &Path) -> Result<()> {
         let url = process::apt_deb_url(pkg, fallback);
         let tmp = tempfile::NamedTempFile::new().context("temp file")?;
         download(&url, tmp.path())?;
-        run_checked("dpkg-deb", &["-x", &tmp.path().to_string_lossy(), &clang_root.to_string_lossy()])?;
+        run_checked(
+            "dpkg-deb",
+            &[
+                "-x",
+                &tmp.path().to_string_lossy(),
+                &clang_root.to_string_lossy(),
+            ],
+        )?;
     }
 
     if !lib.is_file() {
@@ -236,7 +249,10 @@ pub fn install_sp804_qemu(root: &Path) -> Result<PathBuf> {
     let qemu_bin = install_prefix.join("bin/qemu-system-aarch64");
 
     if qemu_bin.is_file() {
-        eprintln!("==> SP804 QEMU already installed at {}", install_prefix.display());
+        eprintln!(
+            "==> SP804 QEMU already installed at {}",
+            install_prefix.display()
+        );
         return Ok(install_prefix.join("bin"));
     }
 
@@ -276,7 +292,16 @@ pub fn install_sp804_qemu(root: &Path) -> Result<PathBuf> {
     let virt_contents = std::fs::read_to_string(&virt_c).unwrap_or_default();
     if !virt_contents.contains("VIRT_TIMER1") {
         eprintln!("==> Applying arm-virt-sp804 patch");
-        run_checked("patch", &["-d", &src_dir.to_string_lossy(), "-p1", "-i", &patch.to_string_lossy()])?;
+        run_checked(
+            "patch",
+            &[
+                "-d",
+                &src_dir.to_string_lossy(),
+                "-p1",
+                "-i",
+                &patch.to_string_lossy(),
+            ],
+        )?;
     }
 
     let config_status = src_dir.join("build/config.status");
@@ -317,8 +342,14 @@ pub fn install_sp804_qemu(root: &Path) -> Result<PathBuf> {
     let nproc = std::thread::available_parallelism()
         .map(|n| n.get().to_string())
         .unwrap_or_else(|_| "4".to_string());
-    run_checked("make", &["-C", &src_dir.join("build").to_string_lossy(), "-j", &nproc])?;
-    run_checked("make", &["-C", &src_dir.join("build").to_string_lossy(), "install"])?;
+    run_checked(
+        "make",
+        &["-C", &src_dir.join("build").to_string_lossy(), "-j", &nproc],
+    )?;
+    run_checked(
+        "make",
+        &["-C", &src_dir.join("build").to_string_lossy(), "install"],
+    )?;
 
     if !qemu_bin.is_file() {
         bail!("SP804 QEMU build failed");
@@ -367,4 +398,3 @@ pub fn install_tool(root: &Path, tool: InstallTool) -> Result<PathBuf> {
         }
     }
 }
-

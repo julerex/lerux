@@ -5,6 +5,9 @@ edition = "2024"
 license = "MIT"
 description = "lerux IPC helpers built on sel4-microkit-simple-ipc"
 
+[lints]
+workspace = true
+
 [dependencies]
 serde = { workspace = true }
 sel4-microkit = { workspace = true }

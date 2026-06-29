@@ -17,6 +17,11 @@ export RUSTC_BOOTSTRAP := "1"
 
 default: build
 
+# Format and clippy for host crates (no SDK required)
+check:
+    cargo fmt --all --check
+    cargo clippy -p lerux-cli -p lerux-interface-types --all-targets -- -D warnings
+
 # Clone seL4 + microkit into deps/workspace/
 fetch:
     {{lerux}} fetch

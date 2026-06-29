@@ -26,8 +26,7 @@ pub fn create_virtio_blk() -> VirtIOBlk<HalImpl, MmioTransport<'static>> {
             as *mut VirtIOHeader,
     )
     .unwrap();
-    let transport =
-        unsafe { MmioTransport::new(header, config::VIRTIO_BLK_MMIO_SIZE) }.unwrap();
+    let transport = unsafe { MmioTransport::new(header, config::VIRTIO_BLK_MMIO_SIZE) }.unwrap();
     assert_eq!(transport.device_type(), DeviceType::Block);
     VirtIOBlk::<HalImpl, MmioTransport>::new(transport).unwrap()
 }

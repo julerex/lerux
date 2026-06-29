@@ -7,10 +7,10 @@ extern crate alloc;
 use lerux_logging::log;
 use sel4_microkit::{protection_domain, Channel, ChannelSet, Handler, Infallible};
 
-#[cfg(feature = "serial-ipc")]
-use lerux_logging::serial;
 #[cfg(not(feature = "serial-ipc"))]
 use lerux_logging::debug;
+#[cfg(feature = "serial-ipc")]
+use lerux_logging::serial;
 
 #[cfg(feature = "virtio")]
 use alloc::rc::Rc;
@@ -19,9 +19,9 @@ use async_unsync::semaphore::Semaphore;
 #[cfg(feature = "virtio")]
 use core::task::Poll;
 #[cfg(feature = "virtio")]
-use sel4_abstract_allocator::WithAlignmentBound;
-#[cfg(feature = "virtio")]
 use sel4_abstract_allocator::basic::BasicAllocator;
+#[cfg(feature = "virtio")]
+use sel4_abstract_allocator::WithAlignmentBound;
 #[cfg(feature = "virtio")]
 use sel4_driver_interfaces::block::GetBlockDeviceLayout;
 #[cfg(feature = "virtio")]
@@ -38,7 +38,6 @@ use sel4_shared_memory::SharedMemoryRef;
 use sel4_shared_ring_buffer::RingBuffers;
 #[cfg(feature = "virtio")]
 use sel4_shared_ring_buffer_block_io::OwnedSharedRingBufferBlockIO;
-
 
 #[cfg(feature = "virtio")]
 mod config;
@@ -176,7 +175,12 @@ fn create_blk_dma_region() -> SharedMemoryRef<'static, [u8]> {
 }
 
 #[cfg(feature = "virtio")]
-fn create_blk_ring_buffers() -> RingBuffers<'static, sel4_shared_ring_buffer::roles::Provide, fn(), sel4_shared_ring_buffer_block_io_types::BlockIORequest> {
+fn create_blk_ring_buffers() -> RingBuffers<
+    'static,
+    sel4_shared_ring_buffer::roles::Provide,
+    fn(),
+    sel4_shared_ring_buffer_block_io_types::BlockIORequest,
+> {
     let notify_block: fn() = || BLK_DRIVER.notify();
     RingBuffers::from_ptrs_using_default_initialization_strategy_for_role(
         unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_blk_free: *mut _)) },
@@ -198,7 +202,8 @@ fn start_blk_read() -> BlkRead {
     let bounce_buffer_allocator =
         WithAlignmentBound::new(BasicAllocator::new(dma_region.as_ptr().len()), 1);
     let ring_buffers = create_blk_ring_buffers();
-    let mut io = OwnedSharedRingBufferBlockIO::new(dma_region, bounce_buffer_allocator, ring_buffers);
+    let mut io =
+        OwnedSharedRingBufferBlockIO::new(dma_region, bounce_buffer_allocator, ring_buffers);
     let request_index = issue_blk_read(&mut io);
     BlkRead {
         io,
@@ -263,7 +268,10 @@ impl HandlerImpl {
 impl Handler for HandlerImpl {
     type Error = Infallible;
 
-    fn notified(&mut self, #[cfg_attr(not(feature = "virtio"), allow(unused_variables))] channels: ChannelSet) -> Result<(), Self::Error> {
+    fn notified(
+        &mut self,
+        #[cfg_attr(not(feature = "virtio"), allow(unused_variables))] channels: ChannelSet,
+    ) -> Result<(), Self::Error> {
         #[cfg(feature = "virtio")]
         {
             #[cfg(feature = "composed-sync")]

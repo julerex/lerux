@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 
 use crate::process::{ensure_dir, run_checked};
@@ -24,8 +24,8 @@ struct RepoPin {
 
 fn load_versions(root: &Path) -> Result<Versions> {
     let path = root.join("deps/versions.toml");
-    let contents = std::fs::read_to_string(&path)
-        .with_context(|| format!("read {}", path.display()))?;
+    let contents =
+        std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
     toml::from_str(&contents).with_context(|| format!("parse {}", path.display()))
 }
 
@@ -54,15 +54,30 @@ pub fn fetch(root: &Path) -> Result<()> {
 fn clone_or_checkout(workspace: &Path, name: &str, url: &str, tag: &str) -> Result<()> {
     let dest = workspace.join(name);
     if dest.join(".git").is_dir() {
-        let _ = run_checked("git", &["config", "--global", "--add", "safe.directory", &dest.to_string_lossy()]);
+        let _ = run_checked(
+            "git",
+            &[
+                "config",
+                "--global",
+                "--add",
+                "safe.directory",
+                &dest.to_string_lossy(),
+            ],
+        );
         eprintln!("==> {name}: already cloned, checking out {tag}");
-        run_checked("git", &["-C", &dest.to_string_lossy(), "fetch", "--tags", "origin"])?;
+        run_checked(
+            "git",
+            &["-C", &dest.to_string_lossy(), "fetch", "--tags", "origin"],
+        )?;
         run_checked("git", &["-C", &dest.to_string_lossy(), "checkout", tag])?;
         return Ok(());
     }
 
     if dest.exists() {
-        eprintln!("==> {name}: removing existing non-repository path at {}", dest.display());
+        eprintln!(
+            "==> {name}: removing existing non-repository path at {}",
+            dest.display()
+        );
         std::fs::remove_dir_all(&dest)?;
     }
 

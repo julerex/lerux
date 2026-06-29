@@ -1,11 +1,19 @@
-use std::ffi::OsStr;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Output, Stdio};
+use std::{
+    ffi::OsStr,
+    path::{Path, PathBuf},
+    process::{Command, Output, Stdio},
+};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 
 pub fn path_str(path: &Path) -> String {
     path.to_string_lossy().into_owned()
+}
+
+pub fn binary_parent(path: &Path) -> Result<PathBuf> {
+    path.parent()
+        .map(Path::to_path_buf)
+        .with_context(|| format!("{} has no parent directory", path.display()))
 }
 
 pub fn repo_root() -> Result<PathBuf> {
@@ -40,7 +48,9 @@ pub fn run_checked(program: impl AsRef<OsStr>, args: &[impl AsRef<OsStr>]) -> Re
         bail!(
             "command {:?} {:?} failed ({})\nstdout: {}\nstderr: {}",
             program.as_ref(),
-            args.iter().map(|a| a.as_ref().to_string_lossy()).collect::<Vec<_>>(),
+            args.iter()
+                .map(|a| a.as_ref().to_string_lossy())
+                .collect::<Vec<_>>(),
             output.status,
             stdout,
             stderr
@@ -68,8 +78,7 @@ pub fn command_on_path(name: &str) -> bool {
 }
 
 pub fn ensure_dir(path: &Path) -> Result<()> {
-    std::fs::create_dir_all(path)
-        .with_context(|| format!("mkdir {}", path.display()))
+    std::fs::create_dir_all(path).with_context(|| format!("mkdir {}", path.display()))
 }
 
 pub fn write_file(path: &Path, contents: &str) -> Result<()> {
@@ -85,8 +94,8 @@ pub fn download(url: &str, dest: &Path) -> Result<()> {
         .call()
         .with_context(|| format!("GET {url}"))?;
     let mut reader = response.into_body().into_reader();
-    let mut file = std::fs::File::create(dest)
-        .with_context(|| format!("create {}", dest.display()))?;
+    let mut file =
+        std::fs::File::create(dest).with_context(|| format!("create {}", dest.display()))?;
     std::io::copy(&mut reader, &mut file).context("download body")?;
     Ok(())
 }
@@ -96,12 +105,12 @@ pub fn apt_deb_url(package: &str, fallback: &str) -> String {
         .args(["show", package])
         .output()
         .ok();
-    if let Some(output) = output {
-        if output.status.success() {
-            for line in String::from_utf8_lossy(&output.stdout).lines() {
-                if let Some(path) = line.strip_prefix("Filename: ") {
-                    return format!("http://archive.ubuntu.com/ubuntu/{path}");
-                }
+    if let Some(output) = output
+        && output.status.success()
+    {
+        for line in String::from_utf8_lossy(&output.stdout).lines() {
+            if let Some(path) = line.strip_prefix("Filename: ") {
+                return format!("http://archive.ubuntu.com/ubuntu/{path}");
             }
         }
     }

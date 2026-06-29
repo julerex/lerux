@@ -30,7 +30,7 @@ just test-all
 
 ## CI
 
-GitHub Actions runs on every push to `main`: one **sdk** job (SDK + patched SP804 QEMU), then **15 smoke** matrix jobs. Details: [`docs/ci.md`](docs/ci.md).
+GitHub Actions runs on every push to `main`: **check** (`just check`), one **sdk** job (SDK + patched SP804 QEMU), then **15 smoke** matrix jobs. Local lint: `just check`. Details: [`docs/ci.md`](docs/ci.md).
 
 ## Architecture
 
@@ -69,6 +69,7 @@ Full board reference: [`docs/boards.md`](docs/boards.md).
 
 | Doc | Purpose |
 |-----|---------|
+| [AGENTS.md](AGENTS.md) | LLM agent instructions for idiomatic Rust |
 | [docs/README.md](docs/README.md) | Documentation index |
 | [docs/context.md](docs/context.md) | Domain language and decisions |
 | [docs/plan.md](docs/plan.md) | Roadmap and smoke parity table |

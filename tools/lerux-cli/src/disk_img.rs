@@ -1,13 +1,19 @@
 use std::path::Path;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 
 use crate::process::{ensure_dir, run_checked};
 
 pub fn disk_img(root: &Path) -> Result<()> {
     let disk = root.join("support/disk.img");
-    ensure_dir(&disk.parent().unwrap())?;
-    run_checked("qemu-img", &["create", "-f", "raw", &disk.to_string_lossy(), "4M"])?;
+    let parent = disk
+        .parent()
+        .context("support/disk.img has no parent directory")?;
+    ensure_dir(parent)?;
+    run_checked(
+        "qemu-img",
+        &["create", "-f", "raw", &disk.to_string_lossy(), "4M"],
+    )?;
 
     let status = std::process::Command::new("bash")
         .arg("-c")

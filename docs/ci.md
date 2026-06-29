@@ -4,15 +4,19 @@ GitHub Actions workflow: [`.github/workflows/rust.yml`](../.github/workflows/rus
 
 ## Pipeline
 
-1. **sdk** — Docker image, fetch sources, build Microkit SDK (cached), **prebuild patched SP804 QEMU** (cached), upload SDK artifact.
-2. **smoke** — 15 parallel matrix jobs; each restores SDK artifact, per-job `build/` cache, and SP804 QEMU (init/composed/http-composed only).
+1. **check** — `just check` (`cargo fmt --all --check` + clippy on host crates; no SDK).
+2. **sdk** — Docker image, fetch sources, build Microkit SDK (cached), **prebuild patched SP804 QEMU** (cached), upload SDK artifact.
+3. **smoke** — 15 parallel matrix jobs; each restores SDK artifact, per-job `build/` cache, and SP804 QEMU (init/composed/http-composed only).
 
 ```mermaid
 flowchart LR
+  check[check job]
   sdk[sdk job]
   smoke[smoke matrix x15]
   sdk --> smoke
 ```
+
+Local mirror: `just check` (format + clippy for `lerux-cli` and `lerux-interface-types`).
 
 ## Smoke matrix
 

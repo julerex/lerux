@@ -1,7 +1,6 @@
-use std::collections::BTreeMap;
-use std::path::Path;
+use std::{collections::BTreeMap, path::Path};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 use toml::Value as TomlValue;
 
@@ -21,8 +20,8 @@ pub type Boards = BTreeMap<String, Board>;
 
 pub fn load_boards(root: &Path) -> Result<Boards> {
     let path = root.join("support/boards.toml");
-    let contents = std::fs::read_to_string(&path)
-        .with_context(|| format!("read {}", path.display()))?;
+    let contents =
+        std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
     toml::from_str(&contents).with_context(|| format!("parse {}", path.display()))
 }
 
@@ -33,11 +32,10 @@ pub fn get_board<'a>(boards: &'a Boards, name: &str) -> Result<&'a Board> {
 }
 
 pub fn print_board_field(board: &Board, field: Option<&str>) -> Result<()> {
-    if field.is_none() {
+    let Some(field) = field else {
         println!("{}", serde_json::to_string(board)?);
         return Ok(());
-    }
-    let field = field.unwrap();
+    };
     match field {
         "arch" => println!("{}", board.arch),
         "microkit_board" => println!("{}", board.microkit_board),

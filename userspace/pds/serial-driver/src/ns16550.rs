@@ -2,8 +2,7 @@
 
 use core::convert::Infallible;
 
-use embedded_hal_nb::nb;
-use embedded_hal_nb::serial;
+use embedded_hal_nb::{nb, serial};
 use sel4::with_ipc_buffer_mut;
 use sel4_driver_interfaces::HandleInterrupt;
 use sel4_microkit::var;
@@ -70,9 +69,7 @@ impl Driver {
     fn in8(&self, offset: u16) -> u8 {
         let port = self.base_port + offset;
         with_ipc_buffer_mut(|ipc| {
-            let ret = ipc
-                .inner_mut()
-                .seL4_X86_IOPort_In8(self.ioport_cap(), port);
+            let ret = ipc.inner_mut().seL4_X86_IOPort_In8(self.ioport_cap(), port);
             ret.result as u8
         })
     }

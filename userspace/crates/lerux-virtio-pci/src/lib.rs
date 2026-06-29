@@ -5,10 +5,10 @@
 mod ecam;
 mod ioport;
 
-use virtio_drivers::transport::pci::bus::{
-    BarInfo, Command, ConfigurationAccess, DeviceFunction, MemoryBarType, PciRoot,
+use virtio_drivers::transport::pci::{
+    bus::{BarInfo, Command, ConfigurationAccess, DeviceFunction, MemoryBarType, PciRoot},
+    PciTransport, VirtioPciError,
 };
-use virtio_drivers::transport::pci::{PciTransport, VirtioPciError};
 
 use ecam::EcamAccess;
 use ioport::IoPortCam;

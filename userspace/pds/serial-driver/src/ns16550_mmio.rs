@@ -1,10 +1,11 @@
 //! NS16550 UART over MMIO (QEMU virt RISC-V at 0x1000_0000).
 
-use core::convert::Infallible;
-use core::ptr::{read_volatile, write_volatile};
+use core::{
+    convert::Infallible,
+    ptr::{read_volatile, write_volatile},
+};
 
-use embedded_hal_nb::nb;
-use embedded_hal_nb::serial;
+use embedded_hal_nb::{nb, serial};
 use sel4_driver_interfaces::HandleInterrupt;
 use sel4_microkit::memory_region_symbol;
 

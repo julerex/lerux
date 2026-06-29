@@ -1,15 +1,19 @@
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::{
+    path::{Path, PathBuf},
+    process::Command,
+};
 
-use anyhow::{Result, bail};
+use anyhow::{bail, Result};
 
-use crate::board::{Board, get_board, load_boards};
-use crate::build_sdk::sdk_path;
-use crate::install::install_sp804_qemu;
-use crate::path::host_path;
-use crate::process::{command_on_path, path_str};
-use crate::system::board_build_dir;
-use crate::tcp_echo::{port_is_listening, start_tcp_echo_background};
+use crate::{
+    board::{get_board, load_boards, Board},
+    build_sdk::sdk_path,
+    install::install_sp804_qemu,
+    path::host_path,
+    process::{command_on_path, path_str},
+    system::board_build_dir,
+    tcp_echo::{port_is_listening, start_tcp_echo_background},
+};
 
 pub struct QemuContext {
     pub root: PathBuf,
@@ -44,11 +48,17 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
                 "mon:stdio",
                 "-nographic",
                 "-device",
-                &format!("loader,file={},addr=0x70000000,cpu-num=0", path_str(&loader)),
+                &format!(
+                    "loader,file={},addr=0x70000000,cpu-num=0",
+                    path_str(&loader)
+                ),
             ]);
             c
         }
-        "aarch64_init" | "aarch64_virtio" | "aarch64_composed" | "aarch64_http"
+        "aarch64_init"
+        | "aarch64_virtio"
+        | "aarch64_composed"
+        | "aarch64_http"
         | "aarch64_http_composed" => {
             let mut c = Command::new("qemu-system-aarch64");
             c.args([
@@ -62,7 +72,10 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
                 "mon:stdio",
                 "-nographic",
                 "-device",
-                &format!("loader,file={},addr=0x70000000,cpu-num=0", path_str(&loader)),
+                &format!(
+                    "loader,file={},addr=0x70000000,cpu-num=0",
+                    path_str(&loader)
+                ),
             ]);
             if matches!(
                 ctx.board.qemu.as_str(),
@@ -82,8 +95,10 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
                         path_str(&disk)
                     ),
                 ]);
-            } else if matches!(ctx.board.qemu.as_str(), "aarch64_http" | "aarch64_http_composed")
-            {
+            } else if matches!(
+                ctx.board.qemu.as_str(),
+                "aarch64_http" | "aarch64_http_composed"
+            ) {
                 c.args([
                     "-device",
                     "virtio-net-device,netdev=netdev0",

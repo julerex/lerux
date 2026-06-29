@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT"
 
+[lints]
+workspace = true
+
 [features]
 board-x86_64_generic_virtio = ["dep:lerux-virtio-hal", "dep:lerux-virtio-pci"]
 board-x86_64_generic_http = ["dep:lerux-virtio-hal", "dep:lerux-virtio-pci"]

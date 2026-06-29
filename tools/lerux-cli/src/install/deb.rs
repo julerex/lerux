@@ -1,16 +1,22 @@
-use std::fs;
-use std::path::Path;
+use std::{fs, path::Path};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use flate2::read::GzDecoder;
 use tar::Archive;
 
-use crate::install::toolchains_dir;
-use crate::process::{download, ensure_dir, run_checked};
+use crate::{
+    install::toolchains_dir,
+    process::{binary_parent, download, ensure_dir, run_checked},
+};
 
-pub fn install_deb_tool(root: &Path, name: &str, deb_url: &str, binary: &str) -> Result<std::path::PathBuf> {
+pub fn install_deb_tool(
+    root: &Path,
+    name: &str,
+    deb_url: &str,
+    binary: &str,
+) -> Result<std::path::PathBuf> {
     if let Ok(path) = which::which(binary) {
-        return Ok(path.parent().unwrap().to_path_buf());
+        return binary_parent(&path);
     }
 
     let install_root = toolchains_dir(root).join(name);
@@ -29,7 +35,11 @@ pub fn install_deb_tool(root: &Path, name: &str, deb_url: &str, binary: &str) ->
     ensure_dir(&install_root)?;
     run_checked(
         "dpkg-deb",
-        &["-x", &tmp.path().to_string_lossy(), &install_root.to_string_lossy()],
+        &[
+            "-x",
+            &tmp.path().to_string_lossy(),
+            &install_root.to_string_lossy(),
+        ],
     )?;
 
     if !bin_path.is_file() {
@@ -46,4 +56,3 @@ pub fn extract_tar_gz(archive: &Path, dest: &Path) -> Result<()> {
     tar.unpack(dest).context("unpack tar.gz")?;
     Ok(())
 }
-

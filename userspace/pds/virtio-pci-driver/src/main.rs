@@ -12,8 +12,7 @@ use core::pin::Pin;
 
 use lerux_logging::{debug, log};
 use sel4_microkit::{
-    memory_region_symbol, protection_domain, Channel, ChannelSet, Handler, Infallible,
-    MessageInfo,
+    memory_region_symbol, protection_domain, Channel, ChannelSet, Handler, Infallible, MessageInfo,
 };
 #[cfg(feature = "board-x86_64_generic_virtio")]
 use sel4_microkit_driver_adapters::block::driver::handle_client_request;
@@ -174,11 +173,7 @@ impl BlkHandler {
         }
     }
 
-    fn enqueue_completed_request(
-        &mut self,
-        client_req: BlockIORequest,
-        virtio_resp: &BlkResp,
-    ) {
+    fn enqueue_completed_request(&mut self, client_req: BlockIORequest, virtio_resp: &BlkResp) {
         let status = match virtio_resp.status() {
             RespStatus::OK => BlockIORequestStatus::Ok,
             _ => panic!(),
@@ -196,15 +191,11 @@ impl BlkHandler {
         let token = self.dev.peek_used().unwrap();
         let mut pending_entry = self.pending.remove(&token).unwrap();
         unsafe {
-            let mut buf_ptr =
-                buf_ptr_for_req(&mut self.client_region, &pending_entry.client_req);
+            let mut buf_ptr = buf_ptr_for_req(&mut self.client_region, &pending_entry.client_req);
             let pending_entry = &mut *pending_entry;
             self.complete_virtio_read(token, pending_entry, buf_ptr.as_mut());
         }
-        self.enqueue_completed_request(
-            pending_entry.client_req,
-            &pending_entry.virtio_resp,
-        );
+        self.enqueue_completed_request(pending_entry.client_req, &pending_entry.virtio_resp);
     }
 
     fn complete_used_requests(&mut self) -> bool {
@@ -245,8 +236,7 @@ impl BlkHandler {
             virtio_req: BlkReq::default(),
             virtio_resp: BlkResp::default(),
         });
-        let mut buf_ptr =
-            buf_ptr_for_req(&mut self.client_region, &pending_entry.client_req);
+        let mut buf_ptr = buf_ptr_for_req(&mut self.client_region, &pending_entry.client_req);
         assert_eq!(buf_ptr.len(), 512);
         let token = unsafe {
             let pending_entry = &mut *pending_entry;
@@ -287,10 +277,7 @@ impl BlkHandler {
 
     fn protected(&mut self, channel: Channel, msg_info: MessageInfo) -> MessageInfo {
         assert_eq!(channel, channels::BLK_CLIENT);
-        handle_client_request(
-            &mut GetBlockDeviceLayoutWrapper(&self.dev),
-            msg_info,
-        )
+        handle_client_request(&mut GetBlockDeviceLayoutWrapper(&self.dev), msg_info)
     }
 }
 

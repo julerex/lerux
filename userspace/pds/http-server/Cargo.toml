@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT"
 
+[lints]
+workspace = true
+
 [features]
 board-qemu_virt_aarch64_http = ["serial-ipc"]
 board-qemu_virt_aarch64_http_composed = ["composed-sync"]

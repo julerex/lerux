@@ -5,6 +5,9 @@ edition = "2024"
 license = "MIT"
 description = "lerux sync helpers built on sel4-sync"
 
+[lints]
+workspace = true
+
 [dependencies]
 lock_api = { workspace = true }
 sel4-sync = { workspace = true }

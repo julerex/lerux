@@ -6,9 +6,7 @@
 #![no_std]
 
 pub use lock_api;
-pub use sel4_sync::{
-    RawDeferredNotificationMutex, RawLazyNotificationMutex, RawNotificationMutex,
-};
+pub use sel4_sync::{RawDeferredNotificationMutex, RawLazyNotificationMutex, RawNotificationMutex};
 
 use lock_api::Mutex;
 use sel4_sync::RawNotificationMutex;

@@ -1,8 +1,10 @@
-use std::io::{BufRead, BufReader, Read};
-use std::process::{Command, Stdio};
-use std::time::{Duration, Instant};
+use std::{
+    io::{BufRead, BufReader, Read},
+    process::{Command, Stdio},
+    time::{Duration, Instant},
+};
 
-use anyhow::{Result, bail};
+use anyhow::{bail, Context, Result};
 
 pub struct SmokeTest {
     pub expects: Vec<String>,
@@ -27,8 +29,8 @@ pub fn run_smoke(mut cmd: Command, test: &SmokeTest) -> Result<()> {
     cmd.stderr(Stdio::piped());
     let mut child = cmd.spawn()?;
 
-    let stdout = child.stdout.take().expect("stdout");
-    let stderr = child.stderr.take().expect("stderr");
+    let stdout = child.stdout.take().context("child stdout pipe")?;
+    let stderr = child.stderr.take().context("child stderr pipe")?;
 
     let output = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
     let out_clone = std::sync::Arc::clone(&output);
@@ -81,7 +83,11 @@ fn pump_reader<R: Read>(mut reader: BufReader<R>, sink: std::sync::Arc<std::sync
     }
 }
 
-fn expect_ordered(output: &std::sync::Arc<std::sync::Mutex<String>>, patterns: &[String], per: u64) -> Result<()> {
+fn expect_ordered(
+    output: &std::sync::Arc<std::sync::Mutex<String>>,
+    patterns: &[String],
+    per: u64,
+) -> Result<()> {
     for pattern in patterns {
         let deadline = Instant::now() + Duration::from_secs(per);
         loop {

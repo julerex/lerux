@@ -1,19 +1,22 @@
 use lerux_logging::log;
-use sel4_abstract_allocator::WithAlignmentBound;
-use sel4_abstract_allocator::basic::BasicAllocator;
+use sel4_abstract_allocator::{basic::BasicAllocator, WithAlignmentBound};
 use sel4_driver_interfaces::net::MacAddress;
-use sel4_microkit::memory_region_symbol;
-use sel4_microkit::Channel;
+use sel4_microkit::{memory_region_symbol, Channel};
 use sel4_shared_memory::SharedMemoryRef;
 use sel4_shared_ring_buffer::RingBuffers;
 use sel4_shared_ring_buffer_smoltcp::DeviceImpl;
-use smoltcp::iface::{Config, Interface, SocketHandle, SocketSet, SocketStorage};
-use smoltcp::phy::{DeviceCapabilities, Medium};
-use smoltcp::socket::tcp::{Socket as TcpSocket, SocketBuffer as TcpSocketBuffer};
-use smoltcp::socket::udp::{PacketBuffer, PacketMetadata, Socket as UdpSocket};
-use smoltcp::time::Instant;
-use smoltcp::wire::{
-    EthernetAddress, HardwareAddress, IpAddress, IpCidr, IpEndpoint, IpListenEndpoint, Ipv4Address,
+use smoltcp::{
+    iface::{Config, Interface, SocketHandle, SocketSet, SocketStorage},
+    phy::{DeviceCapabilities, Medium},
+    socket::{
+        tcp::{Socket as TcpSocket, SocketBuffer as TcpSocketBuffer},
+        udp::{PacketBuffer, PacketMetadata, Socket as UdpSocket},
+    },
+    time::Instant,
+    wire::{
+        EthernetAddress, HardwareAddress, IpAddress, IpCidr, IpEndpoint, IpListenEndpoint,
+        Ipv4Address,
+    },
 };
 
 use crate::config;
@@ -80,18 +83,16 @@ fn create_net_ring_buffers(
     RingBuffers<'static, sel4_shared_ring_buffer::roles::Provide, fn()>,
     RingBuffers<'static, sel4_shared_ring_buffer::roles::Provide, fn()>,
 ) {
-    let rx_ring_buffers =
-        RingBuffers::from_ptrs_using_default_initialization_strategy_for_role(
-            unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_net_rx_free: *mut _)) },
-            unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_net_rx_used: *mut _)) },
-            notify_net,
-        );
-    let tx_ring_buffers =
-        RingBuffers::from_ptrs_using_default_initialization_strategy_for_role(
-            unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_net_tx_free: *mut _)) },
-            unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_net_tx_used: *mut _)) },
-            notify_net,
-        );
+    let rx_ring_buffers = RingBuffers::from_ptrs_using_default_initialization_strategy_for_role(
+        unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_net_rx_free: *mut _)) },
+        unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_net_rx_used: *mut _)) },
+        notify_net,
+    );
+    let tx_ring_buffers = RingBuffers::from_ptrs_using_default_initialization_strategy_for_role(
+        unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_net_tx_free: *mut _)) },
+        unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_net_tx_used: *mut _)) },
+        notify_net,
+    );
     (rx_ring_buffers, tx_ring_buffers)
 }
 

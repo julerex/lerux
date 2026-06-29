@@ -11,10 +11,7 @@ pub const MAX_ECHO_LEN: usize = 32;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EchoRequest {
     Ping,
-    Echo {
-        len: u8,
-        text: [u8; MAX_ECHO_LEN],
-    },
+    Echo { len: u8, text: [u8; MAX_ECHO_LEN] },
 }
 
 impl EchoRequest {
@@ -30,10 +27,7 @@ impl EchoRequest {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EchoResponse {
     Pong,
-    Echo {
-        len: u8,
-        text: [u8; MAX_ECHO_LEN],
-    },
+    Echo { len: u8, text: [u8; MAX_ECHO_LEN] },
 }
 
 impl EchoResponse {

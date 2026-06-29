@@ -54,8 +54,7 @@ pub fn create_virtio_net() -> VirtIONet<NetHal, MmioTransport<'static>, NET_QUEU
             as *mut VirtIOHeader,
     )
     .unwrap();
-    let transport =
-        unsafe { MmioTransport::new(header, config::VIRTIO_NET_MMIO_SIZE) }.unwrap();
+    let transport = unsafe { MmioTransport::new(header, config::VIRTIO_NET_MMIO_SIZE) }.unwrap();
     assert_eq!(transport.device_type(), DeviceType::Network);
     VirtIONet::<NetHal, MmioTransport, NET_QUEUE_SIZE>::new(transport, NET_BUFFER_LEN).unwrap()
 }

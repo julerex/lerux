@@ -6,10 +6,10 @@ use sel4_driver_interfaces::net::GetNetDeviceMeta;
 use sel4_microkit::{protection_domain, Channel, ChannelSet, Handler, Infallible};
 use sel4_microkit_driver_adapters::net::client::Client as NetClient;
 
-#[cfg(feature = "serial-ipc")]
-use lerux_logging::serial;
 #[cfg(not(feature = "serial-ipc"))]
 use lerux_logging::debug;
+#[cfg(feature = "serial-ipc")]
+use lerux_logging::serial;
 
 mod config;
 mod net;

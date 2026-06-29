@@ -1,8 +1,8 @@
 #![no_std]
 #![no_main]
 
-use lerux_ipc::{recv, send, send_unspecified_error};
 use lerux_interface_types::{EchoRequest, EchoResponse};
+use lerux_ipc::{recv, send, send_unspecified_error};
 use lerux_logging::{debug, log};
 use sel4_microkit::{protection_domain, Channel, Handler, Infallible, MessageInfo};
 

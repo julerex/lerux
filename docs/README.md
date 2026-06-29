@@ -6,6 +6,7 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 
 | Doc | Purpose |
 |-----|---------|
+| [../AGENTS.md](../AGENTS.md) | LLM agent instructions for idiomatic Rust in this repo |
 | [context.md](context.md) | Domain language and architectural decisions |
 | [plan.md](plan.md) | Roadmap and cross-arch smoke parity |
 | [boards.md](boards.md) | Board names, PDs, QEMU profiles |

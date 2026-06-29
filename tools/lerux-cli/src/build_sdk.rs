@@ -1,13 +1,15 @@
 use std::path::Path;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 
-use crate::install::{
-    install_dtc, install_libclang, install_qemu_aarch64, install_qemu_riscv64,
-    install_riscv_toolchain, install_xmllint,
+use crate::{
+    install::{
+        install_dtc, install_libclang, install_qemu_aarch64, install_qemu_riscv64,
+        install_riscv_toolchain, install_xmllint,
+    },
+    libclang::apply_libclang_env,
+    process::{command_on_path, run_checked, write_file},
 };
-use crate::libclang::apply_libclang_env;
-use crate::process::{command_on_path, run_checked, write_file};
 
 pub fn build_sdk(root: &Path) -> Result<()> {
     let workspace = root.join("deps/workspace");
@@ -93,7 +95,13 @@ pub fn build_sdk(root: &Path) -> Result<()> {
         let _ = run_checked("rustup", &["target", "add", "x86_64-unknown-linux-musl"]);
         let _ = run_checked(
             "rustup",
-            &["toolchain", "install", "nightly-2026-03-18", "-c", "rust-src"],
+            &[
+                "toolchain",
+                "install",
+                "nightly-2026-03-18",
+                "-c",
+                "rust-src",
+            ],
         );
         let _ = run_checked(
             "rustup",
@@ -194,7 +202,10 @@ pub fn build_sdk(root: &Path) -> Result<()> {
 
     let release = microkit.join("release");
     let sdk = find_sdk(&release).context("SDK build produced no microkit-sdk-* directory")?;
-    write_file(&root.join("deps/.sdk-path"), &format!("{}\n", sdk.display()))?;
+    write_file(
+        &root.join("deps/.sdk-path"),
+        &format!("{}\n", sdk.display()),
+    )?;
     eprintln!("==> Microkit SDK: {}", sdk.display());
     Ok(())
 }
@@ -250,14 +261,16 @@ fn find_sdk(release: &Path) -> Result<std::path::PathBuf> {
         })
         .collect();
     candidates.sort();
-    candidates.pop().ok_or_else(|| anyhow::anyhow!("no sdk dir"))
+    candidates
+        .pop()
+        .ok_or_else(|| anyhow::anyhow!("no sdk dir"))
 }
 
 pub fn sdk_path(root: &Path) -> Result<String> {
-    if let Ok(path) = std::env::var("MICROKIT_SDK") {
-        if !path.is_empty() {
-            return Ok(path);
-        }
+    if let Ok(path) = std::env::var("MICROKIT_SDK")
+        && !path.is_empty()
+    {
+        return Ok(path);
     }
     let file = root.join("deps/.sdk-path");
     if file.is_file() {

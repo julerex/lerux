@@ -19,6 +19,24 @@ env:
   SDK_CACHE_SUFFIX: virt-aarch64-x86-riscv
 
 jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-03-18
+          components: rustfmt, clippy
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      - name: Format and clippy
+        run: just check
+
   sdk:
     runs-on: ubuntu-latest
     timeout-minutes: 120

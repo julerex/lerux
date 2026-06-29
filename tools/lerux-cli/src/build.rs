@@ -1,13 +1,14 @@
-use std::path::Path;
-use std::process::Command;
+use std::{path::Path, process::Command};
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 
-use crate::board::{get_board, load_boards};
-use crate::build_sdk::sdk_path;
-use crate::libclang::apply_libclang_env;
-use crate::process::{ensure_dir, path_str, run_inherit};
-use crate::system::{board_build_dir, generate_system, system_file};
+use crate::{
+    board::{get_board, load_boards},
+    build_sdk::sdk_path,
+    libclang::apply_libclang_env,
+    process::{ensure_dir, path_str, run_inherit},
+    system::{board_build_dir, generate_system, system_file},
+};
 
 const BOARD_FEATURE_CRATES: &[&str] = &[
     "hello",
@@ -34,7 +35,13 @@ pub fn build(root: &Path, board: &str, build_dir: &str, config: &str) -> Result<
     Ok(())
 }
 
-pub fn build_pd(root: &Path, board: &str, build_dir: &str, config: &str, crate_name: &str) -> Result<()> {
+pub fn build_pd(
+    root: &Path,
+    board: &str,
+    build_dir: &str,
+    config: &str,
+    crate_name: &str,
+) -> Result<()> {
     let boards = load_boards(root)?;
     let board_cfg = get_board(&boards, board)?;
     let sdk = sdk_path(root)?;

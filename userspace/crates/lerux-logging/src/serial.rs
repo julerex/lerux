@@ -4,9 +4,9 @@ use core::cell::UnsafeCell;
 
 use embedded_hal_nb::serial::Write;
 use log::SetLoggerError;
+use sel4_logging::{LevelFilter, Logger, LoggerBuilder};
 use sel4_microkit::Channel;
 use sel4_microkit_driver_adapters::serial::client::Client as SerialClient;
-use sel4_logging::{LevelFilter, Logger, LoggerBuilder};
 
 use crate::default_filter;
 

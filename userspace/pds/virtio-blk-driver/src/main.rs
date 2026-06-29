@@ -3,14 +3,12 @@
 
 extern crate alloc;
 
-use alloc::boxed::Box;
-use alloc::collections::BTreeMap;
+use alloc::{boxed::Box, collections::BTreeMap};
 use core::pin::Pin;
 
 use lerux_logging::{debug, log};
 use sel4_microkit::{
-    memory_region_symbol, protection_domain, Channel, ChannelSet, Handler, Infallible,
-    MessageInfo,
+    memory_region_symbol, protection_domain, Channel, ChannelSet, Handler, Infallible, MessageInfo,
 };
 use sel4_microkit_driver_adapters::block::driver::handle_client_request;
 use sel4_shared_memory::SharedMemoryRef;
@@ -138,11 +136,7 @@ impl HandlerImpl {
         }
     }
 
-    fn enqueue_completed_request(
-        &mut self,
-        client_req: BlockIORequest,
-        virtio_resp: &BlkResp,
-    ) {
+    fn enqueue_completed_request(&mut self, client_req: BlockIORequest, virtio_resp: &BlkResp) {
         let status = match virtio_resp.status() {
             RespStatus::OK => BlockIORequestStatus::Ok,
             _ => panic!(),
@@ -160,15 +154,11 @@ impl HandlerImpl {
         let token = self.dev.peek_used().unwrap();
         let mut pending_entry = self.pending.remove(&token).unwrap();
         unsafe {
-            let mut buf_ptr =
-                buf_ptr_for_req(&mut self.client_region, &pending_entry.client_req);
+            let mut buf_ptr = buf_ptr_for_req(&mut self.client_region, &pending_entry.client_req);
             let pending_entry = &mut *pending_entry;
             self.complete_virtio_read(token, pending_entry, buf_ptr.as_mut());
         }
-        self.enqueue_completed_request(
-            pending_entry.client_req,
-            &pending_entry.virtio_resp,
-        );
+        self.enqueue_completed_request(pending_entry.client_req, &pending_entry.virtio_resp);
     }
 
     fn complete_used_requests(&mut self) -> bool {
@@ -180,11 +170,7 @@ impl HandlerImpl {
         notify
     }
 
-    fn submit_read_request(
-        &mut self,
-        pending_entry: &mut PendingEntry,
-        buf_ptr: &mut [u8],
-    ) -> u16 {
+    fn submit_read_request(&mut self, pending_entry: &mut PendingEntry, buf_ptr: &mut [u8]) -> u16 {
         unsafe {
             self.dev
                 .read_blocks_nb(
@@ -209,8 +195,7 @@ impl HandlerImpl {
             virtio_req: BlkReq::default(),
             virtio_resp: BlkResp::default(),
         });
-        let mut buf_ptr =
-            buf_ptr_for_req(&mut self.client_region, &pending_entry.client_req);
+        let mut buf_ptr = buf_ptr_for_req(&mut self.client_region, &pending_entry.client_req);
         assert_eq!(buf_ptr.len(), 512);
         let token = unsafe {
             let pending_entry = &mut *pending_entry;
@@ -222,9 +207,7 @@ impl HandlerImpl {
 
     fn issue_pending_requests(&mut self) -> bool {
         let mut notify = false;
-        while self.pending.len() < QUEUE_SIZE
-            && !self.ring_buffers.free_mut().is_empty().unwrap()
-        {
+        while self.pending.len() < QUEUE_SIZE && !self.ring_buffers.free_mut().is_empty().unwrap() {
             notify |= self.issue_one_pending_request();
         }
         notify

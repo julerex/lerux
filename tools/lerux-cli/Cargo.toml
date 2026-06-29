@@ -3,6 +3,9 @@ name = "lerux-cli"
 version = "0.1.0"
 edition = "2024"
 
+[lints]
+workspace = true
+
 [[bin]]
 name = "lerux"
 path = "src/main.rs"

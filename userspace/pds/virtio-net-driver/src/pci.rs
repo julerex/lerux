@@ -3,8 +3,10 @@ use lerux_virtio_pci::{create_pci_transport_ioport, program_device_bars_ioport};
 use sel4_microkit::var;
 use virtio_drivers::{
     device::net::VirtIONet,
-    transport::pci::bus::DeviceFunction,
-    transport::{pci::PciTransport, DeviceType, Transport},
+    transport::{
+        pci::{bus::DeviceFunction, PciTransport},
+        DeviceType, Transport,
+    },
 };
 
 use crate::config;

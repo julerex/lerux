@@ -20,11 +20,9 @@ pub fn generate_system(root: &Path, board_name: &str, output: &Path) -> Result<(
     }
 
     if let Some(parent) = output.parent() {
-        std::fs::create_dir_all(parent)
-            .with_context(|| format!("mkdir {}", parent.display()))?;
+        std::fs::create_dir_all(parent).with_context(|| format!("mkdir {}", parent.display()))?;
     }
-    std::fs::write(output, rendered)
-        .with_context(|| format!("write {}", output.display()))?;
+    std::fs::write(output, rendered).with_context(|| format!("write {}", output.display()))?;
     Ok(())
 }
 

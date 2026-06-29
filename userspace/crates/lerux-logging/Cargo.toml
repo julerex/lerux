@@ -5,6 +5,9 @@ edition = "2024"
 license = "MIT"
 description = "lerux logging helpers built on sel4-logging"
 
+[lints]
+workspace = true
+
 [features]
 default = []
 serial = ["dep:embedded-hal-nb", "dep:sel4-microkit", "dep:sel4-microkit-driver-adapters"]

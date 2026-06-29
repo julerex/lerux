@@ -3,8 +3,7 @@ use lerux_virtio_pci::create_pci_transport_ioport;
 use sel4_microkit::var;
 use virtio_drivers::{
     device::{blk::VirtIOBlk, net::VirtIONet},
-    transport::pci::PciTransport,
-    transport::{DeviceType, Transport},
+    transport::{pci::PciTransport, DeviceType, Transport},
 };
 
 use crate::config;
@@ -40,7 +39,10 @@ pub fn create_virtio_blk(ioport_id: u32, ioport_addr: u16) -> VirtIOBlk<HalImpl,
     VirtIOBlk::<HalImpl, PciTransport>::new(transport).unwrap()
 }
 
-pub fn create_virtio_net(ioport_id: u32, ioport_addr: u16) -> VirtIONet<HalImpl, PciTransport, NET_QUEUE_SIZE> {
+pub fn create_virtio_net(
+    ioport_id: u32,
+    ioport_addr: u16,
+) -> VirtIONet<HalImpl, PciTransport, NET_QUEUE_SIZE> {
     let transport = create_pci_transport_ioport(
         ioport_id,
         ioport_addr,

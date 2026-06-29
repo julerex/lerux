@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT"
 
+[lints]
+workspace = true
+
 [dependencies]
 lerux-ipc = { path = "../../crates/lerux-ipc" }
 lerux-interface-types = { path = "../../crates/lerux-interface-types" }

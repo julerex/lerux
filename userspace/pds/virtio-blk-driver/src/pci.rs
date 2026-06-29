@@ -3,8 +3,10 @@ use lerux_virtio_pci::create_pci_transport_ecam_bars_programmed;
 use sel4_microkit::var;
 use virtio_drivers::{
     device::blk::VirtIOBlk,
-    transport::pci::bus::DeviceFunction,
-    transport::{pci::PciTransport, DeviceType, Transport},
+    transport::{
+        pci::{bus::DeviceFunction, PciTransport},
+        DeviceType, Transport,
+    },
 };
 
 use crate::config;

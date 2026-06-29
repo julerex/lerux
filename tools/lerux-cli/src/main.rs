@@ -12,16 +12,17 @@ mod system;
 mod tcp_echo;
 mod test;
 
-use std::path::PathBuf;
-use std::process::Command;
+use std::{path::PathBuf, process::Command};
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
-use crate::board::{get_board, load_boards, print_board_field};
-use crate::build_sdk::{build_sdk, sdk_path};
-use crate::install::{InstallTool, install_tool};
-use crate::process::repo_root;
+use crate::{
+    board::{get_board, load_boards, print_board_field},
+    build_sdk::{build_sdk, sdk_path},
+    install::{install_tool, InstallTool},
+    process::repo_root,
+};
 
 #[derive(Parser)]
 #[command(name = "lerux", about = "lerux build and test tooling")]
@@ -147,7 +148,11 @@ fn main() -> Result<()> {
             println!("{}", bin.display());
         }
         Commands::DiskImg => disk_img::disk_img(&root)?,
-        Commands::Build { board, build_dir, config } => {
+        Commands::Build {
+            board,
+            build_dir,
+            config,
+        } => {
             build::build(&root, &board, &build_dir, &config)?;
         }
         Commands::BuildPd {
@@ -156,13 +161,25 @@ fn main() -> Result<()> {
             build_dir,
             config,
         } => build::build_pd(&root, &board, &build_dir, &config, &crate_name)?,
-        Commands::Image { board, build_dir, config } => {
+        Commands::Image {
+            board,
+            build_dir,
+            config,
+        } => {
             build::image(&root, &board, &build_dir, &config)?;
         }
-        Commands::Run { board, build_dir, config } => {
+        Commands::Run {
+            board,
+            build_dir,
+            config,
+        } => {
             build::run(&root, &board, &build_dir, &config)?;
         }
-        Commands::Test { board, build_dir, config } => {
+        Commands::Test {
+            board,
+            build_dir,
+            config,
+        } => {
             build::image(&root, &board, &build_dir, &config)?;
             test::run_board_test(&root, &board, &build_dir, &config)?;
         }
@@ -171,7 +188,11 @@ fn main() -> Result<()> {
         }
         Commands::TcpEcho { port } => tcp_echo::tcp_echo(port)?,
         Commands::TcpEchoProbe { port } => {
-            let code = if tcp_echo::port_is_listening(port) { 0 } else { 1 };
+            let code = if tcp_echo::port_is_listening(port) {
+                0
+            } else {
+                1
+            };
             std::process::exit(code);
         }
         Commands::Smoke {

@@ -5,15 +5,16 @@
 
 #![no_std]
 
-use core::alloc::Layout;
-use core::ptr::{self, NonNull};
+use core::{
+    alloc::Layout,
+    ptr::{self, NonNull},
+};
 
 use one_shot_mutex::sync::OneShotMutex;
-use sel4_abstract_allocator::basic::BasicAllocator;
-use sel4_abstract_allocator::{ByRange, WithAlignmentBound};
+use sel4_abstract_allocator::{basic::BasicAllocator, ByRange, WithAlignmentBound};
 use sel4_immediate_sync_once_cell::ImmediateSyncOnceCell;
 use sel4_shared_memory::SharedMemoryRef;
-use virtio_drivers::{BufferDirection, Hal, PAGE_SIZE, PhysAddr};
+use virtio_drivers::{BufferDirection, Hal, PhysAddr, PAGE_SIZE};
 
 static GLOBAL_STATE: ImmediateSyncOnceCell<OneShotMutex<State>> = ImmediateSyncOnceCell::new();
 
@@ -116,7 +117,9 @@ unsafe impl Hal for HalImpl {
             let start = state.paddr_to_offset(paddr);
             start..(start + pages * PAGE_SIZE)
         };
-        state.bounce_buffer_allocator.deallocate(bounce_buffer_range);
+        state
+            .bounce_buffer_allocator
+            .deallocate(bounce_buffer_range);
         0
     }
 
@@ -153,6 +156,8 @@ unsafe impl Hal for HalImpl {
                 .index(bounce_buffer_range.clone())
                 .copy_into_slice(buffer_slice);
         }
-        state.bounce_buffer_allocator.deallocate(bounce_buffer_range);
+        state
+            .bounce_buffer_allocator
+            .deallocate(bounce_buffer_range);
     }
 }

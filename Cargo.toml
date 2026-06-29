@@ -50,3 +50,9 @@ embedded-hal-nb = "1.0"
 lock_api = "0.4.14"
 log = "0.4"
 serde = { version = "1", default-features = false, features = ["derive"] }
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+redundant_clone = "warn"
+needless_collect = "warn"
+large_enum_variant = "warn"

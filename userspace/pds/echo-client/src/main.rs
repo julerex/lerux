@@ -3,8 +3,8 @@
 
 use core::str;
 
-use lerux_ipc::call;
 use lerux_interface_types::{EchoRequest, EchoResponse};
+use lerux_ipc::call;
 use lerux_logging::{log, serial};
 use sel4_microkit::{protection_domain, Channel, Handler, Infallible};
 

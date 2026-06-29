@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2024"
 license = "MIT"
 
+[features]
+board-qemu_virt_aarch64_virtio = []
+board-qemu_virt_riscv64_virtio = []
+
 [dependencies]
 log = { workspace = true }
 sel4-microkit = { workspace = true }

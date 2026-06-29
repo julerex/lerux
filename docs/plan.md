@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-06-29 (Phase 10)
+Last updated: 2026-06-29 (Phase 11)
 
 ## Phase 1 — Bring-up
 
@@ -51,7 +51,7 @@ Last updated: 2026-06-29 (Phase 10)
 
 - [x] `lerux-interface-types` crate with postcard RPC messages
 - [x] `echo-server` + `echo-client` PDs using `lerux-ipc`
-- [ ] Optional: timer/RTC/init PD vertical slice
+- [x] Optional: timer/RTC/init PD vertical slice (`pl031-driver`, `boot-init`; `sp804-driver` built, deferred from init smoke)
 
 ## Phase 9 — RISC-V bring-up
 
@@ -68,6 +68,13 @@ Last updated: 2026-06-29 (Phase 10)
 - [x] `sel4-shared-ring-buffer-smoltcp` client in hello
 - [x] UDP TX smoke to QEMU user netdev (`10.0.2.2`)
 - [x] Extend `just test-virtio` to expect `virtio-net: TX ok`
+
+## Phase 11 — Cross-arch services and net RX
+
+- [x] Echo IPC on `qemu_virt_riscv64_echo` (`just test-riscv-echo`)
+- [x] Virtio block/net on `qemu_virt_riscv64_virtio` (`just test-riscv-virtio`; QEMU needs `bus=virtio-mmio-bus.N`)
+- [x] TCP loopback RX smoke (`virtio-net: TCP RX ok`) on virtio boards
+- [x] Timer/RTC/init smoke on `qemu_virt_aarch64_init` (`just test-init`)
 
 ## Version alignment
 

@@ -8,6 +8,7 @@ license = "MIT"
 board-qemu_virt_aarch64 = ["serial-ipc"]
 board-qemu_virt_aarch64_virtio = ["serial-ipc", "virtio"]
 board-qemu_virt_riscv64 = ["serial-ipc"]
+board-qemu_virt_riscv64_virtio = ["serial-ipc", "virtio"]
 board-x86_64_generic = ["serial-ipc"]
 serial-ipc = ["lerux-logging/serial"]
 virtio = [
@@ -37,5 +38,5 @@ sel4-shared-ring-buffer-block-io-types = { workspace = true, optional = true }
 sel4-shared-ring-buffer-bookkeeping = { workspace = true, optional = true, features = ["async-unsync"] }
 sel4-abstract-allocator = { workspace = true, optional = true }
 sel4-shared-ring-buffer-smoltcp = { workspace = true, optional = true }
-smoltcp = { workspace = true, optional = true, features = ["medium-ethernet", "proto-ipv4", "socket-udp"] }
+smoltcp = { workspace = true, optional = true, features = ["medium-ethernet", "proto-ipv4", "socket-udp", "socket-tcp"] }
 lerux-logging = { path = "../../crates/lerux-logging" }

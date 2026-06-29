@@ -67,7 +67,7 @@ struct HandlerImpl {
     #[cfg(feature = "virtio")]
     blk_read: Option<BlkRead>,
     #[cfg(feature = "virtio")]
-    net_tx: Option<net::NetTx>,
+    net_io: Option<net::NetIo>,
 }
 
 #[cfg_attr(feature = "virtio", protection_domain(heap_size = 512 * 1024))]
@@ -76,12 +76,12 @@ fn init() -> HandlerImpl {
     init_logging();
     log::info!("lerux: Hello from Rust on seL4 Microkit!");
     #[cfg(feature = "virtio")]
-    let (blk_read, net_tx) = probe_virtio();
+    let (blk_read, net_io) = probe_virtio();
     HandlerImpl {
         #[cfg(feature = "virtio")]
         blk_read: Some(blk_read),
         #[cfg(feature = "virtio")]
-        net_tx: Some(net_tx),
+        net_io: Some(net_io),
     }
 }
 
@@ -94,7 +94,7 @@ fn init_logging() {
 }
 
 #[cfg(feature = "virtio")]
-fn probe_virtio() -> (BlkRead, net::NetTx) {
+fn probe_virtio() -> (BlkRead, net::NetIo) {
     let mut blk = BlockClient::new(BLK_DRIVER);
     let block_size = blk.get_block_size().unwrap();
     let num_blocks = blk.get_num_blocks().unwrap();
@@ -112,9 +112,14 @@ fn probe_virtio() -> (BlkRead, net::NetTx) {
         mac.0[5],
     );
 
-    let mut net_tx = net::NetTx::new(mac);
-    net_tx.poll();
-    (start_blk_read(), net_tx)
+    let mut net_io = net::NetIo::new(mac);
+    for _ in 0..2000 {
+        net_io.poll();
+        if net_io.is_done() {
+            break;
+        }
+    }
+    (start_blk_read(), net_io)
 }
 
 #[cfg(not(feature = "virtio"))]
@@ -189,9 +194,9 @@ impl Handler for HandlerImpl {
                 }
             }
             if channels.contains(NET_DRIVER) {
-                if let Some(net_tx) = &mut self.net_tx {
-                    if !net_tx.is_done() {
-                        net_tx.poll();
+                if let Some(net_io) = &mut self.net_io {
+                    if !net_io.is_done() {
+                        net_io.poll();
                     }
                 }
             }

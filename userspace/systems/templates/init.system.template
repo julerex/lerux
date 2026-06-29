@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<system>
+    <memory_region name="serial_mmio" size="0x1_000" phys_addr="{serial_mmio_phys_addr}" />
+    <memory_region name="pl031_mmio" size="0x1000" phys_addr="{pl031_mmio_phys_addr}" />
+
+    <protection_domain name="serial_driver" priority="2" stack_size="0x10_000">
+        <program_image path="serial-driver.elf" />
+        <map mr="serial_mmio" vaddr="0x2_000_000" perms="rw" setvar_vaddr="serial_register_block" />
+        <irq irq="{serial_irq}" id="0" />
+    </protection_domain>
+
+    <protection_domain name="pl031_driver" priority="3" stack_size="0x10_000">
+        <program_image path="pl031-driver.elf" />
+        <map mr="pl031_mmio" vaddr="0x5_000_000_000" perms="rw" cached="false" setvar_vaddr="pl031_mmio_vaddr" />
+        <irq irq="{pl031_irq}" id="0" />
+    </protection_domain>
+
+    <protection_domain name="boot_init" priority="1" stack_size="0x10_000">
+        <program_image path="boot-init.elf" />
+    </protection_domain>
+
+    <channel>
+        <end pd="serial_driver" id="1" />
+        <end pd="boot_init" id="0" pp="true" />
+    </channel>
+
+    <channel>
+        <end pd="pl031_driver" id="1" />
+        <end pd="boot_init" id="1" pp="true" />
+    </channel>
+</system>

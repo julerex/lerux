@@ -1,0 +1,11 @@
+[package]
+name = "sp804-driver"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[dependencies]
+sel4-driver-interfaces = { workspace = true }
+sel4-microkit = { workspace = true }
+sel4-microkit-driver-adapters = { workspace = true }
+sel4-sp804-driver = { workspace = true }

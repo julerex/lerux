@@ -152,6 +152,12 @@ jobs:
             command: just disk-img && just test-virtio
           - id: echo
             command: just test-echo
+          - id: riscv-echo
+            command: just test-riscv-echo
+          - id: riscv-virtio
+            command: just disk-img && just test-riscv-virtio
+          - id: init
+            command: just test-init
     steps:
       - uses: actions/checkout@v4
 

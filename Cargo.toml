@@ -5,6 +5,9 @@ members = [
     "userspace/pds/serial-driver",
     "userspace/pds/echo-server",
     "userspace/pds/echo-client",
+    "userspace/pds/boot-init",
+    "userspace/pds/pl031-driver",
+    "userspace/pds/sp804-driver",
     "userspace/pds/virtio-blk-driver",
     "userspace/pds/virtio-net-driver",
     "userspace/crates/lerux-logging",
@@ -25,6 +28,8 @@ sel4-sync = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
 sel4-virtio-blk = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
 sel4-virtio-net = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
 sel4-virtio-hal-impl = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
+sel4-sp804-driver = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
+sel4-pl031-driver = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
 sel4-shared-memory = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
 sel4-shared-ring-buffer = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
 sel4-shared-ring-buffer-block-io-types = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }

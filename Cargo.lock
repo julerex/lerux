@@ -95,6 +95,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "boot-init"
+version = "0.1.0"
+dependencies = [
+ "lerux-logging",
+ "rtcc",
+ "sel4-microkit",
+ "sel4-microkit-driver-adapters",
+]
+
+[[package]]
 name = "bytemuck"
 version = "1.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -667,6 +677,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
 
 [[package]]
+name = "pl031-driver"
+version = "0.1.0"
+dependencies = [
+ "sel4-microkit",
+ "sel4-microkit-driver-adapters",
+ "sel4-pl031-driver",
+]
+
+[[package]]
 name = "postcard"
 version = "1.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1038,6 +1057,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "sel4-pl031-driver"
+version = "0.1.0"
+source = "git+https://github.com/seL4/rust-sel4?tag=v4.0.0#7a2321f2d84310ba7a09fe7f5988e6dcecde3566"
+dependencies = [
+ "rtcc",
+ "tock-registers",
+]
+
+[[package]]
 name = "sel4-runtime-common"
 version = "0.1.0"
 source = "git+https://github.com/seL4/rust-sel4?tag=v4.0.0#7a2321f2d84310ba7a09fe7f5988e6dcecde3566"
@@ -1123,6 +1151,15 @@ dependencies = [
  "sel4-shared-ring-buffer",
  "sel4-shared-ring-buffer-bookkeeping",
  "smoltcp",
+]
+
+[[package]]
+name = "sel4-sp804-driver"
+version = "0.1.0"
+source = "git+https://github.com/seL4/rust-sel4?tag=v4.0.0#7a2321f2d84310ba7a09fe7f5988e6dcecde3566"
+dependencies = [
+ "sel4-driver-interfaces",
+ "tock-registers",
 ]
 
 [[package]]
@@ -1285,6 +1322,16 @@ dependencies = [
  "cfg-if",
  "heapless",
  "managed",
+]
+
+[[package]]
+name = "sp804-driver"
+version = "0.1.0"
+dependencies = [
+ "sel4-driver-interfaces",
+ "sel4-microkit",
+ "sel4-microkit-driver-adapters",
+ "sel4-sp804-driver",
 ]
 
 [[package]]

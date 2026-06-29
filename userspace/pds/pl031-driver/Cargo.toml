@@ -1,0 +1,10 @@
+[package]
+name = "pl031-driver"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[dependencies]
+sel4-microkit = { workspace = true }
+sel4-microkit-driver-adapters = { workspace = true }
+sel4-pl031-driver = { workspace = true }

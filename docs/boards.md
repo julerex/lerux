@@ -16,6 +16,7 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `qemu_virt_riscv64` | riscv64 | `just test-riscv` | hello + serial (MMIO UART) |
 | `qemu_virt_riscv64_echo` | riscv64 | `just test-riscv-echo` | echo + serial |
 | `qemu_virt_riscv64_virtio` | riscv64 | `just test-riscv-virtio` | hello + serial + virtio |
+| `qemu_virt_riscv64_http` | riscv64 | `just test-riscv-http` | serial + virtio-net + http-server |
 | `x86_64_generic` | x86_64 | `BOARD=x86_64_generic just test` | hello + serial (COM1) |
 | `x86_64_generic_echo` | x86_64 | `just test-x86-echo` | echo + serial |
 | `x86_64_generic_virtio` | x86_64 | `just test-x86-virtio` | hello + serial + virtio-pci blk/net |
@@ -43,6 +44,7 @@ CI sets this via `MICROKIT_BOARDS` in the workflow env.
 | `aarch64_http_composed` | http-composed | patched SP804 QEMU + virtio-net + `hostfwd` |
 | `riscv64` | riscv hello/echo | `-kernel loader.img` |
 | `riscv64_virtio` | riscv virtio | MMIO virtio buses + `disk.img` |
+| `riscv64_http` | riscv http | MMIO virtio-net bus.1 + `hostfwd=tcp::18080-:8080` |
 | `x86_64` | x86 hello/echo | `-machine q35` + `-kernel sel4_32.elf` + `-initrd loader.img` |
 | `x86_64_virtio` | x86 virtio | q35 + PCI virtio-blk/net + `disk.img` |
 | `x86_64_http` | x86 http | q35 + PCI virtio-net + `hostfwd=tcp::18080-:8080` |
@@ -63,6 +65,8 @@ See [plan.md](plan.md) Phase 15.
 `qemu_virt_aarch64_http_composed` runs boot-init (RTC + SP804) then http-server over virtio-net — same notify gate as composed hello. See [plan.md](plan.md) Phase 17.
 
 `x86_64_generic_http` uses the same HTTP PD and hostfwd layout on QEMU **q35** with PCI virtio-net via `virtio-pci-driver` (net-only). See [plan.md](plan.md) Phase 19.
+
+`qemu_virt_riscv64_http` serves HTTP over MMIO virtio-net on `virtio-mmio-bus.1` (same layout as riscv virtio hello). See [plan.md](plan.md) Phase 22.
 
 ### x86 HTTP inbound (operational notes)
 
@@ -88,7 +92,7 @@ sleep 1 && curl http://127.0.0.1:18080/
 
 | Consumer | Command / context |
 |----------|-------------------|
-| x86/aarch64 HTTP hostfwd | `just test-x86-http`, `just test-http`, `just qemu-x86_64-http` |
+| x86/aarch64/riscv HTTP hostfwd | `just test-x86-http`, `just test-http`, `just test-riscv-http` |
 | TCP echo (virtio outbound tests) | `just test-x86-virtio`, `cargo run -p lerux-cli -- tcp-echo 18080` |
 
 Do **not** run background QEMU and `just test-x86-http` concurrently. A stale QEMU or leftover `tcp-echo-server` on 18080 makes `curl` hit the wrong endpoint and time out even when the new guest has reached `listening`.

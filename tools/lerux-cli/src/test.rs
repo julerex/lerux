@@ -171,7 +171,7 @@ pub fn default_expects(board: &str) -> Vec<String> {
             "virtio-net: TCP RX ok".into(),
             "virtio-blk: MBR sig".into(),
         ],
-        "qemu_virt_aarch64_http" | "x86_64_generic_http" => {
+        "qemu_virt_aarch64_http" | "qemu_virt_riscv64_http" | "x86_64_generic_http" => {
             vec!["lerux-http: listening".into()]
         }
         "qemu_virt_aarch64_http_composed" => vec![
@@ -187,7 +187,10 @@ pub fn default_expects(board: &str) -> Vec<String> {
 pub fn default_curls(board: &str) -> Vec<(String, String)> {
     if matches!(
         board,
-        "qemu_virt_aarch64_http" | "qemu_virt_aarch64_http_composed" | "x86_64_generic_http"
+        "qemu_virt_aarch64_http"
+            | "qemu_virt_aarch64_http_composed"
+            | "qemu_virt_riscv64_http"
+            | "x86_64_generic_http"
     ) {
         vec![("http://127.0.0.1:18080/".into(), "lerux: HTTP ok".into())]
     } else {
@@ -201,7 +204,7 @@ pub fn run_board_test(
     build_dir: &str,
     config: &str,
 ) -> Result<()> {
-    if matches!(board, "x86_64_generic_http") {
+    if crate::qemu::is_http_board(board) {
         crate::qemu::cleanup_http_conflicts();
     }
 

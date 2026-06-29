@@ -119,7 +119,7 @@ pub fn image(root: &Path, board: &str, build_dir: &str, config: &str) -> Result<
 pub fn run(root: &Path, board: &str, build_dir: &str, config: &str) -> Result<()> {
     image(root, board, build_dir, config)?;
     let ctx = crate::qemu::load_qemu_context(root, board, build_dir, config)?;
-    if matches!(board, "x86_64_generic_http") {
+    if crate::qemu::is_http_board(board) {
         crate::qemu::cleanup_http_conflicts();
         crate::qemu::print_http_hint(&ctx);
     }
@@ -147,6 +147,7 @@ pub fn test_all(root: &Path, build_dir: &str, config: &str) -> Result<()> {
         "x86_64_generic_echo",
         "x86_64_generic_virtio",
         "x86_64_generic_http",
+        "qemu_virt_riscv64_http",
         "qemu_virt_aarch64_init",
     ];
     let tests_after_disk = [

@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-06-29 (Phase 21)
+Last updated: 2026-06-29 (Phase 22)
 
 ## Phase 1 — Bring-up
 
@@ -106,7 +106,7 @@ Last updated: 2026-06-29 (Phase 21)
 | Virtio blk/net | yes | yes | yes |
 | Init RTC+timer | yes | no | no |
 | Composed init+virtio | yes | no | no |
-| HTTP over virtio-net | yes | no | yes |
+| HTTP over virtio-net | yes | yes | yes |
 
 Init (`just test-init`) uses PL031 + SP804 drivers from rust-sel4 v4.0.0, which target QEMU aarch64 virt MMIO only. RISC-V virt and x86 PC do not expose those devices in stock QEMU, and there are no equivalent rust-sel4 driver crates yet.
 
@@ -166,6 +166,15 @@ Init (`just test-init`) uses PL031 + SP804 drivers from rust-sel4 v4.0.0, which 
 - [x] Remove `wait_for_inbound` init-time polling workaround in `http-server` (virtio-pci IRQ channel 3 + ring notify path is reliable post-init)
 - [x] Simplify `drive_net` to one notification-driven poll round (+ post-serve flush)
 - [x] Update x86 HTTP operational docs (guest returns from `init()` after `listening`; inbound via driver notifications)
+
+## Phase 22 — RISC-V HTTP over virtio-net
+
+- [x] `http-virtio-riscv.system.template` — serial + virtio-net + http-server (MMIO bus.1 at `0x10_002_000`)
+- [x] Board `qemu_virt_riscv64_http` (`just test-riscv-http`); host `curl` via QEMU `hostfwd` `18080→8080`
+- [x] `riscv64_http` QEMU profile in `lerux-cli` (net-only, no `disk.img`)
+- [x] HTTP port cleanup covers aarch64, RISC-V, and x86 QEMU hostfwd on 18080
+- [x] CI matrix job `riscv-http` (15 smoke jobs total)
+- [x] Cross-arch HTTP parity table updated (RISC-V → yes)
 
 ## Version alignment
 

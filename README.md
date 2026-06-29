@@ -30,7 +30,7 @@ just test-all
 
 ## CI
 
-GitHub Actions runs on every push to `main`: one **sdk** job (SDK + patched SP804 QEMU), then **14 smoke** matrix jobs. Details: [`docs/ci.md`](docs/ci.md).
+GitHub Actions runs on every push to `main`: one **sdk** job (SDK + patched SP804 QEMU), then **15 smoke** matrix jobs. Details: [`docs/ci.md`](docs/ci.md).
 
 ## Architecture
 
@@ -59,7 +59,7 @@ Default: `qemu_virt_aarch64` (QEMU ARM virt). Override with `BOARD=... just run`
 | x86 HTTP over virtio-net | `x86_64_generic_http` | `just test-x86-http` |
 | Init + HTTP | `qemu_virt_aarch64_http_composed` | `just test-http-composed` |
 | x86 serial / echo / virtio | `x86_64_generic` variants | `BOARD=x86_64_generic just test` / `just test-x86-echo` / `just disk-img && just test-x86-virtio` |
-| RISC-V serial / echo / virtio | `qemu_virt_riscv64` variants | `just test-riscv` / `just test-riscv-echo` / `just test-riscv-virtio` |
+| RISC-V serial / echo / virtio / HTTP | `qemu_virt_riscv64` variants | `just test-riscv` / `just test-riscv-echo` / `just test-riscv-virtio` / `just test-riscv-http` |
 
 Full board reference: [`docs/boards.md`](docs/boards.md).
 

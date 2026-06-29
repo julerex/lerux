@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<system>
+    <memory_region name="serial_mmio" size="0x1_000" phys_addr="{serial_mmio_phys_addr}" />
+    <memory_region name="virtio_net_mmio" size="0x1000" phys_addr="{virtio_net_mmio_phys_addr}" />
+
+    <memory_region name="virtio_net_driver_dma" size="0x200_000" page_size="0x200_000" />
+    <memory_region name="virtio_net_client_dma" size="0x200_000" page_size="0x200_000" />
+    <memory_region name="virtio_net_rx_free" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="virtio_net_rx_used" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="virtio_net_tx_free" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="virtio_net_tx_used" size="0x200_000" page_size="0x200_000"/>
+
+    <protection_domain name="serial_driver" priority="2" stack_size="0x10_000">
+        <program_image path="serial-driver.elf" />
+        <map mr="serial_mmio" vaddr="0x2_000_000" perms="rw" setvar_vaddr="serial_register_block" />
+        <irq irq="{serial_irq}" id="0" />
+    </protection_domain>
+
+    <protection_domain name="virtio_net_driver" priority="4" stack_size="0x10_000">
+        <program_image path="virtio-net-driver.elf" />
+        <map mr="virtio_net_mmio" vaddr="0x10_000_000" perms="rw" cached="false" setvar_vaddr="virtio_net_mmio_vaddr" />
+        <map mr="virtio_net_driver_dma" vaddr="0x40_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_driver_dma_vaddr" />
+        <setvar symbol="virtio_net_driver_dma_paddr" region_paddr="virtio_net_driver_dma" />
+        <map mr="virtio_net_client_dma" vaddr="0x20_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_client_dma_vaddr" />
+        <map mr="virtio_net_rx_free" vaddr="0x21_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_rx_free" />
+        <map mr="virtio_net_rx_used" vaddr="0x22_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_rx_used" />
+        <map mr="virtio_net_tx_free" vaddr="0x23_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_tx_free" />
+        <map mr="virtio_net_tx_used" vaddr="0x24_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_tx_used" />
+        <irq irq="{virtio_net_irq}" id="0" />
+    </protection_domain>
+
+    <protection_domain name="http_server" priority="1" stack_size="0x10_000">
+        <program_image path="http-server.elf" />
+        <map mr="virtio_net_client_dma" vaddr="0x20_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_client_dma_vaddr" />
+        <map mr="virtio_net_rx_free" vaddr="0x21_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_rx_free" />
+        <map mr="virtio_net_rx_used" vaddr="0x22_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_rx_used" />
+        <map mr="virtio_net_tx_free" vaddr="0x23_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_tx_free" />
+        <map mr="virtio_net_tx_used" vaddr="0x24_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_tx_used" />
+    </protection_domain>
+
+    <channel>
+        <end pd="serial_driver" id="1" />
+        <end pd="http_server" id="0" pp="true" />
+    </channel>
+
+    <channel>
+        <end pd="virtio_net_driver" id="1" />
+        <end pd="http_server" id="1" pp="true" />
+    </channel>
+</system>

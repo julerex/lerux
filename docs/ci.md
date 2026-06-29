@@ -5,12 +5,12 @@ GitHub Actions workflow: [`.github/workflows/rust.yml`](../.github/workflows/rus
 ## Pipeline
 
 1. **sdk** — Docker image, fetch sources, build Microkit SDK (cached), **prebuild patched SP804 QEMU** (cached), upload SDK artifact.
-2. **smoke** — 14 parallel matrix jobs; each restores SDK artifact, per-job `build/` cache, and SP804 QEMU (init/composed/http-composed only).
+2. **smoke** — 15 parallel matrix jobs; each restores SDK artifact, per-job `build/` cache, and SP804 QEMU (init/composed/http-composed only).
 
 ```mermaid
 flowchart LR
   sdk[sdk job]
-  smoke[smoke matrix x14]
+  smoke[smoke matrix x15]
   sdk --> smoke
 ```
 
@@ -31,6 +31,7 @@ flowchart LR
 | `http` | `just test-http` | virtio-net HTTP `GET /` via hostfwd |
 | `http-composed` | `just test-http-composed` | init + HTTP; patched QEMU |
 | `x86-http` | `just test-x86-http` | x86 q35 PCI virtio-net HTTP via hostfwd |
+| `riscv-http` | `just test-riscv-http` | RISC-V MMIO virtio-net HTTP via hostfwd |
 | `x86-virtio` | `just disk-img && just test-x86-virtio` | x86 q35 PCI virtio-blk/net + TCP RX |
 
 Local mirror: `just test-all` (requires full SDK; creates `support/disk.img` once).

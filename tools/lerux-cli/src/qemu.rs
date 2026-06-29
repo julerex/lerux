@@ -135,6 +135,25 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
             ]);
             c
         }
+        "riscv64_http" => {
+            let mut c = Command::new("qemu-system-riscv64");
+            c.args([
+                "-machine",
+                "virt",
+                "-m",
+                "size=2G",
+                "-nographic",
+                "-serial",
+                "mon:stdio",
+                "-kernel",
+                &path_str(&loader),
+                "-device",
+                "virtio-net-device,bus=virtio-mmio-bus.1,netdev=netdev0",
+                "-netdev",
+                "user,id=netdev0,hostfwd=tcp::18080-:8080",
+            ]);
+            c
+        }
         "x86_64" | "x86_64_virtio" | "x86_64_http" => x86_command(ctx, &loader, &disk)?,
         other => bail!("unsupported qemu profile {other}"),
     };
@@ -235,10 +254,24 @@ pub fn cleanup_http_conflicts() {
     let _ = Command::new("pkill")
         .args(["-f", "tcp-echo 18080"])
         .status();
-    let _ = Command::new("pkill")
-        .args(["-f", "qemu-system-x86_64.*hostfwd=tcp::18080-:8080"])
-        .status();
+    for pattern in [
+        "qemu-system-x86_64.*hostfwd=tcp::18080-:8080",
+        "qemu-system-aarch64.*hostfwd=tcp::18080-:8080",
+        "qemu-system-riscv64.*hostfwd=tcp::18080-:8080",
+    ] {
+        let _ = Command::new("pkill").args(["-f", pattern]).status();
+    }
     std::thread::sleep(std::time::Duration::from_millis(500));
+}
+
+pub fn is_http_board(board: &str) -> bool {
+    matches!(
+        board,
+        "qemu_virt_aarch64_http"
+            | "qemu_virt_aarch64_http_composed"
+            | "qemu_virt_riscv64_http"
+            | "x86_64_generic_http"
+    )
 }
 
 pub fn load_qemu_context(
@@ -259,7 +292,10 @@ pub fn load_qemu_context(
 }
 
 pub fn print_http_hint(ctx: &QemuContext) {
-    if ctx.board.qemu == "x86_64_http" {
+    if matches!(
+        ctx.board.qemu.as_str(),
+        "aarch64_http" | "aarch64_http_composed" | "riscv64_http" | "x86_64_http"
+    ) {
         eprintln!("Guest listens on :8080; hostfwd maps 127.0.0.1:18080. In another terminal:");
         eprintln!("  curl http://127.0.0.1:18080/");
     }
@@ -267,7 +303,7 @@ pub fn print_http_hint(ctx: &QemuContext) {
 
 pub fn ensure_qemu_binary(root: &Path, profile: &str) -> Result<()> {
     let binary = match profile {
-        "riscv64" | "riscv64_virtio" => "qemu-system-riscv64",
+        "riscv64" | "riscv64_virtio" | "riscv64_http" => "qemu-system-riscv64",
         "x86_64" | "x86_64_virtio" | "x86_64_http" => "qemu-system-x86_64",
         _ => "qemu-system-aarch64",
     };

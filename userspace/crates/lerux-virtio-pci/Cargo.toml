@@ -1,0 +1,10 @@
+[package]
+name = "lerux-virtio-pci"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[dependencies]
+lerux-virtio-hal = { path = "../lerux-virtio-hal" }
+sel4 = { workspace = true }
+virtio-drivers = { workspace = true }

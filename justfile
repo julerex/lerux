@@ -62,7 +62,7 @@ build-pd crate:
     mkdir -p "{{board_build}}"
     features=()
     case "{{crate}}" in
-        hello|http-server|boot-init|serial-driver|virtio-blk-driver|virtio-net-driver)
+        hello|http-server|boot-init|serial-driver|virtio-blk-driver|virtio-net-driver|virtio-pci-driver)
             features+=(--features "board-{{board}}")
             ;;
     esac
@@ -105,6 +105,8 @@ run: image
         riscv64) just qemu-riscv64 ;;
         riscv64_virtio) just qemu-riscv64-virtio ;;
         x86_64) just qemu-x86_64 ;;
+        x86_64_virtio) just qemu-x86_64-virtio ;;
+        x86_64_http) just qemu-x86_64-http ;;
         *) echo "error: unsupported qemu profile ${qemu}" >&2; exit 1 ;;
     esac
 
@@ -227,12 +229,61 @@ qemu-x86_64:
         exit 1
     fi
     exec qemu-system-x86_64 \
+        -machine q35 \
         -cpu qemu64,+fsgsbase,+pdpe1gb,+xsaveopt,+xsave \
         -m 2G \
         -display none \
         -serial mon:stdio \
         -kernel "${kernel}" \
         -initrd {{board_build}}/loader.img
+
+qemu-x86_64-virtio:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    sdk="$(just sdk-path)"
+    microkit_board="$(python3 "{{root}}/scripts/board_config.py" "{{board}}" microkit_board)"
+    kernel="${sdk}/board/${microkit_board}/{{config}}/elf/sel4_32.elf"
+    disk="{{root}}/support/disk.img"
+    if [[ ! -f "${disk}" ]]; then
+        echo "error: missing ${disk}; run 'just disk-img'" >&2
+        exit 1
+    fi
+    python3 scripts/tcp-echo-server.py 18080 &
+    tcp_echo_pid=$!
+    trap 'kill "${tcp_echo_pid}" 2>/dev/null || true' EXIT
+    for _ in $(seq 1 100); do
+        if python3 scripts/tcp-echo-server.py --probe 18080; then break; fi
+        sleep 0.05
+    done
+    exec qemu-system-x86_64 \
+        -machine q35 \
+        -cpu qemu64,+fsgsbase,+pdpe1gb,+xsaveopt,+xsave \
+        -m 2G \
+        -display none \
+        -serial mon:stdio \
+        -kernel "${kernel}" \
+        -initrd {{board_build}}/loader.img \
+        -device virtio-blk-pci,id=blk0,addr=0x3.0x0,drive=blkdev0 \
+        -blockdev node-name=blkdev0,read-only=on,driver=file,filename="${disk}" \
+        -device virtio-net-pci,id=net0,addr=0x4.0x0,netdev=netdev0 \
+        -netdev user,id=netdev0
+
+qemu-x86_64-http:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    sdk="$(just sdk-path)"
+    microkit_board="$(python3 "{{root}}/scripts/board_config.py" "{{board}}" microkit_board)"
+    kernel="${sdk}/board/${microkit_board}/{{config}}/elf/sel4_32.elf"
+    exec qemu-system-x86_64 \
+        -machine q35 \
+        -cpu qemu64,+fsgsbase,+pdpe1gb,+xsaveopt,+xsave \
+        -m 2G \
+        -display none \
+        -serial mon:stdio \
+        -kernel "${kernel}" \
+        -initrd {{board_build}}/loader.img \
+        -device virtio-net-pci,id=net0,addr=0x4.0x0,netdev=netdev0 \
+        -netdev user,id=netdev0,hostfwd=tcp::18080-:8080
 
 # Serial smoke test
 test: image
@@ -414,12 +465,66 @@ test: image
             exec python3 scripts/test.py \
                 "${expects[@]}" \
                 qemu-system-x86_64 \
+                -machine q35 \
                 -cpu qemu64,+fsgsbase,+pdpe1gb,+xsaveopt,+xsave \
                 -m 2G \
                 -display none \
                 -serial mon:stdio \
                 -kernel "${kernel}" \
                 -initrd {{board_build}}/loader.img
+            ;;
+        x86_64_virtio)
+            sdk="$(just sdk-path)"
+            microkit_board="$(python3 "{{root}}/scripts/board_config.py" "{{board}}" microkit_board)"
+            kernel="${sdk}/board/${microkit_board}/{{config}}/elf/sel4_32.elf"
+            disk="{{root}}/support/disk.img"
+            if [[ ! -f "${disk}" ]]; then
+                just disk-img
+            fi
+            python3 scripts/tcp-echo-server.py 18080 &
+            tcp_echo_pid=$!
+            trap 'kill "${tcp_echo_pid}" 2>/dev/null || true' EXIT
+            for _ in $(seq 1 100); do
+                if python3 scripts/tcp-echo-server.py --probe 18080; then break; fi
+                sleep 0.05
+            done
+            exec python3 scripts/test.py \
+                --expect "lerux: Hello from Rust on seL4 Microkit!" \
+                --expect "virtio-blk:" \
+                --expect "virtio-net: MAC" \
+                --expect "virtio-net: TX ok" \
+                --expect "virtio-net: TCP RX ok" \
+                --expect "virtio-blk: MBR sig" \
+                qemu-system-x86_64 \
+                -machine q35 \
+                -cpu qemu64,+fsgsbase,+pdpe1gb,+xsaveopt,+xsave \
+                -m 2G \
+                -display none \
+                -serial mon:stdio \
+                -kernel "${kernel}" \
+                -initrd {{board_build}}/loader.img \
+                -device virtio-blk-pci,id=blk0,addr=0x3.0x0,drive=blkdev0 \
+                -blockdev node-name=blkdev0,read-only=on,driver=file,filename="${disk}" \
+                -device virtio-net-pci,id=net0,addr=0x4.0x0,netdev=netdev0 \
+                -netdev user,id=netdev0
+            ;;
+        x86_64_http)
+            sdk="$(just sdk-path)"
+            microkit_board="$(python3 "{{root}}/scripts/board_config.py" "{{board}}" microkit_board)"
+            kernel="${sdk}/board/${microkit_board}/{{config}}/elf/sel4_32.elf"
+            exec python3 scripts/test.py \
+                --expect "lerux-http: listening" \
+                --curl "http://127.0.0.1:18080/" "lerux: HTTP ok" \
+                qemu-system-x86_64 \
+                -machine q35 \
+                -cpu qemu64,+fsgsbase,+pdpe1gb,+xsaveopt,+xsave \
+                -m 2G \
+                -display none \
+                -serial mon:stdio \
+                -kernel "${kernel}" \
+                -initrd {{board_build}}/loader.img \
+                -device virtio-net-pci,id=net0,addr=0x4.0x0,netdev=netdev0 \
+                -netdev user,id=netdev0,hostfwd=tcp::18080-:8080
             ;;
         *)
             echo "error: unsupported qemu profile ${qemu}" >&2
@@ -438,6 +543,14 @@ test-echo:
 # Echo IPC smoke test on x86_64 generic PC
 test-x86-echo:
     BOARD=x86_64_generic_echo just test
+
+# Virtio smoke test on x86_64 q35 (PCI virtio-blk + virtio-net)
+test-x86-virtio:
+    BOARD=x86_64_generic_virtio just test
+
+# HTTP smoke test on x86_64 q35 (PCI virtio-net)
+test-x86-http:
+    BOARD=x86_64_generic_http just test
 
 # RISC-V virt smoke test (NS16550 MMIO UART)
 test-riscv:
@@ -479,6 +592,8 @@ test-all:
     just test-riscv-virtio
     just test-echo
     just test-x86-echo
+    just test-x86-virtio
+    just test-x86-http
     just test-init
     just disk-img
     just test-composed

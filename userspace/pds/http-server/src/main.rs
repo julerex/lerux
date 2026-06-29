@@ -73,20 +73,13 @@ fn log_net_mac(net_client: &mut NetClient) -> sel4_driver_interfaces::net::MacAd
     mac
 }
 
-fn wait_for_http(http_net: &mut net::HttpNet) {
-    for _ in 0..2000 {
-        http_net.poll();
-        if http_net.is_served() {
-            break;
-        }
-    }
-}
-
 fn start_net() -> net::HttpNet {
     let mut net_client = NetClient::new(NET_DRIVER);
     let mac = log_net_mac(&mut net_client);
     let mut http_net = net::HttpNet::new(mac);
-    wait_for_http(&mut http_net);
+    for _ in 0..2000 {
+        http_net.poll();
+    }
     http_net
 }
 
@@ -102,7 +95,12 @@ impl Handler for HandlerImpl {
 
         if channels.contains(NET_DRIVER) {
             if let Some(http_net) = &mut self.net {
-                http_net.poll();
+                for _ in 0..200 {
+                    http_net.poll();
+                    if http_net.is_served() {
+                        break;
+                    }
+                }
             }
         }
         Ok(())

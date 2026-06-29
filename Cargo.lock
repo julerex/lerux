@@ -525,6 +525,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "lerux-virtio-hal"
+version = "0.1.0"
+dependencies = [
+ "one-shot-mutex",
+ "sel4-abstract-allocator",
+ "sel4-immediate-sync-once-cell",
+ "sel4-shared-memory",
+ "virtio-drivers",
+]
+
+[[package]]
+name = "lerux-virtio-pci"
+version = "0.1.0"
+dependencies = [
+ "lerux-virtio-hal",
+ "sel4",
+ "virtio-drivers",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.186"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1449,6 +1469,8 @@ name = "virtio-blk-driver"
 version = "0.1.0"
 dependencies = [
  "lerux-logging",
+ "lerux-virtio-hal",
+ "lerux-virtio-pci",
  "log",
  "sel4",
  "sel4-driver-interfaces",
@@ -1481,12 +1503,34 @@ name = "virtio-net-driver"
 version = "0.1.0"
 dependencies = [
  "lerux-logging",
+ "lerux-virtio-hal",
+ "lerux-virtio-pci",
  "log",
  "sel4-microkit",
  "sel4-microkit-driver-adapters",
  "sel4-shared-memory",
  "sel4-shared-ring-buffer",
  "sel4-virtio-hal-impl",
+ "sel4-virtio-net",
+ "virtio-drivers",
+]
+
+[[package]]
+name = "virtio-pci-driver"
+version = "0.1.0"
+dependencies = [
+ "lerux-logging",
+ "lerux-virtio-hal",
+ "lerux-virtio-pci",
+ "log",
+ "sel4",
+ "sel4-driver-interfaces",
+ "sel4-microkit",
+ "sel4-microkit-driver-adapters",
+ "sel4-shared-memory",
+ "sel4-shared-ring-buffer",
+ "sel4-shared-ring-buffer-block-io-types",
+ "sel4-virtio-blk",
  "sel4-virtio-net",
  "virtio-drivers",
 ]

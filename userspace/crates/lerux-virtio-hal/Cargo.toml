@@ -1,0 +1,12 @@
+[package]
+name = "lerux-virtio-hal"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[dependencies]
+sel4-abstract-allocator = { workspace = true }
+sel4-immediate-sync-once-cell = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
+sel4-shared-memory = { workspace = true }
+one-shot-mutex = "0.2.1"
+virtio-drivers = { workspace = true }

@@ -7,6 +7,7 @@ license = "MIT"
 [features]
 board-qemu_virt_aarch64_http = ["serial-ipc"]
 board-qemu_virt_aarch64_http_composed = ["composed-sync"]
+board-x86_64_generic_http = ["serial-ipc"]
 composed-sync = []
 serial-ipc = ["lerux-logging/serial"]
 

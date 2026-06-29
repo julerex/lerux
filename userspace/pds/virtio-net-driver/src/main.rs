@@ -1,50 +1,52 @@
 #![no_std]
 #![no_main]
 
-use core::ptr::NonNull;
-
 use lerux_logging::{debug, log};
-use sel4_microkit::{memory_region_symbol, protection_domain, var};
+use sel4_microkit::{memory_region_symbol, protection_domain};
 use sel4_microkit_driver_adapters::net::driver::HandlerImpl;
 use sel4_shared_memory::SharedMemoryRef;
 use sel4_shared_ring_buffer::{roles::Use, RingBuffers};
-use sel4_virtio_hal_impl::HalImpl;
 use sel4_virtio_net::DeviceWrapper;
-use virtio_drivers::{
-    device::net::*,
-    transport::{
-        mmio::{MmioTransport, VirtIOHeader},
-        DeviceType, Transport,
-    },
-};
 
 mod config;
 
+#[cfg(not(any(
+    feature = "board-x86_64_generic_virtio",
+    feature = "board-x86_64_generic_http"
+)))]
+mod mmio;
+
+#[cfg(any(
+    feature = "board-x86_64_generic_virtio",
+    feature = "board-x86_64_generic_http"
+))]
+mod pci;
+
 use config::channels;
 
-const NET_QUEUE_SIZE: usize = 16;
-const NET_BUFFER_LEN: usize = 2048;
+#[cfg(any(
+    feature = "board-x86_64_generic_virtio",
+    feature = "board-x86_64_generic_http"
+))]
+type DriverHal = lerux_virtio_hal::HalImpl;
 
-fn init_hal() {
-    debug::init().unwrap();
-    HalImpl::init(
-        config::VIRTIO_NET_DRIVER_DMA_SIZE,
-        *var!(virtio_net_driver_dma_vaddr: usize = 0),
-        *var!(virtio_net_driver_dma_paddr: usize = 0),
-    );
-}
+#[cfg(not(any(
+    feature = "board-x86_64_generic_virtio",
+    feature = "board-x86_64_generic_http"
+)))]
+type DriverHal = sel4_virtio_hal_impl::HalImpl;
 
-fn create_virtio_net() -> VirtIONet<HalImpl, MmioTransport<'static>, NET_QUEUE_SIZE> {
-    let header = NonNull::new(
-        (*var!(virtio_net_mmio_vaddr: usize = 0) + config::VIRTIO_NET_MMIO_OFFSET)
-            as *mut VirtIOHeader,
-    )
-    .unwrap();
-    let transport =
-        unsafe { MmioTransport::new(header, config::VIRTIO_NET_MMIO_SIZE) }.unwrap();
-    assert_eq!(transport.device_type(), DeviceType::Network);
-    VirtIONet::<HalImpl, MmioTransport, NET_QUEUE_SIZE>::new(transport, NET_BUFFER_LEN).unwrap()
-}
+#[cfg(any(
+    feature = "board-x86_64_generic_virtio",
+    feature = "board-x86_64_generic_http"
+))]
+type NetTransport = virtio_drivers::transport::pci::PciTransport;
+
+#[cfg(not(any(
+    feature = "board-x86_64_generic_virtio",
+    feature = "board-x86_64_generic_http"
+)))]
+type NetTransport = virtio_drivers::transport::mmio::MmioTransport<'static>;
 
 fn create_client_region() -> SharedMemoryRef<'static, [u8]> {
     unsafe {
@@ -77,9 +79,34 @@ fn create_net_ring_buffers(
 }
 
 #[protection_domain(heap_size = 512 * 1024)]
-fn init() -> HandlerImpl<DeviceWrapper<HalImpl, MmioTransport<'static>>> {
-    init_hal();
-    let mut dev = create_virtio_net();
+fn init() -> HandlerImpl<DeviceWrapper<DriverHal, NetTransport>> {
+    debug::init().unwrap();
+    #[cfg(any(
+        feature = "board-x86_64_generic_virtio",
+        feature = "board-x86_64_generic_http"
+    ))]
+    pci::init_hal();
+    #[cfg(not(any(
+        feature = "board-x86_64_generic_virtio",
+        feature = "board-x86_64_generic_http"
+    )))]
+    mmio::init_hal();
+    let mut dev = {
+        #[cfg(any(
+            feature = "board-x86_64_generic_virtio",
+            feature = "board-x86_64_generic_http"
+        ))]
+        {
+            pci::create_virtio_net()
+        }
+        #[cfg(not(any(
+            feature = "board-x86_64_generic_virtio",
+            feature = "board-x86_64_generic_http"
+        )))]
+        {
+            mmio::create_virtio_net()
+        }
+    };
     let client_region = create_client_region();
     let notify_client: fn() = || channels::CLIENT.notify();
     let (rx_ring_buffers, tx_ring_buffers) = create_net_ring_buffers(notify_client);

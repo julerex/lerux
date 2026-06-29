@@ -17,6 +17,8 @@ board-qemu_virt_riscv64_echo = ["board-qemu_virt_riscv64"]
 board-qemu_virt_riscv64_virtio = ["board-qemu_virt_riscv64"]
 board-x86_64_generic = []
 board-x86_64_generic_echo = ["board-x86_64_generic"]
+board-x86_64_generic_virtio = ["board-x86_64_generic"]
+board-x86_64_generic_http = ["board-x86_64_generic"]
 
 [dependencies]
 lerux-logging = { path = "../../crates/lerux-logging" }

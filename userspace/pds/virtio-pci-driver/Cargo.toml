@@ -1,13 +1,10 @@
 [package]
-name = "virtio-blk-driver"
+name = "virtio-pci-driver"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
 
 [features]
-board-qemu_virt_aarch64_virtio = []
-board-qemu_virt_aarch64_composed = []
-board-qemu_virt_riscv64_virtio = []
 board-x86_64_generic_virtio = ["dep:lerux-virtio-hal", "dep:lerux-virtio-pci"]
 
 [dependencies]
@@ -21,7 +18,7 @@ sel4-shared-memory = { workspace = true }
 sel4-shared-ring-buffer = { workspace = true }
 sel4-shared-ring-buffer-block-io-types = { workspace = true }
 sel4-virtio-blk = { workspace = true }
-sel4-virtio-hal-impl = { workspace = true }
+sel4-virtio-net = { workspace = true }
 lerux-virtio-hal = { workspace = true, optional = true }
 lerux-virtio-pci = { workspace = true, optional = true }
-virtio-drivers = { workspace = true }
+virtio-drivers = { workspace = true, features = ["alloc"] }

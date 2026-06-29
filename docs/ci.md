@@ -5,12 +5,12 @@ GitHub Actions workflow: [`.github/workflows/rust.yml`](../.github/workflows/rus
 ## Pipeline
 
 1. **sdk** — Docker image, fetch sources, build Microkit SDK (cached), **prebuild patched SP804 QEMU** (cached), upload SDK artifact.
-2. **smoke** — 10 parallel matrix jobs; each restores SDK artifact, per-job `build/` cache, and SP804 QEMU (init/composed only).
+2. **smoke** — 12 parallel matrix jobs; each restores SDK artifact, per-job `build/` cache, and SP804 QEMU (init/composed/http-composed only).
 
 ```mermaid
 flowchart LR
   sdk[sdk job]
-  smoke[smoke matrix x10]
+  smoke[smoke matrix x12]
   sdk --> smoke
 ```
 
@@ -28,6 +28,8 @@ flowchart LR
 | `riscv-virtio` | `just disk-img && just test-riscv-virtio` | RISC-V virtio |
 | `init` | `just test-init` | PL031 + SP804; patched QEMU |
 | `composed` | `just disk-img && just test-composed` | init + virtio in one system |
+| `http` | `just test-http` | virtio-net HTTP `GET /` via hostfwd |
+| `http-composed` | `just test-http-composed` | init + HTTP; patched QEMU |
 
 Local mirror: `just test-all` (requires full SDK; creates `support/disk.img` once).
 
@@ -37,16 +39,16 @@ Local mirror: `just test-all` (requires full SDK; creates `support/disk.img` onc
 |-------|------------|-------------|
 | Workspace | `deps/versions.toml`, `scripts/fetch.sh` | sdk |
 | SDK | versions + `SDK_CACHE_SUFFIX` | sdk |
-| SP804 QEMU | patch + `install-qemu-sp804.sh` | sdk (build), smoke init/composed (restore) |
+| SP804 QEMU | patch + `install-qemu-sp804.sh` | sdk (build), smoke init/composed/http-composed (restore) |
 | Per-smoke `build/` | `Cargo.lock` + matrix job id | smoke |
 
-SP804 QEMU is built once in the **sdk** job so `init` and `composed` do not each cold-build QEMU (~4 min). Cache paths include install prefix, source tree, and tarball.
+SP804 QEMU is built once in the **sdk** job so `init`, `composed`, and `http-composed` do not each cold-build QEMU (~4 min). Cache paths include install prefix, source tree, and tarball.
 
 Caches are saved with `if: always()` when the artifact exists, so a failing smoke job still retains partial `build/` and a completed QEMU install.
 
 ## Patched QEMU
 
-Stock QEMU `virt` lacks SP804 at `0x90d0000`. Init and composed smokes use [`scripts/install-qemu-sp804.sh`](../scripts/install-qemu-sp804.sh). The script prints **only** the install `bin` directory on stdout (build logs go to stderr) so `justfile` can prepend it to `PATH` safely.
+Stock QEMU `virt` lacks SP804 at `0x90d0000`. Init, composed, and http-composed smokes use [`scripts/install-qemu-sp804.sh`](../scripts/install-qemu-sp804.sh). The script prints **only** the install `bin` directory on stdout (build logs go to stderr) so `justfile` can prepend it to `PATH` safely.
 
 ## Troubleshooting
 

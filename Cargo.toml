@@ -10,6 +10,7 @@ members = [
     "userspace/pds/sp804-driver",
     "userspace/pds/virtio-blk-driver",
     "userspace/pds/virtio-net-driver",
+    "userspace/pds/http-server",
     "userspace/crates/lerux-logging",
     "userspace/crates/lerux-ipc",
     "userspace/crates/lerux-interface-types",

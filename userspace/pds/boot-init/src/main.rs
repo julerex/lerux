@@ -11,8 +11,11 @@ use sel4_microkit_driver_adapters::timer::client::Client as TimerClient;
 const SERIAL_DRIVER: Channel = Channel::new(0);
 const RTC_DRIVER: Channel = Channel::new(1);
 const TIMER_DRIVER: Channel = Channel::new(2);
-#[cfg(feature = "board-qemu_virt_aarch64_composed")]
-const HELLO: Channel = Channel::new(3);
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_composed",
+    feature = "board-qemu_virt_aarch64_http_composed"
+))]
+const APP: Channel = Channel::new(3);
 
 struct HandlerImpl;
 
@@ -36,8 +39,11 @@ fn init() -> HandlerImpl {
 
     log::info!("lerux-init: init ok");
 
-    #[cfg(feature = "board-qemu_virt_aarch64_composed")]
-    HELLO.notify();
+    #[cfg(any(
+        feature = "board-qemu_virt_aarch64_composed",
+        feature = "board-qemu_virt_aarch64_http_composed"
+    ))]
+    APP.notify();
 
     HandlerImpl
 }

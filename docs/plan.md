@@ -106,6 +106,7 @@ Last updated: 2026-06-29 (Phase 16)
 | Virtio blk/net | yes | yes | no (PCI virtio; deferred) |
 | Init RTC+timer | yes | no | no |
 | Composed init+virtio | yes | no | no |
+| HTTP over virtio-net | yes | no | no |
 
 Init (`just test-init`) uses PL031 + SP804 drivers from rust-sel4 v4.0.0, which target QEMU aarch64 virt MMIO only. RISC-V virt and x86 PC do not expose those devices in stock QEMU, and there are no equivalent rust-sel4 driver crates yet.
 
@@ -128,6 +129,16 @@ Init (`just test-init`) uses PL031 + SP804 drivers from rust-sel4 v4.0.0, which 
 - [x] Cache save on smoke failure (`if: always()` for `build/`)
 - [x] Workflow concurrency (cancel stale runs); `permissions: contents: read`
 - [x] Smoke jobs verify SP804 QEMU binary is executable after cache restore
+
+## Phase 17 — HTTP over virtio-net
+
+- [x] `http-server` PD: smoltcp TCP listen on `:8080`, `GET /` → `200 OK` body `lerux: HTTP ok`
+- [x] `http-virtio.system.template` — serial + virtio-net + http-server (no blk)
+- [x] Board `qemu_virt_aarch64_http` (`just test-http`); host `curl` via QEMU `hostfwd` `18080→8080`
+- [x] `http-composed.system.template` — boot-init + init drivers + virtio-net + http-server (6 PDs)
+- [x] Board `qemu_virt_aarch64_http_composed` (`just test-http-composed`); boot-init notify gate before net
+- [x] `scripts/test.py` `--curl URL EXPECT` for HTTP smoke
+- [x] CI matrix jobs `http` and `http-composed` (12 smoke jobs total)
 
 ## Version alignment
 

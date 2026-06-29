@@ -7,6 +7,7 @@ license = "MIT"
 [features]
 board-qemu_virt_aarch64_init = []
 board-qemu_virt_aarch64_composed = []
+board-qemu_virt_aarch64_http_composed = []
 
 [dependencies]
 lerux-logging = { path = "../../crates/lerux-logging", features = ["serial"] }

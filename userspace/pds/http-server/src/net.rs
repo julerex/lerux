@@ -1,0 +1,168 @@
+use lerux_logging::log;
+use sel4_abstract_allocator::WithAlignmentBound;
+use sel4_abstract_allocator::basic::BasicAllocator;
+use sel4_driver_interfaces::net::MacAddress;
+use sel4_microkit::memory_region_symbol;
+use sel4_microkit::Channel;
+use sel4_shared_memory::SharedMemoryRef;
+use sel4_shared_ring_buffer::RingBuffers;
+use sel4_shared_ring_buffer_smoltcp::DeviceImpl;
+use smoltcp::iface::{Config, Interface, SocketHandle, SocketSet, SocketStorage};
+use smoltcp::phy::{DeviceCapabilities, Medium};
+use smoltcp::socket::tcp::{Socket as TcpSocket, SocketBuffer as TcpSocketBuffer};
+use smoltcp::time::Instant;
+use smoltcp::wire::{
+    EthernetAddress, HardwareAddress, IpAddress, IpCidr, IpListenEndpoint, Ipv4Address,
+};
+
+use crate::config;
+
+const NET_DRIVER: Channel = Channel::new(1);
+const GUEST_IP: Ipv4Address = Ipv4Address::new(10, 0, 2, 15);
+const HOST_IP: Ipv4Address = Ipv4Address::new(10, 0, 2, 2);
+
+const HTTP_RESPONSE: &[u8] =
+    b"HTTP/1.1 200 OK\r\nContent-Length: 14\r\nConnection: close\r\n\r\nlerux: HTTP ok";
+
+struct SocketArena {
+    storage: [SocketStorage<'static>; 1],
+    tcp_rx: [u8; 1024],
+    tcp_tx: [u8; 2048],
+    tcp_handle: Option<SocketHandle>,
+    initialized: bool,
+}
+
+impl SocketArena {
+    const fn empty() -> Self {
+        Self {
+            storage: [SocketStorage::EMPTY; 1],
+            tcp_rx: [0; 1024],
+            tcp_tx: [0; 2048],
+            tcp_handle: None,
+            initialized: false,
+        }
+    }
+}
+
+static mut SOCKET_ARENA: SocketArena = SocketArena::empty();
+
+pub struct HttpNet {
+    device: DeviceImpl<WithAlignmentBound<BasicAllocator>>,
+    iface: Interface,
+    listening_logged: bool,
+    served: bool,
+}
+
+impl HttpNet {
+    pub fn new(mac: MacAddress) -> Self {
+        let notify_net: fn() = || NET_DRIVER.notify();
+
+        let dma_region = unsafe {
+            SharedMemoryRef::<'static, _>::new(memory_region_symbol!(
+                virtio_net_client_dma_vaddr: *mut [u8],
+                n = config::VIRTIO_NET_CLIENT_DMA_SIZE
+            ))
+        };
+
+        let bounce_buffer_allocator =
+            WithAlignmentBound::new(BasicAllocator::new(dma_region.as_ptr().len()), 1);
+
+        let rx_ring_buffers =
+            RingBuffers::from_ptrs_using_default_initialization_strategy_for_role(
+                unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_net_rx_free: *mut _)) },
+                unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_net_rx_used: *mut _)) },
+                notify_net,
+            );
+
+        let tx_ring_buffers =
+            RingBuffers::from_ptrs_using_default_initialization_strategy_for_role(
+                unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_net_tx_free: *mut _)) },
+                unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_net_tx_used: *mut _)) },
+                notify_net,
+            );
+
+        let mut caps = DeviceCapabilities::default();
+        caps.max_transmission_unit = 1500;
+        caps.medium = Medium::Ethernet;
+
+        let mut device = DeviceImpl::new(
+            Default::default(),
+            dma_region,
+            bounce_buffer_allocator,
+            rx_ring_buffers,
+            tx_ring_buffers,
+            config::NET_QUEUE_SIZE,
+            config::NET_BUFFER_LEN,
+            caps,
+        )
+        .expect("virtio-net device");
+
+        let hardware_addr = HardwareAddress::Ethernet(EthernetAddress(mac.0));
+        let mut iface = Interface::new(Config::new(hardware_addr), &mut device, Instant::ZERO);
+        iface.update_ip_addrs(|ip_addrs| {
+            ip_addrs
+                .push(IpCidr::new(IpAddress::Ipv4(GUEST_IP), 24))
+                .expect("guest IPv4 address");
+        });
+        iface
+            .routes_mut()
+            .add_default_ipv4_route(HOST_IP)
+            .expect("default route");
+
+        Self {
+            device,
+            iface,
+            listening_logged: false,
+            served: false,
+        }
+    }
+
+    pub fn poll(&mut self) {
+        if self.served {
+            return;
+        }
+
+        self.device.poll();
+
+        let arena = unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_ARENA) };
+        let mut sockets = SocketSet::new(&mut arena.storage[..]);
+
+        if !arena.initialized {
+            let mut tcp = TcpSocket::new(
+                TcpSocketBuffer::new(&mut arena.tcp_rx[..]),
+                TcpSocketBuffer::new(&mut arena.tcp_tx[..]),
+            );
+            let endpoint = IpListenEndpoint::from((IpAddress::Ipv4(GUEST_IP), config::HTTP_PORT));
+            if tcp.listen(endpoint).is_ok() {
+                arena.tcp_handle = Some(sockets.add(tcp));
+                arena.initialized = true;
+            }
+        }
+
+        if arena.initialized && !self.listening_logged {
+            log::info!("lerux-http: listening on :{}", config::HTTP_PORT);
+            self.listening_logged = true;
+        }
+
+        if let Some(handle) = arena.tcp_handle {
+            let tcp = sockets.get_mut::<TcpSocket>(handle);
+            if tcp.is_active() && tcp.may_recv() {
+                let mut buf = [0u8; 256];
+                if let Ok(len) = tcp.recv_slice(&mut buf) {
+                    if len >= 4 && &buf[..4] == b"GET " && tcp.may_send() {
+                        let _ = tcp.send_slice(HTTP_RESPONSE);
+                        log::info!("lerux-http: served GET /");
+                        self.served = true;
+                    }
+                }
+            }
+        }
+
+        self.iface
+            .poll(Instant::ZERO, &mut self.device, &mut sockets);
+    }
+
+    pub fn is_served(&self) -> bool {
+        self.served
+    }
+}

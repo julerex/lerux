@@ -11,6 +11,8 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `qemu_virt_aarch64_virtio` | aarch64 | `just test-virtio` | hello + serial + virtio blk/net |
 | `qemu_virt_aarch64_init` | aarch64 | `just test-init` | boot-init + PL031 + SP804 + serial |
 | `qemu_virt_aarch64_composed` | aarch64 | `just test-composed` | boot-init + hello virtio + all drivers |
+| `qemu_virt_aarch64_http` | aarch64 | `just test-http` | serial + virtio-net + http-server |
+| `qemu_virt_aarch64_http_composed` | aarch64 | `just test-http-composed` | boot-init + init drivers + virtio-net + http-server |
 | `qemu_virt_riscv64` | riscv64 | `just test-riscv` | hello + serial (MMIO UART) |
 | `qemu_virt_riscv64_echo` | riscv64 | `just test-riscv-echo` | echo + serial |
 | `qemu_virt_riscv64_virtio` | riscv64 | `just test-riscv-virtio` | hello + serial + virtio |
@@ -35,6 +37,8 @@ CI sets this via `MICROKIT_BOARDS` in the workflow env.
 | `aarch64_init` | init | patched SP804 QEMU |
 | `aarch64_virtio` | virtio | virtio-net + virtio-blk + `disk.img` |
 | `aarch64_composed` | composed | patched SP804 QEMU + virtio + `disk.img` |
+| `aarch64_http` | http | virtio-net + `hostfwd=tcp::18080-:8080` |
+| `aarch64_http_composed` | http-composed | patched SP804 QEMU + virtio-net + `hostfwd` |
 | `riscv64` | riscv hello/echo | `-kernel loader.img` |
 | `riscv64_virtio` | riscv virtio | MMIO virtio buses + `disk.img` |
 | `x86_64` | x86 boards | `-kernel sel4_32.elf` + `-initrd loader.img` |
@@ -47,3 +51,9 @@ CI sets this via `MICROKIT_BOARDS` in the workflow env.
 - **hello** — virtio blk/net via debug-print; waits for `boot-init` notify before probing virtio.
 
 See [plan.md](plan.md) Phase 15.
+
+## HTTP boards
+
+`qemu_virt_aarch64_http` serves `GET /` on guest port **8080** (`10.0.2.15`). QEMU user netdev forwards host `127.0.0.1:18080` → guest `:8080`; smoke uses `curl` after serial shows `lerux-http: listening`.
+
+`qemu_virt_aarch64_http_composed` runs boot-init (RTC + SP804) then http-server over virtio-net — same notify gate as composed hello. See [plan.md](plan.md) Phase 17.

@@ -7,6 +7,8 @@ license = "MIT"
 [features]
 board-qemu_virt_aarch64_virtio = []
 board-qemu_virt_aarch64_composed = []
+board-qemu_virt_aarch64_http = []
+board-qemu_virt_aarch64_http_composed = []
 board-qemu_virt_riscv64_virtio = []
 
 [dependencies]

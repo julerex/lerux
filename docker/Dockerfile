@@ -30,6 +30,8 @@ RUN cargo install just --locked
 COPY rust-toolchain.toml /work/rust-toolchain.toml
 COPY tools/lerux-cli /work/tools/lerux-cli
 COPY support/boards.toml /work/support/boards.toml
+COPY userspace/pds /work/userspace/pds
+COPY userspace/crates /work/userspace/crates
 COPY Cargo.toml /work/Cargo.toml
 COPY Cargo.lock /work/Cargo.lock
 WORKDIR /work

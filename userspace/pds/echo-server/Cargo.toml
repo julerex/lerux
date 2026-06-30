@@ -7,6 +7,12 @@ license = "MIT"
 [lints]
 workspace = true
 
+[features]
+board-qemu_virt_aarch64_echo = ["serial-ipc"]
+board-qemu_virt_riscv64_echo = ["serial-ipc"]
+board-x86_64_generic_echo = ["serial-ipc"]
+serial-ipc = ["lerux-logging/serial"]
+
 [dependencies]
 lerux-ipc = { path = "../../crates/lerux-ipc" }
 lerux-interface-types = { path = "../../crates/lerux-interface-types" }

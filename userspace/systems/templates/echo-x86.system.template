@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <system>
-    <protection_domain name="serial_driver" priority="2" stack_size="0x10_000">
+    <protection_domain name="serial_driver" priority="4" stack_size="0x10_000">
         <program_image path="serial-driver.elf" />
         <ioport id="0" addr="{serial_ioport_addr}" size="8" setvar_id="com1_ioport_id" setvar_addr="com1_ioport_addr" />
         <irq pin="{serial_ioapic_pin}" vector="{serial_ioapic_vector}" id="0" trigger="level" polarity="high" />
@@ -17,6 +17,11 @@
     <channel>
         <end pd="serial_driver" id="1" />
         <end pd="echo_client" id="0" pp="true" />
+    </channel>
+
+    <channel>
+        <end pd="serial_driver" id="2" />
+        <end pd="echo_server" id="0" pp="true" />
     </channel>
 
     <channel>

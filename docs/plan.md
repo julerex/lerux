@@ -194,6 +194,7 @@ Init (`just test-init`) uses PL031 + SP804 drivers from rust-sel4 v4.0.0, which 
 - [x] Second serial channel in `composed.system.template` and `http-composed.system.template`
 - [x] `hello` / `http-server` use `serial-ipc` on composed boards (no debug-print workaround)
 - [x] Channel renumbering when `composed-sync` + `serial-ipc` are both enabled
+- [x] Echo boards: `echo-server` on serial IPC (multi-client-2; serial driver priority 4 on echo layouts)
 
 ## Version alignment
 

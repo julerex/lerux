@@ -149,7 +149,11 @@ fn curl_check(url: &str, expect_substr: &str, timeout_secs: u64) -> Result<()> {
 pub fn default_expects(board: &str) -> Vec<String> {
     match board {
         "qemu_virt_aarch64_echo" | "qemu_virt_riscv64_echo" | "x86_64_generic_echo" => {
-            vec!["lerux-echo: pong".into(), "lerux-echo: lerux".into()]
+            vec![
+                "echo-server ready".into(),
+                "lerux-echo: pong".into(),
+                "lerux-echo: lerux".into(),
+            ]
         }
         "qemu_virt_aarch64_blk" | "qemu_virt_riscv64_blk" | "x86_64_generic_blk" => {
             vec![

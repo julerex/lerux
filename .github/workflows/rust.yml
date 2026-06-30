@@ -303,6 +303,8 @@ jobs:
             command: just test-riscv-blk
           - id: x86-blk
             command: just test-x86-blk
+          - id: net
+            command: just test-net
     steps:
       - uses: actions/checkout@v4
 

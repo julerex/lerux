@@ -1,0 +1,24 @@
+[package]
+name = "net-server"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[lints]
+workspace = true
+
+[features]
+board-qemu_virt_aarch64_net = []
+
+[dependencies]
+lerux-interface-types = { path = "../../crates/lerux-interface-types" }
+lerux-ipc = { path = "../../crates/lerux-ipc" }
+lerux-logging = { path = "../../crates/lerux-logging" }
+sel4-abstract-allocator = { workspace = true }
+sel4-driver-interfaces = { workspace = true }
+sel4-microkit = { workspace = true, features = ["alloc"] }
+sel4-microkit-driver-adapters = { workspace = true }
+sel4-shared-memory = { workspace = true }
+sel4-shared-ring-buffer = { workspace = true }
+sel4-shared-ring-buffer-smoltcp = { workspace = true }
+smoltcp = { workspace = true, features = ["medium-ethernet", "proto-ipv4", "socket-udp"] }

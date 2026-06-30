@@ -61,7 +61,8 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
         | "aarch64_blk_composed"
         | "aarch64_composed"
         | "aarch64_http"
-        | "aarch64_http_composed" => {
+        | "aarch64_http_composed"
+        | "aarch64_net" => {
             let mut c = Command::new("qemu-system-aarch64");
             c.args([
                 "-machine",
@@ -113,9 +114,16 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
                     "virtio-blk-device,drive=blkdev0",
                     "-blockdev",
                     &format!(
-                        "node-name=blkdev0,read-only=on,driver=file,filename={}",
+                        "node-name=blkdev0,read-only=off,driver=file,filename={}",
                         path_str(&disk)
                     ),
+                ]);
+            } else if matches!(ctx.board.qemu.as_str(), "aarch64_net") {
+                c.args([
+                    "-device",
+                    "virtio-net-device,netdev=netdev0",
+                    "-netdev",
+                    "user,id=netdev0",
                 ]);
             } else if matches!(
                 ctx.board.qemu.as_str(),
@@ -189,7 +197,7 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
                 "virtio-blk-device,bus=virtio-mmio-bus.0,drive=blkdev0",
                 "-blockdev",
                 &format!(
-                    "node-name=blkdev0,read-only=on,driver=file,filename={}",
+                    "node-name=blkdev0,read-only=off,driver=file,filename={}",
                     path_str(&disk)
                 ),
             ]);
@@ -282,7 +290,7 @@ fn x86_command(ctx: &QemuContext, loader: &Path, disk: &Path) -> Result<Command>
                 "virtio-blk-pci,id=blk0,addr=0x3.0x0,drive=blkdev0",
                 "-blockdev",
                 &format!(
-                    "node-name=blkdev0,read-only=on,driver=file,filename={}",
+                    "node-name=blkdev0,read-only=off,driver=file,filename={}",
                     path_str(disk)
                 ),
             ]);

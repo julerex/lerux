@@ -936,6 +936,33 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d5439c4ad607c3c23abf66de8c8bf57ba8adcd1f129e699851a6e43935d339d"
 
 [[package]]
+name = "net-client"
+version = "0.1.0"
+dependencies = [
+ "lerux-interface-types",
+ "lerux-ipc",
+ "lerux-logging",
+ "sel4-microkit",
+]
+
+[[package]]
+name = "net-server"
+version = "0.1.0"
+dependencies = [
+ "lerux-interface-types",
+ "lerux-ipc",
+ "lerux-logging",
+ "sel4-abstract-allocator",
+ "sel4-driver-interfaces",
+ "sel4-microkit",
+ "sel4-microkit-driver-adapters",
+ "sel4-shared-memory",
+ "sel4-shared-ring-buffer",
+ "sel4-shared-ring-buffer-smoltcp",
+ "smoltcp",
+]
+
+[[package]]
 name = "nom"
 version = "7.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -11,31 +11,70 @@ const BLK_SERVER: Channel = Channel::new(1);
 #[cfg(feature = "composed-sync")]
 const BOOT_INIT: Channel = Channel::new(2);
 
+const TEST_LBA: u32 = 1;
+const WRITE_MAGIC: &[u8] = b"lerux-blk-write-test";
+
 struct HandlerImpl {
     #[cfg(feature = "composed-sync")]
     blk_pending: bool,
 }
 
-fn probe_blk() {
-    let pending =
-        call::<BlockRequest, BlockResponse>(BLK_SERVER, BlockRequest::ReadSector { lba: 0 })
-            .expect("ReadSector IPC");
-    assert!(matches!(pending, BlockResponse::Pending));
-
-    let sector = loop {
+fn poll_blk() -> BlockResponse {
+    loop {
         match call::<BlockRequest, BlockResponse>(BLK_SERVER, BlockRequest::Poll).expect("Poll IPC")
         {
-            BlockResponse::Sector { data } => break data,
             BlockResponse::Pending => {}
-            BlockResponse::Error => panic!("blk read failed"),
+            other => return other,
         }
-    };
+    }
+}
 
+fn read_sector(lba: u32) -> [u8; SECTOR_SIZE] {
+    let pending = call::<BlockRequest, BlockResponse>(BLK_SERVER, BlockRequest::ReadSector { lba })
+        .expect("ReadSector IPC");
+    assert!(matches!(pending, BlockResponse::Pending));
+
+    match poll_blk() {
+        BlockResponse::Sector { data } => data,
+        BlockResponse::Pending | BlockResponse::Ok | BlockResponse::Error => {
+            panic!("blk read failed")
+        }
+    }
+}
+
+fn write_sector(lba: u32, data: [u8; SECTOR_SIZE]) {
+    let pending =
+        call::<BlockRequest, BlockResponse>(BLK_SERVER, BlockRequest::WriteSector { lba, data })
+            .expect("WriteSector IPC");
+    assert!(matches!(pending, BlockResponse::Pending));
+
+    match poll_blk() {
+        BlockResponse::Ok => {}
+        BlockResponse::Pending | BlockResponse::Sector { .. } | BlockResponse::Error => {
+            panic!("blk write failed")
+        }
+    }
+}
+
+fn probe_blk() {
+    let sector = read_sector(0);
     log::info!(
         "lerux-blk: MBR sig 0x{:02x} 0x{:02x}",
         sector[SECTOR_SIZE - 2],
         sector[SECTOR_SIZE - 1]
     );
+
+    let mut write_data = [0u8; SECTOR_SIZE];
+    let magic_len = WRITE_MAGIC.len().min(SECTOR_SIZE);
+    write_data[..magic_len].copy_from_slice(&WRITE_MAGIC[..magic_len]);
+    write_sector(TEST_LBA, write_data);
+
+    let read_back = read_sector(TEST_LBA);
+    assert!(
+        read_back[..magic_len] == WRITE_MAGIC[..magic_len],
+        "write round-trip mismatch"
+    );
+    log::info!("lerux-blk: write round-trip ok");
 }
 
 #[cfg(feature = "composed-sync")]

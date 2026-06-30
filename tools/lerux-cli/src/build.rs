@@ -17,6 +17,8 @@ const BOARD_FEATURE_CRATES: &[&str] = &[
     "boot-init",
     "blk-server",
     "blk-client",
+    "net-server",
+    "net-client",
     "serial-driver",
     "virtio-blk-driver",
     "virtio-net-driver",
@@ -168,6 +170,7 @@ pub fn test_all(root: &Path, build_dir: &str, config: &str) -> Result<()> {
         "qemu_virt_aarch64_blk_composed",
         "qemu_virt_aarch64_http",
         "qemu_virt_aarch64_http_composed",
+        "qemu_virt_aarch64_net",
     ];
 
     for board in tests_before_disk {

@@ -127,6 +127,10 @@ test-composed:
 test-blk-composed:
     BOARD=qemu_virt_aarch64_blk_composed just test
 
+# Net IPC smoke test (net-server + net-client on aarch64 virt)
+test-net:
+    BOARD=qemu_virt_aarch64_net just test
+
 # HTTP smoke: GET / on virtio-net (host port 18080 -> guest :8080)
 test-http:
     BOARD=qemu_virt_aarch64_http just test

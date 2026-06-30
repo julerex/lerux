@@ -98,6 +98,16 @@ pds = ["http-server", "serial-driver", "virtio-net-driver"]
 qemu = "aarch64_http"
 system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_net_irq = 79 }
 
+[qemu_virt_aarch64_net]
+arch = "aarch64"
+microkit_board = "qemu_virt_aarch64"
+target = "aarch64-sel4-microkit"
+target_triple = "aarch64-sel4-microkit"
+template = "net.system.template"
+pds = ["net-client", "net-server", "serial-driver", "virtio-net-driver"]
+qemu = "aarch64_net"
+system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_net_irq = 79 }
+
 [qemu_virt_aarch64_blk]
 arch = "aarch64"
 microkit_board = "qemu_virt_aarch64"

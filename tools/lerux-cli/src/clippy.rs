@@ -55,7 +55,7 @@ const AARCH64_CRATES: &[ClippyCrate<'_>] = &[
     },
     ClippyCrate {
         name: "echo-server",
-        feature: None,
+        feature: Some("board-qemu_virt_aarch64_echo"),
     },
     ClippyCrate {
         name: "echo-client",

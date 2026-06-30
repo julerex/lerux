@@ -41,6 +41,9 @@ Local mirror: `just check` (format + clippy for `lerux-cli` and `lerux-interface
 | `x86-http` | `just test-x86-http` | x86 q35 PCI virtio-net HTTP via hostfwd |
 | `riscv-http` | `just test-riscv-http` | RISC-V MMIO virtio-net HTTP via hostfwd |
 | `x86-virtio` | `just disk-img && just test-x86-virtio` | x86 q35 PCI virtio-blk/net + TCP RX |
+| `blk` | `just test-blk` | aarch64 block IPC over virtio-blk |
+| `riscv-blk` | `just test-riscv-blk` | RISC-V block IPC |
+| `x86-blk` | `just test-x86-blk` | x86 PCI virtio-blk block IPC |
 
 Local mirror: `just test-all` (requires full SDK; creates `support/disk.img` once).
 

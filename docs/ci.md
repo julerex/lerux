@@ -7,14 +7,14 @@ GitHub Actions workflow: [`.github/workflows/rust.yml`](../.github/workflows/rus
 1. **check** — `just check` (`cargo fmt --all --check` + clippy on host crates; no SDK).
 2. **sdk** — Docker image, fetch sources, build Microkit SDK (cached), **prebuild patched SP804 QEMU** (cached), upload SDK artifact.
 3. **check-pd** — `just check-pd` (cross-target clippy on PD + shared userspace crates; needs SDK artifact).
-4. **smoke** — 15 parallel matrix jobs; each restores SDK artifact, per-job `build/` cache, and SP804 QEMU (init/composed/http-composed only).
+4. **smoke** — 19 parallel matrix jobs; each restores SDK artifact, per-job `build/` cache, and SP804 QEMU (init/composed/blk-composed/http-composed only).
 
 ```mermaid
 flowchart LR
   check[check job]
   sdk[sdk job]
   checkPd[check-pd job]
-  smoke[smoke matrix x15]
+  smoke[smoke matrix x19]
   sdk --> checkPd
   sdk --> smoke
 ```
@@ -35,6 +35,7 @@ Local mirror: `just check` (format + clippy for `lerux-cli` and `lerux-interface
 | `riscv-virtio` | `just disk-img && just test-riscv-virtio` | RISC-V virtio |
 | `init` | `just test-init` | PL031 + SP804; patched QEMU |
 | `composed` | `just disk-img && just test-composed` | init + virtio in one system |
+| `blk-composed` | `just disk-img && just test-blk-composed` | init + block IPC; patched QEMU |
 | `http` | `just test-http` | virtio-net HTTP `GET /` via hostfwd |
 | `http-composed` | `just test-http-composed` | init + HTTP; patched QEMU |
 | `x86-http` | `just test-x86-http` | x86 q35 PCI virtio-net HTTP via hostfwd |
@@ -49,7 +50,7 @@ Local mirror: `just test-all` (requires full SDK; creates `support/disk.img` onc
 |-------|------------|-------------|
 | Workspace | `deps/versions.toml`, `tools/lerux-cli` | sdk |
 | SDK | versions + `SDK_CACHE_SUFFIX` | sdk |
-| SP804 QEMU | patch + `install-qemu-sp804.sh` | sdk (build), smoke init/composed/http-composed (restore) |
+| SP804 QEMU | patch + `install-qemu-sp804.sh` | sdk (build), smoke init/composed/blk-composed/http-composed (restore) |
 | Per-smoke `build/` | `Cargo.lock` + matrix job id | smoke |
 | `build/clippy/` | `Cargo.lock` | check-pd |
 
@@ -59,7 +60,7 @@ Caches are saved with `if: always()` when the artifact exists, so a failing smok
 
 ## Patched QEMU
 
-Stock QEMU `virt` lacks SP804 at `0x90d0000`. Init, composed, and http-composed smokes use `cargo run -p lerux-cli -- install sp804-qemu`. The installer prints **only** the install `bin` directory on stdout (build logs go to stderr).
+Stock QEMU `virt` lacks SP804 at `0x90d0000`. Init, composed, blk-composed, and http-composed smokes use `cargo run -p lerux-cli -- install sp804-qemu`. The installer prints **only** the install `bin` directory on stdout (build logs go to stderr).
 
 ## Troubleshooting
 

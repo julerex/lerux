@@ -196,6 +196,13 @@ Init (`just test-init`) uses PL031 + SP804 drivers from rust-sel4 v4.0.0, which 
 - [x] Channel renumbering when `composed-sync` + `serial-ipc` are both enabled
 - [x] Echo boards: `echo-server` on serial IPC (multi-client-2; serial driver priority 4 on echo layouts)
 
+## Phase 25 — Composed block service
+
+- [x] `blk-composed.system.template`: boot-init + init drivers + blk-server/client + virtio-blk
+- [x] Board `qemu_virt_aarch64_blk_composed` (`just test-blk-composed`)
+- [x] `blk-client` composed-sync: probe block after boot-init notify
+- [x] CI matrix job `blk-composed` (19 smoke jobs total)
+
 ## Version alignment
 
 | Component | Version |

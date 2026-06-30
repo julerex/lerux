@@ -10,6 +10,7 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `qemu_virt_aarch64_echo` | aarch64 | `just test-echo` | echo client/server + serial |
 | `qemu_virt_aarch64_virtio` | aarch64 | `just test-virtio` | hello + serial + virtio blk/net |
 | `qemu_virt_aarch64_blk` | aarch64 | `just test-blk` | blk client/server + serial + virtio-blk |
+| `qemu_virt_aarch64_blk_composed` | aarch64 | `just test-blk-composed` | boot-init + init drivers + blk IPC + virtio-blk |
 | `qemu_virt_aarch64_init` | aarch64 | `just test-init` | boot-init + PL031 + SP804 + serial |
 | `qemu_virt_aarch64_composed` | aarch64 | `just test-composed` | boot-init + hello virtio + all drivers |
 | `qemu_virt_aarch64_http` | aarch64 | `just test-http` | serial + virtio-net + http-server |
@@ -43,6 +44,7 @@ CI sets this via `MICROKIT_BOARDS` in the workflow env.
 | `aarch64_init` | init | patched SP804 QEMU |
 | `aarch64_virtio` | virtio | virtio-net + virtio-blk + `disk.img` |
 | `aarch64_blk` | blk | virtio-blk + `disk.img` |
+| `aarch64_blk_composed` | blk-composed | patched SP804 QEMU + virtio-blk + `disk.img` |
 | `aarch64_composed` | composed | patched SP804 QEMU + virtio + `disk.img` |
 | `aarch64_http` | http | virtio-net + `hostfwd=tcp::18080-:8080` |
 | `aarch64_http_composed` | http-composed | patched SP804 QEMU + virtio-net + `hostfwd` |

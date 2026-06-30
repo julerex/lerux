@@ -12,9 +12,11 @@ use crate::{
 
 const BOARD_FEATURE_CRATES: &[&str] = &[
     "hello",
+    "echo-server",
     "http-server",
     "boot-init",
     "blk-server",
+    "blk-client",
     "serial-driver",
     "virtio-blk-driver",
     "virtio-net-driver",
@@ -163,6 +165,7 @@ pub fn test_all(root: &Path, build_dir: &str, config: &str) -> Result<()> {
         "qemu_virt_riscv64_blk",
         "x86_64_generic_blk",
         "qemu_virt_aarch64_composed",
+        "qemu_virt_aarch64_blk_composed",
         "qemu_virt_aarch64_http",
         "qemu_virt_aarch64_http_composed",
     ];

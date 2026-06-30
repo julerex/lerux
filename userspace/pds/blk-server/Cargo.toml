@@ -9,6 +9,7 @@ workspace = true
 
 [features]
 board-qemu_virt_aarch64_blk = []
+board-qemu_virt_aarch64_blk_composed = []
 board-qemu_virt_riscv64_blk = []
 board-x86_64_generic_blk = []
 

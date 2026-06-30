@@ -58,6 +58,7 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
         "aarch64_init"
         | "aarch64_virtio"
         | "aarch64_blk"
+        | "aarch64_blk_composed"
         | "aarch64_composed"
         | "aarch64_http"
         | "aarch64_http_composed" => {
@@ -96,7 +97,10 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
                         path_str(&disk)
                     ),
                 ]);
-            } else if ctx.board.qemu.as_str() == "aarch64_blk" {
+            } else if matches!(
+                ctx.board.qemu.as_str(),
+                "aarch64_blk" | "aarch64_blk_composed"
+            ) {
                 ensure_disk(&disk)?;
                 // Net device occupies the first virtio-mmio slot; blk stays at +0xc00
                 // in the same page (see virtio-blk-driver VIRTIO_BLK_MMIO_OFFSET).
@@ -306,7 +310,7 @@ fn ensure_disk(disk: &Path) -> Result<()> {
 fn needs_sp804(profile: &str) -> bool {
     matches!(
         profile,
-        "aarch64_init" | "aarch64_composed" | "aarch64_http_composed"
+        "aarch64_init" | "aarch64_composed" | "aarch64_blk_composed" | "aarch64_http_composed"
     )
 }
 

@@ -123,6 +123,10 @@ test-init:
 test-composed:
     BOARD=qemu_virt_aarch64_composed just test
 
+# Init + block IPC over virtio-blk (boot-init notify gate before blk probe)
+test-blk-composed:
+    BOARD=qemu_virt_aarch64_blk_composed just test
+
 # HTTP smoke: GET / on virtio-net (host port 18080 -> guest :8080)
 test-http:
     BOARD=qemu_virt_aarch64_http just test

@@ -285,6 +285,8 @@ jobs:
             command: just test-init
           - id: composed
             command: just disk-img && just test-composed
+          - id: blk-composed
+            command: just disk-img && just test-blk-composed
           - id: http
             command: just test-http
           - id: http-composed
@@ -343,7 +345,7 @@ jobs:
             build-${{ matrix.id }}-
 
       - name: Restore SP804 QEMU cache
-        if: matrix.id == 'init' || matrix.id == 'composed' || matrix.id == 'http-composed'
+        if: matrix.id == 'init' || matrix.id == 'composed' || matrix.id == 'blk-composed' || matrix.id == 'http-composed'
         uses: actions/cache/restore@v4
         with:
           path: |
@@ -355,7 +357,7 @@ jobs:
             qemu-sp804-
 
       - name: Ensure SP804 QEMU executable
-        if: matrix.id == 'init' || matrix.id == 'composed' || matrix.id == 'http-composed'
+        if: matrix.id == 'init' || matrix.id == 'composed' || matrix.id == 'blk-composed' || matrix.id == 'http-composed'
         run: |
           set -euo pipefail
           qemu="deps/toolchains/qemu-sp804/bin/qemu-system-aarch64"

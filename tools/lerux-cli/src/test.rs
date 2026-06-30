@@ -155,6 +155,14 @@ pub fn default_expects(board: &str) -> Vec<String> {
                 "lerux-echo: lerux".into(),
             ]
         }
+        "qemu_virt_aarch64_blk_composed" => vec![
+            "lerux-init: RTC".into(),
+            "lerux-init: timer ok".into(),
+            "lerux-init: init ok".into(),
+            "lerux-blk: ready".into(),
+            "virtio-blk:".into(),
+            "lerux-blk: MBR sig".into(),
+        ],
         "qemu_virt_aarch64_blk" | "qemu_virt_riscv64_blk" | "x86_64_generic_blk" => {
             vec![
                 "lerux-blk: ready".into(),
@@ -233,6 +241,7 @@ pub fn run_board_test(
         board,
         "qemu_virt_aarch64_virtio"
             | "qemu_virt_aarch64_composed"
+            | "qemu_virt_aarch64_blk_composed"
             | "qemu_virt_riscv64_virtio"
             | "x86_64_generic_virtio"
     ) {

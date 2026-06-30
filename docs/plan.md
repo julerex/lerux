@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-06-29 (Phase 23)
+Last updated: 2026-06-30 (Phase 24)
 
 ## Phase 1 — Bring-up
 
@@ -187,6 +187,13 @@ Init (`just test-init`) uses PL031 + SP804 drivers from rust-sel4 v4.0.0, which 
 - [x] `virtio-pci-driver` blk-only board feature for x86
 - [x] `just test-blk` / `just test-riscv-blk` / `just test-x86-blk`
 - [x] CI matrix jobs `blk`, `riscv-blk`, `x86-blk` (18 smoke jobs total)
+
+## Phase 24 — Multi-client serial driver
+
+- [x] Lerux-owned serial `HandlerImpl` with `multi-client-2` feature (two IPC clients on composed boards)
+- [x] Second serial channel in `composed.system.template` and `http-composed.system.template`
+- [x] `hello` / `http-server` use `serial-ipc` on composed boards (no debug-print workaround)
+- [x] Channel renumbering when `composed-sync` + `serial-ipc` are both enabled
 
 ## Version alignment
 

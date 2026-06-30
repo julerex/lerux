@@ -62,6 +62,11 @@
     </channel>
 
     <channel>
+        <end pd="serial_driver" id="2" />
+        <end pd="http_server" id="2" pp="true" />
+    </channel>
+
+    <channel>
         <end pd="pl031_driver" id="1" />
         <end pd="boot_init" id="1" pp="true" />
     </channel>

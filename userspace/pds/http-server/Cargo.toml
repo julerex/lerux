@@ -9,7 +9,7 @@ workspace = true
 
 [features]
 board-qemu_virt_aarch64_http = ["serial-ipc"]
-board-qemu_virt_aarch64_http_composed = ["composed-sync"]
+board-qemu_virt_aarch64_http_composed = ["composed-sync", "serial-ipc"]
 board-qemu_virt_riscv64_http = ["serial-ipc"]
 board-x86_64_generic_http = ["serial-ipc"]
 composed-sync = []

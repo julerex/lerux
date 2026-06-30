@@ -1744,12 +1744,15 @@ name = "serial-driver"
 version = "0.1.0"
 dependencies = [
  "embedded-hal-nb",
+ "heapless",
  "lerux-logging",
+ "log",
  "sel4",
  "sel4-driver-interfaces",
  "sel4-microkit",
- "sel4-microkit-driver-adapters",
+ "sel4-microkit-simple-ipc",
  "sel4-pl011-driver",
+ "serde",
 ]
 
 [[package]]

@@ -44,7 +44,9 @@ mod config;
 #[cfg(feature = "virtio")]
 mod net;
 
-#[cfg(feature = "serial-ipc")]
+#[cfg(all(feature = "serial-ipc", feature = "composed-sync"))]
+const SERIAL_DRIVER: Channel = Channel::new(3);
+#[cfg(all(feature = "serial-ipc", not(feature = "composed-sync")))]
 const SERIAL_DRIVER: Channel = Channel::new(0);
 #[cfg(feature = "composed-sync")]
 const BOOT_INIT: Channel = Channel::new(0);

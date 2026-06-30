@@ -8,13 +8,14 @@ license = "MIT"
 workspace = true
 
 [features]
+multi-client-2 = []
 board-qemu_virt_aarch64 = ["sel4-pl011-driver"]
 board-qemu_virt_aarch64_virtio = ["board-qemu_virt_aarch64"]
 board-qemu_virt_aarch64_echo = ["board-qemu_virt_aarch64"]
 board-qemu_virt_aarch64_init = ["board-qemu_virt_aarch64"]
-board-qemu_virt_aarch64_composed = ["board-qemu_virt_aarch64"]
+board-qemu_virt_aarch64_composed = ["board-qemu_virt_aarch64", "multi-client-2"]
 board-qemu_virt_aarch64_http = ["board-qemu_virt_aarch64"]
-board-qemu_virt_aarch64_http_composed = ["board-qemu_virt_aarch64"]
+board-qemu_virt_aarch64_http_composed = ["board-qemu_virt_aarch64", "multi-client-2"]
 board-qemu_virt_aarch64_blk = ["board-qemu_virt_aarch64"]
 board-qemu_virt_riscv64 = []
 board-qemu_virt_riscv64_echo = ["board-qemu_virt_riscv64"]
@@ -29,9 +30,12 @@ board-x86_64_generic_blk = ["board-x86_64_generic"]
 
 [dependencies]
 lerux-logging = { path = "../../crates/lerux-logging" }
+log = { workspace = true }
 sel4 = { workspace = true }
 sel4-microkit = { workspace = true }
 sel4-driver-interfaces = { workspace = true }
 sel4-pl011-driver = { workspace = true, optional = true }
-sel4-microkit-driver-adapters = { workspace = true }
 embedded-hal-nb = { workspace = true }
+heapless = { workspace = true }
+serde = { workspace = true }
+sel4-microkit-simple-ipc = { workspace = true }

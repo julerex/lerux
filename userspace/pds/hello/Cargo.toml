@@ -10,7 +10,7 @@ workspace = true
 [features]
 board-qemu_virt_aarch64 = ["serial-ipc"]
 board-qemu_virt_aarch64_virtio = ["serial-ipc", "virtio"]
-board-qemu_virt_aarch64_composed = ["virtio", "composed-sync"]
+board-qemu_virt_aarch64_composed = ["virtio", "composed-sync", "serial-ipc"]
 composed-sync = []
 board-qemu_virt_riscv64 = ["serial-ipc"]
 board-qemu_virt_riscv64_virtio = ["serial-ipc", "virtio"]

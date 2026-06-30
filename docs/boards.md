@@ -59,10 +59,10 @@ CI sets this via `MICROKIT_BOARDS` in the workflow env.
 
 `qemu_virt_aarch64_composed` runs two app PDs in one system:
 
-- **boot-init** — RTC + SP804 via serial IPC (owns the serial driver channel).
-- **hello** — virtio blk/net via debug-print; waits for `boot-init` notify before probing virtio.
+- **boot-init** — RTC + SP804 via serial IPC.
+- **hello** — virtio blk/net via serial IPC; waits for `boot-init` notify before probing virtio.
 
-See [plan.md](plan.md) Phase 15.
+See [plan.md](plan.md) Phases 15 and 24.
 
 ## HTTP boards
 

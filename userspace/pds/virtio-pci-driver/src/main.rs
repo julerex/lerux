@@ -244,6 +244,24 @@ impl BlkHandler {
         }
     }
 
+    fn complete_virtio_write(
+        &mut self,
+        token: u16,
+        pending_entry: &mut BlkPendingEntry,
+        buf_ptr: &[u8],
+    ) {
+        unsafe {
+            self.dev
+                .complete_write_blocks(
+                    token,
+                    &pending_entry.virtio_req,
+                    buf_ptr,
+                    &mut pending_entry.virtio_resp,
+                )
+                .unwrap();
+        }
+    }
+
     fn enqueue_completed_request(&mut self, client_req: BlockIORequest, virtio_resp: &BlkResp) {
         let status = match virtio_resp.status() {
             RespStatus::OK => BlockIORequestStatus::Ok,
@@ -261,10 +279,18 @@ impl BlkHandler {
     fn complete_one_used_request(&mut self) {
         let token = self.dev.peek_used().unwrap();
         let mut pending_entry = self.pending.remove(&token).unwrap();
+        let req_ty = pending_entry.client_req.ty().unwrap();
         unsafe {
             let mut buf_ptr = buf_ptr_for_req(&mut self.client_region, &pending_entry.client_req);
             let pending_entry = &mut *pending_entry;
-            self.complete_virtio_read(token, pending_entry, buf_ptr.as_mut());
+            match req_ty {
+                BlockIORequestType::Read => {
+                    self.complete_virtio_read(token, pending_entry, buf_ptr.as_mut());
+                }
+                BlockIORequestType::Write => {
+                    self.complete_virtio_write(token, pending_entry, buf_ptr.as_ref());
+                }
+            }
         }
         self.enqueue_completed_request(pending_entry.client_req, &pending_entry.virtio_resp);
     }
@@ -299,9 +325,26 @@ impl BlkHandler {
         }
     }
 
+    fn submit_write_request(&mut self, pending_entry: &mut BlkPendingEntry, buf_ptr: &[u8]) -> u16 {
+        unsafe {
+            self.dev
+                .write_blocks_nb(
+                    pending_entry
+                        .client_req
+                        .start_block_idx()
+                        .try_into()
+                        .unwrap(),
+                    &mut pending_entry.virtio_req,
+                    buf_ptr,
+                    &mut pending_entry.virtio_resp,
+                )
+                .unwrap()
+        }
+    }
+
     fn issue_one_pending_request(&mut self) -> bool {
         let client_req = self.ring_buffers.free_mut().dequeue().unwrap().unwrap();
-        assert_eq!(client_req.ty().unwrap(), BlockIORequestType::Read);
+        let req_ty = client_req.ty().unwrap();
         let mut pending_entry = Box::pin(BlkPendingEntry {
             client_req,
             virtio_req: BlkReq::default(),
@@ -311,7 +354,14 @@ impl BlkHandler {
         assert_eq!(buf_ptr.len(), 512);
         let token = unsafe {
             let pending_entry = &mut *pending_entry;
-            self.submit_read_request(pending_entry, buf_ptr.as_mut())
+            match req_ty {
+                BlockIORequestType::Read => {
+                    self.submit_read_request(pending_entry, buf_ptr.as_mut())
+                }
+                BlockIORequestType::Write => {
+                    self.submit_write_request(pending_entry, buf_ptr.as_ref())
+                }
+            }
         };
         assert!(self.pending.insert(token, pending_entry).is_none());
         true

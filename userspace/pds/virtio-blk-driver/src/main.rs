@@ -173,8 +173,7 @@ impl HandlerImpl {
         let mut pending_entry = self.pending.remove(&token).unwrap();
         let req_ty = pending_entry.client_req.ty().unwrap();
         unsafe {
-            let mut buf_ptr =
-                buf_ptr_for_req(&mut self.client_region, &pending_entry.client_req);
+            let mut buf_ptr = buf_ptr_for_req(&mut self.client_region, &pending_entry.client_req);
             let pending_entry = &mut *pending_entry;
             match req_ty {
                 BlockIORequestType::Read => {

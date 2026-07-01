@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-01 (Phase 28)
+Last updated: 2026-07-01 (Phase 29)
 
 ## Phase 1 — Bring-up
 
@@ -227,6 +227,13 @@ Init (`just test-init`) uses PL031 + SP804 drivers from rust-sel4 v4.0.0, which 
 - [x] `virtio-pci-driver` net-only board feature for x86
 - [x] `just test-riscv-net` / `just test-x86-net`
 - [x] CI matrix jobs `riscv-net`, `x86-net` (22 smoke jobs total)
+
+## Phase 29 — Composed net service
+
+- [x] `net-composed.system.template`: boot-init + init drivers + net-server/client + virtio-net
+- [x] Board `qemu_virt_aarch64_net_composed` (`just test-net-composed`)
+- [x] `net-client` composed-sync: probe net after boot-init notify
+- [x] CI matrix job `net-composed` (23 smoke jobs total)
 
 ## Version alignment
 

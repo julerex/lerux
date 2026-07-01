@@ -7,14 +7,14 @@ GitHub Actions workflow: [`.github/workflows/rust.yml`](../.github/workflows/rus
 1. **check** — `just check` (`cargo fmt --all --check` + clippy on host crates; no SDK).
 2. **sdk** — Docker image, fetch sources, build Microkit SDK (cached), **prebuild patched SP804 QEMU** (cached), upload SDK artifact.
 3. **check-pd** — `just check-pd` (cross-target clippy on PD + shared userspace crates; needs SDK artifact).
-4. **smoke** — 22 parallel matrix jobs; each restores SDK artifact, per-job `build/` cache, and SP804 QEMU (init/composed/blk-composed/http-composed only).
+4. **smoke** — 23 parallel matrix jobs; each restores SDK artifact, per-job `build/` cache, and SP804 QEMU (init/composed/blk-composed/http-composed/net-composed only).
 
 ```mermaid
 flowchart LR
   check[check job]
   sdk[sdk job]
   checkPd[check-pd job]
-  smoke[smoke matrix x22]
+  smoke[smoke matrix x23]
   sdk --> checkPd
   sdk --> smoke
 ```
@@ -47,6 +47,7 @@ Local mirror: `just check` (format + clippy for `lerux-cli` and `lerux-interface
 | `net` | `just test-net` | aarch64 net IPC over virtio-net (UDP TX) |
 | `riscv-net` | `just test-riscv-net` | RISC-V net IPC |
 | `x86-net` | `just test-x86-net` | x86 PCI virtio-net net IPC |
+| `net-composed` | `just test-net-composed` | init + net IPC; patched QEMU |
 
 Local mirror: `just test-all` (requires full SDK; creates `support/disk.img` once).
 
@@ -60,13 +61,13 @@ Local mirror: `just test-all` (requires full SDK; creates `support/disk.img` onc
 | Per-smoke `build/` | `Cargo.lock` + matrix job id | smoke |
 | `build/clippy/` | `Cargo.lock` | check-pd |
 
-SP804 QEMU is built once in the **sdk** job so `init`, `composed`, and `http-composed` do not each cold-build QEMU (~4 min). Cache paths include install prefix, source tree, and tarball.
+SP804 QEMU is built once in the **sdk** job so `init`, `composed`, `blk-composed`, `http-composed`, and `net-composed` do not each cold-build QEMU (~4 min). Cache paths include install prefix, source tree, and tarball.
 
 Caches are saved with `if: always()` when the artifact exists, so a failing smoke job still retains partial `build/` and a completed QEMU install.
 
 ## Patched QEMU
 
-Stock QEMU `virt` lacks SP804 at `0x90d0000`. Init, composed, blk-composed, and http-composed smokes use `cargo run -p lerux-cli -- install sp804-qemu`. The installer prints **only** the install `bin` directory on stdout (build logs go to stderr).
+Stock QEMU `virt` lacks SP804 at `0x90d0000`. Init, composed, blk-composed, http-composed, and net-composed smokes use `cargo run -p lerux-cli -- install sp804-qemu`. The installer prints **only** the install `bin` directory on stdout (build logs go to stderr).
 
 ## Troubleshooting
 

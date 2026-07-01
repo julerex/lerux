@@ -139,6 +139,10 @@ test-riscv-net:
 test-x86-net:
     BOARD=x86_64_generic_net just test
 
+# Init + net IPC over virtio-net (boot-init notify gate before net probe)
+test-net-composed:
+    BOARD=qemu_virt_aarch64_net_composed just test
+
 # HTTP smoke: GET / on virtio-net (host port 18080 -> guest :8080)
 test-http:
     BOARD=qemu_virt_aarch64_http just test

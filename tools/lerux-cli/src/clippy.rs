@@ -77,6 +77,14 @@ const AARCH64_CRATES: &[ClippyCrate<'_>] = &[
         name: "net-client",
         feature: None,
     },
+    ClippyCrate {
+        name: "net-server",
+        feature: Some("board-qemu_virt_aarch64_net_composed"),
+    },
+    ClippyCrate {
+        name: "net-client",
+        feature: Some("board-qemu_virt_aarch64_net_composed"),
+    },
 ];
 
 const RISCV64_CRATES: &[ClippyCrate<'_>] = &[

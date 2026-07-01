@@ -15,7 +15,8 @@ const TIMER_DRIVER: Channel = Channel::new(2);
 #[cfg(any(
     feature = "board-qemu_virt_aarch64_composed",
     feature = "board-qemu_virt_aarch64_http_composed",
-    feature = "board-qemu_virt_aarch64_blk_composed"
+    feature = "board-qemu_virt_aarch64_blk_composed",
+    feature = "board-qemu_virt_aarch64_net_composed"
 ))]
 const APP: Channel = Channel::new(3);
 
@@ -40,7 +41,8 @@ fn log_timer(timer: &mut TimerClient) {
 #[cfg(any(
     feature = "board-qemu_virt_aarch64_composed",
     feature = "board-qemu_virt_aarch64_http_composed",
-    feature = "board-qemu_virt_aarch64_blk_composed"
+    feature = "board-qemu_virt_aarch64_blk_composed",
+    feature = "board-qemu_virt_aarch64_net_composed"
 ))]
 fn notify_app() {
     APP.notify();
@@ -57,7 +59,8 @@ fn init() -> HandlerImpl {
     #[cfg(any(
         feature = "board-qemu_virt_aarch64_composed",
         feature = "board-qemu_virt_aarch64_http_composed",
-        feature = "board-qemu_virt_aarch64_blk_composed"
+        feature = "board-qemu_virt_aarch64_blk_composed",
+        feature = "board-qemu_virt_aarch64_net_composed"
     ))]
     notify_app();
     HandlerImpl

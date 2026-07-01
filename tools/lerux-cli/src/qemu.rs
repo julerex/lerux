@@ -62,7 +62,8 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
         | "aarch64_composed"
         | "aarch64_http"
         | "aarch64_http_composed"
-        | "aarch64_net" => {
+        | "aarch64_net"
+        | "aarch64_net_composed" => {
             let mut c = Command::new("qemu-system-aarch64");
             c.args([
                 "-machine",
@@ -118,7 +119,10 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
                         path_str(&disk)
                     ),
                 ]);
-            } else if matches!(ctx.board.qemu.as_str(), "aarch64_net") {
+            } else if matches!(
+                ctx.board.qemu.as_str(),
+                "aarch64_net" | "aarch64_net_composed"
+            ) {
                 c.args([
                     "-device",
                     "virtio-net-device,netdev=netdev0",
@@ -345,7 +349,11 @@ fn ensure_disk(disk: &Path) -> Result<()> {
 fn needs_sp804(profile: &str) -> bool {
     matches!(
         profile,
-        "aarch64_init" | "aarch64_composed" | "aarch64_blk_composed" | "aarch64_http_composed"
+        "aarch64_init"
+            | "aarch64_composed"
+            | "aarch64_blk_composed"
+            | "aarch64_http_composed"
+            | "aarch64_net_composed"
     )
 }
 

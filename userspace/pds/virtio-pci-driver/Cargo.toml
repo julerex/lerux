@@ -11,6 +11,7 @@ workspace = true
 board-x86_64_generic_virtio = ["dep:lerux-virtio-hal", "dep:lerux-virtio-pci"]
 board-x86_64_generic_http = ["dep:lerux-virtio-hal", "dep:lerux-virtio-pci"]
 board-x86_64_generic_blk = ["dep:lerux-virtio-hal", "dep:lerux-virtio-pci"]
+board-x86_64_generic_net = ["dep:lerux-virtio-hal", "dep:lerux-virtio-pci"]
 
 [dependencies]
 lerux-logging = { path = "../../crates/lerux-logging" }

@@ -58,6 +58,16 @@ pds = ["blk-client", "blk-server", "serial-driver", "virtio-blk-driver"]
 qemu = "riscv64_blk"
 system_vars = { serial_mmio_phys_addr = "0x1_000_0000", serial_irq = 10, virtio_blk_mmio_phys_addr = "0x10_001_000", virtio_blk_irq = 1 }
 
+[qemu_virt_riscv64_net]
+arch = "riscv64"
+microkit_board = "qemu_virt_riscv64"
+target = "riscv64-sel4-microkit"
+target_triple = "riscv64-sel4-microkit"
+template = "net-riscv.system.template"
+pds = ["net-client", "net-server", "serial-driver", "virtio-net-driver"]
+qemu = "riscv64_net"
+system_vars = { serial_mmio_phys_addr = "0x1_000_0000", serial_irq = 10, virtio_net_mmio_phys_addr = "0x10_002_000", virtio_net_irq = 2 }
+
 [qemu_virt_aarch64_init]
 arch = "aarch64"
 microkit_board = "qemu_virt_aarch64"
@@ -197,3 +207,13 @@ template = "blk-x86.system.template"
 pds = ["blk-client", "blk-server", "serial-driver", "virtio-pci-driver"]
 qemu = "x86_64_blk"
 system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48, virtio_blk_bar1_phys_addr = "0xfed0_0000", virtio_blk_bar4_phys_addr = "0xfed1_0000", virtio_blk_ioapic_pin = 10, virtio_blk_ioapic_vector = 49, virtio_blk_driver_dma_phys_addr = "0x6000_0000", virtio_blk_client_dma_phys_addr = "0x60e0_0000", virtio_blk_free_phys_addr = "0x6100_0000", virtio_blk_used_phys_addr = "0x6120_0000" }
+
+[x86_64_generic_net]
+arch = "x86_64"
+microkit_board = "x86_64_generic"
+target = "x86_64-sel4-microkit"
+target_triple = "x86_64-sel4-microkit"
+template = "net-x86.system.template"
+pds = ["net-client", "net-server", "serial-driver", "virtio-pci-driver"]
+qemu = "x86_64_net"
+system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48, virtio_net_bar1_phys_addr = "0xfed2_0000", virtio_net_bar4_phys_addr = "0xfed3_0000", virtio_net_ioapic_pin = 11, virtio_net_ioapic_vector = 50, virtio_net_driver_dma_phys_addr = "0x6000_0000", virtio_net_client_dma_phys_addr = "0x6020_0000", virtio_net_rx_free_phys_addr = "0x6040_0000", virtio_net_rx_used_phys_addr = "0x6060_0000", virtio_net_tx_free_phys_addr = "0x6080_0000", virtio_net_tx_used_phys_addr = "0x60a0_0000" }

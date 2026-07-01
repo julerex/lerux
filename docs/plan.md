@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-01 (Phase 27)
+Last updated: 2026-07-01 (Phase 28)
 
 ## Phase 1 — Bring-up
 
@@ -108,7 +108,7 @@ Last updated: 2026-07-01 (Phase 27)
 | Composed init+virtio | yes | no | no |
 | HTTP over virtio-net | yes | yes | yes |
 | Block IPC service | yes | yes | yes |
-| Net IPC service | yes | no | no |
+| Net IPC service | yes | yes | yes |
 
 Init (`just test-init`) uses PL031 + SP804 drivers from rust-sel4 v4.0.0, which target QEMU aarch64 virt MMIO only. RISC-V virt and x86 PC do not expose those devices in stock QEMU, and there are no equivalent rust-sel4 driver crates yet.
 
@@ -219,6 +219,14 @@ Init (`just test-init`) uses PL031 + SP804 drivers from rust-sel4 v4.0.0, which 
 - [x] `net.system.template` — serial + virtio-net + net-server/client
 - [x] Board `qemu_virt_aarch64_net` (`just test-net`)
 - [x] CI matrix job `net` (20 smoke jobs total)
+
+## Phase 28 — Cross-arch net IPC
+
+- [x] `net-riscv.system.template` / `net-x86.system.template`
+- [x] Boards `qemu_virt_riscv64_net`, `x86_64_generic_net`
+- [x] `virtio-pci-driver` net-only board feature for x86
+- [x] `just test-riscv-net` / `just test-x86-net`
+- [x] CI matrix jobs `riscv-net`, `x86-net` (22 smoke jobs total)
 
 ## Version alignment
 

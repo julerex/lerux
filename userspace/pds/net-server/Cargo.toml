@@ -9,6 +9,8 @@ workspace = true
 
 [features]
 board-qemu_virt_aarch64_net = []
+board-qemu_virt_riscv64_net = []
+board-x86_64_generic_net = []
 
 [dependencies]
 lerux-interface-types = { path = "../../crates/lerux-interface-types" }

@@ -20,11 +20,13 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `qemu_virt_riscv64_echo` | riscv64 | `just test-riscv-echo` | echo + serial |
 | `qemu_virt_riscv64_virtio` | riscv64 | `just test-riscv-virtio` | hello + serial + virtio |
 | `qemu_virt_riscv64_blk` | riscv64 | `just test-riscv-blk` | blk client/server + serial + virtio-blk |
+| `qemu_virt_riscv64_net` | riscv64 | `just test-riscv-net` | net client/server + serial + virtio-net |
 | `qemu_virt_riscv64_http` | riscv64 | `just test-riscv-http` | serial + virtio-net + http-server |
 | `x86_64_generic` | x86_64 | `BOARD=x86_64_generic just test` | hello + serial (COM1) |
 | `x86_64_generic_echo` | x86_64 | `just test-x86-echo` | echo + serial |
 | `x86_64_generic_virtio` | x86_64 | `just test-x86-virtio` | hello + serial + virtio-pci blk/net |
 | `x86_64_generic_blk` | x86_64 | `just test-x86-blk` | blk client/server + serial + virtio-pci blk |
+| `x86_64_generic_net` | x86_64 | `just test-x86-net` | net client/server + serial + virtio-pci net |
 | `x86_64_generic_http` | x86_64 | `just test-x86-http` | serial + virtio-pci net + http-server |
 
 ## SDK boards
@@ -53,10 +55,12 @@ CI sets this via `MICROKIT_BOARDS` in the workflow env.
 | `riscv64` | riscv hello/echo | `-kernel loader.img` |
 | `riscv64_virtio` | riscv virtio | MMIO virtio buses + `disk.img` |
 | `riscv64_blk` | riscv blk | MMIO virtio-blk bus.0 + `disk.img` |
+| `riscv64_net` | riscv net | MMIO virtio-net bus.1 (no `disk.img`) |
 | `riscv64_http` | riscv http | MMIO virtio-net bus.1 + `hostfwd=tcp::18080-:8080` |
 | `x86_64` | x86 hello/echo | `-machine q35` + `-kernel sel4_32.elf` + `-initrd loader.img` |
 | `x86_64_virtio` | x86 virtio | q35 + PCI virtio-blk/net + `disk.img` |
 | `x86_64_blk` | x86 blk | q35 + PCI virtio-blk + `disk.img` |
+| `x86_64_net` | x86 net | q35 + PCI virtio-net (no `disk.img`) |
 | `x86_64_http` | x86 http | q35 + PCI virtio-net + `hostfwd=tcp::18080-:8080` |
 
 ## Composed board
@@ -80,7 +84,7 @@ See [plan.md](plan.md) Phases 15 and 24.
 
 ## Net IPC board
 
-`qemu_virt_aarch64_net` runs `net-server` (virtio-net driver client) and `net-client` (UDP TX over IPC). Smoke expects `lerux-net: IPC ok` after `virtio-net: TX ok`. See [plan.md](plan.md) Phase 27.
+`qemu_virt_aarch64_net`, `qemu_virt_riscv64_net`, and `x86_64_generic_net` run `net-server` (virtio-net driver client) and `net-client` (UDP TX over IPC). Smoke expects `lerux-net: IPC ok` after `virtio-net: TX ok`. See [plan.md](plan.md) Phases 27–28.
 
 ### x86 HTTP inbound (operational notes)
 

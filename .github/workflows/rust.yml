@@ -305,6 +305,10 @@ jobs:
             command: just test-x86-blk
           - id: net
             command: just test-net
+          - id: riscv-net
+            command: just test-riscv-net
+          - id: x86-net
+            command: just test-x86-net
     steps:
       - uses: actions/checkout@v4
 

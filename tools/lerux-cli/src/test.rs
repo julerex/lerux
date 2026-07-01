@@ -172,7 +172,7 @@ pub fn default_expects(board: &str) -> Vec<String> {
                 "lerux-blk: write round-trip ok".into(),
             ]
         }
-        "qemu_virt_aarch64_net" => vec![
+        "qemu_virt_aarch64_net" | "qemu_virt_riscv64_net" | "x86_64_generic_net" => vec![
             "lerux-net: ready".into(),
             "virtio-net: MAC".into(),
             "lerux-net: TX ok".into(),

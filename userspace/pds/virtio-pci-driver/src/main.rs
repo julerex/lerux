@@ -30,7 +30,8 @@ use sel4_microkit::{
 use sel4_microkit_driver_adapters::block::driver::handle_client_request;
 #[cfg(any(
     feature = "board-x86_64_generic_virtio",
-    feature = "board-x86_64_generic_http"
+    feature = "board-x86_64_generic_http",
+    feature = "board-x86_64_generic_net"
 ))]
 use sel4_microkit_driver_adapters::net::driver::HandlerImpl as NetHandlerImpl;
 use sel4_shared_memory::SharedMemoryRef;
@@ -49,7 +50,8 @@ use sel4_shared_ring_buffer_block_io_types::{
 use sel4_virtio_blk::GetBlockDeviceLayoutWrapper;
 #[cfg(any(
     feature = "board-x86_64_generic_virtio",
-    feature = "board-x86_64_generic_http"
+    feature = "board-x86_64_generic_http",
+    feature = "board-x86_64_generic_net"
 ))]
 use sel4_virtio_net::DeviceWrapper;
 #[cfg(any(
@@ -60,6 +62,7 @@ use virtio_drivers::device::blk::*;
 #[cfg(any(
     feature = "board-x86_64_generic_virtio",
     feature = "board-x86_64_generic_http",
+    feature = "board-x86_64_generic_net",
     feature = "board-x86_64_generic_blk"
 ))]
 use virtio_drivers::transport::pci::PciTransport;
@@ -78,7 +81,8 @@ const BLK_QUEUE_SIZE: usize = 4;
 
 #[cfg(any(
     feature = "board-x86_64_generic_virtio",
-    feature = "board-x86_64_generic_http"
+    feature = "board-x86_64_generic_http",
+    feature = "board-x86_64_generic_net"
 ))]
 fn create_net_handler(
     mut net_dev: virtio_drivers::device::net::VirtIONet<HalImpl, PciTransport, 16>,
@@ -156,7 +160,10 @@ fn init() -> BlkHandler {
     create_blk_handler(pci::create_virtio_blk(ioport_id, ioport_addr))
 }
 
-#[cfg(feature = "board-x86_64_generic_http")]
+#[cfg(any(
+    feature = "board-x86_64_generic_http",
+    feature = "board-x86_64_generic_net"
+))]
 #[protection_domain(heap_size = 768 * 1024)]
 fn init() -> NetHandlerImpl<DeviceWrapper<HalImpl, PciTransport>> {
     debug::init().unwrap();

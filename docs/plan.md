@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-06-30 (Phase 24)
+Last updated: 2026-07-01 (Phase 27)
 
 ## Phase 1 — Bring-up
 
@@ -108,6 +108,7 @@ Last updated: 2026-06-30 (Phase 24)
 | Composed init+virtio | yes | no | no |
 | HTTP over virtio-net | yes | yes | yes |
 | Block IPC service | yes | yes | yes |
+| Net IPC service | yes | no | no |
 
 Init (`just test-init`) uses PL031 + SP804 drivers from rust-sel4 v4.0.0, which target QEMU aarch64 virt MMIO only. RISC-V virt and x86 PC do not expose those devices in stock QEMU, and there are no equivalent rust-sel4 driver crates yet.
 
@@ -202,6 +203,22 @@ Init (`just test-init`) uses PL031 + SP804 drivers from rust-sel4 v4.0.0, which 
 - [x] Board `qemu_virt_aarch64_blk_composed` (`just test-blk-composed`)
 - [x] `blk-client` composed-sync: probe block after boot-init notify
 - [x] CI matrix job `blk-composed` (19 smoke jobs total)
+
+## Phase 26 — Block write over IPC
+
+- [x] `BlockRequest::WriteSector` and `BlockResponse::Ok` in `lerux-interface-types`
+- [x] `blk-server` issues virtio write operations; `blk-client` verifies sector-1 round-trip
+- [x] QEMU blk profiles mount `disk.img` read-write (`read-only=off`) for write smoke coverage
+- [x] Smoke expects `lerux-blk: write round-trip ok` on all blk boards (aarch64, RISC-V, x86, composed)
+
+## Phase 27 — Net service over IPC
+
+- [x] `NetRequest` / `NetResponse` in `lerux-interface-types` (UdpTx + Poll async RPC)
+- [x] `net-server` PD — virtio-net ring-buffer client + postcard RPC server
+- [x] `net-client` PD — UDP TX to QEMU user netdev (`10.0.2.2`) via IPC
+- [x] `net.system.template` — serial + virtio-net + net-server/client
+- [x] Board `qemu_virt_aarch64_net` (`just test-net`)
+- [x] CI matrix job `net` (20 smoke jobs total)
 
 ## Version alignment
 

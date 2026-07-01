@@ -20,9 +20,12 @@ use alloc::collections::BTreeMap;
 use core::pin::Pin;
 
 use lerux_logging::{debug, log};
-use sel4_microkit::{
-    memory_region_symbol, protection_domain, Channel, ChannelSet, Handler, Infallible, MessageInfo,
-};
+use sel4_microkit::{memory_region_symbol, protection_domain};
+#[cfg(any(
+    feature = "board-x86_64_generic_virtio",
+    feature = "board-x86_64_generic_blk"
+))]
+use sel4_microkit::{Channel, ChannelSet, Handler, Infallible, MessageInfo};
 #[cfg(any(
     feature = "board-x86_64_generic_virtio",
     feature = "board-x86_64_generic_blk"

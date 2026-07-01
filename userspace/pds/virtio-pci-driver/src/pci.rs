@@ -3,14 +3,16 @@ use lerux_virtio_pci::create_pci_transport_ioport;
 use sel4_microkit::var;
 #[cfg(any(
     feature = "board-x86_64_generic_virtio",
+    feature = "board-x86_64_generic_blk"
+))]
+use virtio_drivers::device::blk::VirtIOBlk;
+#[cfg(any(
+    feature = "board-x86_64_generic_virtio",
     feature = "board-x86_64_generic_http",
     feature = "board-x86_64_generic_net"
 ))]
 use virtio_drivers::device::net::VirtIONet;
-use virtio_drivers::{
-    device::blk::VirtIOBlk,
-    transport::{pci::PciTransport, DeviceType, Transport},
-};
+use virtio_drivers::transport::{pci::PciTransport, DeviceType, Transport};
 
 use crate::config;
 
@@ -43,6 +45,10 @@ pub fn ioport_config() -> (u32, u16) {
     )
 }
 
+#[cfg(any(
+    feature = "board-x86_64_generic_virtio",
+    feature = "board-x86_64_generic_blk"
+))]
 pub fn create_virtio_blk(ioport_id: u32, ioport_addr: u16) -> VirtIOBlk<HalImpl, PciTransport> {
     let transport = create_pci_transport_ioport(
         ioport_id,

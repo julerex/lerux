@@ -156,9 +156,9 @@ pub fn default_expects(board: &str) -> Vec<String> {
             ]
         }
         "qemu_virt_aarch64_blk_composed" => vec![
-            "lerux-init: RTC".into(),
-            "lerux-init: timer ok".into(),
-            "lerux-init: init ok".into(),
+            "lerux-supervisor: RTC".into(),
+            "lerux-supervisor: timer ok".into(),
+            "lerux-supervisor: init ok".into(),
             "lerux-blk: ready".into(),
             "virtio-blk:".into(),
             "lerux-blk: MBR sig".into(),
@@ -173,18 +173,18 @@ pub fn default_expects(board: &str) -> Vec<String> {
             ]
         }
         "qemu_virt_aarch64_net_composed" => vec![
-            "lerux-init: RTC".into(),
-            "lerux-init: timer ok".into(),
-            "lerux-init: init ok".into(),
+            "lerux-supervisor: RTC".into(),
+            "lerux-supervisor: timer ok".into(),
+            "lerux-supervisor: init ok".into(),
             "lerux-net: ready".into(),
             "virtio-net: MAC".into(),
             "lerux-net: TX ok".into(),
             "lerux-net: IPC ok".into(),
         ],
         "qemu_virt_aarch64_ipc_composed" => vec![
-            "lerux-init: RTC".into(),
-            "lerux-init: timer ok".into(),
-            "lerux-init: init ok".into(),
+            "lerux-supervisor: RTC".into(),
+            "lerux-supervisor: timer ok".into(),
+            "lerux-supervisor: init ok".into(),
             "lerux-blk: ready".into(),
             "virtio-blk:".into(),
             "lerux-blk: MBR sig".into(),
@@ -193,6 +193,16 @@ pub fn default_expects(board: &str) -> Vec<String> {
             "virtio-net: MAC".into(),
             "lerux-net: TX ok".into(),
             "lerux-net: IPC ok".into(),
+        ],
+        "qemu_virt_aarch64_workstation" => vec![
+            "lerux-supervisor: RTC".into(),
+            "lerux-supervisor: timer ok".into(),
+            "lerux-supervisor: init ok".into(),
+            "lerux-fs: ready".into(),
+            "virtio-blk:".into(),
+            "lerux-net: ready".into(),
+            "virtio-net: MAC".into(),
+            "lerux-supervisor: ready".into(),
         ],
         "qemu_virt_aarch64_net" | "qemu_virt_riscv64_net" | "x86_64_generic_net" => vec![
             "lerux-net: ready".into(),
@@ -211,9 +221,9 @@ pub fn default_expects(board: &str) -> Vec<String> {
             "lerux-fs: round-trip ok".into(),
         ],
         "qemu_virt_aarch64_init" => vec![
-            "lerux-init: RTC".into(),
-            "lerux-init: timer ok".into(),
-            "lerux-init: init ok".into(),
+            "lerux-supervisor: RTC".into(),
+            "lerux-supervisor: timer ok".into(),
+            "lerux-supervisor: init ok".into(),
         ],
         "qemu_virt_aarch64_virtio" | "qemu_virt_riscv64_virtio" | "x86_64_generic_virtio" => {
             vec![
@@ -226,9 +236,9 @@ pub fn default_expects(board: &str) -> Vec<String> {
             ]
         }
         "qemu_virt_aarch64_composed" => vec![
-            "lerux-init: RTC".into(),
-            "lerux-init: timer ok".into(),
-            "lerux-init: init ok".into(),
+            "lerux-supervisor: RTC".into(),
+            "lerux-supervisor: timer ok".into(),
+            "lerux-supervisor: init ok".into(),
             "lerux: Hello from Rust on seL4 Microkit!".into(),
             "virtio-blk:".into(),
             "virtio-net: MAC".into(),
@@ -240,9 +250,9 @@ pub fn default_expects(board: &str) -> Vec<String> {
             vec!["lerux-http: listening".into()]
         }
         "qemu_virt_aarch64_http_composed" => vec![
-            "lerux-init: RTC".into(),
-            "lerux-init: timer ok".into(),
-            "lerux-init: init ok".into(),
+            "lerux-supervisor: RTC".into(),
+            "lerux-supervisor: timer ok".into(),
+            "lerux-supervisor: init ok".into(),
             "lerux-http: listening".into(),
         ],
         _ => vec!["lerux: Hello from Rust on seL4 Microkit!".into()],

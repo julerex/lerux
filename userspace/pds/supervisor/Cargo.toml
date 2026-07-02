@@ -1,5 +1,5 @@
 [package]
-name = "boot-init"
+name = "supervisor"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
@@ -14,9 +14,12 @@ board-qemu_virt_aarch64_http_composed = []
 board-qemu_virt_aarch64_blk_composed = []
 board-qemu_virt_aarch64_net_composed = []
 board-qemu_virt_aarch64_ipc_composed = []
+board-qemu_virt_aarch64_workstation = []
 
 [dependencies]
 lerux-logging = { path = "../../crates/lerux-logging", features = ["serial"] }
+lerux-interface-types = { path = "../../crates/lerux-interface-types" }
+lerux-ipc = { path = "../../crates/lerux-ipc" }
 rtcc = "0.4"
 sel4-driver-interfaces = { workspace = true }
 sel4-microkit = { workspace = true }

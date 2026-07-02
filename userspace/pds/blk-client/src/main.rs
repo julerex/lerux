@@ -9,7 +9,7 @@ use sel4_microkit::{protection_domain, Channel, ChannelSet, Handler, Infallible}
 const SERIAL_DRIVER: Channel = Channel::new(0);
 const BLK_SERVER: Channel = Channel::new(1);
 #[cfg(feature = "composed-sync")]
-const BOOT_INIT: Channel = Channel::new(2);
+const SUPERVISOR: Channel = Channel::new(2);
 #[cfg(feature = "composed-chain")]
 const NET_CLIENT: Channel = Channel::new(3);
 
@@ -114,7 +114,7 @@ impl Handler for HandlerImpl {
         channels: ChannelSet,
     ) -> Result<(), Self::Error> {
         #[cfg(feature = "composed-sync")]
-        if self.blk_pending && channels.contains(BOOT_INIT) {
+        if self.blk_pending && channels.contains(SUPERVISOR) {
             probe_blk();
             self.blk_pending = false;
             #[cfg(feature = "composed-chain")]

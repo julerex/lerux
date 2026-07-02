@@ -31,7 +31,7 @@ const AARCH64_CRATES: &[ClippyCrate<'_>] = &[
         feature: Some("board-qemu_virt_aarch64_http_composed"),
     },
     ClippyCrate {
-        name: "boot-init",
+        name: "supervisor",
         feature: Some("board-qemu_virt_aarch64_http_composed"),
     },
     ClippyCrate {
@@ -107,7 +107,7 @@ const AARCH64_CRATES: &[ClippyCrate<'_>] = &[
         feature: Some("board-qemu_virt_aarch64_ipc_composed"),
     },
     ClippyCrate {
-        name: "boot-init",
+        name: "supervisor",
         feature: Some("board-qemu_virt_aarch64_ipc_composed"),
     },
     ClippyCrate {
@@ -117,6 +117,18 @@ const AARCH64_CRATES: &[ClippyCrate<'_>] = &[
     ClippyCrate {
         name: "net-client",
         feature: Some("board-qemu_virt_aarch64_ipc_composed"),
+    },
+    ClippyCrate {
+        name: "supervisor",
+        feature: Some("board-qemu_virt_aarch64_workstation"),
+    },
+    ClippyCrate {
+        name: "fs-server",
+        feature: Some("board-qemu_virt_aarch64_workstation"),
+    },
+    ClippyCrate {
+        name: "net-server",
+        feature: Some("board-qemu_virt_aarch64_workstation"),
     },
 ];
 

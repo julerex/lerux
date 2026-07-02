@@ -11,7 +11,7 @@ members = [
     "userspace/pds/net-server",
     "userspace/pds/net-client",
     "userspace/pds/fetch-client",
-    "userspace/pds/boot-init",
+    "userspace/pds/supervisor",
     "userspace/pds/pl031-driver",
     "userspace/pds/sp804-driver",
     "userspace/pds/virtio-blk-driver",

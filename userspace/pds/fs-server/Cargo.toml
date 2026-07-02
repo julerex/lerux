@@ -9,6 +9,7 @@ workspace = true
 
 [features]
 board-qemu_virt_aarch64_fs = []
+board-qemu_virt_aarch64_workstation = []
 
 [dependencies]
 async-unsync = { version = "0.3.0", default-features = false }

@@ -74,7 +74,7 @@ microkit_board = "qemu_virt_aarch64"
 target = "aarch64-sel4-microkit"
 target_triple = "aarch64-sel4-microkit"
 template = "init.system.template"
-pds = ["boot-init", "serial-driver", "pl031-driver", "sp804-driver"]
+pds = ["supervisor", "serial-driver", "pl031-driver", "sp804-driver"]
 qemu = "aarch64_init"
 system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, pl031_mmio_phys_addr = "0x9010000", pl031_irq = 34, sp804_mmio_phys_addr = "0x90d0000", sp804_irq = 43 }
 
@@ -154,7 +154,7 @@ microkit_board = "qemu_virt_aarch64"
 target = "aarch64-sel4-microkit"
 target_triple = "aarch64-sel4-microkit"
 template = "http-composed.system.template"
-pds = ["boot-init", "http-server", "serial-driver", "pl031-driver", "sp804-driver", "virtio-net-driver"]
+pds = ["supervisor", "http-server", "serial-driver", "pl031-driver", "sp804-driver", "virtio-net-driver"]
 qemu = "aarch64_http_composed"
 system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, pl031_mmio_phys_addr = "0x9010000", pl031_irq = 34, sp804_mmio_phys_addr = "0x90d0000", sp804_irq = 43, virtio_mmio_phys_addr = "0xa003000", virtio_net_irq = 79 }
 
@@ -164,7 +164,7 @@ microkit_board = "qemu_virt_aarch64"
 target = "aarch64-sel4-microkit"
 target_triple = "aarch64-sel4-microkit"
 template = "blk-composed.system.template"
-pds = ["boot-init", "blk-client", "blk-server", "serial-driver", "pl031-driver", "sp804-driver", "virtio-blk-driver"]
+pds = ["supervisor", "blk-client", "blk-server", "serial-driver", "pl031-driver", "sp804-driver", "virtio-blk-driver"]
 qemu = "aarch64_blk_composed"
 system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, pl031_mmio_phys_addr = "0x9010000", pl031_irq = 34, sp804_mmio_phys_addr = "0x90d0000", sp804_irq = 43, virtio_mmio_phys_addr = "0xa003000", virtio_blk_irq = 78 }
 
@@ -174,7 +174,7 @@ microkit_board = "qemu_virt_aarch64"
 target = "aarch64-sel4-microkit"
 target_triple = "aarch64-sel4-microkit"
 template = "net-composed.system.template"
-pds = ["boot-init", "net-client", "net-server", "serial-driver", "pl031-driver", "sp804-driver", "virtio-net-driver"]
+pds = ["supervisor", "net-client", "net-server", "serial-driver", "pl031-driver", "sp804-driver", "virtio-net-driver"]
 qemu = "aarch64_net_composed"
 system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, pl031_mmio_phys_addr = "0x9010000", pl031_irq = 34, sp804_mmio_phys_addr = "0x90d0000", sp804_irq = 43, virtio_mmio_phys_addr = "0xa003000", virtio_net_irq = 79 }
 
@@ -184,7 +184,7 @@ microkit_board = "qemu_virt_aarch64"
 target = "aarch64-sel4-microkit"
 target_triple = "aarch64-sel4-microkit"
 template = "ipc-composed.system.template"
-pds = ["boot-init", "blk-client", "blk-server", "net-client", "net-server", "serial-driver", "pl031-driver", "sp804-driver", "virtio-blk-driver", "virtio-net-driver"]
+pds = ["supervisor", "blk-client", "blk-server", "net-client", "net-server", "serial-driver", "pl031-driver", "sp804-driver", "virtio-blk-driver", "virtio-net-driver"]
 qemu = "aarch64_ipc_composed"
 system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, pl031_mmio_phys_addr = "0x9010000", pl031_irq = 34, sp804_mmio_phys_addr = "0x90d0000", sp804_irq = 43, virtio_mmio_phys_addr = "0xa003000", virtio_blk_irq = 78, virtio_net_irq = 79 }
 
@@ -194,8 +194,18 @@ microkit_board = "qemu_virt_aarch64"
 target = "aarch64-sel4-microkit"
 target_triple = "aarch64-sel4-microkit"
 template = "composed.system.template"
-pds = ["boot-init", "hello", "serial-driver", "pl031-driver", "sp804-driver", "virtio-blk-driver", "virtio-net-driver"]
+pds = ["supervisor", "hello", "serial-driver", "pl031-driver", "sp804-driver", "virtio-blk-driver", "virtio-net-driver"]
 qemu = "aarch64_composed"
+system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, pl031_mmio_phys_addr = "0x9010000", pl031_irq = 34, sp804_mmio_phys_addr = "0x90d0000", sp804_irq = 43, virtio_mmio_phys_addr = "0xa003000", virtio_blk_irq = 78, virtio_net_irq = 79 }
+
+[qemu_virt_aarch64_workstation]
+arch = "aarch64"
+microkit_board = "qemu_virt_aarch64"
+target = "aarch64-sel4-microkit"
+target_triple = "aarch64-sel4-microkit"
+template = "workstation.system.template"
+pds = ["supervisor", "fs-server", "net-server", "serial-driver", "pl031-driver", "sp804-driver", "virtio-blk-driver", "virtio-net-driver"]
+qemu = "aarch64_workstation"
 system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, pl031_mmio_phys_addr = "0x9010000", pl031_irq = 34, sp804_mmio_phys_addr = "0x90d0000", sp804_irq = 43, virtio_mmio_phys_addr = "0xa003000", virtio_blk_irq = 78, virtio_net_irq = 79 }
 
 [x86_64_generic]

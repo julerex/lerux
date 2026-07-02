@@ -52,7 +52,7 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 : One PD crate plus its interface-types version and an optional profile fragment. “Installing” a package means adding it to a profile and rebuilding the static image — Microkit does not load arbitrary ELFs at runtime.
 
 **Supervisor**
-: Planned evolution of `boot-init` (Phase 33): RTC/timer, bring up drivers and services (FS, net), notify app PDs in dependency order, expose reboot/status IPC.
+: Evolution of `boot-init` (Phase 33): `supervisor` PD provides RTC/timer, brings up FS/net services, performs ordered app notify (generalizes composed-sync), exposes reboot/status IPC.
 
 **Ported app checklist** (new PD that users interact with):
 

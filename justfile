@@ -155,6 +155,10 @@ test-net-composed:
 test-ipc-composed:
     BOARD=qemu_virt_aarch64_ipc_composed just test
 
+# Workstation: supervisor + fs + net over virtio (Phase 33)
+test-workstation:
+    BOARD=qemu_virt_aarch64_workstation just test
+
 # HTTP smoke: GET / on virtio-net (host port 18080 -> guest :8080)
 test-http:
     BOARD=qemu_virt_aarch64_http just test

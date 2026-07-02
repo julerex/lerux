@@ -22,22 +22,22 @@
         <irq irq="{sp804_irq}" id="0" />
     </protection_domain>
 
-    <protection_domain name="boot_init" priority="1" stack_size="0x10_000">
-        <program_image path="boot-init.elf" />
+    <protection_domain name="supervisor" priority="1" stack_size="0x10_000">
+        <program_image path="supervisor.elf" />
     </protection_domain>
 
     <channel>
         <end pd="serial_driver" id="1" />
-        <end pd="boot_init" id="0" pp="true" />
+        <end pd="supervisor" id="0" pp="true" />
     </channel>
 
     <channel>
         <end pd="pl031_driver" id="1" />
-        <end pd="boot_init" id="1" pp="true" />
+        <end pd="supervisor" id="1" pp="true" />
     </channel>
 
     <channel>
         <end pd="sp804_driver" id="1" />
-        <end pd="boot_init" id="2" pp="true" />
+        <end pd="supervisor" id="2" pp="true" />
     </channel>
 </system>

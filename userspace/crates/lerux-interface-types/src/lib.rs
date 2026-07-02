@@ -290,6 +290,23 @@ pub enum FsResponse {
     },
 }
 
+/// Supervisor service requests (Phase 33).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SupervisorRequest {
+    Reboot,
+    ListServices,
+    ServiceStatus { id: u8 },
+}
+
+/// Supervisor service responses (Phase 33).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SupervisorResponse {
+    Ok,
+    Error,
+    Services { count: u8 },
+    Status { ready: bool },
+}
+
 /// Network service responses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[expect(

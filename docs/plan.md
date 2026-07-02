@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-02 (Phase 32)
+Last updated: 2026-07-02 (Phase 33)
 
 ## Phase 1 — Bring-up
 
@@ -278,10 +278,12 @@ Tracer-bullet order: FS (32) → TCP/fetch (31) → shell (34) → supervisor (3
 
 ## Phase 33 — Supervisor + service graph
 
-- [ ] Evolve `boot-init` → `supervisor` PD: RTC/timer, driver ready, FS mount, net up, ordered app notify (generalize composed-sync)
-- [ ] `SupervisorRequest` / `SupervisorResponse` (`Reboot`, `ListServices`, `ServiceStatus`)
-- [ ] `workstation.system.template`: supervisor + fs-server + net-server + drivers
-- [ ] Board `qemu_virt_aarch64_workstation` (`just test-workstation`); smoke expects `lerux-supervisor: ready`
+- [x] Evolve `boot-init` → `supervisor` PD (rename + workspace): RTC/timer + generalized init
+- [x] `SupervisorRequest` / `SupervisorResponse` (`Reboot`, `ListServices`, `ServiceStatus`)
+- [x] `workstation.system.template`: supervisor + fs-server + net-server + drivers (with IPC channels)
+- [x] Board `qemu_virt_aarch64_workstation` (`just test-workstation`); smoke expects `lerux-supervisor: ready`
+- [ ] Supervisor exercises FS mount + net up in init; stub service IPC handlers (Reboot etc) for future shell/apps
+- [ ] Generalize notify to apps via supervisor (beyond current composed-sync channels)
 
 ## Phase 34 — Shell and core utilities
 

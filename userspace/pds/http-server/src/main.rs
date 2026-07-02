@@ -51,16 +51,42 @@ fn prime_net_stack(http_net: &mut net::HttpNet) {
 }
 
 #[cfg(feature = "board-x86_64_generic_http")]
+fn kick_virtio_driver() {
+    NET_DRIVER.notify();
+}
+
+#[cfg(feature = "board-x86_64_generic_http")]
 fn wait_for_inbound(http_net: &mut net::HttpNet) {
     log::info!("lerux-http: waiting for GET / (host: curl http://127.0.0.1:18080/)");
     while !http_net.is_served() {
+        kick_virtio_driver();
         http_net.poll();
     }
     for _ in 0..500 {
+        kick_virtio_driver();
         http_net.poll();
     }
 }
 
+#[cfg(feature = "board-x86_64_generic_http")]
+fn drive_net(http_net: &mut net::HttpNet) {
+    let mut flush_after_serve = 0;
+    for _ in 0..4000 {
+        kick_virtio_driver();
+        http_net.poll();
+        if http_net.is_served() {
+            flush_after_serve = 500;
+        }
+        if flush_after_serve > 0 {
+            flush_after_serve -= 1;
+            if flush_after_serve == 0 {
+                break;
+            }
+        }
+    }
+}
+
+#[cfg(not(feature = "board-x86_64_generic_http"))]
 fn drive_net(http_net: &mut net::HttpNet) {
     http_net.poll();
     if http_net.is_served() {

@@ -244,26 +244,35 @@ impl HttpNet {
     }
 
     pub fn poll(&mut self) {
-        loop {
-            self.device.poll();
-            let arena = unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_ARENA) };
-            let mut sockets = SocketSet::new(&mut arena.storage[..]);
-            self.ensure_listening_socket(&mut sockets);
-            if arena.initialized {
-                self.log_listening();
-                self.prime_udp_tx(&mut sockets);
-                if !self.served {
-                    self.serve_http_request(&mut sockets);
+        #[cfg(feature = "board-x86_64_generic_http")]
+        const ROUNDS: usize = 32;
+        #[cfg(not(feature = "board-x86_64_generic_http"))]
+        const ROUNDS: usize = 1;
+
+        for _ in 0..ROUNDS {
+            loop {
+                self.device.poll();
+                let arena = unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_ARENA) };
+                let mut sockets = SocketSet::new(&mut arena.storage[..]);
+                self.ensure_listening_socket(&mut sockets);
+                if arena.initialized {
+                    self.log_listening();
+                    self.prime_udp_tx(&mut sockets);
+                    if !self.served {
+                        self.serve_http_request(&mut sockets);
+                    }
+                }
+                self.iface
+                    .poll(Instant::ZERO, &mut self.device, &mut sockets);
+                if self.served {
+                    return;
+                }
+                if !self.device.poll() {
+                    break;
                 }
             }
-            self.iface
-                .poll(Instant::ZERO, &mut self.device, &mut sockets);
-            if self.served {
-                break;
-            }
-            if !self.device.poll() {
-                break;
-            }
+            #[cfg(feature = "board-x86_64_generic_http")]
+            NET_DRIVER.notify();
         }
     }
 

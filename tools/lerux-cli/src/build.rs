@@ -57,7 +57,7 @@ pub fn build_pd(
         .join("support/targets")
         .join(format!("{}.json", board_cfg.target_triple));
     let board_build = board_build_dir(root, board, build_dir);
-    let target_dir = shared_target_dir(root, build_dir, &board_cfg.target_triple);
+    let target_dir = shared_target_dir(root, build_dir);
 
     apply_libclang_env(root);
     ensure_dir(&board_build)?;
@@ -95,7 +95,10 @@ pub fn build_pd(
         bail!("cargo build -p {crate_name} failed");
     }
 
-    let elf_src = target_dir.join("release").join(format!("{crate_name}.elf"));
+    let elf_src = target_dir
+        .join(&board_cfg.target_triple)
+        .join("release")
+        .join(format!("{crate_name}.elf"));
     let elf_dst = board_build.join(format!("{crate_name}.elf"));
     std::fs::copy(&elf_src, &elf_dst)
         .with_context(|| format!("copy {} to {}", elf_src.display(), elf_dst.display()))?;

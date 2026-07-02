@@ -257,7 +257,7 @@ fn clippy_arch(
     let target_spec = root
         .join("support/targets")
         .join(format!("{}.json", profile.target_triple));
-    let target_dir = shared_target_dir(root, build_dir, profile.target_triple);
+    let target_dir = shared_target_dir(root, build_dir);
     ensure_dir(&target_dir)?;
 
     let include = format!("{sdk}/board/{}/{config}/include", profile.microkit_board);

@@ -171,8 +171,24 @@ test-all:
 disk-img:
     {{lerux}} disk-img
 
+# Remove all build artifacts (shared target cache + per-board outputs).
 clean:
     rm -rf {{build_dir}} target deps/.sdk-path
+
+# Drop per-board outputs (system.system, loader.img, *.elf) but keep build/target/.
+prune-boards:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for dir in {{build_dir}}/*; do
+        [[ -d "$dir" ]] || continue
+        base="$(basename "$dir")"
+        [[ "$base" == "target" || "$base" == "host" ]] && continue
+        rm -rf "$dir"
+    done
+
+# Remove legacy per-arch clippy target trees (pre shared-target layout).
+clean-legacy:
+    rm -rf {{build_dir}}/clippy
 
 clean-deps:
     rm -rf deps/workspace deps/.sdk-path

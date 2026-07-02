@@ -233,10 +233,10 @@ jobs:
         uses: actions/cache/restore@v4
         id: clippy-cache
         with:
-          path: build/clippy
-          key: clippy-${{ hashFiles('Cargo.lock') }}
+          path: build/target
+          key: cargo-target-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            clippy-
+            cargo-target-
 
       - name: Cross-target clippy
         id: clippy
@@ -254,8 +254,8 @@ jobs:
         if: always() && steps.clippy-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
-          path: build/clippy
-          key: clippy-${{ hashFiles('Cargo.lock') }}
+          path: build/target
+          key: cargo-target-${{ hashFiles('Cargo.lock') }}
 
   smoke:
     needs: sdk
@@ -266,56 +266,82 @@ jobs:
       matrix:
         include:
           - id: aarch64
+            board: qemu_virt_aarch64
             command: just test
           - id: x86_64
+            board: x86_64_generic
             command: BOARD=x86_64_generic just test
           - id: riscv64
+            board: qemu_virt_riscv64
             command: just test-riscv
           - id: virtio
+            board: qemu_virt_aarch64_virtio
             command: just disk-img && just test-virtio
           - id: echo
+            board: qemu_virt_aarch64_echo
             command: just test-echo
           - id: x86-echo
+            board: x86_64_generic_echo
             command: just test-x86-echo
           - id: riscv-echo
+            board: qemu_virt_riscv64_echo
             command: just test-riscv-echo
           - id: riscv-virtio
+            board: qemu_virt_riscv64_virtio
             command: just disk-img && just test-riscv-virtio
           - id: init
+            board: qemu_virt_aarch64_init
             command: just test-init
           - id: composed
+            board: qemu_virt_aarch64_composed
             command: just disk-img && just test-composed
           - id: blk-composed
+            board: qemu_virt_aarch64_blk_composed
             command: just disk-img && just test-blk-composed
           - id: http
+            board: qemu_virt_aarch64_http
             command: just test-http
           - id: http-composed
+            board: qemu_virt_aarch64_http_composed
             command: just test-http-composed
           - id: x86-http
+            board: x86_64_generic_http
             command: just test-x86-http
           - id: riscv-http
+            board: qemu_virt_riscv64_http
             command: just test-riscv-http
           - id: x86-virtio
+            board: x86_64_generic_virtio
             command: just disk-img && just test-x86-virtio
           - id: blk
+            board: qemu_virt_aarch64_blk
             command: just test-blk
           - id: riscv-blk
+            board: qemu_virt_riscv64_blk
             command: just test-riscv-blk
           - id: x86-blk
+            board: x86_64_generic_blk
             command: just test-x86-blk
           - id: net
+            board: qemu_virt_aarch64_net
             command: just test-net
           - id: fetch
+            board: qemu_virt_aarch64_fetch
             command: just test-fetch
           - id: fs
+            board: qemu_virt_aarch64_fs
             command: just disk-img && just test-fs
           - id: net-composed
+            board: qemu_virt_aarch64_net_composed
             command: just test-net-composed
           - id: ipc-composed
+            board: qemu_virt_aarch64_ipc_composed
             command: just disk-img && just test-ipc-composed
           - id: riscv-net
+            board: qemu_virt_riscv64_net
             command: just test-riscv-net
           - id: x86-net
+            board: x86_64_generic_net
             command: just test-x86-net
     steps:
       - uses: actions/checkout@v4
@@ -348,15 +374,22 @@ jobs:
           find "${sdk}/bin" -type f -exec chmod a+x {} +
           echo "/work/${sdk}" > deps/.sdk-path
 
-      - name: Restore Cargo build cache
+      - name: Restore shared Cargo target cache
         uses: actions/cache/restore@v4
-        id: build-cache
         with:
-          path: |
-            build
-          key: build-${{ matrix.id }}-${{ hashFiles('Cargo.lock') }}
+          path: build/target
+          key: cargo-target-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            build-${{ matrix.id }}-
+            cargo-target-
+
+      - name: Restore board build cache
+        uses: actions/cache/restore@v4
+        id: board-cache
+        with:
+          path: build/${{ matrix.board }}
+          key: board-${{ matrix.id }}-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            board-${{ matrix.id }}-
 
       - name: Restore SP804 QEMU cache
         if: matrix.id == 'init' || matrix.id == 'composed' || matrix.id == 'blk-composed' || matrix.id == 'http-composed' || matrix.id == 'net-composed' || matrix.id == 'ipc-composed'
@@ -393,9 +426,16 @@ jobs:
             '
           sudo chown -R "$(id -u):$(id -g)" build deps
 
-      - name: Save Cargo build cache
-        if: always() && steps.build-cache.outputs.cache-hit != 'true'
+      - name: Save shared Cargo target cache
+        if: always()
         uses: actions/cache/save@v4
         with:
-          path: build
-          key: build-${{ matrix.id }}-${{ hashFiles('Cargo.lock') }}
+          path: build/target
+          key: cargo-target-${{ hashFiles('Cargo.lock') }}
+
+      - name: Save board build cache
+        if: always() && steps.board-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: build/${{ matrix.board }}
+          key: board-${{ matrix.id }}-${{ hashFiles('Cargo.lock') }}

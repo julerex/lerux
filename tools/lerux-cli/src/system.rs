@@ -33,3 +33,8 @@ pub fn system_file(root: &Path, board: &str, build_dir: &str) -> PathBuf {
 pub fn board_build_dir(root: &Path, board: &str, build_dir: &str) -> PathBuf {
     root.join(build_dir).join(board)
 }
+
+/// Shared Cargo `target` directory for a cross-compile triple (all boards on one arch).
+pub fn shared_target_dir(root: &Path, build_dir: &str, target_triple: &str) -> PathBuf {
+    root.join(build_dir).join("target").join(target_triple)
+}

@@ -1,2 +1,6 @@
+[build]
+# Keep host (lerux-cli) artifacts out of repo-root target/.
+target-dir = "build/host"
+
 [env]
 RUSTC_BOOTSTRAP = "1"

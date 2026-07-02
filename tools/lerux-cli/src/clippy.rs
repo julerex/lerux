@@ -6,6 +6,7 @@ use crate::{
     build_sdk::sdk_path,
     libclang::apply_libclang_env,
     process::{ensure_dir, path_str},
+    system::shared_target_dir,
 };
 
 struct ClippyCrate<'a> {
@@ -256,11 +257,7 @@ fn clippy_arch(
     let target_spec = root
         .join("support/targets")
         .join(format!("{}.json", profile.target_triple));
-    let target_dir = root
-        .join(build_dir)
-        .join("clippy")
-        .join(profile.id)
-        .join("target");
+    let target_dir = shared_target_dir(root, build_dir, profile.target_triple);
     ensure_dir(&target_dir)?;
 
     let include = format!("{sdk}/board/{}/{config}/include", profile.microkit_board);

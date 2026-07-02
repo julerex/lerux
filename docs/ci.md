@@ -60,8 +60,8 @@ Local mirror: `just test-all` (requires full SDK; creates `support/disk.img` onc
 | Workspace | `deps/versions.toml`, `tools/lerux-cli` | sdk |
 | SDK | versions + `SDK_CACHE_SUFFIX` | sdk |
 | SP804 QEMU | patch + `install-qemu-sp804.sh` | sdk (build), smoke init/composed/blk-composed/http-composed/net-composed/ipc-composed (restore) |
-| Per-smoke `build/` | `Cargo.lock` + matrix job id | smoke |
-| `build/clippy/` | `Cargo.lock` | check-pd |
+| Shared `build/target/` | `Cargo.lock` | check-pd, smoke (all jobs) |
+| Per-smoke `build/<board>/` | `Cargo.lock` + matrix job id | smoke |
 
 SP804 QEMU is built once in the **sdk** job so `init`, `composed`, `blk-composed`, `http-composed`, and `net-composed` do not each cold-build QEMU (~4 min). Cache paths include install prefix, source tree, and tarball.
 

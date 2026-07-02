@@ -7,7 +7,7 @@ use crate::{
     build_sdk::sdk_path,
     libclang::apply_libclang_env,
     process::{ensure_dir, path_str, run_inherit},
-    system::{board_build_dir, generate_system, system_file},
+    system::{board_build_dir, generate_system, shared_target_dir, system_file},
 };
 
 const BOARD_FEATURE_CRATES: &[&str] = &[
@@ -57,9 +57,11 @@ pub fn build_pd(
         .join("support/targets")
         .join(format!("{}.json", board_cfg.target_triple));
     let board_build = board_build_dir(root, board, build_dir);
+    let target_dir = shared_target_dir(root, build_dir, &board_cfg.target_triple);
 
     apply_libclang_env(root);
     ensure_dir(&board_build)?;
+    ensure_dir(&target_dir)?;
 
     let mut cmd = Command::new("cargo");
     cmd.current_dir(root);
@@ -69,7 +71,7 @@ pub fn build_pd(
     }
     cmd.args([
         "--target-dir",
-        &path_str(&board_build.join("target")),
+        &path_str(&target_dir),
         "--target",
         &path_str(&target_spec),
         "-Z",
@@ -93,11 +95,7 @@ pub fn build_pd(
         bail!("cargo build -p {crate_name} failed");
     }
 
-    let elf_src = board_build
-        .join("target")
-        .join(&board_cfg.target_triple)
-        .join("release")
-        .join(format!("{crate_name}.elf"));
+    let elf_src = target_dir.join("release").join(format!("{crate_name}.elf"));
     let elf_dst = board_build.join(format!("{crate_name}.elf"));
     std::fs::copy(&elf_src, &elf_dst)
         .with_context(|| format!("copy {} to {}", elf_src.display(), elf_dst.display()))?;

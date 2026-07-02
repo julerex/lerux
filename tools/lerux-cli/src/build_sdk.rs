@@ -43,7 +43,11 @@ pub fn build_sdk(root: &Path) -> Result<()> {
             prepend_path(&bin);
         }
         if !riscv_gcc_ok() {
-            bail!("riscv64-unknown-elf-gcc 13+ not found after install attempt");
+            bail!(
+                "riscv64-unknown-elf-gcc 13+ not found after install attempt \
+                 (on PATH={})",
+                std::env::var("PATH").unwrap_or_default()
+            );
         }
     }
 

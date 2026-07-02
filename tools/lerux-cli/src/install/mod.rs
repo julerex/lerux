@@ -74,17 +74,22 @@ pub fn install_riscv_toolchain(root: &Path) -> Result<PathBuf> {
     }
 
     let xpack_url = "https://github.com/xpack-dev-tools/riscv-none-elf-gcc-xpack/releases/download/v13.2.0-2/xpack-riscv-none-elf-gcc-13.2.0-2-linux-x64.tar.gz";
-    let xpack_dir = toolchains.join("xpack-riscv-none-elf-gcc-13.2.0-2");
     let tmp = tempfile::NamedTempFile::new().context("temp file")?;
     download(xpack_url, tmp.path())?;
     deb::extract_tar_gz(tmp.path(), &toolchains)?;
 
+    let xpack_dir = find_dir(&toolchains, "xpack-riscv-none-elf-gcc-*")
+        .context("xPack RISC-V toolchain install failed")?;
     let xpack_gcc = xpack_dir.join("bin/riscv-none-elf-gcc");
     if !xpack_gcc.is_file() {
         bail!("xPack RISC-V toolchain install failed");
     }
 
     ensure_dir(&wrapper_dir)?;
+    let xpack_leaf = xpack_dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .context("xPack directory name")?;
     let tools = [
         ("gcc", "-march=rv64imafdc -mabi=lp64d"),
         ("g++", "-march=rv64imafdc -mabi=lp64d"),
@@ -101,8 +106,14 @@ pub fn install_riscv_toolchain(root: &Path) -> Result<PathBuf> {
     for (tool, extra) in tools {
         let wrapper = wrapper_dir.join(format!("riscv64-unknown-elf-{tool}"));
         let script = format!(
-            "#!/usr/bin/env bash\nset -euo pipefail\nexec \"{}\" {extra} \"$@\"\n",
-            xpack_dir.join(format!("riscv-none-elf-{tool}")).display(),
+            concat!(
+                "#!/usr/bin/env bash\n",
+                "set -euo pipefail\n",
+                "toolchains_root=\"$(cd \"$(dirname \"${{BASH_SOURCE[0]}}\")/../..\" && pwd)\"\n",
+                "exec \"${{toolchains_root}}/{xpack_leaf}/bin/riscv-none-elf-{tool}\" {extra} \"$@\"\n"
+            ),
+            xpack_leaf = xpack_leaf,
+            tool = tool,
             extra = extra
         );
         std::fs::write(&wrapper, script)?;

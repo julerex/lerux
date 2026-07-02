@@ -2,7 +2,7 @@
 FROM debian:bookworm
 
 RUN apt-get update -q && apt-get install -y --no-install-recommends \
-    build-essential curl git ca-certificates \
+    bash build-essential curl git ca-certificates \
     cmake ninja-build device-tree-compiler libxml2-utils \
     python3 python3-venv python3-pip \
     qemu-system-arm qemu-system-x86 qemu-system-misc qemu-utils ipxe-qemu \
@@ -35,6 +35,9 @@ COPY userspace/crates /work/userspace/crates
 COPY Cargo.toml /work/Cargo.toml
 COPY Cargo.lock /work/Cargo.lock
 WORKDIR /work
-RUN cargo build -q -p lerux-cli && cargo run -q -p lerux-cli -- install riscv-toolchain
-ENV PATH="/work/deps/toolchains/riscv64-unknown-elf/bin:${PATH}"
+# Install under /opt so a bind-mounted /work checkout does not hide the toolchain in CI.
+RUN cargo build -q -p lerux-cli && \
+    cargo run -q -p lerux-cli -- install riscv-toolchain && \
+    mv deps/toolchains /opt/lerux-toolchains
+ENV PATH="/opt/lerux-toolchains/riscv64-unknown-elf/bin:${PATH}"
 RUN rustup show

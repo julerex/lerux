@@ -305,6 +305,8 @@ jobs:
             command: just test-x86-blk
           - id: net
             command: just test-net
+          - id: fetch
+            command: just test-fetch
           - id: net-composed
             command: just test-net-composed
           - id: ipc-composed

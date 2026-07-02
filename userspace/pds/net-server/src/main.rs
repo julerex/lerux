@@ -16,7 +16,7 @@ const CLIENT: Channel = Channel::new(2);
 
 struct HandlerImpl {
     net: net::NetStack,
-    completed_ok: bool,
+    completed: Option<NetResponse>,
 }
 
 #[protection_domain(heap_size = 512 * 1024)]
@@ -40,37 +40,27 @@ fn init() -> HandlerImpl {
     log::info!("lerux-net: ready");
     HandlerImpl {
         net: net_stack,
-        completed_ok: false,
+        completed: None,
     }
 }
 
 impl HandlerImpl {
-    fn handle_udp_tx(
-        &mut self,
-        payload_len: u8,
-        payload: [u8; lerux_interface_types::MAX_NET_UDP_PAYLOAD],
-    ) -> NetResponse {
-        self.net.queue_udp_tx(payload_len, payload);
-        NetResponse::Pending
-    }
-
     fn handle_poll(&mut self) -> NetResponse {
-        if self.completed_ok {
-            self.completed_ok = false;
-            return NetResponse::Ok;
+        if let Some(resp) = self.completed.take() {
+            return resp;
+        }
+        if let Some(resp) = self.net.take_completed() {
+            return resp;
         }
         NET_DRIVER.notify();
         self.net.poll();
-        if self.net.is_tx_done() {
-            self.completed_ok = true;
-        }
-        NetResponse::Pending
+        self.net.take_completed().unwrap_or(NetResponse::Pending)
     }
 
     fn handle_net_driver(&mut self) {
         self.net.poll();
-        if self.net.is_tx_done() {
-            self.completed_ok = true;
+        if let Some(resp) = self.net.take_completed() {
+            self.completed = Some(resp);
         }
     }
 }
@@ -92,7 +82,29 @@ impl Handler for HandlerImpl {
                 NetRequest::UdpTx {
                     payload_len,
                     payload,
-                } => send(self.handle_udp_tx(payload_len, payload)),
+                } => {
+                    self.net.queue_udp_tx(payload_len, payload);
+                    send(NetResponse::Pending)
+                }
+                NetRequest::DnsResolve { name_len, name } => {
+                    self.net.queue_dns_resolve(name_len, name);
+                    send(self.net.take_completed().unwrap_or(NetResponse::Pending))
+                }
+                NetRequest::TcpConnect { addr, port } => {
+                    self.net.queue_tcp_connect(addr, port);
+                    send(NetResponse::Pending)
+                }
+                NetRequest::TcpSend {
+                    payload_len,
+                    payload,
+                } => {
+                    self.net.queue_tcp_send(payload_len, payload);
+                    send(NetResponse::Pending)
+                }
+                NetRequest::TcpRecv => {
+                    self.net.queue_tcp_recv();
+                    send(NetResponse::Pending)
+                }
                 NetRequest::Poll => send(self.handle_poll()),
             },
             Err(_) => send_unspecified_error(),

@@ -4,6 +4,7 @@ mod build_sdk;
 mod clippy;
 mod disk_img;
 mod fetch;
+mod http_one;
 mod install;
 mod libclang;
 mod path;
@@ -112,6 +113,10 @@ enum Commands {
         #[arg(default_value_t = 18080)]
         port: u16,
     },
+    HttpOne {
+        #[arg(default_value_t = 8081)]
+        port: u16,
+    },
     /// Probe whether something is listening on the TCP echo port.
     TcpEchoProbe {
         #[arg(default_value_t = 18080)]
@@ -198,6 +203,7 @@ fn main() -> Result<()> {
             build::test_all(&root, &build_dir, &config)?;
         }
         Commands::TcpEcho { port } => tcp_echo::tcp_echo(port)?,
+        Commands::HttpOne { port } => http_one::http_one(port)?,
         Commands::TcpEchoProbe { port } => {
             let code = if tcp_echo::port_is_listening(port) {
                 0

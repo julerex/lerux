@@ -64,6 +64,7 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
         | "aarch64_http_composed"
         | "aarch64_ipc_composed"
         | "aarch64_net"
+        | "aarch64_fetch"
         | "aarch64_net_composed" => {
             let mut c = Command::new("qemu-system-aarch64");
             c.args([
@@ -122,7 +123,7 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
                 ]);
             } else if matches!(
                 ctx.board.qemu.as_str(),
-                "aarch64_net" | "aarch64_net_composed"
+                "aarch64_net" | "aarch64_fetch" | "aarch64_net_composed"
             ) {
                 c.args([
                     "-device",
@@ -359,7 +360,14 @@ fn needs_sp804(profile: &str) -> bool {
     )
 }
 
+pub fn is_fetch_board(board: &str) -> bool {
+    board == "qemu_virt_aarch64_fetch"
+}
+
 pub fn setup_test_helpers(ctx: &QemuContext) -> Result<Option<std::process::Child>> {
+    if is_fetch_board(&ctx.board_name) {
+        return Ok(Some(crate::http_one::start_http_one_background(8081)?));
+    }
     if matches!(
         ctx.board.qemu.as_str(),
         "aarch64_virtio" | "aarch64_composed" | "riscv64_virtio" | "x86_64_virtio"

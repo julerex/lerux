@@ -10,6 +10,7 @@ members = [
     "userspace/pds/blk-client",
     "userspace/pds/net-server",
     "userspace/pds/net-client",
+    "userspace/pds/fetch-client",
     "userspace/pds/boot-init",
     "userspace/pds/pl031-driver",
     "userspace/pds/sp804-driver",

@@ -131,6 +131,10 @@ test-blk-composed:
 test-net:
     BOARD=qemu_virt_aarch64_net just test
 
+# HTTP fetch over net IPC (DNS + TCP via net-server)
+test-fetch:
+    BOARD=qemu_virt_aarch64_fetch just test
+
 # Net IPC smoke test on RISC-V virt
 test-riscv-net:
     BOARD=qemu_virt_riscv64_net just test

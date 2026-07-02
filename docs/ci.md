@@ -7,14 +7,14 @@ GitHub Actions workflow: [`.github/workflows/rust.yml`](../.github/workflows/rus
 1. **check** — `just check` (`cargo fmt --all --check` + clippy on host crates; no SDK).
 2. **sdk** — Docker image, fetch sources, build Microkit SDK (cached), **prebuild patched SP804 QEMU** (cached), upload SDK artifact.
 3. **check-pd** — `just check-pd` (cross-target clippy on PD + shared userspace crates; needs SDK artifact).
-4. **smoke** — 24 parallel matrix jobs; each restores SDK artifact, per-job `build/` cache, and SP804 QEMU (init/composed/blk-composed/http-composed/net-composed/ipc-composed only).
+4. **smoke** — 25 parallel matrix jobs; each restores SDK artifact, per-job `build/` cache, and SP804 QEMU (init/composed/blk-composed/http-composed/net-composed/ipc-composed only).
 
 ```mermaid
 flowchart LR
   check[check job]
   sdk[sdk job]
   checkPd[check-pd job]
-  smoke[smoke matrix x24]
+  smoke[smoke matrix x25]
   sdk --> checkPd
   sdk --> smoke
 ```
@@ -45,6 +45,7 @@ Local mirror: `just check` (format + clippy for `lerux-cli` and `lerux-interface
 | `riscv-blk` | `just test-riscv-blk` | RISC-V block IPC |
 | `x86-blk` | `just test-x86-blk` | x86 PCI virtio-blk block IPC |
 | `net` | `just test-net` | aarch64 net IPC over virtio-net (UDP TX) |
+| `fetch` | `just test-fetch` | aarch64 HTTP fetch over net IPC (TCP + DNS) |
 | `riscv-net` | `just test-riscv-net` | RISC-V net IPC |
 | `x86-net` | `just test-x86-net` | x86 PCI virtio-net net IPC |
 | `net-composed` | `just test-net-composed` | init + net IPC; patched QEMU |

@@ -74,6 +74,14 @@ const AARCH64_CRATES: &[ClippyCrate<'_>] = &[
         feature: Some("board-qemu_virt_aarch64_net"),
     },
     ClippyCrate {
+        name: "net-server",
+        feature: Some("board-qemu_virt_aarch64_fetch"),
+    },
+    ClippyCrate {
+        name: "fetch-client",
+        feature: None,
+    },
+    ClippyCrate {
         name: "net-client",
         feature: None,
     },

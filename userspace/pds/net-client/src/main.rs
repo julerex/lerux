@@ -32,7 +32,10 @@ fn probe_net() {
 
     match poll_net() {
         NetResponse::Ok => log::info!("lerux-net: IPC ok"),
-        NetResponse::Pending | NetResponse::Error => panic!("net TX failed"),
+        NetResponse::Pending
+        | NetResponse::Error
+        | NetResponse::Ipv4 { .. }
+        | NetResponse::TcpData { .. } => panic!("net TX failed"),
     }
 }
 

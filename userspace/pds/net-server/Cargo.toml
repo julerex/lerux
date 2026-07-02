@@ -9,6 +9,7 @@ workspace = true
 
 [features]
 board-qemu_virt_aarch64_net = []
+board-qemu_virt_aarch64_fetch = []
 board-qemu_virt_aarch64_net_composed = []
 board-qemu_virt_aarch64_ipc_composed = []
 board-qemu_virt_riscv64_net = []
@@ -25,4 +26,4 @@ sel4-microkit-driver-adapters = { workspace = true }
 sel4-shared-memory = { workspace = true }
 sel4-shared-ring-buffer = { workspace = true }
 sel4-shared-ring-buffer-smoltcp = { workspace = true }
-smoltcp = { workspace = true, features = ["medium-ethernet", "proto-ipv4", "socket-udp"] }
+smoltcp = { workspace = true, features = ["medium-ethernet", "proto-ipv4", "socket-udp", "socket-tcp"] }

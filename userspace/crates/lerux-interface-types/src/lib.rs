@@ -79,14 +79,39 @@ pub enum BlockResponse {
 /// Maximum UDP payload for [`NetRequest::UdpTx`].
 pub const MAX_NET_UDP_PAYLOAD: usize = 128;
 
+/// Maximum TCP payload for [`NetRequest::TcpSend`] / [`NetResponse::TcpData`].
+pub const MAX_NET_TCP_PAYLOAD: usize = 512;
+
+/// Maximum hostname length for [`NetRequest::DnsResolve`].
+pub const MAX_DNS_NAME: usize = 32;
+
 /// Network service requests.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "TcpSend carries inline payload for IPC"
+)]
 pub enum NetRequest {
     UdpTx {
         payload_len: u8,
         #[serde(with = "net_payload_bytes")]
         payload: [u8; MAX_NET_UDP_PAYLOAD],
     },
+    DnsResolve {
+        name_len: u8,
+        #[serde(with = "dns_name_bytes")]
+        name: [u8; MAX_DNS_NAME],
+    },
+    TcpConnect {
+        addr: [u8; 4],
+        port: u16,
+    },
+    TcpSend {
+        payload_len: u16,
+        #[serde(with = "tcp_payload_bytes")]
+        payload: [u8; MAX_NET_TCP_PAYLOAD],
+    },
+    TcpRecv,
     Poll,
 }
 
@@ -100,14 +125,46 @@ impl NetRequest {
             payload,
         }
     }
+
+    pub fn dns_resolve(name: &[u8]) -> Self {
+        let mut buf = [0u8; MAX_DNS_NAME];
+        let name_len = name.len().min(MAX_DNS_NAME) as u8;
+        buf[..name_len as usize].copy_from_slice(&name[..name_len as usize]);
+        Self::DnsResolve {
+            name_len,
+            name: buf,
+        }
+    }
+
+    pub fn tcp_send(data: &[u8]) -> Self {
+        let mut payload = [0u8; MAX_NET_TCP_PAYLOAD];
+        let payload_len = data.len().min(MAX_NET_TCP_PAYLOAD) as u16;
+        payload[..payload_len as usize].copy_from_slice(&data[..payload_len as usize]);
+        Self::TcpSend {
+            payload_len,
+            payload,
+        }
+    }
 }
 
 /// Network service responses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "TcpData carries inline payload for IPC"
+)]
 pub enum NetResponse {
     Pending,
     Ok,
     Error,
+    Ipv4 {
+        addr: [u8; 4],
+    },
+    TcpData {
+        data_len: u16,
+        #[serde(with = "tcp_payload_bytes")]
+        data: [u8; MAX_NET_TCP_PAYLOAD],
+    },
 }
 
 mod sector_bytes {
@@ -163,6 +220,120 @@ mod sector_bytes {
         deserializer: D,
     ) -> Result<[u8; SECTOR_SIZE], D::Error> {
         deserializer.deserialize_bytes(SectorVisitor)
+    }
+}
+
+mod dns_name_bytes {
+    use core::fmt;
+
+    use serde::{
+        de::{self, SeqAccess, Visitor},
+        Deserializer, Serializer,
+    };
+
+    use super::MAX_DNS_NAME;
+
+    pub fn serialize<S: Serializer>(
+        name: &[u8; MAX_DNS_NAME],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bytes(name)
+    }
+
+    struct NameVisitor;
+
+    impl<'de> Visitor<'de> for NameVisitor {
+        type Value = [u8; MAX_DNS_NAME];
+
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("a byte array of max DNS name size")
+        }
+
+        fn visit_bytes<E: de::Error>(self, v: &[u8]) -> Result<Self::Value, E> {
+            if v.len() > MAX_DNS_NAME {
+                return Err(E::invalid_length(v.len(), &self));
+            }
+            let mut name = [0u8; MAX_DNS_NAME];
+            name[..v.len()].copy_from_slice(v);
+            Ok(name)
+        }
+
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+            let mut name = [0u8; MAX_DNS_NAME];
+            for (i, byte) in name.iter_mut().enumerate() {
+                match seq.next_element()? {
+                    Some(value) => *byte = value,
+                    None => break,
+                }
+                if i == MAX_DNS_NAME - 1 && seq.next_element::<u8>()?.is_some() {
+                    return Err(de::Error::invalid_length(MAX_DNS_NAME + 1, &self));
+                }
+            }
+            Ok(name)
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<[u8; MAX_DNS_NAME], D::Error> {
+        deserializer.deserialize_bytes(NameVisitor)
+    }
+}
+
+mod tcp_payload_bytes {
+    use core::fmt;
+
+    use serde::{
+        de::{self, SeqAccess, Visitor},
+        Deserializer, Serializer,
+    };
+
+    use super::MAX_NET_TCP_PAYLOAD;
+
+    pub fn serialize<S: Serializer>(
+        payload: &[u8; MAX_NET_TCP_PAYLOAD],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bytes(payload)
+    }
+
+    struct PayloadVisitor;
+
+    impl<'de> Visitor<'de> for PayloadVisitor {
+        type Value = [u8; MAX_NET_TCP_PAYLOAD];
+
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("a byte array of max net TCP payload size")
+        }
+
+        fn visit_bytes<E: de::Error>(self, v: &[u8]) -> Result<Self::Value, E> {
+            if v.len() > MAX_NET_TCP_PAYLOAD {
+                return Err(E::invalid_length(v.len(), &self));
+            }
+            let mut payload = [0u8; MAX_NET_TCP_PAYLOAD];
+            payload[..v.len()].copy_from_slice(v);
+            Ok(payload)
+        }
+
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+            let mut payload = [0u8; MAX_NET_TCP_PAYLOAD];
+            for (i, byte) in payload.iter_mut().enumerate() {
+                match seq.next_element()? {
+                    Some(value) => *byte = value,
+                    None => break,
+                }
+                if i == MAX_NET_TCP_PAYLOAD - 1 && seq.next_element::<u8>()?.is_some() {
+                    return Err(de::Error::invalid_length(MAX_NET_TCP_PAYLOAD + 1, &self));
+                }
+            }
+            Ok(payload)
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<[u8; MAX_NET_TCP_PAYLOAD], D::Error> {
+        deserializer.deserialize_bytes(PayloadVisitor)
     }
 }
 

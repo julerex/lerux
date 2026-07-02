@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-02 (Phase 30; Phases 31–38 planned)
+Last updated: 2026-07-02 (Phase 31)
 
 ## Phase 1 — Bring-up
 
@@ -255,17 +255,18 @@ Tracer-bullet order: FS (32) → TCP/fetch (31) → shell (34) → supervisor (3
 |------------|-----------|---------|
 | Block IPC | yes | Phase 37 |
 | Net IPC (UDP TX) | yes | Phase 37 |
-| Net TCP + DNS | Phase 31 | Phase 37 |
+| Net TCP + DNS | yes | Phase 37 |
 | Filesystem IPC | Phase 32 | Phase 37 |
 | Interactive shell | Phase 34 | Phase 37 |
 | Profile-based build | Phase 35 | Phase 35 |
 
 ## Phase 31 — Net service v2 (TCP + DNS)
 
-- [ ] Extend `NetRequest` / `NetResponse`: `TcpConnect`, `TcpSend`/`TcpRecv`, `TcpListen`, `DnsResolve` (poll-based async RPC)
-- [ ] Extend `net-server` with smoltcp TCP client/server + DNS (QEMU user netdev or static resolver)
-- [ ] `fetch-client` PD — HTTP GET over net IPC
-- [ ] Board `qemu_virt_aarch64_fetch` (`just test-fetch`); smoke expects `lerux-fetch: 200`
+- [x] Extend `NetRequest` / `NetResponse`: `TcpConnect`, `TcpSend`/`TcpRecv`, `DnsResolve` (poll-based async RPC)
+- [x] Extend `net-server` with smoltcp TCP client + static DNS (`host` → `10.0.2.2` for QEMU smoke)
+- [x] `fetch-client` PD — HTTP GET over net IPC
+- [x] Board `qemu_virt_aarch64_fetch` (`just test-fetch`); smoke expects `lerux-fetch: 200`
+- [x] Host `lerux http-one 8081` helper for fetch smoke; CI matrix job `fetch` (25 smoke jobs total)
 
 ## Phase 32 — Filesystem server
 

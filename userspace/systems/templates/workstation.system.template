@@ -17,7 +17,7 @@
     <memory_region name="virtio_blk_free" size="0x200_000" page_size="0x200_000"/>
     <memory_region name="virtio_blk_used" size="0x200_000" page_size="0x200_000"/>
 
-    <protection_domain name="serial_driver" priority="2" stack_size="0x10_000">
+    <protection_domain name="serial_driver" priority="3" stack_size="0x10_000">
         <program_image path="serial-driver.elf" />
         <map mr="serial_mmio" vaddr="0x2_000_000" perms="rw" setvar_vaddr="serial_register_block" />
         <irq irq="{serial_irq}" id="0" />
@@ -59,7 +59,11 @@
         <irq irq="{sp804_irq}" id="0" />
     </protection_domain>
 
-    <protection_domain name="supervisor" priority="1" stack_size="0x10_000">
+    <protection_domain name="shell" priority="1" stack_size="0x10_000">
+        <program_image path="shell.elf" />
+    </protection_domain>
+
+    <protection_domain name="supervisor" priority="2" stack_size="0x10_000">
         <program_image path="supervisor.elf" />
     </protection_domain>
 
@@ -81,6 +85,11 @@
 
     <channel>
         <end pd="serial_driver" id="1" />
+        <end pd="shell" id="0" pp="true" />
+    </channel>
+
+    <channel>
+        <end pd="serial_driver" id="2" />
         <end pd="supervisor" id="0" pp="true" />
     </channel>
 
@@ -105,6 +114,11 @@
     </channel>
 
     <channel>
+        <end pd="fs_server" id="3" />
+        <end pd="shell" id="1" pp="true" />
+    </channel>
+
+    <channel>
         <end pd="virtio_net_driver" id="1" />
         <end pd="net_server" id="1" pp="true" />
     </channel>
@@ -112,5 +126,15 @@
     <channel>
         <end pd="net_server" id="2" />
         <end pd="supervisor" id="4" pp="true" />
+    </channel>
+
+    <channel>
+        <end pd="net_server" id="3" />
+        <end pd="shell" id="2" pp="true" />
+    </channel>
+
+    <channel>
+        <end pd="supervisor" id="5" />
+        <end pd="shell" id="3" pp="true" />
     </channel>
 </system>

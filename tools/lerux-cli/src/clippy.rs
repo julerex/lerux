@@ -130,6 +130,10 @@ const AARCH64_CRATES: &[ClippyCrate<'_>] = &[
         name: "net-server",
         feature: Some("board-qemu_virt_aarch64_workstation"),
     },
+    ClippyCrate {
+        name: "shell",
+        feature: Some("board-qemu_virt_aarch64_workstation"),
+    },
 ];
 
 const RISCV64_CRATES: &[ClippyCrate<'_>] = &[

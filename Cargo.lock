@@ -1830,6 +1830,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "shell"
+version = "0.1.0"
+dependencies = [
+ "embedded-hal-nb",
+ "heapless",
+ "lerux-interface-types",
+ "lerux-ipc",
+ "lerux-logging",
+ "sel4-microkit",
+ "sel4-microkit-driver-adapters",
+]
+
+[[package]]
 name = "shlex"
 version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -1,10 +1,12 @@
 #![no_std]
 #![no_main]
 
+use lerux_interface_types::{SupervisorRequest, SupervisorResponse};
+use lerux_ipc::{recv, send, send_unspecified_error};
 use lerux_logging::{log, serial};
 use rtcc::{DateTimeAccess, Datelike};
 use sel4_driver_interfaces::timer::Clock;
-use sel4_microkit::{protection_domain, Channel, Handler, Infallible};
+use sel4_microkit::{protection_domain, Channel, Handler, Infallible, MessageInfo};
 use sel4_microkit_driver_adapters::{
     rtc::client::Client as RtcClient, timer::client::Client as TimerClient,
 };
@@ -30,6 +32,8 @@ const APP: Channel = Channel::new(3);
 const FS_SERVER: Channel = Channel::new(3);
 #[cfg(feature = "board-qemu_virt_aarch64_workstation")]
 const NET_SERVER: Channel = Channel::new(4);
+#[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+const SHELL: Channel = Channel::new(5);
 
 struct HandlerImpl;
 
@@ -105,6 +109,29 @@ fn probe_net() {
     log::info!("lerux-supervisor: net up");
 }
 
+#[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+fn handle_supervisor(req: SupervisorRequest) -> SupervisorResponse {
+    match req {
+        SupervisorRequest::Reboot => {
+            log::info!("lerux-supervisor: reboot requested");
+            SupervisorResponse::Ok
+        }
+        SupervisorRequest::GetTime => {
+            let mut rtc = RtcClient::new(RTC_DRIVER);
+            if let Ok(dt) = rtc.datetime() {
+                SupervisorResponse::Time {
+                    year: dt.year() as u16,
+                    month: dt.month() as u8,
+                    day: dt.day() as u8,
+                }
+            } else {
+                SupervisorResponse::Error
+            }
+        }
+        _ => SupervisorResponse::Ok,
+    }
+}
+
 #[protection_domain]
 fn init() -> HandlerImpl {
     serial::init(SERIAL_DRIVER).unwrap();
@@ -132,4 +159,20 @@ fn init() -> HandlerImpl {
 
 impl Handler for HandlerImpl {
     type Error = Infallible;
+
+    fn protected(
+        &mut self,
+        channel: Channel,
+        msg_info: MessageInfo,
+    ) -> Result<MessageInfo, Self::Error> {
+        #[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+        if channel == SHELL {
+            return Ok(match recv::<SupervisorRequest>(msg_info) {
+                Ok(req) => send(handle_supervisor(req)),
+                Err(_) => send_unspecified_error(),
+            });
+        }
+        // No other IPC for supervisor on non-workstation boards
+        Ok(send_unspecified_error())
+    }
 }

@@ -895,8 +895,9 @@ impl Handler for HandlerImpl {
         channel: Channel,
         msg_info: MessageInfo,
     ) -> Result<MessageInfo, Self::Error> {
-        if channel != CLIENT {
-            unreachable!();
+        if channel != CLIENT && channel != Channel::new(3) {
+            // Channel 3 is used by shell on workstation (multi-client fs)
+            unreachable!("unexpected fs client");
         }
 
         Ok(match recv::<FsRequest>(msg_info) {

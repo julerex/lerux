@@ -73,8 +73,9 @@ impl Handler for HandlerImpl {
         channel: Channel,
         msg_info: MessageInfo,
     ) -> Result<MessageInfo, Self::Error> {
-        if channel != CLIENT {
-            unreachable!();
+        if channel != CLIENT && channel != Channel::new(3) {
+            // Channel 3 used by shell on workstation
+            unreachable!("unexpected net client");
         }
 
         Ok(match recv::<NetRequest>(msg_info) {

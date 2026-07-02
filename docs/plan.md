@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-02 (Phase 33)
+Last updated: 2026-07-02 (Phase 34 started)
 
 ## Phase 1 — Bring-up
 
@@ -279,17 +279,20 @@ Tracer-bullet order: FS (32) → TCP/fetch (31) → shell (34) → supervisor (3
 ## Phase 33 — Supervisor + service graph
 
 - [x] Evolve `boot-init` → `supervisor` PD (rename + workspace): RTC/timer + generalized init
-- [x] `SupervisorRequest` / `SupervisorResponse` (`Reboot`, `ListServices`, `ServiceStatus`)
+- [x] `SupervisorRequest` / `SupervisorResponse` (Reboot, ListServices, ServiceStatus, GetTime)
 - [x] `workstation.system.template`: supervisor + fs-server + net-server + drivers (with IPC channels)
 - [x] Board `qemu_virt_aarch64_workstation` (`just test-workstation`); smoke expects `lerux-supervisor: ready`
-- [ ] Supervisor exercises FS mount + net up in init; stub service IPC handlers (Reboot etc) for future shell/apps
-- [ ] Generalize notify to apps via supervisor (beyond current composed-sync channels)
+- [x] Supervisor exercises FS mount + net up in init; serves IPC to shell
+- [x] Generalize notify / multi-client serial preserved
 
 ## Phase 34 — Shell and core utilities
 
-- [ ] `lerux-shell` PD — serial IPC REPL; commands call FS/net/supervisor via typed IPC (`ls`, `cat`, `write`, `fetch`, `ps`, `reboot`, `time`)
-- [ ] Add shell to workstation profile; CI scripted serial session smoke
-- [ ] Document “add a ported app” checklist in `docs/context.md`
+- [x] `shell` (lerux-shell) PD: full serial REPL (read/echo/line buffer via serial IPC client)
+- [x] Commands: ls, cat <path>, write <path> <data>, time, ps, reboot, fetch (demo via net), echo, help
+- [x] Shell calls fs-server/net-server/supervisor via typed IPC for commands
+- [x] Included in workstation profile (template + board pds list + serial/fs/net/sup wiring)
+- [x] Smoke test covers shell ready + service calls + prompt (scripted REPL testable via serial)
+- [x] “add a ported app” checklist documented in `docs/context.md`
 
 ## Phase 35 — System profiles and packages
 

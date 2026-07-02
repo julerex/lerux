@@ -307,6 +307,8 @@ jobs:
             command: just test-net
           - id: net-composed
             command: just test-net-composed
+          - id: ipc-composed
+            command: just disk-img && just test-ipc-composed
           - id: riscv-net
             command: just test-riscv-net
           - id: x86-net
@@ -353,7 +355,7 @@ jobs:
             build-${{ matrix.id }}-
 
       - name: Restore SP804 QEMU cache
-        if: matrix.id == 'init' || matrix.id == 'composed' || matrix.id == 'blk-composed' || matrix.id == 'http-composed' || matrix.id == 'net-composed'
+        if: matrix.id == 'init' || matrix.id == 'composed' || matrix.id == 'blk-composed' || matrix.id == 'http-composed' || matrix.id == 'net-composed' || matrix.id == 'ipc-composed'
         uses: actions/cache/restore@v4
         with:
           path: |
@@ -365,7 +367,7 @@ jobs:
             qemu-sp804-
 
       - name: Ensure SP804 QEMU executable
-        if: matrix.id == 'init' || matrix.id == 'composed' || matrix.id == 'blk-composed' || matrix.id == 'http-composed' || matrix.id == 'net-composed'
+        if: matrix.id == 'init' || matrix.id == 'composed' || matrix.id == 'blk-composed' || matrix.id == 'http-composed' || matrix.id == 'net-composed' || matrix.id == 'ipc-composed'
         run: |
           set -euo pipefail
           qemu="deps/toolchains/qemu-sp804/bin/qemu-system-aarch64"

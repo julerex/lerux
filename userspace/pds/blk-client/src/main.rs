@@ -10,6 +10,8 @@ const SERIAL_DRIVER: Channel = Channel::new(0);
 const BLK_SERVER: Channel = Channel::new(1);
 #[cfg(feature = "composed-sync")]
 const BOOT_INIT: Channel = Channel::new(2);
+#[cfg(feature = "composed-chain")]
+const NET_CLIENT: Channel = Channel::new(3);
 
 const TEST_LBA: u32 = 1;
 const WRITE_MAGIC: &[u8] = b"lerux-blk-write-test";
@@ -115,6 +117,8 @@ impl Handler for HandlerImpl {
         if self.blk_pending && channels.contains(BOOT_INIT) {
             probe_blk();
             self.blk_pending = false;
+            #[cfg(feature = "composed-chain")]
+            NET_CLIENT.notify();
         }
         Ok(())
     }

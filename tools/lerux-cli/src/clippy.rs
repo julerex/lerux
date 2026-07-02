@@ -85,6 +85,22 @@ const AARCH64_CRATES: &[ClippyCrate<'_>] = &[
         name: "net-client",
         feature: Some("board-qemu_virt_aarch64_net_composed"),
     },
+    ClippyCrate {
+        name: "serial-driver",
+        feature: Some("board-qemu_virt_aarch64_ipc_composed"),
+    },
+    ClippyCrate {
+        name: "boot-init",
+        feature: Some("board-qemu_virt_aarch64_ipc_composed"),
+    },
+    ClippyCrate {
+        name: "blk-client",
+        feature: Some("board-qemu_virt_aarch64_ipc_composed"),
+    },
+    ClippyCrate {
+        name: "net-client",
+        feature: Some("board-qemu_virt_aarch64_ipc_composed"),
+    },
 ];
 
 const RISCV64_CRATES: &[ClippyCrate<'_>] = &[

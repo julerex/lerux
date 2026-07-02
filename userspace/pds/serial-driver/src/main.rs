@@ -25,17 +25,23 @@ use ns16550_mmio::Driver as Ns16550MmioDriver;
 // Channel 0: IRQ notification (<irq id="0">).
 const DEVICE: Channel = Channel::new(0);
 
-#[cfg(not(feature = "multi-client-2"))]
+#[cfg(not(any(feature = "multi-client-2", feature = "multi-client-3")))]
 const CLIENTS: [Channel; 1] = [Channel::new(1)];
 
 #[cfg(feature = "multi-client-2")]
 const CLIENTS: [Channel; 2] = [Channel::new(1), Channel::new(2)];
 
-#[cfg(not(feature = "multi-client-2"))]
+#[cfg(feature = "multi-client-3")]
+const CLIENTS: [Channel; 3] = [Channel::new(1), Channel::new(2), Channel::new(3)];
+
+#[cfg(not(any(feature = "multi-client-2", feature = "multi-client-3")))]
 type SerialHandler<D> = HandlerImpl<D, 1>;
 
 #[cfg(feature = "multi-client-2")]
 type SerialHandler<D> = HandlerImpl<D, 2>;
+
+#[cfg(feature = "multi-client-3")]
+type SerialHandler<D> = HandlerImpl<D, 3>;
 
 #[cfg(feature = "board-qemu_virt_aarch64")]
 #[protection_domain]

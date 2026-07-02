@@ -143,6 +143,10 @@ test-x86-net:
 test-net-composed:
     BOARD=qemu_virt_aarch64_net_composed just test
 
+# Init + block and net IPC (boot-init → blk-client → net-client notify chain)
+test-ipc-composed:
+    BOARD=qemu_virt_aarch64_ipc_composed just test
+
 # HTTP smoke: GET / on virtio-net (host port 18080 -> guest :8080)
 test-http:
     BOARD=qemu_virt_aarch64_http just test

@@ -12,7 +12,9 @@ board-qemu_virt_aarch64_blk = []
 board-qemu_virt_riscv64_blk = []
 board-x86_64_generic_blk = []
 board-qemu_virt_aarch64_blk_composed = ["composed-sync"]
+board-qemu_virt_aarch64_ipc_composed = ["composed-sync", "composed-chain"]
 composed-sync = []
+composed-chain = []
 
 [dependencies]
 lerux-interface-types = { path = "../../crates/lerux-interface-types" }

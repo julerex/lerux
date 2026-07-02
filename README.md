@@ -30,7 +30,7 @@ just test-all
 
 ## CI
 
-GitHub Actions runs on every push to `main`: **check** (`just check`), one **sdk** job (SDK + patched SP804 QEMU), **check-pd** (cross-target clippy on userspace crates), then **23 smoke** matrix jobs. Local lint: `just check` (host crates) or `just check-all` (host + PD, needs SDK). Details: [`docs/ci.md`](docs/ci.md).
+GitHub Actions runs on every push to `main`: **check** (`just check`), one **sdk** job (SDK + patched SP804 QEMU), **check-pd** (cross-target clippy on userspace crates), then **24 smoke** matrix jobs. Local lint: `just check` (host crates) or `just check-all` (host + PD, needs SDK). Details: [`docs/ci.md`](docs/ci.md).
 
 ## Architecture
 
@@ -62,6 +62,7 @@ Default: `qemu_virt_aarch64` (QEMU ARM virt). Override with `BOARD=... just run`
 | Block IPC over virtio-blk | `qemu_virt_aarch64_blk` variants | `just test-blk` / `just test-riscv-blk` / `just test-x86-blk` |
 | Net IPC over virtio-net | `qemu_virt_aarch64_net` variants | `just test-net` / `just test-riscv-net` / `just test-x86-net` |
 | Init + net IPC | `qemu_virt_aarch64_net_composed` | `just test-net-composed` |
+| Init + blk/net IPC | `qemu_virt_aarch64_ipc_composed` | `just test-ipc-composed` |
 | RISC-V serial / echo / virtio / HTTP | `qemu_virt_riscv64` variants | `just test-riscv` / `just test-riscv-echo` / `just test-riscv-virtio` / `just test-riscv-http` |
 
 Full board reference: [`docs/boards.md`](docs/boards.md).

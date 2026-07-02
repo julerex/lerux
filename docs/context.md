@@ -37,8 +37,33 @@ Echo IPC and virtio smoke tests run on aarch64, RISC-V virt, and x86 (PCI virtio
 
 The composed board (`qemu_virt_aarch64_composed`) runs `boot-init` and `hello`+virtio in one system. Both PDs log via serial IPC (multi-client serial driver). `boot-init` notifies `hello` when init is complete before virtio starts (composed-sync). See [`boards.md`](boards.md) and [`plan.md`](plan.md).
 
+## Non-POSIX direction
+
+lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection domains that speak **typed postcard RPC** (`lerux-interface-types`) over Microkit channels — not file descriptors, `errno`, or `fork`/`exec`.
+
+“Arch-like” means **workflow**, not binary compatibility: rolling PD artifact pins, named system profiles, init ordering, shell + core utilities — each implemented as PDs you port deliberately. Unmodified Arch packages (`bash`, `pacman`, `firefox`, etc.) are out of scope.
+
+## System profiles and packages
+
+**System profile**
+: A named bundle in `support/profiles/` (planned Phase 35): which PD crates, `.system` template, board features, and channel layout compose one `loader.img`. Override with `lerux profile build <name>` (host tooling).
+
+**Package**
+: One PD crate plus its interface-types version and an optional profile fragment. “Installing” a package means adding it to a profile and rebuilding the static image — Microkit does not load arbitrary ELFs at runtime.
+
+**Supervisor**
+: Planned evolution of `boot-init` (Phase 33): RTC/timer, bring up drivers and services (FS, net), notify app PDs in dependency order, expose reboot/status IPC.
+
+**Ported app checklist** (new PD that users interact with):
+
+1. Define request/response types in `lerux-interface-types`
+2. Implement client and/or server PD (`#![no_std]`, `lerux-ipc`)
+3. Wire channels in a profile `.system` template; match `Channel` constants to XML
+4. Add `board-<profile>` features in PD `Cargo.toml` files
+5. Register board in `support/boards.toml`, smoke expects in `lerux-cli`, CI job if needed
+
 ## Boundaries
 
-- **In scope:** Rust PD crates, `.system` files, build/CI, docs
-- **Out of scope:** seL4 kernel modifications, C userspace, vendored upstream trees
+- **In scope:** Rust PD crates, `.system` files, build/CI, docs, host profile tooling
+- **Out of scope:** POSIX/glibc/musl, Linux ABI emulation, seL4 kernel modifications, C userspace, vendored upstream trees, unmodified third-party Linux binaries
 - **Upstream SDK components:** Microkit monitor, loader, libmicrokit (C) — part of SDK, not lerux-owned

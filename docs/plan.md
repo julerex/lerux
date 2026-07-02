@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-01 (Phase 29)
+Last updated: 2026-07-02 (Phase 30; Phases 31–38 planned)
 
 ## Phase 1 — Bring-up
 
@@ -234,6 +234,88 @@ Init (`just test-init`) uses PL031 + SP804 drivers from rust-sel4 v4.0.0, which 
 - [x] Board `qemu_virt_aarch64_net_composed` (`just test-net-composed`)
 - [x] `net-client` composed-sync: probe net after boot-init notify
 - [x] CI matrix job `net-composed` (23 smoke jobs total)
+
+## Phase 30 — Grand composed IPC
+
+- [x] `ipc-composed.system.template`: boot-init + init drivers + blk-server/client + net-server/client + virtio-blk/net (10 PDs)
+- [x] Board `qemu_virt_aarch64_ipc_composed` (`just test-ipc-composed`)
+- [x] Serial driver `multi-client-3` (boot-init, blk-client, net-client)
+- [x] Notify chain: boot-init → blk-client → net-client (sequential probes)
+- [x] CI matrix job `ipc-composed` (24 smoke jobs total)
+
+## Phases 31–38 — Non-POSIX workstation (planned)
+
+Roadmap toward a minimal “Arch-like” workflow (profiles, init, shell, FS, network) **without** POSIX, glibc, or unmodified Linux binaries. A “package” is a PD crate pinned in a **system profile**; installing means reassembling `loader.img`, not `fork`/`exec`.
+
+Tracer-bullet order: FS (32) → TCP/fetch (31) → shell (34) → supervisor (33) → profiles (35).
+
+### Cross-stack smoke parity (target)
+
+| Capability | QEMU virt | Real HW |
+|------------|-----------|---------|
+| Block IPC | yes | Phase 37 |
+| Net IPC (UDP TX) | yes | Phase 37 |
+| Net TCP + DNS | Phase 31 | Phase 37 |
+| Filesystem IPC | Phase 32 | Phase 37 |
+| Interactive shell | Phase 34 | Phase 37 |
+| Profile-based build | Phase 35 | Phase 35 |
+
+## Phase 31 — Net service v2 (TCP + DNS)
+
+- [ ] Extend `NetRequest` / `NetResponse`: `TcpConnect`, `TcpSend`/`TcpRecv`, `TcpListen`, `DnsResolve` (poll-based async RPC)
+- [ ] Extend `net-server` with smoltcp TCP client/server + DNS (QEMU user netdev or static resolver)
+- [ ] `fetch-client` PD — HTTP GET over net IPC
+- [ ] Board `qemu_virt_aarch64_fetch` (`just test-fetch`); smoke expects `lerux-fetch: 200`
+
+## Phase 32 — Filesystem server
+
+- [ ] `FsRequest` / `FsResponse` in `lerux-interface-types` (`Open`, `Read`, `Write`, `ListDir`, `Stat`, `Create`, `Poll`)
+- [ ] `fs-server` PD — virtio-blk client + on-disk format (FAT32 on `disk.img` partition or minimal `lerux-fs`)
+- [ ] `fs-client` PD — write/read round-trip smoke
+- [ ] Board `qemu_virt_aarch64_fs` (`just test-fs`); smoke expects `lerux-fs: round-trip ok`
+
+## Phase 33 — Supervisor + service graph
+
+- [ ] Evolve `boot-init` → `supervisor` PD: RTC/timer, driver ready, FS mount, net up, ordered app notify (generalize composed-sync)
+- [ ] `SupervisorRequest` / `SupervisorResponse` (`Reboot`, `ListServices`, `ServiceStatus`)
+- [ ] `workstation.system.template`: supervisor + fs-server + net-server + drivers
+- [ ] Board `qemu_virt_aarch64_workstation` (`just test-workstation`); smoke expects `lerux-supervisor: ready`
+
+## Phase 34 — Shell and core utilities
+
+- [ ] `lerux-shell` PD — serial IPC REPL; commands call FS/net/supervisor via typed IPC (`ls`, `cat`, `write`, `fetch`, `ps`, `reboot`, `time`)
+- [ ] Add shell to workstation profile; CI scripted serial session smoke
+- [ ] Document “add a ported app” checklist in `docs/context.md`
+
+## Phase 35 — System profiles and packages
+
+- [ ] `support/profiles/*.toml` — named PD sets + template + channel manifest (e.g. `minimal`, `server`, `workstation`)
+- [ ] `lerux profile list|build|diff` in `lerux-cli`
+- [ ] A package = one PD crate + interface-types version + optional profile fragment; publish = CI ELF artifact + pin
+
+## Phase 36 — Logging, config, and ops
+
+- [ ] `log-server` PD — multiplex serial + ring buffer; `LogRequest::Subscribe`
+- [ ] `config-server` PD or FS-backed `/config` keys for net and boot
+- [ ] Shell `dmesg` via log IPC; supervisor persists boot log to FS
+
+## Phase 37 — Real hardware slice
+
+- [ ] One target board (e.g. RPi4 or x86 mini PC): storage + one NIC + serial console
+- [ ] `hardware-<board>.toml` profile; drop QEMU-only virtio where native drivers exist
+- [ ] Smoke subset on hardware CI or manual gate
+
+## Phase 38 — Optional TUI apps (ported only)
+
+- [ ] Cherry-pick apps with clear IPC boundaries: `edit`, `top`, `chat-client`, HTTP file browser
+- [ ] No POSIX layer; each app is a PD + `lerux-interface-types` contract
+
+### MVP done (Phases 31–35)
+
+- [ ] Profile `workstation` boots supervisor + FS + net + shell
+- [ ] Shell lists/reads/writes files and `fetch`es a URL
+- [ ] Host `lerux profile build` reproduces `loader.img` from pins
+- [ ] CI smoke covers FS + fetch + shell script
 
 ## Version alignment
 

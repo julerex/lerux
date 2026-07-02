@@ -1,0 +1,17 @@
+[package]
+name = "fs-client"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[lints]
+workspace = true
+
+[features]
+board-qemu_virt_aarch64_fs = []
+
+[dependencies]
+lerux-interface-types = { path = "../../crates/lerux-interface-types" }
+lerux-ipc = { path = "../../crates/lerux-ipc" }
+lerux-logging = { path = "../../crates/lerux-logging", features = ["serial"] }
+sel4-microkit = { workspace = true }

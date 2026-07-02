@@ -205,6 +205,11 @@ pub fn default_expects(board: &str) -> Vec<String> {
             "virtio-net: MAC".into(),
             "lerux-fetch: 200".into(),
         ],
+        "qemu_virt_aarch64_fs" => vec![
+            "lerux-fs: ready".into(),
+            "virtio-blk:".into(),
+            "lerux-fs: round-trip ok".into(),
+        ],
         "qemu_virt_aarch64_init" => vec![
             "lerux-init: RTC".into(),
             "lerux-init: timer ok".into(),

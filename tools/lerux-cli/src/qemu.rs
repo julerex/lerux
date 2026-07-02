@@ -59,6 +59,7 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
         | "aarch64_virtio"
         | "aarch64_blk"
         | "aarch64_blk_composed"
+        | "aarch64_fs"
         | "aarch64_composed"
         | "aarch64_http"
         | "aarch64_http_composed"
@@ -103,7 +104,7 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
                 ]);
             } else if matches!(
                 ctx.board.qemu.as_str(),
-                "aarch64_blk" | "aarch64_blk_composed" | "aarch64_ipc_composed"
+                "aarch64_blk" | "aarch64_blk_composed" | "aarch64_fs" | "aarch64_ipc_composed"
             ) {
                 ensure_disk(&disk)?;
                 // Net device occupies the first virtio-mmio slot; blk stays at +0xc00

@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-02 (Phase 31)
+Last updated: 2026-07-02 (Phase 32)
 
 ## Phase 1 — Bring-up
 
@@ -270,10 +270,11 @@ Tracer-bullet order: FS (32) → TCP/fetch (31) → shell (34) → supervisor (3
 
 ## Phase 32 — Filesystem server
 
-- [ ] `FsRequest` / `FsResponse` in `lerux-interface-types` (`Open`, `Read`, `Write`, `ListDir`, `Stat`, `Create`, `Poll`)
-- [ ] `fs-server` PD — virtio-blk client + on-disk format (FAT32 on `disk.img` partition or minimal `lerux-fs`)
-- [ ] `fs-client` PD — write/read round-trip smoke
-- [ ] Board `qemu_virt_aarch64_fs` (`just test-fs`); smoke expects `lerux-fs: round-trip ok`
+- [x] `FsRequest` / `FsResponse` in `lerux-interface-types` (`Open`, `Read`, `Write`, `ListDir`, `Stat`, `Create`, `Poll`)
+- [x] `lerux-fs` crate + `fs-server` PD — virtio-blk client + `LERUXFS1` on-disk format (LBAs 1+)
+- [x] `fs-client` PD — write/read round-trip smoke
+- [x] Board `qemu_virt_aarch64_fs` (`just test-fs`); smoke expects `lerux-fs: round-trip ok`
+- [x] CI matrix job `fs` (26 smoke jobs total)
 
 ## Phase 33 — Supervisor + service graph
 

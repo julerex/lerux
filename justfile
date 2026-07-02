@@ -135,6 +135,10 @@ test-net:
 test-fetch:
     BOARD=qemu_virt_aarch64_fetch just test
 
+# Filesystem IPC smoke test (fs-server + fs-client on aarch64 virt)
+test-fs:
+    BOARD=qemu_virt_aarch64_fs just test
+
 # Net IPC smoke test on RISC-V virt
 test-riscv-net:
     BOARD=qemu_virt_riscv64_net just test

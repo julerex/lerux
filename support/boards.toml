@@ -138,6 +138,16 @@ pds = ["blk-client", "blk-server", "serial-driver", "virtio-blk-driver"]
 qemu = "aarch64_blk"
 system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_blk_irq = 78 }
 
+[qemu_virt_aarch64_fs]
+arch = "aarch64"
+microkit_board = "qemu_virt_aarch64"
+target = "aarch64-sel4-microkit"
+target_triple = "aarch64-sel4-microkit"
+template = "fs.system.template"
+pds = ["fs-client", "fs-server", "serial-driver", "virtio-blk-driver"]
+qemu = "aarch64_fs"
+system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_blk_irq = 78 }
+
 [qemu_virt_aarch64_http_composed]
 arch = "aarch64"
 microkit_board = "qemu_virt_aarch64"

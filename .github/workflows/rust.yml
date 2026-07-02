@@ -307,6 +307,8 @@ jobs:
             command: just test-net
           - id: fetch
             command: just test-fetch
+          - id: fs
+            command: just disk-img && just test-fs
           - id: net-composed
             command: just test-net-composed
           - id: ipc-composed

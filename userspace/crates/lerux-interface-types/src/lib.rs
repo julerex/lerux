@@ -147,6 +147,149 @@ impl NetRequest {
     }
 }
 
+/// Maximum path length for filesystem IPC (`Open`, `Create`, `Stat`, …).
+pub const MAX_FS_PATH: usize = 24;
+
+/// Maximum name length returned in [`FsDirEntry`].
+pub const MAX_FS_NAME: usize = 24;
+
+/// Maximum read/write payload per filesystem IPC message.
+pub const MAX_FS_DATA: usize = 448;
+
+/// Maximum directory entries returned in one [`FsResponse::DirList`].
+pub const MAX_FS_DIR_LIST: usize = 8;
+
+/// One directory entry in [`FsResponse::DirList`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FsDirEntry {
+    pub name_len: u8,
+    #[serde(with = "fs_name_bytes")]
+    pub name: [u8; MAX_FS_NAME],
+    pub size: u32,
+}
+
+impl FsDirEntry {
+    pub fn from_name_size(name: &[u8], size: u32) -> Self {
+        let mut buf = [0u8; MAX_FS_NAME];
+        let name_len = name.len().min(MAX_FS_NAME) as u8;
+        buf[..name_len as usize].copy_from_slice(&name[..name_len as usize]);
+        Self {
+            name_len,
+            name: buf,
+            size,
+        }
+    }
+
+    pub fn name_slice(&self) -> &[u8] {
+        &self.name[..self.name_len as usize]
+    }
+}
+
+/// Filesystem service requests.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "Write carries inline payload for IPC"
+)]
+pub enum FsRequest {
+    Open {
+        path_len: u8,
+        #[serde(with = "fs_path_bytes")]
+        path: [u8; MAX_FS_PATH],
+    },
+    Create {
+        path_len: u8,
+        #[serde(with = "fs_path_bytes")]
+        path: [u8; MAX_FS_PATH],
+    },
+    Read {
+        handle: u8,
+        offset: u32,
+        len: u16,
+    },
+    Write {
+        handle: u8,
+        offset: u32,
+        data_len: u16,
+        #[serde(with = "fs_data_bytes")]
+        data: [u8; MAX_FS_DATA],
+    },
+    ListDir,
+    Stat {
+        path_len: u8,
+        #[serde(with = "fs_path_bytes")]
+        path: [u8; MAX_FS_PATH],
+    },
+    Poll,
+}
+
+impl FsRequest {
+    pub fn open(path: &[u8]) -> Self {
+        let mut buf = [0u8; MAX_FS_PATH];
+        let path_len = path.len().min(MAX_FS_PATH) as u8;
+        buf[..path_len as usize].copy_from_slice(&path[..path_len as usize]);
+        Self::Open {
+            path_len,
+            path: buf,
+        }
+    }
+
+    pub fn create(path: &[u8]) -> Self {
+        let mut buf = [0u8; MAX_FS_PATH];
+        let path_len = path.len().min(MAX_FS_PATH) as u8;
+        buf[..path_len as usize].copy_from_slice(&path[..path_len as usize]);
+        Self::Create {
+            path_len,
+            path: buf,
+        }
+    }
+
+    pub fn stat(path: &[u8]) -> Self {
+        let mut buf = [0u8; MAX_FS_PATH];
+        let path_len = path.len().min(MAX_FS_PATH) as u8;
+        buf[..path_len as usize].copy_from_slice(&path[..path_len as usize]);
+        Self::Stat {
+            path_len,
+            path: buf,
+        }
+    }
+
+    pub fn write(handle: u8, offset: u32, data: &[u8]) -> Self {
+        let mut payload = [0u8; MAX_FS_DATA];
+        let data_len = data.len().min(MAX_FS_DATA) as u16;
+        payload[..data_len as usize].copy_from_slice(&data[..data_len as usize]);
+        Self::Write {
+            handle,
+            offset,
+            data_len,
+            data: payload,
+        }
+    }
+}
+
+/// Filesystem service responses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FsResponse {
+    Pending,
+    Ok,
+    Error,
+    Handle {
+        id: u8,
+    },
+    Data {
+        data_len: u16,
+        #[serde(with = "fs_data_bytes")]
+        data: [u8; MAX_FS_DATA],
+    },
+    Stat {
+        size: u32,
+    },
+    DirList {
+        count: u8,
+        entries: [FsDirEntry; MAX_FS_DIR_LIST],
+    },
+}
+
 /// Network service responses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[expect(
@@ -165,6 +308,177 @@ pub enum NetResponse {
         #[serde(with = "tcp_payload_bytes")]
         data: [u8; MAX_NET_TCP_PAYLOAD],
     },
+}
+
+mod fs_path_bytes {
+    use core::fmt;
+
+    use serde::{
+        de::{self, SeqAccess, Visitor},
+        Deserializer, Serializer,
+    };
+
+    use super::MAX_FS_PATH;
+
+    pub fn serialize<S: Serializer>(
+        path: &[u8; MAX_FS_PATH],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bytes(path)
+    }
+
+    struct PathVisitor;
+
+    impl<'de> Visitor<'de> for PathVisitor {
+        type Value = [u8; MAX_FS_PATH];
+
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("a byte array of max filesystem path size")
+        }
+
+        fn visit_bytes<E: de::Error>(self, v: &[u8]) -> Result<Self::Value, E> {
+            if v.len() > MAX_FS_PATH {
+                return Err(E::invalid_length(v.len(), &self));
+            }
+            let mut path = [0u8; MAX_FS_PATH];
+            path[..v.len()].copy_from_slice(v);
+            Ok(path)
+        }
+
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+            let mut path = [0u8; MAX_FS_PATH];
+            for (i, byte) in path.iter_mut().enumerate() {
+                match seq.next_element()? {
+                    Some(value) => *byte = value,
+                    None => break,
+                }
+                if i == MAX_FS_PATH - 1 && seq.next_element::<u8>()?.is_some() {
+                    return Err(de::Error::invalid_length(MAX_FS_PATH + 1, &self));
+                }
+            }
+            Ok(path)
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<[u8; MAX_FS_PATH], D::Error> {
+        deserializer.deserialize_bytes(PathVisitor)
+    }
+}
+
+mod fs_name_bytes {
+    use core::fmt;
+
+    use serde::{
+        de::{self, SeqAccess, Visitor},
+        Deserializer, Serializer,
+    };
+
+    use super::MAX_FS_NAME;
+
+    pub fn serialize<S: Serializer>(
+        name: &[u8; MAX_FS_NAME],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bytes(name)
+    }
+
+    struct NameVisitor;
+
+    impl<'de> Visitor<'de> for NameVisitor {
+        type Value = [u8; MAX_FS_NAME];
+
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("a byte array of max filesystem name size")
+        }
+
+        fn visit_bytes<E: de::Error>(self, v: &[u8]) -> Result<Self::Value, E> {
+            if v.len() > MAX_FS_NAME {
+                return Err(E::invalid_length(v.len(), &self));
+            }
+            let mut name = [0u8; MAX_FS_NAME];
+            name[..v.len()].copy_from_slice(v);
+            Ok(name)
+        }
+
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+            let mut name = [0u8; MAX_FS_NAME];
+            for (i, byte) in name.iter_mut().enumerate() {
+                match seq.next_element()? {
+                    Some(value) => *byte = value,
+                    None => break,
+                }
+                if i == MAX_FS_NAME - 1 && seq.next_element::<u8>()?.is_some() {
+                    return Err(de::Error::invalid_length(MAX_FS_NAME + 1, &self));
+                }
+            }
+            Ok(name)
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<[u8; MAX_FS_NAME], D::Error> {
+        deserializer.deserialize_bytes(NameVisitor)
+    }
+}
+
+mod fs_data_bytes {
+    use core::fmt;
+
+    use serde::{
+        de::{self, SeqAccess, Visitor},
+        Deserializer, Serializer,
+    };
+
+    use super::MAX_FS_DATA;
+
+    pub fn serialize<S: Serializer>(
+        data: &[u8; MAX_FS_DATA],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bytes(data)
+    }
+
+    struct DataVisitor;
+
+    impl<'de> Visitor<'de> for DataVisitor {
+        type Value = [u8; MAX_FS_DATA];
+
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("a byte array of max filesystem data size")
+        }
+
+        fn visit_bytes<E: de::Error>(self, v: &[u8]) -> Result<Self::Value, E> {
+            if v.len() > MAX_FS_DATA {
+                return Err(E::invalid_length(v.len(), &self));
+            }
+            let mut data = [0u8; MAX_FS_DATA];
+            data[..v.len()].copy_from_slice(v);
+            Ok(data)
+        }
+
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+            let mut data = [0u8; MAX_FS_DATA];
+            for (i, byte) in data.iter_mut().enumerate() {
+                match seq.next_element()? {
+                    Some(value) => *byte = value,
+                    None => break,
+                }
+                if i == MAX_FS_DATA - 1 && seq.next_element::<u8>()?.is_some() {
+                    return Err(de::Error::invalid_length(MAX_FS_DATA + 1, &self));
+                }
+            }
+            Ok(data)
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<[u8; MAX_FS_DATA], D::Error> {
+        deserializer.deserialize_bytes(DataVisitor)
+    }
 }
 
 mod sector_bytes {

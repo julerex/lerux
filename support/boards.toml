@@ -288,12 +288,7 @@ target = "aarch64-sel4-microkit"
 target_triple = "aarch64-sel4-microkit"
 template = "net-genet-rpi.system.template"
 pds = ["net-client", "net-server", "serial-driver", "genet-driver"]
-system_vars = {
-  serial_mmio_phys_addr = "0xfe201000",
-  serial_irq = 121,
-  genet_mmio_phys_addr = "0x7d580000",
-  genet_irq = 157
-}
+system_vars = { serial_mmio_phys_addr = "0xfe201000", serial_irq = 121, genet_mmio_phys_addr = "0x7d580000", genet_irq = 157 }
 
 # RPi4 hardware with native eMMC2/SD for block (Phase 37)
 [rpi4b_4gb_blk]
@@ -303,9 +298,4 @@ target = "aarch64-sel4-microkit"
 target_triple = "aarch64-sel4-microkit"
 template = "blk-emmc-rpi.system.template"
 pds = ["blk-client", "blk-server", "serial-driver", "emmc2-driver"]
-system_vars = {
-  serial_mmio_phys_addr = "0xfe201000",
-  serial_irq = 121,
-  emmc2_mmio_phys_addr = "0x7e340000",
-  emmc2_irq = 126
-}
+system_vars = { serial_mmio_phys_addr = "0xfe201000", serial_irq = 121, emmc2_mmio_phys_addr = "0x7e340000", emmc2_irq = 126 }

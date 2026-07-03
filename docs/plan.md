@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-03 (Phase 38 start)
+Last updated: 2026-07-03 (Phase 38 complete)
 
 ## Phase 1 — Bring-up
 
@@ -243,22 +243,25 @@ Init (`just test-init`) uses PL031 + SP804 drivers from rust-sel4 v4.0.0, which 
 - [x] Notify chain: boot-init → blk-client → net-client (sequential probes)
 - [x] CI matrix job `ipc-composed` (24 smoke jobs total)
 
-## Phases 31–38 — Non-POSIX workstation (planned)
+## Phases 31–38 — Non-POSIX workstation (QEMU MVP done)
 
 Roadmap toward a minimal “Arch-like” workflow (profiles, init, shell, FS, network) **without** POSIX, glibc, or unmodified Linux binaries. A “package” is a PD crate pinned in a **system profile**; installing means reassembling `loader.img`, not `fork`/`exec`.
 
-Tracer-bullet order: FS (32) → TCP/fetch (31) → shell (34) → supervisor (33) → profiles (35).
+Tracer-bullet order: FS (32) → TCP/fetch (31) → shell (34) → supervisor (33) → profiles (35) → ops (36) → HW slice (37) → ported apps (38).
 
-### Cross-stack smoke parity (target)
+### Cross-stack smoke parity
 
-| Capability | QEMU virt | Real HW |
-|------------|-----------|---------|
-| Block IPC | yes | Phase 37 (native drivers pending) |
-| Net IPC (UDP TX) | yes | Phase 37 (native drivers pending) |
-| Net TCP + DNS | yes | Phase 37 (native drivers pending) |
-| Filesystem IPC | Phase 32 | Phase 37 (native drivers pending) |
-| Interactive shell | Phase 34 | Phase 37 (native drivers pending) |
-| Profile-based build | Phase 35 | Phase 35 |
+| Capability | QEMU virt | Real HW (RPi4) |
+|------------|-----------|----------------|
+| Serial hello | yes | yes (`rpi4b_4gb`, `hardware-rpi4` profile) |
+| Block IPC | yes | stub (`rpi4b_4gb_blk`; full SDHCI/ADMA → Phase 39) |
+| Net IPC (UDP TX) | yes | stub (`rpi4b_4gb_net`, `rpi4-net` profile; full DMA/MDIO → Phase 39) |
+| Net TCP + DNS | yes | no |
+| Filesystem IPC | yes | no |
+| Interactive shell | yes | no |
+| Logging / config | yes | no |
+| Edit TUI | yes | no |
+| Profile-based build | yes | yes (hello + net slices) |
 
 ## Phase 31 — Net service v2 (TCP + DNS)
 
@@ -299,7 +302,7 @@ Tracer-bullet order: FS (32) → TCP/fetch (31) → shell (34) → supervisor (3
 - [x] `support/profiles/*.toml` — named PD sets + template + channel manifest (e.g. `minimal`, `server`, `workstation`)
 - [x] `lerux profile list|build|diff` in `lerux-cli`
 - [x] Profile `workstation` (and others) bootable via `lerux profile build <name>` (reproduces loader.img from the pinned source tree state)
-- [ ] A package = one PD crate + interface-types version + optional profile fragment; publish = CI ELF artifact + pin (profile tooling introduced; full package pinning / CI artifacts in follow-up)
+- [ ] A package = one PD crate + interface-types version + optional profile fragment; publish = CI ELF artifact + pin → Phase 40
 
 ## Phase 36 — Logging, config, and ops
 
@@ -314,21 +317,35 @@ Tracer-bullet order: FS (32) → TCP/fetch (31) → shell (34) → supervisor (3
 - [x] One target board (`rpi4b_4gb`): serial console via PL011; `BOARD=rpi4b_4gb just image`
 - [x] `hardware-rpi4.toml` profile (basic hello slice); full storage+net use native drivers (virtio dropped when native exist)
 - [x] Smoke subset on hardware / manual gate: `BOARD=rpi4b_4gb just test` (and `lerux test`) now does full image build + prints manual verification guidance. `run` also supported for image+instructions. (No auto QEMU; real device or future HW CI.)
-- [x] Native driver PD skeletons: `genet-driver` (RPi4 bcm2711-genet-v5) and `emmc2-driver` (bcm2711-emmc2); board entries `rpi4b_4gb_net` / `rpi4b_4gb_blk`; templates `net-genet-rpi.system.template`, `blk-emmc-rpi.system.template`. Stubs allow init + basic TX/block read completion for smoke parity. Full HW register/DMA/MDIO/ADMA impl is the next detailed step.
+- [x] Native driver PD skeletons: `genet-driver` (RPi4 bcm2711-genet-v5) and `emmc2-driver` (bcm2711-emmc2); board entries `rpi4b_4gb_net` / `rpi4b_4gb_blk`; templates `net-genet-rpi.system.template`, `blk-emmc-rpi.system.template`. Stubs allow init + basic TX/block read completion for manual smoke parity. Full register/DMA/MDIO/ADMA impl → Phase 39.
 
 ## Phase 38 — Optional TUI apps (ported only)
 
 - [x] Cherry-pick `edit` TUI app with clear IPC boundary (`EditRequest`/`EditResponse` via `lerux-interface-types`)
 - [x] `edit` PD: FS load/save + editing state machine; shell proxies keys (Ctrl-S save, Ctrl-Q quit, basic insert/bs/enter/arrows) and renders view
 - [x] Wired into `workstation` profile + system template + smoke
-- [ ] Additional apps: `top`, `chat-client`, HTTP file browser (future)
 
-### MVP done (Phases 31–35)
+### MVP done (Phases 31–38 on QEMU)
 
-- [x] Profile `workstation` boots supervisor + FS + net + shell (via boards + new profile abstraction)
-- [x] Shell lists/reads/writes files and `fetch`es a URL
-- [x] Host `lerux profile build workstation` (and list/diff) introduced; reproduces `loader.img` from current pinned tree
+- [x] Profile `workstation` boots supervisor + FS + net + shell + log + config + edit
+- [x] Shell lists/reads/writes files, `fetch`es a URL, `dmesg`, and launches `edit`
+- [x] Host `lerux profile build workstation` (and list/diff) reproduces `loader.img` from the current pinned tree
 - [x] CI smoke covers workstation (incl. edit PD init) + `edit` command path (basic)
+
+## Phase 39 — RPi4 workstation (planned)
+
+Bring the QEMU workstation stack to real hardware on `rpi4b_4gb`.
+
+- [ ] Full `genet-driver`: DMA rings, MDIO, reliable RX (not just init + TX stub)
+- [ ] Full `emmc2-driver`: SDHCI/ADMA, reliable block read/write on SD
+- [ ] `workstation-rpi4` profile + `.system` template: supervisor + fs-server + net-server + shell + log + config + edit over native drivers
+- [ ] Manual HW gate: serial REPL, `ls`/`cat`/`fetch`/`edit` on device (`BOARD=rpi4b_4gb just test` guidance)
+- [ ] Optional: serial-capture HW CI harness (no QEMU for RPi4)
+
+## Phase 40 — Packages and more apps (planned)
+
+- [ ] Phase 35 follow-up: package = PD crate + interface-types version + profile fragment; CI ELF artifact + pin
+- [ ] Additional ported apps: `top` (supervisor IPC), `chat-client`, HTTP file browser (FS + net IPC)
 
 ## Version alignment
 

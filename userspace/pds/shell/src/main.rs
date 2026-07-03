@@ -8,8 +8,8 @@ use embedded_hal_nb::{
     serial::{Read as _, Write as _},
 };
 use lerux_interface_types::{
-    FsRequest, FsResponse, LogRequest, LogResponse, NetRequest, NetResponse, SupervisorRequest,
-    SupervisorResponse,
+    EditRequest, EditResponse, FsRequest, FsResponse, LogRequest, LogResponse, NetRequest,
+    NetResponse, SupervisorRequest, SupervisorResponse,
 };
 use lerux_ipc::call;
 use lerux_logging::{log, server};
@@ -21,6 +21,7 @@ const FS_SERVER: Channel = Channel::new(1);
 const NET_SERVER: Channel = Channel::new(2);
 const SUPERVISOR: Channel = Channel::new(3);
 const LOG_SERVER: Channel = Channel::new(4);
+const EDIT: Channel = Channel::new(6);
 
 const INPUT_BUF_CAP: usize = 128;
 
@@ -28,6 +29,7 @@ struct HandlerImpl {
     console: SerialClient,
     input_buf: [u8; INPUT_BUF_CAP],
     input_len: usize,
+    in_edit: bool,
 }
 
 fn write_bytes(console: &mut SerialClient, bytes: &[u8]) {
@@ -65,6 +67,43 @@ fn fs_call(req: FsRequest) -> FsResponse {
         Ok(FsResponse::Pending) => poll_fs(),
         Ok(other) => other,
         Err(_) => FsResponse::Error,
+    }
+}
+
+fn edit_call(req: EditRequest) -> EditResponse {
+    match call::<EditRequest, EditResponse>(EDIT, req) {
+        Ok(other) => other,
+        Err(_) => EditResponse::Error,
+    }
+}
+
+fn edit_view_to_display(console: &mut SerialClient, v: &EditResponse) {
+    if let EditResponse::View {
+        path_len,
+        path,
+        line_count,
+        line_lens,
+        lines,
+        cursor_row: _,
+        cursor_col: _,
+        modified,
+    } = v
+    {
+        // crude clear + redraw for small buffers
+        write_bytes(console, b"\r\n--- edit: ");
+        let p = &path[..*path_len as usize];
+        write_bytes(console, p);
+        if *modified {
+            write_bytes(console, b" *");
+        }
+        write_bytes(console, b" (Ctrl-S save  Ctrl-Q quit)\r\n");
+        for i in 0..(*line_count as usize) {
+            let l = line_lens[i] as usize;
+            write_bytes(console, &lines[i][..l]);
+            write_bytes(console, b"\r\n");
+        }
+    } else {
+        println(console, "edit: view error");
     }
 }
 
@@ -195,7 +234,7 @@ fn dmesg(console: &mut SerialClient) {
     }
 }
 
-fn process_command(console: &mut SerialClient, line: &[u8]) {
+fn process_command(h: &mut HandlerImpl, line: &[u8]) {
     let line = if let Some(p) = line.iter().position(|&b| b == b'\r' || b == b'\n') {
         &line[..p]
     } else {
@@ -208,12 +247,12 @@ fn process_command(console: &mut SerialClient, line: &[u8]) {
     let mut parts = line.split(|&b| b == b' ');
     let cmd = parts.next().unwrap_or(b"");
     match cmd {
-        b"ls" => ls(console),
+        b"ls" => ls(&mut h.console),
         b"cat" => {
             if let Some(p) = parts.next() {
-                cat(console, p);
+                cat(&mut h.console, p);
             } else {
-                println(console, "usage: cat <path>");
+                println(&mut h.console, "usage: cat <path>");
             }
         }
         b"write" => {
@@ -232,29 +271,54 @@ fn process_command(console: &mut SerialClient, line: &[u8]) {
                 } else {
                     b""
                 };
-                write_file(console, path, data);
+                write_file(&mut h.console, path, data);
             } else {
-                println(console, "usage: write <path> <data>");
+                println(&mut h.console, "usage: write <path> <data>");
             }
         }
-        b"time" | b"date" => time(console),
-        b"ps" => ps(console),
-        b"reboot" => reboot(console),
-        b"fetch" => fetch_demo(console),
+        b"time" | b"date" => time(&mut h.console),
+        b"ps" => ps(&mut h.console),
+        b"reboot" => reboot(&mut h.console),
+        b"fetch" => fetch_demo(&mut h.console),
         b"help" => println(
-            console,
-            "commands: ls cat <p> write <p> <d> time ps reboot fetch dmesg help",
+            &mut h.console,
+            "commands: ls cat <p> write <p> <d> time ps reboot fetch dmesg edit <p> help",
         ),
         b"echo" => {
             let rest = &line[4..];
-            write_bytes(console, rest);
-            write_bytes(console, b"\r\n");
+            write_bytes(&mut h.console, rest);
+            write_bytes(&mut h.console, b"\r\n");
         }
-        b"dmesg" => dmesg(console),
+        b"dmesg" => dmesg(&mut h.console),
+        b"edit" => {
+            if let Some(p) = parts.next() {
+                let mut pb = [0u8; lerux_interface_types::MAX_FS_PATH];
+                let n = p.len().min(pb.len());
+                pb[..n].copy_from_slice(&p[..n]);
+                match edit_call(EditRequest::Open {
+                    path_len: n as u8,
+                    path: pb,
+                }) {
+                    EditResponse::View { .. } => {
+                        h.in_edit = true;
+                        // redraw now
+                        if let EditResponse::View { .. } = edit_call(EditRequest::GetView) {
+                            // re-fetch to have clean struct match
+                            if let r @ EditResponse::View { .. } = edit_call(EditRequest::GetView) {
+                                edit_view_to_display(&mut h.console, &r);
+                            }
+                        }
+                    }
+                    _ => println(&mut h.console, "edit: open failed"),
+                }
+            } else {
+                println(&mut h.console, "usage: edit <path>");
+            }
+        }
         _ => {
-            print(console, "unknown command: ");
-            write_bytes(console, cmd);
-            println(console, " (help)");
+            print(&mut h.console, "unknown command: ");
+            write_bytes(&mut h.console, cmd);
+            println(&mut h.console, " (help)");
         }
     }
 }
@@ -282,26 +346,86 @@ fn init() -> HandlerImpl {
         console: SerialClient::new(SERIAL_DRIVER),
         input_buf: [0; INPUT_BUF_CAP],
         input_len: 0,
+        in_edit: false,
     }
 }
 
 impl HandlerImpl {
     fn handle_byte(&mut self, b: u8) {
         if b == b'\r' || b == b'\n' {
+            if self.in_edit {
+                // In edit, \r/\n means newline op, not submit
+                write_bytes(&mut self.console, b"\r\n");
+                let _ = edit_call(EditRequest::Newline);
+                if let r @ EditResponse::View { .. } = edit_call(EditRequest::GetView) {
+                    edit_view_to_display(&mut self.console, &r);
+                }
+                self.input_len = 0;
+                return;
+            }
             write_bytes(&mut self.console, b"\r\n");
             let mut line = [0u8; INPUT_BUF_CAP];
             let n = self.input_len;
             line[..n].copy_from_slice(&self.input_buf[..n]);
             self.input_len = 0;
-            process_command(&mut self.console, &line[..n]);
-            print_prompt(&mut self.console);
+            process_command(self, &line[..n]);
+            if !self.in_edit {
+                print_prompt(&mut self.console);
+            }
             return;
         }
         if b == 0x08 || b == 0x7f {
+            if self.in_edit {
+                let _ = edit_call(EditRequest::Backspace);
+                if let r @ EditResponse::View { .. } = edit_call(EditRequest::GetView) {
+                    edit_view_to_display(&mut self.console, &r);
+                }
+                return;
+            }
             if self.input_len > 0 {
                 self.input_len -= 1;
                 write_bytes(&mut self.console, b"\x08 \x08");
             }
+            return;
+        }
+        // ctrl-s = save (0x13), ctrl-q = quit (0x11)
+        if self.in_edit {
+            if b == 0x13 {
+                // Ctrl-S
+                match edit_call(EditRequest::Save) {
+                    EditResponse::Ok => {
+                        write_bytes(&mut self.console, b"\r\n[saved]\r\n");
+                    }
+                    _ => {
+                        println(&mut self.console, "save failed");
+                    }
+                }
+                if let r @ EditResponse::View { .. } = edit_call(EditRequest::GetView) {
+                    edit_view_to_display(&mut self.console, &r);
+                }
+                return;
+            }
+            if b == 0x11 {
+                // Ctrl-Q
+                let _ = edit_call(EditRequest::Quit);
+                self.in_edit = false;
+                write_bytes(&mut self.console, b"\r\n[quit edit]\r\n");
+                print_prompt(&mut self.console);
+                return;
+            }
+            if b == 0x1b {
+                // ESC or start of arrow, ignore for v1 or simple
+                return;
+            }
+            // printable -> insert (or control ignored)
+            if (32..127).contains(&b) {
+                let _ = edit_call(EditRequest::InsertChar(b));
+                if let r @ EditResponse::View { .. } = edit_call(EditRequest::GetView) {
+                    edit_view_to_display(&mut self.console, &r);
+                }
+                return;
+            }
+            // arrows etc. minimal: ignore or could extend later
             return;
         }
         if self.input_len < INPUT_BUF_CAP {

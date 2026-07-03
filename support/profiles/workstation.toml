@@ -5,6 +5,7 @@ template = "workstation.system.template"
 pds = [
   "supervisor",
   "shell",
+  "edit",
   "fs-server",
   "net-server",
   "log-server",
@@ -41,4 +42,6 @@ channels = [
   "shell:5 <-> config_server:1 (pp)",
   "net_server:5 <-> config_server:2 (pp)",
   "fs_server:5 <-> config_server:3 (pp)",
+  "shell:6 <-> edit:0 (pp)",
+  "fs_server:6 <-> edit:1 (pp)",
 ]

@@ -204,6 +204,7 @@ pub fn default_expects(board: &str) -> Vec<String> {
             "virtio-net: MAC".into(),
             "lerux-supervisor: ready".into(),
             "lerux-shell: ready".into(),
+            "lerux-edit: ready".into(),
         ],
         "qemu_virt_aarch64_net" | "qemu_virt_riscv64_net" | "x86_64_generic_net" => vec![
             "lerux-net: ready".into(),

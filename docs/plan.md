@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-03 (Phase 37)
+Last updated: 2026-07-03 (Phase 38 start)
 
 ## Phase 1 — Bring-up
 
@@ -318,15 +318,17 @@ Tracer-bullet order: FS (32) → TCP/fetch (31) → shell (34) → supervisor (3
 
 ## Phase 38 — Optional TUI apps (ported only)
 
-- [ ] Cherry-pick apps with clear IPC boundaries: `edit`, `top`, `chat-client`, HTTP file browser
-- [ ] No POSIX layer; each app is a PD + `lerux-interface-types` contract
+- [x] Cherry-pick `edit` TUI app with clear IPC boundary (`EditRequest`/`EditResponse` via `lerux-interface-types`)
+- [x] `edit` PD: FS load/save + editing state machine; shell proxies keys (Ctrl-S save, Ctrl-Q quit, basic insert/bs/enter/arrows) and renders view
+- [x] Wired into `workstation` profile + system template + smoke
+- [ ] Additional apps: `top`, `chat-client`, HTTP file browser (future)
 
 ### MVP done (Phases 31–35)
 
 - [x] Profile `workstation` boots supervisor + FS + net + shell (via boards + new profile abstraction)
 - [x] Shell lists/reads/writes files and `fetch`es a URL
 - [x] Host `lerux profile build workstation` (and list/diff) introduced; reproduces `loader.img` from current pinned tree
-- [ ] CI smoke covers FS + fetch + shell script (smoke already covers workstation board; profile command is additive)
+- [x] CI smoke covers workstation (incl. edit PD init) + `edit` command path (basic)
 
 ## Version alignment
 

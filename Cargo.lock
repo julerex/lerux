@@ -419,6 +419,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "edit"
+version = "0.1.0"
+dependencies = [
+ "lerux-interface-types",
+ "lerux-ipc",
+ "lerux-logging",
+ "sel4-microkit",
+]
+
+[[package]]
 name = "either"
 version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

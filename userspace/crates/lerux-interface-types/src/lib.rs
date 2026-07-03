@@ -1129,3 +1129,196 @@ mod config_keys_bytes {
         deserializer.deserialize_bytes(KeysVisitor)
     }
 }
+
+/// Edit TUI app (Phase 38 "edit").
+/// Small fixed buffers keep everything stack / postcard friendly.
+pub const MAX_EDIT_LINES: usize = 24;
+pub const MAX_EDIT_LINE_LEN: usize = 80;
+
+/// Requests sent by shell (or future TUI host) to the edit PD.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum EditRequest {
+    /// Open (or create empty) a file for editing.
+    Open {
+        path_len: u8,
+        #[serde(with = "fs_path_bytes")]
+        path: [u8; MAX_FS_PATH],
+    },
+    /// Insert printable char at cursor.
+    InsertChar(u8),
+    Backspace,
+    Newline,
+    MoveLeft,
+    MoveRight,
+    MoveUp,
+    MoveDown,
+    /// Write buffer back to the open path.
+    Save,
+    /// Snapshot for rendering (cursor + lines + path + flags).
+    GetView,
+    /// Leave edit mode (caller decides whether to save first).
+    Quit,
+}
+
+/// Responses from edit PD.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "View carries full editor lines for TUI redraw"
+)]
+pub enum EditResponse {
+    Pending,
+    Ok,
+    Error,
+    View {
+        path_len: u8,
+        #[serde(with = "fs_path_bytes")]
+        path: [u8; MAX_FS_PATH],
+        line_count: u8,
+        #[serde(with = "edit_line_lens")]
+        line_lens: [u8; MAX_EDIT_LINES],
+        #[serde(with = "edit_lines_bytes")]
+        lines: [[u8; MAX_EDIT_LINE_LEN]; MAX_EDIT_LINES],
+        cursor_row: u8,
+        cursor_col: u8,
+        modified: bool,
+    },
+}
+
+mod edit_line_lens {
+    use core::fmt;
+
+    use serde::{
+        de::{self, SeqAccess, Visitor},
+        Deserializer, Serializer,
+    };
+
+    use super::MAX_EDIT_LINES;
+
+    pub fn serialize<S: Serializer>(
+        lens: &[u8; MAX_EDIT_LINES],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bytes(lens)
+    }
+
+    struct LensVisitor;
+
+    impl<'de> Visitor<'de> for LensVisitor {
+        type Value = [u8; MAX_EDIT_LINES];
+
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("byte array of edit line lengths")
+        }
+
+        fn visit_bytes<E: de::Error>(self, v: &[u8]) -> Result<Self::Value, E> {
+            if v.len() != MAX_EDIT_LINES {
+                return Err(E::invalid_length(v.len(), &self));
+            }
+            let mut lens = [0u8; MAX_EDIT_LINES];
+            lens.copy_from_slice(v);
+            Ok(lens)
+        }
+
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+            let mut lens = [0u8; MAX_EDIT_LINES];
+            for byte in lens.iter_mut() {
+                match seq.next_element()? {
+                    Some(value) => *byte = value,
+                    None => break,
+                }
+            }
+            if seq.next_element::<u8>()?.is_some() {
+                return Err(de::Error::invalid_length(MAX_EDIT_LINES + 1, &self));
+            }
+            Ok(lens)
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<[u8; MAX_EDIT_LINES], D::Error> {
+        deserializer.deserialize_bytes(LensVisitor)
+    }
+}
+
+mod edit_lines_bytes {
+    use core::fmt;
+
+    use serde::{
+        de::{self, SeqAccess, Visitor},
+        Deserializer, Serializer,
+    };
+
+    use super::{MAX_EDIT_LINES, MAX_EDIT_LINE_LEN};
+
+    pub fn serialize<S: Serializer>(
+        lines: &[[u8; MAX_EDIT_LINE_LEN]; MAX_EDIT_LINES],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        let mut flat = [0u8; MAX_EDIT_LINES * MAX_EDIT_LINE_LEN];
+        for (i, line) in lines.iter().enumerate() {
+            let start = i * MAX_EDIT_LINE_LEN;
+            flat[start..start + MAX_EDIT_LINE_LEN].copy_from_slice(line);
+        }
+        serializer.serialize_bytes(&flat)
+    }
+
+    struct LinesVisitor;
+
+    impl<'de> Visitor<'de> for LinesVisitor {
+        type Value = [[u8; MAX_EDIT_LINE_LEN]; MAX_EDIT_LINES];
+
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("flat byte array of edit lines")
+        }
+
+        fn visit_bytes<E: de::Error>(self, v: &[u8]) -> Result<Self::Value, E> {
+            if v.len() != MAX_EDIT_LINES * MAX_EDIT_LINE_LEN {
+                return Err(E::invalid_length(v.len(), &self));
+            }
+            let mut lines = [[0u8; MAX_EDIT_LINE_LEN]; MAX_EDIT_LINES];
+            for (i, chunk) in v.chunks(MAX_EDIT_LINE_LEN).take(MAX_EDIT_LINES).enumerate() {
+                if let Some(dst) = lines.get_mut(i) {
+                    let n = chunk.len().min(MAX_EDIT_LINE_LEN);
+                    dst[..n].copy_from_slice(&chunk[..n]);
+                }
+            }
+            Ok(lines)
+        }
+
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+            let mut flat = [0u8; MAX_EDIT_LINES * MAX_EDIT_LINE_LEN];
+            for byte in flat.iter_mut() {
+                match seq.next_element()? {
+                    Some(value) => *byte = value,
+                    None => break,
+                }
+            }
+            if seq.next_element::<u8>()?.is_some() {
+                return Err(de::Error::invalid_length(
+                    MAX_EDIT_LINES * MAX_EDIT_LINE_LEN + 1,
+                    &self,
+                ));
+            }
+            let mut lines = [[0u8; MAX_EDIT_LINE_LEN]; MAX_EDIT_LINES];
+            for (i, chunk) in flat
+                .chunks(MAX_EDIT_LINE_LEN)
+                .take(MAX_EDIT_LINES)
+                .enumerate()
+            {
+                if let Some(dst) = lines.get_mut(i) {
+                    let n = chunk.len().min(MAX_EDIT_LINE_LEN);
+                    dst[..n].copy_from_slice(&chunk[..n]);
+                }
+            }
+            Ok(lines)
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<[[u8; MAX_EDIT_LINE_LEN]; MAX_EDIT_LINES], D::Error> {
+        deserializer.deserialize_bytes(LinesVisitor)
+    }
+}

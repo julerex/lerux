@@ -151,6 +151,10 @@ const AARCH64_CRATES: &[ClippyCrate<'_>] = &[
         feature: Some("board-qemu_virt_aarch64_workstation"),
     },
     ClippyCrate {
+        name: "edit",
+        feature: Some("board-qemu_virt_aarch64_workstation"),
+    },
+    ClippyCrate {
         name: "config-server",
         feature: Some("board-qemu_virt_aarch64_workstation"),
     },

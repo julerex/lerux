@@ -28,6 +28,7 @@ members = [
     "userspace/pds/fs-client",
     "userspace/pds/shell",
     "userspace/pds/log-server",
+    "userspace/pds/config-server",
     "userspace/crates/lerux-sync",
     "userspace/crates/lerux-virtio-hal",
     "userspace/crates/lerux-virtio-pci",

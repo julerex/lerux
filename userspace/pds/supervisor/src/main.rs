@@ -19,7 +19,8 @@ use sel4_microkit_driver_adapters::{
 
 #[cfg(feature = "board-qemu_virt_aarch64_workstation")]
 use lerux_interface_types::{
-    FsRequest, FsResponse, LogRequest, LogResponse, NetRequest, NetResponse,
+    ConfigRequest, ConfigResponse, FsRequest, FsResponse, LogRequest, LogResponse, NetRequest,
+    NetResponse,
 };
 #[cfg(feature = "board-qemu_virt_aarch64_workstation")]
 use lerux_ipc::call;
@@ -45,6 +46,8 @@ const NET_SERVER: Channel = Channel::new(4);
 const SHELL: Channel = Channel::new(5);
 #[cfg(feature = "board-qemu_virt_aarch64_workstation")]
 const LOG_SERVER: Channel = Channel::new(6);
+#[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+const CONFIG_SERVER: Channel = Channel::new(7);
 
 struct HandlerImpl;
 
@@ -197,6 +200,22 @@ fn init() -> HandlerImpl {
     #[cfg(feature = "board-qemu_virt_aarch64_workstation")]
     {
         probe_fs();
+        // Seed some defaults via config-server (FS backed)
+        let mut key = [0u8; 32];
+        let kdata = b"net.ip";
+        key[..kdata.len()].copy_from_slice(kdata);
+        let mut val = [0u8; 64];
+        let vdata = b"10.0.2.15";
+        val[..vdata.len()].copy_from_slice(vdata);
+        let _ = call::<ConfigRequest, ConfigResponse>(
+            CONFIG_SERVER,
+            ConfigRequest::Set {
+                key_len: kdata.len() as u8,
+                key,
+                val_len: vdata.len() as u8,
+                value: val,
+            },
+        );
         probe_net();
         persist_boot_log();
         log::info!("lerux-supervisor: ready");

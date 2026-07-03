@@ -67,6 +67,10 @@
         <program_image path="log-server.elf" />
     </protection_domain>
 
+    <protection_domain name="config_server" priority="3" stack_size="0x10_000">
+        <program_image path="config-server.elf" />
+    </protection_domain>
+
     <protection_domain name="supervisor" priority="2" stack_size="0x10_000">
         <program_image path="supervisor.elf" />
     </protection_domain>
@@ -165,5 +169,25 @@
     <channel>
         <end pd="log_server" id="4" />
         <end pd="net_server" id="4" pp="true" />
+    </channel>
+
+    <channel>
+        <end pd="fs_server" id="5" />
+        <end pd="config_server" id="3" pp="true" />
+    </channel>
+
+    <channel>
+        <end pd="supervisor" id="7" />
+        <end pd="config_server" id="0" pp="true" />
+    </channel>
+
+    <channel>
+        <end pd="shell" id="5" />
+        <end pd="config_server" id="1" pp="true" />
+    </channel>
+
+    <channel>
+        <end pd="net_server" id="5" />
+        <end pd="config_server" id="2" pp="true" />
     </channel>
 </system>

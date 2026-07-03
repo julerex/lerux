@@ -8,6 +8,7 @@ pds = [
   "fs-server",
   "net-server",
   "log-server",
+  "config-server",
   "serial-driver",
   "pl031-driver",
   "sp804-driver",
@@ -36,4 +37,8 @@ channels = [
   "supervisor:5 <-> shell:3 (pp)",
   "supervisor:6 <-> log_server:2 (pp)",
   "log_server:1 <-> shell:4 (pp)",
+  "supervisor:7 <-> config_server:0 (pp)",
+  "shell:5 <-> config_server:1 (pp)",
+  "net_server:5 <-> config_server:2 (pp)",
+  "fs_server:5 <-> config_server:3 (pp)",
 ]

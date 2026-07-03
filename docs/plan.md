@@ -304,7 +304,7 @@ Tracer-bullet order: FS (32) → TCP/fetch (31) → shell (34) → supervisor (3
 ## Phase 36 — Logging, config, and ops
 
 - [x] `log-server` PD — multiplex serial + ring buffer; `LogRequest::Append` / `Subscribe` / `GetRecent`
-- [ ] `config-server` PD or FS-backed `/config` keys for net and boot (boot log persisted via FS; `/config` keys via FS paths as baseline)
+- [x] `config-server` PD (FS-backed under /config/ for net and boot keys; baseline implementation using existing fs-server)
 - [x] Shell `dmesg` via log IPC; supervisor persists boot log to FS (`/boot.log`)
 - [x] Updated workstation profile + serial multi-client-3 + logging sinks (server feature) + priority wiring for PPCs
 - [x] Smoke + `just check` + `just check-pd` pass

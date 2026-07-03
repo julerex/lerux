@@ -309,6 +309,47 @@ pub enum SupervisorResponse {
     Time { year: u16, month: u8, day: u8 },
 }
 
+/// Config service (Phase 36).
+/// Keys and values stored as FS files under /config/ for persistence.
+pub const MAX_CONFIG_KEY_LEN: usize = 32;
+pub const MAX_CONFIG_VAL_LEN: usize = 64;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ConfigRequest {
+    Get {
+        key_len: u8,
+        #[serde(with = "config_key_bytes")]
+        key: [u8; MAX_CONFIG_KEY_LEN],
+    },
+    Set {
+        key_len: u8,
+        #[serde(with = "config_key_bytes")]
+        key: [u8; MAX_CONFIG_KEY_LEN],
+        val_len: u8,
+        #[serde(with = "config_val_bytes")]
+        value: [u8; MAX_CONFIG_VAL_LEN],
+    },
+    List,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ConfigResponse {
+    Pending,
+    Ok,
+    Error,
+    Value {
+        val_len: u8,
+        #[serde(with = "config_val_bytes")]
+        value: [u8; MAX_CONFIG_VAL_LEN],
+    },
+    Keys {
+        count: u8,
+        #[serde(with = "config_keys_bytes")]
+        keys: [[u8; MAX_CONFIG_KEY_LEN]; 8],
+        lens: [u8; 8],
+    },
+}
+
 /// Max length of one log message text for LogRequest / ring.
 pub const MAX_LOG_MSG: usize = 80;
 
@@ -910,5 +951,181 @@ mod log_lines_bytes {
         deserializer: D,
     ) -> Result<[[u8; MAX_LOG_MSG]; MAX_LOG_LINES], D::Error> {
         deserializer.deserialize_bytes(LinesVisitor)
+    }
+}
+
+mod config_key_bytes {
+    use core::fmt;
+    use serde::{
+        de::{self, SeqAccess, Visitor},
+        Deserializer, Serializer,
+    };
+
+    use super::MAX_CONFIG_KEY_LEN;
+
+    pub fn serialize<S: Serializer>(
+        key: &[u8; MAX_CONFIG_KEY_LEN],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bytes(key)
+    }
+
+    struct KeyVisitor;
+
+    impl<'de> Visitor<'de> for KeyVisitor {
+        type Value = [u8; MAX_CONFIG_KEY_LEN];
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("a byte array of max config key size")
+        }
+        fn visit_bytes<E: de::Error>(self, v: &[u8]) -> Result<Self::Value, E> {
+            if v.len() > MAX_CONFIG_KEY_LEN {
+                return Err(E::invalid_length(v.len(), &self));
+            }
+            let mut key = [0u8; MAX_CONFIG_KEY_LEN];
+            key[..v.len()].copy_from_slice(v);
+            Ok(key)
+        }
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+            let mut key = [0u8; MAX_CONFIG_KEY_LEN];
+            for (i, byte) in key.iter_mut().enumerate() {
+                match seq.next_element()? {
+                    Some(value) => *byte = value,
+                    None => break,
+                }
+                if i == MAX_CONFIG_KEY_LEN - 1 && seq.next_element::<u8>()?.is_some() {
+                    return Err(de::Error::invalid_length(MAX_CONFIG_KEY_LEN + 1, &self));
+                }
+            }
+            Ok(key)
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<[u8; MAX_CONFIG_KEY_LEN], D::Error> {
+        deserializer.deserialize_bytes(KeyVisitor)
+    }
+}
+
+mod config_val_bytes {
+    use core::fmt;
+    use serde::{
+        de::{self, SeqAccess, Visitor},
+        Deserializer, Serializer,
+    };
+
+    use super::MAX_CONFIG_VAL_LEN;
+
+    pub fn serialize<S: Serializer>(
+        val: &[u8; MAX_CONFIG_VAL_LEN],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bytes(val)
+    }
+
+    struct ValVisitor;
+
+    impl<'de> Visitor<'de> for ValVisitor {
+        type Value = [u8; MAX_CONFIG_VAL_LEN];
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("a byte array of max config value size")
+        }
+        fn visit_bytes<E: de::Error>(self, v: &[u8]) -> Result<Self::Value, E> {
+            if v.len() > MAX_CONFIG_VAL_LEN {
+                return Err(E::invalid_length(v.len(), &self));
+            }
+            let mut val = [0u8; MAX_CONFIG_VAL_LEN];
+            val[..v.len()].copy_from_slice(v);
+            Ok(val)
+        }
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+            let mut val = [0u8; MAX_CONFIG_VAL_LEN];
+            for (i, byte) in val.iter_mut().enumerate() {
+                match seq.next_element()? {
+                    Some(value) => *byte = value,
+                    None => break,
+                }
+                if i == MAX_CONFIG_VAL_LEN - 1 && seq.next_element::<u8>()?.is_some() {
+                    return Err(de::Error::invalid_length(MAX_CONFIG_VAL_LEN + 1, &self));
+                }
+            }
+            Ok(val)
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<[u8; MAX_CONFIG_VAL_LEN], D::Error> {
+        deserializer.deserialize_bytes(ValVisitor)
+    }
+}
+
+mod config_keys_bytes {
+    use core::fmt;
+    use serde::{
+        de::{self, SeqAccess, Visitor},
+        Deserializer, Serializer,
+    };
+
+    use super::MAX_CONFIG_KEY_LEN;
+
+    pub fn serialize<S: Serializer>(
+        keys: &[[u8; MAX_CONFIG_KEY_LEN]; 8],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        let mut flat = [0u8; 8 * MAX_CONFIG_KEY_LEN];
+        for (i, k) in keys.iter().enumerate() {
+            let start = i * MAX_CONFIG_KEY_LEN;
+            flat[start..start + MAX_CONFIG_KEY_LEN].copy_from_slice(k);
+        }
+        serializer.serialize_bytes(&flat)
+    }
+
+    struct KeysVisitor;
+
+    impl<'de> Visitor<'de> for KeysVisitor {
+        type Value = [[u8; MAX_CONFIG_KEY_LEN]; 8];
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("byte array of config keys")
+        }
+        fn visit_bytes<E: de::Error>(self, v: &[u8]) -> Result<Self::Value, E> {
+            if v.len() != 8 * MAX_CONFIG_KEY_LEN {
+                return Err(E::invalid_length(v.len(), &self));
+            }
+            let mut keys = [[0u8; MAX_CONFIG_KEY_LEN]; 8];
+            for (i, chunk) in v.chunks(MAX_CONFIG_KEY_LEN).take(8).enumerate() {
+                if let Some(dst) = keys.get_mut(i) {
+                    let n = chunk.len().min(MAX_CONFIG_KEY_LEN);
+                    dst[..n].copy_from_slice(&chunk[..n]);
+                }
+            }
+            Ok(keys)
+        }
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+            let mut flat = [0u8; 8 * MAX_CONFIG_KEY_LEN];
+            for byte in flat.iter_mut() {
+                match seq.next_element()? {
+                    Some(value) => *byte = value,
+                    None => break,
+                }
+            }
+            if seq.next_element::<u8>()?.is_some() {
+                return Err(de::Error::invalid_length(8 * MAX_CONFIG_KEY_LEN + 1, &self));
+            }
+            let mut keys = [[0u8; MAX_CONFIG_KEY_LEN]; 8];
+            for (i, chunk) in flat.chunks(MAX_CONFIG_KEY_LEN).take(8).enumerate() {
+                if let Some(dst) = keys.get_mut(i) {
+                    let n = chunk.len().min(MAX_CONFIG_KEY_LEN);
+                    dst[..n].copy_from_slice(&chunk[..n]);
+                }
+            }
+            Ok(keys)
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<[[u8; MAX_CONFIG_KEY_LEN]; 8], D::Error> {
+        deserializer.deserialize_bytes(KeysVisitor)
     }
 }

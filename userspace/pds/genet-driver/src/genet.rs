@@ -38,7 +38,7 @@ mod regs {
     // MDIO
     #[allow(dead_code)]
     pub const MDIO_CMD: usize = 0x1c; // relative? actually in UMAC area for v5 often at 0x1c from UMAC?
-    // For GENET v5 the MDIO is at:
+                                      // For GENET v5 the MDIO is at:
     pub const UMAC_MDIO_CMD: usize = 0x820; // typical for v5 layout
     #[allow(dead_code)]
     pub const UMAC_MDIO_CFG: usize = 0x824;
@@ -124,7 +124,11 @@ impl Genet {
         }
 
         // Write command: start | write | phy | reg | data
-        let cmd = (1u32 << 31) | (1u32 << 30) | ((phy as u32) << 21) | ((reg as u32) << 16) | (val as u32);
+        let cmd = (1u32 << 31)
+            | (1u32 << 30)
+            | ((phy as u32) << 21)
+            | ((reg as u32) << 16)
+            | (val as u32);
         self.write32(UMAC_MDIO_CMD, cmd);
 
         // Wait for completion
@@ -220,7 +224,12 @@ impl Genet {
 
         log::info!(
             "genet: MAC programmed {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
-            mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]
+            mac[0],
+            mac[1],
+            mac[2],
+            mac[3],
+            mac[4],
+            mac[5]
         );
     }
 
@@ -284,8 +293,8 @@ impl Genet {
         for i in 0..Self::NUM_TX_DESC {
             let desc = dma.add(tx_desc_off + i * Self::DESC_SIZE) as *mut u32;
             // len_stat = 0, owned by driver (bit usually 31 or so)
-            ptr::write_volatile(desc, 0);                    // addr (low)
-            ptr::write_volatile(desc.add(1), 0);             // len/status
+            ptr::write_volatile(desc, 0); // addr (low)
+            ptr::write_volatile(desc.add(1), 0); // len/status
         }
 
         // Pre-allocate some RX buffers (we own the memory)
@@ -301,7 +310,11 @@ impl Genet {
         // Real GENET has ring enable bits in TDMA_CTRL / RDMA_CTRL
         // For simplicity we assume ring0 is always active after reset.
 
-        log::info!("genet: descriptor rings set up ({} TX / {} RX)", Self::NUM_TX_DESC, Self::NUM_RX_DESC);
+        log::info!(
+            "genet: descriptor rings set up ({} TX / {} RX)",
+            Self::NUM_TX_DESC,
+            Self::NUM_RX_DESC
+        );
     }
 
     /// Transmit a packet (called from ring pump).

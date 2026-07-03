@@ -121,17 +121,22 @@ fn init() -> HandlerImpl {
     // === The requested full initialization ===
     unsafe {
         g.reset();
-        g.phy_init();          // MDIO + RGMII PHY bringup
+        g.phy_init(); // MDIO + RGMII PHY bringup
         g.set_mac(&[0xb8, 0x27, 0xeb, 0x12, 0x34, 0x56]);
         g.umac_enable();
-        g.setup_rings();       // TX/RX descriptor rings inside the driver DMA region
+        g.setup_rings(); // TX/RX descriptor rings inside the driver DMA region
         g.enable_irqs();
     }
 
     let mac = [0xb8, 0x27, 0xeb, 0x12, 0x34, 0x56];
     log::info!(
         "genet: MAC {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x} (full native init)",
-        mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]
+        mac[0],
+        mac[1],
+        mac[2],
+        mac[3],
+        mac[4],
+        mac[5]
     );
 
     let mut dev = GenetDriver::new(g, mac, rx_rings, tx_rings);

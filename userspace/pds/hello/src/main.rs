@@ -164,6 +164,10 @@ fn probe_virtio() -> (BlkRead, net::NetIo) {
 }
 
 #[cfg(not(feature = "virtio"))]
+#[expect(
+    dead_code,
+    reason = "stub used only on virtio boards to keep probe call site unconditional"
+)]
 fn probe_virtio() {}
 
 #[cfg(feature = "virtio")]

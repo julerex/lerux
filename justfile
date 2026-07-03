@@ -159,6 +159,11 @@ test-ipc-composed:
 test-workstation:
     BOARD=qemu_virt_aarch64_workstation just test
 
+# Hardware slice (Phase 37): build only (no QEMU). Example RPi4.
+# Deploy the resulting build/rpi4b_4gb/loader.img via U-Boot.
+hardware-rpi4:
+    BOARD=rpi4b_4gb just image
+
 # HTTP smoke: GET / on virtio-net (host port 18080 -> guest :8080)
 test-http:
     BOARD=qemu_virt_aarch64_http just test

@@ -12,7 +12,8 @@ pub struct Board {
     pub target_triple: String,
     pub template: String,
     pub pds: Vec<String>,
-    pub qemu: String,
+    #[serde(default)]
+    pub qemu: Option<String>,
     pub system_vars: BTreeMap<String, TomlValue>,
 }
 
@@ -43,7 +44,7 @@ pub fn print_board_field(board: &Board, field: Option<&str>) -> Result<()> {
         "target_triple" => println!("{}", board.target_triple),
         "template" => println!("{}", board.template),
         "pds" => println!("{}", board.pds.join(" ")),
-        "qemu" => println!("{}", board.qemu),
+        "qemu" => println!("{}", board.qemu.as_deref().unwrap_or("(hardware)")),
         "system_vars" => println!("{}", serde_json::to_string(&board.system_vars)?),
         _ => bail!("unknown field {field:?}"),
     }

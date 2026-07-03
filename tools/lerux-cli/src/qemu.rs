@@ -28,13 +28,22 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
     let loader = board_build.join("loader.img");
     let disk = ctx.root.join("support/disk.img");
 
+    let qemu_profile = ctx.board.qemu.as_deref();
+    if qemu_profile.is_none() {
+        bail!(
+            "board {:?} is hardware-only (no QEMU profile); run `lerux image --board {}` then deploy loader.img manually (e.g. via U-Boot)",
+            ctx.board_name, ctx.board_name
+        );
+    }
+    let qemu_profile = qemu_profile.unwrap();
+
     let mut path = host_path(&ctx.root);
-    if needs_sp804(&ctx.board.qemu) {
+    if needs_sp804(qemu_profile) {
         let sp804 = install_sp804_qemu(&ctx.root)?;
         path = format!("{}:{}", sp804.display(), path);
     }
 
-    let mut cmd = match ctx.board.qemu.as_str() {
+    let mut cmd = match qemu_profile {
         "aarch64" => {
             let mut c = Command::new("qemu-system-aarch64");
             c.args([
@@ -85,10 +94,7 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
                     path_str(&loader)
                 ),
             ]);
-            if matches!(
-                ctx.board.qemu.as_str(),
-                "aarch64_virtio" | "aarch64_composed"
-            ) {
+            if matches!(qemu_profile, "aarch64_virtio" | "aarch64_composed") {
                 ensure_disk(&disk)?;
                 c.args([
                     "-device",
@@ -104,7 +110,7 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
                     ),
                 ]);
             } else if matches!(
-                ctx.board.qemu.as_str(),
+                qemu_profile,
                 "aarch64_blk"
                     | "aarch64_blk_composed"
                     | "aarch64_fs"
@@ -128,7 +134,7 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
                     ),
                 ]);
             } else if matches!(
-                ctx.board.qemu.as_str(),
+                qemu_profile,
                 "aarch64_net" | "aarch64_fetch" | "aarch64_net_composed" | "aarch64_workstation"
             ) {
                 c.args([
@@ -137,10 +143,7 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
                     "-netdev",
                     "user,id=netdev0",
                 ]);
-            } else if matches!(
-                ctx.board.qemu.as_str(),
-                "aarch64_http" | "aarch64_http_composed"
-            ) {
+            } else if matches!(qemu_profile, "aarch64_http" | "aarch64_http_composed") {
                 c.args([
                     "-device",
                     "virtio-net-device,netdev=netdev0",
@@ -297,7 +300,7 @@ fn x86_command(ctx: &QemuContext, loader: &Path, disk: &Path) -> Result<Command>
         &path_str(loader),
     ]);
 
-    match ctx.board.qemu.as_str() {
+    match ctx.board.qemu.as_deref().unwrap_or_default() {
         "x86_64_virtio" => {
             ensure_disk(disk)?;
             c.args([
@@ -376,7 +379,7 @@ pub fn setup_test_helpers(ctx: &QemuContext) -> Result<Option<std::process::Chil
         return Ok(Some(crate::http_one::start_http_one_background(8081)?));
     }
     if matches!(
-        ctx.board.qemu.as_str(),
+        ctx.board.qemu.as_deref().unwrap_or_default(),
         "aarch64_virtio" | "aarch64_composed" | "riscv64_virtio" | "x86_64_virtio"
     ) {
         return Ok(Some(start_tcp_echo_background(18080)?));
@@ -427,7 +430,7 @@ pub fn load_qemu_context(
 
 pub fn print_http_hint(ctx: &QemuContext) {
     if matches!(
-        ctx.board.qemu.as_str(),
+        ctx.board.qemu.as_deref().unwrap_or_default(),
         "aarch64_http" | "aarch64_http_composed" | "riscv64_http" | "x86_64_http"
     ) {
         eprintln!("Guest listens on :8080; hostfwd maps 127.0.0.1:18080. In another terminal:");

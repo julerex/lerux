@@ -267,3 +267,15 @@ template = "net-x86.system.template"
 pds = ["net-client", "net-server", "serial-driver", "virtio-pci-driver"]
 qemu = "x86_64_net"
 system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48, virtio_net_bar1_phys_addr = "0xfed2_0000", virtio_net_bar4_phys_addr = "0xfed3_0000", virtio_net_ioapic_pin = 11, virtio_net_ioapic_vector = 50, virtio_net_driver_dma_phys_addr = "0x6000_0000", virtio_net_client_dma_phys_addr = "0x6020_0000", virtio_net_rx_free_phys_addr = "0x6040_0000", virtio_net_rx_used_phys_addr = "0x6060_0000", virtio_net_tx_free_phys_addr = "0x6080_0000", virtio_net_tx_used_phys_addr = "0x60a0_0000" }
+
+# Real hardware example (Phase 37). Produces loader.img for deployment (U-Boot on RPi4: fatload + go 0x10000000).
+# Uses PL011 at the ARM peripheral base (0xfe20_1000 on RPi4 BCM2711). IRQ is GIC SPI 121 (verify per seL4 platform).
+# No QEMU profile: `just image` (or `lerux image`) only; `run`/`test` will error with guidance.
+[rpi4b_4gb]
+arch = "aarch64"
+microkit_board = "rpi4b_4gb"
+target = "aarch64-sel4-microkit"
+target_triple = "aarch64-sel4-microkit"
+template = "serial-hello.system.template"
+pds = ["hello", "serial-driver"]
+system_vars = { serial_mmio_phys_addr = "0xfe201000", serial_irq = 121 }

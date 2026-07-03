@@ -27,8 +27,16 @@ const AARCH64_CRATES: &[ClippyCrate<'_>] = &[
         feature: Some("board-qemu_virt_aarch64_composed"),
     },
     ClippyCrate {
+        name: "hello",
+        feature: Some("board-rpi4b_4gb"),
+    },
+    ClippyCrate {
         name: "serial-driver",
         feature: Some("board-qemu_virt_aarch64_http_composed"),
+    },
+    ClippyCrate {
+        name: "serial-driver",
+        feature: Some("board-rpi4b_4gb"),
     },
     ClippyCrate {
         name: "supervisor",

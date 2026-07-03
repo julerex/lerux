@@ -1,0 +1,21 @@
+# hardware-rpi4 profile (Phase 37 — Real hardware slice).
+# Targets Raspberry Pi 4B (4GB model) via Microkit `rpi4b_4gb`.
+# Uses the standard serial-hello template + PL011 console for bring-up.
+#
+# Deploy: build loader.img, copy to FAT partition on SD, from U-Boot:
+#   fatload mmc 0 0x10000000 loader.img
+#   go 0x10000000
+#
+# Storage (block) + NIC on real HW require native drivers (not virtio).
+# This profile starts the hardware slice with serial console only.
+# Future: add native SD / Ethernet PDs and dedicated hardware-*.system.template.
+
+template = "serial-hello.system.template"
+pds = ["hello", "serial-driver"]
+description = "Hello on real RPi4 hardware (serial console)"
+
+default_board = "rpi4b_4gb"
+
+channels = [
+  "serial_driver:1 <-> hello:0 (pp)",
+]

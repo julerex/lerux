@@ -16,6 +16,7 @@ board-qemu_virt_riscv64 = ["serial-ipc"]
 board-qemu_virt_riscv64_virtio = ["serial-ipc", "virtio"]
 board-x86_64_generic = ["serial-ipc"]
 board-x86_64_generic_virtio = ["serial-ipc", "virtio"]
+board-rpi4b_4gb = ["serial-ipc"]
 serial-ipc = ["lerux-logging/serial"]
 virtio = [
     "dep:async-unsync",

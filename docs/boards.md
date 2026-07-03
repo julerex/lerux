@@ -34,6 +34,7 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `x86_64_generic_blk` | x86_64 | `just test-x86-blk` | blk client/server + serial + virtio-pci blk |
 | `x86_64_generic_net` | x86_64 | `just test-x86-net` | net client/server + serial + virtio-pci net |
 | `x86_64_generic_http` | x86_64 | `just test-x86-http` | serial + virtio-pci net + http-server |
+| `rpi4b_4gb` | aarch64 | `BOARD=rpi4b_4gb just image` | hello + serial (PL011; hardware only) |
 
 ## SDK boards
 
@@ -44,6 +45,17 @@ MICROKIT_BOARDS=qemu_virt_aarch64,x86_64_generic,qemu_virt_riscv64 just build-sd
 ```
 
 CI sets this via `MICROKIT_BOARDS` in the workflow env.
+
+## Hardware boards (Phase 37+)
+
+Real (non-QEMU) boards have no `qemu` field and produce `loader.img` only.
+Use `lerux image --board <name>` (or `BOARD=<name> just image`).
+
+- `rpi4b_4gb`: Raspberry Pi 4 Model B (4 GB). Requires U-Boot on SD card. See seL4 docs for initial bring-up and `fatload` / `go`.
+- Serial: PL011 at 0xfe201000 (GPIO 14/15). Update IRQ in `boards.toml` if the platform IRQ mapping differs.
+- Full workstation (FS + net) on hardware requires native (non-virtio) block and network drivers; see `support/profiles/hardware-rpi4.toml`.
+
+`just run` / `just test` on hardware boards produce a clear error directing you to `image`.
 
 ## QEMU profiles
 

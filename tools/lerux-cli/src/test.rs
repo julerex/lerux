@@ -285,7 +285,7 @@ pub fn run_board_test(
     }
 
     let ctx = crate::qemu::load_qemu_context(root, board, build_dir, config)?;
-    crate::qemu::ensure_qemu_binary(&ctx.root, &ctx.board.qemu)?;
+    crate::qemu::ensure_qemu_binary(&ctx.root, ctx.board.qemu.as_deref().unwrap_or_default())?;
     crate::qemu::print_http_hint(&ctx);
 
     if matches!(

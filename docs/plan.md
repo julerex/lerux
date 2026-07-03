@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-03 (Phase 36)
+Last updated: 2026-07-03 (Phase 37)
 
 ## Phase 1 — Bring-up
 
@@ -253,11 +253,11 @@ Tracer-bullet order: FS (32) → TCP/fetch (31) → shell (34) → supervisor (3
 
 | Capability | QEMU virt | Real HW |
 |------------|-----------|---------|
-| Block IPC | yes | Phase 37 |
-| Net IPC (UDP TX) | yes | Phase 37 |
-| Net TCP + DNS | yes | Phase 37 |
-| Filesystem IPC | Phase 32 | Phase 37 |
-| Interactive shell | Phase 34 | Phase 37 |
+| Block IPC | yes | Phase 37 (native drivers pending) |
+| Net IPC (UDP TX) | yes | Phase 37 (native drivers pending) |
+| Net TCP + DNS | yes | Phase 37 (native drivers pending) |
+| Filesystem IPC | Phase 32 | Phase 37 (native drivers pending) |
+| Interactive shell | Phase 34 | Phase 37 (native drivers pending) |
 | Profile-based build | Phase 35 | Phase 35 |
 
 ## Phase 31 — Net service v2 (TCP + DNS)
@@ -311,9 +311,9 @@ Tracer-bullet order: FS (32) → TCP/fetch (31) → shell (34) → supervisor (3
 
 ## Phase 37 — Real hardware slice
 
-- [ ] One target board (e.g. RPi4 or x86 mini PC): storage + one NIC + serial console
-- [ ] `hardware-<board>.toml` profile; drop QEMU-only virtio where native drivers exist
-- [ ] Smoke subset on hardware CI or manual gate
+- [x] One target board (`rpi4b_4gb`): serial console via PL011; `BOARD=rpi4b_4gb just image`
+- [x] `hardware-rpi4.toml` profile (basic hello slice); full storage+net use native drivers (virtio dropped when native exist)
+- [ ] Smoke subset on hardware CI or manual gate (image build verified; deploy/run is manual)
 
 ## Phase 38 — Optional TUI apps (ported only)
 

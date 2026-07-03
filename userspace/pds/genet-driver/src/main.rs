@@ -3,59 +3,60 @@
 
 use lerux_logging::{debug, log};
 use sel4_microkit::{
-    memory_region_symbol, protection_domain, Channel, ChannelSet, Handler, Infallible,
+    memory_region_symbol, protection_domain, var, Channel, ChannelSet, Handler, Infallible,
 };
 use sel4_shared_memory::SharedMemoryRef;
 use sel4_shared_ring_buffer::{roles::Use, RingBuffers};
 
 mod config;
+mod genet;
 
-const CLIENT: Channel = Channel::new(1); // matches net-server wiring in template
+const CLIENT: Channel = Channel::new(1);
 
-/// Minimal genet driver state. Real version would hold ring state, MAC, DMA descriptors.
 struct GenetDriver {
+    genet: genet::Genet,
+    #[allow(dead_code)]
     mac: [u8; 6],
+    #[allow(dead_code)]
+    rx_rings: RingBuffers<'static, Use, fn()>,
+    #[allow(dead_code)]
+    tx_rings: RingBuffers<'static, Use, fn()>,
 }
 
 impl GenetDriver {
-    fn new() -> Self {
-        // Placeholder MAC (real driver reads from GENET_UMAC_MAC0 + GENET_UMAC_MAC1 after reset).
+    fn new(
+        genet: genet::Genet,
+        mac: [u8; 6],
+        rx_rings: RingBuffers<'static, Use, fn()>,
+        tx_rings: RingBuffers<'static, Use, fn()>,
+    ) -> Self {
         Self {
-            mac: [0xb8, 0x27, 0xeb, 0x00, 0x00, 0x01],
+            genet,
+            mac,
+            rx_rings,
+            tx_rings,
         }
     }
 
-    #[expect(
-        dead_code,
-        reason = "MAC read for logging / future use in native driver"
-    )]
-    fn mac(&self) -> [u8; 6] {
-        self.mac
+    fn process_tx(&mut self) {
+        // Simple stub: exercise the transmit path when net-server notifies us.
+        // A real implementation would drain self.tx_rings.take() / .used etc.
+        let dummy_pkt = [0u8; 64];
+        unsafe {
+            let _ = self.genet.transmit(&dummy_pkt);
+        }
+        log::info!("genet: processed TX notification (stub ring pump)");
     }
 
-    /// Called when net layer posts TX work via the ring buffers.
-    /// Real impl: copy buffer to genet TX desc ring, start DMA, return on IRQ completion.
-    fn do_tx(&mut self, len: usize) {
-        log::info!("genet: TX (stub) {} bytes to wire", len);
-        // In full driver: mark the TX buffer used in ring and notify client.
-    }
-}
+    unsafe fn handle_hw_irq(&mut self) {
+        unsafe {
+            self.genet.ack_interrupts();
+            self.genet.check_tx_completions();
+        }
 
-fn create_driver_dma() -> SharedMemoryRef<'static, [u8]> {
-    unsafe {
-        SharedMemoryRef::<'static, _>::new(memory_region_symbol!(
-            virtio_net_driver_dma_vaddr: *mut [u8],
-            n = config::GENET_DRIVER_DMA_SIZE
-        ))
-    }
-}
-
-fn create_client_dma() -> SharedMemoryRef<'static, [u8]> {
-    unsafe {
-        SharedMemoryRef::<'static, _>::new(memory_region_symbol!(
-            virtio_net_client_dma_vaddr: *mut [u8],
-            n = config::GENET_CLIENT_DMA_SIZE
-        ))
+        // Placeholder for RX: real code would walk RX descriptors here,
+        // deliver packets into rx_rings, then re-arm.
+        log::info!("genet: HW IRQ serviced");
     }
 }
 
@@ -88,42 +89,56 @@ impl Handler for HandlerImpl {
 
     fn notified(&mut self, channels: ChannelSet) -> Result<(), Self::Error> {
         if channels.contains(CLIENT) {
-            // Net server notified us (new work in rings or IRQ from genet).
-            // Stub: assume TX work and complete it.
-            self.dev.do_tx(60); // fake size for smoke "TX ok"
-                                // In real driver: poll rings, drive HW, complete used buffers, notify back.
+            self.dev.process_tx();
         }
-        // Also handle our own IRQ channel (id=0 wired to genet IRQ) if present.
+
+        // The GENET IRQ is wired as id=0 in the .system template.
+        if !channels.contains(CLIENT) {
+            unsafe {
+                self.dev.handle_hw_irq();
+            }
+        }
         Ok(())
     }
 }
 
-#[protection_domain(heap_size = 256 * 1024)]
+#[protection_domain(heap_size = 512 * 1024)]
 fn init() -> HandlerImpl {
     debug::init().unwrap();
     log::info!("genet-driver: starting native RPi4 bcm2711-genet-v5 driver (Phase 37)");
 
-    // Map the device (real code would reset the block, configure MDIO, program MAC, alloc rings).
-    let _mmio = memory_region_symbol!(genet_mmio_vaddr: *mut ());
-    let _ = _mmio;
-    let _ = create_driver_dma();
-    let _ = create_client_dma();
-    let _notify: fn() = || CLIENT.notify();
-    let (_rx_rings, _tx_rings) = create_rings(_notify);
+    // Obtain regions mapped by Microkit / the system template.
+    let mmio = memory_region_symbol!(genet_mmio_vaddr: *mut ());
+    let driver_dma_v = memory_region_symbol!(virtio_net_driver_dma_vaddr: *mut u8);
+    let driver_dma_p = *var!(virtio_net_driver_dma_paddr: usize = 0);
 
-    let dev = GenetDriver::new();
+    let _notify: fn() = || CLIENT.notify();
+    let (rx_rings, tx_rings) = create_rings(_notify);
+
+    // Construct the GENET driver.
+    let mut g = unsafe { genet::Genet::new(mmio.as_ptr(), driver_dma_v.as_ptr(), driver_dma_p) };
+
+    // === The requested full initialization ===
+    unsafe {
+        g.reset();
+        g.phy_init();          // MDIO + RGMII PHY bringup
+        g.set_mac(&[0xb8, 0x27, 0xeb, 0x12, 0x34, 0x56]);
+        g.umac_enable();
+        g.setup_rings();       // TX/RX descriptor rings inside the driver DMA region
+        g.enable_irqs();
+    }
+
+    let mac = [0xb8, 0x27, 0xeb, 0x12, 0x34, 0x56];
     log::info!(
-        "genet: MAC {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x} (stub - full HW init TODO)",
-        dev.mac[0],
-        dev.mac[1],
-        dev.mac[2],
-        dev.mac[3],
-        dev.mac[4],
-        dev.mac[5]
+        "genet: MAC {:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x} (full native init)",
+        mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]
     );
 
-    // TODO(37): full genet init (reset, rgmii, umac config, desc rings in the DMA region, enable IRQs).
-    // For now the stub allows net-server to talk and get completions for TX smoke tests.
+    let mut dev = GenetDriver::new(g, mac, rx_rings, tx_rings);
+
+    unsafe {
+        dev.genet.ack_interrupts();
+    }
 
     HandlerImpl { dev }
 }

@@ -1,8 +1,11 @@
 #![no_std]
 #![no_main]
 
+#[cfg(feature = "board-qemu_virt_aarch64_workstation")]
 use lerux_interface_types::{SupervisorRequest, SupervisorResponse};
-use lerux_ipc::{recv, send, send_unspecified_error};
+use lerux_ipc::send_unspecified_error;
+#[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+use lerux_ipc::{recv, send};
 use lerux_logging::{log, serial};
 use rtcc::{DateTimeAccess, Datelike};
 use sel4_driver_interfaces::timer::Clock;
@@ -162,7 +165,21 @@ impl Handler for HandlerImpl {
 
     fn protected(
         &mut self,
+        #[cfg_attr(
+            not(feature = "board-qemu_virt_aarch64_workstation"),
+            expect(
+                unused_variables,
+                reason = "channel and msg_info only used for workstation shell IPC"
+            )
+        )]
         channel: Channel,
+        #[cfg_attr(
+            not(feature = "board-qemu_virt_aarch64_workstation"),
+            expect(
+                unused_variables,
+                reason = "channel and msg_info only used for workstation shell IPC"
+            )
+        )]
         msg_info: MessageInfo,
     ) -> Result<MessageInfo, Self::Error> {
         #[cfg(feature = "board-qemu_virt_aarch64_workstation")]

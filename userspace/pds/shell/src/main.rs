@@ -69,8 +69,7 @@ fn fs_call(req: FsRequest) -> FsResponse {
 fn ls(console: &mut SerialClient) {
     match fs_call(FsRequest::ListDir) {
         FsResponse::DirList { count, entries } => {
-            for i in 0..count as usize {
-                let e = &entries[i];
+            for e in entries.iter().take(count as usize) {
                 let name = core::str::from_utf8(e.name_slice()).unwrap_or("?");
                 let _ = writeln!(ConsoleWriter(console), "{:<20} {}", name, e.size);
             }
@@ -201,14 +200,21 @@ fn process_command(console: &mut SerialClient, line: &[u8]) {
             }
         }
         b"write" => {
-            // write <path> <data...>
-            let rest = line.split(|&b| b == b' ').skip(1).next();
-            if let (Some(path), Some(data_start)) = (
-                parts.next(),
-                line.windows(1).position(|w| w[0] == b' ').map(|i| i + 1),
-            ) {
-                // simplistic take after first space after path
-                let data = &line[data_start + path.len() + 1..]; // rough
+            // write <path> <data...>  (data may contain spaces)
+            let mut it = line.split(|&b| b == b' ');
+            let _ = it.next(); // cmd "write"
+            if let Some(path) = it.next() {
+                // remaining part of line after the path (skip the space after path)
+                let path_pos = line
+                    .windows(path.len())
+                    .position(|w| w == path)
+                    .unwrap_or(0);
+                let data_start = path_pos + path.len() + 1;
+                let data = if data_start < line.len() {
+                    &line[data_start..]
+                } else {
+                    b""
+                };
                 write_file(console, path, data);
             } else {
                 println(console, "usage: write <path> <data>");
@@ -238,15 +244,12 @@ fn process_command(console: &mut SerialClient, line: &[u8]) {
 #[protection_domain]
 fn init() -> HandlerImpl {
     serial::init(SERIAL_DRIVER).unwrap();
-    let console = SerialClient::new(SERIAL_DRIVER);
+    let _console = SerialClient::new(SERIAL_DRIVER);
     log::info!("lerux-shell: ready");
 
     // demo on boot (for smoke)
-    match fs_call(FsRequest::ListDir) {
-        FsResponse::DirList { count, .. } => {
-            log::info!("lerux-shell: ls count={}", count);
-        }
-        _ => {}
+    if let FsResponse::DirList { count, .. } = fs_call(FsRequest::ListDir) {
+        log::info!("lerux-shell: ls count={}", count);
     }
     if let Ok(SupervisorResponse::Time { year, month, day }) =
         call::<SupervisorRequest, SupervisorResponse>(SUPERVISOR, SupervisorRequest::GetTime)

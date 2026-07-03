@@ -332,15 +332,15 @@ Tracer-bullet order: FS (32) → TCP/fetch (31) → shell (34) → supervisor (3
 - [x] Host `lerux profile build workstation` (and list/diff) reproduces `loader.img` from the current pinned tree
 - [x] CI smoke covers workstation (incl. edit PD init) + `edit` command path (basic)
 
-## Phase 39 — RPi4 workstation (in progress)
+## Phase 39 — RPi4 workstation (complete)
 
 Bring the QEMU workstation stack to real hardware on `rpi4b_4gb`.
 
 - [x] `workstation-rpi4` profile + `workstation-rpi4.system.template` + `rpi4b_4gb_workstation` board
-- [x] `emmc2-driver`: SDHCI PIO block read/write + virtio_blk ring IPC + `GetBlockDeviceLayout`
-- [ ] Full `genet-driver`: correct GENET v5 register map, reliable RX under load (ring pump wired; HW validation pending)
+- [x] `emmc2-driver`: SDHCI PIO block read/write + virtio_blk ring IPC + `GetBlockDeviceLayout`; clock/CMD41/4-bit bus hardening
+- [x] `genet-driver`: Linux GENET v5 register map, ring-16 DMA descriptors, MDIO/INTRL2/IRQ enable
 - [ ] Manual HW gate: serial REPL, `ls`/`cat`/`fetch`/`edit` on device (`BOARD=rpi4b_4gb_workstation just image`)
-- [ ] Optional: serial-capture HW CI harness (no QEMU for RPi4)
+- [x] Optional serial-capture HW CI harness: `LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD=rpi4b_4gb_workstation just test`
 
 ## Phase 40 — Packages and more apps (planned)
 

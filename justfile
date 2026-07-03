@@ -169,6 +169,10 @@ hardware-rpi4:
 test-hardware-rpi4:
     BOARD=rpi4b_4gb just test
 
+# RPi4 workstation: build image (+ optional serial smoke via LERUX_HW_SERIAL)
+test-rpi4-workstation:
+    BOARD=rpi4b_4gb_workstation just test
+
 # HTTP smoke: GET / on virtio-net (host port 18080 -> guest :8080)
 test-http:
     BOARD=qemu_virt_aarch64_http just test

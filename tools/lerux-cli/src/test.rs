@@ -1,4 +1,5 @@
 use std::{
+    fs::File,
     io::{BufRead, BufReader, Read},
     process::{Command, Stdio},
     time::{Duration, Instant},
@@ -126,6 +127,44 @@ fn expect_unordered(
     Ok(())
 }
 
+/// Optional hardware smoke: read serial from `LERUX_HW_SERIAL` after image build.
+///
+/// Configure the port first (115200 8N1 raw). Example:
+/// `LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD=rpi4b_4gb_workstation just test`
+pub fn run_hw_serial_smoke(test: &SmokeTest) -> Result<()> {
+    let device = std::env::var("LERUX_HW_SERIAL").context("LERUX_HW_SERIAL not set")?;
+    println!("==> Hardware serial smoke on {device:?}");
+
+    let stty = Command::new("stty")
+        .args(["-F", &device, "115200", "raw", "-echo"])
+        .status()
+        .context("stty serial config")?;
+    if !stty.success() {
+        bail!("stty failed configuring {device:?}");
+    }
+
+    let file = File::open(&device).with_context(|| format!("open serial {device:?}"))?;
+    let output = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+    let out_clone = std::sync::Arc::clone(&output);
+
+    let reader_thread = std::thread::spawn(move || {
+        pump_reader(BufReader::new(file), out_clone);
+    });
+
+    let deadline = Instant::now() + Duration::from_secs(test.timeout_secs);
+    let result = if test.unordered {
+        expect_unordered(&output, &test.expects, deadline)
+    } else {
+        let per = std::cmp::max(30, test.timeout_secs / test.expects.len().max(1) as u64);
+        expect_ordered(&output, &test.expects, per)
+    };
+
+    let _ = reader_thread.join();
+    result?;
+    println!("\n==> hardware serial smoke passed");
+    Ok(())
+}
+
 fn curl_check(url: &str, expect_substr: &str, timeout_secs: u64) -> Result<()> {
     let deadline = Instant::now() + Duration::from_secs(timeout_secs);
     let mut last_error = String::new();
@@ -205,6 +244,26 @@ pub fn default_expects(board: &str) -> Vec<String> {
             "lerux-supervisor: ready".into(),
             "lerux-shell: ready".into(),
             "lerux-edit: ready".into(),
+        ],
+        "rpi4b_4gb_workstation" => vec![
+            "lerux-supervisor: init ok".into(),
+            "genet:".into(),
+            "emmc2:".into(),
+            "lerux-fs: ready".into(),
+            "lerux-net: ready".into(),
+            "lerux-supervisor: ready".into(),
+            "lerux-shell: ready".into(),
+            "lerux-edit: ready".into(),
+        ],
+        "rpi4b_4gb_net" => vec![
+            "lerux-net: ready".into(),
+            "genet:".into(),
+            "genet-driver: ready".into(),
+        ],
+        "rpi4b_4gb_blk" => vec![
+            "lerux-blk: ready".into(),
+            "emmc2:".into(),
+            "emmc2-driver: ready".into(),
         ],
         "qemu_virt_aarch64_net" | "qemu_virt_riscv64_net" | "x86_64_generic_net" => vec![
             "lerux-net: ready".into(),
@@ -288,8 +347,17 @@ pub fn run_board_test(
     let ctx = crate::qemu::load_qemu_context(root, board, build_dir, config)?;
 
     if crate::qemu::is_hardware_board(&ctx) {
+        if std::env::var_os("LERUX_HW_SERIAL").is_some() {
+            let test = SmokeTest {
+                expects: default_expects(board),
+                curls: Vec::new(),
+                unordered: matches!(board, "rpi4b_4gb_workstation"),
+                timeout_secs: 120,
+            };
+            return run_hw_serial_smoke(&test);
+        }
         println!(
-            "==> Hardware board {:?}: image built successfully.\n    No QEMU profile. Perform manual smoke/verification on the device.\n    See docs/boards.md for deployment (e.g. U-Boot on RPi4).",
+            "==> Hardware board {:?}: image built successfully.\n    No QEMU profile. Perform manual smoke/verification on the device.\n    Optional: LERUX_HW_SERIAL=/dev/ttyUSB0 just test (serial capture).\n    See docs/boards.md for deployment (e.g. U-Boot on RPi4).",
             board
         );
         return Ok(());

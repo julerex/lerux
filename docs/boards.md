@@ -41,8 +41,10 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 `just build-sdk` compiles kernel + loader for Microkit board names (not always identical to lerux `BOARD`):
 
 ```bash
-MICROKIT_BOARDS=qemu_virt_aarch64,x86_64_generic,qemu_virt_riscv64 just build-sdk
+MICROKIT_BOARDS=qemu_virt_aarch64,x86_64_generic,qemu_virt_riscv64,rpi4b_4gb just build-sdk
 ```
+
+RPi4 workstation images require `rpi4b_4gb` in `MICROKIT_BOARDS` (e.g. `MICROKIT_BOARDS=qemu_virt_aarch64,rpi4b_4gb just build-sdk`).
 
 CI sets this via `MICROKIT_BOARDS` in the workflow env.
 
@@ -57,7 +59,13 @@ Use `lerux image --board <name>` (or `BOARD=<name> just image`).
 
 `just run` on hardware boards builds the image then prints deployment instructions (no QEMU).
 
-`just test` (or `lerux test`) on hardware boards builds the image then reports success with a note to perform manual verification on the device (advances the smoke gate for Phase 37). No execution step.
+`just test` (or `lerux test`) on hardware boards builds the image then reports success with a note to perform manual verification on the device (advances the smoke gate for Phase 37). No execution step unless serial capture is enabled:
+
+```bash
+LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD=rpi4b_4gb_workstation just test
+```
+
+With `LERUX_HW_SERIAL` set, `lerux test` reads boot logs from the given TTY (115200 8N1) and matches smoke patterns for the board (unordered for `rpi4b_4gb_workstation`).
 
 ## QEMU profiles
 

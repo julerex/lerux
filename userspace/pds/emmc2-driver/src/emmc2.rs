@@ -22,8 +22,8 @@ mod regs {
     pub const RESPONSE: usize = 0x10;
     pub const BUFFER_DATA: usize = 0x20;
     pub const PRESENT_STATE: usize = 0x24;
-    #[expect(dead_code, reason = "SDHCI host control; reserved for bus-width setup")]
     pub const HOST_CONTROL: usize = 0x28;
+    pub const HOST_CONTROL_4BIT: u8 = 1 << 1;
     pub const POWER_CONTROL: usize = 0x29;
     pub const CLOCK_CONTROL: usize = 0x2c;
     pub const TIMEOUT_CONTROL: usize = 0x2e;
@@ -178,8 +178,7 @@ impl Emmc2 {
 
         self.write16(NORMAL_INT_STATUS, 0xffff);
         self.write16(ERROR_INT_STATUS, 0xffff);
-        self.write16(ARGUMENT, (arg >> 16) as u16);
-        self.write16(ARGUMENT + 2, arg as u16);
+        self.write32(ARGUMENT, arg);
         self.write16(TRANSFER_MODE, transfer_mode);
         let cmd_reg = (u16::from(cmd_index) << 8) | flags | CMD_CRC_EN | CMD_INDEX_EN;
         self.write16(COMMAND, cmd_reg);
@@ -191,11 +190,19 @@ impl Emmc2 {
         Ok(())
     }
 
+    fn sdhci_divisor(base_hz: u32, target_hz: u32) -> u16 {
+        // SDCLK = base / (2 * divisor) per SDHCI spec.
+        let mut div = base_hz / (2 * target_hz);
+        if !base_hz.is_multiple_of(2 * target_hz) {
+            div += 1;
+        }
+        div.clamp(1, 255) as u16
+    }
+
     unsafe fn set_clock(&mut self, hz: u32) -> Result<(), Emmc2Error> {
-        // SDHCI base clock on RPi4 EMMC is typically 50 MHz.
         const BASE_HZ: u32 = 50_000_000;
-        let divisor = (BASE_HZ / hz).max(1);
-        let sdclk = (divisor as u16) << 8;
+        let divisor = Self::sdhci_divisor(BASE_HZ, hz);
+        let sdclk = divisor << 8;
 
         self.write16(CLOCK_CONTROL, 0);
         for _ in 0..10_000 {
@@ -205,14 +212,14 @@ impl Emmc2 {
         for _ in 0..10_000 {
             core::hint::spin_loop();
         }
-        self.write16(CLOCK_CONTROL, sdclk | 0x0004); // internal clock enable
+        self.write16(CLOCK_CONTROL, sdclk | 0x0004);
         for _ in 0..100_000 {
             if self.read16(CLOCK_CONTROL) & 0x0002 != 0 {
                 break;
             }
             core::hint::spin_loop();
         }
-        self.write16(CLOCK_CONTROL, sdclk | 0x0004 | 0x0001); // SD clock enable
+        self.write16(CLOCK_CONTROL, sdclk | 0x0005);
         Ok(())
     }
 
@@ -256,10 +263,12 @@ impl Emmc2 {
         // CMD8 — interface condition (SD v2+)
         let _ = self.send_cmd(8, 0x1aa, RESP_48, 0);
 
-        // ACMD41 — wait until card ready
+        // ACMD41 — HCS for SDHC/SDXC; wait until card ready (OCR busy bit).
+        const OCR_VOLTAGE: u32 = 0x00ff8000;
+        const OCR_HCS: u32 = 1 << 30;
         for _ in 0..1000 {
             self.send_cmd(55, 0, RESP_48, 0)?;
-            if self.send_cmd(41, 0x40ff8000, RESP_48, 0).is_ok() {
+            if self.send_cmd(41, OCR_VOLTAGE | OCR_HCS, RESP_48, 0).is_ok() {
                 let resp = self.read32(RESPONSE);
                 if resp & (1 << 31) != 0 {
                     break;
@@ -276,6 +285,12 @@ impl Emmc2 {
         let select_arg = u32::from(self.rca) << 16;
         self.send_cmd(7, select_arg, RESP_48_BUSY, 0)?;
         self.send_cmd(16, SECTOR_SIZE as u32, RESP_48, 0)?;
+
+        // ACMD6 — 4-bit bus (faster transfers on the SD slot).
+        self.send_cmd(55, select_arg, RESP_48, 0)?;
+        self.send_cmd(6, 2, RESP_48, 0)?;
+        let hc = self.read8(HOST_CONTROL);
+        self.write8(HOST_CONTROL, hc | HOST_CONTROL_4BIT);
 
         self.set_clock(25_000_000)?;
 

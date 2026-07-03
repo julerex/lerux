@@ -114,11 +114,6 @@
     </channel>
 
     <channel>
-        <end pd="fs_server" id="4" />
-        <end pd="log_server" id="3" pp="true" />
-    </channel>
-
-    <channel>
         <end pd="genet_driver" id="1" />
         <end pd="net_server" id="1" pp="true" />
     </channel>
@@ -134,23 +129,28 @@
     </channel>
 
     <channel>
-        <end pd="net_server" id="4" />
-        <end pd="log_server" id="4" pp="true" />
-    </channel>
-
-    <channel>
         <end pd="supervisor" id="5" />
         <end pd="shell" id="3" pp="true" />
     </channel>
 
     <channel>
-        <end pd="supervisor" id="6" />
-        <end pd="log_server" id="2" pp="true" />
+        <end pd="log_server" id="1" />
+        <end pd="shell" id="4" pp="true" />
     </channel>
 
     <channel>
-        <end pd="log_server" id="1" />
-        <end pd="shell" id="4" pp="true" />
+        <end pd="log_server" id="2" />
+        <end pd="supervisor" id="6" pp="true" />
+    </channel>
+
+    <channel>
+        <end pd="log_server" id="3" />
+        <end pd="fs_server" id="4" pp="true" />
+    </channel>
+
+    <channel>
+        <end pd="log_server" id="4" />
+        <end pd="net_server" id="4" pp="true" />
     </channel>
 
     <channel>

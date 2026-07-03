@@ -3,7 +3,8 @@
 
 use lerux_logging::{debug, log};
 use sel4_microkit::{
-    memory_region_symbol, protection_domain, Channel, ChannelSet, Handler, Infallible, MessageInfo,
+    memory_region_symbol, protection_domain, var, Channel, ChannelSet, Handler, Infallible,
+    MessageInfo,
 };
 use sel4_microkit_driver_adapters::block::driver::handle_client_request;
 use sel4_shared_memory::SharedMemoryRef;
@@ -135,6 +136,9 @@ fn init() -> HandlerImpl {
     log::info!("emmc2-driver: RPi4 bcm2711-emmc2 native driver");
 
     let mmio = memory_region_symbol!(emmc2_mmio_vaddr: *mut ());
+    let _driver_dma = memory_region_symbol!(virtio_blk_driver_dma_vaddr: *mut u8);
+    let _driver_dma_paddr = *var!(virtio_blk_driver_dma_paddr: usize = 0);
+    let _ = (_driver_dma, _driver_dma_paddr);
     let mut dev = unsafe { emmc2::Emmc2::new(mmio.as_ptr()) };
     match unsafe { dev.init() } {
         Ok(()) => log::info!("emmc2: SDHCI init ok"),

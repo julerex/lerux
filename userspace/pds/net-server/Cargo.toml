@@ -19,7 +19,7 @@ board-x86_64_generic_net = []
 [dependencies]
 lerux-interface-types = { path = "../../crates/lerux-interface-types" }
 lerux-ipc = { path = "../../crates/lerux-ipc" }
-lerux-logging = { path = "../../crates/lerux-logging" }
+lerux-logging = { path = "../../crates/lerux-logging", features = ["server"] }
 sel4-abstract-allocator = { workspace = true }
 sel4-driver-interfaces = { workspace = true }
 sel4-microkit = { workspace = true, features = ["alloc"] }

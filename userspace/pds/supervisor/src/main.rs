@@ -6,7 +6,10 @@ use lerux_interface_types::{SupervisorRequest, SupervisorResponse};
 use lerux_ipc::send_unspecified_error;
 #[cfg(feature = "board-qemu_virt_aarch64_workstation")]
 use lerux_ipc::{recv, send};
+#[cfg(not(feature = "board-qemu_virt_aarch64_workstation"))]
 use lerux_logging::{log, serial};
+#[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+use lerux_logging::{log, server};
 use rtcc::{DateTimeAccess, Datelike};
 use sel4_driver_interfaces::timer::Clock;
 use sel4_microkit::{protection_domain, Channel, Handler, Infallible, MessageInfo};
@@ -15,10 +18,13 @@ use sel4_microkit_driver_adapters::{
 };
 
 #[cfg(feature = "board-qemu_virt_aarch64_workstation")]
-use lerux_interface_types::{FsRequest, FsResponse, NetRequest, NetResponse};
+use lerux_interface_types::{
+    FsRequest, FsResponse, LogRequest, LogResponse, NetRequest, NetResponse,
+};
 #[cfg(feature = "board-qemu_virt_aarch64_workstation")]
 use lerux_ipc::call;
 
+#[cfg(not(feature = "board-qemu_virt_aarch64_workstation"))]
 const SERIAL_DRIVER: Channel = Channel::new(0);
 const RTC_DRIVER: Channel = Channel::new(1);
 const TIMER_DRIVER: Channel = Channel::new(2);
@@ -37,6 +43,8 @@ const FS_SERVER: Channel = Channel::new(3);
 const NET_SERVER: Channel = Channel::new(4);
 #[cfg(feature = "board-qemu_virt_aarch64_workstation")]
 const SHELL: Channel = Channel::new(5);
+#[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+const LOG_SERVER: Channel = Channel::new(6);
 
 struct HandlerImpl;
 
@@ -113,6 +121,38 @@ fn probe_net() {
 }
 
 #[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+fn persist_boot_log() {
+    if let Ok(LogResponse::Recent { count, lens, lines }) =
+        call::<LogRequest, LogResponse>(LOG_SERVER, LogRequest::GetRecent)
+    {
+        // concatenate into a buffer for FS write
+        let mut buf = [0u8; 512];
+        let mut pos = 0usize;
+        for i in 0..(count as usize) {
+            let l = lens[i] as usize;
+            if pos + l + 1 >= buf.len() {
+                break;
+            }
+            buf[pos..pos + l].copy_from_slice(&lines[i][..l]);
+            pos += l;
+            buf[pos] = b'\n';
+            pos += 1;
+        }
+        if pos > 0 {
+            // direct create + write like probe style
+            let create_resp =
+                call::<FsRequest, FsResponse>(FS_SERVER, FsRequest::create(b"/boot.log"));
+            if let Ok(FsResponse::Handle { id }) = create_resp {
+                let write_req = FsRequest::write(id, 0, &buf[..pos]);
+                if let Ok(FsResponse::Ok) = call::<FsRequest, FsResponse>(FS_SERVER, write_req) {
+                    log::info!("lerux-supervisor: boot log written to /boot.log");
+                }
+            }
+        }
+    }
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_workstation")]
 fn handle_supervisor(req: SupervisorRequest) -> SupervisorResponse {
     match req {
         SupervisorRequest::Reboot => {
@@ -137,6 +177,9 @@ fn handle_supervisor(req: SupervisorRequest) -> SupervisorResponse {
 
 #[protection_domain]
 fn init() -> HandlerImpl {
+    #[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+    server::init(LOG_SERVER).unwrap();
+    #[cfg(not(feature = "board-qemu_virt_aarch64_workstation"))]
     serial::init(SERIAL_DRIVER).unwrap();
     let mut rtc = RtcClient::new(RTC_DRIVER);
     log_rtc(&mut rtc);
@@ -155,6 +198,7 @@ fn init() -> HandlerImpl {
     {
         probe_fs();
         probe_net();
+        persist_boot_log();
         log::info!("lerux-supervisor: ready");
     }
     HandlerImpl

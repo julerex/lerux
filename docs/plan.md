@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-03 (Phase 35)
+Last updated: 2026-07-03 (Phase 36)
 
 ## Phase 1 — Bring-up
 
@@ -303,9 +303,11 @@ Tracer-bullet order: FS (32) → TCP/fetch (31) → shell (34) → supervisor (3
 
 ## Phase 36 — Logging, config, and ops
 
-- [ ] `log-server` PD — multiplex serial + ring buffer; `LogRequest::Subscribe`
-- [ ] `config-server` PD or FS-backed `/config` keys for net and boot
-- [ ] Shell `dmesg` via log IPC; supervisor persists boot log to FS
+- [x] `log-server` PD — multiplex serial + ring buffer; `LogRequest::Append` / `Subscribe` / `GetRecent`
+- [ ] `config-server` PD or FS-backed `/config` keys for net and boot (boot log persisted via FS; `/config` keys via FS paths as baseline)
+- [x] Shell `dmesg` via log IPC; supervisor persists boot log to FS (`/boot.log`)
+- [x] Updated workstation profile + serial multi-client-3 + logging sinks (server feature) + priority wiring for PPCs
+- [x] Smoke + `just check` + `just check-pd` pass
 
 ## Phase 37 — Real hardware slice
 

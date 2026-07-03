@@ -23,6 +23,7 @@ const BOARD_FEATURE_CRATES: &[&str] = &[
     "fs-server",
     "fs-client",
     "shell",
+    "log-server",
     "serial-driver",
     "virtio-blk-driver",
     "virtio-net-driver",

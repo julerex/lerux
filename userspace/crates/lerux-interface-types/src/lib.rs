@@ -309,6 +309,58 @@ pub enum SupervisorResponse {
     Time { year: u16, month: u8, day: u8 },
 }
 
+/// Max length of one log message text for LogRequest / ring.
+pub const MAX_LOG_MSG: usize = 80;
+
+/// Max number of recent log lines returned by one LogResponse::Recent (for dmesg).
+pub const MAX_LOG_LINES: usize = 6;
+
+/// Log service requests (Phase 36 log-server).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LogRequest {
+    /// Append a (pre-formatted) log line to the ring buffer and output.
+    Append {
+        level: u8,
+        len: u8,
+        #[serde(with = "log_msg_bytes")]
+        text: [u8; MAX_LOG_MSG],
+    },
+    /// Subscribe for future log notifications (stub for Phase 36).
+    Subscribe,
+    /// Fetch recent logs (used by shell `dmesg` and supervisor persist).
+    GetRecent,
+}
+
+impl LogRequest {
+    pub fn append(text: &[u8]) -> Self {
+        let mut buf = [0u8; MAX_LOG_MSG];
+        let len = text.len().min(MAX_LOG_MSG) as u8;
+        buf[..len as usize].copy_from_slice(&text[..len as usize]);
+        Self::Append {
+            level: 2, // info-ish
+            len,
+            text: buf,
+        }
+    }
+}
+
+/// Log service responses (Phase 36).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "Recent carries array of log lines for dmesg"
+)]
+pub enum LogResponse {
+    Ok,
+    Error,
+    Recent {
+        count: u8,
+        lens: [u8; MAX_LOG_LINES],
+        #[serde(with = "log_lines_bytes")]
+        lines: [[u8; MAX_LOG_MSG]; MAX_LOG_LINES],
+    },
+}
+
 /// Network service responses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[expect(
@@ -724,5 +776,139 @@ mod net_payload_bytes {
         deserializer: D,
     ) -> Result<[u8; MAX_NET_UDP_PAYLOAD], D::Error> {
         deserializer.deserialize_bytes(PayloadVisitor)
+    }
+}
+
+mod log_msg_bytes {
+    use core::fmt;
+
+    use serde::{
+        de::{self, SeqAccess, Visitor},
+        Deserializer, Serializer,
+    };
+
+    use super::MAX_LOG_MSG;
+
+    pub fn serialize<S: Serializer>(
+        msg: &[u8; MAX_LOG_MSG],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bytes(msg)
+    }
+
+    struct MsgVisitor;
+
+    impl<'de> Visitor<'de> for MsgVisitor {
+        type Value = [u8; MAX_LOG_MSG];
+
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("a byte array of max log message size")
+        }
+
+        fn visit_bytes<E: de::Error>(self, v: &[u8]) -> Result<Self::Value, E> {
+            if v.len() > MAX_LOG_MSG {
+                return Err(E::invalid_length(v.len(), &self));
+            }
+            let mut msg = [0u8; MAX_LOG_MSG];
+            msg[..v.len()].copy_from_slice(v);
+            Ok(msg)
+        }
+
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+            let mut msg = [0u8; MAX_LOG_MSG];
+            for (i, byte) in msg.iter_mut().enumerate() {
+                match seq.next_element()? {
+                    Some(value) => *byte = value,
+                    None => break,
+                }
+                if i == MAX_LOG_MSG - 1 && seq.next_element::<u8>()?.is_some() {
+                    return Err(de::Error::invalid_length(MAX_LOG_MSG + 1, &self));
+                }
+            }
+            Ok(msg)
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<[u8; MAX_LOG_MSG], D::Error> {
+        deserializer.deserialize_bytes(MsgVisitor)
+    }
+}
+
+mod log_lines_bytes {
+    use core::fmt;
+
+    use serde::{
+        de::{self, SeqAccess, Visitor},
+        Deserializer, Serializer,
+    };
+
+    use super::{MAX_LOG_LINES, MAX_LOG_MSG};
+
+    pub fn serialize<S: Serializer>(
+        lines: &[[u8; MAX_LOG_MSG]; MAX_LOG_LINES],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        let mut flat = [0u8; MAX_LOG_LINES * MAX_LOG_MSG];
+        for (i, line) in lines.iter().enumerate() {
+            let start = i * MAX_LOG_MSG;
+            flat[start..start + MAX_LOG_MSG].copy_from_slice(line);
+        }
+        serializer.serialize_bytes(&flat)
+    }
+
+    struct LinesVisitor;
+
+    impl<'de> Visitor<'de> for LinesVisitor {
+        type Value = [[u8; MAX_LOG_MSG]; MAX_LOG_LINES];
+
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("byte array of max log lines size")
+        }
+
+        fn visit_bytes<E: de::Error>(self, v: &[u8]) -> Result<Self::Value, E> {
+            if v.len() != MAX_LOG_LINES * MAX_LOG_MSG {
+                return Err(E::invalid_length(v.len(), &self));
+            }
+            let mut lines = [[0u8; MAX_LOG_MSG]; MAX_LOG_LINES];
+            for (i, chunk) in v.chunks(MAX_LOG_MSG).take(MAX_LOG_LINES).enumerate() {
+                if let Some(dst) = lines.get_mut(i) {
+                    let n = chunk.len().min(MAX_LOG_MSG);
+                    dst[..n].copy_from_slice(&chunk[..n]);
+                }
+            }
+            Ok(lines)
+        }
+
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+            let mut flat = [0u8; MAX_LOG_LINES * MAX_LOG_MSG];
+            for byte in flat.iter_mut() {
+                match seq.next_element()? {
+                    Some(value) => *byte = value,
+                    None => break,
+                }
+            }
+            if seq.next_element::<u8>()?.is_some() {
+                return Err(de::Error::invalid_length(
+                    MAX_LOG_LINES * MAX_LOG_MSG + 1,
+                    &self,
+                ));
+            }
+            let mut lines = [[0u8; MAX_LOG_MSG]; MAX_LOG_LINES];
+            for (i, chunk) in flat.chunks(MAX_LOG_MSG).take(MAX_LOG_LINES).enumerate() {
+                if let Some(dst) = lines.get_mut(i) {
+                    let n = chunk.len().min(MAX_LOG_MSG);
+                    dst[..n].copy_from_slice(&chunk[..n]);
+                }
+            }
+            Ok(lines)
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<[[u8; MAX_LOG_MSG]; MAX_LOG_LINES], D::Error> {
+        deserializer.deserialize_bytes(LinesVisitor)
     }
 }

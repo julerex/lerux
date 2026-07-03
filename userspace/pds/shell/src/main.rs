@@ -8,10 +8,11 @@ use embedded_hal_nb::{
     serial::{Read as _, Write as _},
 };
 use lerux_interface_types::{
-    FsRequest, FsResponse, NetRequest, NetResponse, SupervisorRequest, SupervisorResponse,
+    FsRequest, FsResponse, LogRequest, LogResponse, NetRequest, NetResponse, SupervisorRequest,
+    SupervisorResponse,
 };
 use lerux_ipc::call;
-use lerux_logging::{log, serial};
+use lerux_logging::{log, server};
 use sel4_microkit::{protection_domain, Channel, ChannelSet, Handler, Infallible};
 use sel4_microkit_driver_adapters::serial::client::Client as SerialClient;
 
@@ -19,6 +20,7 @@ const SERIAL_DRIVER: Channel = Channel::new(0);
 const FS_SERVER: Channel = Channel::new(1);
 const NET_SERVER: Channel = Channel::new(2);
 const SUPERVISOR: Channel = Channel::new(3);
+const LOG_SERVER: Channel = Channel::new(4);
 
 const INPUT_BUF_CAP: usize = 128;
 
@@ -148,7 +150,7 @@ fn ps(console: &mut SerialClient) {
         call::<SupervisorRequest, SupervisorResponse>(SUPERVISOR, SupervisorRequest::ListServices);
     println(
         console,
-        "ps: supervisor fs-server net-server shell serial-driver ...",
+        "ps: supervisor fs-server net-server shell log-server serial-driver ...",
     );
 }
 
@@ -175,6 +177,21 @@ fn poll_net() -> NetResponse {
             Ok(other) => return other,
             Err(_) => return NetResponse::Error,
         }
+    }
+}
+
+fn dmesg(console: &mut SerialClient) {
+    match call::<LogRequest, LogResponse>(LOG_SERVER, LogRequest::GetRecent) {
+        Ok(LogResponse::Recent { count, lens, lines }) => {
+            for i in 0..(count as usize) {
+                let l = lens[i] as usize;
+                if l > 0 {
+                    write_bytes(console, &lines[i][..l]);
+                    write_bytes(console, b"\r\n");
+                }
+            }
+        }
+        _ => println(console, "dmesg: unavailable"),
     }
 }
 
@@ -226,13 +243,14 @@ fn process_command(console: &mut SerialClient, line: &[u8]) {
         b"fetch" => fetch_demo(console),
         b"help" => println(
             console,
-            "commands: ls cat <p> write <p> <d> time ps reboot fetch help",
+            "commands: ls cat <p> write <p> <d> time ps reboot fetch dmesg help",
         ),
         b"echo" => {
             let rest = &line[4..];
             write_bytes(console, rest);
             write_bytes(console, b"\r\n");
         }
+        b"dmesg" => dmesg(console),
         _ => {
             print(console, "unknown command: ");
             write_bytes(console, cmd);
@@ -243,7 +261,7 @@ fn process_command(console: &mut SerialClient, line: &[u8]) {
 
 #[protection_domain]
 fn init() -> HandlerImpl {
-    serial::init(SERIAL_DRIVER).unwrap();
+    server::init(LOG_SERVER).unwrap();
     let _console = SerialClient::new(SERIAL_DRIVER);
     log::info!("lerux-shell: ready");
 

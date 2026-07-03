@@ -845,6 +845,8 @@ name = "lerux-logging"
 version = "0.1.0"
 dependencies = [
  "embedded-hal-nb",
+ "lerux-interface-types",
+ "lerux-ipc",
  "log",
  "sel4",
  "sel4-logging",
@@ -916,6 +918,19 @@ name = "log"
 version = "0.4.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
+
+[[package]]
+name = "log-server"
+version = "0.1.0"
+dependencies = [
+ "embedded-hal-nb",
+ "heapless",
+ "lerux-interface-types",
+ "lerux-ipc",
+ "lerux-logging",
+ "sel4-microkit",
+ "sel4-microkit-driver-adapters",
+]
 
 [[package]]
 name = "lru"

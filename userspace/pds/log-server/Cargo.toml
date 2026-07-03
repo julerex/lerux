@@ -1,5 +1,5 @@
 [package]
-name = "shell"
+name = "log-server"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
@@ -14,7 +14,7 @@ board-qemu_virt_aarch64_workstation = []
 heapless = { workspace = true }
 lerux-interface-types = { path = "../../crates/lerux-interface-types" }
 lerux-ipc = { path = "../../crates/lerux-ipc" }
-lerux-logging = { path = "../../crates/lerux-logging", features = ["server"] }
+lerux-logging = { path = "../../crates/lerux-logging" }
 sel4-microkit = { workspace = true }
 sel4-microkit-driver-adapters = { workspace = true }
 embedded-hal-nb = { workspace = true }

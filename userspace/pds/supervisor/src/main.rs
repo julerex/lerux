@@ -20,7 +20,7 @@ use sel4_microkit_driver_adapters::{
 #[cfg(feature = "board-qemu_virt_aarch64_workstation")]
 use lerux_interface_types::{
     ConfigRequest, ConfigResponse, FsRequest, FsResponse, LogRequest, LogResponse, NetRequest,
-    NetResponse,
+    NetResponse, MAX_CONFIG_KEY_LEN, MAX_CONFIG_VAL_LEN,
 };
 #[cfg(feature = "board-qemu_virt_aarch64_workstation")]
 use lerux_ipc::call;
@@ -201,10 +201,10 @@ fn init() -> HandlerImpl {
     {
         probe_fs();
         // Seed some defaults via config-server (FS backed)
-        let mut key = [0u8; 32];
+        let mut key = [0u8; MAX_CONFIG_KEY_LEN];
         let kdata = b"net.ip";
         key[..kdata.len()].copy_from_slice(kdata);
-        let mut val = [0u8; 64];
+        let mut val = [0u8; MAX_CONFIG_VAL_LEN];
         let vdata = b"10.0.2.15";
         val[..vdata.len()].copy_from_slice(vdata);
         let _ = call::<ConfigRequest, ConfigResponse>(

@@ -97,10 +97,7 @@ fn write_config_file(key: &[u8], value: &[u8]) -> bool {
         FsResponse::Handle { id } => id,
         _ => return false,
     };
-    match fs_call(FsRequest::write(handle, 0, value)) {
-        FsResponse::Ok => true,
-        _ => false,
-    }
+    matches!(fs_call(FsRequest::write(handle, 0, value)), FsResponse::Ok)
 }
 
 fn list_config_keys() -> (u8, [[u8; MAX_CONFIG_KEY_LEN]; 8], [u8; 8]) {
@@ -108,20 +105,17 @@ fn list_config_keys() -> (u8, [[u8; MAX_CONFIG_KEY_LEN]; 8], [u8; 8]) {
     let mut lens = [0u8; 8];
     let mut count: u8 = 0;
 
-    match fs_call(FsRequest::ListDir) {
-        FsResponse::DirList { count: dc, entries } => {
-            for e in entries.iter().take(dc as usize) {
-                let name = e.name_slice();
-                if name.starts_with(b"/config/") && count < 8 {
-                    let k = &name[b"/config/".len()..];
-                    let kl = k.len().min(MAX_CONFIG_KEY_LEN) as u8;
-                    keys[count as usize][..kl as usize].copy_from_slice(&k[..kl as usize]);
-                    lens[count as usize] = kl;
-                    count += 1;
-                }
+    if let FsResponse::DirList { count: dc, entries } = fs_call(FsRequest::ListDir) {
+        for e in entries.iter().take(dc as usize) {
+            let name = e.name_slice();
+            if name.starts_with(b"/config/") && count < 8 {
+                let k = &name[b"/config/".len()..];
+                let kl = k.len().min(MAX_CONFIG_KEY_LEN) as u8;
+                keys[count as usize][..kl as usize].copy_from_slice(&k[..kl as usize]);
+                lens[count as usize] = kl;
+                count += 1;
             }
         }
-        _ => {}
     }
     (count, keys, lens)
 }

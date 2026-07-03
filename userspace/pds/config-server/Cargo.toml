@@ -13,5 +13,5 @@ board-qemu_virt_aarch64_workstation = []
 [dependencies]
 lerux-interface-types = { path = "../../crates/lerux-interface-types" }
 lerux-ipc = { path = "../../crates/lerux-ipc" }
-lerux-logging = { path = "../../crates/lerux-logging", features = ["server"] }
+lerux-logging = { path = "../../crates/lerux-logging" }
 sel4-microkit = { workspace = true }

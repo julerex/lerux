@@ -65,6 +65,7 @@ Default: `qemu_virt_aarch64` (QEMU ARM virt). Override with `BOARD=... just run`
 | Init + net IPC | `qemu_virt_aarch64_net_composed` | `just test-net-composed` |
 | Init + blk/net IPC | `qemu_virt_aarch64_ipc_composed` | `just test-ipc-composed` |
 | RISC-V serial / echo / virtio / HTTP | `qemu_virt_riscv64` variants | `just test-riscv` / `just test-riscv-echo` / `just test-riscv-virtio` / `just test-riscv-http` |
+| System profiles (workstation etc) | `lerux profile` | `cargo run -p lerux-cli -- profile list` / `profile build workstation` |
 
 Full board reference: [`docs/boards.md`](docs/boards.md).
 

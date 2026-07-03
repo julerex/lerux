@@ -46,10 +46,10 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 ## System profiles and packages
 
 **System profile**
-: A named bundle in `support/profiles/` (planned Phase 35): which PD crates, `.system` template, board features, and channel layout compose one `loader.img`. Override with `lerux profile build <name>` (host tooling).
+: A named bundle in `support/profiles/*.toml`: which PD crates, `.system` template, and channel manifest compose one `loader.img`. Use `lerux profile list|build|diff <name>`. Board hardware (MMIO, IRQs, arch) remains in `support/boards.toml`; profiles are selected via default_board or `--board`. (Phase 35)
 
 **Package**
-: One PD crate plus its interface-types version and an optional profile fragment. “Installing” a package means adding it to a profile and rebuilding the static image — Microkit does not load arbitrary ELFs at runtime.
+: One PD crate plus its interface-types version and an optional profile fragment (Phase 35+). “Installing” a package means adding the PD to a `support/profiles/*.toml` and rebuilding the static image via `lerux profile build` — Microkit does not load arbitrary ELFs at runtime. (Full per-PD pinned ELF artifacts / registry in later work.)
 
 **Supervisor**
 : Evolution of `boot-init` (Phase 33): `supervisor` PD provides RTC/timer, brings up FS/net services, performs ordered app notify (generalizes composed-sync), exposes reboot/status IPC.

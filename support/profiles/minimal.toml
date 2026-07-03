@@ -1,0 +1,13 @@
+# Minimal system profile: basic hello over serial.
+# Corresponds to boards like qemu_virt_aarch64, x86_64_generic, etc.
+
+template = "serial-hello.system.template"
+pds = ["hello", "serial-driver"]
+description = "Minimal hello world over serial driver"
+
+default_board = "qemu_virt_aarch64"
+
+# Channel manifest (for documentation / diffing)
+channels = [
+  "serial_driver:1 <-> hello:0 (pp)",
+]

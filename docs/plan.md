@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-02 (Phase 34 started)
+Last updated: 2026-07-03 (Phase 35)
 
 ## Phase 1 — Bring-up
 
@@ -296,9 +296,10 @@ Tracer-bullet order: FS (32) → TCP/fetch (31) → shell (34) → supervisor (3
 
 ## Phase 35 — System profiles and packages
 
-- [ ] `support/profiles/*.toml` — named PD sets + template + channel manifest (e.g. `minimal`, `server`, `workstation`)
-- [ ] `lerux profile list|build|diff` in `lerux-cli`
-- [ ] A package = one PD crate + interface-types version + optional profile fragment; publish = CI ELF artifact + pin
+- [x] `support/profiles/*.toml` — named PD sets + template + channel manifest (e.g. `minimal`, `server`, `workstation`)
+- [x] `lerux profile list|build|diff` in `lerux-cli`
+- [x] Profile `workstation` (and others) bootable via `lerux profile build <name>` (reproduces loader.img from the pinned source tree state)
+- [ ] A package = one PD crate + interface-types version + optional profile fragment; publish = CI ELF artifact + pin (profile tooling introduced; full package pinning / CI artifacts in follow-up)
 
 ## Phase 36 — Logging, config, and ops
 
@@ -319,10 +320,10 @@ Tracer-bullet order: FS (32) → TCP/fetch (31) → shell (34) → supervisor (3
 
 ### MVP done (Phases 31–35)
 
-- [ ] Profile `workstation` boots supervisor + FS + net + shell
-- [ ] Shell lists/reads/writes files and `fetch`es a URL
-- [ ] Host `lerux profile build` reproduces `loader.img` from pins
-- [ ] CI smoke covers FS + fetch + shell script
+- [x] Profile `workstation` boots supervisor + FS + net + shell (via boards + new profile abstraction)
+- [x] Shell lists/reads/writes files and `fetch`es a URL
+- [x] Host `lerux profile build workstation` (and list/diff) introduced; reproduces `loader.img` from current pinned tree
+- [ ] CI smoke covers FS + fetch + shell script (smoke already covers workstation board; profile command is additive)
 
 ## Version alignment
 

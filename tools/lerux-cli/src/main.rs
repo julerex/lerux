@@ -9,6 +9,7 @@ mod install;
 mod libclang;
 mod path;
 mod process;
+mod profile;
 mod qemu;
 mod system;
 mod tcp_echo;
@@ -135,6 +136,32 @@ enum Commands {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         cmd: Vec<String>,
     },
+    /// System profile commands (named PD sets + templates from support/profiles/).
+    Profile {
+        #[command(subcommand)]
+        command: ProfileCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum ProfileCommands {
+    /// List available system profiles (e.g. minimal, workstation).
+    List,
+    /// Build a loader.img for the named profile (uses default_board or --board override).
+    Build {
+        name: String,
+        #[arg(long)]
+        board: Option<String>,
+        #[arg(long, default_value = "build")]
+        build_dir: String,
+        #[arg(long, default_value = "debug")]
+        config: String,
+    },
+    /// Diff two profiles (PD set, template, channel manifest).
+    Diff {
+        profile_a: String,
+        profile_b: String,
+    },
 }
 
 fn main() -> Result<()> {
@@ -250,6 +277,36 @@ fn main() -> Result<()> {
                 timeout_secs: timeout,
             };
             test::run_smoke(command, &smoke)?;
+        }
+        Commands::Profile { command } => {
+            let profiles = crate::profile::load_profiles(&root)?;
+            match command {
+                ProfileCommands::List => {
+                    crate::profile::list_profiles(&profiles);
+                }
+                ProfileCommands::Build {
+                    name,
+                    board,
+                    build_dir,
+                    config,
+                } => {
+                    let board_name = crate::profile::resolve_board_for_profile(
+                        &profiles,
+                        &name,
+                        board.as_deref(),
+                    )?;
+                    build::image(&root, &board_name, &build_dir, &config)?;
+                    println!("profile {name} -> board {board_name}: loader.img ready");
+                }
+                ProfileCommands::Diff {
+                    profile_a,
+                    profile_b,
+                } => {
+                    let pa = crate::profile::get_profile(&profiles, &profile_a)?;
+                    let pb = crate::profile::get_profile(&profiles, &profile_b)?;
+                    crate::profile::diff_profiles(&profile_a, pa, &profile_b, pb);
+                }
+            }
         }
     }
 

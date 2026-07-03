@@ -1,0 +1,33 @@
+# Workstation system profile: supervisor + fs + net + shell on virtio.
+# Full non-POSIX workstation experience.
+
+template = "workstation.system.template"
+pds = [
+  "supervisor",
+  "shell",
+  "fs-server",
+  "net-server",
+  "serial-driver",
+  "pl031-driver",
+  "sp804-driver",
+  "virtio-blk-driver",
+  "virtio-net-driver",
+]
+description = "Supervisor + FS server + Net server + interactive shell"
+
+default_board = "qemu_virt_aarch64_workstation"
+
+# Channel manifest (high-level; exact wiring in the .system.template)
+channels = [
+  "serial_driver:1 <-> shell:0 (pp)",
+  "serial_driver:2 <-> supervisor:0 (pp)",
+  "pl031_driver:1 <-> supervisor:1 (pp)",
+  "sp804_driver:1 <-> supervisor:2 (pp)",
+  "virtio_blk_driver:1 <-> fs_server:1 (pp)",
+  "fs_server:2 <-> supervisor:3 (pp)",
+  "fs_server:3 <-> shell:1 (pp)",
+  "virtio_net_driver:1 <-> net_server:1 (pp)",
+  "net_server:2 <-> supervisor:4 (pp)",
+  "net_server:3 <-> shell:2 (pp)",
+  "supervisor:5 <-> shell:3 (pp)",
+]

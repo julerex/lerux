@@ -158,6 +158,46 @@ const AARCH64_CRATES: &[ClippyCrate<'_>] = &[
         name: "config-server",
         feature: Some("board-qemu_virt_aarch64_workstation"),
     },
+    ClippyCrate {
+        name: "supervisor",
+        feature: Some("board-rpi4b_4gb_workstation"),
+    },
+    ClippyCrate {
+        name: "fs-server",
+        feature: Some("board-rpi4b_4gb_workstation"),
+    },
+    ClippyCrate {
+        name: "net-server",
+        feature: Some("board-rpi4b_4gb_workstation"),
+    },
+    ClippyCrate {
+        name: "shell",
+        feature: Some("board-rpi4b_4gb_workstation"),
+    },
+    ClippyCrate {
+        name: "edit",
+        feature: Some("board-rpi4b_4gb_workstation"),
+    },
+    ClippyCrate {
+        name: "config-server",
+        feature: Some("board-rpi4b_4gb_workstation"),
+    },
+    ClippyCrate {
+        name: "log-server",
+        feature: Some("board-rpi4b_4gb_workstation"),
+    },
+    ClippyCrate {
+        name: "serial-driver",
+        feature: Some("board-rpi4b_4gb_workstation"),
+    },
+    ClippyCrate {
+        name: "genet-driver",
+        feature: Some("board-rpi4b_4gb_workstation"),
+    },
+    ClippyCrate {
+        name: "emmc2-driver",
+        feature: Some("board-rpi4b_4gb_workstation"),
+    },
 ];
 
 const RISCV64_CRATES: &[ClippyCrate<'_>] = &[

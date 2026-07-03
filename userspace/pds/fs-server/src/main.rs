@@ -15,10 +15,10 @@ use lerux_interface_types::{
     FsDirEntry, FsRequest, FsResponse, MAX_FS_DATA, MAX_FS_DIR_LIST, MAX_FS_PATH, SECTOR_SIZE,
 };
 use lerux_ipc::{recv, send, send_unspecified_error};
-#[cfg(not(feature = "board-qemu_virt_aarch64_workstation"))]
+#[cfg(not(feature = "workstation"))]
 use lerux_logging::debug;
 use lerux_logging::log;
-#[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+#[cfg(feature = "workstation")]
 use lerux_logging::server;
 use sel4_abstract_allocator::{basic::BasicAllocator, WithAlignmentBound};
 use sel4_driver_interfaces::block::GetBlockDeviceLayout;
@@ -35,7 +35,7 @@ mod config;
 
 const BLK_DRIVER: Channel = Channel::new(1);
 const CLIENT: Channel = Channel::new(2);
-#[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+#[cfg(feature = "workstation")]
 const LOG_SERVER: Channel = Channel::new(4);
 
 type BlkIo = OwnedSharedRingBufferBlockIO<Rc<Semaphore>, WithAlignmentBound<BasicAllocator>, fn()>;
@@ -869,9 +869,9 @@ impl HandlerImpl {
 
 #[protection_domain(heap_size = 512 * 1024)]
 fn init() -> HandlerImpl {
-    #[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+    #[cfg(feature = "workstation")]
     server::init(LOG_SERVER).unwrap();
-    #[cfg(not(feature = "board-qemu_virt_aarch64_workstation"))]
+    #[cfg(not(feature = "workstation"))]
     debug::init().unwrap();
     let mut blk = BlockClient::new(BLK_DRIVER);
     let block_size = blk.get_block_size().unwrap();

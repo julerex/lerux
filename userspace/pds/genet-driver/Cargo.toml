@@ -9,6 +9,7 @@ workspace = true
 
 [features]
 board-rpi4b_4gb_net = []
+board-rpi4b_4gb_workstation = ["board-rpi4b_4gb_net"]
 # Add more rpi variants as needed
 
 [dependencies]
@@ -16,5 +17,7 @@ lerux-logging = { path = "../../crates/lerux-logging" }
 log = { workspace = true }
 sel4 = { workspace = true }
 sel4-microkit = { workspace = true }
+sel4-driver-interfaces = { workspace = true }
+sel4-microkit-driver-adapters = { workspace = true }
 sel4-shared-memory = { workspace = true }
 sel4-shared-ring-buffer = { workspace = true }

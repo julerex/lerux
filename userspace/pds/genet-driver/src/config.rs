@@ -1,10 +1,13 @@
-use sel4_microkit::Channel;
+pub mod channels {
+    use sel4_microkit::Channel;
 
-#[expect(dead_code, reason = "channel id used in full ring implementation")]
-pub const NET_DRIVER: Channel = Channel::new(0); // to net-server
+    pub const DEVICE: Channel = Channel::new(0);
+    pub const CLIENT: Channel = Channel::new(1);
+}
 
-// Sizes match the ones in virtio templates / other net drivers.
-#[allow(dead_code)]
+#[expect(
+    dead_code,
+    reason = "DMA region size for future memory_region_symbol use"
+)]
 pub const GENET_DRIVER_DMA_SIZE: usize = 0x200_000;
-#[allow(dead_code)]
 pub const GENET_CLIENT_DMA_SIZE: usize = 0x200_000;

@@ -459,6 +459,7 @@ dependencies = [
  "lerux-logging",
  "log",
  "sel4",
+ "sel4-driver-interfaces",
  "sel4-microkit",
  "sel4-microkit-driver-adapters",
  "sel4-shared-memory",
@@ -673,7 +674,9 @@ dependencies = [
  "lerux-logging",
  "log",
  "sel4",
+ "sel4-driver-interfaces",
  "sel4-microkit",
+ "sel4-microkit-driver-adapters",
  "sel4-shared-memory",
  "sel4-shared-ring-buffer",
 ]

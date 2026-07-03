@@ -1,0 +1,45 @@
+# RPi4 workstation profile (Phase 39).
+# Supervisor + FS + net + shell + log + config + edit over native genet + emmc2 drivers.
+#
+# Build: lerux profile build workstation-rpi4
+# Deploy: copy loader.img to SD FAT partition, U-Boot: fatload mmc 0 0x10000000 loader.img; go 0x10000000
+
+template = "workstation-rpi4.system.template"
+pds = [
+  "supervisor",
+  "shell",
+  "edit",
+  "fs-server",
+  "net-server",
+  "log-server",
+  "config-server",
+  "serial-driver",
+  "genet-driver",
+  "emmc2-driver",
+]
+description = "RPi4 workstation: supervisor + FS + net + shell over native drivers"
+
+default_board = "rpi4b_4gb_workstation"
+
+channels = [
+  "serial_driver:1 <-> shell:0 (pp)",
+  "serial_driver:2 <-> supervisor:0 (pp)",
+  "serial_driver:3 <-> log_server:0 (pp)",
+  "emmc2_driver:1 <-> fs_server:1 (pp)",
+  "fs_server:2 <-> supervisor:3 (pp)",
+  "fs_server:3 <-> shell:1 (pp)",
+  "fs_server:4 <-> log_server:3 (pp)",
+  "genet_driver:1 <-> net_server:1 (pp)",
+  "net_server:2 <-> supervisor:4 (pp)",
+  "net_server:3 <-> shell:2 (pp)",
+  "net_server:4 <-> log_server:4 (pp)",
+  "supervisor:5 <-> shell:3 (pp)",
+  "supervisor:6 <-> log_server:2 (pp)",
+  "log_server:1 <-> shell:4 (pp)",
+  "supervisor:7 <-> config_server:0 (pp)",
+  "shell:5 <-> config_server:1 (pp)",
+  "net_server:5 <-> config_server:2 (pp)",
+  "fs_server:5 <-> config_server:3 (pp)",
+  "shell:6 <-> edit:0 (pp)",
+  "fs_server:6 <-> edit:1 (pp)",
+]

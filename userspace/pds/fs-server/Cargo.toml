@@ -9,7 +9,9 @@ workspace = true
 
 [features]
 board-qemu_virt_aarch64_fs = []
-board-qemu_virt_aarch64_workstation = []
+workstation = []
+board-qemu_virt_aarch64_workstation = ["workstation"]
+board-rpi4b_4gb_workstation = ["workstation"]
 
 [dependencies]
 async-unsync = { version = "0.3.0", default-features = false }

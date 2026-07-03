@@ -41,6 +41,7 @@ board-x86_64_generic_net = ["board-x86_64_generic"]
 board-rpi4b_4gb = ["board-qemu_virt_aarch64"]
 board-rpi4b_4gb_net = ["board-rpi4b_4gb"]
 board-rpi4b_4gb_blk = ["board-rpi4b_4gb"]
+board-rpi4b_4gb_workstation = ["board-rpi4b_4gb", "multi-client-3"]
 
 [dependencies]
 lerux-logging = { path = "../../crates/lerux-logging" }

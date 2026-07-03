@@ -23,8 +23,17 @@ use smoltcp::{
 use crate::config;
 
 const NET_DRIVER: Channel = Channel::new(1);
+#[cfg(feature = "board-rpi4b_4gb_workstation")]
+const GUEST_IP: Ipv4Address = Ipv4Address::new(192, 168, 1, 10);
+#[cfg(not(feature = "board-rpi4b_4gb_workstation"))]
 const GUEST_IP: Ipv4Address = Ipv4Address::new(10, 0, 2, 15);
+#[cfg(feature = "board-rpi4b_4gb_workstation")]
+const HOST_IP: Ipv4Address = Ipv4Address::new(192, 168, 1, 1);
+#[cfg(not(feature = "board-rpi4b_4gb_workstation"))]
 const HOST_IP: Ipv4Address = Ipv4Address::new(10, 0, 2, 2);
+#[cfg(feature = "board-rpi4b_4gb_workstation")]
+const DNS_IP: Ipv4Address = Ipv4Address::new(192, 168, 1, 1);
+#[cfg(not(feature = "board-rpi4b_4gb_workstation"))]
 const DNS_IP: Ipv4Address = Ipv4Address::new(10, 0, 2, 3);
 const LOCAL_UDP_PORT: u16 = 4242;
 const REMOTE_UDP_PORT: u16 = 12345;

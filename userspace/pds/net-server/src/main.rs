@@ -3,10 +3,10 @@
 
 use lerux_interface_types::{NetRequest, NetResponse};
 use lerux_ipc::{recv, send, send_unspecified_error};
-#[cfg(not(feature = "board-qemu_virt_aarch64_workstation"))]
+#[cfg(not(feature = "workstation"))]
 use lerux_logging::debug;
 use lerux_logging::log;
-#[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+#[cfg(feature = "workstation")]
 use lerux_logging::server;
 use sel4_driver_interfaces::net::GetNetDeviceMeta;
 use sel4_microkit::{protection_domain, Channel, ChannelSet, Handler, Infallible, MessageInfo};
@@ -17,7 +17,7 @@ mod net;
 
 const NET_DRIVER: Channel = Channel::new(1);
 const CLIENT: Channel = Channel::new(2);
-#[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+#[cfg(feature = "workstation")]
 const LOG_SERVER: Channel = Channel::new(4);
 
 struct HandlerImpl {
@@ -27,9 +27,9 @@ struct HandlerImpl {
 
 #[protection_domain(heap_size = 512 * 1024)]
 fn init() -> HandlerImpl {
-    #[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+    #[cfg(feature = "workstation")]
     server::init(LOG_SERVER).unwrap();
-    #[cfg(not(feature = "board-qemu_virt_aarch64_workstation"))]
+    #[cfg(not(feature = "workstation"))]
     debug::init().unwrap();
     let mut net_client = NetClient::new(NET_DRIVER);
     let mac = net_client.get_mac_address().unwrap();

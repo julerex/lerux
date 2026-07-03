@@ -1,33 +1,38 @@
 #![no_std]
 #![no_main]
 
-#[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+#[cfg(feature = "workstation")]
 use lerux_interface_types::{SupervisorRequest, SupervisorResponse};
 use lerux_ipc::send_unspecified_error;
-#[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+#[cfg(feature = "workstation")]
 use lerux_ipc::{recv, send};
-#[cfg(not(feature = "board-qemu_virt_aarch64_workstation"))]
+#[cfg(not(feature = "workstation"))]
 use lerux_logging::{log, serial};
-#[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+#[cfg(feature = "workstation")]
 use lerux_logging::{log, server};
+#[cfg(not(feature = "board-rpi4b_4gb_workstation"))]
 use rtcc::{DateTimeAccess, Datelike};
+#[cfg(not(feature = "board-rpi4b_4gb_workstation"))]
 use sel4_driver_interfaces::timer::Clock;
 use sel4_microkit::{protection_domain, Channel, Handler, Infallible, MessageInfo};
+#[cfg(not(feature = "board-rpi4b_4gb_workstation"))]
 use sel4_microkit_driver_adapters::{
     rtc::client::Client as RtcClient, timer::client::Client as TimerClient,
 };
 
-#[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+#[cfg(feature = "workstation")]
 use lerux_interface_types::{
     ConfigRequest, ConfigResponse, FsRequest, FsResponse, LogRequest, LogResponse, NetRequest,
     NetResponse, MAX_CONFIG_KEY_LEN, MAX_CONFIG_VAL_LEN,
 };
-#[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+#[cfg(feature = "workstation")]
 use lerux_ipc::call;
 
-#[cfg(not(feature = "board-qemu_virt_aarch64_workstation"))]
+#[cfg(not(feature = "workstation"))]
 const SERIAL_DRIVER: Channel = Channel::new(0);
+#[cfg(not(feature = "board-rpi4b_4gb_workstation"))]
 const RTC_DRIVER: Channel = Channel::new(1);
+#[cfg(not(feature = "board-rpi4b_4gb_workstation"))]
 const TIMER_DRIVER: Channel = Channel::new(2);
 #[cfg(any(
     feature = "board-qemu_virt_aarch64_composed",
@@ -38,19 +43,20 @@ const TIMER_DRIVER: Channel = Channel::new(2);
 ))]
 const APP: Channel = Channel::new(3);
 
-#[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+#[cfg(feature = "workstation")]
 const FS_SERVER: Channel = Channel::new(3);
-#[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+#[cfg(feature = "workstation")]
 const NET_SERVER: Channel = Channel::new(4);
-#[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+#[cfg(feature = "workstation")]
 const SHELL: Channel = Channel::new(5);
-#[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+#[cfg(feature = "workstation")]
 const LOG_SERVER: Channel = Channel::new(6);
-#[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+#[cfg(feature = "workstation")]
 const CONFIG_SERVER: Channel = Channel::new(7);
 
 struct HandlerImpl;
 
+#[cfg(not(feature = "board-rpi4b_4gb_workstation"))]
 fn log_rtc(rtc: &mut RtcClient) {
     let dt = rtc.datetime().unwrap();
     log::info!(
@@ -61,6 +67,7 @@ fn log_rtc(rtc: &mut RtcClient) {
     );
 }
 
+#[cfg(not(feature = "board-rpi4b_4gb_workstation"))]
 fn log_timer(timer: &mut TimerClient) {
     let elapsed = timer.get_time().unwrap();
     log::info!("lerux-supervisor: timer {}ms", elapsed.as_millis());
@@ -78,7 +85,7 @@ fn notify_app() {
     APP.notify();
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+#[cfg(feature = "workstation")]
 fn poll_fs() -> FsResponse {
     loop {
         match call::<FsRequest, FsResponse>(FS_SERVER, FsRequest::Poll).expect("FS Poll IPC") {
@@ -88,7 +95,7 @@ fn poll_fs() -> FsResponse {
     }
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+#[cfg(feature = "workstation")]
 fn probe_fs() {
     // Exercise FS server to ensure FS is "mounted" (triggers format if needed)
     match call::<FsRequest, FsResponse>(FS_SERVER, FsRequest::ListDir) {
@@ -101,7 +108,7 @@ fn probe_fs() {
     log::info!("lerux-supervisor: fs up");
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+#[cfg(feature = "workstation")]
 fn poll_net() -> NetResponse {
     loop {
         match call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::Poll).expect("Net Poll IPC") {
@@ -111,7 +118,7 @@ fn poll_net() -> NetResponse {
     }
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+#[cfg(feature = "workstation")]
 fn probe_net() {
     // Exercise net server to ensure "net up"
     let pending =
@@ -123,7 +130,7 @@ fn probe_net() {
     log::info!("lerux-supervisor: net up");
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+#[cfg(feature = "workstation")]
 fn persist_boot_log() {
     if let Ok(LogResponse::Recent { count, lens, lines }) =
         call::<LogRequest, LogResponse>(LOG_SERVER, LogRequest::GetRecent)
@@ -155,7 +162,7 @@ fn persist_boot_log() {
     }
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+#[cfg(feature = "workstation")]
 fn handle_supervisor(req: SupervisorRequest) -> SupervisorResponse {
     match req {
         SupervisorRequest::Reboot => {
@@ -163,15 +170,23 @@ fn handle_supervisor(req: SupervisorRequest) -> SupervisorResponse {
             SupervisorResponse::Ok
         }
         SupervisorRequest::GetTime => {
-            let mut rtc = RtcClient::new(RTC_DRIVER);
-            if let Ok(dt) = rtc.datetime() {
-                SupervisorResponse::Time {
-                    year: dt.year() as u16,
-                    month: dt.month() as u8,
-                    day: dt.day() as u8,
-                }
-            } else {
+            #[cfg(feature = "board-rpi4b_4gb_workstation")]
+            {
+                let _ = ();
                 SupervisorResponse::Error
+            }
+            #[cfg(not(feature = "board-rpi4b_4gb_workstation"))]
+            {
+                let mut rtc = RtcClient::new(RTC_DRIVER);
+                if let Ok(dt) = rtc.datetime() {
+                    SupervisorResponse::Time {
+                        year: dt.year() as u16,
+                        month: dt.month() as u8,
+                        day: dt.day() as u8,
+                    }
+                } else {
+                    SupervisorResponse::Error
+                }
             }
         }
         _ => SupervisorResponse::Ok,
@@ -180,14 +195,19 @@ fn handle_supervisor(req: SupervisorRequest) -> SupervisorResponse {
 
 #[protection_domain]
 fn init() -> HandlerImpl {
-    #[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+    #[cfg(feature = "workstation")]
     server::init(LOG_SERVER).unwrap();
-    #[cfg(not(feature = "board-qemu_virt_aarch64_workstation"))]
+    #[cfg(not(feature = "workstation"))]
     serial::init(SERIAL_DRIVER).unwrap();
-    let mut rtc = RtcClient::new(RTC_DRIVER);
-    log_rtc(&mut rtc);
-    let mut timer = TimerClient::new(TIMER_DRIVER);
-    log_timer(&mut timer);
+    #[cfg(not(feature = "board-rpi4b_4gb_workstation"))]
+    {
+        let mut rtc = RtcClient::new(RTC_DRIVER);
+        log_rtc(&mut rtc);
+        let mut timer = TimerClient::new(TIMER_DRIVER);
+        log_timer(&mut timer);
+    }
+    #[cfg(feature = "board-rpi4b_4gb_workstation")]
+    log::info!("lerux-supervisor: no RTC/timer PDs on RPi4 workstation");
     log::info!("lerux-supervisor: init ok");
     #[cfg(any(
         feature = "board-qemu_virt_aarch64_composed",
@@ -197,7 +217,7 @@ fn init() -> HandlerImpl {
         feature = "board-qemu_virt_aarch64_ipc_composed"
     ))]
     notify_app();
-    #[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+    #[cfg(feature = "workstation")]
     {
         probe_fs();
         // Seed some defaults via config-server (FS backed)
@@ -205,6 +225,9 @@ fn init() -> HandlerImpl {
         let kdata = b"net.ip";
         key[..kdata.len()].copy_from_slice(kdata);
         let mut val = [0u8; MAX_CONFIG_VAL_LEN];
+        #[cfg(feature = "board-rpi4b_4gb_workstation")]
+        let vdata = b"192.168.1.10";
+        #[cfg(not(feature = "board-rpi4b_4gb_workstation"))]
         let vdata = b"10.0.2.15";
         val[..vdata.len()].copy_from_slice(vdata);
         let _ = call::<ConfigRequest, ConfigResponse>(
@@ -229,7 +252,7 @@ impl Handler for HandlerImpl {
     fn protected(
         &mut self,
         #[cfg_attr(
-            not(feature = "board-qemu_virt_aarch64_workstation"),
+            not(feature = "workstation"),
             expect(
                 unused_variables,
                 reason = "channel and msg_info only used for workstation shell IPC"
@@ -237,7 +260,7 @@ impl Handler for HandlerImpl {
         )]
         channel: Channel,
         #[cfg_attr(
-            not(feature = "board-qemu_virt_aarch64_workstation"),
+            not(feature = "workstation"),
             expect(
                 unused_variables,
                 reason = "channel and msg_info only used for workstation shell IPC"
@@ -245,7 +268,7 @@ impl Handler for HandlerImpl {
         )]
         msg_info: MessageInfo,
     ) -> Result<MessageInfo, Self::Error> {
-        #[cfg(feature = "board-qemu_virt_aarch64_workstation")]
+        #[cfg(feature = "workstation")]
         if channel == SHELL {
             return Ok(match recv::<SupervisorRequest>(msg_info) {
                 Ok(req) => send(handle_supervisor(req)),

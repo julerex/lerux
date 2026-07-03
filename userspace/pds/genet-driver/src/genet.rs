@@ -358,10 +358,47 @@ impl Genet {
 
     /// Check for TX completions (called on IRQ or poll).
     pub unsafe fn check_tx_completions(&mut self) -> usize {
-        // In real code we would read CONS_INDEX and walk completed descs.
-        // For now we are optimistic and assume previous transmits are done.
-        // Proper impl would clear ownership and return buffers.
-        0
+        let dma = self.dma_vaddr;
+        let tx_desc_off = 0;
+        let mut completed = 0usize;
+        for i in 0..Self::NUM_TX_DESC {
+            let desc = dma.add(tx_desc_off + i * Self::DESC_SIZE) as *mut u32;
+            let stat = ptr::read_volatile(desc.add(1));
+            if (stat & (1 << 31)) == 0 && stat != 0 {
+                ptr::write_volatile(desc.add(1), 0);
+                completed += 1;
+            }
+        }
+        completed
+    }
+
+    /// Poll one completed RX frame. Returns a slice into driver DMA (valid until next receive).
+    pub unsafe fn receive(&mut self) -> Option<&[u8]> {
+        let dma = self.dma_vaddr;
+        let tx_desc_off = 0;
+        let tx_buf_off = tx_desc_off + Self::NUM_TX_DESC * Self::DESC_SIZE;
+        let rx_desc_off = tx_buf_off + Self::NUM_TX_DESC * 2048;
+        let rx_buf_off = rx_desc_off + Self::NUM_RX_DESC * Self::DESC_SIZE;
+        let buf_size = 2048usize;
+
+        for i in 0..Self::NUM_RX_DESC {
+            let desc = dma.add(rx_desc_off + i * Self::DESC_SIZE) as *mut u32;
+            let stat = ptr::read_volatile(desc.add(1));
+            if (stat & (1 << 31)) == 0 && stat != 0 {
+                let len = ((stat >> 16) & 0x3fff) as usize;
+                if len == 0 {
+                    continue;
+                }
+                let buf_ptr = dma.add(rx_buf_off + i * buf_size);
+                let pkt = core::slice::from_raw_parts(buf_ptr, len.min(buf_size));
+                // Re-arm descriptor for HW.
+                let buf_phys = self.dma_paddr + rx_buf_off + i * buf_size;
+                ptr::write_volatile(desc, buf_phys as u32);
+                ptr::write_volatile(desc.add(1), (2048u32 << 16) | (1u32 << 31));
+                return Some(pkt);
+            }
+        }
+        None
     }
 
     /// Acknowledge GENET interrupts.

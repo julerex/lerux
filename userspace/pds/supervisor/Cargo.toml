@@ -15,6 +15,7 @@ board-qemu_virt_aarch64_blk_composed = []
 board-qemu_virt_aarch64_net_composed = []
 board-qemu_virt_aarch64_ipc_composed = []
 board-qemu_virt_aarch64_workstation = []
+board-rpi4b_4gb = []
 
 [dependencies]
 lerux-logging = { path = "../../crates/lerux-logging", features = ["serial", "server"] }

@@ -137,6 +137,13 @@ pub fn image(root: &Path, board: &str, build_dir: &str, config: &str) -> Result<
 pub fn run(root: &Path, board: &str, build_dir: &str, config: &str) -> Result<()> {
     image(root, board, build_dir, config)?;
     let ctx = crate::qemu::load_qemu_context(root, board, build_dir, config)?;
+    if crate::qemu::is_hardware_board(&ctx) {
+        println!(
+            "==> Hardware board {:?}: image ready.\n    Use manual deployment (U-Boot etc). See docs/boards.md.",
+            board
+        );
+        return Ok(());
+    }
     if crate::qemu::is_http_board(board) {
         crate::qemu::cleanup_http_conflicts();
         crate::qemu::print_http_hint(&ctx);

@@ -285,6 +285,15 @@ pub fn run_board_test(
     }
 
     let ctx = crate::qemu::load_qemu_context(root, board, build_dir, config)?;
+
+    if crate::qemu::is_hardware_board(&ctx) {
+        println!(
+            "==> Hardware board {:?}: image built successfully.\n    No QEMU profile. Perform manual smoke/verification on the device.\n    See docs/boards.md for deployment (e.g. U-Boot on RPi4).",
+            board
+        );
+        return Ok(());
+    }
+
     crate::qemu::ensure_qemu_binary(&ctx.root, ctx.board.qemu.as_deref().unwrap_or_default())?;
     crate::qemu::print_http_hint(&ctx);
 

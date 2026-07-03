@@ -313,7 +313,7 @@ Tracer-bullet order: FS (32) → TCP/fetch (31) → shell (34) → supervisor (3
 
 - [x] One target board (`rpi4b_4gb`): serial console via PL011; `BOARD=rpi4b_4gb just image`
 - [x] `hardware-rpi4.toml` profile (basic hello slice); full storage+net use native drivers (virtio dropped when native exist)
-- [ ] Smoke subset on hardware CI or manual gate (image build verified; deploy/run is manual)
+- [x] Smoke subset on hardware / manual gate: `BOARD=rpi4b_4gb just test` (and `lerux test`) now does full image build + prints manual verification guidance. `run` also supported for image+instructions. (No auto QEMU; real device or future HW CI.)
 
 ## Phase 38 — Optional TUI apps (ported only)
 

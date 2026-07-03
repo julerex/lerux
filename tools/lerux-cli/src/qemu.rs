@@ -411,6 +411,10 @@ pub fn is_http_board(board: &str) -> bool {
     )
 }
 
+pub fn is_hardware_board(ctx: &QemuContext) -> bool {
+    ctx.board.qemu.is_none()
+}
+
 pub fn load_qemu_context(
     root: &Path,
     board_name: &str,

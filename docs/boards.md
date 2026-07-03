@@ -55,7 +55,9 @@ Use `lerux image --board <name>` (or `BOARD=<name> just image`).
 - Serial: PL011 at 0xfe201000 (GPIO 14/15). Update IRQ in `boards.toml` if the platform IRQ mapping differs.
 - Full workstation (FS + net) on hardware requires native (non-virtio) block and network drivers; see `support/profiles/hardware-rpi4.toml`.
 
-`just run` / `just test` on hardware boards produce a clear error directing you to `image`.
+`just run` on hardware boards builds the image then prints deployment instructions (no QEMU).
+
+`just test` (or `lerux test`) on hardware boards builds the image then reports success with a note to perform manual verification on the device (advances the smoke gate for Phase 37). No execution step.
 
 ## QEMU profiles
 

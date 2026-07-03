@@ -17,6 +17,8 @@ members = [
     "userspace/pds/virtio-blk-driver",
     "userspace/pds/virtio-net-driver",
     "userspace/pds/virtio-pci-driver",
+    "userspace/pds/genet-driver",
+    "userspace/pds/emmc2-driver",
     "userspace/pds/http-server",
     "userspace/crates/lerux-logging",
     "userspace/crates/lerux-ipc",

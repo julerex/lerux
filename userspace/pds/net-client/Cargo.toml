@@ -13,6 +13,7 @@ board-qemu_virt_aarch64_net_composed = ["composed-sync"]
 board-qemu_virt_aarch64_ipc_composed = ["composed-sync"]
 board-qemu_virt_riscv64_net = []
 board-x86_64_generic_net = []
+board-rpi4b_4gb_net = []
 composed-sync = []
 
 [dependencies]

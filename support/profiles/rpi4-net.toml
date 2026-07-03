@@ -1,0 +1,16 @@
+# RPi4 hardware net profile using native genet driver (Phase 37).
+# After building a full SDK with rpi4b board:
+#   BOARD=rpi4b_4gb_net just image
+# Deploy and test manual UDP TX smoke.
+
+template = "net-genet-rpi.system.template"
+pds = ["net-client", "net-server", "serial-driver", "genet-driver"]
+description = "Net over native RPi4 genet Ethernet"
+
+default_board = "rpi4b_4gb_net"
+
+channels = [
+  "serial_driver <-> net_client",
+  "genet_driver <-> net_server",
+  "net_server <-> net_client",
+]

@@ -28,6 +28,8 @@ const BOARD_FEATURE_CRATES: &[&str] = &[
     "virtio-blk-driver",
     "virtio-net-driver",
     "virtio-pci-driver",
+    "genet-driver",
+    "emmc2-driver",
 ];
 
 pub fn system(root: &Path, board: &str, build_dir: &str) -> Result<()> {

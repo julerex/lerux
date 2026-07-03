@@ -431,6 +431,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "emmc2-driver"
+version = "0.1.0"
+dependencies = [
+ "embedded-hal-nb",
+ "heapless",
+ "lerux-logging",
+ "log",
+ "sel4",
+ "sel4-microkit",
+ "sel4-microkit-driver-adapters",
+ "sel4-shared-memory",
+ "sel4-shared-ring-buffer",
+ "sel4-shared-ring-buffer-block-io-types",
+]
+
+[[package]]
 name = "enumn"
 version = "0.1.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -628,6 +644,18 @@ checksum = "85649ca51fd72272d7821adaf274ad91c288277713d9c18820d8499a7ff69e9a"
 dependencies = [
  "typenum",
  "version_check",
+]
+
+[[package]]
+name = "genet-driver"
+version = "0.1.0"
+dependencies = [
+ "lerux-logging",
+ "log",
+ "sel4",
+ "sel4-microkit",
+ "sel4-shared-memory",
+ "sel4-shared-ring-buffer",
 ]
 
 [[package]]

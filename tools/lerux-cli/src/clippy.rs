@@ -51,8 +51,16 @@ const AARCH64_CRATES: &[ClippyCrate<'_>] = &[
         feature: Some("board-qemu_virt_aarch64_composed"),
     },
     ClippyCrate {
+        name: "emmc2-driver",
+        feature: Some("board-rpi4b_4gb_blk"),
+    },
+    ClippyCrate {
         name: "virtio-net-driver",
         feature: Some("board-qemu_virt_aarch64_composed"),
+    },
+    ClippyCrate {
+        name: "genet-driver",
+        feature: Some("board-rpi4b_4gb_net"),
     },
     ClippyCrate {
         name: "pl031-driver",

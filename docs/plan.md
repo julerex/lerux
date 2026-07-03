@@ -314,6 +314,7 @@ Tracer-bullet order: FS (32) → TCP/fetch (31) → shell (34) → supervisor (3
 - [x] One target board (`rpi4b_4gb`): serial console via PL011; `BOARD=rpi4b_4gb just image`
 - [x] `hardware-rpi4.toml` profile (basic hello slice); full storage+net use native drivers (virtio dropped when native exist)
 - [x] Smoke subset on hardware / manual gate: `BOARD=rpi4b_4gb just test` (and `lerux test`) now does full image build + prints manual verification guidance. `run` also supported for image+instructions. (No auto QEMU; real device or future HW CI.)
+- [x] Native driver PD skeletons: `genet-driver` (RPi4 bcm2711-genet-v5) and `emmc2-driver` (bcm2711-emmc2); board entries `rpi4b_4gb_net` / `rpi4b_4gb_blk`; templates `net-genet-rpi.system.template`, `blk-emmc-rpi.system.template`. Stubs allow init + basic TX/block read completion for smoke parity. Full HW register/DMA/MDIO/ADMA impl is the next detailed step.
 
 ## Phase 38 — Optional TUI apps (ported only)
 

@@ -123,6 +123,15 @@ CI runs `just check` before the SDK pipeline and `just check-pd` after the SDK a
 - Do not add vendored rust-sel4 trees — use workspace dependencies.
 - Do not "clean up" unrelated code, normalize experiments, or rewrite git history unless asked.
 
+## Cursor Cloud specific instructions
+
+The VM snapshot already has the full dev environment: system packages (cmake, ninja, dtc, xmllint, `qemu-system-{arm,x86,misc}`, libclang, glib/pixman for SP804 QEMU), the pinned Rust nightly, `just`, the prebuilt Microkit SDK, and the cross toolchains. Do not reinstall these; the startup update script only runs `cargo fetch --locked`.
+
+- **SDK**: obtained via `just fetch-sdk` (prebuilt SDK 2.2.0 at `deps/microkit-sdk/`, path in `deps/.sdk-path`), not `just build-sdk`. It covers the `qemu_virt_aarch64`, `qemu_virt_riscv64`, `x86_64_generic`, and `rpi4b_4gb` boards used by the smoke matrix. All of `deps/workspace/`, `deps/microkit-sdk/`, `deps/toolchains/`, `deps/.sdk-path` are gitignored but persist in the snapshot. If the SDK is ever missing, re-run `just fetch && just fetch-sdk`.
+- **Cross toolchains auto-install**: `just build`/`just test` auto-download the ARM (`aarch64-none-elf`) and RISC-V toolchains into `deps/toolchains/` on the first PD build if absent — no manual ARM toolchain step needed.
+- **Commands** are documented in the `README.md`/`justfile`: `just check` (host lint, no SDK), `just check-pd` (cross clippy, needs SDK), `just test` (default aarch64 hello smoke in QEMU). Other boards via `BOARD=... just test` or the `just test-*` recipes.
+- **Caveat**: `init`/`composed`/`*-composed` boards need patched SP804 QEMU — run `cargo run -p lerux-cli -- install sp804-qemu` first (build deps are already installed). Not required for the default hello/echo/virtio/http flows.
+
 ## Further reading
 
 **General idiomatic Rust**

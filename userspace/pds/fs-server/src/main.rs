@@ -382,6 +382,10 @@ impl HandlerImpl {
                     if is_formatted(&sector) {
                         self.superblock = decode_superblock(&sector).unwrap();
                         self.formatted = true;
+                        if let Some(next) = self.after_format.take() {
+                            self.fs_job = next;
+                            return self.advance_fs_job();
+                        }
                         self.fs_job = FsJob::None;
                         return Some(FsResponse::Ok);
                     }

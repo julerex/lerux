@@ -72,6 +72,24 @@ With `LERUX_HW_SERIAL` set, `lerux test` reads boot logs from the given TTY (115
 
 Board `rpi4b_4gb_workstation` (profile `workstation-rpi4`) runs the full workstation stack on real hardware: supervisor, fs-server, net-server, shell, log-server, config-server, and edit over native `genet-driver` + `emmc2-driver`. There is no QEMU profile.
 
+**Quick reference** (after `BOARD=rpi4b_4gb_workstation just image`):
+
+```bash
+# 1. Copy build/rpi4b_4gb_workstation/loader.img to SD FAT boot partition
+# 2. U-Boot:
+fatload mmc 0 0x10000000 loader.img
+go 0x10000000
+
+# 3. Optional boot smoke (serial connected first):
+LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD=rpi4b_4gb_workstation just test
+
+# 4. At lerux> prompt:
+ls
+cat /boot.log
+fetch
+edit /test.txt
+```
+
 **Prerequisites**
 
 - Raspberry Pi 4 Model B (4 GB) with U-Boot on the SD FAT boot partition

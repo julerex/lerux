@@ -2,7 +2,13 @@
 # Supervisor + FS + net + shell + log + config + edit over native genet + emmc2 drivers.
 #
 # Build: lerux profile build workstation-rpi4
-# Deploy: copy loader.img to SD FAT partition, U-Boot: fatload mmc 0 0x10000000 loader.img; go 0x10000000
+#        (or BOARD=rpi4b_4gb_workstation just image)
+#
+# On-device gate — see docs/boards.md#rpi4-workstation-manual-hw-gate-phase-39:
+#   1. Copy build/rpi4b_4gb_workstation/loader.img to SD FAT boot partition
+#   2. U-Boot: fatload mmc 0 0x10000000 loader.img; go 0x10000000
+#   3. Optional: LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD=rpi4b_4gb_workstation just test
+#   4. At lerux> prompt: ls, cat /boot.log, fetch, edit /test.txt
 
 template = "workstation-rpi4.system.template"
 pds = [

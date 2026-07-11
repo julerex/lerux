@@ -67,6 +67,7 @@ Default: `qemu_virt_aarch64` (QEMU ARM virt). Override with `BOARD=... just run`
 | RISC-V serial / echo / virtio / HTTP | `qemu_virt_riscv64` variants | `just test-riscv` / `just test-riscv-echo` / `just test-riscv-virtio` / `just test-riscv-http` |
 | System profiles (workstation etc) | `lerux profile` | `cargo run -p lerux-cli -- profile list` / `profile build workstation` |
 | Real hardware (RPi4 serial slice) | `rpi4b_4gb` | `BOARD=rpi4b_4gb just image` (or `just test` for build verification; see docs for U-Boot deploy) |
+| Real hardware (RPi4 workstation) | `rpi4b_4gb_workstation` | `just test-rpi4-workstation` — deploy + REPL gate: [docs/boards.md](docs/boards.md#rpi4-workstation-manual-hw-gate-phase-39) |
 
 Full board reference: [`docs/boards.md`](docs/boards.md).
 

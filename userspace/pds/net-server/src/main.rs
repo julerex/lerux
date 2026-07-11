@@ -19,6 +19,9 @@ const NET_DRIVER: Channel = Channel::new(1);
 const CLIENT: Channel = Channel::new(2);
 #[cfg(feature = "workstation")]
 const LOG_SERVER: Channel = Channel::new(4);
+/// http-file-browser on workstation (net_server id 7).
+#[cfg(feature = "workstation")]
+const HTTP_FS_CLIENT: Channel = Channel::new(7);
 
 struct HandlerImpl {
     net: net::NetStack,
@@ -71,6 +74,18 @@ impl HandlerImpl {
         if let Some(resp) = self.net.take_completed() {
             self.completed = Some(resp);
         }
+        #[cfg(feature = "workstation")]
+        if self.net.listen_activity {
+            HTTP_FS_CLIENT.notify();
+        }
+    }
+
+    fn is_client(channel: Channel) -> bool {
+        channel == CLIENT
+            || channel == Channel::new(3)
+            || channel == Channel::new(5)
+            || channel == Channel::new(6)
+            || channel == Channel::new(7)
     }
 }
 
@@ -82,8 +97,8 @@ impl Handler for HandlerImpl {
         channel: Channel,
         msg_info: MessageInfo,
     ) -> Result<MessageInfo, Self::Error> {
-        if channel != CLIENT && channel != Channel::new(3) {
-            // Channel 3 used by shell on workstation
+        if !Self::is_client(channel) {
+            // 2=sup, 3=shell, 5=config, 6=chat, 7=http-file-browser (workstation)
             unreachable!("unexpected net client");
         }
 
@@ -96,12 +111,20 @@ impl Handler for HandlerImpl {
                     self.net.queue_udp_tx(payload_len, payload);
                     send(NetResponse::Pending)
                 }
+                NetRequest::UdpRecv => {
+                    self.net.queue_udp_recv();
+                    send(NetResponse::Pending)
+                }
                 NetRequest::DnsResolve { name_len, name } => {
                     self.net.queue_dns_resolve(name_len, name);
                     send(self.net.take_completed().unwrap_or(NetResponse::Pending))
                 }
                 NetRequest::TcpConnect { addr, port } => {
                     self.net.queue_tcp_connect(addr, port);
+                    send(NetResponse::Pending)
+                }
+                NetRequest::TcpListen { port } => {
+                    self.net.queue_tcp_listen(port);
                     send(NetResponse::Pending)
                 }
                 NetRequest::TcpSend {
@@ -113,6 +136,10 @@ impl Handler for HandlerImpl {
                 }
                 NetRequest::TcpRecv => {
                     self.net.queue_tcp_recv();
+                    send(NetResponse::Pending)
+                }
+                NetRequest::TcpClose => {
+                    self.net.queue_tcp_close();
                     send(NetResponse::Pending)
                 }
                 NetRequest::Poll => send(self.handle_poll()),

@@ -1,0 +1,10 @@
+pd = "echo-server"
+interface_types = "0.1.0"
+description = "Typed postcard echo IPC server (server profile demo)"
+
+[fragment]
+pds = ["echo-server"]
+requires = ["echo-client", "serial-driver"]
+channels = [
+  "echo-client <-> echo-server",
+]

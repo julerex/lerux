@@ -912,8 +912,9 @@ impl Handler for HandlerImpl {
             && channel != Channel::new(3)
             && channel != Channel::new(5)
             && channel != Channel::new(6)
+            && channel != Channel::new(7)
         {
-            // 2=sup, 3=shell, 5=config, 6=edit (workstation multi-client fs)
+            // 2=sup, 3=shell, 5=config, 6=edit, 7=http-file-browser (workstation)
             unreachable!("unexpected fs client");
         }
 

@@ -35,7 +35,8 @@ fn probe_net() {
         NetResponse::Pending
         | NetResponse::Error
         | NetResponse::Ipv4 { .. }
-        | NetResponse::TcpData { .. } => panic!("net TX failed"),
+        | NetResponse::TcpData { .. }
+        | NetResponse::UdpData { .. } => panic!("net TX failed"),
     }
 }
 

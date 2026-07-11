@@ -75,6 +75,14 @@
         <program_image path="edit.elf" />
     </protection_domain>
 
+    <protection_domain name="chat_client" priority="2" stack_size="0x10_000">
+        <program_image path="chat-client.elf" />
+    </protection_domain>
+
+    <protection_domain name="http_file_browser" priority="2" stack_size="0x10_000">
+        <program_image path="http-file-browser.elf" />
+    </protection_domain>
+
     <protection_domain name="supervisor" priority="2" stack_size="0x10_000">
         <program_image path="supervisor.elf" />
     </protection_domain>
@@ -203,5 +211,25 @@
     <channel>
         <end pd="fs_server" id="6" />
         <end pd="edit" id="1" pp="true" />
+    </channel>
+
+    <channel>
+        <end pd="shell" id="7" pp="true" />
+        <end pd="chat_client" id="0" />
+    </channel>
+
+    <channel>
+        <end pd="net_server" id="6" />
+        <end pd="chat_client" id="1" pp="true" />
+    </channel>
+
+    <channel>
+        <end pd="net_server" id="7" />
+        <end pd="http_file_browser" id="0" pp="true" />
+    </channel>
+
+    <channel>
+        <end pd="fs_server" id="7" />
+        <end pd="http_file_browser" id="1" pp="true" />
     </channel>
 </system>

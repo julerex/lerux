@@ -163,11 +163,57 @@ fn persist_boot_log() {
 }
 
 #[cfg(feature = "workstation")]
+fn service_list() -> SupervisorResponse {
+    const NAMES: &[&[u8]] = &[
+        b"supervisor",
+        b"fs-server",
+        b"net-server",
+        b"shell",
+        b"edit",
+        b"chat-client",
+        b"http-fs",
+        b"log-server",
+    ];
+    let mut name_lens = [0u8; lerux_interface_types::MAX_SERVICES];
+    let mut names =
+        [[0u8; lerux_interface_types::MAX_SERVICE_NAME]; lerux_interface_types::MAX_SERVICES];
+    let mut ready = [false; lerux_interface_types::MAX_SERVICES];
+    let count = NAMES.len().min(lerux_interface_types::MAX_SERVICES) as u8;
+    for (i, name) in NAMES.iter().take(count as usize).enumerate() {
+        let n = name.len().min(lerux_interface_types::MAX_SERVICE_NAME);
+        name_lens[i] = n as u8;
+        names[i][..n].copy_from_slice(&name[..n]);
+        // Init probes mark FS/net up; remaining services are present in the image.
+        ready[i] = true;
+    }
+    SupervisorResponse::ServiceList {
+        count,
+        name_lens,
+        names,
+        ready,
+    }
+}
+
+#[cfg(feature = "workstation")]
 fn handle_supervisor(req: SupervisorRequest) -> SupervisorResponse {
     match req {
         SupervisorRequest::Reboot => {
             log::info!("lerux-supervisor: reboot requested");
             SupervisorResponse::Ok
+        }
+        SupervisorRequest::ListServices => service_list(),
+        SupervisorRequest::ServiceStatus { id } => {
+            if let SupervisorResponse::ServiceList { count, ready, .. } = service_list() {
+                if (id as usize) < count as usize {
+                    SupervisorResponse::Status {
+                        ready: ready[id as usize],
+                    }
+                } else {
+                    SupervisorResponse::Error
+                }
+            } else {
+                SupervisorResponse::Error
+            }
         }
         SupervisorRequest::GetTime => {
             #[cfg(feature = "board-rpi4b_4gb_workstation")]
@@ -189,7 +235,6 @@ fn handle_supervisor(req: SupervisorRequest) -> SupervisorResponse {
                 }
             }
         }
-        _ => SupervisorResponse::Ok,
     }
 }
 

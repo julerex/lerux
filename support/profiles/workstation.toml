@@ -1,11 +1,13 @@
 # Workstation system profile: supervisor + fs + net + shell on virtio.
-# Full non-POSIX workstation experience.
+# Full non-POSIX workstation experience (Phase 40 apps: top/chat/http-fs).
 
 template = "workstation.system.template"
 pds = [
   "supervisor",
   "shell",
   "edit",
+  "chat-client",
+  "http-file-browser",
   "fs-server",
   "net-server",
   "log-server",
@@ -16,7 +18,7 @@ pds = [
   "virtio-blk-driver",
   "virtio-net-driver",
 ]
-description = "Supervisor + FS server + Net server + interactive shell"
+description = "Supervisor + FS + net + shell + edit/chat/http-fs apps"
 
 default_board = "qemu_virt_aarch64_workstation"
 
@@ -44,4 +46,8 @@ channels = [
   "fs_server:5 <-> config_server:3 (pp)",
   "shell:6 <-> edit:0 (pp)",
   "fs_server:6 <-> edit:1 (pp)",
+  "shell:7 <-> chat-client:0 (pp)",
+  "net_server:6 <-> chat-client:1 (pp)",
+  "net_server:7 <-> http-file-browser:0 (pp)",
+  "fs_server:7 <-> http-file-browser:1 (pp)",
 ]

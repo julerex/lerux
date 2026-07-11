@@ -1,0 +1,30 @@
+# CI-published PD ELF pins (Phase 40).
+# Updated by `lerux package pin`. Artifacts are rebuild inputs for profiles;
+# Microkit still assembles loader.img from source builds in the usual path.
+
+[packages.chat-client]
+pd = "chat-client"
+interface_types = "0.1.0"
+
+[packages.chat-client.artifacts.qemu_virt_aarch64_workstation]
+elf_sha256 = "b73a1d46f20008bd4f64c2b11c4d97d4fbb7b80f3e5ea68f8fe35af88c37361b"
+target = "aarch64-sel4-microkit"
+built_at_ref = "8d2a922"
+
+[packages.edit]
+pd = "edit"
+interface_types = "0.1.0"
+
+[packages.edit.artifacts.qemu_virt_aarch64_workstation]
+elf_sha256 = "29b8e0720b367237ecf2744371562467c95c3c1cc877f1d51ccdf53380b8620b"
+target = "aarch64-sel4-microkit"
+built_at_ref = "8d2a922"
+
+[packages.http-file-browser]
+pd = "http-file-browser"
+interface_types = "0.1.0"
+
+[packages.http-file-browser.artifacts.qemu_virt_aarch64_workstation]
+elf_sha256 = "dfee7e92ae9c5f8b57eeea1f21abee47f5c3adaa5795b0859a42abbbe9aa17e6"
+target = "aarch64-sel4-microkit"
+built_at_ref = "8d2a922"

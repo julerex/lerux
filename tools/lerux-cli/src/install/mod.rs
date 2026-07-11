@@ -333,7 +333,7 @@ pub fn install_sp804_qemu(root: &Path) -> Result<PathBuf> {
                 "--disable-sdl",
                 "--disable-vnc",
                 "--disable-curses",
-                "--audio-drvlist=",
+                "--audio-drv-list=",
                 "--disable-capstone",
                 "--disable-libusb",
                 "--disable-usb-redir",

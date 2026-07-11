@@ -28,6 +28,8 @@ members = [
     "userspace/pds/fs-client",
     "userspace/pds/shell",
     "userspace/pds/edit",
+    "userspace/pds/chat-client",
+    "userspace/pds/http-file-browser",
     "userspace/pds/log-server",
     "userspace/pds/config-server",
     "userspace/crates/lerux-sync",

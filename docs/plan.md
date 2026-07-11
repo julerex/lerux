@@ -302,7 +302,7 @@ Tracer-bullet order: FS (32) → TCP/fetch (31) → shell (34) → supervisor (3
 - [x] `support/profiles/*.toml` — named PD sets + template + channel manifest (e.g. `minimal`, `server`, `workstation`)
 - [x] `lerux profile list|build|diff` in `lerux-cli`
 - [x] Profile `workstation` (and others) bootable via `lerux profile build <name>` (reproduces loader.img from the pinned source tree state)
-- [ ] A package = one PD crate + interface-types version + optional profile fragment; publish = CI ELF artifact + pin → Phase 40
+- [x] A package = one PD crate + interface-types version + optional profile fragment; publish = CI ELF artifact + pin → Phase 40
 
 ## Phase 36 — Logging, config, and ops
 
@@ -342,10 +342,11 @@ Bring the QEMU workstation stack to real hardware on `rpi4b_4gb`.
 - [ ] Manual HW gate: serial REPL, `ls`/`cat`/`fetch`/`edit` on device — procedure in [docs/boards.md](boards.md#rpi4-workstation-manual-hw-gate-phase-39); image build verified (`BOARD=rpi4b_4gb_workstation just image`)
 - [x] Optional serial-capture HW CI harness: `LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD=rpi4b_4gb_workstation just test`
 
-## Phase 40 — Packages and more apps (planned)
+## Phase 40 — Packages and more apps (complete)
 
-- [ ] Phase 35 follow-up: package = PD crate + interface-types version + profile fragment; CI ELF artifact + pin
-- [ ] Additional ported apps: `top` (supervisor IPC), `chat-client`, HTTP file browser (FS + net IPC)
+- [x] Phase 35 follow-up: package = PD crate + interface-types version + profile fragment; `lerux package` CLI + `support/packages/` + `support/package-pins.toml`; CI ELF artifact job
+- [x] Additional ported apps: `top` (supervisor `ServiceList` IPC), `chat-client` (UDP chat + shell proxy), `http-file-browser` (FS + net TCP listen IPC)
+- [x] Workstation profile wires chat + http-fs; smoke expects + hostfwd curl for directory listing
 
 ## Phases 41+ — au-ts inspiration
 

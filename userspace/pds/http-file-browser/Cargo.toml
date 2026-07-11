@@ -1,0 +1,19 @@
+[package]
+name = "http-file-browser"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[lints]
+workspace = true
+
+[features]
+workstation = []
+board-qemu_virt_aarch64_workstation = ["workstation"]
+board-rpi4b_4gb_workstation = ["workstation"]
+
+[dependencies]
+lerux-interface-types = { path = "../../crates/lerux-interface-types" }
+lerux-ipc = { path = "../../crates/lerux-ipc" }
+lerux-logging = { path = "../../crates/lerux-logging" }
+sel4-microkit = { workspace = true }

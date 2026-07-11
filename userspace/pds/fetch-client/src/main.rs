@@ -38,11 +38,15 @@ fn dns_resolve(name: &[u8]) -> [u8; 4] {
             NetResponse::Pending
             | NetResponse::Ok
             | NetResponse::Error
-            | NetResponse::TcpData { .. } => {
+            | NetResponse::TcpData { .. }
+            | NetResponse::UdpData { .. } => {
                 panic!("dns resolve failed")
             }
         },
-        NetResponse::Ok | NetResponse::Error | NetResponse::TcpData { .. } => {
+        NetResponse::Ok
+        | NetResponse::Error
+        | NetResponse::TcpData { .. }
+        | NetResponse::UdpData { .. } => {
             panic!("dns resolve failed")
         }
     }
@@ -58,7 +62,8 @@ fn tcp_connect(addr: [u8; 4], port: u16) {
         NetResponse::Pending
         | NetResponse::Error
         | NetResponse::Ipv4 { .. }
-        | NetResponse::TcpData { .. } => panic!("tcp connect failed"),
+        | NetResponse::TcpData { .. }
+        | NetResponse::UdpData { .. } => panic!("tcp connect failed"),
     }
 }
 
@@ -71,7 +76,8 @@ fn tcp_send(data: &[u8]) {
         NetResponse::Pending
         | NetResponse::Error
         | NetResponse::Ipv4 { .. }
-        | NetResponse::TcpData { .. } => panic!("tcp send failed"),
+        | NetResponse::TcpData { .. }
+        | NetResponse::UdpData { .. } => panic!("tcp send failed"),
     }
 }
 
@@ -101,7 +107,10 @@ fn recv_until_status_200() {
                 }
                 break;
             }
-            NetResponse::Pending | NetResponse::Error | NetResponse::Ipv4 { .. } => {
+            NetResponse::Pending
+            | NetResponse::Error
+            | NetResponse::Ipv4 { .. }
+            | NetResponse::UdpData { .. } => {
                 panic!("tcp recv failed")
             }
         }

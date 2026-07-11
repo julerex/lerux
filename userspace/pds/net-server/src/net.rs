@@ -54,6 +54,7 @@ struct SocketArena {
     tcp_tx: [u8; 1024],
     udp_handle: Option<SocketHandle>,
     tcp_handle: Option<SocketHandle>,
+    udp_bound: bool,
 }
 
 impl SocketArena {
@@ -68,6 +69,7 @@ impl SocketArena {
             tcp_tx: [0; 1024],
             udp_handle: None,
             tcp_handle: None,
+            udp_bound: false,
         }
     }
 }
@@ -78,9 +80,12 @@ static mut SOCKET_ARENA: SocketArena = SocketArena::empty();
 enum Op {
     None,
     UdpTx,
+    UdpRecv,
     TcpConnect,
+    TcpListen,
     TcpSend,
     TcpRecv,
+    TcpClose,
 }
 
 pub struct NetStack {
@@ -90,9 +95,14 @@ pub struct NetStack {
     pending_udp_len: Option<u8>,
     pending_udp: [u8; MAX_NET_UDP_PAYLOAD],
     pending_tcp_connect: Option<([u8; 4], u16)>,
+    pending_tcp_listen: Option<u16>,
+    listen_port: Option<u16>,
     pending_tcp_send_len: Option<u16>,
     pending_tcp_send: [u8; MAX_NET_TCP_PAYLOAD],
     tcp_connected: bool,
+    tcp_listening: bool,
+    /// True when an inbound listen socket may have recv data (for client notify).
+    pub listen_activity: bool,
     completed: Option<NetResponse>,
     udp_tx_logged: bool,
     last_was_udp_tx: bool,
@@ -186,9 +196,13 @@ impl NetStack {
             pending_udp_len: None,
             pending_udp: [0; MAX_NET_UDP_PAYLOAD],
             pending_tcp_connect: None,
+            pending_tcp_listen: None,
+            listen_port: None,
             pending_tcp_send_len: None,
             pending_tcp_send: [0; MAX_NET_TCP_PAYLOAD],
             tcp_connected: false,
+            tcp_listening: false,
+            listen_activity: false,
             completed: None,
             udp_tx_logged: false,
             last_was_udp_tx: false,
@@ -203,6 +217,11 @@ impl NetStack {
         self.last_was_udp_tx = false;
     }
 
+    pub fn queue_udp_recv(&mut self) {
+        self.op = Op::UdpRecv;
+        self.completed = None;
+    }
+
     pub fn queue_dns_resolve(&mut self, name_len: u8, name: [u8; MAX_DNS_NAME]) {
         let len = name_len as usize;
         self.completed = resolve_static_dns(&name[..len])
@@ -213,9 +232,25 @@ impl NetStack {
 
     pub fn queue_tcp_connect(&mut self, addr: [u8; 4], port: u16) {
         self.tcp_connected = false;
+        self.tcp_listening = false;
+        self.listen_port = None;
         self.pending_tcp_send_len = None;
+        self.pending_tcp_listen = None;
         self.pending_tcp_connect = Some((addr, port));
         self.op = Op::TcpConnect;
+        self.completed = None;
+        let arena = unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_ARENA) };
+        arena.tcp_handle = None;
+    }
+
+    pub fn queue_tcp_listen(&mut self, port: u16) {
+        self.tcp_connected = false;
+        self.tcp_listening = false;
+        self.pending_tcp_connect = None;
+        self.pending_tcp_send_len = None;
+        self.pending_tcp_listen = Some(port);
+        self.listen_port = Some(port);
+        self.op = Op::TcpListen;
         self.completed = None;
         let arena = unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_ARENA) };
         arena.tcp_handle = None;
@@ -230,6 +265,12 @@ impl NetStack {
 
     pub fn queue_tcp_recv(&mut self) {
         self.op = Op::TcpRecv;
+        self.completed = None;
+        self.listen_activity = false;
+    }
+
+    pub fn queue_tcp_close(&mut self) {
+        self.op = Op::TcpClose;
         self.completed = None;
     }
 
@@ -282,11 +323,55 @@ impl NetStack {
         let remote = IpEndpoint::new(IpAddress::Ipv4(HOST_IP), REMOTE_UDP_PORT);
         let udp = sockets.get_mut::<UdpSocket>(udp_handle);
         let payload = &self.pending_udp[..payload_len as usize];
-        if udp.bind(local).is_ok() && udp.send_slice(payload, remote).is_ok() {
+        if !arena.udp_bound {
+            if udp.bind(local).is_err() {
+                return;
+            }
+            arena.udp_bound = true;
+        }
+        if udp.send_slice(payload, remote).is_ok() {
             self.pending_udp_len = None;
             self.completed = Some(NetResponse::Ok);
             self.op = Op::None;
             self.last_was_udp_tx = true;
+        }
+    }
+
+    fn try_udp_recv(&mut self, sockets: &mut SocketSet<'static>) {
+        if self.op != Op::UdpRecv {
+            return;
+        }
+        let arena = unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_ARENA) };
+        let Some(udp_handle) = arena.udp_handle else {
+            return;
+        };
+        let local = IpListenEndpoint::from((IpAddress::Ipv4(GUEST_IP), LOCAL_UDP_PORT));
+        let udp = sockets.get_mut::<UdpSocket>(udp_handle);
+        if !arena.udp_bound {
+            if udp.bind(local).is_err() {
+                return;
+            }
+            arena.udp_bound = true;
+        }
+        if !udp.can_recv() {
+            return;
+        }
+        let mut buf = [0u8; MAX_NET_UDP_PAYLOAD];
+        match udp.recv_slice(&mut buf) {
+            Ok((len, _meta)) => {
+                let mut data = [0u8; MAX_NET_UDP_PAYLOAD];
+                let n = len.min(MAX_NET_UDP_PAYLOAD);
+                data[..n].copy_from_slice(&buf[..n]);
+                self.completed = Some(NetResponse::UdpData {
+                    data_len: n as u8,
+                    data,
+                });
+                self.op = Op::None;
+            }
+            Err(_) => {
+                self.completed = Some(NetResponse::Error);
+                self.op = Op::None;
+            }
         }
     }
 
@@ -317,8 +402,32 @@ impl NetStack {
         }
     }
 
+    fn try_tcp_listen(&mut self, sockets: &mut SocketSet<'static>) {
+        if self.op != Op::TcpListen {
+            return;
+        }
+        let Some(port) = self.pending_tcp_listen else {
+            return;
+        };
+        let Some(tcp_handle) = self.ensure_tcp_socket(sockets) else {
+            return;
+        };
+        let endpoint = IpListenEndpoint { addr: None, port };
+        let tcp = sockets.get_mut::<TcpSocket>(tcp_handle);
+        if !tcp.is_open() && tcp.listen(endpoint).is_err() {
+            self.completed = Some(NetResponse::Error);
+            self.op = Op::None;
+            return;
+        }
+        self.tcp_listening = true;
+        self.pending_tcp_listen = None;
+        self.completed = Some(NetResponse::Ok);
+        self.op = Op::None;
+        log::info!("lerux-net: listen :{}", port);
+    }
+
     fn try_tcp_send(&mut self, sockets: &mut SocketSet<'static>) {
-        if self.op != Op::TcpSend || !self.tcp_connected {
+        if self.op != Op::TcpSend || !(self.tcp_connected || self.tcp_listening) {
             return;
         }
         let Some(payload_len) = self.pending_tcp_send_len else {
@@ -341,7 +450,7 @@ impl NetStack {
     }
 
     fn try_tcp_recv(&mut self, sockets: &mut SocketSet<'static>) {
-        if self.op != Op::TcpRecv || !self.tcp_connected {
+        if self.op != Op::TcpRecv || !(self.tcp_connected || self.tcp_listening) {
             return;
         }
         let arena = unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_ARENA) };
@@ -374,6 +483,37 @@ impl NetStack {
         }
     }
 
+    fn try_tcp_close(&mut self, sockets: &mut SocketSet<'static>) {
+        if self.op != Op::TcpClose {
+            return;
+        }
+        let arena = unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_ARENA) };
+        if let Some(tcp_handle) = arena.tcp_handle {
+            let tcp = sockets.get_mut::<TcpSocket>(tcp_handle);
+            tcp.close();
+            tcp.abort();
+        }
+        arena.tcp_handle = None;
+        self.tcp_connected = false;
+        self.tcp_listening = false;
+        self.completed = Some(NetResponse::Ok);
+        self.op = Op::None;
+    }
+
+    fn note_listen_activity(&mut self, sockets: &mut SocketSet<'static>) {
+        if !self.tcp_listening || self.listen_port.is_none() {
+            return;
+        }
+        let arena = unsafe { &*core::ptr::addr_of!(SOCKET_ARENA) };
+        let Some(tcp_handle) = arena.tcp_handle else {
+            return;
+        };
+        let tcp = sockets.get_mut::<TcpSocket>(tcp_handle);
+        if tcp.may_recv() {
+            self.listen_activity = true;
+        }
+    }
+
     fn log_udp_tx_done(&mut self) {
         if self.last_was_udp_tx && !self.udp_tx_logged {
             log::info!("lerux-net: TX ok");
@@ -388,11 +528,25 @@ impl NetStack {
         let mut sockets = SocketSet::new(&mut arena.storage[..]);
         self.ensure_udp_socket(&mut sockets);
         self.try_udp_tx(&mut sockets);
+        self.try_udp_recv(&mut sockets);
         self.try_tcp_connect(&mut sockets);
+        self.try_tcp_listen(&mut sockets);
         self.try_tcp_send(&mut sockets);
         self.try_tcp_recv(&mut sockets);
+        self.try_tcp_close(&mut sockets);
         self.iface
             .poll(Instant::ZERO, &mut self.device, &mut sockets);
+        // Re-open listen after close if a listen port is configured.
+        if !self.tcp_listening
+            && self.op == Op::None
+            && let Some(port) = self.listen_port
+            && arena.tcp_handle.is_none()
+        {
+            self.pending_tcp_listen = Some(port);
+            self.op = Op::TcpListen;
+            self.try_tcp_listen(&mut sockets);
+        }
+        self.note_listen_activity(&mut sockets);
         self.log_udp_tx_done();
     }
 }

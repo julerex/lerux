@@ -169,7 +169,8 @@ hardware-rpi4:
 test-hardware-rpi4:
     BOARD=rpi4b_4gb just test
 
-# RPi4 workstation: build image (+ optional serial smoke via LERUX_HW_SERIAL)
+# RPi4 workstation: build image (+ optional serial smoke via LERUX_HW_SERIAL).
+# On-device gate: docs/boards.md#rpi4-workstation-manual-hw-gate-phase-39
 test-rpi4-workstation:
     BOARD=rpi4b_4gb_workstation just test
 

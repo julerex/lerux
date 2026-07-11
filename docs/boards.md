@@ -35,6 +35,7 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `x86_64_generic_net` | x86_64 | `just test-x86-net` | net client/server + serial + virtio-pci net |
 | `x86_64_generic_http` | x86_64 | `just test-x86-http` | serial + virtio-pci net + http-server |
 | `rpi4b_4gb` | aarch64 | `BOARD=rpi4b_4gb just image` | hello + serial (PL011; hardware only) |
+| `rpi4b_4gb_workstation` | aarch64 | `just test-rpi4-workstation` | workstation over native genet + emmc2 (hardware only) |
 
 ## SDK boards
 
@@ -66,6 +67,88 @@ LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD=rpi4b_4gb_workstation just test
 ```
 
 With `LERUX_HW_SERIAL` set, `lerux test` reads boot logs from the given TTY (115200 8N1) and matches smoke patterns for the board (unordered for `rpi4b_4gb_workstation`).
+
+### RPi4 workstation manual HW gate (Phase 39)
+
+Board `rpi4b_4gb_workstation` (profile `workstation-rpi4`) runs the full workstation stack on real hardware: supervisor, fs-server, net-server, shell, log-server, config-server, and edit over native `genet-driver` + `emmc2-driver`. There is no QEMU profile.
+
+**Quick reference** (after `BOARD=rpi4b_4gb_workstation just image`):
+
+```bash
+# 1. Copy build/rpi4b_4gb_workstation/loader.img to SD FAT boot partition
+# 2. U-Boot:
+fatload mmc 0 0x10000000 loader.img
+go 0x10000000
+
+# 3. Optional boot smoke (serial connected first):
+LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD=rpi4b_4gb_workstation just test
+
+# 4. At lerux> prompt:
+ls
+cat /boot.log
+fetch
+edit /test.txt
+```
+
+**Prerequisites**
+
+- Raspberry Pi 4 Model B (4 GB) with U-Boot on the SD FAT boot partition
+- USB-serial adapter on GPIO UART (PL011, 115200 8N1)
+- Ethernet on `192.168.1.0/24` (guest static IP `192.168.1.10`; host `192.168.1.1` for `fetch` UDP demo)
+
+**1. Build image**
+
+```bash
+BOARD=rpi4b_4gb_workstation just image
+# → build/rpi4b_4gb_workstation/loader.img
+```
+
+Or via profile: `cargo run -p lerux-cli -- profile build workstation-rpi4`.
+
+**2. Deploy and boot**
+
+1. Copy `build/rpi4b_4gb_workstation/loader.img` onto the SD FAT boot partition.
+2. Connect serial (`screen /dev/ttyUSB0 115200` or equivalent).
+3. At the U-Boot prompt:
+
+   ```
+   fatload mmc 0 0x10000000 loader.img
+   go 0x10000000
+   ```
+
+**3. Automated boot smoke (optional)**
+
+Power on the Pi and connect serial **before** starting the read:
+
+```bash
+LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD=rpi4b_4gb_workstation just test
+```
+
+Within 120s, boot log must contain all of (any order):
+
+- `lerux-supervisor: init ok`
+- `genet:`, `emmc2:`
+- `lerux-fs: ready`, `lerux-net: ready`
+- `lerux-supervisor: ready`, `lerux-shell: ready`, `lerux-edit: ready`
+
+Success prints `==> hardware serial smoke passed`.
+
+Without `LERUX_HW_SERIAL`, `just test` only verifies the image build.
+
+**4. Manual REPL checklist**
+
+At the `lerux>` prompt:
+
+| Command | Pass criteria |
+|---------|---------------|
+| `ls` | Directory listing; no `ls: error` |
+| `cat /boot.log` | File contents printed |
+| `fetch` | `fetch: demo udp sent` (UDP to `192.168.1.1:12345`, not HTTP) |
+| `edit /test.txt` | Edit TUI opens; Ctrl-S save, Ctrl-Q quit |
+
+**Likely failure modes:** `emmc2` SDHCI init failure blocks FS/`edit`; genet PHY/link issues can make `fetch` meaningless even if the demo print succeeds.
+
+**QEMU dev substitute:** `just disk-img && just test-workstation` exercises the same REPL stack with virtio drivers (not a substitute for the RPi4 gate).
 
 ## QEMU profiles
 

@@ -9,7 +9,7 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [../AGENTS.md](../AGENTS.md) | LLM agent instructions for idiomatic Rust in this repo |
 | [context.md](context.md) | Domain language and architectural decisions |
 | [plan.md](plan.md) | Roadmap and cross-arch smoke parity |
-| [boards.md](boards.md) | Board names, PDs, QEMU profiles |
+| [boards.md](boards.md) | Board names, PDs, QEMU profiles; [RPi4 workstation HW gate](boards.md#rpi4-workstation-manual-hw-gate-phase-39) |
 | [ci.md](ci.md) | GitHub Actions pipeline, caches, troubleshooting |
 | [seL4-whitepaper.pdf](seL4-whitepaper.pdf) | seL4 high-level overview (reference) |
 

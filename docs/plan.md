@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-03 (Phase 38 complete)
+Last updated: 2026-07-11 (Phase 39 manual HW gate procedure documented)
 
 ## Phase 1 — Bring-up
 
@@ -254,14 +254,14 @@ Tracer-bullet order: FS (32) → TCP/fetch (31) → shell (34) → supervisor (3
 | Capability | QEMU virt | Real HW (RPi4) |
 |------------|-----------|----------------|
 | Serial hello | yes | yes (`rpi4b_4gb`, `hardware-rpi4` profile) |
-| Block IPC | yes | stub (`rpi4b_4gb_blk`; full SDHCI/ADMA → Phase 39) |
-| Net IPC (UDP TX) | yes | stub (`rpi4b_4gb_net`, `rpi4-net` profile; full DMA/MDIO → Phase 39) |
-| Net TCP + DNS | yes | no |
-| Filesystem IPC | yes | no |
-| Interactive shell | yes | no |
-| Logging / config | yes | no |
-| Edit TUI | yes | no |
-| Profile-based build | yes | yes (hello + net slices) |
+| Block IPC | yes | yes (`rpi4b_4gb_blk`, `emmc2-driver`; workstation uses same driver) |
+| Net IPC (UDP TX) | yes | yes (`rpi4b_4gb_net`, `genet-driver`; workstation uses same driver) |
+| Net TCP + DNS | yes | no (workstation `fetch` is UDP demo only) |
+| Filesystem IPC | yes | yes (`rpi4b_4gb_workstation`; manual gate pending on-device REPL) |
+| Interactive shell | yes | yes (`rpi4b_4gb_workstation`; manual gate pending) |
+| Logging / config | yes | yes (workstation profile) |
+| Edit TUI | yes | yes (workstation profile; manual gate pending) |
+| Profile-based build | yes | yes (`workstation-rpi4`, `hardware-rpi4`, hello/net/blk slices) |
 
 ## Phase 31 — Net service v2 (TCP + DNS)
 
@@ -339,7 +339,7 @@ Bring the QEMU workstation stack to real hardware on `rpi4b_4gb`.
 - [x] `workstation-rpi4` profile + `workstation-rpi4.system.template` + `rpi4b_4gb_workstation` board
 - [x] `emmc2-driver`: SDHCI PIO block read/write + virtio_blk ring IPC + `GetBlockDeviceLayout`; clock/CMD41/4-bit bus hardening
 - [x] `genet-driver`: Linux GENET v5 register map, ring-16 DMA descriptors, MDIO/INTRL2/IRQ enable
-- [ ] Manual HW gate: serial REPL, `ls`/`cat`/`fetch`/`edit` on device (`BOARD=rpi4b_4gb_workstation just image`)
+- [ ] Manual HW gate: serial REPL, `ls`/`cat`/`fetch`/`edit` on device — procedure in [docs/boards.md](boards.md#rpi4-workstation-manual-hw-gate-phase-39); image build verified (`BOARD=rpi4b_4gb_workstation just image`)
 - [x] Optional serial-capture HW CI harness: `LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD=rpi4b_4gb_workstation just test`
 
 ## Phase 40 — Packages and more apps (planned)

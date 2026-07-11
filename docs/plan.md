@@ -347,6 +347,10 @@ Bring the QEMU workstation stack to real hardware on `rpi4b_4gb`.
 - [ ] Phase 35 follow-up: package = PD crate + interface-types version + profile fragment; CI ELF artifact + pin
 - [ ] Additional ported apps: `top` (supervisor IPC), `chat-client`, HTTP file browser (FS + net IPC)
 
+## Phases 41+ — au-ts inspiration
+
+See [`plan-au-ts.md`](plan-au-ts.md) for Phases 41–49 (system generation, serial/net virtualisers, FS backends, sync runtime, GDB, HW CI, optional QoS/perf). That plan steals topology and tooling ideas from sDDF / LionsOS / sdfgen without adopting C userspace.
+
 ## Version alignment
 
 | Component | Version |

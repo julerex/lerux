@@ -226,9 +226,8 @@ fn try_serve() {
 #[protection_domain]
 fn init() -> HandlerImpl {
     debug::init().expect("debug log init");
-    match net_call(NetRequest::TcpListen { port: HTTP_PORT }) {
-        NetResponse::Ok => log::info!("lerux-http-fs: listening"),
-        _ => {}
+    if net_call(NetRequest::TcpListen { port: HTTP_PORT }) == NetResponse::Ok {
+        log::info!("lerux-http-fs: listening");
     }
     log::info!("lerux-http-fs: ready");
     for _ in 0..INIT_SERVE_ROUNDS {

@@ -414,12 +414,10 @@ impl NetStack {
         };
         let endpoint = IpListenEndpoint { addr: None, port };
         let tcp = sockets.get_mut::<TcpSocket>(tcp_handle);
-        if !tcp.is_open() {
-            if tcp.listen(endpoint).is_err() {
-                self.completed = Some(NetResponse::Error);
-                self.op = Op::None;
-                return;
-            }
+        if !tcp.is_open() && tcp.listen(endpoint).is_err() {
+            self.completed = Some(NetResponse::Error);
+            self.op = Op::None;
+            return;
         }
         self.tcp_listening = true;
         self.pending_tcp_listen = None;
@@ -493,7 +491,7 @@ impl NetStack {
         if let Some(tcp_handle) = arena.tcp_handle {
             let tcp = sockets.get_mut::<TcpSocket>(tcp_handle);
             tcp.close();
-            let _ = tcp.abort();
+            tcp.abort();
         }
         arena.tcp_handle = None;
         self.tcp_connected = false;
@@ -539,14 +537,14 @@ impl NetStack {
         self.iface
             .poll(Instant::ZERO, &mut self.device, &mut sockets);
         // Re-open listen after close if a listen port is configured.
-        if self.listen_port.is_some() && !self.tcp_listening && self.op == Op::None {
-            if let Some(port) = self.listen_port {
-                if arena.tcp_handle.is_none() {
-                    self.pending_tcp_listen = Some(port);
-                    self.op = Op::TcpListen;
-                    self.try_tcp_listen(&mut sockets);
-                }
-            }
+        if !self.tcp_listening
+            && self.op == Op::None
+            && let Some(port) = self.listen_port
+            && arena.tcp_handle.is_none()
+        {
+            self.pending_tcp_listen = Some(port);
+            self.op = Op::TcpListen;
+            self.try_tcp_listen(&mut sockets);
         }
         self.note_listen_activity(&mut sockets);
         self.log_udp_tx_done();

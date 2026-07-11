@@ -96,11 +96,8 @@ impl HandlerImpl {
                 self.ring.view()
             }
             ChatRequest::Recv => {
-                match net_call(NetRequest::UdpRecv) {
-                    NetResponse::UdpData { data_len, data } => {
-                        self.ring.push_line(b'<', &data[..data_len as usize]);
-                    }
-                    _ => {}
+                if let NetResponse::UdpData { data_len, data } = net_call(NetRequest::UdpRecv) {
+                    self.ring.push_line(b'<', &data[..data_len as usize]);
                 }
                 self.ring.view()
             }

@@ -1,0 +1,5 @@
+# CI-published PD ELF pins (Phase 40).
+# Updated by `lerux package pin`. Artifacts are rebuild inputs for profiles;
+# Microkit still assembles loader.img from source builds in the usual path.
+
+[packages]

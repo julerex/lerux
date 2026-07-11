@@ -1,0 +1,13 @@
+# Phase 38 TUI editor — reference package for the Phase 40 pin story.
+
+pd = "edit"
+interface_types = "0.1.0"
+description = "Serial TUI text editor (FS load/save via shell proxy)"
+
+[fragment]
+pds = ["edit"]
+requires = ["shell", "fs-server"]
+channels = [
+  "shell:6 <-> edit:0 (pp)",
+  "fs_server:6 <-> edit:1 (pp)",
+]

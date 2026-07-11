@@ -97,6 +97,8 @@ pub enum NetRequest {
         #[serde(with = "net_payload_bytes")]
         payload: [u8; MAX_NET_UDP_PAYLOAD],
     },
+    /// Receive one UDP datagram previously bound via [`NetRequest::UdpTx`] / listen port.
+    UdpRecv,
     DnsResolve {
         name_len: u8,
         #[serde(with = "dns_name_bytes")]
@@ -106,12 +108,18 @@ pub enum NetRequest {
         addr: [u8; 4],
         port: u16,
     },
+    /// Listen for inbound TCP (Phase 40 HTTP file browser). Mutually exclusive with TcpConnect.
+    TcpListen {
+        port: u16,
+    },
     TcpSend {
         payload_len: u16,
         #[serde(with = "tcp_payload_bytes")]
         payload: [u8; MAX_NET_TCP_PAYLOAD],
     },
     TcpRecv,
+    /// Close the active TCP socket (client or accepted listen connection).
+    TcpClose,
     Poll,
 }
 
@@ -290,6 +298,12 @@ pub enum FsResponse {
     },
 }
 
+/// Max services returned by [`SupervisorResponse::ServiceList`] (Phase 40 `top`).
+pub const MAX_SERVICES: usize = 8;
+
+/// Max bytes of one service name in [`SupervisorResponse::ServiceList`].
+pub const MAX_SERVICE_NAME: usize = 16;
+
 /// Supervisor service requests (Phase 33/34).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SupervisorRequest {
@@ -299,14 +313,32 @@ pub enum SupervisorRequest {
     GetTime,
 }
 
-/// Supervisor service responses (Phase 33/34).
+/// Supervisor service responses (Phase 33/34 / Phase 40).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SupervisorResponse {
     Ok,
     Error,
-    Services { count: u8 },
-    Status { ready: bool },
-    Time { year: u16, month: u8, day: u8 },
+    Services {
+        count: u8,
+    },
+    /// Named service table for `top` / `ps` (Phase 40).
+    ServiceList {
+        count: u8,
+        #[serde(with = "service_name_lens")]
+        name_lens: [u8; MAX_SERVICES],
+        #[serde(with = "service_names_bytes")]
+        names: [[u8; MAX_SERVICE_NAME]; MAX_SERVICES],
+        #[serde(with = "service_ready_flags")]
+        ready: [bool; MAX_SERVICES],
+    },
+    Status {
+        ready: bool,
+    },
+    Time {
+        year: u16,
+        month: u8,
+        day: u8,
+    },
 }
 
 /// Config service (Phase 36).
@@ -414,6 +446,11 @@ pub enum NetResponse {
     Error,
     Ipv4 {
         addr: [u8; 4],
+    },
+    UdpData {
+        data_len: u8,
+        #[serde(with = "net_payload_bytes")]
+        data: [u8; MAX_NET_UDP_PAYLOAD],
     },
     TcpData {
         data_len: u16,
@@ -1130,6 +1167,44 @@ mod config_keys_bytes {
     }
 }
 
+/// Chat client (Phase 40).
+pub const MAX_CHAT_MSG: usize = 80;
+pub const MAX_CHAT_LINES: usize = 12;
+
+/// Requests from shell to the chat-client PD.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ChatRequest {
+    /// Append and UDP-send a line of text.
+    Send {
+        msg_len: u8,
+        #[serde(with = "chat_msg_bytes")]
+        msg: [u8; MAX_CHAT_MSG],
+    },
+    /// Pull any inbound UDP into the local ring, then return [`ChatResponse::View`].
+    Recv,
+    GetView,
+    Quit,
+}
+
+/// Responses from chat-client PD.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "View carries chat ring for TUI redraw"
+)]
+pub enum ChatResponse {
+    Pending,
+    Ok,
+    Error,
+    View {
+        count: u8,
+        #[serde(with = "chat_line_lens")]
+        line_lens: [u8; MAX_CHAT_LINES],
+        #[serde(with = "chat_lines_bytes")]
+        lines: [[u8; MAX_CHAT_MSG]; MAX_CHAT_LINES],
+    },
+}
+
 /// Edit TUI app (Phase 38 "edit").
 /// Small fixed buffers keep everything stack / postcard friendly.
 pub const MAX_EDIT_LINES: usize = 24;
@@ -1319,6 +1394,387 @@ mod edit_lines_bytes {
     pub fn deserialize<'de, D: Deserializer<'de>>(
         deserializer: D,
     ) -> Result<[[u8; MAX_EDIT_LINE_LEN]; MAX_EDIT_LINES], D::Error> {
+        deserializer.deserialize_bytes(LinesVisitor)
+    }
+}
+
+mod service_name_lens {
+    use core::fmt;
+
+    use serde::{
+        de::{self, SeqAccess, Visitor},
+        Deserializer, Serializer,
+    };
+
+    use super::MAX_SERVICES;
+
+    pub fn serialize<S: Serializer>(
+        lens: &[u8; MAX_SERVICES],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bytes(lens)
+    }
+
+    struct LensVisitor;
+
+    impl<'de> Visitor<'de> for LensVisitor {
+        type Value = [u8; MAX_SERVICES];
+
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("byte array of service name lengths")
+        }
+
+        fn visit_bytes<E: de::Error>(self, v: &[u8]) -> Result<Self::Value, E> {
+            if v.len() != MAX_SERVICES {
+                return Err(E::invalid_length(v.len(), &self));
+            }
+            let mut lens = [0u8; MAX_SERVICES];
+            lens.copy_from_slice(v);
+            Ok(lens)
+        }
+
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+            let mut lens = [0u8; MAX_SERVICES];
+            for byte in lens.iter_mut() {
+                match seq.next_element()? {
+                    Some(value) => *byte = value,
+                    None => break,
+                }
+            }
+            if seq.next_element::<u8>()?.is_some() {
+                return Err(de::Error::invalid_length(MAX_SERVICES + 1, &self));
+            }
+            Ok(lens)
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<[u8; MAX_SERVICES], D::Error> {
+        deserializer.deserialize_bytes(LensVisitor)
+    }
+}
+
+mod service_names_bytes {
+    use core::fmt;
+
+    use serde::{
+        de::{self, SeqAccess, Visitor},
+        Deserializer, Serializer,
+    };
+
+    use super::{MAX_SERVICES, MAX_SERVICE_NAME};
+
+    pub fn serialize<S: Serializer>(
+        names: &[[u8; MAX_SERVICE_NAME]; MAX_SERVICES],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        let mut flat = [0u8; MAX_SERVICES * MAX_SERVICE_NAME];
+        for (i, name) in names.iter().enumerate() {
+            let start = i * MAX_SERVICE_NAME;
+            flat[start..start + MAX_SERVICE_NAME].copy_from_slice(name);
+        }
+        serializer.serialize_bytes(&flat)
+    }
+
+    struct NamesVisitor;
+
+    impl<'de> Visitor<'de> for NamesVisitor {
+        type Value = [[u8; MAX_SERVICE_NAME]; MAX_SERVICES];
+
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("flat byte array of service names")
+        }
+
+        fn visit_bytes<E: de::Error>(self, v: &[u8]) -> Result<Self::Value, E> {
+            if v.len() != MAX_SERVICES * MAX_SERVICE_NAME {
+                return Err(E::invalid_length(v.len(), &self));
+            }
+            let mut names = [[0u8; MAX_SERVICE_NAME]; MAX_SERVICES];
+            for (i, chunk) in v.chunks(MAX_SERVICE_NAME).take(MAX_SERVICES).enumerate() {
+                if let Some(dst) = names.get_mut(i) {
+                    let n = chunk.len().min(MAX_SERVICE_NAME);
+                    dst[..n].copy_from_slice(&chunk[..n]);
+                }
+            }
+            Ok(names)
+        }
+
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+            let mut flat = [0u8; MAX_SERVICES * MAX_SERVICE_NAME];
+            for byte in flat.iter_mut() {
+                match seq.next_element()? {
+                    Some(value) => *byte = value,
+                    None => break,
+                }
+            }
+            if seq.next_element::<u8>()?.is_some() {
+                return Err(de::Error::invalid_length(
+                    MAX_SERVICES * MAX_SERVICE_NAME + 1,
+                    &self,
+                ));
+            }
+            let mut names = [[0u8; MAX_SERVICE_NAME]; MAX_SERVICES];
+            for (i, chunk) in flat.chunks(MAX_SERVICE_NAME).take(MAX_SERVICES).enumerate() {
+                if let Some(dst) = names.get_mut(i) {
+                    let n = chunk.len().min(MAX_SERVICE_NAME);
+                    dst[..n].copy_from_slice(&chunk[..n]);
+                }
+            }
+            Ok(names)
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<[[u8; MAX_SERVICE_NAME]; MAX_SERVICES], D::Error> {
+        deserializer.deserialize_bytes(NamesVisitor)
+    }
+}
+
+mod service_ready_flags {
+    use core::fmt;
+
+    use serde::{
+        de::{self, SeqAccess, Visitor},
+        Deserializer, Serializer,
+    };
+
+    use super::MAX_SERVICES;
+
+    pub fn serialize<S: Serializer>(
+        ready: &[bool; MAX_SERVICES],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        let bytes: [u8; MAX_SERVICES] = core::array::from_fn(|i| u8::from(ready[i]));
+        serializer.serialize_bytes(&bytes)
+    }
+
+    struct ReadyVisitor;
+
+    impl<'de> Visitor<'de> for ReadyVisitor {
+        type Value = [bool; MAX_SERVICES];
+
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("byte array of service ready flags")
+        }
+
+        fn visit_bytes<E: de::Error>(self, v: &[u8]) -> Result<Self::Value, E> {
+            if v.len() != MAX_SERVICES {
+                return Err(E::invalid_length(v.len(), &self));
+            }
+            Ok(core::array::from_fn(|i| v[i] != 0))
+        }
+
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+            let mut bytes = [0u8; MAX_SERVICES];
+            for byte in bytes.iter_mut() {
+                match seq.next_element()? {
+                    Some(value) => *byte = value,
+                    None => break,
+                }
+            }
+            if seq.next_element::<u8>()?.is_some() {
+                return Err(de::Error::invalid_length(MAX_SERVICES + 1, &self));
+            }
+            Ok(core::array::from_fn(|i| bytes[i] != 0))
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<[bool; MAX_SERVICES], D::Error> {
+        deserializer.deserialize_bytes(ReadyVisitor)
+    }
+}
+
+mod chat_msg_bytes {
+    use core::fmt;
+
+    use serde::{
+        de::{self, SeqAccess, Visitor},
+        Deserializer, Serializer,
+    };
+
+    use super::MAX_CHAT_MSG;
+
+    pub fn serialize<S: Serializer>(
+        msg: &[u8; MAX_CHAT_MSG],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bytes(msg)
+    }
+
+    struct MsgVisitor;
+
+    impl<'de> Visitor<'de> for MsgVisitor {
+        type Value = [u8; MAX_CHAT_MSG];
+
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("a byte array of max chat message size")
+        }
+
+        fn visit_bytes<E: de::Error>(self, v: &[u8]) -> Result<Self::Value, E> {
+            if v.len() > MAX_CHAT_MSG {
+                return Err(E::invalid_length(v.len(), &self));
+            }
+            let mut msg = [0u8; MAX_CHAT_MSG];
+            msg[..v.len()].copy_from_slice(v);
+            Ok(msg)
+        }
+
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+            let mut msg = [0u8; MAX_CHAT_MSG];
+            for (i, byte) in msg.iter_mut().enumerate() {
+                match seq.next_element()? {
+                    Some(value) => *byte = value,
+                    None => break,
+                }
+                if i == MAX_CHAT_MSG - 1 && seq.next_element::<u8>()?.is_some() {
+                    return Err(de::Error::invalid_length(MAX_CHAT_MSG + 1, &self));
+                }
+            }
+            Ok(msg)
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<[u8; MAX_CHAT_MSG], D::Error> {
+        deserializer.deserialize_bytes(MsgVisitor)
+    }
+}
+
+mod chat_line_lens {
+    use core::fmt;
+
+    use serde::{
+        de::{self, SeqAccess, Visitor},
+        Deserializer, Serializer,
+    };
+
+    use super::MAX_CHAT_LINES;
+
+    pub fn serialize<S: Serializer>(
+        lens: &[u8; MAX_CHAT_LINES],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bytes(lens)
+    }
+
+    struct LensVisitor;
+
+    impl<'de> Visitor<'de> for LensVisitor {
+        type Value = [u8; MAX_CHAT_LINES];
+
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("byte array of chat line lengths")
+        }
+
+        fn visit_bytes<E: de::Error>(self, v: &[u8]) -> Result<Self::Value, E> {
+            if v.len() != MAX_CHAT_LINES {
+                return Err(E::invalid_length(v.len(), &self));
+            }
+            let mut lens = [0u8; MAX_CHAT_LINES];
+            lens.copy_from_slice(v);
+            Ok(lens)
+        }
+
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+            let mut lens = [0u8; MAX_CHAT_LINES];
+            for byte in lens.iter_mut() {
+                match seq.next_element()? {
+                    Some(value) => *byte = value,
+                    None => break,
+                }
+            }
+            if seq.next_element::<u8>()?.is_some() {
+                return Err(de::Error::invalid_length(MAX_CHAT_LINES + 1, &self));
+            }
+            Ok(lens)
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<[u8; MAX_CHAT_LINES], D::Error> {
+        deserializer.deserialize_bytes(LensVisitor)
+    }
+}
+
+mod chat_lines_bytes {
+    use core::fmt;
+
+    use serde::{
+        de::{self, SeqAccess, Visitor},
+        Deserializer, Serializer,
+    };
+
+    use super::{MAX_CHAT_LINES, MAX_CHAT_MSG};
+
+    pub fn serialize<S: Serializer>(
+        lines: &[[u8; MAX_CHAT_MSG]; MAX_CHAT_LINES],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        let mut flat = [0u8; MAX_CHAT_LINES * MAX_CHAT_MSG];
+        for (i, line) in lines.iter().enumerate() {
+            let start = i * MAX_CHAT_MSG;
+            flat[start..start + MAX_CHAT_MSG].copy_from_slice(line);
+        }
+        serializer.serialize_bytes(&flat)
+    }
+
+    struct LinesVisitor;
+
+    impl<'de> Visitor<'de> for LinesVisitor {
+        type Value = [[u8; MAX_CHAT_MSG]; MAX_CHAT_LINES];
+
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("flat byte array of chat lines")
+        }
+
+        fn visit_bytes<E: de::Error>(self, v: &[u8]) -> Result<Self::Value, E> {
+            if v.len() != MAX_CHAT_LINES * MAX_CHAT_MSG {
+                return Err(E::invalid_length(v.len(), &self));
+            }
+            let mut lines = [[0u8; MAX_CHAT_MSG]; MAX_CHAT_LINES];
+            for (i, chunk) in v.chunks(MAX_CHAT_MSG).take(MAX_CHAT_LINES).enumerate() {
+                if let Some(dst) = lines.get_mut(i) {
+                    let n = chunk.len().min(MAX_CHAT_MSG);
+                    dst[..n].copy_from_slice(&chunk[..n]);
+                }
+            }
+            Ok(lines)
+        }
+
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+            let mut flat = [0u8; MAX_CHAT_LINES * MAX_CHAT_MSG];
+            for byte in flat.iter_mut() {
+                match seq.next_element()? {
+                    Some(value) => *byte = value,
+                    None => break,
+                }
+            }
+            if seq.next_element::<u8>()?.is_some() {
+                return Err(de::Error::invalid_length(
+                    MAX_CHAT_LINES * MAX_CHAT_MSG + 1,
+                    &self,
+                ));
+            }
+            let mut lines = [[0u8; MAX_CHAT_MSG]; MAX_CHAT_LINES];
+            for (i, chunk) in flat.chunks(MAX_CHAT_MSG).take(MAX_CHAT_LINES).enumerate() {
+                if let Some(dst) = lines.get_mut(i) {
+                    let n = chunk.len().min(MAX_CHAT_MSG);
+                    dst[..n].copy_from_slice(&chunk[..n]);
+                }
+            }
+            Ok(lines)
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<[[u8; MAX_CHAT_MSG]; MAX_CHAT_LINES], D::Error> {
         deserializer.deserialize_bytes(LinesVisitor)
     }
 }

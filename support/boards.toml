@@ -204,7 +204,7 @@ microkit_board = "qemu_virt_aarch64"
 target = "aarch64-sel4-microkit"
 target_triple = "aarch64-sel4-microkit"
 template = "workstation.system.template"
-pds = ["supervisor", "shell", "edit", "fs-server", "net-server", "log-server", "config-server", "serial-driver", "pl031-driver", "sp804-driver", "virtio-blk-driver", "virtio-net-driver"]
+pds = ["supervisor", "shell", "edit", "chat-client", "http-file-browser", "fs-server", "net-server", "log-server", "config-server", "serial-driver", "pl031-driver", "sp804-driver", "virtio-blk-driver", "virtio-net-driver"]
 qemu = "aarch64_workstation"
 system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, pl031_mmio_phys_addr = "0x9010000", pl031_irq = 34, sp804_mmio_phys_addr = "0x90d0000", sp804_irq = 43, virtio_mmio_phys_addr = "0xa003000", virtio_blk_irq = 78, virtio_net_irq = 79 }
 
@@ -297,7 +297,7 @@ microkit_board = "rpi4b_4gb"
 target = "aarch64-sel4-microkit"
 target_triple = "aarch64-sel4-microkit"
 template = "workstation-rpi4.system.template"
-pds = ["supervisor", "shell", "edit", "fs-server", "net-server", "log-server", "config-server", "serial-driver", "genet-driver", "emmc2-driver"]
+pds = ["supervisor", "shell", "edit", "chat-client", "http-file-browser", "fs-server", "net-server", "log-server", "config-server", "serial-driver", "genet-driver", "emmc2-driver"]
 system_vars = { serial_mmio_phys_addr = "0xfe201000", serial_irq = 121, genet_mmio_phys_addr = "0x7d580000", genet_irq = 157, emmc2_mmio_phys_addr = "0x7e340000", emmc2_irq = 126 }
 
 # RPi4 hardware with native eMMC2/SD for block (Phase 37)

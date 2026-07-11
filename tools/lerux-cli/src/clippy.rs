@@ -155,6 +155,14 @@ const AARCH64_CRATES: &[ClippyCrate<'_>] = &[
         feature: Some("board-qemu_virt_aarch64_workstation"),
     },
     ClippyCrate {
+        name: "chat-client",
+        feature: Some("board-qemu_virt_aarch64_workstation"),
+    },
+    ClippyCrate {
+        name: "http-file-browser",
+        feature: Some("board-qemu_virt_aarch64_workstation"),
+    },
+    ClippyCrate {
         name: "config-server",
         feature: Some("board-qemu_virt_aarch64_workstation"),
     },
@@ -176,6 +184,14 @@ const AARCH64_CRATES: &[ClippyCrate<'_>] = &[
     },
     ClippyCrate {
         name: "edit",
+        feature: Some("board-rpi4b_4gb_workstation"),
+    },
+    ClippyCrate {
+        name: "chat-client",
+        feature: Some("board-rpi4b_4gb_workstation"),
+    },
+    ClippyCrate {
+        name: "http-file-browser",
         feature: Some("board-rpi4b_4gb_workstation"),
     },
     ClippyCrate {

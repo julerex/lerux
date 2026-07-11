@@ -1,0 +1,11 @@
+pd = "http-file-browser"
+interface_types = "0.1.0"
+description = "HTTP file browser over FS + net TCP listen IPC"
+
+[fragment]
+pds = ["http-file-browser"]
+requires = ["fs-server", "net-server"]
+channels = [
+  "net_server:7 <-> http-file-browser:0 (pp)",
+  "fs_server:7 <-> http-file-browser:1 (pp)",
+]

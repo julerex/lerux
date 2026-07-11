@@ -50,6 +50,24 @@ fn net_call(req: NetRequest) -> NetResponse {
     }
 }
 
+/// Non-blocking poll: returns Pending after a few rounds instead of spinning forever.
+fn net_call_try(req: NetRequest) -> NetResponse {
+    match call::<NetRequest, NetResponse>(NET_SERVER, req) {
+        Ok(NetResponse::Pending) => {
+            for _ in 0..32 {
+                match call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::Poll) {
+                    Ok(NetResponse::Pending) => {}
+                    Ok(other) => return other,
+                    Err(_) => return NetResponse::Error,
+                }
+            }
+            NetResponse::Pending
+        }
+        Ok(other) => other,
+        Err(_) => NetResponse::Error,
+    }
+}
+
 fn write_u16_dec(buf: &mut [u8], mut n: u16) -> usize {
     let mut tmp = [0u8; 5];
     let mut i = 0usize;
@@ -160,7 +178,7 @@ fn read_file_body(path: &[u8], out: &mut [u8]) -> Option<usize> {
 }
 
 fn try_serve() {
-    let NetResponse::TcpData { data_len, data } = net_call(NetRequest::TcpRecv) else {
+    let NetResponse::TcpData { data_len, data } = net_call_try(NetRequest::TcpRecv) else {
         return;
     };
     let req = &data[..data_len as usize];

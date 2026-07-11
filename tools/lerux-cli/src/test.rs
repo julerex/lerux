@@ -244,6 +244,9 @@ pub fn default_expects(board: &str) -> Vec<String> {
             "lerux-supervisor: ready".into(),
             "lerux-shell: ready".into(),
             "lerux-edit: ready".into(),
+            "lerux-chat: ready".into(),
+            "lerux-http-fs: listening".into(),
+            "lerux-shell: top count=".into(),
         ],
         "rpi4b_4gb_workstation" => vec![
             "lerux-supervisor: init ok".into(),
@@ -254,6 +257,8 @@ pub fn default_expects(board: &str) -> Vec<String> {
             "lerux-supervisor: ready".into(),
             "lerux-shell: ready".into(),
             "lerux-edit: ready".into(),
+            "lerux-chat: ready".into(),
+            "lerux-http-fs: listening".into(),
         ],
         "rpi4b_4gb_net" => vec![
             "lerux-net: ready".into(),
@@ -329,6 +334,9 @@ pub fn default_curls(board: &str) -> Vec<(String, String)> {
             | "x86_64_generic_http"
     ) {
         vec![("http://127.0.0.1:18080/".into(), "lerux: HTTP ok".into())]
+    } else if board == "qemu_virt_aarch64_workstation" {
+        // Supervisor writes /boot.log; listing body includes the name.
+        vec![("http://127.0.0.1:18080/".into(), "boot.log".into())]
     } else {
         Vec::new()
     }

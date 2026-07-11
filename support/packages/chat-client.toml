@@ -1,0 +1,11 @@
+pd = "chat-client"
+interface_types = "0.1.0"
+description = "UDP chat client (shell TUI proxy + net IPC)"
+
+[fragment]
+pds = ["chat-client"]
+requires = ["shell", "net-server"]
+channels = [
+  "shell:7 <-> chat-client:0 (pp)",
+  "net_server:6 <-> chat-client:1 (pp)",
+]

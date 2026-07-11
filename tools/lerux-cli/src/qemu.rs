@@ -109,13 +109,25 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
                         path_str(&disk)
                     ),
                 ]);
+            } else if matches!(qemu_profile, "aarch64_workstation") {
+                ensure_disk(&disk)?;
+                // Blk + net with hostfwd for Phase 40 HTTP file browser smoke.
+                c.args([
+                    "-device",
+                    "virtio-net-device,netdev=netdev0",
+                    "-netdev",
+                    "user,id=netdev0,hostfwd=tcp::18080-:8080",
+                    "-device",
+                    "virtio-blk-device,drive=blkdev0",
+                    "-blockdev",
+                    &format!(
+                        "node-name=blkdev0,read-only=off,driver=file,filename={}",
+                        path_str(&disk)
+                    ),
+                ]);
             } else if matches!(
                 qemu_profile,
-                "aarch64_blk"
-                    | "aarch64_blk_composed"
-                    | "aarch64_fs"
-                    | "aarch64_ipc_composed"
-                    | "aarch64_workstation"
+                "aarch64_blk" | "aarch64_blk_composed" | "aarch64_fs" | "aarch64_ipc_composed"
             ) {
                 ensure_disk(&disk)?;
                 // Net device occupies the first virtio-mmio slot; blk stays at +0xc00
@@ -135,7 +147,7 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
                 ]);
             } else if matches!(
                 qemu_profile,
-                "aarch64_net" | "aarch64_fetch" | "aarch64_net_composed" | "aarch64_workstation"
+                "aarch64_net" | "aarch64_fetch" | "aarch64_net_composed"
             ) {
                 c.args([
                     "-device",
@@ -408,6 +420,7 @@ pub fn is_http_board(board: &str) -> bool {
             | "qemu_virt_aarch64_http_composed"
             | "qemu_virt_riscv64_http"
             | "x86_64_generic_http"
+            | "qemu_virt_aarch64_workstation"
     )
 }
 

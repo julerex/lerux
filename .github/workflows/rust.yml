@@ -337,6 +337,9 @@ jobs:
           - id: ipc-composed
             board: qemu_virt_aarch64_ipc_composed
             command: just disk-img && just test-ipc-composed
+          - id: workstation
+            board: qemu_virt_aarch64_workstation
+            command: just disk-img && just test-workstation
           - id: riscv-net
             board: qemu_virt_riscv64_net
             command: just test-riscv-net
@@ -392,7 +395,7 @@ jobs:
             board-${{ matrix.id }}-
 
       - name: Restore SP804 QEMU cache
-        if: matrix.id == 'init' || matrix.id == 'composed' || matrix.id == 'blk-composed' || matrix.id == 'http-composed' || matrix.id == 'net-composed' || matrix.id == 'ipc-composed'
+        if: matrix.id == 'init' || matrix.id == 'composed' || matrix.id == 'blk-composed' || matrix.id == 'http-composed' || matrix.id == 'net-composed' || matrix.id == 'ipc-composed' || matrix.id == 'workstation'
         uses: actions/cache/restore@v4
         with:
           path: |
@@ -404,7 +407,7 @@ jobs:
             qemu-sp804-
 
       - name: Ensure SP804 QEMU executable
-        if: matrix.id == 'init' || matrix.id == 'composed' || matrix.id == 'blk-composed' || matrix.id == 'http-composed' || matrix.id == 'net-composed' || matrix.id == 'ipc-composed'
+        if: matrix.id == 'init' || matrix.id == 'composed' || matrix.id == 'blk-composed' || matrix.id == 'http-composed' || matrix.id == 'net-composed' || matrix.id == 'ipc-composed' || matrix.id == 'workstation'
         run: |
           set -euo pipefail
           qemu="deps/toolchains/qemu-sp804/bin/qemu-system-aarch64"
@@ -439,3 +442,80 @@ jobs:
         with:
           path: build/${{ matrix.board }}
           key: board-${{ matrix.id }}-${{ hashFiles('Cargo.lock') }}
+  # Phase 40: build reference package ELF(s) and upload as CI artifacts.
+  package:
+    needs: sdk
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: edit
+            pd: edit
+            board: qemu_virt_aarch64_workstation
+          - name: chat-client
+            pd: chat-client
+            board: qemu_virt_aarch64_workstation
+          - name: http-file-browser
+            pd: http-file-browser
+            board: qemu_virt_aarch64_workstation
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build dev image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          tags: lerux-dev
+          load: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: sdk
+          path: sdk-bundle
+
+      - name: Install SDK from artifact
+        run: |
+          set -euo pipefail
+          mkdir -p deps/workspace/microkit/release
+          cp -a sdk-bundle/microkit-sdk deps/workspace/microkit/release/
+          sdk="deps/workspace/microkit/release/$(basename sdk-bundle/microkit-sdk)"
+          chmod -R a+rX "${sdk}"
+          find "${sdk}/bin" -type f -exec chmod a+x {} +
+          echo "/work/${sdk}" > deps/.sdk-path
+
+      - name: Restore shared Cargo target cache
+        uses: actions/cache/restore@v4
+        with:
+          path: build/target
+          key: cargo-target-${{ hashFiles('Cargo.lock') }}
+          restore-keys: |
+            cargo-target-
+
+      - name: Build package ELF
+        run: |
+          docker run --rm -v "${{ github.workspace }}:/work" -w /work lerux-dev \
+            bash -c 'set -euo pipefail
+              sdk="$(tr -d "\n" < deps/.sdk-path)"
+              chmod -R a+rX "${sdk}"
+              find "${sdk}/bin" -type f -exec chmod a+x {} +
+              cargo run -p lerux-cli -- package build ${{ matrix.name }} --board ${{ matrix.board }}
+              cargo run -p lerux-cli -- package pin ${{ matrix.name }} --board ${{ matrix.board }} --git-ref "${{ github.sha }}"
+            '
+          sudo chown -R "$(id -u):$(id -g)" build support deps
+
+      - name: Upload package ELF
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.name }}-${{ matrix.board }}
+          path: |
+            build/${{ matrix.board }}/${{ matrix.pd }}.elf
+            support/package-pins.toml
+          if-no-files-found: error

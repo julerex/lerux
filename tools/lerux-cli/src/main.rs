@@ -7,6 +7,7 @@ mod fetch;
 mod http_one;
 mod install;
 mod libclang;
+mod package;
 mod path;
 mod process;
 mod profile;
@@ -141,6 +142,11 @@ enum Commands {
         #[command(subcommand)]
         command: ProfileCommands,
     },
+    /// Package commands (PD + interface-types pin + optional profile fragment).
+    Package {
+        #[command(subcommand)]
+        command: PackageCommands,
+    },
 }
 
 #[derive(Subcommand)]
@@ -161,6 +167,43 @@ enum ProfileCommands {
     Diff {
         profile_a: String,
         profile_b: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum PackageCommands {
+    /// List packages under support/packages/.
+    List,
+    /// Show one package manifest (PD, interface-types, fragment).
+    Show { name: String },
+    /// Build the package PD ELF for a board.
+    Build {
+        name: String,
+        #[arg(long, default_value = "qemu_virt_aarch64_workstation")]
+        board: String,
+        #[arg(long, default_value = "build")]
+        build_dir: String,
+        #[arg(long, default_value = "debug")]
+        config: String,
+    },
+    /// Record sha256 pin for a built package ELF into support/package-pins.toml.
+    Pin {
+        name: String,
+        #[arg(long, default_value = "qemu_virt_aarch64_workstation")]
+        board: String,
+        #[arg(long, default_value = "build")]
+        build_dir: String,
+        /// Optional git commit / tag recorded with the pin.
+        #[arg(long)]
+        git_ref: Option<String>,
+    },
+    /// Compare a built ELF against the committed pin.
+    Diff {
+        name: String,
+        #[arg(long, default_value = "qemu_virt_aarch64_workstation")]
+        board: String,
+        #[arg(long, default_value = "build")]
+        build_dir: String,
     },
 }
 
@@ -305,6 +348,48 @@ fn main() -> Result<()> {
                     let pa = crate::profile::get_profile(&profiles, &profile_a)?;
                     let pb = crate::profile::get_profile(&profiles, &profile_b)?;
                     crate::profile::diff_profiles(&profile_a, pa, &profile_b, pb);
+                }
+            }
+        }
+        Commands::Package { command } => {
+            let packages = crate::package::load_packages(&root)?;
+            match command {
+                PackageCommands::List => crate::package::list_packages(&packages),
+                PackageCommands::Show { name } => {
+                    let package = crate::package::get_package(&packages, &name)?;
+                    crate::package::show_package(&name, package);
+                }
+                PackageCommands::Build {
+                    name,
+                    board,
+                    build_dir,
+                    config,
+                } => {
+                    crate::package::build_package(
+                        &root, &packages, &name, &board, &build_dir, &config,
+                    )?;
+                }
+                PackageCommands::Pin {
+                    name,
+                    board,
+                    build_dir,
+                    git_ref,
+                } => {
+                    crate::package::pin_package(
+                        &root,
+                        &packages,
+                        &name,
+                        &board,
+                        &build_dir,
+                        git_ref.as_deref(),
+                    )?;
+                }
+                PackageCommands::Diff {
+                    name,
+                    board,
+                    build_dir,
+                } => {
+                    crate::package::diff_package_pins(&root, &name, &board, &build_dir)?;
                 }
             }
         }

@@ -66,8 +66,8 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 **Debug / faults (Phase 46)**
 : Child PD faults can be delivered to a **parent** PD (`Handler::fault`) via Microkit hierarchy. Demo: `debug-handler` + `crash-demo` (`just test-debug`). Interactive host debugging uses QEMU’s gdbstub + `gdb-multiarch` ([`debug.md`](debug.md), [ADR-005](decisions/005-debug-pd.md)).
 
-**Hardware serial smoke (Phase 47)**
-: On-device boot checks use `LERUX_HW_SERIAL` + `--mode hw-serial` / `just test-hw`, with expects from `support/smoke-expects.toml` and a local board lock. Cloud CI stays QEMU-only; optional self-hosted workflow is documented in [`ci.md`](ci.md).
+**Hardware serial smoke (Phase 47 / 52)**
+: On-device boot checks use `LERUX_HW_SERIAL` + `--mode hw-serial` / `just test-hw`, with expects from `support/smoke-expects.toml` and a local board lock. Phase 52 adds optional **scripted REPL** steps (`script = [{send, expect}, …]`) after boot match, and `lerux deploy` / `just deploy-rpi4` for SD boot media. First-boot seeds `/config` via supervisor. Cloud CI stays QEMU-only; optional self-hosted workflow is documented in [`ci.md`](ci.md). Install path: [`boards.md`](boards.md#rpi4-workstation-install-path-phase-52).
 
 **Workstation QoS (Phase 48)**
 : Fixed Microkit PD priorities form service classes (platform / services / control / bulk / interactive). PPC callees must outrank callers (shell stays lowest among clients). See [`qos.md`](qos.md), [ADR-006](decisions/006-workstation-qos.md).

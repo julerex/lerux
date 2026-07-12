@@ -72,9 +72,12 @@ Test modes for `lerux test`:
 **Golden path (RPi4 workstation):**
 
 ```bash
-# 1. Flash/build loader.img, connect USB-serial, power on / U-Boot go
-# 2. From the host with the serial port free:
+# 1. Deploy loader.img to SD boot (Phase 52)
+DEST=/media/$USER/boot just deploy-rpi4
+# 2. U-Boot: fatload mmc 0 0x10000000 loader.img; go 0x10000000
+# 3. Host smoke (serial free — not held by screen):
 BOARD=rpi4b_4gb_workstation LERUX_HW_SERIAL=/dev/ttyUSB0 just test-hw
+#    → boot expects + scripted ls/pwd/ip from support/smoke-expects.toml
 ```
 
 Optional env:

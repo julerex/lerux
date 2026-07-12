@@ -191,10 +191,16 @@ test-hardware-rpi4:
     BOARD=rpi4b_4gb just test
 
 # RPi4 workstation: build image (+ optional serial smoke via LERUX_HW_SERIAL).
-# On-device gate: docs/boards.md#rpi4-workstation-manual-hw-gate-phase-39
+# Install path: docs/boards.md#rpi4-workstation-install-path-phase-52
 # Prefer: LERUX_HW_SERIAL=/dev/ttyUSB0 just test-hw
 test-rpi4-workstation:
     BOARD=rpi4b_4gb_workstation just test
+
+# Phase 52: copy RPi4 workstation loader.img onto a mounted SD FAT boot dir.
+# Example: DEST=/media/$USER/boot just deploy-rpi4
+# Builds the image if missing. Writes lerux-uboot.txt beside loader.img.
+deploy-rpi4 DEST:
+    {{lerux}} deploy --board rpi4b_4gb_workstation --dest {{DEST}}
 
 # HTTP smoke: GET / on virtio-net (host port 18080 -> guest :8080)
 test-http:

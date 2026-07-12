@@ -1,11 +1,18 @@
 use std::{
-    fs::File,
-    io::{BufRead, BufReader, Read},
+    fs::OpenOptions,
+    io::{BufRead, BufReader, Read, Write},
     process::{Command, Stdio},
     time::{Duration, Instant},
 };
 
 use anyhow::{bail, Context, Result};
+
+/// One scripted host→guest serial interaction (Phase 52 hw-serial).
+#[derive(Debug, Clone)]
+pub struct ScriptStep {
+    pub send: String,
+    pub expect: String,
+}
 
 #[derive(Debug)]
 pub struct SmokeTest {
@@ -13,6 +20,9 @@ pub struct SmokeTest {
     pub curls: Vec<(String, String)>,
     pub unordered: bool,
     pub timeout_secs: u64,
+    /// After boot expects, optional write/expect pairs (hw-serial only).
+    pub script: Vec<ScriptStep>,
+    pub script_timeout_secs: u64,
 }
 
 impl Default for SmokeTest {
@@ -22,6 +32,8 @@ impl Default for SmokeTest {
             curls: Vec::new(),
             unordered: false,
             timeout_secs: 60,
+            script: Vec::new(),
+            script_timeout_secs: 30,
         }
     }
 }
@@ -168,6 +180,8 @@ impl TestMode {
 ///
 /// Golden path:
 /// `BOARD=rpi4b_4gb_workstation LERUX_HW_SERIAL=/dev/ttyUSB0 just test-hw`
+///
+/// Phase 52: optional `script` steps in smoke-expects.toml send shell commands after boot.
 pub fn run_hw_serial_smoke(test: &SmokeTest) -> Result<()> {
     let device = std::env::var("LERUX_HW_SERIAL")
         .context("LERUX_HW_SERIAL not set (e.g. /dev/ttyUSB0). Required for --mode hw-serial")?;
@@ -182,12 +196,22 @@ pub fn run_hw_serial_smoke(test: &SmokeTest) -> Result<()> {
         bail!("stty failed configuring {device:?}");
     }
 
-    let file = File::open(&device).with_context(|| format!("open serial {device:?}"))?;
+    // RDWR so Phase 52 script steps can inject REPL commands.
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&device)
+        .with_context(|| format!("open serial {device:?}"))?;
+    let reader = file
+        .try_clone()
+        .with_context(|| format!("clone serial {device:?} for reader"))?;
+    let mut writer = file;
+
     let output = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
     let out_clone = std::sync::Arc::clone(&output);
 
     let reader_thread = std::thread::spawn(move || {
-        pump_reader(BufReader::new(file), out_clone);
+        pump_reader(BufReader::new(reader), out_clone);
     });
 
     let deadline = Instant::now() + Duration::from_secs(test.timeout_secs);
@@ -198,9 +222,54 @@ pub fn run_hw_serial_smoke(test: &SmokeTest) -> Result<()> {
         expect_ordered(&output, &test.expects, per)
     };
 
+    if let Err(e) = result {
+        drop(reader_thread);
+        return Err(e);
+    }
+    println!("==> boot expects matched");
+
+    // Scripted REPL (Phase 52): send commands, wait for substrings in the serial log.
+    if !test.script.is_empty() {
+        println!("==> running {} scripted serial step(s)…", test.script.len());
+        for (i, step) in test.script.iter().enumerate() {
+            let mark = output.lock().map(|s| s.len()).unwrap_or(0);
+            print!(
+                "    [{}] send {:?} expect {:?}… ",
+                i + 1,
+                step.send.trim_end_matches(['\r', '\n']),
+                step.expect
+            );
+            let _ = std::io::Write::flush(&mut std::io::stdout());
+            writer
+                .write_all(step.send.as_bytes())
+                .with_context(|| format!("write serial step {}", i + 1))?;
+            writer.flush().context("flush serial")?;
+            let step_deadline = Instant::now() + Duration::from_secs(test.script_timeout_secs);
+            loop {
+                let found = output
+                    .lock()
+                    .map(|s| s.len() > mark && s[mark..].contains(&step.expect))
+                    .unwrap_or(false);
+                if found {
+                    println!("ok");
+                    break;
+                }
+                if Instant::now() >= step_deadline {
+                    bail!(
+                        "script step {} timed out waiting for {:?} after send {:?}",
+                        i + 1,
+                        step.expect,
+                        step.send
+                    );
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+        }
+        println!("==> scripted REPL steps passed");
+    }
+
     // Detach: reader may block on serial; we don't join forever.
     drop(reader_thread);
-    result?;
     println!("\n==> hardware serial smoke passed");
     Ok(())
 }
@@ -285,9 +354,10 @@ pub fn run_board_test_with_mode(
         }
         println!(
             "==> Hardware board {board:?}: image built successfully.\n\
-             \x20   No QEMU profile. Deploy loader.img (U-Boot) for manual checks.\n\
+             \x20   No QEMU profile.\n\
+             \x20   Deploy: just deploy-rpi4 DEST=/path/to/sd-boot\n\
              \x20   Golden path: LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD={board} just test-hw\n\
-             \x20   See docs/boards.md and docs/ci.md (Phase 47 hw-serial)."
+             \x20   Install path: docs/boards.md#rpi4-workstation-install-path-phase-52"
         );
         return Ok(());
     }

@@ -23,7 +23,7 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [bench.md](bench.md) | Phase 49: microbench methodology |
 | [bench-results.latest.md](bench-results.latest.md) | Latest `just bench` snapshot (regenerated) |
 | [net-topology.md](net-topology.md) | NIC / net-server / app channel map |
-| [boards.md](boards.md) | Board names, PDs, QEMU profiles; [RPi4 workstation HW gate](boards.md#rpi4-workstation-manual-hw-gate-phase-39) |
+| [boards.md](boards.md) | Board names, PDs, QEMU profiles; [RPi4 install path (Phase 52)](boards.md#rpi4-workstation-install-path-phase-52) |
 | [ci.md](ci.md) | GitHub Actions pipeline, caches, troubleshooting |
 | [seL4-whitepaper.pdf](seL4-whitepaper.pdf) | seL4 high-level overview (reference) |
 

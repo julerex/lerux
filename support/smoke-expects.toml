@@ -1,14 +1,17 @@
-# Phase 47: data-driven smoke expects shared by QEMU and hw-serial modes.
+# Phase 47/52: data-driven smoke expects shared by QEMU and hw-serial modes.
 # Loaded by lerux-cli (`test` / `test-all`). Edit here when adding boards.
 #
 # [boards.<name>]
 # expects = ["ordered substrings…"]  # required
 # unordered = true                   # optional (default false)
 # timeout_secs = 120                 # optional (default 60; hw often 120)
+# script_timeout_secs = 30           # optional; per-step timeout for hw script
+# script = [ { send = "ls\r", expect = "boot.log" }, … ]  # Phase 52 hw-serial REPL
 
 [defaults]
 timeout_secs = 60
 unordered = false
+script_timeout_secs = 30
 
 [boards.qemu_virt_aarch64]
 expects = ["lerux: Hello from Rust on seL4 Microkit!"]
@@ -243,6 +246,9 @@ expects = [
   "virtio-blk:",
   "lerux-net: ready",
   "virtio-net: MAC",
+  "lerux-supervisor: fs up",
+  "lerux-supervisor: first-boot seed ok",
+  "lerux-supervisor: net up",
   "lerux-supervisor: ready",
   "lerux-shell: ready",
   "lerux-edit: ready",
@@ -256,17 +262,28 @@ expects = [
 [boards.rpi4b_4gb_workstation]
 unordered = true
 timeout_secs = 120
+script_timeout_secs = 45
 expects = [
   "lerux-supervisor: init ok",
   "genet:",
   "emmc2:",
   "lerux-fs: ready",
   "lerux-net: ready",
+  "lerux-supervisor: fs up",
+  "lerux-supervisor: first-boot seed ok",
+  "lerux-supervisor: net up",
   "lerux-supervisor: ready",
   "lerux-shell: ready",
   "lerux-edit: ready",
   "lerux-chat: ready",
   "lerux-http-fs:",
+]
+# Phase 52: after boot strings match, inject REPL commands over the same TTY.
+# Requires the shell prompt to be live; power-on/reset the board before/while test-hw runs.
+script = [
+  { send = "ls\r", expect = "boot.log" },
+  { send = "pwd\r", expect = "/" },
+  { send = "ip\r", expect = "inet" },
 ]
 
 [boards.rpi4b_4gb_net]

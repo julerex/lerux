@@ -96,16 +96,69 @@ fn poll_fs() -> FsResponse {
 }
 
 #[cfg(feature = "workstation")]
+fn fs_call(req: FsRequest) -> FsResponse {
+    match call::<FsRequest, FsResponse>(FS_SERVER, req) {
+        Ok(FsResponse::Pending) => poll_fs(),
+        Ok(other) => other,
+        Err(_) => FsResponse::Error,
+    }
+}
+
+#[cfg(feature = "workstation")]
 fn probe_fs() {
     // Exercise FS server to ensure FS is "mounted" (triggers format if needed)
-    match call::<FsRequest, FsResponse>(FS_SERVER, FsRequest::list_root()) {
-        Ok(FsResponse::Pending) => {
-            let _ = poll_fs();
-        }
-        Ok(FsResponse::DirList { .. }) | Ok(FsResponse::Ok) | Err(_) => {}
+    match fs_call(FsRequest::list_root()) {
+        FsResponse::DirList { .. } | FsResponse::Ok | FsResponse::Error => {}
         _ => {}
     }
     log::info!("lerux-supervisor: fs up");
+}
+
+/// Phase 52: seed hierarchical `/config` defaults after first format (idempotent).
+#[cfg(feature = "workstation")]
+fn seed_first_boot() {
+    // Ensure `/config` exists as a real directory (LERUXFS2).
+    match fs_call(FsRequest::mkdir(b"/config")) {
+        FsResponse::Ok => log::info!("lerux-supervisor: mkdir /config"),
+        FsResponse::Error => {
+            // Already present from a previous boot.
+        }
+        _ => {}
+    }
+
+    #[cfg(feature = "board-rpi4b_4gb_workstation")]
+    let seeds: &[(&[u8], &[u8])] = &[
+        (b"net.ip", b"192.168.1.10"),
+        (b"net.gateway", b"192.168.1.1"),
+        (b"net.dns", b"192.168.1.1"),
+        (b"hostname", b"lerux-rpi4"),
+    ];
+    #[cfg(not(feature = "board-rpi4b_4gb_workstation"))]
+    let seeds: &[(&[u8], &[u8])] = &[
+        (b"net.ip", b"10.0.2.15"),
+        (b"net.gateway", b"10.0.2.2"),
+        (b"net.dns", b"10.0.2.3"),
+        (b"hostname", b"lerux"),
+    ];
+
+    for (kdata, vdata) in seeds {
+        let mut key = [0u8; MAX_CONFIG_KEY_LEN];
+        let kl = kdata.len().min(MAX_CONFIG_KEY_LEN);
+        key[..kl].copy_from_slice(&kdata[..kl]);
+        let mut val = [0u8; MAX_CONFIG_VAL_LEN];
+        let vl = vdata.len().min(MAX_CONFIG_VAL_LEN);
+        val[..vl].copy_from_slice(&vdata[..vl]);
+        let _ = call::<ConfigRequest, ConfigResponse>(
+            CONFIG_SERVER,
+            ConfigRequest::Set {
+                key_len: kl as u8,
+                key,
+                val_len: vl as u8,
+                value: val,
+            },
+        );
+    }
+    log::info!("lerux-supervisor: first-boot seed ok");
 }
 
 #[cfg(feature = "workstation")]
@@ -144,16 +197,14 @@ fn persist_boot_log() {
             buf[pos] = b'\n';
             pos += 1;
         }
-        if pos > 0 {
-            // direct create + write like probe style
-            let create_resp =
-                call::<FsRequest, FsResponse>(FS_SERVER, FsRequest::create(b"/boot.log"));
-            if let Ok(FsResponse::Handle { id }) = create_resp {
-                let write_req = FsRequest::write(id, 0, &buf[..pos]);
-                if let Ok(FsResponse::Ok) = call::<FsRequest, FsResponse>(FS_SERVER, write_req) {
-                    log::info!("lerux-supervisor: boot log written to /boot.log");
-                }
-            }
+        if pos > 0
+            && let FsResponse::Handle { id } = fs_call(FsRequest::create(b"/boot.log"))
+            && matches!(
+                fs_call(FsRequest::write(id, 0, &buf[..pos])),
+                FsResponse::Ok
+            )
+        {
+            log::info!("lerux-supervisor: boot log written to /boot.log");
         }
     }
 }
@@ -261,25 +312,7 @@ fn init() -> HandlerImpl {
     #[cfg(feature = "workstation")]
     {
         probe_fs();
-        // Seed some defaults via config-server (FS backed)
-        let mut key = [0u8; MAX_CONFIG_KEY_LEN];
-        let kdata = b"net.ip";
-        key[..kdata.len()].copy_from_slice(kdata);
-        let mut val = [0u8; MAX_CONFIG_VAL_LEN];
-        #[cfg(feature = "board-rpi4b_4gb_workstation")]
-        let vdata = b"192.168.1.10";
-        #[cfg(not(feature = "board-rpi4b_4gb_workstation"))]
-        let vdata = b"10.0.2.15";
-        val[..vdata.len()].copy_from_slice(vdata);
-        let _ = call::<ConfigRequest, ConfigResponse>(
-            CONFIG_SERVER,
-            ConfigRequest::Set {
-                key_len: kdata.len() as u8,
-                key,
-                val_len: vdata.len() as u8,
-                value: val,
-            },
-        );
+        seed_first_boot();
         probe_net();
         persist_boot_log();
         log::info!("lerux-supervisor: ready");

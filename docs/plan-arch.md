@@ -113,21 +113,21 @@ Files large enough for configs, logs, and edit buffers without artificial 512 B 
 
 ---
 
-## Phase 52 — Hardware closeout (Arch: install and use the machine)
+## Phase 52 — Hardware closeout (Arch: install and use the machine) — core done
 
-**Why:** Arch on real metal is the bar; RPi4 workstation image builds but the **manual REPL gate** is still open.
+**Why:** Arch on real metal is the bar; RPi4 workstation image built but lacked a single install path and automated REPL checks.
 
 ### Steps
 
-- [ ] Complete Phase 39 gate: serial REPL `ls`/`cat`/`fetch`/`edit` on device; document failures and fix drivers (`emmc2`, `genet`).
-- [ ] Automate what Phase 47 already supports: self-hosted `hw-serial` green for workstation boot expects; expand expects for shell prompt + one FS/net command.
-- [ ] First-boot disk format story: empty eMMC → format LERUXFS → seed `/config/`.
-- [ ] Deploy ergonomics: U-Boot/SD image recipe, one-command host flash doc (already partially in `boards.md`).
+- [ ] Complete Phase 39 **lab** gate: serial REPL `ls`/`cat`/`fetch`/`edit` on device; record results in the boards.md checklist; fix drivers if failures recur.
+- [x] Automate Phase 47 harness further: expand rpi4 workstation expects (fs/net/seed); **scripted** `ls`/`pwd`/`ip` over hw-serial after boot match.
+- [x] First-boot disk format story: empty block → LERUXFS2 format → `mkdir /config` → seed net/hostname keys (`first-boot seed ok`).
+- [x] Deploy ergonomics: `lerux deploy` / `just deploy-rpi4 DEST=…`, U-Boot helper file, install path in [`boards.md`](boards.md#rpi4-workstation-install-path-phase-52).
 - [ ] Optional second board (e.g. another aarch64 SBC) only after RPi4 is reliable.
 
 ### Exit
 
-Documented “install media → boot → shell works” path on RPi4 without folklore.
+Documented “install media → boot → shell works” path on RPi4 without folklore. **Met for tooling/docs/harness**; physical lab sign-off remains open.
 
 ---
 
@@ -315,11 +315,9 @@ That is Arch’s **workflow and completeness**, reimplemented as static Microkit
 
 If capacity is limited, do **not** start with graphics or scripting runtimes:
 
-1. **Phase 50 FS v2 core** — done (LERUXFS2 + shell ops); optional FAT/NFS stretch later
-2. **Phase 51 Net v2 core** — done (DHCP + DNS + dual TCP); TLS/RPi4 stretch later
-3. **Phase 52 HW closeout** — proves the stack outside QEMU
-
-Then **55 package UX** and **53 shell** turn the stack into something that feels administerable day to day.
+1. **Phases 50–52 cores** — FS v2, net v2, deploy/seed/hw-serial scripts done
+2. **Phase 52 lab** — fill RPi4 REPL checklist on real hardware when available
+3. **Phase 53 / 55** — shell depth and package UX for day-to-day admin feel
 
 ---
 

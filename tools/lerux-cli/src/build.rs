@@ -149,8 +149,10 @@ pub fn run(root: &Path, board: &str, build_dir: &str, config: &str) -> Result<()
     let ctx = crate::qemu::load_qemu_context(root, board, build_dir, config)?;
     if crate::qemu::is_hardware_board(&ctx) {
         println!(
-            "==> Hardware board {:?}: image ready.\n    Use manual deployment (U-Boot etc). See docs/boards.md.",
-            board
+            "==> Hardware board {board:?}: image ready.\n\
+             \x20   Deploy: just deploy-rpi4 DEST=/path/to/sd-boot   # or: lerux deploy --dest …\n\
+             \x20   Boot smoke: LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD={board} just test-hw\n\
+             \x20   Docs: docs/boards.md#rpi4-workstation-install-path-phase-52"
         );
         return Ok(());
     }

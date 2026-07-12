@@ -72,55 +72,47 @@ BOARD=rpi4b_4gb_workstation LERUX_HW_SERIAL=/dev/ttyUSB0 just test-hw
 
 Expects come from [`support/smoke-expects.toml`](../support/smoke-expects.toml) (shared with QEMU smokes). Modes and lock env: [`ci.md` — hardware serial](ci.md#hardware-serial-smoke-phase-47).
 
-### RPi4 workstation manual HW gate (Phase 39)
+### RPi4 workstation install path (Phase 52)
 
-Board `rpi4b_4gb_workstation` (profile `workstation-rpi4`) runs the full workstation stack on real hardware: supervisor, fs-server, net-server, shell, log-server, config-server, and edit over native `genet-driver` + `emmc2-driver`. There is no QEMU profile.
+Board `rpi4b_4gb_workstation` (profile `workstation-rpi4`) is the **install-media → boot → shell** path on real metal: supervisor, fs-server, net-server, shell, log, config, edit/chat/http-fs over native `genet-driver` + `emmc2-driver`. There is no QEMU profile for this board.
 
-**Quick reference** (after `BOARD=rpi4b_4gb_workstation just image`):
+**One-command deploy** (after mounting the SD FAT boot partition on the host):
 
 ```bash
-# 1. Copy build/rpi4b_4gb_workstation/loader.img to SD FAT boot partition
-# 2. U-Boot:
-fatload mmc 0 0x10000000 loader.img
-go 0x10000000
-
-# 3. Optional boot smoke (serial connected first):
-LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD=rpi4b_4gb_workstation just test
-
-# 4. At lerux> prompt:
-ls
-cat /boot.log
-fetch
-edit /test.txt
+# Build (if needed) + copy loader.img + write lerux-uboot.txt
+DEST=/media/$USER/boot just deploy-rpi4
+# equivalent: cargo run -p lerux-cli -- deploy --board rpi4b_4gb_workstation --dest /media/$USER/boot
 ```
+
+**Full path**
+
+| Step | Command / action |
+|------|------------------|
+| 1. SDK | `MICROKIT_BOARDS=…,rpi4b_4gb just build-sdk` or `just fetch-sdk` |
+| 2. Image | `BOARD=rpi4b_4gb_workstation just image` (or deploy builds it) |
+| 3. Flash | `DEST=/path/to/sd-boot just deploy-rpi4` |
+| 4. Boot | U-Boot: `fatload mmc 0 0x10000000 loader.img` then `go 0x10000000` |
+| 5. Host smoke | `LERUX_HW_SERIAL=/dev/ttyUSB0 just test-hw` (boot expects + scripted `ls`/`pwd`/`ip`) |
+| 6. Manual REPL | At `lerux>`: `ls`, `cat /boot.log`, `ip`, `fetch`, `edit /test.txt` |
 
 **Prerequisites**
 
 - Raspberry Pi 4 Model B (4 GB) with U-Boot on the SD FAT boot partition
 - USB-serial adapter on GPIO UART (PL011, 115200 8N1)
-- Ethernet on `192.168.1.0/24` (guest static IP `192.168.1.10`; host `192.168.1.1` for `fetch` UDP demo)
+- Ethernet on `192.168.1.0/24` (static fallback guest `192.168.1.10`; DHCP used when a server answers; `fetch` UDP demo targets `192.168.1.1:12345`)
 
-**1. Build image**
+**First-boot disk story**
 
-```bash
-BOARD=rpi4b_4gb_workstation just image
-# → build/rpi4b_4gb_workstation/loader.img
-```
+Empty eMMC/block device is formatted as **LERUXFS2** on first FS access. Supervisor then:
 
-Or via profile: `cargo run -p lerux-cli -- profile build workstation-rpi4`.
+1. `mkdir /config` (idempotent)
+2. Seeds config keys via `config-server`: `net.ip`, `net.gateway`, `net.dns`, `hostname`
+3. Logs `lerux-supervisor: first-boot seed ok`
+4. Writes `/boot.log` from the log ring
 
-**2. Deploy and boot**
+Reboots refresh the seed keys (overwrite) and re-write `/boot.log`.
 
-1. Copy `build/rpi4b_4gb_workstation/loader.img` onto the SD FAT boot partition.
-2. Connect serial (`screen /dev/ttyUSB0 115200` or equivalent).
-3. At the U-Boot prompt:
-
-   ```
-   fatload mmc 0 0x10000000 loader.img
-   go 0x10000000
-   ```
-
-**3. Automated boot smoke (Phase 47)**
+**Automated boot + REPL smoke (Phase 47/52)**
 
 Connect serial **before** starting the host command; boot (or reset) the Pi so logs stream while the reader runs:
 
@@ -128,26 +120,37 @@ Connect serial **before** starting the host command; boot (or reset) the Pi so l
 BOARD=rpi4b_4gb_workstation LERUX_HW_SERIAL=/dev/ttyUSB0 just test-hw
 ```
 
-Within 120s (unordered), boot log must match entries in `support/smoke-expects.toml` for `rpi4b_4gb_workstation` (supervisor/fs/net/shell/edit/…).
+1. Unordered boot expects from `support/smoke-expects.toml` (supervisor/fs/net/shell/seed/…).
+2. **Scripted REPL** (same TTY): host sends `ls`, `pwd`, `ip` and waits for `boot.log`, `/`, `inet`.
 
-Success prints `==> hardware serial smoke passed` and acquires a board lock under `$TMPDIR/lerux-hw-locks/`.
+Success prints `==> hardware serial smoke passed` and holds a board lock under `$TMPDIR/lerux-hw-locks/`.
 
 Without `LERUX_HW_SERIAL`, `just test` only verifies the image build.
 
-**4. Manual REPL checklist**
+**Manual REPL checklist** (record pass/fail for the Phase 39/52 gate)
 
-At the `lerux>` prompt:
+| Command | Pass criteria | Result |
+|---------|---------------|--------|
+| `ls` | Lists `boot.log` / dirs; no `ls: error` | |
+| `cat /boot.log` | File contents printed | |
+| `ip` | Shows `inet …` (dhcp or static) | |
+| `fetch` | `fetch: demo udp sent` (UDP demo, not HTTP) | |
+| `edit /test.txt` | Edit TUI; Ctrl-S save, Ctrl-Q quit | |
+| `pwd` / `cd` / `mkdir` | Hierarchical FS ops work | |
 
-| Command | Pass criteria |
-|---------|---------------|
-| `ls` | Directory listing; no `ls: error` |
-| `cat /boot.log` | File contents printed |
-| `fetch` | `fetch: demo udp sent` (UDP to `192.168.1.1:12345`, not HTTP) |
-| `edit /test.txt` | Edit TUI opens; Ctrl-S save, Ctrl-Q quit |
+**Likely failure modes**
 
-**Likely failure modes:** `emmc2` SDHCI init failure blocks FS/`edit`; genet PHY/link issues can make `fetch` meaningless even if the demo print succeeds.
+| Symptom | Likely cause |
+|---------|----------------|
+| No `lerux-fs: ready` / seed never appears | `emmc2` SDHCI init / block probe |
+| `ls: error` / no `boot.log` | FS format failed or wrong channel wiring |
+| `ip: unavailable` / no `lerux-net: ready` | genet bring-up; check PHY/link |
+| `fetch` prints ok but nothing on LAN | UDP demo is best-effort; check static IP/gateway |
+| `test-hw` script step timeout | Shell not at prompt; serial held by another process; increase `script_timeout_secs` |
 
-**QEMU dev substitute:** `just disk-img && just test-workstation` exercises the same REPL stack with virtio drivers (not a substitute for the RPi4 gate).
+**QEMU dev substitute:** `just disk-img && just test-workstation` exercises the same REPL stack with virtio (not a substitute for the RPi4 gate).
+
+**Self-hosted CI:** optional workflow [`.github/workflows/hw-serial.yml`](../.github/workflows/hw-serial.yml); see [`ci.md`](ci.md#hardware-serial-smoke-phase-47).
 
 ## QEMU profiles
 

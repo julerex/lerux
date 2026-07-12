@@ -1,11 +1,11 @@
-//! Phase 47: load smoke expects from `support/smoke-expects.toml`.
+//! Phase 47/52: load smoke expects from `support/smoke-expects.toml`.
 
 use std::{collections::HashMap, path::Path};
 
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 
-use crate::test::SmokeTest;
+use crate::test::{ScriptStep, SmokeTest};
 
 #[derive(Debug, Deserialize)]
 struct FileRoot {
@@ -21,10 +21,16 @@ struct Defaults {
     timeout_secs: u64,
     #[serde(default)]
     unordered: bool,
+    #[serde(default = "default_script_timeout")]
+    script_timeout_secs: u64,
 }
 
 fn default_timeout() -> u64 {
     60
+}
+
+fn default_script_timeout() -> u64 {
+    30
 }
 
 #[derive(Debug, Deserialize)]
@@ -34,6 +40,17 @@ struct BoardSpec {
     unordered: Option<bool>,
     #[serde(default)]
     timeout_secs: Option<u64>,
+    /// Phase 52: after boot expects, write `send` and wait for `expect` (hw-serial).
+    #[serde(default)]
+    script: Vec<ScriptStepToml>,
+    #[serde(default)]
+    script_timeout_secs: Option<u64>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+struct ScriptStepToml {
+    send: String,
+    expect: String,
 }
 
 /// Path to the expects file under the repo root.
@@ -57,6 +74,15 @@ pub fn smoke_test_for_board(root: &Path, board: &str) -> Result<SmokeTest> {
         bail!("board {board:?} has empty expects in smoke-expects.toml");
     }
 
+    let script: Vec<ScriptStep> = spec
+        .script
+        .iter()
+        .map(|s| ScriptStep {
+            send: s.send.clone(),
+            expect: s.expect.clone(),
+        })
+        .collect();
+
     Ok(SmokeTest {
         expects: spec.expects.clone(),
         curls: crate::test::default_curls(board),
@@ -64,6 +90,11 @@ pub fn smoke_test_for_board(root: &Path, board: &str) -> Result<SmokeTest> {
         timeout_secs: spec
             .timeout_secs
             .unwrap_or(file.defaults.timeout_secs)
+            .max(1),
+        script,
+        script_timeout_secs: spec
+            .script_timeout_secs
+            .unwrap_or(file.defaults.script_timeout_secs)
             .max(1),
     })
 }
@@ -86,6 +117,15 @@ mod tests {
         assert!(t.unordered);
         assert_eq!(t.timeout_secs, 120);
         assert!(t.expects.iter().any(|e| e.contains("lerux-shell")));
+        assert!(
+            t.expects.iter().any(|e| e.contains("first-boot seed ok")),
+            "Phase 52 first-boot seed expect missing"
+        );
+        assert!(
+            !t.script.is_empty(),
+            "Phase 52 scripted REPL steps expected on rpi4 workstation"
+        );
+        assert!(t.script.iter().any(|s| s.expect.contains("boot.log")));
     }
 
     #[test]

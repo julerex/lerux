@@ -5,6 +5,7 @@ mod build_sdk;
 mod channel_consts;
 mod channels;
 mod clippy;
+mod deploy;
 mod disk_img;
 mod fetch;
 mod http_one;
@@ -165,6 +166,26 @@ enum Commands {
     Package {
         #[command(subcommand)]
         command: PackageCommands,
+    },
+    /// Phase 52: copy board `loader.img` onto a mounted SD boot partition.
+    ///
+    /// Example: `lerux deploy --board rpi4b_4gb_workstation --dest /media/$USER/boot`
+    Deploy {
+        #[arg(long, default_value = "rpi4b_4gb_workstation")]
+        board: String,
+        /// Mounted FAT boot directory (must exist).
+        #[arg(long, short = 'd')]
+        dest: PathBuf,
+        #[arg(long, default_value = "build")]
+        build_dir: String,
+        #[arg(long, default_value = "debug")]
+        config: String,
+        /// Build the image if `loader.img` is missing.
+        #[arg(long, default_value_t = true)]
+        build: bool,
+        /// Skip building even if loader.img is missing (error instead).
+        #[arg(long, default_value_t = false)]
+        no_build: bool,
     },
 }
 
@@ -372,6 +393,8 @@ fn main() -> Result<()> {
                 curls,
                 unordered,
                 timeout_secs: timeout,
+                script: Vec::new(),
+                script_timeout_secs: 30,
             };
             test::run_smoke(command, &smoke)?;
         }
@@ -501,6 +524,24 @@ fn main() -> Result<()> {
                     crate::package::diff_package_pins(&root, &name, &board, &build_dir)?;
                 }
             }
+        }
+        Commands::Deploy {
+            board,
+            dest,
+            build_dir,
+            config,
+            build,
+            no_build,
+        } => {
+            let build_if_missing = build && !no_build;
+            crate::deploy::deploy_loader(
+                &root,
+                &board,
+                &build_dir,
+                &config,
+                &dest,
+                build_if_missing,
+            )?;
         }
     }
 

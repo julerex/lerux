@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-12 (Phase 51 net v2 core: DHCP + real DNS + dual TCP; TLS/RPi4 stretch open)
+Last updated: 2026-07-12 (Phase 52 HW closeout: deploy + first-boot seed + scripted hw-serial; on-device REPL still lab)
 
 ## Phase 1 — Bring-up
 
@@ -257,8 +257,8 @@ Tracer-bullet order: FS (32) → TCP/fetch (31) → shell (34) → supervisor (3
 | Block IPC | yes | yes (`rpi4b_4gb_blk`, `emmc2-driver`; workstation uses same driver) |
 | Net IPC (UDP TX) | yes | yes (`rpi4b_4gb_net`, `genet-driver`; workstation uses same driver) |
 | Net TCP + DNS | yes | no (workstation `fetch` is UDP demo only) |
-| Filesystem IPC | yes | yes (`rpi4b_4gb_workstation`; manual gate pending on-device REPL) |
-| Interactive shell | yes | yes (`rpi4b_4gb_workstation`; manual gate pending) |
+| Filesystem IPC | yes | yes (`rpi4b_4gb_workstation`; deploy+seed+hw-serial; lab REPL checklist open) |
+| Interactive shell | yes | yes (`rpi4b_4gb_workstation`; scripted ls/pwd/ip on hw-serial; lab REPL open) |
 | Logging / config | yes | yes (workstation profile) |
 | Edit TUI | yes | yes (workstation profile; manual gate pending) |
 | Profile-based build | yes | yes (`workstation-rpi4`, `hardware-rpi4`, hello/net/blk slices) |
@@ -339,7 +339,7 @@ Bring the QEMU workstation stack to real hardware on `rpi4b_4gb`.
 - [x] `workstation-rpi4` profile + `workstation-rpi4.system.template` + `rpi4b_4gb_workstation` board
 - [x] `emmc2-driver`: SDHCI PIO block read/write + virtio_blk ring IPC + `GetBlockDeviceLayout`; clock/CMD41/4-bit bus hardening
 - [x] `genet-driver`: Linux GENET v5 register map, ring-16 DMA descriptors, MDIO/INTRL2/IRQ enable
-- [ ] Manual HW gate: serial REPL, `ls`/`cat`/`fetch`/`edit` on device — procedure in [docs/boards.md](boards.md#rpi4-workstation-manual-hw-gate-phase-39); image build verified (`BOARD=rpi4b_4gb_workstation just image`)
+- [ ] Manual HW gate on device: serial REPL `ls`/`cat`/`fetch`/`edit` — procedure + result table in [docs/boards.md](boards.md#rpi4-workstation-install-path-phase-52); image build verified (`BOARD=rpi4b_4gb_workstation just image`)
 - [x] Optional serial-capture HW CI harness: `LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD=rpi4b_4gb_workstation just test`
 
 ## Phase 40 — Packages and more apps (complete)
@@ -406,19 +406,29 @@ LERUXFS2 + hierarchical IPC (see [`plan-arch.md`](plan-arch.md) Phase 50 for ful
 - [x] Real DNS socket; static `host`/`dns` aliases for smokes
 - [x] Dual TCP (client + listen); `NetRequest::GetIface` + shell `ip`
 - [x] Smokes: `just test-net`, `just test-fetch`, `just test-workstation`
-- [ ] TLS outbound / RPi4 GENET production path / multi-client op queue (stretch)
+- [ ] TLS outbound / multi-client op queue (stretch)
 
-## Phases 52–60 — Arch-level functionality (planned)
+## Phase 52 — Hardware closeout (core done; lab gate open)
 
-Roadmap to “about Arch Linux” **workflow** (not ABI): HW closeout, shell/coreutils, config policy, package UX, multi-arch workstation, app catalog, optional hardening.
+Install-media path for RPi4 workstation (see [`boards.md`](boards.md#rpi4-workstation-install-path-phase-52), [`plan-arch.md`](plan-arch.md)):
+
+- [x] `lerux deploy` / `just deploy-rpi4 DEST=…` — copy `loader.img` + `lerux-uboot.txt`
+- [x] First-boot: format LERUXFS2 → `mkdir /config` → seed `net.*`/`hostname` → log `first-boot seed ok`
+- [x] hw-serial expects expanded (fs/net/seed); **scripted REPL** (`ls`/`pwd`/`ip`) after boot match
+- [x] Docs: install path table, failure modes, manual checklist result grid
+- [ ] On-device lab sign-off: fill checklist on real Pi (requires hardware)
+
+## Phases 53–60 — Arch-level functionality (planned)
+
+Roadmap to “about Arch Linux” **workflow** (not ABI): shell/coreutils, config policy, package UX, multi-arch workstation, app catalog, optional hardening.
 
 Full checklist, priority order, and completion bar: **[`plan-arch.md`](plan-arch.md)**.
 
 | Phase | Theme | Status |
 |-------|--------|--------|
 | 50 | Filesystem v2 (multi-sector, dirs, unlink/rename) | core done (FAT/NFS stretch open) |
-| 51 | Network stack v2 (DHCP, DNS, multi-conn, TLS) | core done (TLS/RPi4 stretch open) |
-| 52 | Hardware closeout (RPi4 REPL gate + deploy) | planned |
+| 51 | Network stack v2 (DHCP, DNS, multi-conn, TLS) | core done (TLS stretch open) |
+| 52 | Hardware closeout (RPi4 deploy + seed + harness) | core done (lab REPL sign-off open) |
 | 53 | Shell + core utilities | planned |
 | 54 | Config, secrets, boot policy | planned |
 | 55 | Package/profile UX (pacman-like host CLI) | planned |
@@ -428,7 +438,7 @@ Full checklist, priority order, and completion bar: **[`plan-arch.md`](plan-arch
 | 59 | Multi-arch workstation profiles | planned |
 | 60 | Security posture (stretch) | planned |
 
-Near-term priority: **52 HW closeout**, then 55/53; TLS when needed.
+Near-term priority: **53 shell** / **55 package UX**; lab Pi for Phase 52 sign-off when available.
 
 ## Version alignment
 

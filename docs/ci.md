@@ -58,6 +58,48 @@ Local mirror: `just check` (format + clippy for `lerux-cli` and `lerux-interface
 
 Local mirror: `just test-all` (requires full SDK; creates `support/disk.img` once).
 
+## Hardware serial smoke (Phase 47)
+
+Expect strings live in **`support/smoke-expects.toml`** (shared by QEMU and hw-serial).  
+Test modes for `lerux test`:
+
+| Mode | Flag / env | Behaviour |
+|------|------------|-----------|
+| `auto` (default) | `--mode auto` or unset | QEMU boards → QEMU; hardware boards → hw-serial **if** `LERUX_HW_SERIAL` is set, else image-only success |
+| `qemu` | `--mode qemu` | Force QEMU (fails on hardware-only boards) |
+| `hw-serial` | `--mode hw-serial` or `LERUX_TEST_MODE=hw-serial` | Read serial device; requires `LERUX_HW_SERIAL` |
+
+**Golden path (RPi4 workstation):**
+
+```bash
+# 1. Flash/build loader.img, connect USB-serial, power on / U-Boot go
+# 2. From the host with the serial port free:
+BOARD=rpi4b_4gb_workstation LERUX_HW_SERIAL=/dev/ttyUSB0 just test-hw
+```
+
+Optional env:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `LERUX_HW_SERIAL` | (required for hw-serial) | TTY path, e.g. `/dev/ttyUSB0` |
+| `LERUX_HW_BAUD` | `115200` | Serial baud |
+| `LERUX_HW_LOCK_DIR` | `$TMPDIR/lerux-hw-locks` | Advisory lock directory (single-writer) |
+| `LERUX_HW_LOCK_WAIT_SECS` | `300` | Wait for lock |
+| `LERUX_TEST_MODE` | `auto` | Same as `--mode` |
+
+Locks prevent two local jobs from racing the same board (`{board}.lock` with PID; stale locks are stolen if the PID is gone).
+
+### Self-hosted CI workflow
+
+Workflow: [`.github/workflows/hw-serial.yml`](../.github/workflows/hw-serial.yml) (`workflow_dispatch` only).
+
+1. Runner labels: `self-hosted`, `lerux-hw`
+2. Repo variable `LERUX_HW_ENABLED=true` (job is skipped otherwise — no infinite queue on github-hosted)
+3. Repo variable `LERUX_HW_SERIAL` (device path on the runner)
+4. Optional `LERUX_HW_BAUD`
+
+Cloud PR smoke **does not** require a Pi. Hardware remains an opt-in lab path.
+
 ## Caches
 
 | Cache | Key inputs | Restored in |

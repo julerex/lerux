@@ -7,6 +7,7 @@ use std::{
 
 use anyhow::{bail, Context, Result};
 
+#[derive(Debug)]
 pub struct SmokeTest {
     pub expects: Vec<String>,
     pub curls: Vec<(String, String)>,
@@ -127,16 +128,54 @@ fn expect_unordered(
     Ok(())
 }
 
-/// Optional hardware smoke: read serial from `LERUX_HW_SERIAL` after image build.
+/// How `lerux test` drives the board (Phase 47).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TestMode {
+    /// QEMU boards → qemu; hardware boards → hw-serial if `LERUX_HW_SERIAL` set, else image-only.
+    #[default]
+    Auto,
+    /// Force QEMU (errors on hardware-only boards).
+    Qemu,
+    /// Force serial capture (`LERUX_HW_SERIAL` required).
+    HwSerial,
+}
+
+impl TestMode {
+    pub fn parse(s: &str) -> Result<Self> {
+        match s.to_ascii_lowercase().as_str() {
+            "auto" => Ok(Self::Auto),
+            "qemu" => Ok(Self::Qemu),
+            "hw-serial" | "hw_serial" | "hw" => Ok(Self::HwSerial),
+            other => bail!("unknown test mode {other:?}; use auto|qemu|hw-serial"),
+        }
+    }
+
+    /// CLI flag, then `LERUX_TEST_MODE`, then Auto.
+    pub fn from_env_or_flag(flag: Option<&str>) -> Result<Self> {
+        if let Some(s) = flag {
+            return Self::parse(s);
+        }
+        if let Ok(s) = std::env::var("LERUX_TEST_MODE")
+            && !s.is_empty()
+        {
+            return Self::parse(&s);
+        }
+        Ok(Self::Auto)
+    }
+}
+
+/// Hardware serial smoke: read from `LERUX_HW_SERIAL` (115200 8N1 raw by default).
 ///
-/// Configure the port first (115200 8N1 raw). Example:
-/// `LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD=rpi4b_4gb_workstation just test`
+/// Golden path:
+/// `BOARD=rpi4b_4gb_workstation LERUX_HW_SERIAL=/dev/ttyUSB0 just test-hw`
 pub fn run_hw_serial_smoke(test: &SmokeTest) -> Result<()> {
-    let device = std::env::var("LERUX_HW_SERIAL").context("LERUX_HW_SERIAL not set")?;
-    println!("==> Hardware serial smoke on {device:?}");
+    let device = std::env::var("LERUX_HW_SERIAL")
+        .context("LERUX_HW_SERIAL not set (e.g. /dev/ttyUSB0). Required for --mode hw-serial")?;
+    let baud = std::env::var("LERUX_HW_BAUD").unwrap_or_else(|_| "115200".into());
+    println!("==> Hardware serial smoke on {device:?} ({baud} 8N1 raw)");
 
     let stty = Command::new("stty")
-        .args(["-F", &device, "115200", "raw", "-echo"])
+        .args(["-F", &device, &baud, "raw", "-echo"])
         .status()
         .context("stty serial config")?;
     if !stty.success() {
@@ -159,7 +198,8 @@ pub fn run_hw_serial_smoke(test: &SmokeTest) -> Result<()> {
         expect_ordered(&output, &test.expects, per)
     };
 
-    let _ = reader_thread.join();
+    // Detach: reader may block on serial; we don't join forever.
+    drop(reader_thread);
     result?;
     println!("\n==> hardware serial smoke passed");
     Ok(())
@@ -185,159 +225,6 @@ fn curl_check(url: &str, expect_substr: &str, timeout_secs: u64) -> Result<()> {
     bail!("curl {url} failed: expected {expect_substr:?}, last={last_error:?}");
 }
 
-pub fn default_expects(board: &str) -> Vec<String> {
-    match board {
-        "qemu_virt_aarch64_echo" | "qemu_virt_riscv64_echo" | "x86_64_generic_echo" => {
-            vec![
-                "echo-server ready".into(),
-                "lerux-echo: pong".into(),
-                "lerux-echo: lerux".into(),
-            ]
-        }
-        "qemu_virt_aarch64_debug" => vec![
-            "lerux-debug: ready".into(),
-            "crash-demo: about to fault".into(),
-            "lerux-debug: fault child=1".into(),
-            "lerux-debug: VmFault".into(),
-            "lerux-debug: crash-demo stopped".into(),
-        ],
-        "qemu_virt_aarch64_blk_composed" => vec![
-            "lerux-supervisor: RTC".into(),
-            "lerux-supervisor: timer ok".into(),
-            "lerux-supervisor: init ok".into(),
-            "lerux-blk: ready".into(),
-            "virtio-blk:".into(),
-            "lerux-blk: MBR sig".into(),
-            "lerux-blk: write round-trip ok".into(),
-        ],
-        "qemu_virt_aarch64_blk" | "qemu_virt_riscv64_blk" | "x86_64_generic_blk" => {
-            vec![
-                "lerux-blk: ready".into(),
-                "virtio-blk:".into(),
-                "lerux-blk: MBR sig".into(),
-                "lerux-blk: write round-trip ok".into(),
-            ]
-        }
-        "qemu_virt_aarch64_net_composed" => vec![
-            "lerux-supervisor: RTC".into(),
-            "lerux-supervisor: timer ok".into(),
-            "lerux-supervisor: init ok".into(),
-            "lerux-net: ready".into(),
-            "virtio-net: MAC".into(),
-            "lerux-net: TX ok".into(),
-            "lerux-net: IPC ok".into(),
-        ],
-        "qemu_virt_aarch64_ipc_composed" => vec![
-            "lerux-supervisor: RTC".into(),
-            "lerux-supervisor: timer ok".into(),
-            "lerux-supervisor: init ok".into(),
-            "lerux-blk: ready".into(),
-            "virtio-blk:".into(),
-            "lerux-blk: MBR sig".into(),
-            "lerux-blk: write round-trip ok".into(),
-            "lerux-net: ready".into(),
-            "virtio-net: MAC".into(),
-            "lerux-net: TX ok".into(),
-            "lerux-net: IPC ok".into(),
-        ],
-        "qemu_virt_aarch64_workstation" => vec![
-            "lerux-supervisor: RTC".into(),
-            "lerux-supervisor: timer ok".into(),
-            "lerux-supervisor: init ok".into(),
-            "lerux-fs: ready".into(),
-            "virtio-blk:".into(),
-            "lerux-net: ready".into(),
-            "virtio-net: MAC".into(),
-            "lerux-supervisor: ready".into(),
-            "lerux-shell: ready".into(),
-            "lerux-edit: ready".into(),
-            "lerux-chat: ready".into(),
-            // Match short tokens: multi-client serial can interleave mid-line.
-            "lerux-http-fs:".into(),
-            "lerux-shell: top count=".into(),
-        ],
-        "rpi4b_4gb_workstation" => vec![
-            "lerux-supervisor: init ok".into(),
-            "genet:".into(),
-            "emmc2:".into(),
-            "lerux-fs: ready".into(),
-            "lerux-net: ready".into(),
-            "lerux-supervisor: ready".into(),
-            "lerux-shell: ready".into(),
-            "lerux-edit: ready".into(),
-            "lerux-chat: ready".into(),
-            "lerux-http-fs:".into(),
-        ],
-        "rpi4b_4gb_net" => vec![
-            "lerux-net: ready".into(),
-            "genet:".into(),
-            "genet-driver: ready".into(),
-        ],
-        "rpi4b_4gb_blk" => vec![
-            "lerux-blk: ready".into(),
-            "emmc2:".into(),
-            "emmc2-driver: ready".into(),
-        ],
-        "qemu_virt_aarch64_net" | "qemu_virt_riscv64_net" | "x86_64_generic_net" => vec![
-            "lerux-net: ready".into(),
-            "virtio-net: MAC".into(),
-            "lerux-net: TX ok".into(),
-            "lerux-net: IPC ok".into(),
-        ],
-        "qemu_virt_aarch64_fetch" => vec![
-            "lerux-net: ready".into(),
-            "virtio-net: MAC".into(),
-            "lerux-fetch: 200".into(),
-        ],
-        "qemu_virt_aarch64_fs" => vec![
-            "lerux-fs: ready".into(),
-            "virtio-blk:".into(),
-            "lerux-fs: round-trip ok".into(),
-        ],
-        "qemu_virt_aarch64_fs_fat" => vec![
-            "lerux-fs: ready (FAT16)".into(),
-            "virtio-blk:".into(),
-            "lerux-fs: round-trip ok".into(),
-        ],
-        "qemu_virt_aarch64_init" => vec![
-            "lerux-supervisor: RTC".into(),
-            "lerux-supervisor: timer ok".into(),
-            "lerux-supervisor: init ok".into(),
-        ],
-        "qemu_virt_aarch64_virtio" | "qemu_virt_riscv64_virtio" | "x86_64_generic_virtio" => {
-            vec![
-                "lerux: Hello from Rust on seL4 Microkit!".into(),
-                "virtio-blk:".into(),
-                "virtio-net: MAC".into(),
-                "virtio-net: TX ok".into(),
-                "virtio-net: TCP RX ok".into(),
-                "virtio-blk: MBR sig".into(),
-            ]
-        }
-        "qemu_virt_aarch64_composed" => vec![
-            "lerux-supervisor: RTC".into(),
-            "lerux-supervisor: timer ok".into(),
-            "lerux-supervisor: init ok".into(),
-            "lerux: Hello from Rust on seL4 Microkit!".into(),
-            "virtio-blk:".into(),
-            "virtio-net: MAC".into(),
-            "virtio-net: TX ok".into(),
-            "virtio-net: TCP RX ok".into(),
-            "virtio-blk: MBR sig".into(),
-        ],
-        "qemu_virt_aarch64_http" | "qemu_virt_riscv64_http" | "x86_64_generic_http" => {
-            vec!["lerux-http: listening".into()]
-        }
-        "qemu_virt_aarch64_http_composed" => vec![
-            "lerux-supervisor: RTC".into(),
-            "lerux-supervisor: timer ok".into(),
-            "lerux-supervisor: init ok".into(),
-            "lerux-http: listening".into(),
-        ],
-        _ => vec!["lerux: Hello from Rust on seL4 Microkit!".into()],
-    }
-}
-
 pub fn default_curls(board: &str) -> Vec<(String, String)> {
     if matches!(
         board,
@@ -361,31 +248,61 @@ pub fn run_board_test(
     build_dir: &str,
     config: &str,
 ) -> Result<()> {
+    run_board_test_with_mode(root, board, build_dir, config, TestMode::Auto)
+}
+
+pub fn run_board_test_with_mode(
+    root: &std::path::Path,
+    board: &str,
+    build_dir: &str,
+    config: &str,
+    mode: TestMode,
+) -> Result<()> {
     if crate::qemu::is_http_board(board) {
         crate::qemu::cleanup_http_conflicts();
     }
 
     let ctx = crate::qemu::load_qemu_context(root, board, build_dir, config)?;
+    let hardware = crate::qemu::is_hardware_board(&ctx);
+    let hw_serial_set = std::env::var_os("LERUX_HW_SERIAL").is_some();
 
-    if crate::qemu::is_hardware_board(&ctx) {
-        if std::env::var_os("LERUX_HW_SERIAL").is_some() {
-            let test = SmokeTest {
-                expects: default_expects(board),
-                curls: Vec::new(),
-                // Concurrent loggers interleave bytes on multi-client serial.
-                unordered: matches!(
-                    board,
-                    "rpi4b_4gb_workstation" | "qemu_virt_aarch64_workstation"
-                ),
-                timeout_secs: 120,
-            };
-            return run_hw_serial_smoke(&test);
+    let use_hw = match mode {
+        TestMode::HwSerial => true,
+        TestMode::Qemu => {
+            if hardware {
+                bail!(
+                    "board {board:?} is hardware-only; cannot use --mode qemu (use --mode hw-serial with LERUX_HW_SERIAL)"
+                );
+            }
+            false
+        }
+        TestMode::Auto => hardware && hw_serial_set,
+    };
+
+    if hardware && !use_hw {
+        if mode == TestMode::HwSerial {
+            // unreachable: use_hw true
         }
         println!(
-            "==> Hardware board {:?}: image built successfully.\n    No QEMU profile. Perform manual smoke/verification on the device.\n    Optional: LERUX_HW_SERIAL=/dev/ttyUSB0 just test (serial capture).\n    See docs/boards.md for deployment (e.g. U-Boot on RPi4).",
-            board
+            "==> Hardware board {board:?}: image built successfully.\n\
+             \x20   No QEMU profile. Deploy loader.img (U-Boot) for manual checks.\n\
+             \x20   Golden path: LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD={board} just test-hw\n\
+             \x20   See docs/boards.md and docs/ci.md (Phase 47 hw-serial)."
         );
         return Ok(());
+    }
+
+    if use_hw {
+        if !hardware && mode == TestMode::HwSerial {
+            println!(
+                "==> Note: {board:?} has a QEMU profile; hw-serial will only read LERUX_HW_SERIAL (no QEMU)."
+            );
+        }
+        let mut test = crate::smoke_expects::smoke_test_for_board(root, board)?;
+        // Host curls do not apply over bare serial.
+        test.curls.clear();
+        let _lock = crate::hw_lock::BoardLock::acquire(board)?;
+        return run_hw_serial_smoke(&test);
     }
 
     crate::qemu::ensure_qemu_binary(&ctx.root, ctx.board.qemu.as_deref().unwrap_or_default())?;
@@ -408,14 +325,7 @@ pub fn run_board_test(
 
     let helper = crate::qemu::setup_test_helpers(&ctx)?;
     let cmd = crate::qemu::qemu_command(&ctx)?;
-
-    let test = SmokeTest {
-        expects: default_expects(board),
-        curls: default_curls(board),
-        // Multi-client serial interleaves concurrent loggers mid-line.
-        unordered: board.contains("workstation"),
-        timeout_secs: 60,
-    };
+    let test = crate::smoke_expects::smoke_test_for_board(root, board)?;
 
     let result = run_smoke(cmd, &test);
     if let Some(mut child) = helper {

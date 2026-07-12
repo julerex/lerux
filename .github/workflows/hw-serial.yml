@@ -1,0 +1,81 @@
+# Phase 47: optional hardware serial smoke on a self-hosted runner with a Pi.
+#
+# Does NOT run on github-hosted runners (no serial hardware). Enable by:
+# 1. Registering a self-hosted runner with labels: self-hosted, lerux-hw
+# 2. Setting repository variable LERUX_HW_ENABLED=true
+# 3. Setting secret/variable LERUX_HW_SERIAL (e.g. /dev/ttyUSB0) on the runner env
+#    or as a repo variable consumed below.
+#
+# Manual trigger only by default so PRs never wait on missing hardware.
+
+name: hardware serial
+
+on:
+  workflow_dispatch:
+    inputs:
+      board:
+        description: Hardware board name
+        required: true
+        default: rpi4b_4gb_workstation
+        type: choice
+        options:
+          - rpi4b_4gb_workstation
+          - rpi4b_4gb_net
+          - rpi4b_4gb_blk
+          - rpi4b_4gb
+
+concurrency:
+  group: hw-serial-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  hw-serial:
+    # Skip when the lab has not opted in (avoids queued jobs with no runner).
+    if: ${{ vars.LERUX_HW_ENABLED == 'true' }}
+    runs-on: [self-hosted, lerux-hw]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-03-18
+          components: rustfmt, clippy
+
+      - name: Install just
+        uses: extractions/setup-just@v2
+
+      - name: Ensure serial device
+        env:
+          LERUX_HW_SERIAL: ${{ vars.LERUX_HW_SERIAL }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${LERUX_HW_SERIAL:-}" ]]; then
+            echo "Set repository variable LERUX_HW_SERIAL (e.g. /dev/ttyUSB0)" >&2
+            exit 1
+          fi
+          if [[ ! -e "$LERUX_HW_SERIAL" ]]; then
+            echo "Serial device missing: $LERUX_HW_SERIAL" >&2
+            exit 1
+          fi
+          ls -l "$LERUX_HW_SERIAL"
+
+      - name: Fetch SDK if needed
+        run: |
+          if [[ ! -f deps/.sdk-path ]]; then
+            just fetch-sdk || just fetch && just fetch-sdk
+          fi
+
+      - name: Image + hw-serial smoke
+        env:
+          LERUX_HW_SERIAL: ${{ vars.LERUX_HW_SERIAL }}
+          LERUX_HW_BAUD: ${{ vars.LERUX_HW_BAUD || '115200' }}
+          BOARD: ${{ inputs.board }}
+        run: |
+          set -euo pipefail
+          # Build image and match support/smoke-expects.toml via --mode hw-serial.
+          just test-hw

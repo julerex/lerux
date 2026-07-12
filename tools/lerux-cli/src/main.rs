@@ -7,6 +7,7 @@ mod clippy;
 mod disk_img;
 mod fetch;
 mod http_one;
+mod hw_lock;
 mod install;
 mod libclang;
 mod package;
@@ -14,6 +15,7 @@ mod path;
 mod process;
 mod profile;
 mod qemu;
+mod smoke_expects;
 mod system;
 mod tcp_echo;
 mod test;
@@ -106,6 +108,10 @@ enum Commands {
         build_dir: String,
         #[arg(long, default_value = "debug")]
         config: String,
+        /// Test driver: `auto` (default), `qemu`, or `hw-serial` (Phase 47).
+        /// Also set via `LERUX_TEST_MODE`. hw-serial requires `LERUX_HW_SERIAL`.
+        #[arg(long)]
+        mode: Option<String>,
     },
     TestAll {
         #[arg(long, default_value = "build")]
@@ -293,9 +299,11 @@ fn main() -> Result<()> {
             board,
             build_dir,
             config,
+            mode,
         } => {
+            let mode = test::TestMode::from_env_or_flag(mode.as_deref())?;
             build::image(&root, &board, &build_dir, &config)?;
-            test::run_board_test(&root, &board, &build_dir, &config)?;
+            test::run_board_test_with_mode(&root, &board, &build_dir, &config, mode)?;
         }
         Commands::TestAll { build_dir, config } => {
             build::test_all(&root, &build_dir, &config)?;

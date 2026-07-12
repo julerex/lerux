@@ -1,0 +1,251 @@
+# Phase 47: data-driven smoke expects shared by QEMU and hw-serial modes.
+# Loaded by lerux-cli (`test` / `test-all`). Edit here when adding boards.
+#
+# [boards.<name>]
+# expects = ["ordered substrings…"]  # required
+# unordered = true                   # optional (default false)
+# timeout_secs = 120                 # optional (default 60; hw often 120)
+
+[defaults]
+timeout_secs = 60
+unordered = false
+
+[boards.qemu_virt_aarch64]
+expects = ["lerux: Hello from Rust on seL4 Microkit!"]
+
+[boards.qemu_virt_riscv64]
+expects = ["lerux: Hello from Rust on seL4 Microkit!"]
+
+[boards.x86_64_generic]
+expects = ["lerux: Hello from Rust on seL4 Microkit!"]
+
+[boards.rpi4b_4gb]
+expects = ["lerux: Hello from Rust on seL4 Microkit!"]
+
+[boards.qemu_virt_aarch64_echo]
+expects = ["echo-server ready", "lerux-echo: pong", "lerux-echo: lerux"]
+
+[boards.qemu_virt_riscv64_echo]
+expects = ["echo-server ready", "lerux-echo: pong", "lerux-echo: lerux"]
+
+[boards.x86_64_generic_echo]
+expects = ["echo-server ready", "lerux-echo: pong", "lerux-echo: lerux"]
+
+[boards.qemu_virt_aarch64_debug]
+expects = [
+  "lerux-debug: ready",
+  "crash-demo: about to fault",
+  "lerux-debug: fault child=1",
+  "lerux-debug: VmFault",
+  "lerux-debug: crash-demo stopped",
+]
+
+[boards.qemu_virt_aarch64_blk]
+expects = [
+  "lerux-blk: ready",
+  "virtio-blk:",
+  "lerux-blk: MBR sig",
+  "lerux-blk: write round-trip ok",
+]
+
+[boards.qemu_virt_riscv64_blk]
+expects = [
+  "lerux-blk: ready",
+  "virtio-blk:",
+  "lerux-blk: MBR sig",
+  "lerux-blk: write round-trip ok",
+]
+
+[boards.x86_64_generic_blk]
+expects = [
+  "lerux-blk: ready",
+  "virtio-blk:",
+  "lerux-blk: MBR sig",
+  "lerux-blk: write round-trip ok",
+]
+
+[boards.qemu_virt_aarch64_blk_composed]
+expects = [
+  "lerux-supervisor: RTC",
+  "lerux-supervisor: timer ok",
+  "lerux-supervisor: init ok",
+  "lerux-blk: ready",
+  "virtio-blk:",
+  "lerux-blk: MBR sig",
+  "lerux-blk: write round-trip ok",
+]
+
+[boards.qemu_virt_aarch64_net]
+expects = [
+  "lerux-net: ready",
+  "virtio-net: MAC",
+  "lerux-net: TX ok",
+  "lerux-net: IPC ok",
+]
+
+[boards.qemu_virt_riscv64_net]
+expects = [
+  "lerux-net: ready",
+  "virtio-net: MAC",
+  "lerux-net: TX ok",
+  "lerux-net: IPC ok",
+]
+
+[boards.x86_64_generic_net]
+expects = [
+  "lerux-net: ready",
+  "virtio-net: MAC",
+  "lerux-net: TX ok",
+  "lerux-net: IPC ok",
+]
+
+[boards.qemu_virt_aarch64_net_composed]
+expects = [
+  "lerux-supervisor: RTC",
+  "lerux-supervisor: timer ok",
+  "lerux-supervisor: init ok",
+  "lerux-net: ready",
+  "virtio-net: MAC",
+  "lerux-net: TX ok",
+  "lerux-net: IPC ok",
+]
+
+[boards.qemu_virt_aarch64_ipc_composed]
+expects = [
+  "lerux-supervisor: RTC",
+  "lerux-supervisor: timer ok",
+  "lerux-supervisor: init ok",
+  "lerux-blk: ready",
+  "virtio-blk:",
+  "lerux-blk: MBR sig",
+  "lerux-blk: write round-trip ok",
+  "lerux-net: ready",
+  "virtio-net: MAC",
+  "lerux-net: TX ok",
+  "lerux-net: IPC ok",
+]
+
+[boards.qemu_virt_aarch64_fetch]
+expects = ["lerux-net: ready", "virtio-net: MAC", "lerux-fetch: 200"]
+
+[boards.qemu_virt_aarch64_fs]
+expects = ["lerux-fs: ready", "virtio-blk:", "lerux-fs: round-trip ok"]
+
+[boards.qemu_virt_aarch64_fs_fat]
+expects = [
+  "lerux-fs: ready (FAT16)",
+  "virtio-blk:",
+  "lerux-fs: round-trip ok",
+]
+
+[boards.qemu_virt_aarch64_init]
+expects = [
+  "lerux-supervisor: RTC",
+  "lerux-supervisor: timer ok",
+  "lerux-supervisor: init ok",
+]
+
+[boards.qemu_virt_aarch64_virtio]
+expects = [
+  "lerux: Hello from Rust on seL4 Microkit!",
+  "virtio-blk:",
+  "virtio-net: MAC",
+  "virtio-net: TX ok",
+  "virtio-net: TCP RX ok",
+  "virtio-blk: MBR sig",
+]
+
+[boards.qemu_virt_riscv64_virtio]
+expects = [
+  "lerux: Hello from Rust on seL4 Microkit!",
+  "virtio-blk:",
+  "virtio-net: MAC",
+  "virtio-net: TX ok",
+  "virtio-net: TCP RX ok",
+  "virtio-blk: MBR sig",
+]
+
+[boards.x86_64_generic_virtio]
+expects = [
+  "lerux: Hello from Rust on seL4 Microkit!",
+  "virtio-blk:",
+  "virtio-net: MAC",
+  "virtio-net: TX ok",
+  "virtio-net: TCP RX ok",
+  "virtio-blk: MBR sig",
+]
+
+[boards.qemu_virt_aarch64_composed]
+expects = [
+  "lerux-supervisor: RTC",
+  "lerux-supervisor: timer ok",
+  "lerux-supervisor: init ok",
+  "lerux: Hello from Rust on seL4 Microkit!",
+  "virtio-blk:",
+  "virtio-net: MAC",
+  "virtio-net: TX ok",
+  "virtio-net: TCP RX ok",
+  "virtio-blk: MBR sig",
+]
+
+[boards.qemu_virt_aarch64_http]
+expects = ["lerux-http: listening"]
+
+[boards.qemu_virt_riscv64_http]
+expects = ["lerux-http: listening"]
+
+[boards.x86_64_generic_http]
+expects = ["lerux-http: listening"]
+
+[boards.qemu_virt_aarch64_http_composed]
+expects = [
+  "lerux-supervisor: RTC",
+  "lerux-supervisor: timer ok",
+  "lerux-supervisor: init ok",
+  "lerux-http: listening",
+]
+
+[boards.qemu_virt_aarch64_workstation]
+unordered = true
+timeout_secs = 60
+expects = [
+  "lerux-supervisor: RTC",
+  "lerux-supervisor: timer ok",
+  "lerux-supervisor: init ok",
+  "lerux-fs: ready",
+  "virtio-blk:",
+  "lerux-net: ready",
+  "virtio-net: MAC",
+  "lerux-supervisor: ready",
+  "lerux-shell: ready",
+  "lerux-edit: ready",
+  "lerux-chat: ready",
+  "lerux-http-fs:",
+  "lerux-shell: top count=",
+]
+
+# --- Hardware (hw-serial mode) ---
+
+[boards.rpi4b_4gb_workstation]
+unordered = true
+timeout_secs = 120
+expects = [
+  "lerux-supervisor: init ok",
+  "genet:",
+  "emmc2:",
+  "lerux-fs: ready",
+  "lerux-net: ready",
+  "lerux-supervisor: ready",
+  "lerux-shell: ready",
+  "lerux-edit: ready",
+  "lerux-chat: ready",
+  "lerux-http-fs:",
+]
+
+[boards.rpi4b_4gb_net]
+timeout_secs = 120
+expects = ["lerux-net: ready", "genet:", "genet-driver: ready"]
+
+[boards.rpi4b_4gb_blk]
+timeout_secs = 120
+expects = ["lerux-blk: ready", "emmc2:", "emmc2-driver: ready"]

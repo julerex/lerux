@@ -63,9 +63,22 @@ image: build
 run: image
     {{lerux}} run --board {{board}} --build-dir {{build_dir}} --config {{config}}
 
-# Serial smoke test
+# Serial smoke test (QEMU or hw-serial when LERUX_HW_SERIAL is set on hardware boards)
 test: image
     {{lerux}} test --board {{board}} --build-dir {{build_dir}} --config {{config}}
+
+# Phase 47: force hardware serial smoke (requires LERUX_HW_SERIAL=/dev/ttyUSB0 etc.)
+# Example: LERUX_HW_SERIAL=/dev/ttyUSB0 just test-hw
+# Optional: BOARD=rpi4b_4gb_net LERUX_HW_BAUD=115200 LERUX_HW_LOCK_DIR=/tmp/locks just test-hw
+test-hw:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ -z "${LERUX_HW_SERIAL:-}" ]]; then
+      echo "error: LERUX_HW_SERIAL is required (e.g. /dev/ttyUSB0)" >&2
+      exit 1
+    fi
+    BOARD="${BOARD:-rpi4b_4gb_workstation}"
+    {{lerux}} test --board "$BOARD" --build-dir {{build_dir}} --config {{config}} --mode hw-serial
 
 # Virtio smoke test (serial + virtio-blk + virtio-net on aarch64 virt)
 test-virtio:
@@ -179,6 +192,7 @@ test-hardware-rpi4:
 
 # RPi4 workstation: build image (+ optional serial smoke via LERUX_HW_SERIAL).
 # On-device gate: docs/boards.md#rpi4-workstation-manual-hw-gate-phase-39
+# Prefer: LERUX_HW_SERIAL=/dev/ttyUSB0 just test-hw
 test-rpi4-workstation:
     BOARD=rpi4b_4gb_workstation just test
 

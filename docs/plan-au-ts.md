@@ -249,7 +249,7 @@ LionsOS `components/fs/fat`, `components/fs/nfs`, `examples/fileio`.
 
 ---
 
-## Phase 47 — Hardware CI harness
+## Phase 47 — Hardware CI harness ✅
 
 **Goal:** Reliable RPi4 (and future board) serial expect tests without ad-hoc cable folklore.
 
@@ -259,11 +259,11 @@ LionsOS `components/fs/fat`, `components/fs/nfs`, `examples/fileio`.
 
 ### Scope
 
-- [ ] Formalize `LERUX_HW_SERIAL` path into `lerux-cli test` modes: `qemu` | `hw-serial`
-- [ ] Expect scripts as data (board + profile → ordered string matches), shared with QEMU where possible
-- [ ] Optional lock file / env for single-writer board access (local first; remote queue later)
-- [ ] CI: manual or self-hosted runner job gated on hardware label (document; do not require cloud runners to have Pi)
-- [ ] Align docs with [`ci.md`](ci.md)
+- [x] Formalize modes: `lerux test --mode auto|qemu|hw-serial` (+ `LERUX_TEST_MODE`); `just test-hw`
+- [x] Expects as data: [`support/smoke-expects.toml`](../support/smoke-expects.toml) shared by QEMU and hw-serial
+- [x] Board lock: `LERUX_HW_LOCK_DIR` / `{board}.lock` (PID + stale reclaim)
+- [x] CI: [`.github/workflows/hw-serial.yml`](../.github/workflows/hw-serial.yml) `workflow_dispatch` + `self-hosted,lerux-hw` when `LERUX_HW_ENABLED=true`
+- [x] Docs: [`ci.md`](ci.md), [`boards.md`](boards.md)
 
 ### Out of scope
 
@@ -272,7 +272,8 @@ LionsOS `components/fs/fat`, `components/fs/nfs`, `examples/fileio`.
 
 ### Exit
 
-`BOARD=rpi4b_4gb_workstation LERUX_HW_SERIAL=… just test` is the documented golden path; Phase 39 manual gate checklist is mostly automated.
+- [x] Golden path: `BOARD=rpi4b_4gb_workstation LERUX_HW_SERIAL=… just test-hw`
+- [x] Phase 39 boot expects automated via TOML + hw-serial; REPL checklist remains manual
 
 ---
 

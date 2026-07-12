@@ -63,13 +63,14 @@ Use `lerux image --board <name>` (or `BOARD=<name> just image`).
 
 `just run` on hardware boards builds the image then prints deployment instructions (no QEMU).
 
-`just test` (or `lerux test`) on hardware boards builds the image then reports success with a note to perform manual verification on the device (advances the smoke gate for Phase 37). No execution step unless serial capture is enabled:
+`just test` on hardware boards builds the image; without a serial device it stops there (manual gate). **Phase 47 golden path** for automated boot smoke:
 
 ```bash
-LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD=rpi4b_4gb_workstation just test
+BOARD=rpi4b_4gb_workstation LERUX_HW_SERIAL=/dev/ttyUSB0 just test-hw
+# equivalent: lerux test --board rpi4b_4gb_workstation --mode hw-serial
 ```
 
-With `LERUX_HW_SERIAL` set, `lerux test` reads boot logs from the given TTY (115200 8N1) and matches smoke patterns for the board (unordered for `rpi4b_4gb_workstation`).
+Expects come from [`support/smoke-expects.toml`](../support/smoke-expects.toml) (shared with QEMU smokes). Modes and lock env: [`ci.md` — hardware serial](ci.md#hardware-serial-smoke-phase-47).
 
 ### RPi4 workstation manual HW gate (Phase 39)
 
@@ -119,22 +120,17 @@ Or via profile: `cargo run -p lerux-cli -- profile build workstation-rpi4`.
    go 0x10000000
    ```
 
-**3. Automated boot smoke (optional)**
+**3. Automated boot smoke (Phase 47)**
 
-Power on the Pi and connect serial **before** starting the read:
+Connect serial **before** starting the host command; boot (or reset) the Pi so logs stream while the reader runs:
 
 ```bash
-LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD=rpi4b_4gb_workstation just test
+BOARD=rpi4b_4gb_workstation LERUX_HW_SERIAL=/dev/ttyUSB0 just test-hw
 ```
 
-Within 120s, boot log must contain all of (any order):
+Within 120s (unordered), boot log must match entries in `support/smoke-expects.toml` for `rpi4b_4gb_workstation` (supervisor/fs/net/shell/edit/…).
 
-- `lerux-supervisor: init ok`
-- `genet:`, `emmc2:`
-- `lerux-fs: ready`, `lerux-net: ready`
-- `lerux-supervisor: ready`, `lerux-shell: ready`, `lerux-edit: ready`
-
-Success prints `==> hardware serial smoke passed`.
+Success prints `==> hardware serial smoke passed` and acquires a board lock under `$TMPDIR/lerux-hw-locks/`.
 
 Without `LERUX_HW_SERIAL`, `just test` only verifies the image build.
 

@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-12 (Phase 46 debug PD; Phases 47–49 in plan-au-ts)
+Last updated: 2026-07-12 (Phase 47 HW CI harness; Phases 48–49 in plan-au-ts)
 
 ## Phase 1 — Bring-up
 
@@ -377,9 +377,13 @@ Stackless coop async for service PDs ([ADR-004](decisions/004-service-async.md),
 
 Microkit hierarchy fault parent + crash child (`just test-debug`); QEMU gdbstub docs ([`debug.md`](debug.md), [ADR-005](decisions/005-debug-pd.md)). libgdb deferred (needs forked seL4/Microkit).
 
-## Phases 47+ — au-ts inspiration
+## Phase 47 — Hardware CI harness ✅
 
-See [`plan-au-ts.md`](plan-au-ts.md) for Phases 47–49 (HW CI, optional QoS/perf).
+`support/smoke-expects.toml`, `lerux test --mode hw-serial`, board locks, `just test-hw`, optional self-hosted workflow ([`ci.md`](ci.md)).
+
+## Phases 48+ — au-ts inspiration
+
+See [`plan-au-ts.md`](plan-au-ts.md) for Phases 48–49 (optional QoS/perf).
 
 ## Version alignment
 

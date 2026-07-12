@@ -125,7 +125,7 @@ impl HandlerImpl {
         let n = room.len().min(MAX_CHAT_ROOM);
         for i in 0..self.n_rooms as usize {
             let rl = self.room_lens[i] as usize;
-            if &self.rooms[i][..rl] == &room[..n] {
+            if self.rooms[i][..rl] == room[..n] {
                 return;
             }
         }

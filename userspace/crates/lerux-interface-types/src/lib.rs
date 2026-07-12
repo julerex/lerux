@@ -1524,14 +1524,24 @@ mod config_keys_bytes {
     }
 }
 
-/// Chat client (Phase 40).
+/// Chat client (Phase 40 / 58 multi-room).
 pub const MAX_CHAT_MSG: usize = 80;
 pub const MAX_CHAT_LINES: usize = 12;
+/// Max room name bytes (Phase 58).
+pub const MAX_CHAT_ROOM: usize = 8;
+/// Max concurrent rooms tracked by chat-client.
+pub const MAX_CHAT_ROOMS: usize = 4;
 
 /// Requests from shell to the chat-client PD.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ChatRequest {
-    /// Append and UDP-send a line of text.
+    /// Join (or switch to) a room; empty room → `lobby`.
+    Join {
+        room_len: u8,
+        #[serde(with = "chat_room_bytes")]
+        room: [u8; MAX_CHAT_ROOM],
+    },
+    /// Append and UDP-send a line of text in the current room.
     Send {
         msg_len: u8,
         #[serde(with = "chat_msg_bytes")]
@@ -1540,7 +1550,21 @@ pub enum ChatRequest {
     /// Pull any inbound UDP into the local ring, then return [`ChatResponse::View`].
     Recv,
     GetView,
+    /// List joined rooms (names in View lines).
+    ListRooms,
     Quit,
+}
+
+impl ChatRequest {
+    pub fn join(room: &[u8]) -> Self {
+        let mut buf = [0u8; MAX_CHAT_ROOM];
+        let room_len = room.len().min(MAX_CHAT_ROOM) as u8;
+        buf[..room_len as usize].copy_from_slice(&room[..room_len as usize]);
+        Self::Join {
+            room_len,
+            room: buf,
+        }
+    }
 }
 
 /// Responses from chat-client PD.
@@ -1559,6 +1583,32 @@ pub enum ChatResponse {
         line_lens: [u8; MAX_CHAT_LINES],
         #[serde(with = "chat_lines_bytes")]
         lines: [[u8; MAX_CHAT_MSG]; MAX_CHAT_LINES],
+        /// Current room name (Phase 58).
+        room_len: u8,
+        #[serde(with = "chat_room_bytes")]
+        room: [u8; MAX_CHAT_ROOM],
+    },
+}
+
+/// Backup / sync service (Phase 58).
+pub const MAX_BACKUP_PATH: usize = MAX_FS_PATH;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BackupRequest {
+    /// Snapshot root listing into `/backup/manifest` (creates `/backup/`).
+    Snapshot,
+    /// Report last snapshot stats.
+    Status,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum BackupResponse {
+    Ok,
+    Error,
+    /// `files` = entries written to the manifest.
+    Report {
+        files: u8,
+        bytes: u32,
     },
 }
 
@@ -2056,6 +2106,63 @@ mod service_err_bytes {
         deserializer: D,
     ) -> Result<[u8; MAX_SERVICE_ERR], D::Error> {
         deserializer.deserialize_bytes(ErrVisitor)
+    }
+}
+
+mod chat_room_bytes {
+    use core::fmt;
+
+    use serde::{
+        de::{self, SeqAccess, Visitor},
+        Deserializer, Serializer,
+    };
+
+    use super::MAX_CHAT_ROOM;
+
+    pub fn serialize<S: Serializer>(
+        room: &[u8; MAX_CHAT_ROOM],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bytes(room)
+    }
+
+    struct RoomVisitor;
+
+    impl<'de> Visitor<'de> for RoomVisitor {
+        type Value = [u8; MAX_CHAT_ROOM];
+
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("a byte array of max chat room size")
+        }
+
+        fn visit_bytes<E: de::Error>(self, v: &[u8]) -> Result<Self::Value, E> {
+            if v.len() > MAX_CHAT_ROOM {
+                return Err(E::invalid_length(v.len(), &self));
+            }
+            let mut room = [0u8; MAX_CHAT_ROOM];
+            room[..v.len()].copy_from_slice(v);
+            Ok(room)
+        }
+
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+            let mut room = [0u8; MAX_CHAT_ROOM];
+            for (i, byte) in room.iter_mut().enumerate() {
+                match seq.next_element()? {
+                    Some(value) => *byte = value,
+                    None => break,
+                }
+                if i == MAX_CHAT_ROOM - 1 && seq.next_element::<u8>()?.is_some() {
+                    return Err(de::Error::invalid_length(MAX_CHAT_ROOM + 1, &self));
+                }
+            }
+            Ok(room)
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<[u8; MAX_CHAT_ROOM], D::Error> {
+        deserializer.deserialize_bytes(RoomVisitor)
     }
 }
 

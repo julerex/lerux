@@ -19,6 +19,7 @@ pds = [
   "edit",
   "chat-client",
   "http-file-browser",
+  "backup",
   "fs-server",
   "net-server",
   "log-server",
@@ -205,4 +206,18 @@ name = "http_fs_fs"
 ends = [
   { pd = "fs_server", id = 7 },
   { pd = "http_file_browser", id = 1, pp = true },
+]
+
+[[channel]]
+name = "backup_shell"
+ends = [
+  { pd = "shell", id = 8, pp = true },
+  { pd = "backup", id = 0 },
+]
+
+[[channel]]
+name = "backup_fs"
+ends = [
+  { pd = "fs_server", id = 8 },
+  { pd = "backup", id = 1, pp = true },
 ]

@@ -1,6 +1,6 @@
 # PLAN — Arch-level functionality (phases 50–60)
 
-Last updated: 2026-07-12 (Phase 57 core done)
+Last updated: 2026-07-12 (Phase 58 core done)
 
 Related: [`plan.md`](plan.md) (completed phases 1–49), [`plan-au-ts.md`](plan-au-ts.md) (sDDF/LionsOS inspiration track), [`context.md`](context.md) (domain language).
 
@@ -222,7 +222,7 @@ A failed boot or hung service is diagnosable from serial + one host command (`le
 
 ---
 
-## Phase 58 — App catalog (Arch: official repos + AUR-shaped ports)
+## Phase 58 — App catalog (Arch: official repos + AUR-shaped ports) — core done
 
 **Why:** Arch is useful because of software; lerux needs deliberate ports, not ports of Linux binaries.
 
@@ -230,22 +230,24 @@ A failed boot or hung service is diagnosable from serial + one host command (`le
 
 Each row = interface types + PD + package fragment + smoke.
 
-| App | Depends on | Notes |
-|-----|------------|-------|
-| `top` polish / `htop`-like | supervisor | Already partial Phase 40 |
-| `fetch` CLI improvements | net v2 + TLS | Progress, content-type, save to FS |
-| `http-file-browser` v2 | FS v2 | Upload, MIME, larger listings |
-| Calculator / REPL math | shell only | Trivial confidence builder |
-| `irc`/`chat` multi-room | net multi-conn | Evolve `chat-client` |
-| Scripting runtime PD | FS + net | MicroPython or WAMR **as PD**, IPC only (`plan-au-ts` idea) |
-| Backup/sync PD | FS + net | Push tree over TCP |
-| Cert/key tool | secrets + FS | For TLS trust anchors |
+| App | Depends on | Status |
+|-----|------------|--------|
+| `top` polish / `htop`-like | supervisor | done (uptime + state table) |
+| `fetch` CLI improvements | net | done (`fetch` / `fetch save <path>`) |
+| `http-file-browser` v2 | FS v2 | done (MIME, HTML list, PUT) |
+| Calculator / REPL math | shell only | done (`calc`) |
+| `irc`/`chat` multi-room | net | done (`chat [#room]`) |
+| Backup/sync PD | FS | done (`backup` PD + package) |
+| Scripting runtime PD | FS + net | deferred (stretch) |
+| Cert/key tool | secrets + FS | deferred (shell `config`/secrets covers store) |
+
+Packages installable via Phase 55: **edit**, **chat-client**, **http-file-browser**, **backup**, **fetch-client** (≥5).
 
 Defer heavy GUI browsers and language ecosystems until/unless a runtime PD proves viable.
 
 ### Exit
 
-≥5 “daily” apps beyond shell builtins, all installable via Phase 55 packaging.
+≥5 “daily” apps beyond shell builtins, all installable via Phase 55 packaging. **Met.**
 
 ---
 
@@ -318,7 +320,7 @@ If capacity is limited, do **not** start with graphics or scripting runtimes:
 
 1. **Phases 50–55 cores** — FS through package UX done
 2. **Phase 52 lab** — fill RPi4 REPL checklist on real hardware when available
-3. **Phase 58** — deeper app catalog
+3. **Phase 59** — multi-arch workstation
 
 ---
 

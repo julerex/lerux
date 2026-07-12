@@ -8,9 +8,10 @@ use embedded_hal_nb::{
     serial::{Read as _, Write as _},
 };
 use lerux_interface_types::{
-    ChatRequest, ChatResponse, ConfigRequest, ConfigResponse, EditRequest, EditResponse, FsRequest,
-    FsResponse, LogRequest, LogResponse, NetRequest, NetResponse, SupervisorRequest,
-    SupervisorResponse, CFG_HOSTNAME, CFG_SECRET_PREFIX, MAX_CHAT_MSG, MAX_SERVICE_NAME,
+    BackupRequest, BackupResponse, ChatRequest, ChatResponse, ConfigRequest, ConfigResponse,
+    EditRequest, EditResponse, FsRequest, FsResponse, LogRequest, LogResponse, NetRequest,
+    NetResponse, SupervisorRequest, SupervisorResponse, CFG_HOSTNAME, CFG_SECRET_PREFIX,
+    MAX_CHAT_MSG, MAX_SERVICE_NAME,
 };
 use lerux_ipc::call;
 use lerux_logging::{log, server};
@@ -25,6 +26,7 @@ const LOG_SERVER: Channel = Channel::new(4);
 const CONFIG_SERVER: Channel = Channel::new(5);
 const EDIT: Channel = Channel::new(6);
 const CHAT: Channel = Channel::new(7);
+const BACKUP: Channel = Channel::new(8);
 
 const INPUT_BUF_CAP: usize = 128;
 const CWD_CAP: usize = lerux_interface_types::MAX_FS_PATH;
@@ -38,7 +40,8 @@ const HISTORY_LINE: usize = 64;
 const COMMANDS: &[&str] = &[
     "ls", "cat", "write", "mkdir", "rm", "mv", "cd", "pwd", "stat", "df", "ip", "ifconfig", "ping",
     "time", "date", "uptime", "clear", "history", "ps", "top", "status", "qos", "reboot", "fetch",
-    "dmesg", "edit", "chat", "echo", "config", "get", "set", "list", "hostname", "help",
+    "dmesg", "edit", "chat", "backup", "calc", "echo", "config", "get", "set", "list", "hostname",
+    "help",
 ];
 
 struct HandlerImpl {
@@ -143,9 +146,13 @@ fn chat_view_to_display(console: &mut SerialClient, v: &ChatResponse) {
         count,
         line_lens,
         lines,
+        room_len,
+        room,
     } = v
     {
-        write_bytes(console, b"\r\n--- chat (Enter send  Ctrl-Q quit)\r\n");
+        write_bytes(console, b"\r\n--- chat #");
+        write_bytes(console, &room[..*room_len as usize]);
+        write_bytes(console, b" (Enter send  Ctrl-Q quit)\r\n");
         for i in 0..(*count as usize) {
             let l = line_lens[i] as usize;
             write_bytes(console, &lines[i][..l]);
@@ -551,7 +558,7 @@ fn help_cmd(console: &mut SerialClient, arg: Option<&[u8]>) {
                 "sys:    time date uptime ps top status qos reboot dmesg clear history",
             );
             println(console, "config: config get|set|list|del  hostname");
-            println(console, "apps:   edit chat echo help");
+            println(console, "apps:   edit chat backup calc fetch echo help");
         }
         Some(other) => {
             print(console, "help: unknown topic ");
@@ -724,8 +731,15 @@ fn ps(console: &mut SerialClient) {
 }
 
 fn top(console: &mut SerialClient) {
-    println(console, "--- top ---");
+    println(console, "--- top (Phase 58) ---");
+    match call::<SupervisorRequest, SupervisorResponse>(SUPERVISOR, SupervisorRequest::GetUptime) {
+        Ok(SupervisorResponse::Uptime { secs }) => {
+            let _ = writeln!(ConsoleWriter(console), "uptime: {secs}s");
+        }
+        _ => println(console, "uptime: ?"),
+    }
     render_services(console);
+    println(console, "hint: status <id>  qos");
 }
 
 /// Phase 48: print fixed priority service classes (matches workstation templates).
@@ -738,7 +752,7 @@ fn qos(console: &mut SerialClient) {
     );
     println(console, "services     5-4    log, fs, net");
     println(console, "control      3-2    config, supervisor");
-    println(console, "bulk         2      edit, chat, http-fs");
+    println(console, "bulk         2      edit, chat, backup, http-fs");
     println(console, "interactive  1      shell (below all PPC servers)");
     println(
         console,
@@ -752,23 +766,228 @@ fn reboot(console: &mut SerialClient) {
     println(console, "reboot requested");
 }
 
-fn fetch_demo(console: &mut SerialClient) {
+/// Phase 58: `fetch` demo UDP, or `fetch save <path>` writes a small probe file.
+fn fetch_cmd<'a>(console: &mut SerialClient, cwd: &[u8], mut args: impl Iterator<Item = &'a [u8]>) {
+    if let Some(b"save") = args.next() {
+        let path = args.next().unwrap_or(b"/fetch.out");
+        let mut abs = [0u8; CWD_CAP];
+        let Some(n) = resolve_path(cwd, path, &mut abs) else {
+            println(console, "fetch: path too long");
+            return;
+        };
+        println(console, "fetch: probing…");
+        let mut ok = false;
+        for _ in 0..16 {
+            match call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::udp_tx(b"lerux-fetch")) {
+                Ok(NetResponse::Pending) => {
+                    if poll_net() == NetResponse::Ok {
+                        ok = true;
+                        break;
+                    }
+                }
+                Ok(NetResponse::Ok) => {
+                    ok = true;
+                    break;
+                }
+                _ => break,
+            }
+        }
+        let body = if ok {
+            b"lerux-fetch: ok\n".as_slice()
+        } else {
+            b"lerux-fetch: error\n".as_slice()
+        };
+        let _ = fs_call(FsRequest::unlink(&abs[..n]));
+        if let FsResponse::Handle { id } = fs_call(FsRequest::create(&abs[..n]))
+            && matches!(fs_call(FsRequest::write(id, 0, body)), FsResponse::Ok)
+        {
+            let _ = writeln!(
+                ConsoleWriter(console),
+                "fetch: saved {} bytes to path",
+                body.len()
+            );
+            return;
+        }
+        println(console, "fetch: save failed");
+        return;
+    }
+    println(console, "fetch: probing…");
     for _ in 0..16 {
         match call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::udp_tx(b"lerux-fetch")) {
             Ok(NetResponse::Pending) => {
                 if poll_net() == NetResponse::Ok {
-                    println(console, "fetch: demo udp sent");
+                    println(console, "fetch: ok (use `fetch save <path>` to write)");
                     return;
                 }
             }
             Ok(NetResponse::Ok) => {
-                println(console, "fetch: demo udp sent");
+                println(console, "fetch: ok (use `fetch save <path>` to write)");
                 return;
             }
             _ => break,
         }
     }
     println(console, "fetch: error");
+}
+
+fn backup_cmd(console: &mut SerialClient, arg: Option<&[u8]>) {
+    let req = match arg {
+        None | Some(b"snapshot") | Some(b"run") => BackupRequest::Snapshot,
+        Some(b"status") => BackupRequest::Status,
+        _ => {
+            println(console, "usage: backup [snapshot|status]");
+            return;
+        }
+    };
+    match call::<BackupRequest, BackupResponse>(BACKUP, req) {
+        Ok(BackupResponse::Report { files, bytes }) => {
+            let _ = writeln!(
+                ConsoleWriter(console),
+                "backup: files={} bytes={} (/backup/manifest)",
+                files,
+                bytes
+            );
+        }
+        Ok(BackupResponse::Ok) => println(console, "backup: ok"),
+        _ => println(console, "backup: error"),
+    }
+}
+
+/// Phase 58: integer expression calculator (`+ - * / %` and parentheses).
+fn calc_cmd(console: &mut SerialClient, expr: &[u8]) {
+    if expr.is_empty() {
+        println(console, "usage: calc <expr>   e.g. calc (1+2)*3");
+        return;
+    }
+    match eval_expr(expr) {
+        Ok(v) => {
+            let _ = writeln!(ConsoleWriter(console), "{v}");
+        }
+        Err(e) => {
+            print(console, "calc: ");
+            println(console, e);
+        }
+    }
+}
+
+fn eval_expr(input: &[u8]) -> Result<i64, &'static str> {
+    let mut p = Parser { s: input, i: 0 };
+    let v = p.parse_expr()?;
+    p.skip_ws();
+    if p.i != p.s.len() {
+        return Err("trailing junk");
+    }
+    Ok(v)
+}
+
+struct Parser<'a> {
+    s: &'a [u8],
+    i: usize,
+}
+
+impl Parser<'_> {
+    fn skip_ws(&mut self) {
+        while self.i < self.s.len() && self.s[self.i].is_ascii_whitespace() {
+            self.i += 1;
+        }
+    }
+
+    fn peek(&mut self) -> Option<u8> {
+        self.skip_ws();
+        self.s.get(self.i).copied()
+    }
+
+    fn bump(&mut self) -> Option<u8> {
+        self.skip_ws();
+        if self.i < self.s.len() {
+            let b = self.s[self.i];
+            self.i += 1;
+            Some(b)
+        } else {
+            None
+        }
+    }
+
+    fn parse_expr(&mut self) -> Result<i64, &'static str> {
+        let mut v = self.parse_term()?;
+        loop {
+            match self.peek() {
+                Some(b'+') => {
+                    self.bump();
+                    v = v.saturating_add(self.parse_term()?);
+                }
+                Some(b'-') => {
+                    self.bump();
+                    v = v.saturating_sub(self.parse_term()?);
+                }
+                _ => break,
+            }
+        }
+        Ok(v)
+    }
+
+    fn parse_term(&mut self) -> Result<i64, &'static str> {
+        let mut v = self.parse_factor()?;
+        loop {
+            match self.peek() {
+                Some(b'*') => {
+                    self.bump();
+                    v = v.saturating_mul(self.parse_factor()?);
+                }
+                Some(b'/') => {
+                    self.bump();
+                    let r = self.parse_factor()?;
+                    if r == 0 {
+                        return Err("div by zero");
+                    }
+                    v /= r;
+                }
+                Some(b'%') => {
+                    self.bump();
+                    let r = self.parse_factor()?;
+                    if r == 0 {
+                        return Err("mod by zero");
+                    }
+                    v %= r;
+                }
+                _ => break,
+            }
+        }
+        Ok(v)
+    }
+
+    fn parse_factor(&mut self) -> Result<i64, &'static str> {
+        match self.peek() {
+            Some(b'(') => {
+                self.bump();
+                let v = self.parse_expr()?;
+                if self.bump() != Some(b')') {
+                    return Err("missing )");
+                }
+                Ok(v)
+            }
+            Some(b'-') => {
+                self.bump();
+                Ok(-self.parse_factor()?)
+            }
+            Some(b'+') => {
+                self.bump();
+                self.parse_factor()
+            }
+            Some(b) if b.is_ascii_digit() => {
+                let mut v: i64 = 0;
+                while let Some(d) = self.peek() {
+                    if !d.is_ascii_digit() {
+                        break;
+                    }
+                    self.bump();
+                    v = v.saturating_mul(10).saturating_add(i64::from(d - b'0'));
+                }
+                Ok(v)
+            }
+            _ => Err("expected number"),
+        }
+    }
 }
 
 fn ip_cmd(console: &mut SerialClient) {
@@ -994,7 +1213,13 @@ fn process_command(h: &mut HandlerImpl, line: &[u8]) {
         b"status" => status_cmd(&mut h.console, parts.next()),
         b"qos" => qos(&mut h.console),
         b"reboot" => reboot(&mut h.console),
-        b"fetch" => fetch_demo(&mut h.console),
+        b"fetch" => fetch_cmd(&mut h.console, cwd, parts),
+        b"backup" => backup_cmd(&mut h.console, parts.next()),
+        b"calc" => {
+            let rest = if line.len() > 4 { &line[4..] } else { b"" };
+            let rest = rest.strip_prefix(b" ").unwrap_or(rest);
+            calc_cmd(&mut h.console, rest);
+        }
         b"ping" => ping_cmd(&mut h.console),
         b"ip" | b"ifconfig" => ip_cmd(&mut h.console),
         b"hostname" => hostname_cmd(&mut h.console),
@@ -1119,6 +1344,9 @@ fn process_command(h: &mut HandlerImpl, line: &[u8]) {
             }
         }
         b"chat" => {
+            let room = parts.next().unwrap_or(b"lobby");
+            let room = room.strip_prefix(b"#").unwrap_or(room);
+            let _ = chat_call(ChatRequest::join(room));
             h.in_chat = true;
             let _ = chat_call(ChatRequest::Recv);
             if let r @ ChatResponse::View { .. } = chat_call(ChatRequest::GetView) {

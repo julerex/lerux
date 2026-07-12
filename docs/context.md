@@ -75,8 +75,11 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 **Microbenches (Phase 49)**
 : `just bench` runs guest-timed echo RTT, blk read IOPS, and UDP TX PPS on QEMU aarch64 and writes markdown/JSON summaries. See [`bench.md`](bench.md).
 
-**Shell (Phase 53 / 57)**
-: Interactive REPL over serial with file/net/sys built-ins (`ls`…`df`, `ip`/`ping`, `uptime`/`history`/`clear`, apps). Long `cat`/`dmesg` use a space/`q` pager. `dmesg --pd` / `-l` filter the log ring; `ps`/`top`/`status` show service state. `help -l` and boot log `lerux-shell: cmds=` expose a machine-readable command list for smokes.
+**Shell (Phase 53 / 57 / 58)**
+: Interactive REPL over serial with file/net/sys built-ins (`ls`…`df`, `ip`/`ping`, `uptime`/`history`/`clear`, apps). Long `cat`/`dmesg` use a space/`q` pager. `dmesg --pd` / `-l` filter the log ring; `ps`/`top`/`status` show service state; `calc`, `backup`, `fetch save`, `chat [#room]`. `help -l` and boot log `lerux-shell: cmds=` expose a machine-readable command list for smokes.
+
+**App catalog (Phase 58)**
+: Installable PD packages under `support/packages/`: edit, chat-client, http-file-browser, backup, fetch-client (≥5). See [`packages.md`](packages.md).
 
 **Config policy (Phase 54)**
 : FS-backed keys under `/config/` via `config-server` ([`docs/config.md`](config.md)). Supervisor seeds missing keys only (`boot.seeded`), logs active hostname/net.mode/log.level, and may rotate `/boot.log`. Shell: `config get|set|list|del`, `hostname`. Secrets use the `secret.*` prefix (`/config/secrets/`). Host: `lerux config schema|defaults|seed-disk`.

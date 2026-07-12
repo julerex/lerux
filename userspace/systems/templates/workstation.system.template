@@ -92,6 +92,10 @@
         <program_image path="http-file-browser.elf" />
     </protection_domain>
 
+    <protection_domain name="backup" priority="2" stack_size="0x10_000">
+        <program_image path="backup.elf" />
+    </protection_domain>
+
     <protection_domain name="supervisor" priority="2" stack_size="0x10_000">
         <program_image path="supervisor.elf" />
     </protection_domain>

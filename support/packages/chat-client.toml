@@ -1,6 +1,6 @@
 pd = "chat-client"
 interface_types = "0.1.0"
-description = "UDP chat client (shell TUI proxy + net IPC)"
+description = "UDP chat client with multi-room join (shell: chat [#room])"
 
 [fragment]
 pds = ["chat-client"]

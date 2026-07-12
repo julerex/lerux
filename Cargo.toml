@@ -38,6 +38,7 @@ members = [
     "userspace/pds/edit",
     "userspace/pds/chat-client",
     "userspace/pds/http-file-browser",
+    "userspace/pds/backup",
     "userspace/pds/log-server",
     "userspace/pds/config-server",
     "userspace/pds/debug-handler",

@@ -67,7 +67,7 @@ const SERVICE_NAMES: &[&[u8]] = &[
     b"edit",
     b"chat-client",
     b"http-fs",
-    b"log-server",
+    b"backup",
 ];
 
 #[cfg(feature = "workstation")]

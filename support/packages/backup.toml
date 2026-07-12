@@ -1,0 +1,23 @@
+# Phase 58: FS snapshot / backup PD.
+
+pd = "backup"
+interface_types = "0.1.0"
+description = "Snapshot root listing to /backup/manifest (shell: backup)"
+
+[fragment]
+pds = ["backup"]
+requires = ["shell", "fs-server"]
+
+[[fragment.channel]]
+name = "backup_shell"
+ends = [
+  { pd = "shell", id = 8, pp = true },
+  { pd = "backup", id = 0 },
+]
+
+[[fragment.channel]]
+name = "backup_fs"
+ends = [
+  { pd = "fs_server", id = 8 },
+  { pd = "backup", id = 1, pp = true },
+]

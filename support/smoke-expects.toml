@@ -278,7 +278,9 @@ expects = [
   "lerux-shell: cmds=",
   "lerux-edit: ready",
   "lerux-chat: ready",
+  "lerux-backup:",
   "lerux-http-fs:",
+  "v2 mime",
   "lerux-shell: top count=",
 ]
 

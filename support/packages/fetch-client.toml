@@ -1,0 +1,12 @@
+# Phase 58: HTTP fetch smoke PD (installable; hostfwd boards use dedicated fetch board).
+
+pd = "fetch-client"
+interface_types = "0.1.0"
+description = "One-shot HTTP GET over net IPC (DNS+TCP); smoke board qemu_virt_aarch64_fetch"
+
+[fragment]
+pds = ["fetch-client"]
+requires = ["net-server", "serial-driver"]
+
+# Channel IDs match fetch.system.template; only install into profiles that
+# use that layout (or merge carefully). Prefer: just test-fetch.

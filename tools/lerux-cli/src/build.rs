@@ -27,6 +27,7 @@ const BOARD_FEATURE_CRATES: &[&str] = &[
     "edit",
     "chat-client",
     "http-file-browser",
+    "backup",
     "log-server",
     "config-server",
     "serial-driver",

@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-12 (Phase 57 observability and ops)
+Last updated: 2026-07-12 (Phase 58 app catalog)
 
 ## Phase 1 — Bring-up
 
@@ -458,11 +458,17 @@ Install-media path for RPi4 workstation (see [`boards.md`](boards.md#rpi4-workst
 - [x] `lerux diagnose` + CI smoke-serial artifacts; debug crash-dump line
 - [x] Docs: [`ops.md`](ops.md)
 
-## Phases 58–60 — Arch-level functionality (planned)
+## Phase 58 — App catalog (core done)
 
-Roadmap to “about Arch Linux” **workflow** (not ABI): app catalog, multi-arch workstation, security.
+- [x] top polish, calc, fetch save, chat multi-room, http-fs v2 (MIME/PUT/HTML)
+- [x] `backup` PD + package; packages: edit, chat, http-fs, backup, fetch-client
+- [x] Docs: [`packages.md`](packages.md) catalog table
 
-Full checklist, priority order, and completion bar: **[`plan-arch.md`](plan-arch.md)**.
+## Phases 59–60 — Arch-level functionality (planned)
+
+Roadmap: multi-arch workstation, security.
+
+Full checklist: **[`plan-arch.md`](plan-arch.md)**.
 
 | Phase | Theme | Status |
 |-------|--------|--------|
@@ -474,11 +480,11 @@ Full checklist, priority order, and completion bar: **[`plan-arch.md`](plan-arch
 | 55 | Package/profile UX (pacman-like host CLI) | core done |
 | 56 | Time/init cross-arch parity | core done |
 | 57 | Observability and ops | core done |
-| 58 | App catalog | planned |
+| 58 | App catalog | core done |
 | 59 | Multi-arch workstation profiles | planned |
 | 60 | Security posture (stretch) | planned |
 
-Near-term priority: **58 app catalog**.
+Near-term priority: **59 multi-arch workstation**.
 
 ## Version alignment
 

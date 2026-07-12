@@ -1,4 +1,5 @@
 pd = "http-file-browser"
+# Phase 58 v2: MIME types, HTML directory listing, PUT upload
 interface_types = "0.1.0"
 description = "HTTP file browser over FS + net TCP listen IPC"
 

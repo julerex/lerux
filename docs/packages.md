@@ -38,8 +38,22 @@ Install checks `fragment.requires` against the profile’s current PD set, merge
 | `server` | Echo IPC demo |
 | `net-appliance` | HTTP server over virtio-net |
 | `dev-workstation` | Workstation **core** without apps — use `package install` |
-| `workstation` | Full apps pre-wired (edit/chat/http-fs) |
+| `workstation` | Full apps pre-wired (edit/chat/http-fs/backup) |
 | `workstation-rpi4` | RPi4 native drivers + full apps |
+
+## App catalog packages (Phase 58)
+
+| Package | Shell / use | Notes |
+|---------|-------------|-------|
+| `edit` | `edit <path>` | TUI editor |
+| `chat-client` | `chat [#room]` | Multi-room UDP chat |
+| `http-file-browser` | host curl :8080 | MIME, HTML listing, PUT |
+| `backup` | `backup [snapshot\|status]` | `/backup/manifest` |
+| `fetch-client` | smoke board / install | HTTP GET one-shot PD |
+| (shell) `calc` | `calc (1+2)*3` | Integer REPL math |
+| (shell) `top` | `top` | Service table + uptime |
+
+≥5 installable daily apps: edit, chat-client, http-file-browser, backup, fetch-client.
 
 ## Package manifest
 

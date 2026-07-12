@@ -8,14 +8,16 @@ license = "MIT"
 workspace = true
 
 [features]
-board-qemu_virt_aarch64_net = []
-board-qemu_virt_aarch64_fetch = []
-board-qemu_virt_aarch64_net_composed = []
+# Phase 43: bounce is high half of driver_dma (shared MR with driver).
+unified-dma = []
+board-qemu_virt_aarch64_net = ["unified-dma"]
+board-qemu_virt_aarch64_fetch = ["unified-dma"]
+board-qemu_virt_aarch64_net_composed = ["unified-dma"]
 workstation = []
-board-qemu_virt_aarch64_workstation = ["workstation"]
+board-qemu_virt_aarch64_workstation = ["workstation", "unified-dma"]
 board-rpi4b_4gb_workstation = ["workstation"]
 board-rpi4b_4gb_net = []
-board-qemu_virt_aarch64_ipc_composed = []
+board-qemu_virt_aarch64_ipc_composed = ["unified-dma"]
 board-qemu_virt_riscv64_net = []
 board-x86_64_generic_net = []
 

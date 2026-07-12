@@ -6,7 +6,6 @@
     <memory_region name="virtio_mmio" size="0x1000" phys_addr="{virtio_mmio_phys_addr}" />
 
     <memory_region name="virtio_net_driver_dma" size="0x200_000" page_size="0x200_000" />
-    <memory_region name="virtio_net_client_dma" size="0x200_000" page_size="0x200_000" />
     <memory_region name="virtio_net_rx_free" size="0x200_000" page_size="0x200_000"/>
     <memory_region name="virtio_net_rx_used" size="0x200_000" page_size="0x200_000"/>
     <memory_region name="virtio_net_tx_free" size="0x200_000" page_size="0x200_000"/>
@@ -29,7 +28,6 @@
         <map mr="virtio_mmio" vaddr="0x6_000_000_000" perms="rw" cached="false" setvar_vaddr="virtio_net_mmio_vaddr" />
         <map mr="virtio_net_driver_dma" vaddr="0x7_000_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_driver_dma_vaddr" />
         <setvar symbol="virtio_net_driver_dma_paddr" region_paddr="virtio_net_driver_dma" />
-        <map mr="virtio_net_client_dma" vaddr="0x1_000_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_client_dma_vaddr" />
         <map mr="virtio_net_rx_free" vaddr="0x2_000_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_rx_free" />
         <map mr="virtio_net_rx_used" vaddr="0x2_001_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_rx_used" />
         <map mr="virtio_net_tx_free" vaddr="0x2_002_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_tx_free" />
@@ -49,7 +47,7 @@
 
     <protection_domain name="net_server" priority="3" stack_size="0x10_000">
         <program_image path="net-server.elf" />
-        <map mr="virtio_net_client_dma" vaddr="0x1_000_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_client_dma_vaddr" />
+        <map mr="virtio_net_driver_dma" vaddr="0x1_000_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_client_dma_vaddr" />
         <map mr="virtio_net_rx_free" vaddr="0x2_000_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_rx_free" />
         <map mr="virtio_net_rx_used" vaddr="0x2_001_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_rx_used" />
         <map mr="virtio_net_tx_free" vaddr="0x2_002_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_tx_free" />

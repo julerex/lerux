@@ -27,6 +27,8 @@ pub const VIRTIO_NET_MMIO_OFFSET: usize = 0xe00;
 )))]
 pub const VIRTIO_NET_MMIO_SIZE: usize = 0x200;
 pub const VIRTIO_NET_DRIVER_DMA_SIZE: usize = 0x200_000;
+/// Separate client_dma MR size (legacy / non-unified boards).
+#[cfg(not(feature = "unified-dma"))]
 pub const VIRTIO_NET_CLIENT_DMA_SIZE: usize = 0x200_000;
 
 #[cfg(any(

@@ -55,7 +55,7 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 : On workstation, UART is owned by `serial-driver` (`device-only`); multi-client postcard RPC is served by `serial-virt` (PPC to the driver). Apps still use `SerialClient` / `SERIAL_DRIVER` channel consts (peer is `serial_virt`). See [ADR-002](decisions/002-serial-virtualiser.md).
 
 **Network topology (Phase 43)**
-: Untrusted apps use only `NetRequest` / `NetResponse` against `net-server` (smoltcp + multi-client mux). The NIC driver PD has a single Microkit client (`net-server`) but still maps client DMA rings (rust-sel4 adapter). Target sDDF-shaped driver-without-client-DMA is deferred — [ADR-003](decisions/003-net-virtualiser.md), [`net-topology.md`](net-topology.md).
+: Untrusted apps use only `NetRequest` / `NetResponse` against `net-server`. On aarch64 virtio-net, **unified-dma** removes the separate client_dma MR: Hal + bounce share `virtio_net_driver_dma`; the stack maps the bounce half only. Apps never map net DMA. See [ADR-003](decisions/003-net-virtualiser.md), [`net-topology.md`](net-topology.md).
 
 **Package**
 : One PD crate plus its interface-types version and an optional profile fragment (`support/packages/<name>.toml`). “Installing” a package means adding the PD to a `support/profiles/*.toml` and rebuilding the static image via `lerux profile build` — Microkit does not load arbitrary ELFs at runtime. CI can publish per-PD ELF artifacts; pins live in `support/package-pins.toml` (`lerux package list|show|build|pin|diff`). (Phase 40)

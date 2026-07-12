@@ -361,9 +361,9 @@ In-tree SDF composition in `lerux-cli` ([ADR-001](decisions/001-in-tree-system-g
 
 `serial-driver` (device-only) + `serial-virt` on workstation profiles ([ADR-002](decisions/002-serial-virtualiser.md)). Other boards keep the combined multi-client driver. Smoke green.
 
-## Phase 43 — Net topology ✅ design / app trust
+## Phase 43 — Net sDDF topology ✅
 
-Apps stay on `NetRequest` RPC via `net-server`; NIC driver still maps client DMA pending adapter work ([ADR-003](decisions/003-net-virtualiser.md), [`net-topology.md`](net-topology.md)).
+Apps on `NetRequest` via `net-server`; aarch64 virtio-net **unified-dma** (no separate client_dma MR in the driver SDF). [ADR-003](decisions/003-net-virtualiser.md), [`net-topology.md`](net-topology.md).
 
 ## Phases 44+ — au-ts inspiration
 

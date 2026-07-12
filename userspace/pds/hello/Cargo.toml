@@ -8,9 +8,10 @@ license = "MIT"
 workspace = true
 
 [features]
+unified-dma = []
 board-qemu_virt_aarch64 = ["serial-ipc"]
-board-qemu_virt_aarch64_virtio = ["serial-ipc", "virtio"]
-board-qemu_virt_aarch64_composed = ["virtio", "composed-sync", "serial-ipc"]
+board-qemu_virt_aarch64_virtio = ["serial-ipc", "virtio", "unified-dma"]
+board-qemu_virt_aarch64_composed = ["virtio", "composed-sync", "serial-ipc", "unified-dma"]
 composed-sync = []
 board-qemu_virt_riscv64 = ["serial-ipc"]
 board-qemu_virt_riscv64_virtio = ["serial-ipc", "virtio"]

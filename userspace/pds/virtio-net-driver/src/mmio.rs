@@ -26,6 +26,10 @@ type NetHal = lerux_virtio_hal::HalImpl;
 )))]
 type NetHal = sel4_virtio_hal_impl::HalImpl;
 
+/// Full-size Hal init when DMA is not unified (riscv / legacy maps).
+/// Under `unified-dma`, Hal is initialised in `dma::init_hal_unified` so that
+/// `var!(virtio_net_driver_dma_*)` is defined only once in the crate.
+#[cfg(not(feature = "unified-dma"))]
 pub fn init_hal() {
     #[cfg(any(
         feature = "board-x86_64_generic_virtio",

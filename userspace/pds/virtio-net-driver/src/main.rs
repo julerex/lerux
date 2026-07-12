@@ -10,6 +10,9 @@ use sel4_virtio_net::DeviceWrapper;
 
 mod config;
 
+#[cfg(feature = "unified-dma")]
+mod dma;
+
 #[cfg(not(any(
     feature = "board-x86_64_generic_virtio",
     feature = "board-x86_64_generic_http"
@@ -53,6 +56,7 @@ type NetRingBuffers = (
     RingBuffers<'static, Use, fn()>,
 );
 
+#[cfg(not(feature = "unified-dma"))]
 fn create_client_region() -> SharedMemoryRef<'static, [u8]> {
     unsafe {
         SharedMemoryRef::<'static, _>::new(memory_region_symbol!(
@@ -60,6 +64,12 @@ fn create_client_region() -> SharedMemoryRef<'static, [u8]> {
             n = config::VIRTIO_NET_CLIENT_DMA_SIZE
         ))
     }
+}
+
+#[cfg(feature = "unified-dma")]
+fn create_client_region() -> SharedMemoryRef<'static, [u8]> {
+    // High half of driver_dma — no separate client_dma map (Phase 43).
+    dma::bounce_region()
 }
 
 fn create_net_ring_buffers(notify_client: fn()) -> NetRingBuffers {
@@ -81,15 +91,26 @@ fn create_net_ring_buffers(notify_client: fn()) -> NetRingBuffers {
 #[protection_domain(heap_size = 512 * 1024)]
 fn init() -> HandlerImpl<DeviceWrapper<DriverHal, NetTransport>> {
     debug::init().unwrap();
-    #[cfg(any(
-        feature = "board-x86_64_generic_virtio",
-        feature = "board-x86_64_generic_http"
+    #[cfg(feature = "unified-dma")]
+    {
+        dma::init_hal_unified();
+        log::info!("virtio-net: unified-dma (no client_dma map)");
+    }
+    #[cfg(all(
+        not(feature = "unified-dma"),
+        any(
+            feature = "board-x86_64_generic_virtio",
+            feature = "board-x86_64_generic_http"
+        )
     ))]
     pci::init_hal();
-    #[cfg(not(any(
-        feature = "board-x86_64_generic_virtio",
-        feature = "board-x86_64_generic_http"
-    )))]
+    #[cfg(all(
+        not(feature = "unified-dma"),
+        not(any(
+            feature = "board-x86_64_generic_virtio",
+            feature = "board-x86_64_generic_http"
+        ))
+    ))]
     mmio::init_hal();
     let mut dev = {
         #[cfg(any(

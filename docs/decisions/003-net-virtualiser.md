@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (Phase 43 design; DMA ownership split deferred)
+Accepted (Phase 43 complete for aarch64 virtio-net: unified DMA)
 
 ## Date
 
@@ -41,31 +41,26 @@ Serial Phase 42 taught us to prefer a working trust boundary (device-only driver
 
 ## Decision
 
-1. **Document and freeze the app-facing boundary:** all untrusted apps use `NetRequest` / `NetResponse` via `net-server` (or a future rename). No app maps virtio rings.
-2. **Treat `net-server` as the trusted “stack + RPC virt”** for Phase 43: it is the sole Microkit client of the NIC driver PD and the sole smoltcp owner.
-3. **Defer “driver without client DMA”** until we either:
-   - extend/replace the rust-sel4 virtio-net driver adapter so the driver PD only maps device + driver DMA, with a separate virt PD owning client rings; or
-   - reimplement a thin device-only net driver + queue handoff in lerux (using lessons from `lerux-serial-queue`).
-4. **Do not** insert a no-op `net-virt` PD that only renames channels without changing maps — that adds hop cost without a trust win (serial-virt was different: it removed multi-client from the UART driver).
-5. Stretch (later): genet path reuses the same role map; multi-stack clients still go through RPC unless explicitly trusted.
+1. **App-facing boundary:** untrusted apps use only `NetRequest` / `NetResponse`. No app maps virtio rings or net DMA.
+2. **`net-server` is the trusted stack + RPC virt:** sole Microkit client of the NIC driver PD; sole smoltcp owner.
+3. **Unified DMA (aarch64 virtio-net boards):** drop the separate `virtio_net_client_dma` MR. One `virtio_net_driver_dma` region is split in software:
+   - low half → virtio-drivers `HalImpl` (device buffers only)
+   - high half → shared bounce for ring payloads (driver `HandlerImpl` + stack `DeviceImpl`)
+   The driver therefore has **no distinct client_dma map** in the system description; the bounce is subsystem DMA shared only with the trusted stack PD (sDDF “DMA region”, not untrusted client data).
+4. **Do not** insert a no-op extra PD hop without map changes.
+5. Stretch: genet / x86 / multi-virt (Rx+Tx PDs) can adopt the same vocabulary later.
 
-## Trust map (current, Phase 43)
+## Trust map (aarch64 virtio-net after Phase 43)
 
-| PD | MMIO / IRQ | Client DMA / rings | App RPC | Notes |
-|----|------------|--------------------|---------|--------|
-| `virtio-net-driver` | yes | yes (shared w/ server) | no | Sole L2 client = `net-server` |
-| `genet-driver` | yes | yes (virtio-shaped rings) | no | RPi4 |
-| `virtio-pci-driver` | PCI | yes | no | x86 combined |
-| `net-server` | no | yes | yes | smoltcp + multi-client mux |
-| shell / fetch / http-fs / chat | no | no | yes | postcard only |
+| PD | MMIO / IRQ | DMA maps | App RPC | Notes |
+|----|------------|----------|---------|--------|
+| `virtio-net-driver` | yes | `driver_dma` only (Hal + bounce halves) | no | No `client_dma` MR |
+| `net-server` | no | same `driver_dma` (bounce half) + rings | yes | Trusted stack / virt |
+| shell / fetch / http-fs / chat | no | **none** | yes | postcard only |
 
-### Target (post DMA-split)
-
-| PD | MMIO / IRQ | Client DMA / rings | App RPC |
-|----|------------|--------------------|---------|
-| `*-net-driver` | yes | **no** | no |
-| `net-virt` (Tx/Rx or combined) | no | yes (driver-facing) | optional L2 |
-| `net-server` | no | yes (or via virt only) | yes |
+| PD (other platforms) | Notes |
+|----------------------|--------|
+| genet / virtio-pci | Still use separate client_dma until ported |
 
 ## Alternatives considered
 
@@ -83,10 +78,10 @@ Rejected: duplicates stacks; weakens isolation story; conflicts with existing `N
 
 ## Consequences
 
-- Phase 43 exit for **documentation + app trust** is met: apps never map NIC DMA; `NetRequest` remains the API.
-- Phase 43 exit for **driver without client DMA** remains open (tracked as follow-up under plan-au-ts Phase 43 stretch / next PR).
-- Serial-virt (ADR-002) remains the template for device-only drivers when the adapter stack allows it.
-- Fetch/HTTP/net smokes stay the regression gate for any future DMA split.
+- Aarch64 virtio-net boards (`net`, `fetch`, `http`, workstation, composed variants) use **unified-dma**: no `virtio_net_client_dma` region in the SDF.
+- Driver address space no longer includes a separate client_dma mapping; bounce lives in the high half of `virtio_net_driver_dma`.
+- Apps still never map net DMA; `NetRequest` remains the API.
+- Residual vs full sDDF: no separate Rx/Tx virt PDs or per-client copy PDs; genet/x86 not yet on unified-dma.
 
 ## References
 

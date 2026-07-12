@@ -74,6 +74,19 @@ pub struct NetIo {
 }
 
 fn create_dma_region() -> SharedMemoryRef<'static, [u8]> {
+    #[cfg(feature = "unified-dma")]
+    {
+        use core::ptr::{self, NonNull};
+        use sel4_microkit::var;
+        let base = *var!(virtio_net_client_dma_vaddr: usize = 0);
+        let ptr = NonNull::new(ptr::slice_from_raw_parts_mut(
+            (base + config::VIRTIO_NET_HAL_SIZE) as *mut u8,
+            config::VIRTIO_NET_BOUNCE_SIZE,
+        ))
+        .expect("hello net bounce");
+        unsafe { SharedMemoryRef::new(ptr) }
+    }
+    #[cfg(not(feature = "unified-dma"))]
     unsafe {
         SharedMemoryRef::<'static, _>::new(memory_region_symbol!(
             virtio_net_client_dma_vaddr: *mut [u8],

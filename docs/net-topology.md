@@ -17,45 +17,38 @@ Untrusted apps never see the NIC. They use postcard RPC:
 
 Server entry: `userspace/pds/net-server` (`smoltcp` + multi-client `Handler`).
 
-## L2 path (QEMU virtio-net)
+## L2 path (QEMU aarch64 virtio-net, Phase 43 unified-dma)
 
 ```
 virtio_net_driver  ←IRQ→  NIC
+  maps: MMIO + virtio_net_driver_dma (Hal | bounce) + rings
        ↕ channel 1 (pp on server)
-   net_server
-       ↕ shared: client_dma + rx/tx free/used rings
+   net_server  (smoltcp + app RPC virt)
+  maps: virtio_net_driver_dma (bounce half) + rings
 ```
+
+There is **no** `virtio_net_client_dma` region. Feature `unified-dma` on driver + stack PDs.
 
 Template example: `userspace/systems/templates/net.system.template`.
 
-Driver maps:
+## L2 path (RPi4 genet / x86)
 
-- device MMIO (or PCI BARs on x86)
-- `virtio_net_driver_dma` (device)
-- `virtio_net_client_dma` + ring MRs (**also** mapped into `net_server`)
+Still use a separate client_dma-style region until ported to unified-dma.
 
-## L2 path (RPi4 genet)
+## Why there is no extra `net-virt` PD
 
-Same ring symbol names so `net-server` is unchanged; `genet-driver` replaces virtio-net.
-
-## Why there is no `net-virt` PD yet
-
-Serial needed a virt because the UART driver itself multi-cliented apps. Net already multi-clients apps in `net-server`, and the driver already has a **single** Microkit client (`net-server`).
-
-A new PD is only worth it when it **removes client DMA from the NIC driver** (sDDF driver shape). That needs adapter work beyond a channel hop — see ADR-003.
+Serial needed a virt because the UART driver multi-cliented apps. Net multi-clients apps in `net-server`; the driver already has a single Microkit client. The sDDF win for Phase 43 is **map ownership** (no distinct client_dma in the driver SDF), not an extra hop.
 
 ## Smoke coverage
 
 | Board / recipe | Exercises |
 |----------------|-----------|
-| `just test-net` | net-server + virtio-net UDP IPC |
-| `just test-fetch` | TCP/DNS-ish fetch client |
-| `just test-http` | inbound HTTP over virtio-net |
+| `just test-net` | unified-dma + UDP IPC |
+| `just test-fetch` | TCP fetch |
+| `just test-http` | inbound HTTP |
 | `just test-workstation` | multi-client net-server + http-fs |
 
-## Follow-up (DMA split)
+## Follow-up
 
-1. Spike: device-only virtio-net PD using only driver DMA + hardware rings.
-2. `net-virt` owns client free/used rings and buffer pool.
-3. `net-server` attaches smoltcp to virt-facing rings (or frame RPC).
-4. Golden: `just test-fetch` + `just test-http` bit-equivalent behaviour.
+- genet / x86 unified-dma
+- Optional Rx/Tx virt PD split + copy PDs if a second untrusted L2 client appears

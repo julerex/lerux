@@ -130,7 +130,7 @@ sDDF serial: driver ↔ Tx/Rx virtualisers ↔ clients; SPSC queues; power-of-tw
 
 ---
 
-## Phase 43 — Net virtualiser (sDDF net shape) ✅ design / app trust; DMA split deferred
+## Phase 43 — Net virtualiser (sDDF net shape) ✅
 
 **Goal:** Multi-client ethernet with clear trust boundaries: NIC driver without client DMA; Rx/Tx virtualisers; optional per-client copy for untrusted clients.
 
@@ -140,25 +140,24 @@ sDDF network architecture ([`sddf/docs/network/network.md`](https://github.com/a
 
 ### Scope
 
-- [x] Design note: map today’s `virtio-net-driver` | `genet-driver` → `net-server` (smoltcp) → apps onto sDDF roles → [ADR-003](decisions/003-net-virtualiser.md), [`net-topology.md`](net-topology.md)
-- [x] App trust vertical slice: untrusted apps stay behind `NetRequest` / `NetResponse` only (no app ring maps); sole L2 Microkit client of the NIC driver is `net-server`
-- [ ] Driver lacks client DMA maps; separate `net-virt` owns buffer handoff (**deferred** — needs rust-sel4 net driver-adapter change or lerux device-only reimplementation; see ADR-003)
-- [x] Prefer RPC for untrusted apps (shell / fetch / http-fs / chat); do not give them L2 DMA
-- [x] Preserve `NetRequest` / `NetResponse` as the app-facing API
-- [x] Smoke regression gate: `just test-net`, `just test-fetch`, `just test-http` green (2026-07-12)
-- [ ] Stretch: genet path after DMA split; net-composed boards as optional extra
+- [x] Design note → [ADR-003](decisions/003-net-virtualiser.md), [`net-topology.md`](net-topology.md)
+- [x] Apps stay behind `NetRequest` / `NetResponse`; sole L2 Microkit client of the NIC driver is `net-server`
+- [x] **Unified DMA (aarch64 virtio-net):** remove separate `virtio_net_client_dma` MR; driver maps only `virtio_net_driver_dma` (Hal low half + bounce high half); stack maps same MR for bounce; feature `unified-dma`
+- [x] Prefer RPC for untrusted apps; no app L2 DMA
+- [x] Preserve `NetRequest` / `NetResponse`
+- [x] Smoke: `just test-net`, `just test-fetch`, `just test-http` (and workstation)
+- [ ] Stretch: genet / x86 unified-dma; separate Rx/Tx virt PDs / copy PDs
 
 ### Out of scope
 
-- Full sDDF copy-PD swarm unless a second untrusted L2 client appears
+- Full sDDF copy-PD swarm
 - Replacing smoltcp with lwIP
-- No-op passthrough `net-virt` PD without map changes
 
 ### Exit
 
-- [x] Documented trust map (ADR-003 + net-topology.md)
-- [ ] At least one board where NIC driver address space excludes client DMA (deferred)
-- [x] Apps never map NIC DMA; fetch/HTTP/net smokes green
+- [x] Documented trust map
+- [x] Aarch64 virtio-net boards: no distinct client_dma map in the NIC driver PD
+- [x] Apps never map NIC DMA; net/fetch/HTTP smokes green
 
 ---
 

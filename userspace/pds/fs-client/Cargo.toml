@@ -9,6 +9,7 @@ workspace = true
 
 [features]
 board-qemu_virt_aarch64_fs = []
+board-qemu_virt_aarch64_fs_fat = []
 
 [dependencies]
 lerux-interface-types = { path = "../../crates/lerux-interface-types" }

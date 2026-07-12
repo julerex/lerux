@@ -57,6 +57,9 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 **Network topology (Phase 43)**
 : Untrusted apps use only `NetRequest` / `NetResponse` against `net-server`. On aarch64 virtio-net, **unified-dma** removes the separate client_dma MR: Hal + bounce share `virtio_net_driver_dma`; the stack maps the bounce half only. Apps never map net DMA. See [ADR-003](decisions/003-net-virtualiser.md), [`net-topology.md`](net-topology.md).
 
+**Filesystem backends (Phase 44)**
+: `fs-server` serves `FsRequest` / `FsResponse` over virtio-blk (or emmc2). Default on-disk format is **LERUXFS1** (`lerux-fs`). Alternate **FAT16** backend (`lerux-fat`, feature `backend-fat`) for interchange with host tools: root-only, 8.3 names, single-cluster files for the IPC payload size. Select via board feature (`qemu_virt_aarch64_fs` vs `qemu_virt_aarch64_fs_fat`). Shell/edit/config stay on the same IPC.
+
 **Package**
 : One PD crate plus its interface-types version and an optional profile fragment (`support/packages/<name>.toml`). “Installing” a package means adding the PD to a `support/profiles/*.toml` and rebuilding the static image via `lerux profile build` — Microkit does not load arbitrary ELFs at runtime. CI can publish per-PD ELF artifacts; pins live in `support/package-pins.toml` (`lerux package list|show|build|pin|diff`). (Phase 40)
 

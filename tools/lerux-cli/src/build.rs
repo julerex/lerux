@@ -193,6 +193,7 @@ pub fn test_all(root: &Path, build_dir: &str, config: &str) -> Result<()> {
         "qemu_virt_aarch64_net",
         "qemu_virt_aarch64_fetch",
         "qemu_virt_aarch64_fs",
+        "qemu_virt_aarch64_fs_fat",
         "qemu_virt_aarch64_net_composed",
         "qemu_virt_aarch64_ipc_composed",
         "qemu_virt_aarch64_workstation",

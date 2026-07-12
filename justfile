@@ -139,6 +139,10 @@ test-fetch:
 test-fs:
     BOARD=qemu_virt_aarch64_fs just test
 
+# Phase 44: FAT16 backend on same fs SDF / virtio-blk
+test-fs-fat:
+    BOARD=qemu_virt_aarch64_fs_fat just test
+
 # Net IPC smoke test on RISC-V virt
 test-riscv-net:
     BOARD=qemu_virt_riscv64_net just test

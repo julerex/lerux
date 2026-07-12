@@ -15,7 +15,8 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `qemu_virt_aarch64_blk_composed` | aarch64 | `just test-blk-composed` | boot-init + init drivers + blk IPC + virtio-blk |
 | `qemu_virt_aarch64_net` | aarch64 | `just test-net` | net client/server + serial + virtio-net |
 | `qemu_virt_aarch64_fetch` | aarch64 | `just test-fetch` | fetch-client + net-server + serial + virtio-net |
-| `qemu_virt_aarch64_fs` | aarch64 | `just test-fs` | fs-client + fs-server + serial + virtio-blk |
+| `qemu_virt_aarch64_fs` | aarch64 | `just test-fs` | fs-client + fs-server (LERUXFS1) + serial + virtio-blk |
+| `qemu_virt_aarch64_fs_fat` | aarch64 | `just test-fs-fat` | same SDF; fs-server FAT16 backend |
 | `qemu_virt_aarch64_net_composed` | aarch64 | `just test-net-composed` | boot-init + init drivers + net IPC + virtio-net |
 | `qemu_virt_aarch64_ipc_composed` | aarch64 | `just test-ipc-composed` | boot-init + init drivers + blk/net IPC + virtio-blk/net |
 | `qemu_virt_aarch64_init` | aarch64 | `just test-init` | boot-init + PL031 + SP804 + serial |
@@ -203,6 +204,8 @@ See [plan.md](plan.md) Phases 15 and 24.
 `qemu_virt_aarch64_fetch` runs `fetch-client` over extended net IPC (DNS resolve, TCP connect/send/recv) to perform `GET /` against a host HTTP server at `10.0.2.2:8081`. Smoke expects `lerux-fetch: 200`. See [plan.md](plan.md) Phase 31.
 
 `qemu_virt_aarch64_fs` runs `fs-client` over filesystem IPC (`Create`/`Write`/`Read`/`Stat`/`ListDir`) backed by `fs-server` on virtio-blk with the minimal `LERUXFS1` format. Smoke expects `lerux-fs: round-trip ok`. See [plan.md](plan.md) Phase 32.
+
+`qemu_virt_aarch64_fs_fat` uses the same SDF and IPC; `fs-server` is built with `backend-fat` (Phase 44 minimal FAT16: root-only, 8.3 names, single-cluster files). Smoke expects `lerux-fs: ready (FAT16)` and `lerux-fs: round-trip ok`.
 
 `qemu_virt_aarch64_net_composed` gates net probe on boot-init notify (same composed-sync pattern as blk-composed). See [plan.md](plan.md) Phase 29.
 

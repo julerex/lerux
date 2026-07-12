@@ -33,9 +33,13 @@ fn fs_call(req: FsRequest) -> FsResponse {
 fn fs_create(path: &[u8]) -> u8 {
     match fs_call(FsRequest::create(path)) {
         FsResponse::Handle { id } => id,
+        // Re-running smoke on a persistent disk.img often leaves `ping` around.
+        FsResponse::Error => match fs_call(FsRequest::open(path)) {
+            FsResponse::Handle { id } => id,
+            _ => panic!("create failed and open fallback failed"),
+        },
         FsResponse::Pending
         | FsResponse::Ok
-        | FsResponse::Error
         | FsResponse::Data { .. }
         | FsResponse::Stat { .. }
         | FsResponse::DirList { .. } => panic!("create failed"),

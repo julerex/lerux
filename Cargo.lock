@@ -579,6 +579,7 @@ name = "fs-server"
 version = "0.1.0"
 dependencies = [
  "async-unsync",
+ "lerux-fat",
  "lerux-fs",
  "lerux-interface-types",
  "lerux-ipc",
@@ -887,6 +888,13 @@ dependencies = [
  "ureq",
  "which",
  "xz2",
+]
+
+[[package]]
+name = "lerux-fat"
+version = "0.1.0"
+dependencies = [
+ "lerux-interface-types",
 ]
 
 [[package]]

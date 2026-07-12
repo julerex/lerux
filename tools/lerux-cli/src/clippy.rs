@@ -115,6 +115,10 @@ const AARCH64_CRATES: &[ClippyCrate<'_>] = &[
         feature: Some("board-qemu_virt_aarch64_fs"),
     },
     ClippyCrate {
+        name: "fs-server",
+        feature: Some("board-qemu_virt_aarch64_fs_fat"),
+    },
+    ClippyCrate {
         name: "fs-client",
         feature: None,
     },

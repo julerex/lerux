@@ -287,6 +287,11 @@ pub fn default_expects(board: &str) -> Vec<String> {
             "virtio-blk:".into(),
             "lerux-fs: round-trip ok".into(),
         ],
+        "qemu_virt_aarch64_fs_fat" => vec![
+            "lerux-fs: ready (FAT16)".into(),
+            "virtio-blk:".into(),
+            "lerux-fs: round-trip ok".into(),
+        ],
         "qemu_virt_aarch64_init" => vec![
             "lerux-supervisor: RTC".into(),
             "lerux-supervisor: timer ok".into(),

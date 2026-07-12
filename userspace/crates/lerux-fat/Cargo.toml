@@ -1,0 +1,12 @@
+[package]
+name = "lerux-fat"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Minimal FAT16 codec for lerux fs-server (root-only, short names)"
+
+[lints]
+workspace = true
+
+[dependencies]
+lerux-interface-types = { path = "../lerux-interface-types" }

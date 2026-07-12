@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-12 (Phase 43 net topology ADR; Phases 44–49 in plan-au-ts)
+Last updated: 2026-07-12 (Phase 44 FAT backend; Phases 45–49 in plan-au-ts)
 
 ## Phase 1 — Bring-up
 
@@ -365,9 +365,13 @@ In-tree SDF composition in `lerux-cli` ([ADR-001](decisions/001-in-tree-system-g
 
 Apps on `NetRequest` via `net-server`; aarch64 virtio-net **unified-dma** (no separate client_dma MR in the driver SDF). [ADR-003](decisions/003-net-virtualiser.md), [`net-topology.md`](net-topology.md).
 
-## Phases 44+ — au-ts inspiration
+## Phase 44 — FS backends ✅ (FAT slice)
 
-See [`plan-au-ts.md`](plan-au-ts.md) for Phases 44–49 (FS backends, sync runtime, GDB, HW CI, optional QoS/perf) and deferred net DMA split.
+`LERUXFS1` remains default (`just test-fs`). Alternate **FAT16** backend (`lerux-fat`, `backend-fat`, `just test-fs-fat`). NFS and multi-cluster stretch deferred — [`plan-au-ts.md`](plan-au-ts.md).
+
+## Phases 45+ — au-ts inspiration
+
+See [`plan-au-ts.md`](plan-au-ts.md) for Phases 45–49 (sync runtime, GDB, HW CI, optional QoS/perf).
 
 ## Version alignment
 

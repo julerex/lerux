@@ -161,7 +161,7 @@ sDDF network architecture ([`sddf/docs/network/network.md`](https://github.com/a
 
 ---
 
-## Phase 44 — Filesystem backends (LionsOS menu)
+## Phase 44 — Filesystem backends (LionsOS menu) ✅ FAT slice
 
 **Goal:** Real on-disk / network FS options behind existing `FsRequest` / `FsResponse`, without POSIX.
 
@@ -171,21 +171,23 @@ LionsOS `components/fs/fat`, `components/fs/nfs`, `examples/fileio`.
 
 ### Scope
 
-- [ ] Keep `LERUXFS1` as the default smoke FS
-- [ ] FAT backend behind `fs-server` (read + write subset matching current IPC ops) on virtio-blk / emmc2
-- [ ] Optional NFS client PD or `fs-server` backend for QEMU user-net (libnfs inspiration only — reimplement or carefully wrap; stay `no_std` or isolate host-incompatible bits)
-- [ ] Profile fragments: `fs-lerux`, `fs-fat` (and later `fs-nfs`)
-- [ ] Shell / edit unchanged at IPC boundary
-- [ ] Smoke: FAT round-trip board; document format choice in `docs/context.md`
+- [x] Keep `LERUXFS1` as the default smoke FS (`just test-fs`)
+- [x] FAT16 backend behind `fs-server` (`lerux-fat` + `backend-fat`) matching `Open`/`Create`/`Read`/`Write`/`Stat`/`ListDir`/`Poll` on virtio-blk
+- [ ] Optional NFS client PD or `fs-server` backend for QEMU user-net (deferred)
+- [x] Board/feature selection: `qemu_virt_aarch64_fs` (LERUXFS1) vs `qemu_virt_aarch64_fs_fat` (FAT16); Cargo features `backend-lerux` / `backend-fat`
+- [x] Shell / edit unchanged at IPC boundary
+- [x] Smoke: `just test-fs-fat`; format choice in `docs/context.md`
 
 ### Out of scope
 
 - Mounting Linux rootfs or glibc apps
 - Full POSIX VFS
+- Multi-cluster files / LFN / subdirectories (v1 FAT is root + single cluster)
 
 ### Exit
 
-One alternate FS backend selectable by profile; workstation can boot with FAT for demo if desired.
+- [x] One alternate FS backend selectable by board/feature; `just test-fs` and `just test-fs-fat` green
+- [ ] Workstation optional FAT demo (stretch)
 
 ---
 

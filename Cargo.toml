@@ -26,6 +26,7 @@ members = [
     "userspace/crates/lerux-ipc",
     "userspace/crates/lerux-interface-types",
     "userspace/crates/lerux-fs",
+    "userspace/crates/lerux-fat",
     "userspace/pds/fs-server",
     "userspace/pds/fs-client",
     "userspace/pds/shell",

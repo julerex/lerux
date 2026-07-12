@@ -8,14 +8,20 @@ license = "MIT"
 workspace = true
 
 [features]
-board-qemu_virt_aarch64_fs = []
+default = []
+# Phase 44: alternate on-disk format behind the same FsRequest IPC.
+backend-lerux = []
+backend-fat = ["dep:lerux-fat"]
+board-qemu_virt_aarch64_fs = ["backend-lerux"]
+board-qemu_virt_aarch64_fs_fat = ["backend-fat"]
 workstation = []
-board-qemu_virt_aarch64_workstation = ["workstation"]
-board-rpi4b_4gb_workstation = ["workstation"]
+board-qemu_virt_aarch64_workstation = ["workstation", "backend-lerux"]
+board-rpi4b_4gb_workstation = ["workstation", "backend-lerux"]
 
 [dependencies]
 async-unsync = { version = "0.3.0", default-features = false }
 lerux-fs = { path = "../../crates/lerux-fs" }
+lerux-fat = { path = "../../crates/lerux-fat", optional = true }
 lerux-interface-types = { path = "../../crates/lerux-interface-types" }
 lerux-ipc = { path = "../../crates/lerux-ipc" }
 lerux-logging = { path = "../../crates/lerux-logging", features = ["server"] }

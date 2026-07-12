@@ -108,7 +108,8 @@ pub enum NetRequest {
         addr: [u8; 4],
         port: u16,
     },
-    /// Listen for inbound TCP (Phase 40 HTTP file browser). Mutually exclusive with TcpConnect.
+    /// Listen for inbound TCP (Phase 40 HTTP file browser).
+    /// Uses a dedicated listen socket so outbound TcpConnect can run concurrently (Phase 51).
     TcpListen {
         port: u16,
     },
@@ -122,6 +123,8 @@ pub enum NetRequest {
     TcpClose,
     /// Abandon a pending recv without closing sockets (client timeout).
     Abort,
+    /// Return current IPv4 configuration (static or DHCP). Non-blocking.
+    GetIface,
     Poll,
 }
 
@@ -512,6 +515,15 @@ pub enum NetResponse {
     Error,
     Ipv4 {
         addr: [u8; 4],
+    },
+    /// Current interface configuration ([`NetRequest::GetIface`]).
+    Iface {
+        addr: [u8; 4],
+        prefix: u8,
+        gateway: [u8; 4],
+        dns: [u8; 4],
+        /// True when the address came from DHCP (vs static fallback).
+        dhcp: bool,
     },
     UdpData {
         data_len: u8,

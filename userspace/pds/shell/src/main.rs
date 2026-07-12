@@ -433,6 +433,39 @@ fn fetch_demo(console: &mut SerialClient) {
     println(console, "fetch: error");
 }
 
+fn ip_cmd(console: &mut SerialClient) {
+    match call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::GetIface) {
+        Ok(NetResponse::Iface {
+            addr,
+            prefix,
+            gateway,
+            dns,
+            dhcp,
+        }) => {
+            let mode = if dhcp { "dhcp" } else { "static" };
+            let _ = writeln!(
+                ConsoleWriter(console),
+                "inet {}.{}.{}.{}/{} via {}.{}.{}.{} dns {}.{}.{}.{} ({})",
+                addr[0],
+                addr[1],
+                addr[2],
+                addr[3],
+                prefix,
+                gateway[0],
+                gateway[1],
+                gateway[2],
+                gateway[3],
+                dns[0],
+                dns[1],
+                dns[2],
+                dns[3],
+                mode
+            );
+        }
+        _ => println(console, "ip: unavailable"),
+    }
+}
+
 fn poll_net() -> NetResponse {
     loop {
         match call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::Poll) {
@@ -537,9 +570,10 @@ fn process_command(h: &mut HandlerImpl, line: &[u8]) {
         b"qos" => qos(&mut h.console),
         b"reboot" => reboot(&mut h.console),
         b"fetch" => fetch_demo(&mut h.console),
+        b"ip" | b"ifconfig" => ip_cmd(&mut h.console),
         b"help" => println(
             &mut h.console,
-            "commands: ls cat write mkdir rm mv cd pwd time ps top qos reboot fetch dmesg edit chat help",
+            "commands: ls cat write mkdir rm mv cd pwd ip time ps top qos reboot fetch dmesg edit chat help",
         ),
         b"echo" => {
             let rest = &line[4..];

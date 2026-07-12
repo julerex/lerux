@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-12 (Phase 50 FS v2 in progress: LERUXFS2 multi-sector + hierarchy shipped; FAT stretch deferred)
+Last updated: 2026-07-12 (Phase 51 net v2 core: DHCP + real DNS + dual TCP; TLS/RPi4 stretch open)
 
 ## Phase 1 — Bring-up
 
@@ -389,7 +389,7 @@ Service-class PD priorities and Microkit PPC rules; [`qos.md`](qos.md), [ADR-006
 
 `just bench` / `lerux bench`: echo RTT, blk IOPS, UDP TX PPS on QEMU; [`bench.md`](bench.md).
 
-## Phase 50 — Filesystem v2 (in progress)
+## Phase 50 — Filesystem v2 (core done)
 
 LERUXFS2 + hierarchical IPC (see [`plan-arch.md`](plan-arch.md) Phase 50 for full checklist).
 
@@ -400,16 +400,24 @@ LERUXFS2 + hierarchical IPC (see [`plan-arch.md`](plan-arch.md) Phase 50 for ful
 - [ ] FAT stretch: multi-cluster files / subdirs (still root-only single-cluster)
 - [ ] Optional NFS / host-backed FS
 
-## Phases 51–60 — Arch-level functionality (planned)
+## Phase 51 — Network stack v2 (core done)
 
-Roadmap to “about Arch Linux” **workflow** (not ABI): production net, HW closeout, shell/coreutils, config policy, package UX, multi-arch workstation, app catalog, optional hardening.
+- [x] DHCP client (smoltcp) with static fallback; log `lerux-net: dhcp ok` / `static`
+- [x] Real DNS socket; static `host`/`dns` aliases for smokes
+- [x] Dual TCP (client + listen); `NetRequest::GetIface` + shell `ip`
+- [x] Smokes: `just test-net`, `just test-fetch`, `just test-workstation`
+- [ ] TLS outbound / RPi4 GENET production path / multi-client op queue (stretch)
+
+## Phases 52–60 — Arch-level functionality (planned)
+
+Roadmap to “about Arch Linux” **workflow** (not ABI): HW closeout, shell/coreutils, config policy, package UX, multi-arch workstation, app catalog, optional hardening.
 
 Full checklist, priority order, and completion bar: **[`plan-arch.md`](plan-arch.md)**.
 
 | Phase | Theme | Status |
 |-------|--------|--------|
-| 50 | Filesystem v2 (multi-sector, dirs, unlink/rename) | in progress (core done; FAT/NFS stretch open) |
-| 51 | Network stack v2 (DHCP, DNS, multi-conn, TLS) | planned |
+| 50 | Filesystem v2 (multi-sector, dirs, unlink/rename) | core done (FAT/NFS stretch open) |
+| 51 | Network stack v2 (DHCP, DNS, multi-conn, TLS) | core done (TLS/RPi4 stretch open) |
 | 52 | Hardware closeout (RPi4 REPL gate + deploy) | planned |
 | 53 | Shell + core utilities | planned |
 | 54 | Config, secrets, boot policy | planned |
@@ -420,7 +428,7 @@ Full checklist, priority order, and completion bar: **[`plan-arch.md`](plan-arch
 | 59 | Multi-arch workstation profiles | planned |
 | 60 | Security posture (stretch) | planned |
 
-Near-term priority: finish **50** stretch if needed, then **52 → 51**, then 55 and 53.
+Near-term priority: **52 HW closeout**, then 55/53; TLS when needed.
 
 ## Version alignment
 

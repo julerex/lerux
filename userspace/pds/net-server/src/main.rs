@@ -52,8 +52,10 @@ fn init() -> HandlerImpl {
         mac.0[5],
     );
     let mut net_stack = net::NetStack::new(mac);
-    for _ in 0..2000 {
+    // DHCP / static fallback: each poll advances fake time (~20 ms).
+    for _ in 0..400 {
         net_stack.poll();
+        NET_DRIVER.notify();
     }
     log::info!("lerux-net: ready");
     HandlerImpl {
@@ -163,9 +165,19 @@ impl Handler for HandlerImpl {
                     send(NetResponse::Pending)
                 }
                 NetRequest::DnsResolve { name_len, name } => {
+                    // Static aliases complete immediately; real DNS is async (Phase 51).
+                    if !self.begin_async(channel) {
+                        return Ok(send(NetResponse::Pending));
+                    }
                     self.net.queue_dns_resolve(name_len, name);
-                    send(self.net.take_completed().unwrap_or(NetResponse::Pending))
+                    if let Some(resp) = self.net.take_completed() {
+                        self.finish_async();
+                        send(resp)
+                    } else {
+                        send(NetResponse::Pending)
+                    }
                 }
+                NetRequest::GetIface => send(self.net.iface_response()),
                 NetRequest::TcpConnect { addr, port } => {
                     if !self.begin_async(channel) {
                         return Ok(send(NetResponse::Pending));

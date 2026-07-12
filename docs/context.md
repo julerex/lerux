@@ -54,8 +54,8 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 **Serial virtualiser (Phase 42)**
 : On workstation, UART is owned by `serial-driver` (`device-only`); multi-client postcard RPC is served by `serial-virt` (PPC to the driver). Apps still use `SerialClient` / `SERIAL_DRIVER` channel consts (peer is `serial_virt`). See [ADR-002](decisions/002-serial-virtualiser.md).
 
-**Network topology (Phase 43)**
-: Untrusted apps use only `NetRequest` / `NetResponse` against `net-server`. On aarch64 virtio-net, **unified-dma** removes the separate client_dma MR: Hal + bounce share `virtio_net_driver_dma`; the stack maps the bounce half only. Apps never map net DMA. See [ADR-003](decisions/003-net-virtualiser.md), [`net-topology.md`](net-topology.md).
+**Network topology (Phase 43 / 51)**
+: Untrusted apps use only `NetRequest` / `NetResponse` against `net-server`. On aarch64 virtio-net, **unified-dma** removes the separate client_dma MR: Hal + bounce share `virtio_net_driver_dma`; the stack maps the bounce half only. Apps never map net DMA. See [ADR-003](decisions/003-net-virtualiser.md), [`net-topology.md`](net-topology.md). Phase 51: **DHCP** (with static fallback), **real DNS** (static `host`/`dns` aliases for smokes), dual TCP (client + listen), and `GetIface` / shell `ip`.
 
 **Filesystem backends (Phase 44 / 50)**
 : `fs-server` serves `FsRequest` / `FsResponse` over virtio-blk (or emmc2). Default on-disk format is **LERUXFS2** (`lerux-fs`): hierarchical directories, free-map allocation, multi-sector contiguous files (up to 16 KiB). IPC includes `Mkdir` / `Unlink` / `Rename` and path-scoped `ListDir`. Path grammar: `/`-separated components, optional leading `/`, max 48-byte paths (see `lerux-interface-types`). Alternate **FAT16** backend (`lerux-fat`, feature `backend-fat`) stays root-only, 8.3, single-cluster; hierarchy ops return `Error`. Select via board feature (`qemu_virt_aarch64_fs` vs `qemu_virt_aarch64_fs_fat`). Shell/edit/config stay on the same IPC.

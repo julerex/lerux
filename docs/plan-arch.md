@@ -93,22 +93,23 @@ Files large enough for configs, logs, and edit buffers without artificial 512 B 
 
 ---
 
-## Phase 51 — Network stack v2 (Arch: “networking just works”)
+## Phase 51 — Network stack v2 (Arch: “networking just works”) — core done
 
-**Why:** Arch has DHCP, real DNS, concurrent sockets, HTTPS-ish fetch. lerux has static QEMU addresses, static DNS map (`host`/`dns` → `10.0.2.2`), single-flight TCP, no TLS.
+**Why:** Arch has DHCP, real DNS, concurrent sockets, HTTPS-ish fetch. Pre-v2 lerux had static QEMU addresses, static DNS map only, single TCP socket.
 
 ### Steps
 
-- [ ] **DHCP client** in `net-server` (or config-driven static IP via `config-server`); apply on bring-up; shell/`config` show address.
-- [ ] **Real DNS** over UDP (beyond static table); cache; fail soft to static map for smokes.
-- [ ] **Multi-connection / multi-client** net: either multi-socket in one server or sDDF-style Rx/Tx virt + copy (stretch from ADR-003); allow shell fetch + `http-file-browser` concurrently.
+- [x] **DHCP client** in `net-server` (smoltcp `Dhcpv4Socket`); apply on bring-up; static fallback after timeout; shell `ip` / `GetIface` show address.
+- [x] **Real DNS** over smoltcp DNS socket; static map for `host`/`dns` still wins (deterministic smokes).
+- [x] **Dual TCP** sockets (client + listen) so outbound connect and inbound listen can coexist; exclusive async client lock remains for mid-op serialization.
 - [ ] **TLS** for outbound fetch (e.g. `rustls` + `webpki-roots` in a dedicated `tls-proxy` PD or net-server feature) — keep apps on cleartext IPC to the proxy if cert store is large.
 - [ ] RPi4 workstation: TCP+DNS+DHCP on GENET (today `fetch` is UDP-demo-only on HW).
 - [ ] Unified-dma / trust map on genet + x86 PCI (ADR-003 residual).
+- [ ] Full multi-client queue (shell fetch while http-fs TcpRecv pending without `Pending`).
 
 ### Exit
 
-`fetch https://…` (or TLS-terminated `fetch`) works on QEMU; RPi4 can reach a real host; smokes stay deterministic (DHCP mock or fixed QEMU DHCP).
+`fetch https://…` (or TLS-terminated `fetch`) works on QEMU; RPi4 can reach a real host; smokes stay deterministic (DHCP mock or fixed QEMU DHCP). **Partial:** DHCP+DNS+GetIface+dual TCP on QEMU; TLS/RPi4 remain open.
 
 ---
 
@@ -315,8 +316,8 @@ That is Arch’s **workflow and completeness**, reimplemented as static Microkit
 If capacity is limited, do **not** start with graphics or scripting runtimes:
 
 1. **Phase 50 FS v2 core** — done (LERUXFS2 + shell ops); optional FAT/NFS stretch later
-2. **Phase 52 HW closeout** — proves the stack outside QEMU
-3. **Phase 51 Net v2** (DHCP/DNS, then TLS) — makes the machine useful on a LAN
+2. **Phase 51 Net v2 core** — done (DHCP + DNS + dual TCP); TLS/RPi4 stretch later
+3. **Phase 52 HW closeout** — proves the stack outside QEMU
 
 Then **55 package UX** and **53 shell** turn the stack into something that feels administerable day to day.
 

@@ -33,4 +33,12 @@ sel4-microkit-driver-adapters = { workspace = true }
 sel4-shared-memory = { workspace = true }
 sel4-shared-ring-buffer = { workspace = true }
 sel4-shared-ring-buffer-smoltcp = { workspace = true }
-smoltcp = { workspace = true, features = ["medium-ethernet", "proto-ipv4", "socket-udp", "socket-tcp"] }
+smoltcp = { workspace = true, features = [
+    "medium-ethernet",
+    "proto-ipv4",
+    "proto-dhcpv4",
+    "socket-udp",
+    "socket-tcp",
+    "socket-dhcpv4",
+    "socket-dns",
+] }

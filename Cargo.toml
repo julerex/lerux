@@ -4,6 +4,8 @@ members = [
     "tools/lerux-cli",
     "userspace/pds/hello",
     "userspace/pds/serial-driver",
+    "userspace/pds/serial-virt",
+    "userspace/crates/lerux-serial-queue",
     "userspace/pds/echo-server",
     "userspace/pds/echo-client",
     "userspace/pds/blk-server",

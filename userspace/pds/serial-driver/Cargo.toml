@@ -10,6 +10,8 @@ workspace = true
 [features]
 multi-client-2 = []
 multi-client-3 = []
+# Phase 42: UART + queues only; clients use serial-virt.
+device-only = ["dep:lerux-serial-queue"]
 board-qemu_virt_aarch64 = ["sel4-pl011-driver"]
 board-qemu_virt_aarch64_virtio = ["board-qemu_virt_aarch64"]
 board-qemu_virt_aarch64_echo = ["board-qemu_virt_aarch64", "multi-client-2"]
@@ -24,7 +26,7 @@ board-qemu_virt_aarch64_blk = ["board-qemu_virt_aarch64"]
 board-qemu_virt_aarch64_net = ["board-qemu_virt_aarch64"]
 board-qemu_virt_aarch64_fetch = ["board-qemu_virt_aarch64"]
 board-qemu_virt_aarch64_fs = ["board-qemu_virt_aarch64"]
-board-qemu_virt_aarch64_workstation = ["board-qemu_virt_aarch64", "multi-client-3"]
+board-qemu_virt_aarch64_workstation = ["board-qemu_virt_aarch64", "device-only"]
 board-qemu_virt_riscv64 = []
 board-qemu_virt_riscv64_echo = ["board-qemu_virt_riscv64", "multi-client-2"]
 board-qemu_virt_riscv64_virtio = ["board-qemu_virt_riscv64"]
@@ -41,10 +43,11 @@ board-x86_64_generic_net = ["board-x86_64_generic"]
 board-rpi4b_4gb = ["board-qemu_virt_aarch64"]
 board-rpi4b_4gb_net = ["board-rpi4b_4gb"]
 board-rpi4b_4gb_blk = ["board-rpi4b_4gb"]
-board-rpi4b_4gb_workstation = ["board-rpi4b_4gb", "multi-client-3"]
+board-rpi4b_4gb_workstation = ["board-rpi4b_4gb", "device-only"]
 
 [dependencies]
 lerux-logging = { path = "../../crates/lerux-logging" }
+lerux-serial-queue = { path = "../../crates/lerux-serial-queue", optional = true }
 log = { workspace = true }
 sel4 = { workspace = true }
 sel4-microkit = { workspace = true }

@@ -1,0 +1,11 @@
+[package]
+name = "lerux-serial-queue"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "sDDF-shaped SPSC serial byte queues (no_std) for lerux serial virt"
+
+[lints]
+workspace = true
+
+[dependencies]

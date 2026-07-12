@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <system>
     <memory_region name="serial_mmio" size="0x1_000" phys_addr="{serial_mmio_phys_addr}" />
+    <!-- Phase 42: sDDF-shaped serial queues (driver ↔ virt only; no client maps). -->
+    <memory_region name="serial_tx_queue" size="0x1000" />
+    <memory_region name="serial_tx_data" size="0x1000" />
+    <memory_region name="serial_rx_queue" size="0x1000" />
+    <memory_region name="serial_rx_data" size="0x1000" />
     <memory_region name="pl031_mmio" size="0x1000" phys_addr="{pl031_mmio_phys_addr}" />
     <memory_region name="sp804_mmio" size="0x1000" phys_addr="{sp804_mmio_phys_addr}" />
     <memory_region name="virtio_mmio" size="0x1000" phys_addr="{virtio_mmio_phys_addr}" />
@@ -20,7 +25,19 @@
     <protection_domain name="serial_driver" priority="10" stack_size="0x10_000">
         <program_image path="serial-driver.elf" />
         <map mr="serial_mmio" vaddr="0x2_000_000" perms="rw" setvar_vaddr="serial_register_block" />
+        <map mr="serial_tx_queue" vaddr="0x2_001_000" perms="rw" setvar_vaddr="serial_tx_queue" />
+        <map mr="serial_tx_data" vaddr="0x2_002_000" perms="rw" setvar_vaddr="serial_tx_data" />
+        <map mr="serial_rx_queue" vaddr="0x2_003_000" perms="rw" setvar_vaddr="serial_rx_queue" />
+        <map mr="serial_rx_data" vaddr="0x2_004_000" perms="rw" setvar_vaddr="serial_rx_data" />
         <irq irq="{serial_irq}" id="0" />
+    </protection_domain>
+
+    <protection_domain name="serial_virt" priority="9" stack_size="0x10_000">
+        <program_image path="serial-virt.elf" />
+        <map mr="serial_tx_queue" vaddr="0x3_001_000" perms="rw" setvar_vaddr="serial_tx_queue" />
+        <map mr="serial_tx_data" vaddr="0x3_002_000" perms="rw" setvar_vaddr="serial_tx_data" />
+        <map mr="serial_rx_queue" vaddr="0x3_003_000" perms="rw" setvar_vaddr="serial_rx_queue" />
+        <map mr="serial_rx_data" vaddr="0x3_004_000" perms="rw" setvar_vaddr="serial_rx_data" />
     </protection_domain>
 
     <protection_domain name="pl031_driver" priority="7" stack_size="0x10_000">

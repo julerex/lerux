@@ -24,31 +24,39 @@ pds = [
   "log-server",
   "config-server",
   "serial-driver",
+  "serial-virt",
   "genet-driver",
   "emmc2-driver",
 ]
-description = "RPi4 workstation: supervisor + FS + net + shell + Phase 40 apps"
+description = "RPi4 workstation: supervisor + FS + net + shell + Phase 40 apps (serial virt)"
 
 default_board = "rpi4b_4gb_workstation"
 
 [[channel]]
-name = "shell_serial"
+name = "driver_virt"
 ends = [
   { pd = "serial_driver", id = 1 },
+  { pd = "serial_virt", id = 0 },
+]
+
+[[channel]]
+name = "shell_serial"
+ends = [
+  { pd = "serial_virt", id = 1 },
   { pd = "shell", id = 0, pp = true },
 ]
 
 [[channel]]
 name = "supervisor_serial"
 ends = [
-  { pd = "serial_driver", id = 2 },
+  { pd = "serial_virt", id = 2 },
   { pd = "supervisor", id = 0, pp = true },
 ]
 
 [[channel]]
 name = "log_serial"
 ends = [
-  { pd = "serial_driver", id = 3 },
+  { pd = "serial_virt", id = 3 },
   { pd = "log_server", id = 0, pp = true },
 ]
 

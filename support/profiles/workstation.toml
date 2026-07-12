@@ -16,33 +16,42 @@ pds = [
   "log-server",
   "config-server",
   "serial-driver",
+  "serial-virt",
   "pl031-driver",
   "sp804-driver",
   "virtio-blk-driver",
   "virtio-net-driver",
 ]
-description = "Supervisor + FS + net + shell + edit/chat/http-fs apps"
+description = "Supervisor + FS + net + shell + edit/chat/http-fs apps (serial virt Phase 42)"
 
 default_board = "qemu_virt_aarch64_workstation"
+
+# Phase 42: clients → serial_virt; driver ↔ virt queues + notify.
+[[channel]]
+name = "driver_virt"
+ends = [
+  { pd = "serial_driver", id = 1 },
+  { pd = "serial_virt", id = 0 },
+]
 
 [[channel]]
 name = "shell_serial"
 ends = [
-  { pd = "serial_driver", id = 1 },
+  { pd = "serial_virt", id = 1 },
   { pd = "shell", id = 0, pp = true },
 ]
 
 [[channel]]
 name = "supervisor_serial"
 ends = [
-  { pd = "serial_driver", id = 2 },
+  { pd = "serial_virt", id = 2 },
   { pd = "supervisor", id = 0, pp = true },
 ]
 
 [[channel]]
 name = "log_serial"
 ends = [
-  { pd = "serial_driver", id = 3 },
+  { pd = "serial_virt", id = 3 },
   { pd = "log_server", id = 0, pp = true },
 ]
 

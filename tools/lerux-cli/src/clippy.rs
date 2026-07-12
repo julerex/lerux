@@ -36,7 +36,19 @@ const AARCH64_CRATES: &[ClippyCrate<'_>] = &[
     },
     ClippyCrate {
         name: "serial-driver",
+        feature: Some("board-qemu_virt_aarch64_workstation"),
+    },
+    ClippyCrate {
+        name: "serial-driver",
         feature: Some("board-rpi4b_4gb"),
+    },
+    ClippyCrate {
+        name: "serial-virt",
+        feature: Some("board-qemu_virt_aarch64_workstation"),
+    },
+    ClippyCrate {
+        name: "lerux-serial-queue",
+        feature: None,
     },
     ClippyCrate {
         name: "supervisor",

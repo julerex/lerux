@@ -1,11 +1,18 @@
 #![no_std]
 #![no_main]
 
+#[cfg(not(feature = "device-only"))]
 mod handler;
 
+#[cfg(feature = "device-only")]
+mod device;
+
+#[cfg(not(feature = "device-only"))]
 use handler::HandlerImpl;
 use lerux_logging::{debug, log};
-use sel4_microkit::{protection_domain, Channel, Handler};
+#[cfg(not(feature = "device-only"))]
+use sel4_microkit::Channel;
+use sel4_microkit::{protection_domain, Handler};
 
 #[cfg(feature = "board-qemu_virt_aarch64")]
 use sel4_microkit::memory_region_symbol;
@@ -23,27 +30,36 @@ mod ns16550_mmio;
 use ns16550_mmio::Driver as Ns16550MmioDriver;
 
 // Channel 0: IRQ notification (<irq id="0">).
+#[cfg(not(feature = "device-only"))]
 const DEVICE: Channel = Channel::new(0);
 
-#[cfg(not(any(feature = "multi-client-2", feature = "multi-client-3")))]
+#[cfg(not(any(
+    feature = "multi-client-2",
+    feature = "multi-client-3",
+    feature = "device-only"
+)))]
 const CLIENTS: [Channel; 1] = [Channel::new(1)];
 
-#[cfg(feature = "multi-client-2")]
+#[cfg(all(feature = "multi-client-2", not(feature = "device-only")))]
 const CLIENTS: [Channel; 2] = [Channel::new(1), Channel::new(2)];
 
-#[cfg(feature = "multi-client-3")]
+#[cfg(all(feature = "multi-client-3", not(feature = "device-only")))]
 const CLIENTS: [Channel; 3] = [Channel::new(1), Channel::new(2), Channel::new(3)];
 
-#[cfg(not(any(feature = "multi-client-2", feature = "multi-client-3")))]
+#[cfg(not(any(
+    feature = "multi-client-2",
+    feature = "multi-client-3",
+    feature = "device-only"
+)))]
 type SerialHandler<D> = HandlerImpl<D, 1>;
 
-#[cfg(feature = "multi-client-2")]
+#[cfg(all(feature = "multi-client-2", not(feature = "device-only")))]
 type SerialHandler<D> = HandlerImpl<D, 2>;
 
-#[cfg(feature = "multi-client-3")]
+#[cfg(all(feature = "multi-client-3", not(feature = "device-only")))]
 type SerialHandler<D> = HandlerImpl<D, 3>;
 
-#[cfg(feature = "board-qemu_virt_aarch64")]
+#[cfg(all(feature = "board-qemu_virt_aarch64", not(feature = "device-only")))]
 #[protection_domain]
 fn init() -> impl Handler {
     debug::init().unwrap();
@@ -51,6 +67,17 @@ fn init() -> impl Handler {
     let driver =
         unsafe { Pl011Driver::new(memory_region_symbol!(serial_register_block: *mut ()).as_ptr()) };
     SerialHandler::new(driver, DEVICE, CLIENTS)
+}
+
+#[cfg(all(feature = "board-qemu_virt_aarch64", feature = "device-only"))]
+#[protection_domain]
+fn init() -> impl Handler {
+    debug::init().unwrap();
+    log::info!("serial driver: PL011 (device-only → serial-virt)");
+    let driver =
+        unsafe { Pl011Driver::new(memory_region_symbol!(serial_register_block: *mut ()).as_ptr()) };
+    // SAFETY: queue MRs shared with serial-virt in workstation system description.
+    unsafe { device::DeviceHandler::new(driver) }
 }
 
 #[cfg(feature = "board-x86_64_generic")]

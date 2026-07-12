@@ -179,10 +179,11 @@ mod tests {
     }
 
     #[test]
-    fn workstation_composed_has_26_channels() {
+    fn workstation_composed_has_27_channels() {
         let root = repo_root();
         let generated = render_system(&root, "qemu_virt_aarch64_workstation").expect("gen");
-        assert_eq!(generated.matches("<channel>").count(), 26);
+        // 26 app/service edges + driver↔virt notify (Phase 42).
+        assert_eq!(generated.matches("<channel>").count(), 27);
         assert!(generated.contains("protection_domain name=\"shell\""));
         assert!(generated.contains("serial_mmio"));
         // Placeholder substitution for aarch64 virt UART.
@@ -213,7 +214,9 @@ mod tests {
             "workstation template must not dual-maintain channels"
         );
         let composed = render_system(&root, "qemu_virt_aarch64_workstation").unwrap();
-        assert_eq!(composed.matches("<channel>").count(), 26);
+        assert_eq!(composed.matches("<channel>").count(), 27);
+        assert!(composed.contains("serial_virt"));
+        assert!(composed.contains("serial_tx_queue"));
     }
 
     #[test]

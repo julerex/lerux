@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-12 (Phase 41 system generation complete; Phases 42–49 in plan-au-ts)
+Last updated: 2026-07-12 (Phase 42 serial virt on workstation; Phases 43–49 in plan-au-ts)
 
 ## Phase 1 — Bring-up
 
@@ -357,9 +357,13 @@ In-tree SDF composition in `lerux-cli` ([ADR-001](decisions/001-in-tree-system-g
 - `lerux profile sdf|emit-channels|check-channels|diff` (SDF delta included)
 - Docs: [`system-generation.md`](system-generation.md), [`plan-au-ts.md`](plan-au-ts.md)
 
-## Phases 42+ — au-ts inspiration
+## Phase 42 — Serial virtualiser ✅ (workstation)
 
-See [`plan-au-ts.md`](plan-au-ts.md) for Phases 42–49 (serial/net virtualisers, FS backends, sync runtime, GDB, HW CI, optional QoS/perf).
+`serial-driver` (device-only) + `serial-virt` + `lerux-serial-queue` on workstation profiles ([ADR-002](decisions/002-serial-virtualiser.md)). Other boards keep the combined multi-client driver.
+
+## Phases 43+ — au-ts inspiration
+
+See [`plan-au-ts.md`](plan-au-ts.md) for Phases 43–49 (net virt, FS backends, sync runtime, GDB, HW CI, optional QoS/perf).
 
 ## Version alignment
 

@@ -236,6 +236,9 @@ fn peer_aliases(actual: &str, expected: &str) -> bool {
             | ("virtio_blk_driver", "emmc2_driver")
             | ("genet_driver", "virtio_net_driver")
             | ("virtio_net_driver", "genet_driver")
+            // Phase 42: clients still name SERIAL_DRIVER but peer is serial_virt.
+            | ("serial_virt", "serial_driver")
+            | ("serial_driver", "serial_virt")
     )
 }
 

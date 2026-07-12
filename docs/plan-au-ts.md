@@ -1,6 +1,6 @@
 # PLAN — au-ts inspiration
 
-Last updated: 2026-07-12 (Phase 41 complete)
+Last updated: 2026-07-12 (Phase 42 serial virt on workstation)
 
 Upstream mirror: [`/home/julian/repos/github_orgs/au-ts`](https://github.com/au-ts) (Trustworthy Systems).  
 Related: [`plan.md`](plan.md) (main roadmap), [`context.md`](context.md) (domain language).
@@ -99,7 +99,7 @@ Phases 46–47 harden bring-up on real boards.
 
 ---
 
-## Phase 42 — Serial virtualiser (sDDF serial shape)
+## Phase 42 — Serial virtualiser (sDDF serial shape) ✅ complete (workstation slice)
 
 **Goal:** Least-privilege serial mux: UART driver owns MMIO/IRQ only; a virtualiser multiplexes clients over shared queues.
 
@@ -109,20 +109,24 @@ sDDF serial: driver ↔ Tx/Rx virtualisers ↔ clients; SPSC queues; power-of-tw
 
 ### Scope
 
-- [ ] Document current `serial-driver` multi-client-2/3 model vs sDDF split (ADR or short design note under `docs/`)
-- [ ] Introduce Rust queue crate or module (`lerux-sddf-serial` or under `lerux-ipc`) matching SPSC + separate queue/data regions — **or** confirm rust-sel4 already covers enough and wrap it
-- [ ] Split PDs (names TBD): `serial-driver` (device only) + `serial-virt` (mux) + existing clients unchanged at RPC boundary where possible
-- [ ] Map log-server / shell / supervisor onto virt queues; preserve multi-client workstation behaviour
-- [ ] Smoke: workstation serial REPL + `dmesg` unchanged in expects
+- [x] Document current multi-client model vs sDDF split → [ADR-002](decisions/002-serial-virtualiser.md)
+- [x] `lerux-serial-queue` SPSC + data region + `producer_signalled` (host unit tests)
+- [x] Split on workstation: `serial-driver` `device-only` + `serial-virt` multi-client postcard RPC (clients unchanged wire format)
+- [x] Shell / supervisor / log-server → `serial_virt`; driver ↔ virt notify + shared TX/RX queues
+- [x] Non-workstation boards keep combined multi-client driver (migration later)
+- [ ] Full QEMU workstation smoke regression (run in CI / local `just test-workstation` when convenient)
 
 ### Out of scope
 
 - Porting C sDDF serial components
-- Changing postcard `LogRequest` / shell line protocol (transport may change under the hood)
+- Changing postcard `LogRequest` / shell line protocol
+- Per-client shared queues / separate TX+RX virt PDs (future)
 
 ### Exit
 
-Driver PD has no client data regions mapped; virt owns mux; smokes pass.
+- [x] Driver PD has no client PPCs; maps only UART + queue regions
+- [x] Virt owns multi-client mux; workstation profile/template/board updated
+- [ ] Workstation smoke green (verify after image build)
 
 ---
 

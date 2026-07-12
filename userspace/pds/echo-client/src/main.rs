@@ -17,6 +17,8 @@ const ECHO_SERVER: Channel = Channel::new(1);
 fn init() -> HandlerImpl {
     serial::init(SERIAL_DRIVER).unwrap();
     probe_echo();
+    #[cfg(feature = "bench")]
+    bench_echo();
     HandlerImpl
 }
 
@@ -32,6 +34,22 @@ fn probe_echo() {
         "lerux-echo: {}",
         str::from_utf8(text).unwrap_or("<invalid utf-8>")
     );
+}
+
+/// Phase 49: N Ping PPCs; host times wall-clock between start/done lines.
+#[cfg(feature = "bench")]
+fn bench_echo() {
+    const WARMUP: u32 = 32;
+    const N: u32 = 1_000;
+    for _ in 0..WARMUP {
+        let _ = call::<EchoRequest, EchoResponse>(ECHO_SERVER, EchoRequest::Ping).unwrap();
+    }
+    log::info!("lerux-bench: echo start n={N}");
+    for _ in 0..N {
+        let pong = call::<EchoRequest, EchoResponse>(ECHO_SERVER, EchoRequest::Ping).unwrap();
+        assert!(matches!(pong, EchoResponse::Pong));
+    }
+    log::info!("lerux-bench: echo done n={N}");
 }
 
 struct HandlerImpl;

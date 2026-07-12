@@ -11,6 +11,7 @@ workspace = true
 board-qemu_virt_aarch64_virtio = []
 board-qemu_virt_aarch64_composed = []
 board-qemu_virt_aarch64_blk = []
+board-qemu_virt_aarch64_bench_blk = []
 board-qemu_virt_aarch64_fs = []
 board-qemu_virt_aarch64_fs_fat = []
 board-qemu_virt_aarch64_blk_composed = []

@@ -11,6 +11,7 @@ workspace = true
 # Phase 43: bounce is high half of driver_dma (shared MR with driver).
 unified-dma = []
 board-qemu_virt_aarch64_net = ["unified-dma"]
+board-qemu_virt_aarch64_bench_net = ["unified-dma"]
 board-qemu_virt_aarch64_fetch = ["unified-dma"]
 board-qemu_virt_aarch64_net_composed = ["unified-dma"]
 workstation = []

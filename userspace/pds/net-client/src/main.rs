@@ -38,6 +38,30 @@ fn probe_net() {
         | NetResponse::TcpData { .. }
         | NetResponse::UdpData { .. } => panic!("net TX failed"),
     }
+
+    #[cfg(feature = "bench")]
+    bench_udp_tx();
+}
+
+/// Phase 49: N UdpTx+Poll completions; host times wall-clock between start/done.
+#[cfg(feature = "bench")]
+fn bench_udp_tx() {
+    const WARMUP: u32 = 16;
+    const N: u32 = 200;
+    for _ in 0..WARMUP {
+        let _ = call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::udp_tx(b"b")).unwrap();
+        let _ = poll_net();
+    }
+    log::info!("lerux-bench: udp_tx start n={N}");
+    for _ in 0..N {
+        let pending =
+            call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::udp_tx(b"b")).unwrap();
+        assert!(matches!(pending, NetResponse::Pending | NetResponse::Ok));
+        if matches!(pending, NetResponse::Pending) {
+            assert!(matches!(poll_net(), NetResponse::Ok));
+        }
+    }
+    log::info!("lerux-bench: udp_tx done n={N}");
 }
 
 #[cfg(feature = "composed-sync")]

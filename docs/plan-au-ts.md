@@ -299,7 +299,7 @@ LionsOS `components/fs/fat`, `components/fs/nfs`, `examples/fileio`.
 
 ---
 
-## Phase 49 — Performance baselines (optional)
+## Phase 49 — Performance baselines (optional) ✅
 
 **Goal:** Know whether Rust ring + postcard paths are in the same ballpark as sDDF/LionsOS anecdotes.
 
@@ -309,13 +309,13 @@ LionsOS `components/fs/fat`, `components/fs/nfs`, `examples/fileio`.
 
 ### Scope
 
-- [ ] Host-driven microbench profile: echo RTT, blk read IOPS, UDP PPS on QEMU
-- [ ] Record numbers in `docs/` (table + qemu version / CPU)
-- [ ] Optional: compare against a pinned sDDF example build *outside* this repo (script in `tools/`, not vendored tree)
+- [x] Host-driven microbench: echo RTT, blk read IOPS, UDP TX PPS on QEMU aarch64 (`bench_*` boards + `lerux-bench-time`)
+- [x] Record numbers: `just bench` → `build/bench/bench-results.{md,json}` + `docs/bench-results.latest.md`
+- [x] Optional external sDDF compare: documented as out-of-tree only ([`docs/bench.md`](bench.md))
 
 ### Exit
 
-Reproducible `just bench` (or `lerux bench`) producing a markdown or JSON summary.
+- [x] Reproducible `just bench` / `lerux bench` producing markdown + JSON summary
 
 ---
 

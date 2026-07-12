@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-12 (Phase 48 workstation QoS; Phase 49 in plan-au-ts)
+Last updated: 2026-07-12 (Phase 49 perf baselines; au-ts phases 41–49 complete)
 
 ## Phase 1 — Bring-up
 
@@ -383,11 +383,11 @@ Microkit hierarchy fault parent + crash child (`just test-debug`); QEMU gdbstub 
 
 ## Phase 48 — Workstation QoS ✅
 
-Service-class PD priorities (shell interactive above bulk); [`qos.md`](qos.md), [ADR-006](decisions/006-workstation-qos.md).
+Service-class PD priorities and Microkit PPC rules; [`qos.md`](qos.md), [ADR-006](decisions/006-workstation-qos.md).
 
-## Phases 49+ — au-ts inspiration
+## Phase 49 — Performance baselines ✅
 
-See [`plan-au-ts.md`](plan-au-ts.md) for Phase 49 (optional perf baselines).
+`just bench` / `lerux bench`: echo RTT, blk IOPS, UDP TX PPS on QEMU; [`bench.md`](bench.md).
 
 ## Version alignment
 

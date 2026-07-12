@@ -13,6 +13,7 @@ use crate::{
 const BOARD_FEATURE_CRATES: &[&str] = &[
     "hello",
     "echo-server",
+    "echo-client",
     "http-server",
     "supervisor",
     "blk-server",

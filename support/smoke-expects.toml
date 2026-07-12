@@ -25,6 +25,33 @@ expects = ["lerux: Hello from Rust on seL4 Microkit!"]
 [boards.qemu_virt_aarch64_echo]
 expects = ["echo-server ready", "lerux-echo: pong", "lerux-echo: lerux"]
 
+[boards.qemu_virt_aarch64_bench_echo]
+timeout_secs = 90
+expects = [
+  "echo-server ready",
+  "lerux-echo: pong",
+  "lerux-bench: echo start",
+  "lerux-bench: echo done",
+]
+
+[boards.qemu_virt_aarch64_bench_blk]
+timeout_secs = 120
+expects = [
+  "lerux-blk: ready",
+  "lerux-blk: write round-trip ok",
+  "lerux-bench: blk_read start",
+  "lerux-bench: blk_read done",
+]
+
+[boards.qemu_virt_aarch64_bench_net]
+timeout_secs = 120
+expects = [
+  "lerux-net: ready",
+  "lerux-net: IPC ok",
+  "lerux-bench: udp_tx start",
+  "lerux-bench: udp_tx done",
+]
+
 [boards.qemu_virt_riscv64_echo]
 expects = ["echo-server ready", "lerux-echo: pong", "lerux-echo: lerux"]
 

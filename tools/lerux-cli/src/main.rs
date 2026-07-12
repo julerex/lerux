@@ -1,3 +1,4 @@
+mod bench;
 mod board;
 mod build;
 mod build_sdk;
@@ -118,6 +119,16 @@ enum Commands {
         build_dir: String,
         #[arg(long, default_value = "debug")]
         config: String,
+    },
+    /// Phase 49: run echo/blk/net microbenches on QEMU; write md+json summary.
+    Bench {
+        #[arg(long, default_value = "build")]
+        build_dir: String,
+        #[arg(long, default_value = "debug")]
+        config: String,
+        /// Output directory (default: `{build_dir}/bench`).
+        #[arg(long)]
+        out_dir: Option<PathBuf>,
     },
     TcpEcho {
         #[arg(default_value_t = 18080)]
@@ -307,6 +318,13 @@ fn main() -> Result<()> {
         }
         Commands::TestAll { build_dir, config } => {
             build::test_all(&root, &build_dir, &config)?;
+        }
+        Commands::Bench {
+            build_dir,
+            config,
+            out_dir,
+        } => {
+            bench::run_bench(&root, &build_dir, &config, out_dir.as_deref())?;
         }
         Commands::TcpEcho { port } => tcp_echo::tcp_echo(port)?,
         Commands::HttpOne { port } => http_one::http_one(port)?,

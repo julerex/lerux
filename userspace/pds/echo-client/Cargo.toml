@@ -7,6 +7,13 @@ license = "MIT"
 [lints]
 workspace = true
 
+[features]
+bench = []
+board-qemu_virt_aarch64_echo = []
+board-qemu_virt_aarch64_bench_echo = ["bench"]
+board-qemu_virt_riscv64_echo = []
+board-x86_64_generic_echo = []
+
 [dependencies]
 lerux-ipc = { path = "../../crates/lerux-ipc" }
 lerux-interface-types = { path = "../../crates/lerux-interface-types" }

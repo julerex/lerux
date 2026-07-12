@@ -88,6 +88,37 @@ pds = ["echo-client", "echo-server", "serial-driver"]
 qemu = "aarch64"
 system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33 }
 
+# Phase 49: same layouts as echo/blk/net with guest microbench instrumentation.
+[qemu_virt_aarch64_bench_echo]
+arch = "aarch64"
+microkit_board = "qemu_virt_aarch64"
+target = "aarch64-sel4-microkit"
+target_triple = "aarch64-sel4-microkit"
+template = "echo.system.template"
+pds = ["echo-client", "echo-server", "serial-driver"]
+qemu = "aarch64"
+system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33 }
+
+[qemu_virt_aarch64_bench_blk]
+arch = "aarch64"
+microkit_board = "qemu_virt_aarch64"
+target = "aarch64-sel4-microkit"
+target_triple = "aarch64-sel4-microkit"
+template = "blk.system.template"
+pds = ["blk-client", "blk-server", "serial-driver", "virtio-blk-driver"]
+qemu = "aarch64_blk"
+system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_blk_irq = 78 }
+
+[qemu_virt_aarch64_bench_net]
+arch = "aarch64"
+microkit_board = "qemu_virt_aarch64"
+target = "aarch64-sel4-microkit"
+target_triple = "aarch64-sel4-microkit"
+template = "net.system.template"
+pds = ["net-client", "net-server", "serial-driver", "virtio-net-driver"]
+qemu = "aarch64_net"
+system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_net_irq = 79 }
+
 # Phase 46: parent debug-handler + child crash-demo (Microkit hierarchy faults).
 [qemu_virt_aarch64_debug]
 arch = "aarch64"

@@ -208,6 +208,12 @@ test-http-composed:
 test-all:
     {{lerux}} test-all --build-dir {{build_dir}} --config {{config}}
 
+# Phase 49: microbenches (echo RTT, blk IOPS, UDP TX PPS) on QEMU aarch64
+# Writes build/bench/bench-results.{md,json} and docs/bench-results.latest.md
+bench:
+    just disk-img
+    {{lerux}} bench --build-dir {{build_dir}} --config {{config}}
+
 # Disk image for virtio-blk QEMU device (MBR boot signature at bytes 510–511)
 disk-img:
     {{lerux}} disk-img

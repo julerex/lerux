@@ -8,7 +8,9 @@ license = "MIT"
 workspace = true
 
 [features]
+bench = []
 board-qemu_virt_aarch64_net = []
+board-qemu_virt_aarch64_bench_net = ["bench"]
 board-qemu_virt_aarch64_net_composed = ["composed-sync"]
 board-qemu_virt_aarch64_ipc_composed = ["composed-sync"]
 board-qemu_virt_riscv64_net = []

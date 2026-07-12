@@ -77,6 +77,24 @@ fn probe_blk() {
         "write round-trip mismatch"
     );
     log::info!("lerux-blk: write round-trip ok");
+
+    #[cfg(feature = "bench")]
+    bench_blk_read();
+}
+
+/// Phase 49: N sector reads; host times wall-clock between start/done lines.
+#[cfg(feature = "bench")]
+fn bench_blk_read() {
+    const WARMUP: u32 = 16;
+    const N: u32 = 500;
+    for _ in 0..WARMUP {
+        let _ = read_sector(0);
+    }
+    log::info!("lerux-bench: blk_read start n={N}");
+    for _ in 0..N {
+        let _ = read_sector(0);
+    }
+    log::info!("lerux-bench: blk_read done n={N}");
 }
 
 #[cfg(feature = "composed-sync")]

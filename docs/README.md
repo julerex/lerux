@@ -19,6 +19,8 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [debug.md](debug.md) | Phase 46: `test-debug` + gdb-multiarch workflow |
 | [qos.md](qos.md) | Phase 48: workstation service classes / PD priorities |
 | [decisions/006-workstation-qos.md](decisions/006-workstation-qos.md) | ADR-006: priority policy |
+| [bench.md](bench.md) | Phase 49: microbench methodology |
+| [bench-results.latest.md](bench-results.latest.md) | Latest `just bench` snapshot (regenerated) |
 | [net-topology.md](net-topology.md) | NIC / net-server / app channel map |
 | [boards.md](boards.md) | Board names, PDs, QEMU profiles; [RPi4 workstation HW gate](boards.md#rpi4-workstation-manual-hw-gate-phase-39) |
 | [ci.md](ci.md) | GitHub Actions pipeline, caches, troubleshooting |

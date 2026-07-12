@@ -25,12 +25,12 @@ lerux keeps **typed postcard RPC** for apps (`SerialClient` / `lerux_logging::se
 
 ## Decision
 
-1. Introduce **`lerux-serial-queue`**: power-of-two SPSC byte queue + separate data region + `producer_signalled` (sDDF-shaped, pure Rust).
+1. Introduce **`lerux-serial-queue`**: power-of-two SPSC byte queue + `producer_signalled` (sDDF-shaped, pure Rust; host-tested; ready for a later queue-backed transport).
 2. Split on **workstation** profiles first:
-   - **`serial-driver`** (`device-only` feature): UART only; TX/RX queues shared with virt; notify channel to virt.
-   - **`serial-virt`**: multi-client postcard RPC (same wire protocol as today’s driver handler); drains TX queue to driver, RX to clients.
+   - **`serial-driver`** (`device-only` feature): UART MMIO/IRQ only; **single** client channel to `serial-virt` (same postcard serial RPC as before).
+   - **`serial-virt`**: multi-client postcard RPC for apps; each request is forwarded to the driver over a protected channel.
 3. Leave non-workstation boards on the combined multi-client driver until a later migration.
-4. Do **not** require per-client shared queues for v1 — virt keeps the existing RPC boundary so shell/log/supervisor need no source changes beyond channel peer rename in the profile.
+4. v1 uses **PPC passthrough** virt→driver (not shared queues yet) so TX stays synchronous like the pre-split driver and avoids init-time livelocks. Queue transport can replace the passthrough without changing the app RPC boundary.
 
 ## Alternatives considered
 

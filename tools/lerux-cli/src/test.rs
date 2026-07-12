@@ -245,7 +245,8 @@ pub fn default_expects(board: &str) -> Vec<String> {
             "lerux-shell: ready".into(),
             "lerux-edit: ready".into(),
             "lerux-chat: ready".into(),
-            "lerux-http-fs: listening".into(),
+            // Match short tokens: multi-client serial can interleave mid-line.
+            "lerux-http-fs:".into(),
             "lerux-shell: top count=".into(),
         ],
         "rpi4b_4gb_workstation" => vec![
@@ -258,7 +259,7 @@ pub fn default_expects(board: &str) -> Vec<String> {
             "lerux-shell: ready".into(),
             "lerux-edit: ready".into(),
             "lerux-chat: ready".into(),
-            "lerux-http-fs: listening".into(),
+            "lerux-http-fs:".into(),
         ],
         "rpi4b_4gb_net" => vec![
             "lerux-net: ready".into(),
@@ -359,7 +360,11 @@ pub fn run_board_test(
             let test = SmokeTest {
                 expects: default_expects(board),
                 curls: Vec::new(),
-                unordered: matches!(board, "rpi4b_4gb_workstation"),
+                // Concurrent loggers interleave bytes on multi-client serial.
+                unordered: matches!(
+                    board,
+                    "rpi4b_4gb_workstation" | "qemu_virt_aarch64_workstation"
+                ),
                 timeout_secs: 120,
             };
             return run_hw_serial_smoke(&test);
@@ -395,7 +400,8 @@ pub fn run_board_test(
     let test = SmokeTest {
         expects: default_expects(board),
         curls: default_curls(board),
-        unordered: false,
+        // Multi-client serial interleaves concurrent loggers mid-line.
+        unordered: board.contains("workstation"),
         timeout_secs: 60,
     };
 

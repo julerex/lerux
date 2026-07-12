@@ -10,8 +10,8 @@ workspace = true
 [features]
 multi-client-2 = []
 multi-client-3 = []
-# Phase 42: UART + queues only; clients use serial-virt.
-device-only = ["dep:lerux-serial-queue"]
+# Phase 42: UART + single virt client only; apps use serial-virt.
+device-only = []
 board-qemu_virt_aarch64 = ["sel4-pl011-driver"]
 board-qemu_virt_aarch64_virtio = ["board-qemu_virt_aarch64"]
 board-qemu_virt_aarch64_echo = ["board-qemu_virt_aarch64", "multi-client-2"]
@@ -47,7 +47,6 @@ board-rpi4b_4gb_workstation = ["board-rpi4b_4gb", "device-only"]
 
 [dependencies]
 lerux-logging = { path = "../../crates/lerux-logging" }
-lerux-serial-queue = { path = "../../crates/lerux-serial-queue", optional = true }
 log = { workspace = true }
 sel4 = { workspace = true }
 sel4-microkit = { workspace = true }

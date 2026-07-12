@@ -1,107 +1,105 @@
-//! Device-only serial path: UART + shared queues to `serial-virt` (Phase 42).
+//! Device-only serial path (Phase 42): UART MMIO/IRQ + **one** client (`serial-virt`).
 //!
-//! No client postcard RPC; clients talk to `serial-virt` only.
+//! Uses the same postcard serial RPC as the legacy multi-client handler, but only
+//! accepts channel 1 (the virtualiser). Clients never map into this PD.
 
 use core::convert::Infallible;
 
 use embedded_hal_nb::{nb, serial};
-use lerux_serial_queue::{SerialQueue, SerialQueueHandle, DEFAULT_CAPACITY};
+use heapless::Deque;
 use sel4_driver_interfaces::HandleInterrupt;
-use sel4_microkit::{memory_region_symbol, Channel, ChannelSet, Handler};
+use sel4_microkit::{Channel, ChannelSet, Handler, MessageInfo};
+use sel4_microkit_simple_ipc as simple_ipc;
+use serde::{Deserialize, Serialize};
 
-/// Channel 0 = device IRQ; channel 1 = notify `serial-virt`.
+/// Channel 0 = device IRQ; channel 1 = protected RPC from `serial-virt`.
 pub const DEVICE: Channel = Channel::new(0);
 pub const VIRT: Channel = Channel::new(1);
 
-pub struct DeviceHandler<Driver> {
+#[derive(Debug, Serialize, Deserialize)]
+enum NonBlocking<T> {
+    Ready(T),
+    WouldBlock,
+}
+
+impl<T> NonBlocking<T> {
+    fn from_nb_result<E>(r: nb::Result<T, E>) -> Result<Self, E> {
+        match r {
+            Ok(v) => Ok(Self::Ready(v)),
+            Err(nb::Error::WouldBlock) => Ok(Self::WouldBlock),
+            Err(nb::Error::Other(err)) => Err(err),
+        }
+    }
+}
+
+impl<T> From<Option<T>> for NonBlocking<T> {
+    fn from(v: Option<T>) -> Self {
+        match v {
+            Some(v) => NonBlocking::Ready(v),
+            None => NonBlocking::WouldBlock,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+enum Request {
+    Read,
+    Write(u8),
+    Flush,
+}
+
+type Response = Result<SuccessResponse, ErrorResponse>;
+
+#[derive(Debug, Serialize, Deserialize)]
+enum SuccessResponse {
+    Read(NonBlocking<u8>),
+    Write(NonBlocking<()>),
+    Flush(NonBlocking<()>),
+}
+
+#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+enum ErrorResponse {
+    WriteError,
+    FlushError,
+}
+
+pub struct DeviceHandler<Driver, const READ_BUF_SIZE: usize = 256> {
     driver: Driver,
     device: Channel,
     virt: Channel,
-    tx: SerialQueueHandle,
-    rx: SerialQueueHandle,
-    /// Byte dequeued from TX but not yet accepted by UART.
-    pending_tx: Option<u8>,
+    buffer: Deque<u8, READ_BUF_SIZE>,
+    notify: bool,
 }
 
-impl<Driver> DeviceHandler<Driver>
+impl<Driver, const READ_BUF_SIZE: usize> DeviceHandler<Driver, READ_BUF_SIZE>
 where
     Driver: serial::Read<u8> + serial::Write<u8> + HandleInterrupt,
 {
-    /// # Safety
-    /// Queue symbols must be mapped shared with `serial-virt`.
-    pub unsafe fn new(driver: Driver) -> Self {
-        let tx_q = memory_region_symbol!(serial_tx_queue: *mut SerialQueue).as_ptr();
-        let tx_d = memory_region_symbol!(
-            serial_tx_data: *mut [u8],
-            n = DEFAULT_CAPACITY
-        )
-        .as_ptr()
-        .cast::<u8>();
-        let rx_q = memory_region_symbol!(serial_rx_queue: *mut SerialQueue).as_ptr();
-        let rx_d = memory_region_symbol!(
-            serial_rx_data: *mut [u8],
-            n = DEFAULT_CAPACITY
-        )
-        .as_ptr()
-        .cast::<u8>();
-        let tx = unsafe { SerialQueueHandle::new(tx_q, tx_d, DEFAULT_CAPACITY) };
-        let rx = unsafe { SerialQueueHandle::new(rx_q, rx_d, DEFAULT_CAPACITY) };
-        tx.init_shared();
-        rx.init_shared();
+    pub fn new(driver: Driver) -> Self {
         Self {
             driver,
             device: DEVICE,
             virt: VIRT,
-            tx,
-            rx,
-            pending_tx: None,
+            buffer: Deque::new(),
+            notify: true,
         }
     }
 
-    fn drain_tx_to_uart(&mut self) {
-        loop {
-            let b = match self.pending_tx.take() {
-                Some(b) => b,
-                None => match self.tx.dequeue() {
-                    Some(b) => b,
-                    None => break,
-                },
-            };
-            match self.driver.write(b) {
-                Ok(()) => {}
-                Err(nb::Error::WouldBlock) => {
-                    self.pending_tx = Some(b);
-                    break;
+    fn handle_request(&mut self, req: Request) -> Response {
+        match req {
+            Request::Read => {
+                let v = self.buffer.pop_front();
+                if v.is_some() {
+                    self.notify = true;
                 }
-                Err(nb::Error::Other(_)) => {
-                    self.pending_tx = Some(b);
-                    break;
-                }
+                Ok(SuccessResponse::Read(v.into()))
             }
-        }
-        let _ = self.driver.flush();
-        if self.tx.consumer_should_signal_producer() {
-            self.virt.notify();
-        }
-    }
-
-    fn fill_rx_from_uart(&mut self) {
-        let mut any = false;
-        while !self.rx.is_full() {
-            match self.driver.read() {
-                Ok(b) => {
-                    if self.rx.enqueue(b) {
-                        any = true;
-                    } else {
-                        break;
-                    }
-                }
-                Err(nb::Error::WouldBlock) => break,
-                Err(nb::Error::Other(_)) => break,
-            }
-        }
-        if any {
-            self.virt.notify();
+            Request::Write(c) => NonBlocking::from_nb_result(self.driver.write(c))
+                .map(SuccessResponse::Write)
+                .map_err(|_| ErrorResponse::WriteError),
+            Request::Flush => NonBlocking::from_nb_result(self.driver.flush())
+                .map(SuccessResponse::Flush)
+                .map_err(|_| ErrorResponse::FlushError),
         }
     }
 }
@@ -114,16 +112,40 @@ where
 
     fn notified(&mut self, channels: ChannelSet) -> Result<(), Self::Error> {
         if channels.contains(self.device) {
-            self.fill_rx_from_uart();
+            while !self.buffer.is_full() {
+                match self.driver.read() {
+                    Ok(v) => {
+                        self.buffer.push_back(v).unwrap();
+                    }
+                    Err(err) => {
+                        if let nb::Error::Other(err) = err {
+                            log::debug!("read error: {err:?}");
+                        }
+                        break;
+                    }
+                }
+            }
             self.driver.handle_interrupt();
             self.device.irq_ack().unwrap();
-            // IRQ may also free TX capacity on some UARTs.
-            self.drain_tx_to_uart();
-        }
-        if channels.contains(self.virt) {
-            self.drain_tx_to_uart();
-            self.fill_rx_from_uart();
+            if self.notify {
+                self.virt.notify();
+                self.notify = false;
+            }
         }
         Ok(())
+    }
+
+    fn protected(
+        &mut self,
+        channel: Channel,
+        msg_info: MessageInfo,
+    ) -> Result<MessageInfo, Self::Error> {
+        if channel != self.virt {
+            unreachable!("unexpected IPC channel (device-only expects serial-virt)");
+        }
+        Ok(match simple_ipc::recv::<Request>(msg_info) {
+            Ok(req) => simple_ipc::send(self.handle_request(req)),
+            Err(_) => simple_ipc::send_unspecified_error(),
+        })
     }
 }

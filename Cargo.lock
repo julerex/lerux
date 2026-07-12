@@ -1900,7 +1900,6 @@ dependencies = [
  "embedded-hal-nb",
  "heapless",
  "lerux-logging",
- "lerux-serial-queue",
  "log",
  "sel4",
  "sel4-driver-interfaces",
@@ -1914,9 +1913,9 @@ dependencies = [
 name = "serial-virt"
 version = "0.1.0"
 dependencies = [
+ "embedded-hal-nb",
  "heapless",
  "lerux-logging",
- "lerux-serial-queue",
  "log",
  "sel4-microkit",
  "sel4-microkit-simple-ipc",

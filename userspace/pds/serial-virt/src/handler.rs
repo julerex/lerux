@@ -1,9 +1,11 @@
-//! Multi-client serial RPC (same wire format as legacy serial-driver handler).
+//! Multi-client serial RPC mux → single device RPC to `serial-driver` (Phase 42).
+//!
+//! Wire format matches rust-sel4 `SerialClient` / legacy serial-driver handler.
+//! Device trust boundary: only this PD may call the UART driver.
 
 use core::convert::Infallible;
 
 use heapless::Deque;
-use lerux_serial_queue::SerialQueueHandle;
 use sel4_microkit::{Channel, ChannelSet, Handler, MessageInfo};
 use sel4_microkit_simple_ipc as simple_ipc;
 use serde::{Deserialize, Serialize};
@@ -22,6 +24,17 @@ impl<T> From<Option<T>> for NonBlocking<T> {
         }
     }
 }
+
+impl<T, E> From<NonBlocking<T>> for nb::Result<T, E> {
+    fn from(v: NonBlocking<T>) -> Self {
+        match v {
+            NonBlocking::Ready(v) => Ok(v),
+            NonBlocking::WouldBlock => Err(nb::Error::WouldBlock),
+        }
+    }
+}
+
+use embedded_hal_nb::nb;
 
 #[derive(Debug, Serialize, Deserialize)]
 enum Request {
@@ -48,26 +61,16 @@ enum ErrorResponse {
 pub struct HandlerImpl<const NUM_CLIENTS: usize, const READ_BUF_SIZE: usize = 256> {
     driver: Channel,
     clients: [Channel; NUM_CLIENTS],
-    /// Local RX staging (from driver RX queue) so Read RPC stays non-blocking.
     buffer: Deque<u8, READ_BUF_SIZE>,
-    tx: SerialQueueHandle,
-    rx: SerialQueueHandle,
     notify_rx_client: bool,
 }
 
 impl<const NUM_CLIENTS: usize, const READ_BUF_SIZE: usize> HandlerImpl<NUM_CLIENTS, READ_BUF_SIZE> {
-    pub fn new(
-        driver: Channel,
-        clients: [Channel; NUM_CLIENTS],
-        tx: SerialQueueHandle,
-        rx: SerialQueueHandle,
-    ) -> Self {
+    pub fn new(driver: Channel, clients: [Channel; NUM_CLIENTS]) -> Self {
         Self {
             driver,
             clients,
             buffer: Deque::new(),
-            tx,
-            rx,
             notify_rx_client: true,
         }
     }
@@ -76,17 +79,19 @@ impl<const NUM_CLIENTS: usize, const READ_BUF_SIZE: usize> HandlerImpl<NUM_CLIEN
         self.clients.iter().position(|c| *c == channel)
     }
 
+    fn driver_request(&self, req: Request) -> Result<SuccessResponse, ErrorResponse> {
+        simple_ipc::call::<Request, Response>(self.driver, req)
+            .unwrap_or(Err(ErrorResponse::WriteError))
+    }
+
     fn pull_rx_from_driver(&mut self) {
         while !self.buffer.is_full() {
-            match self.rx.dequeue() {
-                Some(b) => {
+            match self.driver_request(Request::Read) {
+                Ok(SuccessResponse::Read(NonBlocking::Ready(b))) => {
                     let _ = self.buffer.push_back(b);
                 }
-                None => break,
+                _ => break,
             }
-        }
-        if self.rx.consumer_should_signal_producer() {
-            self.driver.notify();
         }
     }
 
@@ -100,26 +105,16 @@ impl<const NUM_CLIENTS: usize, const READ_BUF_SIZE: usize> HandlerImpl<NUM_CLIEN
                 }
                 Ok(SuccessResponse::Read(v.into()))
             }
-            Request::Write(c) => {
-                if self.tx.enqueue(c) {
-                    self.driver.notify();
-                    Ok(SuccessResponse::Write(NonBlocking::Ready(())))
-                } else {
-                    self.tx.request_signal();
-                    // Double-check after flag (sDDF protocol).
-                    if self.tx.enqueue(c) {
-                        self.driver.notify();
-                        Ok(SuccessResponse::Write(NonBlocking::Ready(())))
-                    } else {
-                        Ok(SuccessResponse::Write(NonBlocking::WouldBlock))
-                    }
-                }
-            }
-            Request::Flush => {
-                // Bytes already in TX queue; notify driver to drain.
-                self.driver.notify();
-                Ok(SuccessResponse::Flush(NonBlocking::Ready(())))
-            }
+            Request::Write(c) => match self.driver_request(Request::Write(c)) {
+                Ok(SuccessResponse::Write(nb)) => Ok(SuccessResponse::Write(nb)),
+                Ok(_) => Err(ErrorResponse::WriteError),
+                Err(e) => Err(e),
+            },
+            Request::Flush => match self.driver_request(Request::Flush) {
+                Ok(SuccessResponse::Flush(nb)) => Ok(SuccessResponse::Flush(nb)),
+                Ok(_) => Err(ErrorResponse::FlushError),
+                Err(e) => Err(e),
+            },
         }
     }
 }
@@ -130,7 +125,6 @@ impl<const NUM_CLIENTS: usize> Handler for HandlerImpl<NUM_CLIENTS> {
     fn notified(&mut self, channels: ChannelSet) -> Result<(), Self::Error> {
         if channels.contains(self.driver) {
             self.pull_rx_from_driver();
-            // Free TX space may have opened.
             if self.notify_rx_client && !self.buffer.is_empty() {
                 self.clients[0].notify();
                 self.notify_rx_client = false;

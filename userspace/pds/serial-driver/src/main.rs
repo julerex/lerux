@@ -76,8 +76,7 @@ fn init() -> impl Handler {
     log::info!("serial driver: PL011 (device-only → serial-virt)");
     let driver =
         unsafe { Pl011Driver::new(memory_region_symbol!(serial_register_block: *mut ()).as_ptr()) };
-    // SAFETY: queue MRs shared with serial-virt in workstation system description.
-    unsafe { device::DeviceHandler::new(driver) }
+    device::DeviceHandler::new(driver)
 }
 
 #[cfg(feature = "board-x86_64_generic")]

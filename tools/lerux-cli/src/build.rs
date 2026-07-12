@@ -29,6 +29,7 @@ const BOARD_FEATURE_CRATES: &[&str] = &[
     "log-server",
     "config-server",
     "serial-driver",
+    "serial-virt",
     "virtio-blk-driver",
     "virtio-net-driver",
     "virtio-pci-driver",

@@ -216,7 +216,6 @@ mod tests {
         let composed = render_system(&root, "qemu_virt_aarch64_workstation").unwrap();
         assert_eq!(composed.matches("<channel>").count(), 27);
         assert!(composed.contains("serial_virt"));
-        assert!(composed.contains("serial_tx_queue"));
     }
 
     #[test]

@@ -36,7 +36,7 @@ default_board = "rpi4b_4gb_workstation"
 name = "driver_virt"
 ends = [
   { pd = "serial_driver", id = 1 },
-  { pd = "serial_virt", id = 0 },
+  { pd = "serial_virt", id = 0, pp = true },
 ]
 
 [[channel]]

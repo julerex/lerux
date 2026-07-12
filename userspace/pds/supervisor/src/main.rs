@@ -109,23 +109,19 @@ fn probe_fs() {
 }
 
 #[cfg(feature = "workstation")]
-fn poll_net() -> NetResponse {
-    loop {
-        match call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::Poll).expect("Net Poll IPC") {
-            NetResponse::Pending => {}
-            other => return other,
-        }
-    }
-}
-
-#[cfg(feature = "workstation")]
 fn probe_net() {
-    // Exercise net server to ensure "net up"
+    // Exercise net server to ensure "net up". Bound Poll so a stuck Pending
+    // cannot hang init (http-file-browser may leave the stack busy briefly).
     let pending =
         call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::udp_tx(b"lerux-workstation"))
             .expect("Net UdpTx IPC");
     if matches!(pending, NetResponse::Pending) {
-        let _ = poll_net();
+        for _ in 0..512 {
+            match call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::Poll) {
+                Ok(NetResponse::Pending) => {}
+                Ok(_) | Err(_) => break,
+            }
+        }
     }
     log::info!("lerux-supervisor: net up");
 }

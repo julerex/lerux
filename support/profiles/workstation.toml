@@ -26,12 +26,12 @@ description = "Supervisor + FS + net + shell + edit/chat/http-fs apps (serial vi
 
 default_board = "qemu_virt_aarch64_workstation"
 
-# Phase 42: clients → serial_virt; driver ↔ virt queues + notify.
+# Phase 42: clients → serial_virt; virt is sole PPC client of serial_driver.
 [[channel]]
 name = "driver_virt"
 ends = [
   { pd = "serial_driver", id = 1 },
-  { pd = "serial_virt", id = 0 },
+  { pd = "serial_virt", id = 0, pp = true },
 ]
 
 [[channel]]

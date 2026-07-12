@@ -3,7 +3,7 @@ name = "serial-virt"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-description = "Serial virtualiser: multi-client postcard RPC over queues to serial-driver"
+description = "Serial virtualiser: multi-client postcard RPC to device-only serial-driver"
 
 [lints]
 workspace = true
@@ -11,15 +11,14 @@ workspace = true
 [features]
 multi-client-2 = []
 multi-client-3 = []
-# Board features — no MMIO; only select client count for workstation-like boards.
 board-qemu_virt_aarch64_workstation = ["multi-client-3"]
 board-rpi4b_4gb_workstation = ["multi-client-3"]
 
 [dependencies]
 lerux-logging = { path = "../../crates/lerux-logging" }
-lerux-serial-queue = { path = "../../crates/lerux-serial-queue" }
 log = { workspace = true }
 sel4-microkit = { workspace = true }
 heapless = { workspace = true }
 serde = { workspace = true }
 sel4-microkit-simple-ipc = { workspace = true }
+embedded-hal-nb = { workspace = true }

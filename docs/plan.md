@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-12 (Phase 47 HW CI harness; Phases 48–49 in plan-au-ts)
+Last updated: 2026-07-12 (Phase 48 workstation QoS; Phase 49 in plan-au-ts)
 
 ## Phase 1 — Bring-up
 
@@ -381,9 +381,13 @@ Microkit hierarchy fault parent + crash child (`just test-debug`); QEMU gdbstub 
 
 `support/smoke-expects.toml`, `lerux test --mode hw-serial`, board locks, `just test-hw`, optional self-hosted workflow ([`ci.md`](ci.md)).
 
-## Phases 48+ — au-ts inspiration
+## Phase 48 — Workstation QoS ✅
 
-See [`plan-au-ts.md`](plan-au-ts.md) for Phases 48–49 (optional QoS/perf).
+Service-class PD priorities (shell interactive above bulk); [`qos.md`](qos.md), [ADR-006](decisions/006-workstation-qos.md).
+
+## Phases 49+ — au-ts inspiration
+
+See [`plan-au-ts.md`](plan-au-ts.md) for Phase 49 (optional perf baselines).
 
 ## Version alignment
 

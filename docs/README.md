@@ -17,6 +17,8 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [decisions/004-service-async.md](decisions/004-service-async.md) | ADR-004: stackless coop async in service PDs |
 | [decisions/005-debug-pd.md](decisions/005-debug-pd.md) | ADR-005: fault parent + QEMU GDB (not libgdb fork) |
 | [debug.md](debug.md) | Phase 46: `test-debug` + gdb-multiarch workflow |
+| [qos.md](qos.md) | Phase 48: workstation service classes / PD priorities |
+| [decisions/006-workstation-qos.md](decisions/006-workstation-qos.md) | ADR-006: priority policy |
 | [net-topology.md](net-topology.md) | NIC / net-server / app channel map |
 | [boards.md](boards.md) | Board names, PDs, QEMU profiles; [RPi4 workstation HW gate](boards.md#rpi4-workstation-manual-hw-gate-phase-39) |
 | [ci.md](ci.md) | GitHub Actions pipeline, caches, troubleshooting |

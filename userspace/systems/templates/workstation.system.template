@@ -16,6 +16,12 @@
     <memory_region name="virtio_blk_free" size="0x200_000" page_size="0x200_000"/>
     <memory_region name="virtio_blk_used" size="0x200_000" page_size="0x200_000"/>
 
+    <!--
+      Phase 48 service classes (docs/qos.md). Higher number = higher priority.
+      Microkit requires PPC callees to be *strictly higher* priority than callers
+      (shell PPCs edit/fs/net/supervisor → shell must stay below those).
+      Platform 10–6 | Services 5–4 | Control/apps 3–2 | Interactive shell 1
+    -->
     <!-- Phase 42: driver owns UART only; serial_virt is the sole driver client. -->
     <protection_domain name="serial_driver" priority="10" stack_size="0x10_000">
         <program_image path="serial-driver.elf" />

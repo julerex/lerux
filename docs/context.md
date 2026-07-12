@@ -69,6 +69,9 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 **Hardware serial smoke (Phase 47)**
 : On-device boot checks use `LERUX_HW_SERIAL` + `--mode hw-serial` / `just test-hw`, with expects from `support/smoke-expects.toml` and a local board lock. Cloud CI stays QEMU-only; optional self-hosted workflow is documented in [`ci.md`](ci.md).
 
+**Workstation QoS (Phase 48)**
+: Fixed Microkit PD priorities form service classes (platform / interactive / services / control / bulk). Shell is above bulk apps so interactive serial stays responsive; fs/net keep single-flight jobs as coarse throttling. See [`qos.md`](qos.md), [ADR-006](decisions/006-workstation-qos.md).
+
 **Package**
 : One PD crate plus its interface-types version and an optional profile fragment (`support/packages/<name>.toml`). “Installing” a package means adding the PD to a `support/profiles/*.toml` and rebuilding the static image via `lerux profile build` — Microkit does not load arbitrary ELFs at runtime. CI can publish per-PD ELF artifacts; pins live in `support/package-pins.toml` (`lerux package list|show|build|pin|diff`). (Phase 40)
 

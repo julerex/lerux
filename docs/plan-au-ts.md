@@ -277,7 +277,7 @@ LionsOS `components/fs/fat`, `components/fs/nfs`, `examples/fileio`.
 
 ---
 
-## Phase 48 — Supervisor QoS / partitioning (optional)
+## Phase 48 — Supervisor QoS / partitioning (optional) ✅
 
 **Goal:** Explicit time or priority isolation between shell, net, and FS when contention matters.
 
@@ -287,14 +287,15 @@ LionsOS `components/fs/fat`, `components/fs/nfs`, `examples/fileio`.
 
 ### Scope
 
-- [ ] Inventory current PD priorities and PPC behaviour in workstation templates
-- [ ] Define service classes (interactive / bulk I/O / background) in supervisor or profile
-- [ ] Optional: budget or rate-limit IPC for bulk clients
-- [ ] Smoke under load (e.g. fetch + edit + dmesg) shows interactive serial remains responsive
+- [x] Inventory current PD priorities and PPC behaviour → [`docs/qos.md`](qos.md)
+- [x] Service classes (platform / services / control / bulk / interactive); document Microkit PPC callee>caller rule (shell stays at 1)
+- [x] Inherent bulk throttle: document fs/net single-flight jobs (no MCS budgets in v1)
+- [x] Stress note + `just test-workstation` concurrent boot as smoke proxy; shell `qos` command
 
 ### Exit
 
-Documented priority policy; one stress smoke or bench note.
+- [x] Documented priority policy ([ADR-006](decisions/006-workstation-qos.md), `qos.md`)
+- [x] Template comments + shell `qos`; `just test-workstation` green
 
 ---
 

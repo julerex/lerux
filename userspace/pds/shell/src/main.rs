@@ -244,6 +244,25 @@ fn top(console: &mut SerialClient) {
     render_services(console);
 }
 
+/// Phase 48: print fixed priority service classes (matches workstation templates).
+fn qos(console: &mut SerialClient) {
+    println(console, "--- qos (Phase 48) ---");
+    println(console, "class        band   examples");
+    println(
+        console,
+        "platform     10-6   serial, virtio/genet/emmc, timers",
+    );
+    println(console, "services     5-4    log, fs, net");
+    println(console, "control      3-2    config, supervisor");
+    println(console, "bulk         2      edit, chat, http-fs");
+    println(console, "interactive  1      shell (below all PPC servers)");
+    println(
+        console,
+        "note: Microkit PPC requires callee priority > caller",
+    );
+    println(console, "policy: docs/qos.md");
+}
+
 fn reboot(console: &mut SerialClient) {
     let _ = call::<SupervisorRequest, SupervisorResponse>(SUPERVISOR, SupervisorRequest::Reboot);
     println(console, "reboot requested");
@@ -335,11 +354,12 @@ fn process_command(h: &mut HandlerImpl, line: &[u8]) {
         b"time" | b"date" => time(&mut h.console),
         b"ps" => ps(&mut h.console),
         b"top" => top(&mut h.console),
+        b"qos" => qos(&mut h.console),
         b"reboot" => reboot(&mut h.console),
         b"fetch" => fetch_demo(&mut h.console),
         b"help" => println(
             &mut h.console,
-            "commands: ls cat write time ps top reboot fetch dmesg edit chat help",
+            "commands: ls cat write time ps top qos reboot fetch dmesg edit chat help",
         ),
         b"echo" => {
             let rest = &line[4..];

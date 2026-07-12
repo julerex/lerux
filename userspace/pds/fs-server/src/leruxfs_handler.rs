@@ -3,11 +3,11 @@
 use core::cmp::min;
 
 use lerux_fs::{
-    alloc_contiguous, count_entries, decode_dir_entry, decode_superblock, dir_is_empty,
-    encode_dir_entry, encode_free_map_fresh, encode_superblock, file_lba_for_offset, find_by_name,
-    find_free_slot, free_contiguous, is_formatted, is_legacy_v1, make_entry, sector_offset,
-    split_path, DirEntry, PathParts, Superblock, DATA_START_LBA, FREE_MAP_LBA, MAX_ENTRIES,
-    MAX_FILE_SECTORS, ROOT_DIR_LBA, SUPERBLOCK_LBA,
+    alloc_contiguous, count_entries, count_free_blocks, decode_dir_entry, decode_superblock,
+    dir_is_empty, encode_dir_entry, encode_free_map_fresh, encode_superblock, file_lba_for_offset,
+    find_by_name, find_free_slot, free_contiguous, is_formatted, is_legacy_v1, make_entry,
+    sector_offset, split_path, DirEntry, PathParts, Superblock, DATA_START_LBA, FREE_MAP_LBA,
+    MAX_ENTRIES, MAX_FILE_SECTORS, ROOT_DIR_LBA, SUPERBLOCK_LBA,
 };
 use lerux_interface_types::{
     FsDirEntry, FsRequest, FsResponse, MAX_FS_DATA, MAX_FS_DIR_LIST, MAX_FS_PATH, SECTOR_SIZE,
@@ -2222,6 +2222,34 @@ impl HandlerImpl {
                 to,
             } => {
                 self.begin_path_op(PathOp::RenameFrom, from, from_len, to, to_len);
+            }
+            FsRequest::DiskInfo => {
+                if !self.formatted {
+                    // Trigger format/mount; client should Poll until ready, then retry DiskInfo.
+                    if self.format_task.is_idle() {
+                        let io = self.io.clone();
+                        self.format_task
+                            .spawn(async move { format_leruxfs(io).await });
+                    }
+                    if let Some(resp) = self.poll_format_task() {
+                        // Discard Ok from format; fall through if now formatted.
+                        if !self.formatted {
+                            return resp;
+                        }
+                    } else {
+                        return FsResponse::Pending;
+                    }
+                }
+                let free = count_free_blocks(&self.free_map, &self.superblock);
+                let total = self
+                    .superblock
+                    .total_lbas
+                    .saturating_sub(self.superblock.data_start_lba);
+                return FsResponse::DiskInfo {
+                    block_size: SECTOR_SIZE as u32,
+                    total_blocks: total,
+                    free_blocks: free,
+                };
             }
             FsRequest::Poll => return self.handle_poll(),
         }

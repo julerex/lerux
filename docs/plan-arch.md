@@ -131,21 +131,21 @@ Documented “install media → boot → shell works” path on RPi4 without fol
 
 ---
 
-## Phase 53 — Shell and core utilities (Arch: base packages)
+## Phase 53 — Shell and core utilities (Arch: base packages) — core done
 
-**Why:** Arch base is dozens of CLI tools; lerux shell is a thin REPL over a few IPC services.
+**Why:** Arch base is dozens of CLI tools; lerux shell was a thin REPL over a few IPC services.
 
 ### Steps
 
-- [ ] Expand built-ins: `mkdir`/`rm`/`mv`/`stat`/`df`, `ping`/`ifconfig` (or `ip`), `date`/`uptime`, `clear`, `history` (ring in shell PD).
-- [ ] **Pager / less-like** for long `cat`/`dmesg` over serial.
-- [ ] Structured **help** and command discovery (machine-readable list for smokes).
-- [ ] Optional small **coreutils-style PDs** only where IPC isolation matters; prefer shell built-ins for pure transforms to avoid channel explosion.
-- [ ] Scripted non-interactive shell for CI (serial expect sequences already exist — deepen them).
+- [x] Expand built-ins: `mkdir`/`rm`/`mv`/`stat`/`df`, `ping`/`ifconfig`/`ip`, `date`/`time`/`uptime`, `clear`, `history` (ring in shell PD).
+- [x] **Pager / less-like** for long `cat`/`dmesg` over serial (`-- more --`, space/q).
+- [x] Structured **help** (`help`, `help -l`) and machine-readable `lerux-shell: cmds=` for smokes.
+- [x] Prefer shell built-ins (no new coreutils PDs); `df` via `FsRequest::DiskInfo`, `uptime` via `SupervisorRequest::GetUptime`.
+- [x] Deepen hw-serial scripts: `help -l`, `df` after boot match.
 
 ### Exit
 
-A new user can administer files, net identity, services, and logs without knowing IPC channel IDs.
+A new user can administer files, net identity, services, and logs without knowing IPC channel IDs. **Met** for built-in surface.
 
 ---
 
@@ -315,9 +315,9 @@ That is Arch’s **workflow and completeness**, reimplemented as static Microkit
 
 If capacity is limited, do **not** start with graphics or scripting runtimes:
 
-1. **Phases 50–52 cores** — FS v2, net v2, deploy/seed/hw-serial scripts done
+1. **Phases 50–53 cores** — FS, net, deploy/seed, shell built-ins done
 2. **Phase 52 lab** — fill RPi4 REPL checklist on real hardware when available
-3. **Phase 53 / 55** — shell depth and package UX for day-to-day admin feel
+3. **Phase 54 / 55** — config policy and package UX
 
 ---
 

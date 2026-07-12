@@ -46,7 +46,8 @@ fn fs_create(path: &[u8]) -> u8 {
         | FsResponse::Ok
         | FsResponse::Data { .. }
         | FsResponse::Stat { .. }
-        | FsResponse::DirList { .. } => panic!("create failed"),
+        | FsResponse::DirList { .. }
+        | FsResponse::DiskInfo { .. } => panic!("create failed"),
     }
 }
 
@@ -58,7 +59,8 @@ fn fs_write(handle: u8, offset: u32, data: &[u8]) {
         | FsResponse::Handle { .. }
         | FsResponse::Data { .. }
         | FsResponse::Stat { .. }
-        | FsResponse::DirList { .. } => {
+        | FsResponse::DirList { .. }
+        | FsResponse::DiskInfo { .. } => {
             panic!("write failed")
         }
     }

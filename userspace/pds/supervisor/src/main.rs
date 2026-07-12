@@ -282,6 +282,23 @@ fn handle_supervisor(req: SupervisorRequest) -> SupervisorResponse {
                 }
             }
         }
+        SupervisorRequest::GetUptime => {
+            #[cfg(feature = "board-rpi4b_4gb_workstation")]
+            {
+                // No timer PD on RPi4 workstation profile.
+                SupervisorResponse::Uptime { secs: 0 }
+            }
+            #[cfg(not(feature = "board-rpi4b_4gb_workstation"))]
+            {
+                let mut timer = TimerClient::new(TIMER_DRIVER);
+                match timer.get_time() {
+                    Ok(elapsed) => SupervisorResponse::Uptime {
+                        secs: elapsed.as_secs() as u32,
+                    },
+                    Err(_) => SupervisorResponse::Error,
+                }
+            }
+        }
     }
 }
 

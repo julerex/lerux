@@ -274,6 +274,8 @@ pub enum FsRequest {
         #[serde(with = "fs_path_bytes")]
         to: [u8; MAX_FS_PATH],
     },
+    /// Phase 53: total/free block capacity for shell `df`.
+    DiskInfo,
     Poll,
 }
 
@@ -365,6 +367,12 @@ pub enum FsResponse {
         count: u8,
         entries: [FsDirEntry; MAX_FS_DIR_LIST],
     },
+    /// Capacity snapshot for [`FsRequest::DiskInfo`].
+    DiskInfo {
+        block_size: u32,
+        total_blocks: u32,
+        free_blocks: u32,
+    },
 }
 
 /// Max services returned by [`SupervisorResponse::ServiceList`] (Phase 40 `top`).
@@ -373,16 +381,20 @@ pub const MAX_SERVICES: usize = 8;
 /// Max bytes of one service name in [`SupervisorResponse::ServiceList`].
 pub const MAX_SERVICE_NAME: usize = 16;
 
-/// Supervisor service requests (Phase 33/34).
+/// Supervisor service requests (Phase 33/34 / 53).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SupervisorRequest {
     Reboot,
     ListServices,
-    ServiceStatus { id: u8 },
+    ServiceStatus {
+        id: u8,
+    },
     GetTime,
+    /// Seconds since supervisor init (Phase 53 `uptime`).
+    GetUptime,
 }
 
-/// Supervisor service responses (Phase 33/34 / Phase 40).
+/// Supervisor service responses (Phase 33/34 / Phase 40 / 53).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SupervisorResponse {
     Ok,
@@ -407,6 +419,9 @@ pub enum SupervisorResponse {
         year: u16,
         month: u8,
         day: u8,
+    },
+    Uptime {
+        secs: u32,
     },
 }
 

@@ -1062,6 +1062,19 @@ impl HandlerImpl {
                 // Hierarchy ops are LERUXFS2-only (Phase 50); FAT stays root-only.
                 return FsResponse::Error;
             }
+            FsRequest::DiskInfo => {
+                // Approximate single-partition capacity (Phase 53 shell `df`).
+                if !self.mounted {
+                    return FsResponse::Error;
+                }
+                let data = self.bpb.total_sectors.saturating_sub(self.bpb.data_lba);
+                return FsResponse::DiskInfo {
+                    block_size: u32::from(self.bpb.bytes_per_sector),
+                    total_blocks: data,
+                    // Free-cluster walk is not tracked; report capacity only.
+                    free_blocks: 0,
+                };
+            }
             FsRequest::Poll => return self.handle_poll(),
         }
         if let Some(resp) = self.advance_fs_job() {

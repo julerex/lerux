@@ -251,6 +251,7 @@ expects = [
   "lerux-supervisor: net up",
   "lerux-supervisor: ready",
   "lerux-shell: ready",
+  "lerux-shell: cmds=",
   "lerux-edit: ready",
   "lerux-chat: ready",
   "lerux-http-fs:",
@@ -274,16 +275,20 @@ expects = [
   "lerux-supervisor: net up",
   "lerux-supervisor: ready",
   "lerux-shell: ready",
+  "lerux-shell: cmds=",
   "lerux-edit: ready",
   "lerux-chat: ready",
   "lerux-http-fs:",
 ]
-# Phase 52: after boot strings match, inject REPL commands over the same TTY.
+# Phase 52/53: after boot strings match, inject REPL commands over the same TTY.
 # Requires the shell prompt to be live; power-on/reset the board before/while test-hw runs.
 script = [
   { send = "ls\r", expect = "boot.log" },
   { send = "pwd\r", expect = "/" },
   { send = "ip\r", expect = "inet" },
+  { send = "help -l\r", expect = "cmds=" },
+  { send = "df\r", expect = "leruxfs" },
+  { send = "uptime\r", expect = "up " },
 ]
 
 [boards.rpi4b_4gb_net]

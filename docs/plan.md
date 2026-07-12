@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-12 (Phase 52 HW closeout: deploy + first-boot seed + scripted hw-serial; on-device REPL still lab)
+Last updated: 2026-07-12 (Phase 53 shell coreutils: stat/df/ping/uptime/history/pager/help -l)
 
 ## Phase 1 — Bring-up
 
@@ -418,9 +418,17 @@ Install-media path for RPi4 workstation (see [`boards.md`](boards.md#rpi4-workst
 - [x] Docs: install path table, failure modes, manual checklist result grid
 - [ ] On-device lab sign-off: fill checklist on real Pi (requires hardware)
 
-## Phases 53–60 — Arch-level functionality (planned)
+## Phase 53 — Shell + core utilities (core done)
 
-Roadmap to “about Arch Linux” **workflow** (not ABI): shell/coreutils, config policy, package UX, multi-arch workstation, app catalog, optional hardening.
+- [x] Built-ins: `stat` `df` `ping` `uptime` `clear` `history` (+ existing fs/net/sys)
+- [x] Pager for `cat`/`dmesg` (`-- more --`)
+- [x] `help` / `help -l` and boot log `lerux-shell: cmds=…`
+- [x] `FsRequest::DiskInfo`, `SupervisorRequest::GetUptime`
+- [x] Smokes: workstation expects `cmds=`; hw-serial scripts `help -l` + `df`
+
+## Phases 54–60 — Arch-level functionality (planned)
+
+Roadmap to “about Arch Linux” **workflow** (not ABI): config policy, package UX, multi-arch workstation, app catalog, optional hardening.
 
 Full checklist, priority order, and completion bar: **[`plan-arch.md`](plan-arch.md)**.
 
@@ -429,7 +437,7 @@ Full checklist, priority order, and completion bar: **[`plan-arch.md`](plan-arch
 | 50 | Filesystem v2 (multi-sector, dirs, unlink/rename) | core done (FAT/NFS stretch open) |
 | 51 | Network stack v2 (DHCP, DNS, multi-conn, TLS) | core done (TLS stretch open) |
 | 52 | Hardware closeout (RPi4 deploy + seed + harness) | core done (lab REPL sign-off open) |
-| 53 | Shell + core utilities | planned |
+| 53 | Shell + core utilities | core done |
 | 54 | Config, secrets, boot policy | planned |
 | 55 | Package/profile UX (pacman-like host CLI) | planned |
 | 56 | Time/init cross-arch parity | planned |
@@ -438,7 +446,7 @@ Full checklist, priority order, and completion bar: **[`plan-arch.md`](plan-arch
 | 59 | Multi-arch workstation profiles | planned |
 | 60 | Security posture (stretch) | planned |
 
-Near-term priority: **53 shell** / **55 package UX**; lab Pi for Phase 52 sign-off when available.
+Near-term priority: **54 config policy** / **55 package UX**.
 
 ## Version alignment
 

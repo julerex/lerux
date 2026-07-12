@@ -395,6 +395,18 @@ pub fn count_entries(dir_sector: &[u8; SECTOR_SIZE]) -> u8 {
     count
 }
 
+/// Count free data LBAs in the free-map (`data_start..total_lbas`).
+pub fn count_free_blocks(map: &[u8; SECTOR_SIZE], sb: &Superblock) -> u32 {
+    let mut free = 0u32;
+    let start = sb.data_start_lba.min(sb.total_lbas);
+    for lba in start..sb.total_lbas {
+        if is_free(map, lba) {
+            free = free.saturating_add(1);
+        }
+    }
+    free
+}
+
 /// True when a directory sector has no entries.
 pub fn dir_is_empty(dir_sector: &[u8; SECTOR_SIZE]) -> bool {
     count_entries(dir_sector) == 0
@@ -527,5 +539,15 @@ mod tests {
         assert_eq!(file_lba_for_offset(10, 0), 10);
         assert_eq!(file_lba_for_offset(10, 512), 11);
         assert_eq!(sector_offset(513), 1);
+    }
+
+    #[test]
+    fn count_free_after_alloc() {
+        let sb = Superblock::new();
+        let mut map = [0u8; SECTOR_SIZE];
+        encode_free_map_fresh(&mut map, &sb);
+        let before = count_free_blocks(&map, &sb);
+        let _ = alloc_contiguous(&mut map, &sb, 2).unwrap();
+        assert_eq!(count_free_blocks(&map, &sb), before - 2);
     }
 }

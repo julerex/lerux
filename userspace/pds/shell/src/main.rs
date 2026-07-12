@@ -27,6 +27,18 @@ const CHAT: Channel = Channel::new(7);
 
 const INPUT_BUF_CAP: usize = 128;
 const CWD_CAP: usize = lerux_interface_types::MAX_FS_PATH;
+/// Phase 53: lines per pager page for `cat` / `dmesg`.
+const PAGE_LINES: usize = 16;
+/// History ring capacity (Phase 53).
+const HISTORY_CAP: usize = 8;
+const HISTORY_LINE: usize = 64;
+
+/// Machine-readable command list for smokes and `help -l` (Phase 53).
+const COMMANDS: &[&str] = &[
+    "ls", "cat", "write", "mkdir", "rm", "mv", "cd", "pwd", "stat", "df", "ip", "ifconfig", "ping",
+    "time", "date", "uptime", "clear", "history", "ps", "top", "qos", "reboot", "fetch", "dmesg",
+    "edit", "chat", "echo", "help",
+];
 
 struct HandlerImpl {
     console: SerialClient,
@@ -37,6 +49,11 @@ struct HandlerImpl {
     /// Shell-local cwd (Phase 50); server paths are absolute after resolve.
     cwd: [u8; CWD_CAP],
     cwd_len: u8,
+    /// Circular command history (Phase 53).
+    history: [[u8; HISTORY_LINE]; HISTORY_CAP],
+    history_lens: [u8; HISTORY_CAP],
+    history_len: u8,
+    history_next: u8,
 }
 
 fn write_bytes(console: &mut SerialClient, bytes: &[u8]) {
@@ -211,6 +228,26 @@ impl Write for ConsoleWriter<'_> {
     }
 }
 
+/// Wait for space/enter to continue or `q` to quit (Phase 53 pager).
+fn wait_more(console: &mut SerialClient) -> bool {
+    print(console, " -- more -- ");
+    let _ = console.flush();
+    loop {
+        match console.read() {
+            Ok(b' ') | Ok(b'\r') | Ok(b'\n') => {
+                write_bytes(console, b"\r\n");
+                return true;
+            }
+            Ok(b'q') | Ok(b'Q') => {
+                write_bytes(console, b"\r\n");
+                return false;
+            }
+            Ok(_) | Err(nb::Error::WouldBlock) => {}
+            Err(nb::Error::Other(_)) => return false,
+        }
+    }
+}
+
 fn cat(console: &mut SerialClient, cwd: &[u8], path: &[u8]) {
     let mut path_buf = [0u8; CWD_CAP];
     let Some(n) = resolve_path(cwd, path, &mut path_buf) else {
@@ -225,6 +262,7 @@ fn cat(console: &mut SerialClient, cwd: &[u8], path: &[u8]) {
         }
     };
     let mut offset = 0u32;
+    let mut lines_on_page = 0usize;
     loop {
         match fs_call(FsRequest::Read {
             handle,
@@ -232,7 +270,20 @@ fn cat(console: &mut SerialClient, cwd: &[u8], path: &[u8]) {
             len: 128,
         }) {
             FsResponse::Data { data_len, data } if data_len > 0 => {
-                write_bytes(console, &data[..data_len as usize]);
+                let chunk = &data[..data_len as usize];
+                for &b in chunk {
+                    let _ = console.write(b);
+                    if b == b'\n' {
+                        lines_on_page += 1;
+                        if lines_on_page >= PAGE_LINES {
+                            let _ = console.flush();
+                            if !wait_more(console) {
+                                return;
+                            }
+                            lines_on_page = 0;
+                        }
+                    }
+                }
                 offset += data_len as u32;
             }
             _ => break,
@@ -356,6 +407,158 @@ fn time(console: &mut SerialClient) {
     }
 }
 
+fn stat_cmd(console: &mut SerialClient, cwd: &[u8], path: &[u8]) {
+    let mut path_buf = [0u8; CWD_CAP];
+    let Some(n) = resolve_path(cwd, path, &mut path_buf) else {
+        println(console, "stat: path too long");
+        return;
+    };
+    match fs_call(FsRequest::stat(&path_buf[..n])) {
+        FsResponse::Stat { size, is_dir } => {
+            let kind = if is_dir { "dir" } else { "file" };
+            let name = core::str::from_utf8(&path_buf[..n]).unwrap_or("?");
+            let _ = writeln!(ConsoleWriter(console), "{}: {} size={}", name, kind, size);
+        }
+        _ => println(console, "stat: failed"),
+    }
+}
+
+fn df_cmd(console: &mut SerialClient) {
+    // DiskInfo may return Ok after first-boot format; retry once.
+    let mut resp = fs_call(FsRequest::DiskInfo);
+    if matches!(resp, FsResponse::Ok | FsResponse::Pending) {
+        resp = fs_call(FsRequest::DiskInfo);
+    }
+    match resp {
+        FsResponse::DiskInfo {
+            block_size,
+            total_blocks,
+            free_blocks,
+        } => {
+            let used = total_blocks.saturating_sub(free_blocks);
+            let _ = writeln!(
+                ConsoleWriter(console),
+                "Filesystem  1K-blocks  Used  Available",
+            );
+            let total_k = (total_blocks as u64 * block_size as u64) / 1024;
+            let used_k = (used as u64 * block_size as u64) / 1024;
+            let free_k = (free_blocks as u64 * block_size as u64) / 1024;
+            let _ = writeln!(
+                ConsoleWriter(console),
+                "leruxfs     {:>9}  {:>4}  {:>9}",
+                total_k,
+                used_k,
+                free_k
+            );
+        }
+        _ => println(console, "df: unavailable"),
+    }
+}
+
+fn ping_cmd(console: &mut SerialClient) {
+    // UDP reachability probe to default gateway (same path as fetch demo).
+    for _ in 0..16 {
+        match call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::udp_tx(b"ping")) {
+            Ok(NetResponse::Pending) => {
+                if poll_net() == NetResponse::Ok {
+                    println(console, "ping: udp ok");
+                    return;
+                }
+            }
+            Ok(NetResponse::Ok) => {
+                println(console, "ping: udp ok");
+                return;
+            }
+            _ => break,
+        }
+    }
+    println(console, "ping: failed");
+}
+
+fn uptime_cmd(console: &mut SerialClient) {
+    match call::<SupervisorRequest, SupervisorResponse>(SUPERVISOR, SupervisorRequest::GetUptime) {
+        Ok(SupervisorResponse::Uptime { secs }) => {
+            let h = secs / 3600;
+            let m = (secs % 3600) / 60;
+            let s = secs % 60;
+            let _ = writeln!(ConsoleWriter(console), "up {:02}:{:02}:{:02}", h, m, s);
+        }
+        _ => println(console, "uptime: unavailable"),
+    }
+}
+
+fn clear_cmd(console: &mut SerialClient) {
+    // ANSI clear screen + home (works on most serial terminals / screen).
+    write_bytes(console, b"\x1b[2J\x1b[H");
+}
+
+fn history_cmd(h: &mut HandlerImpl) {
+    let n = h.history_len as usize;
+    if n == 0 {
+        println(&mut h.console, "history: empty");
+        return;
+    }
+    let start = if h.history_len < HISTORY_CAP as u8 {
+        0
+    } else {
+        h.history_next as usize
+    };
+    for i in 0..n {
+        let idx = (start + i) % HISTORY_CAP;
+        let len = h.history_lens[idx] as usize;
+        let _ = write!(ConsoleWriter(&mut h.console), "{:>3}  ", i + 1);
+        write_bytes(&mut h.console, &h.history[idx][..len]);
+        write_bytes(&mut h.console, b"\r\n");
+    }
+}
+
+fn push_history(h: &mut HandlerImpl, line: &[u8]) {
+    if line.is_empty() {
+        return;
+    }
+    let i = h.history_next as usize;
+    let n = line.len().min(HISTORY_LINE);
+    h.history[i][..n].copy_from_slice(&line[..n]);
+    h.history_lens[i] = n as u8;
+    h.history_next = ((i + 1) % HISTORY_CAP) as u8;
+    if (h.history_len as usize) < HISTORY_CAP {
+        h.history_len += 1;
+    }
+}
+
+fn help_cmd(console: &mut SerialClient, arg: Option<&[u8]>) {
+    match arg {
+        Some(b"-l") | Some(b"commands") | Some(b"--list") => {
+            print(console, "lerux-shell: cmds=");
+            for (i, c) in COMMANDS.iter().enumerate() {
+                if i > 0 {
+                    write_bytes(console, b",");
+                }
+                print(console, c);
+            }
+            write_bytes(console, b"\r\n");
+        }
+        Some(b"help") | None => {
+            println(
+                console,
+                "lerux shell — type a command, or `help -l` for the full list",
+            );
+            println(console, "files:  ls cat write mkdir rm mv cd pwd stat df");
+            println(console, "net:    ip ifconfig ping fetch");
+            println(
+                console,
+                "sys:    time date uptime ps top qos reboot dmesg clear history",
+            );
+            println(console, "apps:   edit chat echo help");
+        }
+        Some(other) => {
+            print(console, "help: unknown topic ");
+            write_bytes(console, other);
+            write_bytes(console, b"\r\n");
+        }
+    }
+}
+
 fn render_services(console: &mut SerialClient) {
     match call::<SupervisorRequest, SupervisorResponse>(SUPERVISOR, SupervisorRequest::ListServices)
     {
@@ -377,7 +580,14 @@ fn render_services(console: &mut SerialClient) {
         Ok(SupervisorResponse::Services { count }) => {
             let _ = writeln!(ConsoleWriter(console), "services: {count}");
         }
-        _ => println(console, "ps: error"),
+        Ok(
+            SupervisorResponse::Ok
+            | SupervisorResponse::Error
+            | SupervisorResponse::Status { .. }
+            | SupervisorResponse::Time { .. }
+            | SupervisorResponse::Uptime { .. },
+        )
+        | Err(_) => println(console, "ps: error"),
     }
 }
 
@@ -479,11 +689,19 @@ fn poll_net() -> NetResponse {
 fn dmesg(console: &mut SerialClient) {
     match call::<LogRequest, LogResponse>(LOG_SERVER, LogRequest::GetRecent) {
         Ok(LogResponse::Recent { count, lens, lines }) => {
+            let mut lines_on_page = 0usize;
             for i in 0..(count as usize) {
                 let l = lens[i] as usize;
                 if l > 0 {
                     write_bytes(console, &lines[i][..l]);
                     write_bytes(console, b"\r\n");
+                    lines_on_page += 1;
+                    if lines_on_page >= PAGE_LINES {
+                        if !wait_more(console) {
+                            return;
+                        }
+                        lines_on_page = 0;
+                    }
                 }
             }
         }
@@ -500,9 +718,10 @@ fn process_command(h: &mut HandlerImpl, line: &[u8]) {
     if line.is_empty() {
         return;
     }
+    push_history(h, line);
     let mut parts = line.split(|&b| b == b' ');
     let cmd = parts.next().unwrap_or(b"");
-    // Copy cwd so path helpers do not borrow `h` across `cd`.
+    // Copy cwd so path helpers do not borrow `h` across `cd` / `history`.
     let mut cwd_copy = [0u8; CWD_CAP];
     let cwd_len = h.cwd_len as usize;
     cwd_copy[..cwd_len].copy_from_slice(&h.cwd[..cwd_len]);
@@ -564,19 +783,29 @@ fn process_command(h: &mut HandlerImpl, line: &[u8]) {
             }
         }
         b"pwd" => pwd_cmd(&mut h.console, cwd),
+        b"stat" => {
+            if let Some(p) = parts.next() {
+                stat_cmd(&mut h.console, cwd, p);
+            } else {
+                println(&mut h.console, "usage: stat <path>");
+            }
+        }
+        b"df" => df_cmd(&mut h.console),
         b"time" | b"date" => time(&mut h.console),
+        b"uptime" => uptime_cmd(&mut h.console),
+        b"clear" => clear_cmd(&mut h.console),
+        b"history" => history_cmd(h),
         b"ps" => ps(&mut h.console),
         b"top" => top(&mut h.console),
         b"qos" => qos(&mut h.console),
         b"reboot" => reboot(&mut h.console),
         b"fetch" => fetch_demo(&mut h.console),
+        b"ping" => ping_cmd(&mut h.console),
         b"ip" | b"ifconfig" => ip_cmd(&mut h.console),
-        b"help" => println(
-            &mut h.console,
-            "commands: ls cat write mkdir rm mv cd pwd ip time ps top qos reboot fetch dmesg edit chat help",
-        ),
+        b"help" => help_cmd(&mut h.console, parts.next()),
         b"echo" => {
-            let rest = &line[4..];
+            let rest = if line.len() > 4 { &line[4..] } else { b"" };
+            let rest = rest.strip_prefix(b" ").unwrap_or(rest);
             write_bytes(&mut h.console, rest);
             write_bytes(&mut h.console, b"\r\n");
         }
@@ -626,6 +855,9 @@ fn init() -> HandlerImpl {
     server::init(LOG_SERVER).unwrap();
     let _console = SerialClient::new(SERIAL_DRIVER);
     log::info!("lerux-shell: ready");
+    // Machine-readable command discovery for smokes (Phase 53).
+    // Keep under MAX_LOG_MSG (~80) by logging a short marker + count.
+    log::info!("lerux-shell: cmds={} (help -l)", COMMANDS.len());
 
     if let FsResponse::DirList { count, .. } = fs_call(FsRequest::list_root()) {
         log::info!("lerux-shell: ls count={}", count);
@@ -655,6 +887,10 @@ fn init() -> HandlerImpl {
         in_chat: false,
         cwd,
         cwd_len: 1,
+        history: [[0; HISTORY_LINE]; HISTORY_CAP],
+        history_lens: [0; HISTORY_CAP],
+        history_len: 0,
+        history_next: 0,
     }
 }
 

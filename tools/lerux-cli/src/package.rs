@@ -323,6 +323,10 @@ fn profile_has_pd(profile: &crate::profile::Profile, pd: &str) -> bool {
 /// Merge package fragment into a profile and write `support/profiles/<profile>.toml`.
 ///
 /// Does not rebuild the image unless `build` is true.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "install options map 1:1 to CLI flags"
+)]
 pub fn install_package(
     root: &Path,
     packages: &Packages,

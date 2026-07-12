@@ -16,6 +16,9 @@ description = "Hello on real RPi4 hardware (serial console)"
 
 default_board = "rpi4b_4gb"
 
-channels = [
-  "serial_driver:1 <-> hello:0 (pp)",
+[[channel]]
+name = "hello_serial"
+ends = [
+  { pd = "serial_driver", id = 1 },
+  { pd = "hello", id = 0, pp = true },
 ]

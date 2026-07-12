@@ -23,7 +23,7 @@ Apply to all Rust code unless a context-specific section overrides.
 - Import order: `core`/`alloc` → external crates → workspace / `lerux-*` → `crate::` / `super::`.
 - Prefer `From` / `Into` / `TryFrom` over manual bit-twiddling conversions.
 - Use `#[expect(clippy::…)]` with a one-line rationale instead of blanket `#[allow]`.
-- Avoid magic numbers for IPC topology; use named `const` `Channel` values that match `.system` XML.
+- **Channel numbers come from the profile manifest**, not freehand magic. Use named `const` `Channel` values that match `support/profiles/*.toml` `[[channel]]` ends (and the composed SDF). Run `lerux profile check-channels` after renumbering; see Phase 41 / ADR-001 / `docs/system-generation.md`.
 - Match existing naming: `HandlerImpl`, `SERIAL_DRIVER`, `*_DRIVER` channel constants.
 - Keep comments purposeful (`why`, invariants, safety); remove stale commentary.
 - Link TODOs to issues: `// TODO(#NNN): …`.

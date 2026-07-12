@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-11 (Phase 39 manual HW gate procedure documented)
+Last updated: 2026-07-12 (Phase 41 system generation complete; Phases 42–49 in plan-au-ts)
 
 ## Phase 1 — Bring-up
 
@@ -348,9 +348,18 @@ Bring the QEMU workstation stack to real hardware on `rpi4b_4gb`.
 - [x] Additional ported apps: `top` (supervisor `ServiceList` IPC), `chat-client` (UDP chat + shell proxy), `http-file-browser` (FS + net TCP listen IPC)
 - [x] Workstation profile wires chat + http-fs; smoke expects + hostfwd curl for directory listing
 
-## Phases 41+ — au-ts inspiration
+## Phase 41 — System generation ✅
 
-See [`plan-au-ts.md`](plan-au-ts.md) for Phases 41–49 (system generation, serial/net virtualisers, FS backends, sync runtime, GDB, HW CI, optional QoS/perf). That plan steals topology and tooling ideas from sDDF / LionsOS / sdfgen without adopting C userspace.
+In-tree SDF composition in `lerux-cli` ([ADR-001](decisions/001-in-tree-system-generation.md)):
+
+- Structured `[[channel]]` manifests in profiles; workstation templates are channel-free layout bodies
+- `render_system` = board `system_vars` + template layout + generated channels
+- `lerux profile sdf|emit-channels|check-channels|diff` (SDF delta included)
+- Docs: [`system-generation.md`](system-generation.md), [`plan-au-ts.md`](plan-au-ts.md)
+
+## Phases 42+ — au-ts inspiration
+
+See [`plan-au-ts.md`](plan-au-ts.md) for Phases 42–49 (serial/net virtualisers, FS backends, sync runtime, GDB, HW CI, optional QoS/perf).
 
 ## Version alignment
 

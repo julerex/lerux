@@ -14,7 +14,7 @@ use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::build;
+use crate::{build, channels::ChannelSpec};
 
 /// One package under `support/packages/<name>.toml`.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -35,8 +35,9 @@ pub struct Package {
 pub struct PackageFragment {
     #[serde(default)]
     pub pds: Vec<String>,
+    /// Structured channel edges (`[[fragment.channel]]`).
     #[serde(default)]
-    pub channels: Vec<String>,
+    pub channel: Vec<ChannelSpec>,
     /// Other PD crates this package expects to be present.
     #[serde(default)]
     pub requires: Vec<String>,
@@ -128,9 +129,9 @@ pub fn show_package(name: &str, package: &Package) {
         if !frag.requires.is_empty() {
             println!("  fragment.requires: {}", frag.requires.join(", "));
         }
-        if !frag.channels.is_empty() {
+        if !frag.channel.is_empty() {
             println!("  fragment.channels:");
-            for ch in &frag.channels {
+            for ch in &frag.channel {
                 println!("    - {ch}");
             }
         }

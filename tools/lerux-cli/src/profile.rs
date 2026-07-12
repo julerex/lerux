@@ -3,6 +3,8 @@ use std::{collections::BTreeMap, fs, path::Path};
 use anyhow::{Context, Result};
 use serde::Deserialize;
 
+use crate::channels::{ensure_channels_valid, to_sdf_pd_name, ChannelSpec, ChannelValidation};
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct Profile {
     pub template: String,
@@ -11,9 +13,11 @@ pub struct Profile {
     pub description: Option<String>,
     #[serde(default)]
     pub default_board: Option<String>,
-    /// High-level channel manifest for the profile (documentation / diffing).
+    /// Structured channel manifest (`[[channel]]` tables). Source of truth for
+    /// IPC topology: `render_system` splices these into the board template when
+    /// `default_board` matches (Phase 41).
     #[serde(default)]
-    pub channels: Vec<String>,
+    pub channel: Vec<ChannelSpec>,
 }
 
 pub type Profiles = BTreeMap<String, Profile>;
@@ -43,6 +47,8 @@ pub fn load_profiles(root: &Path) -> Result<Profiles> {
             fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
         let profile: Profile =
             toml::from_str(&contents).with_context(|| format!("parse {}", path.display()))?;
+        ensure_channels_valid(&profile.channel, &profile.pds, &format!("profile {name}"))
+            .with_context(|| format!("validate channels in {}", path.display()))?;
         profiles.insert(name, profile);
     }
     Ok(profiles)
@@ -61,13 +67,66 @@ pub fn list_profiles(profiles: &Profiles) {
     }
     for (name, p) in profiles {
         let desc = p.description.as_deref().unwrap_or("");
-        println!("{name:20} {desc}");
+        let n = p.channel.len();
+        println!("{name:20} [{n:2} ch] {desc}");
     }
+}
+
+pub fn show_profile(name: &str, profile: &Profile) {
+    println!("profile: {name}");
+    println!("  template: {}", profile.template);
+    if let Some(board) = &profile.default_board {
+        println!("  default_board: {board}");
+    }
+    if let Some(desc) = &profile.description {
+        println!("  description: {desc}");
+    }
+    println!("  pds: {}", profile.pds.join(", "));
+    println!("  channels ({}):", profile.channel.len());
+    for ch in &profile.channel {
+        println!("    - {ch}");
+    }
+}
+
+pub fn validate_profile(name: &str, profile: &Profile) -> Result<ChannelValidation> {
+    let report = crate::channels::validate_channels(&profile.channel, &profile.pds);
+    if report.ok() {
+        println!(
+            "profile {name}: ok ({} channels, {} pds)",
+            profile.channel.len(),
+            profile.pds.len()
+        );
+    } else {
+        report.clone().into_result(&format!("profile {name}"))?;
+    }
+    Ok(report)
+}
+
+pub fn validate_all_profiles(profiles: &Profiles) -> Result<()> {
+    let mut failed = 0usize;
+    for (name, p) in profiles {
+        match validate_profile(name, p) {
+            Ok(_) => {}
+            Err(e) => {
+                eprintln!("{e:#}");
+                failed += 1;
+            }
+        }
+    }
+    if failed > 0 {
+        anyhow::bail!("{failed} profile(s) failed channel validation");
+    }
+    Ok(())
 }
 
 pub fn diff_profiles(a_name: &str, a: &Profile, b_name: &str, b: &Profile) {
     println!("diff {a_name} vs {b_name}");
     println!("template: {} | {}", a.template, b.template);
+    println!(
+        "default_board: {} | {}",
+        a.default_board.as_deref().unwrap_or("-"),
+        b.default_board.as_deref().unwrap_or("-")
+    );
 
     println!("\nPDs in {a_name} only:");
     for pd in &a.pds {
@@ -86,19 +145,73 @@ pub fn diff_profiles(a_name: &str, a: &Profile, b_name: &str, b: &Profile) {
         a.pds.iter().filter(|p| b.pds.contains(p)).count()
     );
 
-    // channels
+    let a_lines: BTreeMap<String, &ChannelSpec> = a
+        .channel
+        .iter()
+        .map(|c| (canonical_channel_key(c), c))
+        .collect();
+    let b_lines: BTreeMap<String, &ChannelSpec> = b
+        .channel
+        .iter()
+        .map(|c| (canonical_channel_key(c), c))
+        .collect();
+
     println!("\nChannels in {a_name} only:");
-    for ch in &a.channels {
-        if !b.channels.contains(ch) {
-            println!("  + {ch}");
+    for key in a_lines.keys() {
+        if !b_lines.contains_key(key) {
+            println!("  + {}", a_lines[key]);
         }
     }
     println!("Channels in {b_name} only:");
-    for ch in &b.channels {
-        if !a.channels.contains(ch) {
-            println!("  - {ch}");
+    for key in b_lines.keys() {
+        if !a_lines.contains_key(key) {
+            println!("  - {}", b_lines[key]);
         }
     }
+    let common = a_lines
+        .keys()
+        .filter(|k| b_lines.contains_key(k.as_str()))
+        .count();
+    println!("Common channels: {common}");
+}
+
+/// Diff profile TOML topology and the composed Microkit SDF for each profile.
+pub fn diff_profiles_with_sdf(
+    root: &Path,
+    a_name: &str,
+    a: &Profile,
+    b_name: &str,
+    b: &Profile,
+) -> Result<()> {
+    diff_profiles(a_name, a, b_name, b);
+    println!();
+    let sdf_a = crate::system::render_profile_system(root, a_name, a, None)
+        .with_context(|| format!("render SDF for profile {a_name}"))?;
+    let sdf_b = crate::system::render_profile_system(root, b_name, b, None)
+        .with_context(|| format!("render SDF for profile {b_name}"))?;
+    print!(
+        "{}",
+        crate::system::sdf_diff_summary(a_name, &sdf_a, b_name, &sdf_b)
+    );
+    Ok(())
+}
+
+/// Order-independent key for channel equality (ends sorted by pd:id).
+fn canonical_channel_key(ch: &ChannelSpec) -> String {
+    let mut ends: Vec<String> = ch
+        .ends
+        .iter()
+        .map(|e| {
+            format!(
+                "{}:{}{}",
+                to_sdf_pd_name(&e.pd),
+                e.id,
+                if e.pp { "pp" } else { "" }
+            )
+        })
+        .collect();
+    ends.sort();
+    ends.join("|")
 }
 
 /// Resolve a board name for a profile. Prefers explicit board, then profile.default_board.
@@ -114,4 +227,17 @@ pub fn resolve_board_for_profile(
     p.default_board.clone().ok_or_else(|| {
         anyhow::anyhow!("profile {name} has no default_board and none was --board supplied")
     })
+}
+
+/// Find the profile whose `default_board` matches `board_name` (if any).
+///
+/// Used by system generation to splice structured channels into the board template.
+pub fn find_profile_for_board<'a>(
+    profiles: &'a Profiles,
+    board_name: &str,
+) -> Option<(&'a str, &'a Profile)> {
+    profiles
+        .iter()
+        .find(|(_, p)| p.default_board.as_deref() == Some(board_name))
+        .map(|(name, p)| (name.as_str(), p))
 }

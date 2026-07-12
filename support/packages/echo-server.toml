@@ -5,6 +5,10 @@ description = "Typed postcard echo IPC server (server profile demo)"
 [fragment]
 pds = ["echo-server"]
 requires = ["echo-client", "serial-driver"]
-channels = [
-  "echo-client <-> echo-server",
+
+[[fragment.channel]]
+name = "echo_rpc"
+ends = [
+  { pd = "echo_server", id = 1 },
+  { pd = "echo_client", id = 1, pp = true },
 ]

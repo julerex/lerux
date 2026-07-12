@@ -48,6 +48,9 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 **System profile**
 : A named bundle in `support/profiles/*.toml`: which PD crates, `.system` template, and channel manifest compose one `loader.img`. Use `lerux profile list|build|diff <name>`. Board hardware (MMIO, IRQs, arch) remains in `support/boards.toml`; profiles are selected via default_board or `--board`. (Phase 35)
 
+**System generation (Phase 41)**
+: Composed Microkit SDF = board `system_vars` + layout template (MRs/PDs/maps) + **generated channels** from the profile’s structured `[[channel]]` list ([ADR-001](decisions/001-in-tree-system-generation.md)). Workstation templates are channel-free; `lerux profile check-channels` guards PD `Channel::new` drift. Details: [`system-generation.md`](system-generation.md).
+
 **Package**
 : One PD crate plus its interface-types version and an optional profile fragment (`support/packages/<name>.toml`). “Installing” a package means adding the PD to a `support/profiles/*.toml` and rebuilding the static image via `lerux profile build` — Microkit does not load arbitrary ELFs at runtime. CI can publish per-PD ELF artifacts; pins live in `support/package-pins.toml` (`lerux package list|show|build|pin|diff`). (Phase 40)
 

@@ -5,7 +5,17 @@ description = "HTTP file browser over FS + net TCP listen IPC"
 [fragment]
 pds = ["http-file-browser"]
 requires = ["fs-server", "net-server"]
-channels = [
-  "net_server:7 <-> http-file-browser:0 (pp)",
-  "fs_server:7 <-> http-file-browser:1 (pp)",
+
+[[fragment.channel]]
+name = "http_fs_net"
+ends = [
+  { pd = "net_server", id = 7 },
+  { pd = "http_file_browser", id = 0, pp = true },
+]
+
+[[fragment.channel]]
+name = "http_fs_fs"
+ends = [
+  { pd = "fs_server", id = 7 },
+  { pd = "http_file_browser", id = 1, pp = true },
 ]

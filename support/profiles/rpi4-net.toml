@@ -9,8 +9,23 @@ description = "Net over native RPi4 genet Ethernet"
 
 default_board = "rpi4b_4gb_net"
 
-channels = [
-  "serial_driver <-> net_client",
-  "genet_driver <-> net_server",
-  "net_server <-> net_client",
+[[channel]]
+name = "net_client_serial"
+ends = [
+  { pd = "serial_driver", id = 1 },
+  { pd = "net_client", id = 0, pp = true },
+]
+
+[[channel]]
+name = "net_genet"
+ends = [
+  { pd = "genet_driver", id = 1 },
+  { pd = "net_server", id = 1, pp = true },
+]
+
+[[channel]]
+name = "net_client_rpc"
+ends = [
+  { pd = "net_server", id = 2 },
+  { pd = "net_client", id = 1, pp = true },
 ]

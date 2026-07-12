@@ -7,7 +7,23 @@ description = "Echo client/server (typed IPC demo) + serial"
 
 default_board = "qemu_virt_aarch64_echo"
 
-channels = [
-  "serial_driver <-> echo-client",
-  "echo-client <-> echo-server",
+[[channel]]
+name = "echo_client_serial"
+ends = [
+  { pd = "serial_driver", id = 1 },
+  { pd = "echo_client", id = 0, pp = true },
+]
+
+[[channel]]
+name = "echo_server_serial"
+ends = [
+  { pd = "serial_driver", id = 2 },
+  { pd = "echo_server", id = 0, pp = true },
+]
+
+[[channel]]
+name = "echo_rpc"
+ends = [
+  { pd = "echo_server", id = 1 },
+  { pd = "echo_client", id = 1, pp = true },
 ]

@@ -1,6 +1,8 @@
 mod board;
 mod build;
 mod build_sdk;
+mod channel_consts;
+mod channels;
 mod clippy;
 mod disk_img;
 mod fetch;
@@ -163,10 +165,36 @@ enum ProfileCommands {
         #[arg(long, default_value = "debug")]
         config: String,
     },
-    /// Diff two profiles (PD set, template, channel manifest).
+    /// Diff two profiles (PD set, channels, and composed Microkit SDF).
     Diff {
         profile_a: String,
         profile_b: String,
+    },
+    /// Show one profile (PDs + structured channels).
+    Show { name: String },
+    /// Validate structured channel manifests (unique ends, known PDs).
+    Validate {
+        /// Profile name; omit to validate all profiles under support/profiles/.
+        name: Option<String>,
+    },
+    /// Write the composed Microkit SDF for a profile (`-o` or stdout).
+    Sdf {
+        name: String,
+        #[arg(long)]
+        board: Option<String>,
+        #[arg(short = 'o', long)]
+        output: Option<PathBuf>,
+    },
+    /// Emit generated `channel_consts.rs` from the profile manifest.
+    EmitChannels {
+        name: String,
+        #[arg(short = 'o', long)]
+        output: Option<PathBuf>,
+    },
+    /// Check PD `Channel::new` consts against the profile manifest.
+    CheckChannels {
+        /// Profile name; omit to check all profiles.
+        name: Option<String>,
     },
 }
 
@@ -347,7 +375,62 @@ fn main() -> Result<()> {
                 } => {
                     let pa = crate::profile::get_profile(&profiles, &profile_a)?;
                     let pb = crate::profile::get_profile(&profiles, &profile_b)?;
-                    crate::profile::diff_profiles(&profile_a, pa, &profile_b, pb);
+                    crate::profile::diff_profiles_with_sdf(&root, &profile_a, pa, &profile_b, pb)?;
+                }
+                ProfileCommands::Show { name } => {
+                    let p = crate::profile::get_profile(&profiles, &name)?;
+                    crate::profile::show_profile(&name, p);
+                }
+                ProfileCommands::Validate { name } => {
+                    if let Some(name) = name {
+                        let p = crate::profile::get_profile(&profiles, &name)?;
+                        crate::profile::validate_profile(&name, p)?;
+                    } else {
+                        crate::profile::validate_all_profiles(&profiles)?;
+                    }
+                }
+                ProfileCommands::Sdf {
+                    name,
+                    board,
+                    output,
+                } => {
+                    let p = crate::profile::get_profile(&profiles, &name)?;
+                    let sdf =
+                        crate::system::render_profile_system(&root, &name, p, board.as_deref())?;
+                    if let Some(path) = output {
+                        if let Some(parent) = path.parent() {
+                            std::fs::create_dir_all(parent)?;
+                        }
+                        std::fs::write(&path, &sdf)?;
+                        println!("wrote {} ({} bytes)", path.display(), sdf.len());
+                    } else {
+                        print!("{sdf}");
+                    }
+                }
+                ProfileCommands::EmitChannels { name, output } => {
+                    let p = crate::profile::get_profile(&profiles, &name)?;
+                    let body = crate::channel_consts::emit_channel_consts_rs(&name, &p.channel);
+                    if let Some(path) = output {
+                        if let Some(parent) = path.parent() {
+                            std::fs::create_dir_all(parent)?;
+                        }
+                        std::fs::write(&path, &body)?;
+                        println!("wrote {}", path.display());
+                    } else {
+                        print!("{body}");
+                    }
+                }
+                ProfileCommands::CheckChannels { name } => {
+                    if let Some(name) = name {
+                        let p = crate::profile::get_profile(&profiles, &name)?;
+                        crate::channel_consts::check_profile_channels(&root, &name, p)?;
+                        println!("profile {name}: channel consts ok");
+                    } else {
+                        for (name, p) in &profiles {
+                            crate::channel_consts::check_profile_channels(&root, name, p)?;
+                            println!("profile {name}: channel consts ok");
+                        }
+                    }
                 }
             }
         }

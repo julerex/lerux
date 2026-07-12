@@ -7,7 +7,17 @@ description = "Serial TUI text editor (FS load/save via shell proxy)"
 [fragment]
 pds = ["edit"]
 requires = ["shell", "fs-server"]
-channels = [
-  "shell:6 <-> edit:0 (pp)",
-  "fs_server:6 <-> edit:1 (pp)",
+
+[[fragment.channel]]
+name = "edit_shell"
+ends = [
+  { pd = "shell", id = 6, pp = true },
+  { pd = "edit", id = 0 },
+]
+
+[[fragment.channel]]
+name = "edit_fs"
+ends = [
+  { pd = "fs_server", id = 6 },
+  { pd = "edit", id = 1, pp = true },
 ]

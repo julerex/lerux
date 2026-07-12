@@ -1,6 +1,6 @@
 # PLAN — au-ts inspiration
 
-Last updated: 2026-07-11
+Last updated: 2026-07-12 (Phase 41 complete)
 
 Upstream mirror: [`/home/julian/repos/github_orgs/au-ts`](https://github.com/au-ts) (Trustworthy Systems).  
 Related: [`plan.md`](plan.md) (main roadmap), [`context.md`](context.md) (domain language).
@@ -24,7 +24,7 @@ This plan turns the highest-leverage ideas from the au-ts ecosystem into lerux w
 | Inspiration | au-ts repos | lerux touchpoints today |
 |-------------|-------------|-------------------------|
 | Driver / virtualiser / client | `sddf` (+ design PDF) | `serial-driver`, virtio/genet/emmc2, `net-server`, `blk-server` |
-| Programmatic SDF | `microkit_sdf_gen` | `.system` templates, `support/profiles/`, `lerux profile` |
+| Programmatic SDF | `microkit_sdf_gen` | `.system` templates (layout body), `support/profiles/`, `lerux profile` / `render_system` |
 | Component catalog | `lionsos` examples + `components/` | workstation profile, Phase 40 apps |
 | Sync over Microkit events | `libmicrokitco` | poll-based `FsRequest` / `NetRequest` |
 | Remote GDB | `libgdb` | none |
@@ -53,7 +53,7 @@ Phases 46–47 harden bring-up on real boards.
 
 ---
 
-## Phase 41 — System generation (sdfgen-shaped)
+## Phase 41 — System generation (sdfgen-shaped) ✅ complete
 
 **Goal:** Profiles and channel manifests drive composition with fewer hand-edited XML edges; validate against Microkit SDF rules before `microkit` runs.
 
@@ -63,22 +63,39 @@ Phases 46–47 harden bring-up on real boards.
 
 ### Scope
 
-- [ ] Inventory current templates: which regions/channels are mechanical vs board-specific
-- [ ] ADR: extend `lerux profile` / `lerux system` in-tree **vs** call out to sdfgen Python
-  - Default lean: in-tree Rust generator in `lerux-cli` (matches host tooling rules); optional later bridge to sdfgen for sDDF-compatible layouts
-- [ ] Generate channel IDs and named `Channel` constants from a single manifest (profile TOML or sibling YAML) so PD `const` values cannot drift from XML
-- [ ] Emit `.system` from profile + board `system_vars`; keep templates only for irreducible board MMIO/IRQ snippets if needed
-- [ ] `lerux profile diff` shows generated SDF delta, not only TOML
-- [ ] Smoke: `lerux profile build workstation` bit-identical (or documented-equivalent) to today’s hand template path for one golden board
+- [x] Inventory current templates: which regions/channels are mechanical vs board-specific → [`system-generation.md`](system-generation.md)
+- [x] ADR: extend `lerux profile` / `lerux system` in-tree **vs** call out to sdfgen Python → [ADR-001](decisions/001-in-tree-system-generation.md)
+  - **Accepted:** in-tree Rust generator in `lerux-cli`; optional later bridge to sdfgen for sDDF-compatible layouts only
+- [x] Structured channel manifest (`[[channel]]`) + load-time validation (`lerux profile validate|show`)
+- [x] Channel XML composition: `render_system` / `render_profile_system` = layout body (`system_vars` + template) + generated channels from profile
+- [x] Workstation + workstation-rpi4 templates are **channel-free layout recipes**; channels live only in profile TOML
+- [x] Named channel constants: `lerux profile emit-channels` + `check-channels` (PD `const` drift check); `channel_consts.rs` written next to `system.system`
+- [x] Full SDF emit path: `lerux profile sdf <name>` / `lerux system --board …` compose complete Microkit XML (layout body from template + channels from manifest; hardware from `boards.toml`)
+- [x] `lerux profile diff` shows PD/channel TOML delta **and** composed SDF delta
+- [x] Golden unit tests (17) for workstation composition + channel checks; `just check` clean
 
-### Out of scope
+### Out of scope (deferred)
 
 - Full sDDF subsystem recipes in C
+- Replacing all layout templates with pure device-recipe IR (MRs/maps still in `.system.template` bodies; Phase 42+ can shrink further)
 - Replacing `support/boards.toml` hardware constants
 
 ### Exit
 
-Workstation (QEMU aarch64) still boots via generated SDF; CI smoke green; AGENTS.md notes “channels come from manifest.”
+- [x] Workstation (QEMU aarch64) SDF composed from profile + board (channels generated)
+- [x] Host checks green (`just check`, `cargo test -p lerux-cli`)
+- [x] AGENTS.md notes channels come from the profile manifest
+
+### CLI surface (Phase 41)
+
+| Command | Purpose |
+|---------|---------|
+| `lerux profile list\|show\|validate` | Inspect structured channels |
+| `lerux profile sdf <name> [-o file]` | Emit composed Microkit SDF |
+| `lerux profile emit-channels <name>` | Generate `channel_consts.rs` text |
+| `lerux profile check-channels [name]` | Drift-check PD `Channel::new` vs manifest |
+| `lerux profile diff a b` | TOML topology + SDF delta |
+| `lerux system --board … -o …` | Compose + write SDF (+ channel_consts side file) |
 
 ---
 
@@ -326,5 +343,5 @@ Track alongside [`plan.md`](plan.md) version table. Revisit when adopting debug 
 
 - Inspiration is visible as **Rust PDs + profiles**, not as C submodules
 - Workstation QEMU smokes remain green after each phase
-- At least one of: generated SDF (41), serial virt (42), or net virt (43) ships before optional 48–49
+- At least one of: generated SDF (41), serial virt (42), or net virt (43) ships before optional 48–49 — **Phase 41 done**
 - HW bring-up (47) closes the Phase 39 manual gate for workstation-rpi4

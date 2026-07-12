@@ -5,7 +5,17 @@ description = "UDP chat client (shell TUI proxy + net IPC)"
 [fragment]
 pds = ["chat-client"]
 requires = ["shell", "net-server"]
-channels = [
-  "shell:7 <-> chat-client:0 (pp)",
-  "net_server:6 <-> chat-client:1 (pp)",
+
+[[fragment.channel]]
+name = "chat_shell"
+ends = [
+  { pd = "shell", id = 7, pp = true },
+  { pd = "chat_client", id = 0 },
+]
+
+[[fragment.channel]]
+name = "chat_net"
+ends = [
+  { pd = "net_server", id = 6 },
+  { pd = "chat_client", id = 1, pp = true },
 ]

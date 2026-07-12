@@ -11,7 +11,9 @@ use lerux_ipc::{recv, send, send_unspecified_error};
 use lerux_logging::log;
 use sel4_microkit::{Channel, ChannelSet, Handler, Infallible, MessageInfo};
 
-use crate::block_io::{SectorIo, BLK_DRIVER, CLIENT};
+use lerux_service_async::SingleTask;
+
+use crate::block_io::{read_sector, write_sector, SectorIo, SharedSectorIo, BLK_DRIVER, CLIENT};
 
 #[expect(
     clippy::large_enum_variant,
@@ -19,9 +21,6 @@ use crate::block_io::{SectorIo, BLK_DRIVER, CLIENT};
 )]
 enum FsJob {
     None,
-    Format {
-        step: u8,
-    },
     Open {
         path: [u8; MAX_FS_PATH],
         path_len: u8,
@@ -61,7 +60,9 @@ enum FsJob {
 }
 
 pub struct HandlerImpl {
-    io: SectorIo,
+    io: SharedSectorIo,
+    /// Phase 45: LERUXFS1 format runs as a stackless async task.
+    format_task: SingleTask<Result<Superblock, ()>>,
     superblock: Superblock,
     dir_sector: [u8; SECTOR_SIZE],
     formatted: bool,
@@ -78,7 +79,8 @@ impl HandlerImpl {
     pub fn new(block_size: usize) -> HandlerImpl {
         log::info!("lerux-fs: ready (LERUXFS1)");
         HandlerImpl {
-            io: SectorIo::new(block_size),
+            io: SectorIo::shared(block_size),
+            format_task: SingleTask::empty(),
             superblock: Superblock::new(),
             dir_sector: [0; SECTOR_SIZE],
             formatted: false,
@@ -148,7 +150,6 @@ impl HandlerImpl {
     fn advance_fs_job(&mut self) -> Option<FsResponse> {
         match core::mem::replace(&mut self.fs_job, FsJob::None) {
             FsJob::None => None,
-            FsJob::Format { step } => self.advance_format(step),
             FsJob::Open {
                 path,
                 path_len,
@@ -190,54 +191,20 @@ impl HandlerImpl {
         self.fs_job = job;
     }
 
-    fn advance_format(&mut self, step: u8) -> Option<FsResponse> {
-        let job = FsJob::Format { step };
-        match step {
-            0 => {
-                if let Some(sector) = self.io.poll_read_sector(SUPERBLOCK_LBA) {
-                    if is_formatted(&sector) {
-                        self.superblock = decode_superblock(&sector).unwrap();
-                        self.formatted = true;
-                        if let Some(next) = self.after_format.take() {
-                            self.fs_job = next;
-                            return self.advance_fs_job();
-                        }
-                        self.fs_job = FsJob::None;
-                        return Some(FsResponse::Ok);
-                    }
-                    self.superblock = Superblock::new();
-                    encode_superblock(&mut self.io.sector_buf, &self.superblock);
-                    self.fs_job = FsJob::Format { step: 1 };
+    fn poll_format_task(&mut self) -> Option<FsResponse> {
+        match self.format_task.run_until_stalled() {
+            Some(Ok(sb)) => {
+                self.superblock = sb;
+                self.formatted = true;
+                log::info!("lerux-fs: format/mount done (async)");
+                if let Some(next) = self.after_format.take() {
+                    self.fs_job = next;
                     return self.advance_fs_job();
                 }
-                self.restore_job(job);
-                None
+                Some(FsResponse::Ok)
             }
-            1 => {
-                let sector = self.io.sector_buf;
-                if self.io.poll_write_sector(SUPERBLOCK_LBA, &sector) {
-                    self.dir_sector.fill(0);
-                    self.fs_job = FsJob::Format { step: 2 };
-                    return self.advance_fs_job();
-                }
-                self.restore_job(job);
-                None
-            }
-            2 => {
-                let dir = self.dir_sector;
-                if self.io.poll_write_sector(DIR_LBA, &dir) {
-                    self.formatted = true;
-                    if let Some(next) = self.after_format.take() {
-                        self.fs_job = next;
-                        return self.advance_fs_job();
-                    }
-                    self.fs_job = FsJob::None;
-                    return Some(FsResponse::Ok);
-                }
-                self.restore_job(job);
-                None
-            }
-            _ => Some(FsResponse::Error),
+            Some(Err(())) => Some(FsResponse::Error),
+            None => None,
         }
     }
 
@@ -247,10 +214,12 @@ impl HandlerImpl {
             return self.advance_fs_job();
         }
         self.after_format = Some(next);
-        if matches!(self.fs_job, FsJob::None) {
-            self.fs_job = FsJob::Format { step: 0 };
+        if self.format_task.is_idle() {
+            let io = self.io.clone();
+            self.format_task
+                .spawn(async move { format_leruxfs(io).await });
         }
-        self.advance_fs_job()
+        self.poll_format_task()
     }
 
     fn advance_open(
@@ -272,7 +241,8 @@ impl HandlerImpl {
                 step: 1,
             }),
             1 => {
-                if let Some(dir) = self.io.poll_read_sector(DIR_LBA) {
+                let __tmp = self.io.borrow_mut().poll_read_sector(DIR_LBA);
+                if let Some(dir) = __tmp {
                     self.dir_sector = dir;
                     if let Some(index) = find_by_name(&self.dir_sector, name) {
                         return Some(FsResponse::Handle { id: index as u8 });
@@ -311,7 +281,8 @@ impl HandlerImpl {
                 data_lba,
             }),
             1 => {
-                if let Some(dir) = self.io.poll_read_sector(DIR_LBA) {
+                let __tmp = self.io.borrow_mut().poll_read_sector(DIR_LBA);
+                if let Some(dir) = __tmp {
                     self.dir_sector = dir;
                     if find_by_name(&self.dir_sector, name).is_some() {
                         return Some(FsResponse::Error);
@@ -342,7 +313,7 @@ impl HandlerImpl {
                 encode_dir_entry(&mut self.dir_sector, slot as usize, &entry);
                 self.superblock.file_count = self.superblock.file_count.saturating_add(1);
                 self.superblock.next_data_lba = data_lba.saturating_add(1);
-                encode_superblock(&mut self.io.sector_buf, &self.superblock);
+                encode_superblock(&mut self.io.borrow_mut().sector_buf, &self.superblock);
                 self.fs_job = FsJob::Create {
                     path,
                     path_len,
@@ -354,7 +325,8 @@ impl HandlerImpl {
             }
             3 => {
                 let dir = self.dir_sector;
-                if self.io.poll_write_sector(DIR_LBA, &dir) {
+                let __w = self.io.borrow_mut().poll_write_sector(DIR_LBA, &dir);
+                if __w {
                     self.fs_job = FsJob::Create {
                         path,
                         path_len,
@@ -368,8 +340,12 @@ impl HandlerImpl {
                 None
             }
             4 => {
-                let sector = self.io.sector_buf;
-                if self.io.poll_write_sector(SUPERBLOCK_LBA, &sector) {
+                let sector = self.io.borrow_mut().sector_buf;
+                let __w = self
+                    .io
+                    .borrow_mut()
+                    .poll_write_sector(SUPERBLOCK_LBA, &sector);
+                if __w {
                     return Some(FsResponse::Handle { id: slot });
                 }
                 self.restore_job(job);
@@ -404,7 +380,8 @@ impl HandlerImpl {
         };
         match step {
             0 => {
-                if let Some(dir) = self.io.poll_read_sector(DIR_LBA) {
+                let __tmp = self.io.borrow_mut().poll_read_sector(DIR_LBA);
+                if let Some(dir) = __tmp {
                     self.dir_sector = dir;
                     let entry = decode_dir_entry(&self.dir_sector, handle as usize);
                     if entry.is_free() {
@@ -425,7 +402,8 @@ impl HandlerImpl {
                 None
             }
             1 => {
-                if let Some(mut sector) = self.io.poll_read_sector(data_lba) {
+                let __tmp = self.io.borrow_mut().poll_read_sector(data_lba);
+                if let Some(mut sector) = __tmp {
                     let off = offset as usize;
                     let len = data_len as usize;
                     if off >= SECTOR_SIZE
@@ -435,7 +413,7 @@ impl HandlerImpl {
                         return Some(FsResponse::Error);
                     }
                     sector[off..off + len].copy_from_slice(&data[..len]);
-                    self.io.sector_buf = sector;
+                    self.io.borrow_mut().sector_buf = sector;
                     let end = (off + len) as u32;
                     let size = new_size.max(end);
                     self.fs_job = FsJob::Write {
@@ -453,8 +431,9 @@ impl HandlerImpl {
                 None
             }
             2 => {
-                let sector = self.io.sector_buf;
-                if self.io.poll_write_sector(data_lba, &sector) {
+                let sector = self.io.borrow_mut().sector_buf;
+                let __w = self.io.borrow_mut().poll_write_sector(data_lba, &sector);
+                if __w {
                     let mut entry = decode_dir_entry(&self.dir_sector, handle as usize);
                     entry.size = new_size;
                     encode_dir_entry(&mut self.dir_sector, handle as usize, &entry);
@@ -474,7 +453,8 @@ impl HandlerImpl {
             }
             3 => {
                 let dir = self.dir_sector;
-                if self.io.poll_write_sector(DIR_LBA, &dir) {
+                let __w = self.io.borrow_mut().poll_write_sector(DIR_LBA, &dir);
+                if __w {
                     return Some(FsResponse::Ok);
                 }
                 self.restore_job(job);
@@ -501,7 +481,8 @@ impl HandlerImpl {
         };
         match step {
             0 => {
-                if let Some(dir) = self.io.poll_read_sector(DIR_LBA) {
+                let __tmp = self.io.borrow_mut().poll_read_sector(DIR_LBA);
+                if let Some(dir) = __tmp {
                     self.dir_sector = dir;
                     let entry = decode_dir_entry(&self.dir_sector, handle as usize);
                     if entry.is_free() {
@@ -520,7 +501,8 @@ impl HandlerImpl {
                 None
             }
             1 => {
-                if let Some(sector) = self.io.poll_read_sector(data_lba) {
+                let __tmp = self.io.borrow_mut().poll_read_sector(data_lba);
+                if let Some(sector) = __tmp {
                     let entry = decode_dir_entry(&self.dir_sector, handle as usize);
                     let off = offset as usize;
                     let want = len as usize;
@@ -560,7 +542,8 @@ impl HandlerImpl {
                 if !self.formatted {
                     return Some(FsResponse::Error);
                 }
-                if let Some(dir) = self.io.poll_read_sector(DIR_LBA) {
+                let __tmp = self.io.borrow_mut().poll_read_sector(DIR_LBA);
+                if let Some(dir) = __tmp {
                     self.dir_sector = dir;
                     if let Some(index) = find_by_name(&self.dir_sector, name) {
                         let entry = decode_dir_entry(&self.dir_sector, index);
@@ -585,7 +568,8 @@ impl HandlerImpl {
                         entries: [FsDirEntry::from_name_size(&[], 0); MAX_FS_DIR_LIST],
                     });
                 }
-                if let Some(dir) = self.io.poll_read_sector(DIR_LBA) {
+                let __tmp = self.io.borrow_mut().poll_read_sector(DIR_LBA);
+                if let Some(dir) = __tmp {
                     self.dir_sector = dir;
                     let total = count_entries(&self.dir_sector);
                     let mut entries = [FsDirEntry::from_name_size(&[], 0); MAX_FS_DIR_LIST];
@@ -619,7 +603,10 @@ impl HandlerImpl {
             return self.handle_poll();
         }
 
-        if self.completed.is_some() || !matches!(self.fs_job, FsJob::None) {
+        if self.completed.is_some()
+            || !matches!(self.fs_job, FsJob::None)
+            || self.format_task.is_running()
+        {
             return FsResponse::Pending;
         }
 
@@ -665,19 +652,40 @@ impl HandlerImpl {
         if let Some(resp) = self.completed.take() {
             return resp;
         }
+        if self.format_task.is_running() {
+            if let Some(resp) = self.poll_format_task() {
+                self.finish_job(resp);
+                return self.completed.take().unwrap_or(FsResponse::Pending);
+            }
+        }
         if let Some(resp) = self.advance_fs_job() {
             self.finish_job(resp);
             return self.completed.take().unwrap_or(FsResponse::Pending);
         }
-        if self.io.io_busy() {
+        if self.io.borrow().io_busy() {
             BLK_DRIVER.notify();
         }
         FsResponse::Pending
     }
 
     fn handle_blk_driver(&mut self) {
-        self.io.handle_blk_driver();
+        self.io.borrow_mut().handle_blk_driver();
     }
+}
+
+/// Sequential format/mount for LERUXFS1 (Phase 45 stackless async).
+async fn format_leruxfs(io: SharedSectorIo) -> Result<Superblock, ()> {
+    let sector = read_sector(io.clone(), SUPERBLOCK_LBA).await?;
+    if is_formatted(&sector) {
+        return decode_superblock(&sector).ok_or(());
+    }
+    let sb = Superblock::new();
+    let mut buf = [0u8; SECTOR_SIZE];
+    encode_superblock(&mut buf, &sb);
+    write_sector(io.clone(), SUPERBLOCK_LBA, buf).await?;
+    let dir = [0u8; SECTOR_SIZE];
+    write_sector(io, DIR_LBA, dir).await?;
+    Ok(sb)
 }
 
 impl Handler for HandlerImpl {
@@ -706,6 +714,11 @@ impl Handler for HandlerImpl {
     fn notified(&mut self, channels: ChannelSet) -> Result<(), Self::Error> {
         if channels.contains(BLK_DRIVER) {
             self.handle_blk_driver();
+            if self.format_task.is_running() {
+                if let Some(resp) = self.poll_format_task() {
+                    self.finish_job(resp);
+                }
+            }
         }
         Ok(())
     }

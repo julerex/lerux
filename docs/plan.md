@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-12 (Phase 44 FAT backend; Phases 45–49 in plan-au-ts)
+Last updated: 2026-07-12 (Phase 45 service async; Phases 46–49 in plan-au-ts)
 
 ## Phase 1 — Bring-up
 
@@ -369,9 +369,13 @@ Apps on `NetRequest` via `net-server`; aarch64 virtio-net **unified-dma** (no se
 
 `LERUXFS1` remains default (`just test-fs`). Alternate **FAT16** backend (`lerux-fat`, `backend-fat`, `just test-fs-fat`). NFS and multi-cluster stretch deferred — [`plan-au-ts.md`](plan-au-ts.md).
 
-## Phases 45+ — au-ts inspiration
+## Phase 45 — Service async ✅
 
-See [`plan-au-ts.md`](plan-au-ts.md) for Phases 45–49 (sync runtime, GDB, HW CI, optional QoS/perf).
+Stackless coop async for service PDs ([ADR-004](decisions/004-service-async.md), `lerux-service-async`). `fs-server` LERUXFS1 format runs as a `SingleTask` future; clients keep `Poll` RPC.
+
+## Phases 46+ — au-ts inspiration
+
+See [`plan-au-ts.md`](plan-au-ts.md) for Phases 46–49 (GDB, HW CI, optional QoS/perf).
 
 ## Version alignment
 

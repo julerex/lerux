@@ -51,6 +51,14 @@ const AARCH64_CRATES: &[ClippyCrate<'_>] = &[
         feature: None,
     },
     ClippyCrate {
+        name: "lerux-service-async",
+        feature: None,
+    },
+    ClippyCrate {
+        name: "lerux-fat",
+        feature: None,
+    },
+    ClippyCrate {
         name: "supervisor",
         feature: Some("board-qemu_virt_aarch64_http_composed"),
     },

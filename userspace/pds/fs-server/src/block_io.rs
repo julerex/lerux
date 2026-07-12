@@ -1,10 +1,14 @@
 //! Shared virtio-blk ring client for LERUXFS1 and FAT backends.
+//!
+//! Phase 45: also exposes stackless async sector helpers ([`read_sector`] /
+//! [`write_sector`]) driven from Handler via [`lerux_service_async`].
 
 use alloc::rc::Rc;
-use core::task::Poll;
+use core::{cell::RefCell, task::Poll};
 
 use async_unsync::semaphore::Semaphore;
 use lerux_interface_types::SECTOR_SIZE;
+use lerux_service_async::{poll_fn, WakeCell};
 use sel4_abstract_allocator::{basic::BasicAllocator, WithAlignmentBound};
 use sel4_microkit::{memory_region_symbol, Channel};
 use sel4_shared_memory::SharedMemoryRef;
@@ -114,6 +118,9 @@ fn advance_write(io_state: &mut IoState, io: &mut BlkIo) -> bool {
     }
 }
 
+/// Shared handle for async sector ops (Phase 45).
+pub type SharedSectorIo = Rc<RefCell<SectorIo>>;
+
 /// Sector I/O helper held by both backends.
 pub struct SectorIo {
     pub blk_io: BlkIo,
@@ -124,6 +131,10 @@ pub struct SectorIo {
     pub pending_read_lba: Option<u32>,
     pub pending_write_lba: Option<u32>,
     pub sector_buf: [u8; SECTOR_SIZE],
+    /// Woken when a ring completion is observed (async tasks).
+    pub wake: WakeCell,
+    read_failed: bool,
+    write_failed: bool,
 }
 
 impl SectorIo {
@@ -137,7 +148,14 @@ impl SectorIo {
             pending_read_lba: None,
             pending_write_lba: None,
             sector_buf: [0; SECTOR_SIZE],
+            wake: WakeCell::new(),
+            read_failed: false,
+            write_failed: false,
         }
+    }
+
+    pub fn shared(block_size: usize) -> SharedSectorIo {
+        Rc::new(RefCell::new(Self::new(block_size)))
     }
 
     pub fn start_read(&mut self, lba: u32) {
@@ -200,14 +218,23 @@ impl SectorIo {
     }
 
     pub fn store_completed_read(&mut self) {
-        if let Some(data) = advance_read(&mut self.io_state, &mut self.blk_io) {
+        if let Some(data) = self.try_advance_read() {
             self.completed_sector = Some(data);
+            self.wake.wake();
+        } else if matches!(self.io_state, IoState::Idle) {
+            // advance_read cleared state on error
+            self.read_failed = true;
+            self.wake.wake();
         }
     }
 
     pub fn store_completed_write(&mut self) {
-        if advance_write(&mut self.io_state, &mut self.blk_io) {
+        if self.try_advance_write() {
             self.completed_ok = true;
+            self.wake.wake();
+        } else if matches!(self.io_state, IoState::Idle) {
+            self.write_failed = true;
+            self.wake.wake();
         }
     }
 
@@ -225,4 +252,90 @@ impl SectorIo {
             IoState::Reading { .. } | IoState::Writing { .. }
         )
     }
+
+    fn try_advance_read(&mut self) -> Option<[u8; SECTOR_SIZE]> {
+        advance_read(&mut self.io_state, &mut self.blk_io)
+    }
+
+    fn try_advance_write(&mut self) -> bool {
+        advance_write(&mut self.io_state, &mut self.blk_io)
+    }
+}
+
+/// Async read of one sector (Phase 45). Completes when the block driver notifies.
+pub async fn read_sector(io: SharedSectorIo, lba: u32) -> Result<[u8; SECTOR_SIZE], ()> {
+    {
+        let mut g = io.borrow_mut();
+        g.read_failed = false;
+        if g.pending_read_lba != Some(lba) {
+            if !matches!(g.io_state, IoState::Idle) || g.pending_read_lba.is_some() {
+                return Err(());
+            }
+            g.start_read(lba);
+        }
+    }
+    poll_fn(move |cx| {
+        let mut g = io.borrow_mut();
+        g.wake.set(cx.waker());
+        // Opportunistic progress without notify (same PD edge cases).
+        if matches!(g.io_state, IoState::Reading { .. }) {
+            if let Some(data) = g.try_advance_read() {
+                g.completed_sector = Some(data);
+                g.pending_read_lba = None;
+                return Poll::Ready(Ok(data));
+            }
+        }
+        if g.pending_read_lba == Some(lba) {
+            if let Some(data) = g.completed_sector.take() {
+                g.pending_read_lba = None;
+                return Poll::Ready(Ok(data));
+            }
+            if g.read_failed {
+                g.read_failed = false;
+                g.pending_read_lba = None;
+                return Poll::Ready(Err(()));
+            }
+        }
+        Poll::Pending
+    })
+    .await
+}
+
+/// Async write of one sector (Phase 45).
+pub async fn write_sector(io: SharedSectorIo, lba: u32, data: [u8; SECTOR_SIZE]) -> Result<(), ()> {
+    {
+        let mut g = io.borrow_mut();
+        g.write_failed = false;
+        if g.pending_write_lba != Some(lba) {
+            if !matches!(g.io_state, IoState::Idle) || g.pending_write_lba.is_some() {
+                return Err(());
+            }
+            g.start_write(lba, &data);
+        }
+    }
+    poll_fn(move |cx| {
+        let mut g = io.borrow_mut();
+        g.wake.set(cx.waker());
+        if matches!(g.io_state, IoState::Writing { .. }) {
+            if g.try_advance_write() {
+                g.pending_write_lba = None;
+                g.completed_ok = false;
+                return Poll::Ready(Ok(()));
+            }
+        }
+        if g.pending_write_lba == Some(lba) {
+            if g.completed_ok {
+                g.completed_ok = false;
+                g.pending_write_lba = None;
+                return Poll::Ready(Ok(()));
+            }
+            if g.write_failed {
+                g.write_failed = false;
+                g.pending_write_lba = None;
+                return Poll::Ready(Err(()));
+            }
+        }
+        Poll::Pending
+    })
+    .await
 }

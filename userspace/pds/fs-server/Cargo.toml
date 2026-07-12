@@ -22,6 +22,7 @@ board-rpi4b_4gb_workstation = ["workstation", "backend-lerux"]
 async-unsync = { version = "0.3.0", default-features = false }
 lerux-fs = { path = "../../crates/lerux-fs" }
 lerux-fat = { path = "../../crates/lerux-fat", optional = true }
+lerux-service-async = { path = "../../crates/lerux-service-async" }
 lerux-interface-types = { path = "../../crates/lerux-interface-types" }
 lerux-ipc = { path = "../../crates/lerux-ipc" }
 lerux-logging = { path = "../../crates/lerux-logging", features = ["server"] }

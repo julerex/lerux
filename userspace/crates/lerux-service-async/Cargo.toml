@@ -1,0 +1,11 @@
+[package]
+name = "lerux-service-async"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Stackless cooperative async helpers for lerux service PDs (Phase 45)"
+
+[lints]
+workspace = true
+
+[dependencies]

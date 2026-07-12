@@ -584,6 +584,7 @@ dependencies = [
  "lerux-interface-types",
  "lerux-ipc",
  "lerux-logging",
+ "lerux-service-async",
  "sel4-abstract-allocator",
  "sel4-driver-interfaces",
  "sel4-microkit",
@@ -936,6 +937,10 @@ dependencies = [
 
 [[package]]
 name = "lerux-serial-queue"
+version = "0.1.0"
+
+[[package]]
+name = "lerux-service-async"
 version = "0.1.0"
 
 [[package]]

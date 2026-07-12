@@ -191,7 +191,7 @@ LionsOS `components/fs/fat`, `components/fs/nfs`, `examples/fileio`.
 
 ---
 
-## Phase 45 — Sync runtime for service PDs
+## Phase 45 — Sync runtime for service PDs ✅
 
 **Goal:** Replace the worst poll loops in `fs-server` / `net-server` with structured concurrency that still fits Microkit’s `Handler` model.
 
@@ -201,20 +201,22 @@ LionsOS `components/fs/fat`, `components/fs/nfs`, `examples/fileio`.
 
 ### Scope
 
-- [ ] Spike: evaluate rust-sel4 async / local executor vs a thin `lerux-microkitco`-style coop scheduler inside one PD
-- [ ] ADR: coop tasks in-server **vs** keep poll RPC only
-- [ ] If adopted: refactor one server (`fs-server` or `net-server`) to await ring completions without busy `Poll` from clients regressing
-- [ ] Clients may keep poll-based RPC; server-internal only is enough for v1
-- [ ] `just check-pd` + affected smokes
+- [x] Spike: stackful libmicrokitco **vs** rust-sel4 `LocalPool` **vs** thin in-tree stackless async → [ADR-004](decisions/004-service-async.md)
+- [x] ADR: **stackless coop async** server-internal; clients keep poll RPC
+- [x] Adopt in `fs-server`: `lerux-service-async` + async sector helpers; LERUXFS1 **format/mount** as `SingleTask` future
+- [x] Clients keep poll-based RPC (`FsRequest::Poll`)
+- [x] Smokes: `just test-fs`, `just test-fs-fat`
 
 ### Out of scope
 
 - Preemptive threads in every PD
 - Porting libmicrokitco C into the tree
+- Full multi-task executor / net-server migration (follow-up)
 
 ### Exit
 
-ADR accepted; at least one service uses the chosen model; no smoke regression.
+- [x] ADR-004 accepted
+- [x] `fs-server` uses the model for format; no smoke regression
 
 ---
 

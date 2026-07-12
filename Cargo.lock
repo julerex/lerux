@@ -898,6 +898,8 @@ dependencies = [
  "anyhow",
  "clap",
  "flate2",
+ "lerux-fs",
+ "lerux-interface-types",
  "regex",
  "serde",
  "serde_json",

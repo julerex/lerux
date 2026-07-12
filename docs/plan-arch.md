@@ -149,21 +149,22 @@ A new user can administer files, net identity, services, and logs without knowin
 
 ---
 
-## Phase 54 — Config, secrets, and boot policy (Arch: `/etc`, netctl)
+## Phase 54 — Config, secrets, and boot policy (Arch: `/etc`, netctl) — core done
 
-**Why:** Arch is configuration-driven; `config-server` is a thin FS key store, not a policy layer.
+**Why:** Arch is configuration-driven; `config-server` was a thin FS key store without a published schema or boot policy.
 
 ### Steps
 
-- [ ] Schema for keys: net (IP/DHCP/DNS), hostname, log level, default services, boot notify order.
-- [ ] Supervisor reads config **before** bringing services up; validate and log defaults on missing keys.
-- [ ] Shell `get`/`set`/`list` config commands; host-side seed into `disk.img` for QEMU.
-- [ ] Secrets store (separate PD or encrypted region later): API tokens for fetch/chat — even if “encryption” is deferred, isolate capabilities.
-- [ ] Persist boot/log rotation policy under FS v2.
+- [x] Schema for keys: net (IP/DHCP/DNS/mode/prefix), hostname, log level, rotate — [`docs/config.md`](config.md), `CFG_*`.
+- [x] Supervisor seeds **missing** keys only, sets `boot.seeded`, logs `config hostname=… net.mode=… log.level=…` before net probe.
+- [x] Shell `config get|set|list|del` + `hostname`; host `lerux config schema|defaults|seed-disk`.
+- [x] Secrets: `secret.*` → `/config/secrets/` (path isolation; no encryption yet).
+- [x] Boot log rotation: `log.rotate` renames `/boot.log` → `/boot.log.1`.
+- [ ] Hot-apply static net from config into `net-server` (stretch).
 
 ### Exit
 
-Changing net mode or hostname is a config write + reboot (or hot-apply where safe), not a rebuild.
+Changing hostname / net.* / log.* is a config write + reboot (values re-read and logged), not a rebuild. **Met** for policy surface; live net reconfigure remains stretch.
 
 ---
 
@@ -315,9 +316,9 @@ That is Arch’s **workflow and completeness**, reimplemented as static Microkit
 
 If capacity is limited, do **not** start with graphics or scripting runtimes:
 
-1. **Phases 50–53 cores** — FS, net, deploy/seed, shell built-ins done
+1. **Phases 50–54 cores** — FS, net, deploy, shell, config policy done
 2. **Phase 52 lab** — fill RPi4 REPL checklist on real hardware when available
-3. **Phase 54 / 55** — config policy and package UX
+3. **Phase 55** — package/profile UX
 
 ---
 

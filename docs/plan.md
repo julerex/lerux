@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-12 (Phase 53 shell coreutils: stat/df/ping/uptime/history/pager/help -l)
+Last updated: 2026-07-12 (Phase 54 config schema, seed-if-missing, shell config, host seed-disk)
 
 ## Phase 1 — Bring-up
 
@@ -426,9 +426,18 @@ Install-media path for RPi4 workstation (see [`boards.md`](boards.md#rpi4-workst
 - [x] `FsRequest::DiskInfo`, `SupervisorRequest::GetUptime`
 - [x] Smokes: workstation expects `cmds=`; hw-serial scripts `help -l` + `df`
 
-## Phases 54–60 — Arch-level functionality (planned)
+## Phase 54 — Config, secrets, boot policy (core done)
 
-Roadmap to “about Arch Linux” **workflow** (not ABI): config policy, package UX, multi-arch workstation, app catalog, optional hardening.
+- [x] Schema: [`docs/config.md`](config.md) + `CFG_*` in interface-types
+- [x] Seed **missing** keys only; `boot.seeded`; policy log `config hostname=… net.mode=…`
+- [x] Shell: `config get|set|list|del`, `hostname`; secrets under `/config/secrets/`
+- [x] Boot log rotate via `log.rotate` (`/boot.log` → `/boot.log.1`)
+- [x] Host: `lerux config schema|defaults|seed-disk`
+- [ ] Hot-apply net.mode/static from config into live stack (still DHCP+fallback)
+
+## Phases 55–60 — Arch-level functionality (planned)
+
+Roadmap to “about Arch Linux” **workflow** (not ABI): package UX, multi-arch workstation, app catalog, optional hardening.
 
 Full checklist, priority order, and completion bar: **[`plan-arch.md`](plan-arch.md)**.
 
@@ -438,7 +447,7 @@ Full checklist, priority order, and completion bar: **[`plan-arch.md`](plan-arch
 | 51 | Network stack v2 (DHCP, DNS, multi-conn, TLS) | core done (TLS stretch open) |
 | 52 | Hardware closeout (RPi4 deploy + seed + harness) | core done (lab REPL sign-off open) |
 | 53 | Shell + core utilities | core done |
-| 54 | Config, secrets, boot policy | planned |
+| 54 | Config, secrets, boot policy | core done (net hot-apply stretch) |
 | 55 | Package/profile UX (pacman-like host CLI) | planned |
 | 56 | Time/init cross-arch parity | planned |
 | 57 | Observability and ops | planned |
@@ -446,7 +455,7 @@ Full checklist, priority order, and completion bar: **[`plan-arch.md`](plan-arch
 | 59 | Multi-arch workstation profiles | planned |
 | 60 | Security posture (stretch) | planned |
 
-Near-term priority: **54 config policy** / **55 package UX**.
+Near-term priority: **55 package UX**.
 
 ## Version alignment
 

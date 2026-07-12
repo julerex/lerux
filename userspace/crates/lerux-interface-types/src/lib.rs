@@ -425,10 +425,26 @@ pub enum SupervisorResponse {
     },
 }
 
-/// Config service (Phase 36).
-/// Keys and values stored as FS files under /config/ for persistence.
+/// Config service (Phase 36 / 54).
+///
+/// Keys are stored as files under `/config/` (or `/config/secrets/` for
+/// `secret.*` keys). See `docs/config.md` for the Phase 54 schema.
 pub const MAX_CONFIG_KEY_LEN: usize = 32;
 pub const MAX_CONFIG_VAL_LEN: usize = 64;
+
+/// Well-known config keys (Phase 54 schema).
+pub const CFG_NET_MODE: &[u8] = b"net.mode";
+pub const CFG_NET_IP: &[u8] = b"net.ip";
+pub const CFG_NET_GATEWAY: &[u8] = b"net.gateway";
+pub const CFG_NET_DNS: &[u8] = b"net.dns";
+pub const CFG_NET_PREFIX: &[u8] = b"net.prefix";
+pub const CFG_HOSTNAME: &[u8] = b"hostname";
+pub const CFG_LOG_LEVEL: &[u8] = b"log.level";
+pub const CFG_BOOT_SEEDED: &[u8] = b"boot.seeded";
+pub const CFG_LOG_ROTATE: &[u8] = b"log.rotate";
+
+/// Prefix for secret keys (`secret.token` → file under `/config/secrets/`).
+pub const CFG_SECRET_PREFIX: &[u8] = b"secret.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ConfigRequest {
@@ -445,7 +461,44 @@ pub enum ConfigRequest {
         #[serde(with = "config_val_bytes")]
         value: [u8; MAX_CONFIG_VAL_LEN],
     },
+    /// Remove a key (Phase 54).
+    Delete {
+        key_len: u8,
+        #[serde(with = "config_key_bytes")]
+        key: [u8; MAX_CONFIG_KEY_LEN],
+    },
     List,
+}
+
+impl ConfigRequest {
+    pub fn get(key: &[u8]) -> Self {
+        let mut buf = [0u8; MAX_CONFIG_KEY_LEN];
+        let key_len = key.len().min(MAX_CONFIG_KEY_LEN) as u8;
+        buf[..key_len as usize].copy_from_slice(&key[..key_len as usize]);
+        Self::Get { key_len, key: buf }
+    }
+
+    pub fn set(key: &[u8], value: &[u8]) -> Self {
+        let mut kbuf = [0u8; MAX_CONFIG_KEY_LEN];
+        let key_len = key.len().min(MAX_CONFIG_KEY_LEN) as u8;
+        kbuf[..key_len as usize].copy_from_slice(&key[..key_len as usize]);
+        let mut vbuf = [0u8; MAX_CONFIG_VAL_LEN];
+        let val_len = value.len().min(MAX_CONFIG_VAL_LEN) as u8;
+        vbuf[..val_len as usize].copy_from_slice(&value[..val_len as usize]);
+        Self::Set {
+            key_len,
+            key: kbuf,
+            val_len,
+            value: vbuf,
+        }
+    }
+
+    pub fn delete(key: &[u8]) -> Self {
+        let mut buf = [0u8; MAX_CONFIG_KEY_LEN];
+        let key_len = key.len().min(MAX_CONFIG_KEY_LEN) as u8;
+        buf[..key_len as usize].copy_from_slice(&key[..key_len as usize]);
+        Self::Delete { key_len, key: buf }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

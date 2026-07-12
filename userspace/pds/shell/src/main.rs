@@ -8,9 +8,9 @@ use embedded_hal_nb::{
     serial::{Read as _, Write as _},
 };
 use lerux_interface_types::{
-    ChatRequest, ChatResponse, EditRequest, EditResponse, FsRequest, FsResponse, LogRequest,
-    LogResponse, NetRequest, NetResponse, SupervisorRequest, SupervisorResponse, MAX_CHAT_MSG,
-    MAX_SERVICE_NAME,
+    ChatRequest, ChatResponse, ConfigRequest, ConfigResponse, EditRequest, EditResponse, FsRequest,
+    FsResponse, LogRequest, LogResponse, NetRequest, NetResponse, SupervisorRequest,
+    SupervisorResponse, CFG_HOSTNAME, CFG_SECRET_PREFIX, MAX_CHAT_MSG, MAX_SERVICE_NAME,
 };
 use lerux_ipc::call;
 use lerux_logging::{log, server};
@@ -22,6 +22,7 @@ const FS_SERVER: Channel = Channel::new(1);
 const NET_SERVER: Channel = Channel::new(2);
 const SUPERVISOR: Channel = Channel::new(3);
 const LOG_SERVER: Channel = Channel::new(4);
+const CONFIG_SERVER: Channel = Channel::new(5);
 const EDIT: Channel = Channel::new(6);
 const CHAT: Channel = Channel::new(7);
 
@@ -37,7 +38,7 @@ const HISTORY_LINE: usize = 64;
 const COMMANDS: &[&str] = &[
     "ls", "cat", "write", "mkdir", "rm", "mv", "cd", "pwd", "stat", "df", "ip", "ifconfig", "ping",
     "time", "date", "uptime", "clear", "history", "ps", "top", "qos", "reboot", "fetch", "dmesg",
-    "edit", "chat", "echo", "help",
+    "edit", "chat", "echo", "config", "get", "set", "list", "hostname", "help",
 ];
 
 struct HandlerImpl {
@@ -549,6 +550,7 @@ fn help_cmd(console: &mut SerialClient, arg: Option<&[u8]>) {
                 console,
                 "sys:    time date uptime ps top qos reboot dmesg clear history",
             );
+            println(console, "config: config get|set|list|del  hostname");
             println(console, "apps:   edit chat echo help");
         }
         Some(other) => {
@@ -556,6 +558,73 @@ fn help_cmd(console: &mut SerialClient, arg: Option<&[u8]>) {
             write_bytes(console, other);
             write_bytes(console, b"\r\n");
         }
+    }
+}
+
+fn config_call(req: ConfigRequest) -> ConfigResponse {
+    match call::<ConfigRequest, ConfigResponse>(CONFIG_SERVER, req) {
+        Ok(r) => r,
+        Err(_) => ConfigResponse::Error,
+    }
+}
+
+fn config_list_cmd(console: &mut SerialClient) {
+    match config_call(ConfigRequest::List) {
+        ConfigResponse::Keys { count, keys, lens } => {
+            if count == 0 {
+                println(console, "(empty)");
+                return;
+            }
+            for i in 0..(count as usize) {
+                let n = lens[i] as usize;
+                let k = &keys[i][..n];
+                write_bytes(console, k);
+                if k.starts_with(CFG_SECRET_PREFIX) {
+                    write_bytes(console, b" = <secret>");
+                } else if let ConfigResponse::Value { val_len, value } =
+                    config_call(ConfigRequest::get(k))
+                {
+                    write_bytes(console, b" = ");
+                    write_bytes(console, &value[..val_len as usize]);
+                }
+                write_bytes(console, b"\r\n");
+            }
+        }
+        _ => println(console, "config list: error"),
+    }
+}
+
+fn config_get_cmd(console: &mut SerialClient, key: &[u8]) {
+    match config_call(ConfigRequest::get(key)) {
+        ConfigResponse::Value { val_len, value } => {
+            write_bytes(console, &value[..val_len as usize]);
+            write_bytes(console, b"\r\n");
+        }
+        _ => println(console, "config get: not found"),
+    }
+}
+
+fn config_set_cmd(console: &mut SerialClient, key: &[u8], value: &[u8]) {
+    match config_call(ConfigRequest::set(key, value)) {
+        ConfigResponse::Ok => println(console, "config set: ok"),
+        _ => println(console, "config set: failed"),
+    }
+}
+
+fn config_del_cmd(console: &mut SerialClient, key: &[u8]) {
+    match config_call(ConfigRequest::delete(key)) {
+        ConfigResponse::Ok => println(console, "config del: ok"),
+        _ => println(console, "config del: failed"),
+    }
+}
+
+fn hostname_cmd(console: &mut SerialClient) {
+    match config_call(ConfigRequest::get(CFG_HOSTNAME)) {
+        ConfigResponse::Value { val_len, value } => {
+            write_bytes(console, &value[..val_len as usize]);
+            write_bytes(console, b"\r\n");
+        }
+        _ => println(console, "lerux"),
     }
 }
 
@@ -802,6 +871,94 @@ fn process_command(h: &mut HandlerImpl, line: &[u8]) {
         b"fetch" => fetch_demo(&mut h.console),
         b"ping" => ping_cmd(&mut h.console),
         b"ip" | b"ifconfig" => ip_cmd(&mut h.console),
+        b"hostname" => hostname_cmd(&mut h.console),
+        b"config" => match parts.next() {
+            Some(b"list") | None => config_list_cmd(&mut h.console),
+            Some(b"get") => {
+                if let Some(k) = parts.next() {
+                    config_get_cmd(&mut h.console, k);
+                } else {
+                    println(&mut h.console, "usage: config get <key>");
+                }
+            }
+            Some(b"set") => {
+                if let Some(k) = parts.next() {
+                    // remainder of line after "config set key "
+                    let rest = line
+                        .split(|&b| b == b' ')
+                        .nth(3)
+                        .map(|_| {
+                            // find third space after "config set key"
+                            let mut spaces = 0usize;
+                            let mut idx = 0usize;
+                            for (i, &b) in line.iter().enumerate() {
+                                if b == b' ' {
+                                    spaces += 1;
+                                    if spaces == 3 {
+                                        idx = i + 1;
+                                        break;
+                                    }
+                                }
+                            }
+                            if spaces >= 3 {
+                                &line[idx..]
+                            } else {
+                                b""
+                            }
+                        })
+                        .unwrap_or(b"");
+                    if rest.is_empty() {
+                        println(&mut h.console, "usage: config set <key> <value>");
+                    } else {
+                        config_set_cmd(&mut h.console, k, rest);
+                    }
+                } else {
+                    println(&mut h.console, "usage: config set <key> <value>");
+                }
+            }
+            Some(b"del") | Some(b"delete") | Some(b"rm") => {
+                if let Some(k) = parts.next() {
+                    config_del_cmd(&mut h.console, k);
+                } else {
+                    println(&mut h.console, "usage: config del <key>");
+                }
+            }
+            Some(_) => println(
+                &mut h.console,
+                "usage: config list|get|set|del …  (docs/config.md)",
+            ),
+        },
+        b"list" => config_list_cmd(&mut h.console),
+        b"get" => {
+            if let Some(k) = parts.next() {
+                config_get_cmd(&mut h.console, k);
+            } else {
+                println(&mut h.console, "usage: get <key>");
+            }
+        }
+        b"set" => {
+            if let Some(k) = parts.next() {
+                let mut spaces = 0usize;
+                let mut idx = 0usize;
+                for (i, &b) in line.iter().enumerate() {
+                    if b == b' ' {
+                        spaces += 1;
+                        if spaces == 2 {
+                            idx = i + 1;
+                            break;
+                        }
+                    }
+                }
+                let rest = if spaces >= 2 { &line[idx..] } else { b"" };
+                if rest.is_empty() {
+                    println(&mut h.console, "usage: set <key> <value>");
+                } else {
+                    config_set_cmd(&mut h.console, k, rest);
+                }
+            } else {
+                println(&mut h.console, "usage: set <key> <value>");
+            }
+        }
         b"help" => help_cmd(&mut h.console, parts.next()),
         b"echo" => {
             let rest = if line.len() > 4 { &line[4..] } else { b"" };

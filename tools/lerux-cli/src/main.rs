@@ -5,6 +5,7 @@ mod build_sdk;
 mod channel_consts;
 mod channels;
 mod clippy;
+mod config_cmd;
 mod deploy;
 mod disk_img;
 mod fetch;
@@ -186,6 +187,25 @@ enum Commands {
         /// Skip building even if loader.img is missing (error instead).
         #[arg(long, default_value_t = false)]
         no_build: bool,
+    },
+    /// Phase 54: config schema and disk seed helpers.
+    Config {
+        #[command(subcommand)]
+        command: ConfigCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum ConfigCommands {
+    /// Print the Phase 54 key schema summary.
+    Schema,
+    /// Print QEMU default key=value pairs.
+    Defaults,
+    /// Format `support/disk.img` with LERUXFS2 and seed default config files.
+    SeedDisk {
+        /// Override path (default: support/disk.img under repo root).
+        #[arg(long)]
+        disk: Option<PathBuf>,
     },
 }
 
@@ -543,6 +563,13 @@ fn main() -> Result<()> {
                 build_if_missing,
             )?;
         }
+        Commands::Config { command } => match command {
+            ConfigCommands::Schema => crate::config_cmd::print_schema(),
+            ConfigCommands::Defaults => crate::config_cmd::print_defaults(),
+            ConfigCommands::SeedDisk { disk } => {
+                crate::config_cmd::seed_disk(&root, disk.as_deref())?;
+            }
+        },
     }
 
     Ok(())

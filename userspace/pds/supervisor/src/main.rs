@@ -23,7 +23,8 @@ use sel4_microkit_driver_adapters::{
 #[cfg(feature = "workstation")]
 use lerux_interface_types::{
     ConfigRequest, ConfigResponse, FsRequest, FsResponse, LogRequest, LogResponse, NetRequest,
-    NetResponse, MAX_CONFIG_KEY_LEN, MAX_CONFIG_VAL_LEN,
+    NetResponse, CFG_BOOT_SEEDED, CFG_HOSTNAME, CFG_LOG_LEVEL, CFG_LOG_ROTATE, CFG_NET_DNS,
+    CFG_NET_GATEWAY, CFG_NET_IP, CFG_NET_MODE, CFG_NET_PREFIX, MAX_CONFIG_VAL_LEN,
 };
 #[cfg(feature = "workstation")]
 use lerux_ipc::call;
@@ -114,51 +115,94 @@ fn probe_fs() {
     log::info!("lerux-supervisor: fs up");
 }
 
-/// Phase 52: seed hierarchical `/config` defaults after first format (idempotent).
+#[cfg(feature = "workstation")]
+fn config_get(key: &[u8]) -> Option<(u8, [u8; MAX_CONFIG_VAL_LEN])> {
+    match call::<ConfigRequest, ConfigResponse>(CONFIG_SERVER, ConfigRequest::get(key)) {
+        Ok(ConfigResponse::Value { val_len, value }) => Some((val_len, value)),
+        _ => None,
+    }
+}
+
+#[cfg(feature = "workstation")]
+fn config_set(key: &[u8], value: &[u8]) -> bool {
+    matches!(
+        call::<ConfigRequest, ConfigResponse>(CONFIG_SERVER, ConfigRequest::set(key, value)),
+        Ok(ConfigResponse::Ok)
+    )
+}
+
+/// Phase 52/54: seed **missing** keys only; never overwrite operator edits.
 #[cfg(feature = "workstation")]
 fn seed_first_boot() {
-    // Ensure `/config` exists as a real directory (LERUXFS2).
-    match fs_call(FsRequest::mkdir(b"/config")) {
-        FsResponse::Ok => log::info!("lerux-supervisor: mkdir /config"),
-        FsResponse::Error => {
-            // Already present from a previous boot.
-        }
-        _ => {}
+    if fs_call(FsRequest::mkdir(b"/config")) == FsResponse::Ok {
+        log::info!("lerux-supervisor: mkdir /config");
+    }
+    let _ = fs_call(FsRequest::mkdir(b"/config/secrets"));
+
+    if config_get(CFG_BOOT_SEEDED).is_some() {
+        log::info!("lerux-supervisor: config already seeded");
+        return;
     }
 
     #[cfg(feature = "board-rpi4b_4gb_workstation")]
     let seeds: &[(&[u8], &[u8])] = &[
-        (b"net.ip", b"192.168.1.10"),
-        (b"net.gateway", b"192.168.1.1"),
-        (b"net.dns", b"192.168.1.1"),
-        (b"hostname", b"lerux-rpi4"),
+        (CFG_NET_MODE, b"dhcp"),
+        (CFG_NET_IP, b"192.168.1.10"),
+        (CFG_NET_GATEWAY, b"192.168.1.1"),
+        (CFG_NET_DNS, b"192.168.1.1"),
+        (CFG_NET_PREFIX, b"24"),
+        (CFG_HOSTNAME, b"lerux-rpi4"),
+        (CFG_LOG_LEVEL, b"info"),
+        (CFG_LOG_ROTATE, b"1"),
     ];
     #[cfg(not(feature = "board-rpi4b_4gb_workstation"))]
     let seeds: &[(&[u8], &[u8])] = &[
-        (b"net.ip", b"10.0.2.15"),
-        (b"net.gateway", b"10.0.2.2"),
-        (b"net.dns", b"10.0.2.3"),
-        (b"hostname", b"lerux"),
+        (CFG_NET_MODE, b"dhcp"),
+        (CFG_NET_IP, b"10.0.2.15"),
+        (CFG_NET_GATEWAY, b"10.0.2.2"),
+        (CFG_NET_DNS, b"10.0.2.3"),
+        (CFG_NET_PREFIX, b"24"),
+        (CFG_HOSTNAME, b"lerux"),
+        (CFG_LOG_LEVEL, b"info"),
+        (CFG_LOG_ROTATE, b"1"),
     ];
 
-    for (kdata, vdata) in seeds {
-        let mut key = [0u8; MAX_CONFIG_KEY_LEN];
-        let kl = kdata.len().min(MAX_CONFIG_KEY_LEN);
-        key[..kl].copy_from_slice(&kdata[..kl]);
-        let mut val = [0u8; MAX_CONFIG_VAL_LEN];
-        let vl = vdata.len().min(MAX_CONFIG_VAL_LEN);
-        val[..vl].copy_from_slice(&vdata[..vl]);
-        let _ = call::<ConfigRequest, ConfigResponse>(
-            CONFIG_SERVER,
-            ConfigRequest::Set {
-                key_len: kl as u8,
-                key,
-                val_len: vl as u8,
-                value: val,
-            },
-        );
+    for (k, v) in seeds {
+        if config_get(k).is_none() {
+            let _ = config_set(k, v);
+        }
     }
+    let _ = config_set(CFG_BOOT_SEEDED, b"1");
     log::info!("lerux-supervisor: first-boot seed ok");
+}
+
+/// Phase 54: log active policy after seed (read, do not invent).
+#[cfg(feature = "workstation")]
+fn apply_config_policy() {
+    let (h_len, h_buf) = config_get(CFG_HOSTNAME).unwrap_or((0, [0; MAX_CONFIG_VAL_LEN]));
+    let (m_len, m_buf) = config_get(CFG_NET_MODE).unwrap_or((0, [0; MAX_CONFIG_VAL_LEN]));
+    let (l_len, l_buf) = config_get(CFG_LOG_LEVEL).unwrap_or((0, [0; MAX_CONFIG_VAL_LEN]));
+    let h = if h_len > 0 {
+        core::str::from_utf8(&h_buf[..h_len as usize]).unwrap_or("?")
+    } else {
+        "lerux"
+    };
+    let m = if m_len > 0 {
+        core::str::from_utf8(&m_buf[..m_len as usize]).unwrap_or("?")
+    } else {
+        "dhcp"
+    };
+    let l = if l_len > 0 {
+        core::str::from_utf8(&l_buf[..l_len as usize]).unwrap_or("?")
+    } else {
+        "info"
+    };
+    log::info!(
+        "lerux-supervisor: config hostname={} net.mode={} log.level={}",
+        h,
+        m,
+        l
+    );
 }
 
 #[cfg(feature = "workstation")]
@@ -197,8 +241,20 @@ fn persist_boot_log() {
             buf[pos] = b'\n';
             pos += 1;
         }
-        if pos > 0
-            && let FsResponse::Handle { id } = fs_call(FsRequest::create(b"/boot.log"))
+        if pos == 0 {
+            return;
+        }
+        // Phase 54: optional rotate /boot.log → /boot.log.1
+        let rotate = config_get(CFG_LOG_ROTATE)
+            .map(|(n, v)| n > 0 && v[0] == b'1')
+            .unwrap_or(true);
+        if rotate {
+            let _ = fs_call(FsRequest::unlink(b"/boot.log.1"));
+            let _ = fs_call(FsRequest::rename(b"/boot.log", b"/boot.log.1"));
+        } else {
+            let _ = fs_call(FsRequest::unlink(b"/boot.log"));
+        }
+        if let FsResponse::Handle { id } = fs_call(FsRequest::create(b"/boot.log"))
             && matches!(
                 fs_call(FsRequest::write(id, 0, &buf[..pos])),
                 FsResponse::Ok
@@ -330,6 +386,7 @@ fn init() -> HandlerImpl {
     {
         probe_fs();
         seed_first_boot();
+        apply_config_policy();
         probe_net();
         persist_boot_log();
         log::info!("lerux-supervisor: ready");

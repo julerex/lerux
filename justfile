@@ -224,6 +224,13 @@ bench:
 disk-img:
     {{lerux}} disk-img
 
+# Phase 54: print config schema / QEMU defaults / preseed support/disk.img
+config-schema:
+    {{lerux}} config schema
+
+config-seed-disk:
+    {{lerux}} config seed-disk
+
 # Remove all build artifacts (shared target cache + per-board outputs).
 clean:
     rm -rf {{build_dir}} target deps/.sdk-path

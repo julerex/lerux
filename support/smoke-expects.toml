@@ -248,6 +248,7 @@ expects = [
   "virtio-net: MAC",
   "lerux-supervisor: fs up",
   "lerux-supervisor: first-boot seed ok",
+  "lerux-supervisor: config hostname=",
   "lerux-supervisor: net up",
   "lerux-supervisor: ready",
   "lerux-shell: ready",
@@ -272,6 +273,7 @@ expects = [
   "lerux-net: ready",
   "lerux-supervisor: fs up",
   "lerux-supervisor: first-boot seed ok",
+  "lerux-supervisor: config hostname=",
   "lerux-supervisor: net up",
   "lerux-supervisor: ready",
   "lerux-shell: ready",
@@ -280,7 +282,7 @@ expects = [
   "lerux-chat: ready",
   "lerux-http-fs:",
 ]
-# Phase 52/53: after boot strings match, inject REPL commands over the same TTY.
+# Phase 52–54: after boot strings match, inject REPL commands over the same TTY.
 # Requires the shell prompt to be live; power-on/reset the board before/while test-hw runs.
 script = [
   { send = "ls\r", expect = "boot.log" },
@@ -289,6 +291,8 @@ script = [
   { send = "help -l\r", expect = "cmds=" },
   { send = "df\r", expect = "leruxfs" },
   { send = "uptime\r", expect = "up " },
+  { send = "hostname\r", expect = "lerux" },
+  { send = "config list\r", expect = "hostname" },
 ]
 
 [boards.rpi4b_4gb_net]

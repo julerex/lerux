@@ -158,12 +158,20 @@ impl NetRequest {
 }
 
 /// Maximum path length for filesystem IPC (`Open`, `Create`, `Stat`, …).
-pub const MAX_FS_PATH: usize = 24;
+///
+/// Path grammar (Phase 50):
+/// - Byte strings; `/` separates components; leading `/` is optional (root-relative).
+/// - `""` or `"/"` is the root directory.
+/// - Components are non-empty, not `.` / `..`, max 22 bytes each, max 8 components.
+/// - No trailing-only empty segments (`//` collapses).
+pub const MAX_FS_PATH: usize = 48;
 
-/// Maximum name length returned in [`FsDirEntry`].
+/// Maximum name length returned in [`FsDirEntry`] (one path component).
 pub const MAX_FS_NAME: usize = 24;
 
 /// Maximum read/write payload per filesystem IPC message.
+///
+/// Multi-sector files use repeated `Read`/`Write` with advancing `offset`.
 pub const MAX_FS_DATA: usize = 448;
 
 /// Maximum directory entries returned in one [`FsResponse::DirList`].
@@ -176,10 +184,16 @@ pub struct FsDirEntry {
     #[serde(with = "fs_name_bytes")]
     pub name: [u8; MAX_FS_NAME],
     pub size: u32,
+    /// True when the entry is a subdirectory.
+    pub is_dir: bool,
 }
 
 impl FsDirEntry {
     pub fn from_name_size(name: &[u8], size: u32) -> Self {
+        Self::from_name(name, size, false)
+    }
+
+    pub fn from_name(name: &[u8], size: u32, is_dir: bool) -> Self {
         let mut buf = [0u8; MAX_FS_NAME];
         let name_len = name.len().min(MAX_FS_NAME) as u8;
         buf[..name_len as usize].copy_from_slice(&name[..name_len as usize]);
@@ -187,6 +201,7 @@ impl FsDirEntry {
             name_len,
             name: buf,
             size,
+            is_dir,
         }
     }
 
@@ -199,7 +214,7 @@ impl FsDirEntry {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[expect(
     clippy::large_enum_variant,
-    reason = "Write carries inline payload for IPC"
+    reason = "Write/Rename carry inline path/payload for IPC"
 )]
 pub enum FsRequest {
     Open {
@@ -224,43 +239,91 @@ pub enum FsRequest {
         #[serde(with = "fs_data_bytes")]
         data: [u8; MAX_FS_DATA],
     },
-    ListDir,
+    /// List directory at `path` (`""` / `"/"` = root).
+    ListDir {
+        path_len: u8,
+        #[serde(with = "fs_path_bytes")]
+        path: [u8; MAX_FS_PATH],
+    },
     Stat {
         path_len: u8,
         #[serde(with = "fs_path_bytes")]
         path: [u8; MAX_FS_PATH],
     },
+    /// Create a directory (parents must exist unless the backend auto-creates).
+    Mkdir {
+        path_len: u8,
+        #[serde(with = "fs_path_bytes")]
+        path: [u8; MAX_FS_PATH],
+    },
+    /// Remove a file or empty directory.
+    Unlink {
+        path_len: u8,
+        #[serde(with = "fs_path_bytes")]
+        path: [u8; MAX_FS_PATH],
+    },
+    /// Rename or move `from` → `to` (same volume).
+    Rename {
+        from_len: u8,
+        #[serde(with = "fs_path_bytes")]
+        from: [u8; MAX_FS_PATH],
+        to_len: u8,
+        #[serde(with = "fs_path_bytes")]
+        to: [u8; MAX_FS_PATH],
+    },
     Poll,
 }
 
 impl FsRequest {
-    pub fn open(path: &[u8]) -> Self {
+    fn path_buf(path: &[u8]) -> ([u8; MAX_FS_PATH], u8) {
         let mut buf = [0u8; MAX_FS_PATH];
         let path_len = path.len().min(MAX_FS_PATH) as u8;
         buf[..path_len as usize].copy_from_slice(&path[..path_len as usize]);
-        Self::Open {
-            path_len,
-            path: buf,
-        }
+        (buf, path_len)
+    }
+
+    pub fn open(path: &[u8]) -> Self {
+        let (path, path_len) = Self::path_buf(path);
+        Self::Open { path_len, path }
     }
 
     pub fn create(path: &[u8]) -> Self {
-        let mut buf = [0u8; MAX_FS_PATH];
-        let path_len = path.len().min(MAX_FS_PATH) as u8;
-        buf[..path_len as usize].copy_from_slice(&path[..path_len as usize]);
-        Self::Create {
-            path_len,
-            path: buf,
-        }
+        let (path, path_len) = Self::path_buf(path);
+        Self::Create { path_len, path }
     }
 
     pub fn stat(path: &[u8]) -> Self {
-        let mut buf = [0u8; MAX_FS_PATH];
-        let path_len = path.len().min(MAX_FS_PATH) as u8;
-        buf[..path_len as usize].copy_from_slice(&path[..path_len as usize]);
-        Self::Stat {
-            path_len,
-            path: buf,
+        let (path, path_len) = Self::path_buf(path);
+        Self::Stat { path_len, path }
+    }
+
+    pub fn list_dir(path: &[u8]) -> Self {
+        let (path, path_len) = Self::path_buf(path);
+        Self::ListDir { path_len, path }
+    }
+
+    pub fn list_root() -> Self {
+        Self::list_dir(b"/")
+    }
+
+    pub fn mkdir(path: &[u8]) -> Self {
+        let (path, path_len) = Self::path_buf(path);
+        Self::Mkdir { path_len, path }
+    }
+
+    pub fn unlink(path: &[u8]) -> Self {
+        let (path, path_len) = Self::path_buf(path);
+        Self::Unlink { path_len, path }
+    }
+
+    pub fn rename(from: &[u8], to: &[u8]) -> Self {
+        let (from, from_len) = Self::path_buf(from);
+        let (to, to_len) = Self::path_buf(to);
+        Self::Rename {
+            from_len,
+            from,
+            to_len,
+            to,
         }
     }
 
@@ -293,6 +356,7 @@ pub enum FsResponse {
     },
     Stat {
         size: u32,
+        is_dir: bool,
     },
     DirList {
         count: u8,

@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-12 (Phase 49 perf baselines; au-ts phases 41–49 complete)
+Last updated: 2026-07-12 (Phase 50 FS v2 in progress: LERUXFS2 multi-sector + hierarchy shipped; FAT stretch deferred)
 
 ## Phase 1 — Bring-up
 
@@ -388,6 +388,39 @@ Service-class PD priorities and Microkit PPC rules; [`qos.md`](qos.md), [ADR-006
 ## Phase 49 — Performance baselines ✅
 
 `just bench` / `lerux bench`: echo RTT, blk IOPS, UDP TX PPS on QEMU; [`bench.md`](bench.md).
+
+## Phase 50 — Filesystem v2 (in progress)
+
+LERUXFS2 + hierarchical IPC (see [`plan-arch.md`](plan-arch.md) Phase 50 for full checklist).
+
+- [x] Extend `FsRequest` / `FsResponse`: `Mkdir`, `Unlink`, `Rename`, path-scoped `ListDir`, `Stat.is_dir`; path grammar on `MAX_FS_PATH` (48)
+- [x] **LERUXFS2**: free-map allocation, multi-sector contiguous files (≤16 KiB), directory sectors, auto-create parents on `Create`/`Mkdir`; legacy LERUXFS1 volumes reformat on mount
+- [x] Shell: `mkdir` / `rm` / `mv` / `cd` / `pwd`; chunked `write`/`cat`; cwd-relative paths
+- [x] Smokes: `just test-fs` (hierarchy + multi-sector), `just test-fs-fat` (root-only FAT stubs new ops), `just test-workstation`
+- [ ] FAT stretch: multi-cluster files / subdirs (still root-only single-cluster)
+- [ ] Optional NFS / host-backed FS
+
+## Phases 51–60 — Arch-level functionality (planned)
+
+Roadmap to “about Arch Linux” **workflow** (not ABI): production net, HW closeout, shell/coreutils, config policy, package UX, multi-arch workstation, app catalog, optional hardening.
+
+Full checklist, priority order, and completion bar: **[`plan-arch.md`](plan-arch.md)**.
+
+| Phase | Theme | Status |
+|-------|--------|--------|
+| 50 | Filesystem v2 (multi-sector, dirs, unlink/rename) | in progress (core done; FAT/NFS stretch open) |
+| 51 | Network stack v2 (DHCP, DNS, multi-conn, TLS) | planned |
+| 52 | Hardware closeout (RPi4 REPL gate + deploy) | planned |
+| 53 | Shell + core utilities | planned |
+| 54 | Config, secrets, boot policy | planned |
+| 55 | Package/profile UX (pacman-like host CLI) | planned |
+| 56 | Time/init cross-arch parity | planned |
+| 57 | Observability and ops | planned |
+| 58 | App catalog | planned |
+| 59 | Multi-arch workstation profiles | planned |
+| 60 | Security posture (stretch) | planned |
+
+Near-term priority: finish **50** stretch if needed, then **52 → 51**, then 55 and 53.
 
 ## Version alignment
 

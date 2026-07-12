@@ -80,7 +80,8 @@ Full board reference: [`docs/boards.md`](docs/boards.md).
 | [AGENTS.md](AGENTS.md) | LLM agent instructions for idiomatic Rust |
 | [docs/README.md](docs/README.md) | Documentation index |
 | [docs/context.md](docs/context.md) | Domain language and decisions |
-| [docs/plan.md](docs/plan.md) | Roadmap and smoke parity table |
+| [docs/plan.md](docs/plan.md) | Roadmap and smoke parity table (phases 1–49) |
+| [docs/plan-arch.md](docs/plan-arch.md) | Arch-level functionality gap plan (phases 50–60) |
 | [docs/boards.md](docs/boards.md) | Board and QEMU profile reference |
 | [docs/ci.md](docs/ci.md) | CI pipeline, caches, troubleshooting |
 | [docs/seL4-whitepaper.pdf](docs/seL4-whitepaper.pdf) | seL4 overview (reference) |

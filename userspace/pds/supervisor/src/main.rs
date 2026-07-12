@@ -98,7 +98,7 @@ fn poll_fs() -> FsResponse {
 #[cfg(feature = "workstation")]
 fn probe_fs() {
     // Exercise FS server to ensure FS is "mounted" (triggers format if needed)
-    match call::<FsRequest, FsResponse>(FS_SERVER, FsRequest::ListDir) {
+    match call::<FsRequest, FsResponse>(FS_SERVER, FsRequest::list_root()) {
         Ok(FsResponse::Pending) => {
             let _ = poll_fs();
         }

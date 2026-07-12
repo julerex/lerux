@@ -26,6 +26,7 @@ const EDIT: Channel = Channel::new(6);
 const CHAT: Channel = Channel::new(7);
 
 const INPUT_BUF_CAP: usize = 128;
+const CWD_CAP: usize = lerux_interface_types::MAX_FS_PATH;
 
 struct HandlerImpl {
     console: SerialClient,
@@ -33,6 +34,9 @@ struct HandlerImpl {
     input_len: usize,
     in_edit: bool,
     in_chat: bool,
+    /// Shell-local cwd (Phase 50); server paths are absolute after resolve.
+    cwd: [u8; CWD_CAP],
+    cwd_len: u8,
 }
 
 fn write_bytes(console: &mut SerialClient, bytes: &[u8]) {
@@ -135,12 +139,63 @@ fn chat_view_to_display(console: &mut SerialClient, v: &ChatResponse) {
     }
 }
 
-fn ls(console: &mut SerialClient) {
-    match fs_call(FsRequest::ListDir) {
+/// Resolve `path` against shell cwd into `out`; returns length.
+fn resolve_path(cwd: &[u8], path: &[u8], out: &mut [u8; CWD_CAP]) -> Option<usize> {
+    if path.is_empty() {
+        let n = cwd.len().min(out.len());
+        out[..n].copy_from_slice(&cwd[..n]);
+        return Some(n);
+    }
+    if path[0] == b'/' {
+        let n = path.len().min(out.len());
+        out[..n].copy_from_slice(&path[..n]);
+        return Some(n);
+    }
+    // cwd + "/" + path
+    let pos = if cwd == b"/" {
+        out[0] = b'/';
+        1usize
+    } else {
+        let n = cwd.len().min(out.len());
+        out[..n].copy_from_slice(&cwd[..n]);
+        let mut pos = n;
+        if pos < out.len() {
+            out[pos] = b'/';
+            pos += 1;
+        }
+        pos
+    };
+    if pos + path.len() > out.len() {
+        return None;
+    }
+    out[pos..pos + path.len()].copy_from_slice(path);
+    Some(pos + path.len())
+}
+
+fn ls(console: &mut SerialClient, cwd: &[u8], arg: Option<&[u8]>) {
+    let mut path_buf = [0u8; CWD_CAP];
+    let path = match arg {
+        Some(p) => match resolve_path(cwd, p, &mut path_buf) {
+            Some(n) => &path_buf[..n],
+            None => {
+                println(console, "ls: path too long");
+                return;
+            }
+        },
+        None => cwd,
+    };
+    match fs_call(FsRequest::list_dir(path)) {
         FsResponse::DirList { count, entries } => {
             for e in entries.iter().take(count as usize) {
                 let name = core::str::from_utf8(e.name_slice()).unwrap_or("?");
-                let _ = writeln!(ConsoleWriter(console), "{:<20} {}", name, e.size);
+                let kind = if e.is_dir { "dir" } else { "file" };
+                let _ = writeln!(
+                    ConsoleWriter(console),
+                    "{:<20} {:>6} {}",
+                    name,
+                    e.size,
+                    kind
+                );
             }
         }
         _ => println(console, "ls: error"),
@@ -156,8 +211,13 @@ impl Write for ConsoleWriter<'_> {
     }
 }
 
-fn cat(console: &mut SerialClient, path: &[u8]) {
-    let handle = match fs_call(FsRequest::open(path)) {
+fn cat(console: &mut SerialClient, cwd: &[u8], path: &[u8]) {
+    let mut path_buf = [0u8; CWD_CAP];
+    let Some(n) = resolve_path(cwd, path, &mut path_buf) else {
+        println(console, "cat: path too long");
+        return;
+    };
+    let handle = match fs_call(FsRequest::open(&path_buf[..n])) {
         FsResponse::Handle { id } => id,
         _ => {
             println(console, "cat: open failed");
@@ -181,17 +241,103 @@ fn cat(console: &mut SerialClient, path: &[u8]) {
     write_bytes(console, b"\r\n");
 }
 
-fn write_file(console: &mut SerialClient, path: &[u8], data: &[u8]) {
-    let handle = match fs_call(FsRequest::create(path)) {
+fn write_file(console: &mut SerialClient, cwd: &[u8], path: &[u8], data: &[u8]) {
+    let mut path_buf = [0u8; CWD_CAP];
+    let Some(n) = resolve_path(cwd, path, &mut path_buf) else {
+        println(console, "write: path too long");
+        return;
+    };
+    let handle = match fs_call(FsRequest::create(&path_buf[..n])) {
         FsResponse::Handle { id } => id,
         _ => {
             println(console, "write: create failed");
             return;
         }
     };
-    match fs_call(FsRequest::write(handle, 0, data)) {
-        FsResponse::Ok => println(console, "write: ok"),
-        _ => println(console, "write: failed"),
+    let mut offset = 0u32;
+    let max_chunk = lerux_interface_types::MAX_FS_DATA;
+    while (offset as usize) < data.len() {
+        let end = (offset as usize + max_chunk).min(data.len());
+        match fs_call(FsRequest::write(
+            handle,
+            offset,
+            &data[offset as usize..end],
+        )) {
+            FsResponse::Ok => offset = end as u32,
+            _ => {
+                println(console, "write: failed");
+                return;
+            }
+        }
+    }
+    println(console, "write: ok");
+}
+
+fn mkdir_cmd(console: &mut SerialClient, cwd: &[u8], path: &[u8]) {
+    let mut path_buf = [0u8; CWD_CAP];
+    let Some(n) = resolve_path(cwd, path, &mut path_buf) else {
+        println(console, "mkdir: path too long");
+        return;
+    };
+    match fs_call(FsRequest::mkdir(&path_buf[..n])) {
+        FsResponse::Ok => println(console, "mkdir: ok"),
+        _ => println(console, "mkdir: failed"),
+    }
+}
+
+fn rm_cmd(console: &mut SerialClient, cwd: &[u8], path: &[u8]) {
+    let mut path_buf = [0u8; CWD_CAP];
+    let Some(n) = resolve_path(cwd, path, &mut path_buf) else {
+        println(console, "rm: path too long");
+        return;
+    };
+    match fs_call(FsRequest::unlink(&path_buf[..n])) {
+        FsResponse::Ok => println(console, "rm: ok"),
+        _ => println(console, "rm: failed"),
+    }
+}
+
+fn mv_cmd(console: &mut SerialClient, cwd: &[u8], from: &[u8], to: &[u8]) {
+    let mut from_buf = [0u8; CWD_CAP];
+    let mut to_buf = [0u8; CWD_CAP];
+    let Some(fn_) = resolve_path(cwd, from, &mut from_buf) else {
+        println(console, "mv: path too long");
+        return;
+    };
+    let Some(tn) = resolve_path(cwd, to, &mut to_buf) else {
+        println(console, "mv: path too long");
+        return;
+    };
+    match fs_call(FsRequest::rename(&from_buf[..fn_], &to_buf[..tn])) {
+        FsResponse::Ok => println(console, "mv: ok"),
+        _ => println(console, "mv: failed"),
+    }
+}
+
+fn pwd_cmd(console: &mut SerialClient, cwd: &[u8]) {
+    write_bytes(console, cwd);
+    write_bytes(console, b"\r\n");
+}
+
+fn cd_cmd(h: &mut HandlerImpl, path: &[u8]) {
+    let mut path_buf = [0u8; CWD_CAP];
+    let cwd = &h.cwd[..h.cwd_len as usize];
+    let Some(n) = resolve_path(cwd, path, &mut path_buf) else {
+        println(&mut h.console, "cd: path too long");
+        return;
+    };
+    // Allow "/" always; otherwise require Stat is_dir.
+    if n == 1 && path_buf[0] == b'/' {
+        h.cwd[0] = b'/';
+        h.cwd_len = 1;
+        return;
+    }
+    match fs_call(FsRequest::stat(&path_buf[..n])) {
+        FsResponse::Stat { is_dir: true, .. } => {
+            h.cwd[..n].copy_from_slice(&path_buf[..n]);
+            h.cwd_len = n as u8;
+        }
+        _ => println(&mut h.console, "cd: failed"),
     }
 }
 
@@ -323,11 +469,16 @@ fn process_command(h: &mut HandlerImpl, line: &[u8]) {
     }
     let mut parts = line.split(|&b| b == b' ');
     let cmd = parts.next().unwrap_or(b"");
+    // Copy cwd so path helpers do not borrow `h` across `cd`.
+    let mut cwd_copy = [0u8; CWD_CAP];
+    let cwd_len = h.cwd_len as usize;
+    cwd_copy[..cwd_len].copy_from_slice(&h.cwd[..cwd_len]);
+    let cwd = &cwd_copy[..cwd_len];
     match cmd {
-        b"ls" => ls(&mut h.console),
+        b"ls" => ls(&mut h.console, cwd, parts.next()),
         b"cat" => {
             if let Some(p) = parts.next() {
-                cat(&mut h.console, p);
+                cat(&mut h.console, cwd, p);
             } else {
                 println(&mut h.console, "usage: cat <path>");
             }
@@ -346,11 +497,40 @@ fn process_command(h: &mut HandlerImpl, line: &[u8]) {
                 } else {
                     b""
                 };
-                write_file(&mut h.console, path, data);
+                write_file(&mut h.console, cwd, path, data);
             } else {
                 println(&mut h.console, "usage: write <path> <data>");
             }
         }
+        b"mkdir" => {
+            if let Some(p) = parts.next() {
+                mkdir_cmd(&mut h.console, cwd, p);
+            } else {
+                println(&mut h.console, "usage: mkdir <path>");
+            }
+        }
+        b"rm" => {
+            if let Some(p) = parts.next() {
+                rm_cmd(&mut h.console, cwd, p);
+            } else {
+                println(&mut h.console, "usage: rm <path>");
+            }
+        }
+        b"mv" => {
+            if let (Some(from), Some(to)) = (parts.next(), parts.next()) {
+                mv_cmd(&mut h.console, cwd, from, to);
+            } else {
+                println(&mut h.console, "usage: mv <from> <to>");
+            }
+        }
+        b"cd" => {
+            if let Some(p) = parts.next() {
+                cd_cmd(h, p);
+            } else {
+                println(&mut h.console, "usage: cd <path>");
+            }
+        }
+        b"pwd" => pwd_cmd(&mut h.console, cwd),
         b"time" | b"date" => time(&mut h.console),
         b"ps" => ps(&mut h.console),
         b"top" => top(&mut h.console),
@@ -359,7 +539,7 @@ fn process_command(h: &mut HandlerImpl, line: &[u8]) {
         b"fetch" => fetch_demo(&mut h.console),
         b"help" => println(
             &mut h.console,
-            "commands: ls cat write time ps top qos reboot fetch dmesg edit chat help",
+            "commands: ls cat write mkdir rm mv cd pwd time ps top qos reboot fetch dmesg edit chat help",
         ),
         b"echo" => {
             let rest = &line[4..];
@@ -369,9 +549,13 @@ fn process_command(h: &mut HandlerImpl, line: &[u8]) {
         b"dmesg" => dmesg(&mut h.console),
         b"edit" => {
             if let Some(p) = parts.next() {
+                let mut abs = [0u8; lerux_interface_types::MAX_FS_PATH];
+                let Some(n) = resolve_path(cwd, p, &mut abs) else {
+                    println(&mut h.console, "edit: path too long");
+                    return;
+                };
                 let mut pb = [0u8; lerux_interface_types::MAX_FS_PATH];
-                let n = p.len().min(pb.len());
-                pb[..n].copy_from_slice(&p[..n]);
+                pb[..n].copy_from_slice(&abs[..n]);
                 match edit_call(EditRequest::Open {
                     path_len: n as u8,
                     path: pb,
@@ -409,7 +593,7 @@ fn init() -> HandlerImpl {
     let _console = SerialClient::new(SERIAL_DRIVER);
     log::info!("lerux-shell: ready");
 
-    if let FsResponse::DirList { count, .. } = fs_call(FsRequest::ListDir) {
+    if let FsResponse::DirList { count, .. } = fs_call(FsRequest::list_root()) {
         log::info!("lerux-shell: ls count={}", count);
     }
     if let Ok(SupervisorResponse::Time { year, month, day }) =
@@ -427,12 +611,16 @@ fn init() -> HandlerImpl {
     let mut c = SerialClient::new(SERIAL_DRIVER);
     print_prompt(&mut c);
 
+    let mut cwd = [0u8; CWD_CAP];
+    cwd[0] = b'/';
     HandlerImpl {
         console: SerialClient::new(SERIAL_DRIVER),
         input_buf: [0; INPUT_BUF_CAP],
         input_len: 0,
         in_edit: false,
         in_chat: false,
+        cwd,
+        cwd_len: 1,
     }
 }
 

@@ -908,7 +908,10 @@ impl HandlerImpl {
                 let lba = self.bpb.root_lba + u32::from(root_sec);
                 if let Some(sector) = self.io.poll_read_sector(lba) {
                     if let Some((_, e)) = Self::find_in_root_sector(&sector, &short) {
-                        return Some(FsResponse::Stat { size: e.size });
+                        return Some(FsResponse::Stat {
+                            size: e.size,
+                            is_dir: false,
+                        });
                     }
                     let mut ended = false;
                     for index in 0..lerux_fat::ENTRIES_PER_SECTOR {
@@ -1046,7 +1049,19 @@ impl HandlerImpl {
                 len,
             } => self.begin_read(handle, offset, len),
             FsRequest::Stat { path_len, path } => self.begin_stat(path, path_len),
-            FsRequest::ListDir => self.begin_list_dir(),
+            FsRequest::ListDir { path_len, path } => {
+                // Root-only FAT: only "" or "/" are accepted.
+                let p = &path[..path_len as usize];
+                if path_len == 0 || p == b"/" || p == b"." {
+                    self.begin_list_dir();
+                } else {
+                    return FsResponse::Error;
+                }
+            }
+            FsRequest::Mkdir { .. } | FsRequest::Unlink { .. } | FsRequest::Rename { .. } => {
+                // Hierarchy ops are LERUXFS2-only (Phase 50); FAT stays root-only.
+                return FsResponse::Error;
+            }
             FsRequest::Poll => return self.handle_poll(),
         }
         if let Some(resp) = self.advance_fs_job() {

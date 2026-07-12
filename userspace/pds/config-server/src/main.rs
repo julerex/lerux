@@ -105,13 +105,16 @@ fn list_config_keys() -> (u8, [[u8; MAX_CONFIG_KEY_LEN]; 8], [u8; 8]) {
     let mut lens = [0u8; 8];
     let mut count: u8 = 0;
 
-    if let FsResponse::DirList { count: dc, entries } = fs_call(FsRequest::ListDir) {
+    // Phase 50: `/config` is a real directory; list component names inside it.
+    if let FsResponse::DirList { count: dc, entries } = fs_call(FsRequest::list_dir(b"/config")) {
         for e in entries.iter().take(dc as usize) {
+            if e.is_dir {
+                continue;
+            }
             let name = e.name_slice();
-            if name.starts_with(b"/config/") && count < 8 {
-                let k = &name[b"/config/".len()..];
-                let kl = k.len().min(MAX_CONFIG_KEY_LEN) as u8;
-                keys[count as usize][..kl as usize].copy_from_slice(&k[..kl as usize]);
+            if count < 8 {
+                let kl = name.len().min(MAX_CONFIG_KEY_LEN) as u8;
+                keys[count as usize][..kl as usize].copy_from_slice(&name[..kl as usize]);
                 lens[count as usize] = kl;
                 count += 1;
             }

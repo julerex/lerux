@@ -135,7 +135,7 @@ fn parse_get_path(req: &[u8]) -> Option<&[u8]> {
 }
 
 fn list_dir_body(out: &mut [u8]) -> usize {
-    match fs_call(FsRequest::ListDir) {
+    match fs_call(FsRequest::list_root()) {
         FsResponse::DirList { count, entries } => {
             let mut pos = 0usize;
             for e in entries.iter().take(count as usize) {

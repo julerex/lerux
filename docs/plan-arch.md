@@ -1,0 +1,355 @@
+# PLAN — Arch-level functionality (phases 50–60)
+
+Last updated: 2026-07-12
+
+Related: [`plan.md`](plan.md) (completed phases 1–49), [`plan-au-ts.md`](plan-au-ts.md) (sDDF/LionsOS inspiration track), [`context.md`](context.md) (domain language).
+
+## Context
+
+lerux is a **Rust-only, non-POSIX** userspace on seL4 Microkit. Phases 1–49 delivered a QEMU workstation MVP and much of an RPi4 path: supervisor, FS/net IPC, shell, profiles/packages, serial/net virtualisers, QoS, debug, benches.
+
+**Project definition of “Arch-like”** ([`context.md`](context.md)):
+
+> Rolling PD artifact pins, named system profiles, init ordering, shell + core utilities — each implemented as PDs you port deliberately. Unmodified Arch packages (`bash`, `pacman`, `firefox`, etc.) are **out of scope**.
+
+This plan maps **Arch Linux workflow and capability surface** onto that constraint. Target is not “run Arch packages”; it is “a daily-driver-feel console system for embedded/workstation seL4”: install/update compose images, manage storage/net/config, edit files, fetch over the network, observe and reboot — with hardware parity and a growing app catalog.
+
+### Already at Arch-analogue (roughly)
+
+| Arch concept | lerux today |
+|--------------|-------------|
+| Kernel | Upstream seL4 15.0.0 (not lerux-owned) |
+| Init | `supervisor` (RTC/timer, service bring-up, reboot/status IPC) |
+| Package set / ISO profiles | `support/profiles/*.toml` + `lerux profile build` |
+| pacman package metadata | `support/packages/`, `package-pins.toml`, `lerux package` |
+| Shell | `shell` REPL over serial (`ls cat write time ps top qos reboot fetch dmesg edit chat help`) |
+| Storage | `fs-server` + LERUXFS2 / FAT16 slice on virtio-blk or eMMC2 |
+| Network | `net-server` (UDP/TCP/DNS static map) + drivers |
+| Logging | `log-server` + shell `dmesg` |
+| Config | `config-server` FS-backed under `/config/` |
+| Apps | `edit`, `chat-client`, `http-file-browser` |
+| Multiarch bring-up | aarch64 / riscv64 / x86 serial+echo+virtio smokes |
+| Hardware | RPi4 serial/net/blk/workstation profiles (manual HW gate still open) |
+
+### Hard ceiling (do not plan as “become Arch”)
+
+- No Linux/POSIX ABI, musl, `fork`/`exec`, unmodified third-party binaries
+- Microkit **static** PD set at image build time — “install package” = pin + rebuild `loader.img`, not runtime ELF load
+- No full desktop (Wayland/X) or browser-class stack unless a future ADR opens guest VMM / large runtimes
+
+---
+
+## Approach
+
+Work in **vertical capability tracks**, each ending in a smoke-gated profile board. Prefer deepening existing IPC contracts (`lerux-interface-types`) and the workstation profile over new one-off boards. Align naming with Arch mental models in docs/CLI (`package`, `profile`, “rolling pins”) while keeping postcard RPC under the hood.
+
+```
+Foundation gaps          Daily-driver UX           Ecosystem
+─────────────────        ─────────────────         ─────────────
+50 FS v2 ──────────────► 53 Shell + coreutils-PD
+51 Net stack v2 ───────► 54 Config & secrets
+52 HW closeout ────────► 55 Package/repo UX ──────► 58 App catalog
+        │                         │
+        └──── 56 Time/RTC parity ─┘
+              57 Observability
+              59 Multi-board / multi-arch workstation
+              60 Security posture (optional stretch)
+```
+
+Graphics, POSIX layers, and guest Linux (libvmm) stay **explicit non-goals** unless product requirements change (would need ADRs).
+
+### Reuse map
+
+| Area | Paths |
+|------|--------|
+| Domain language / Arch definition | `docs/context.md` |
+| Completed roadmap | `docs/plan.md`, `docs/plan-au-ts.md` |
+| IPC contracts | `userspace/crates/lerux-interface-types/src/lib.rs` |
+| FS formats | `userspace/crates/lerux-fs/`, `userspace/crates/lerux-fat/` |
+| FS/net/services | `userspace/pds/fs-server/`, `net-server/`, `supervisor/`, `shell/`, `config-server/`, `log-server/` |
+| Profiles / packages | `support/profiles/`, `support/packages/`, `support/package-pins.toml` |
+| System gen | `tools/lerux-cli/` (`profile`, `package`, `render_system`), ADR-001 |
+| Ported-app checklist | `docs/context.md` (“Ported app checklist”) |
+| HW gate | `docs/boards.md` (RPi4 workstation section), Phase 47 `hw-serial` |
+
+---
+
+## Phase 50 — Filesystem v2 (Arch: real storage) — core done
+
+**Why:** Arch assumes hierarchical dirs, multi-block files, delete/rename, and usable capacity. LERUXFS1 was flat (≤16 files, one 512-byte sector each); FAT remains root-only, 8.3, single-cluster.
+
+### Steps
+
+- [x] Extend `FsRequest` / `FsResponse` for paths with directories, `Unlink`/`Rename`/`Mkdir` (path grammar on `MAX_FS_PATH` / interface-types docs).
+- [x] **LERUXFS2**: multi-sector contiguous files (≤32 sectors / 16 KiB), directory sectors, free-map bitmap; magic `LERUXFS2`; LERUXFS1 superblocks reformat on mount.
+- [ ] Finish **FAT** stretch: multi-cluster files, subdirs (or LFN if needed for host interchange); optional workstation FAT demo (`plan-au-ts` deferred items).
+- [ ] Optional **NFS** or host-backed FS for QEMU user-net (dev convenience; LionsOS-inspired).
+- [x] Shell: `mkdir`, `rm`, `mv`, `cd`/`pwd` (shell-local cwd); larger `cat`/`write` via chunked IPC.
+- [x] Smokes: `just test-fs` (hierarchy + multi-sector), `just test-fs-fat` (basic parity; new ops Error on FAT), workstation boots.
+
+### Exit
+
+Files large enough for configs, logs, and edit buffers without artificial 512 B caps; hierarchical layout usable from shell. **Met for LERUXFS2**; FAT/NFS remain stretch.
+
+---
+
+## Phase 51 — Network stack v2 (Arch: “networking just works”)
+
+**Why:** Arch has DHCP, real DNS, concurrent sockets, HTTPS-ish fetch. lerux has static QEMU addresses, static DNS map (`host`/`dns` → `10.0.2.2`), single-flight TCP, no TLS.
+
+### Steps
+
+- [ ] **DHCP client** in `net-server` (or config-driven static IP via `config-server`); apply on bring-up; shell/`config` show address.
+- [ ] **Real DNS** over UDP (beyond static table); cache; fail soft to static map for smokes.
+- [ ] **Multi-connection / multi-client** net: either multi-socket in one server or sDDF-style Rx/Tx virt + copy (stretch from ADR-003); allow shell fetch + `http-file-browser` concurrently.
+- [ ] **TLS** for outbound fetch (e.g. `rustls` + `webpki-roots` in a dedicated `tls-proxy` PD or net-server feature) — keep apps on cleartext IPC to the proxy if cert store is large.
+- [ ] RPi4 workstation: TCP+DNS+DHCP on GENET (today `fetch` is UDP-demo-only on HW).
+- [ ] Unified-dma / trust map on genet + x86 PCI (ADR-003 residual).
+
+### Exit
+
+`fetch https://…` (or TLS-terminated `fetch`) works on QEMU; RPi4 can reach a real host; smokes stay deterministic (DHCP mock or fixed QEMU DHCP).
+
+---
+
+## Phase 52 — Hardware closeout (Arch: install and use the machine)
+
+**Why:** Arch on real metal is the bar; RPi4 workstation image builds but the **manual REPL gate** is still open.
+
+### Steps
+
+- [ ] Complete Phase 39 gate: serial REPL `ls`/`cat`/`fetch`/`edit` on device; document failures and fix drivers (`emmc2`, `genet`).
+- [ ] Automate what Phase 47 already supports: self-hosted `hw-serial` green for workstation boot expects; expand expects for shell prompt + one FS/net command.
+- [ ] First-boot disk format story: empty eMMC → format LERUXFS → seed `/config/`.
+- [ ] Deploy ergonomics: U-Boot/SD image recipe, one-command host flash doc (already partially in `boards.md`).
+- [ ] Optional second board (e.g. another aarch64 SBC) only after RPi4 is reliable.
+
+### Exit
+
+Documented “install media → boot → shell works” path on RPi4 without folklore.
+
+---
+
+## Phase 53 — Shell and core utilities (Arch: base packages)
+
+**Why:** Arch base is dozens of CLI tools; lerux shell is a thin REPL over a few IPC services.
+
+### Steps
+
+- [ ] Expand built-ins: `mkdir`/`rm`/`mv`/`stat`/`df`, `ping`/`ifconfig` (or `ip`), `date`/`uptime`, `clear`, `history` (ring in shell PD).
+- [ ] **Pager / less-like** for long `cat`/`dmesg` over serial.
+- [ ] Structured **help** and command discovery (machine-readable list for smokes).
+- [ ] Optional small **coreutils-style PDs** only where IPC isolation matters; prefer shell built-ins for pure transforms to avoid channel explosion.
+- [ ] Scripted non-interactive shell for CI (serial expect sequences already exist — deepen them).
+
+### Exit
+
+A new user can administer files, net identity, services, and logs without knowing IPC channel IDs.
+
+---
+
+## Phase 54 — Config, secrets, and boot policy (Arch: `/etc`, netctl)
+
+**Why:** Arch is configuration-driven; `config-server` is a thin FS key store, not a policy layer.
+
+### Steps
+
+- [ ] Schema for keys: net (IP/DHCP/DNS), hostname, log level, default services, boot notify order.
+- [ ] Supervisor reads config **before** bringing services up; validate and log defaults on missing keys.
+- [ ] Shell `get`/`set`/`list` config commands; host-side seed into `disk.img` for QEMU.
+- [ ] Secrets store (separate PD or encrypted region later): API tokens for fetch/chat — even if “encryption” is deferred, isolate capabilities.
+- [ ] Persist boot/log rotation policy under FS v2.
+
+### Exit
+
+Changing net mode or hostname is a config write + reboot (or hot-apply where safe), not a rebuild.
+
+---
+
+## Phase 55 — Package and profile UX (Arch: pacman + rolling)
+
+**Why:** Arch’s soul is package management. lerux has pins and profiles but “install” is still a developer rebuild, not a clear product loop.
+
+### Steps
+
+- [ ] **Host-side package UX:** `lerux package search|install|remove` that edits a profile’s `pds` + channels (or composes profile fragments), then `profile build`.
+- [ ] **Rolling pin workflow:** CI publishes ELF artifacts; `lerux package upgrade` bumps pins with `diff` of SHA256/interface-types; document breakage when `interface_types` major changes.
+- [ ] **Profile recipes:** expand beyond workstation/server/minimal (e.g. `net-appliance`, `dev-workstation` with extra apps).
+- [ ] **Channel auto-wiring:** when adding a package fragment, merge declared `[[channel]]` needs instead of hand-editing workstation TOML (extends Phase 41).
+- [ ] Docs: “AUR for lerux” = out-of-tree profile fragments + PD crates; contribution template matching ported-app checklist.
+- [ ] **Not in scope:** runtime dynamic loading of arbitrary ELFs into a running Microkit system (would need different system model / ADR).
+
+### Exit
+
+Adding `edit` or a new app to a profile is one CLI command + rebuild; pins are auditable and rollable.
+
+---
+
+## Phase 56 — Time and init parity (Arch: timedatectl / systemd units)
+
+**Why:** RTC/timer and composed init are **aarch64 virt-only**; RISC-V/x86 lack PL031/SP804 stack.
+
+### Steps
+
+- [ ] Platform timers: RISC-V CLINT/ACLINT or SBI time; x86 PIT/HPET or QEMU fw_cfg — prefer rust-sel4 drivers if/when available, else thin lerux drivers.
+- [ ] Supervisor `GetTime` / shell `time` on all arches used for workstation-class profiles.
+- [ ] Optional **service graph** description (dependencies, restart policy) beyond fixed notify chains — still static PDs, but ordered readiness like systemd units.
+- [ ] Watchdog / hang detection (timer + supervisor status).
+
+### Exit
+
+Cross-arch smoke parity table gains “init/time: yes” for at least one non-aarch64 board; workstation concepts portable.
+
+---
+
+## Phase 57 — Observability and ops (Arch: journalctl, systemd-analyze)
+
+**Why:** Arch admins debug with logs, process state, and metrics; lerux has log-server + `top`/`qos` + microbenches.
+
+### Steps
+
+- [ ] Structured log levels, per-PD tags, ring size config; shell filters (`dmesg --pd shell`).
+- [ ] Supervisor: richer `ServiceStatus` (ready/degraded/error, last error string).
+- [ ] Integrate or extend **bench** into optional continuous smoke thresholds (perf regression gate).
+- [ ] Fault path: wire workstation optional debug parent for non-demo PDs; keep production images lean (ADR-005).
+- [ ] Host tools: `lerux smoke` / serial capture post-processing; crash dump artifact in CI.
+
+### Exit
+
+A failed boot or hung service is diagnosable from serial + one host command.
+
+---
+
+## Phase 58 — App catalog (Arch: official repos + AUR-shaped ports)
+
+**Why:** Arch is useful because of software; lerux needs deliberate ports, not ports of Linux binaries.
+
+### Priority catalog
+
+Each row = interface types + PD + package fragment + smoke.
+
+| App | Depends on | Notes |
+|-----|------------|-------|
+| `top` polish / `htop`-like | supervisor | Already partial Phase 40 |
+| `fetch` CLI improvements | net v2 + TLS | Progress, content-type, save to FS |
+| `http-file-browser` v2 | FS v2 | Upload, MIME, larger listings |
+| Calculator / REPL math | shell only | Trivial confidence builder |
+| `irc`/`chat` multi-room | net multi-conn | Evolve `chat-client` |
+| Scripting runtime PD | FS + net | MicroPython or WAMR **as PD**, IPC only (`plan-au-ts` idea) |
+| Backup/sync PD | FS + net | Push tree over TCP |
+| Cert/key tool | secrets + FS | For TLS trust anchors |
+
+Defer heavy GUI browsers and language ecosystems until/unless a runtime PD proves viable.
+
+### Exit
+
+≥5 “daily” apps beyond shell builtins, all installable via Phase 55 packaging.
+
+---
+
+## Phase 59 — Multi-arch / multi-profile workstation (Arch: multi-architecture)
+
+**Why:** Arch supports many arches; lerux workstation is essentially aarch64 QEMU (+ RPi4 path).
+
+### Steps
+
+- [ ] `workstation-x86` / `workstation-riscv` profiles using PCI/MMIO virtio and arch-appropriate serial.
+- [ ] Shared channel manifests; board-specific drivers only in board vars / layout templates.
+- [ ] CI matrix: at least one non-aarch64 workstation smoke (may be serial+fs+shell without full HTTP if cost is high).
+- [ ] Document supported platform tiers (Tier 1: aarch64 virt + RPi4; Tier 2: x86/riscv virt; etc.).
+
+### Exit
+
+“Workstation” is a product concept, not a single board name.
+
+---
+
+## Phase 60 — Security posture (Arch: hardening baseline) — stretch
+
+**Why:** seL4 sells isolation; Arch users care about least privilege and updates.
+
+### Steps
+
+- [ ] Threat model doc: which PDs trust which channels; untrusted apps never map DMA (already net policy).
+- [ ] Capability audit: reduce shell’s surface; separate admin vs untrusted app profiles.
+- [ ] Image signing / measured boot story (host-side first; hardware roots later).
+- [ ] Channel/QoS abuse tests; optional MCS budgets if Microkit/seL4 config allows (beyond ADR-006 fixed priorities).
+- [ ] Dependency pin hygiene (rust-sel4, Microkit) and security update runbook.
+
+### Exit
+
+Documented trust map + one automated isolation test (e.g. crash in app PD does not take down fs-server).
+
+---
+
+## Deferred stretch (from existing plans)
+
+Fold in as capacity allows; see also [`plan-au-ts.md`](plan-au-ts.md) and ADRs:
+
+- Per-client serial queues / separate TX+RX virt PDs
+- Full sDDF net copy-PD swarm
+- In-guest GDB RSP (needs fork or upstream APIs)
+- libvmm / guest Linux — **only with dedicated ADR** (explicit non-goal today)
+- Formal verification of lerux PDs
+
+---
+
+## Completion bar (“about Arch level”)
+
+Treat the system as **done enough** when a developer can:
+
+1. Flash or boot a **profile image** on QEMU and RPi4 without hand-editing XML.
+2. Use a **shell** to manage hierarchical storage, config, logs, time, and services.
+3. **Fetch** content over the network (DHCP/DNS/TLS path) and edit/save files on disk.
+4. **Add/remove/upgrade** PD packages via host CLI with rolling pins and rebuild.
+5. Run a small **catalog of apps** (edit, chat, http-fs, …) selected by profile.
+6. Diagnose failures via **logs + service status + optional GDB/fault path**.
+7. Rely on **CI** (QEMU matrix + optional HW) so regressions match Arch’s “breakage is visible” culture.
+
+That is Arch’s **workflow and completeness**, reimplemented as static Microkit + Rust PDs — not Arch’s ABI.
+
+---
+
+## Near-term priority
+
+If capacity is limited, do **not** start with graphics or scripting runtimes:
+
+1. **Phase 50 FS v2 core** — done (LERUXFS2 + shell ops); optional FAT/NFS stretch later
+2. **Phase 52 HW closeout** — proves the stack outside QEMU
+3. **Phase 51 Net v2** (DHCP/DNS, then TLS) — makes the machine useful on a LAN
+
+Then **55 package UX** and **53 shell** turn the stack into something that feels administerable day to day.
+
+---
+
+## Verification (program-level)
+
+| Gate | Command / artifact |
+|------|-------------------|
+| Host lint | `just check` |
+| PD lint | `just check-pd` (needs SDK) |
+| Workstation QEMU | `just test-workstation` |
+| FS | `just test-fs` / `just test-fs-fat` (+ new multi-sector tests) |
+| Net/fetch | `just test-net`, `just test-fetch` (+ TLS/DHCP smokes when added) |
+| Packages | `lerux package list|diff`; profile build after install simulation |
+| HW | `LERUX_HW_SERIAL=… BOARD=rpi4b_4gb_workstation just test-hw` + REPL checklist |
+| Bench (optional) | `just bench` vs `docs/bench-results.latest.md` |
+| Docs | Update `docs/plan.md` when a phase completes; keep this file as the living checklist |
+
+Each phase should add or extend **one** profile board smoke rather than only unit tests.
+
+---
+
+## Explicit non-goals
+
+- Unmodified Arch/Linux binaries, pacman on-device, glibc/musl userspace
+- Full POSIX VFS / Linux rootfs mount as primary UX
+- Desktop environment / GPU stack (unless future product ADR)
+- Replacing seL4 or forking Microkit by default
+- Vendoring sDDF/LionsOS C trees (`plan-au-ts` principles)
+
+---
+
+## Summary
+
+Phases **1–49** built the **kernel of an Arch-like workflow** (profiles, init, shell, FS/net, packages). Reaching “about Arch level” of **functionality** still needs real storage (50), production networking (51), hardware truth (52), admin UX (53–55), parity and ops (56–57), a deeper app catalog (58), multi-arch workstation (59), and optional hardening (60) — all as **ported Rust PDs and host tooling**, never as a Linux compatibility layer.

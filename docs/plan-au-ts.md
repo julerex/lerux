@@ -171,7 +171,7 @@ LionsOS `components/fs/fat`, `components/fs/nfs`, `examples/fileio`.
 
 ### Scope
 
-- [x] Keep `LERUXFS1` as the default smoke FS (`just test-fs`)
+- [x] Keep LERUXFS as the default smoke FS (`just test-fs`; Phase 50 → **LERUXFS2**)
 - [x] FAT16 backend behind `fs-server` (`lerux-fat` + `backend-fat`) matching `Open`/`Create`/`Read`/`Write`/`Stat`/`ListDir`/`Poll` on virtio-blk
 - [ ] Optional NFS client PD or `fs-server` backend for QEMU user-net (deferred)
 - [x] Board/feature selection: `qemu_virt_aarch64_fs` (LERUXFS1) vs `qemu_virt_aarch64_fs_fat` (FAT16); Cargo features `backend-lerux` / `backend-fat`

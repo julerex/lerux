@@ -41,7 +41,7 @@ The composed board (`qemu_virt_aarch64_composed`) runs `boot-init` and `hello`+v
 
 lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection domains that speak **typed postcard RPC** (`lerux-interface-types`) over Microkit channels — not file descriptors, `errno`, or `fork`/`exec`.
 
-“Arch-like” means **workflow**, not binary compatibility: rolling PD artifact pins, named system profiles, init ordering, shell + core utilities — each implemented as PDs you port deliberately. Unmodified Arch packages (`bash`, `pacman`, `firefox`, etc.) are out of scope.
+“Arch-like” means **workflow**, not binary compatibility: rolling PD artifact pins, named system profiles, init ordering, shell + core utilities — each implemented as PDs you port deliberately. Unmodified Arch packages (`bash`, `pacman`, `firefox`, etc.) are out of scope. Gap plan for Arch-level capability (phases 50–60): [`plan-arch.md`](plan-arch.md).
 
 ## System profiles and packages
 
@@ -57,8 +57,8 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 **Network topology (Phase 43)**
 : Untrusted apps use only `NetRequest` / `NetResponse` against `net-server`. On aarch64 virtio-net, **unified-dma** removes the separate client_dma MR: Hal + bounce share `virtio_net_driver_dma`; the stack maps the bounce half only. Apps never map net DMA. See [ADR-003](decisions/003-net-virtualiser.md), [`net-topology.md`](net-topology.md).
 
-**Filesystem backends (Phase 44)**
-: `fs-server` serves `FsRequest` / `FsResponse` over virtio-blk (or emmc2). Default on-disk format is **LERUXFS1** (`lerux-fs`). Alternate **FAT16** backend (`lerux-fat`, feature `backend-fat`) for interchange with host tools: root-only, 8.3 names, single-cluster files for the IPC payload size. Select via board feature (`qemu_virt_aarch64_fs` vs `qemu_virt_aarch64_fs_fat`). Shell/edit/config stay on the same IPC.
+**Filesystem backends (Phase 44 / 50)**
+: `fs-server` serves `FsRequest` / `FsResponse` over virtio-blk (or emmc2). Default on-disk format is **LERUXFS2** (`lerux-fs`): hierarchical directories, free-map allocation, multi-sector contiguous files (up to 16 KiB). IPC includes `Mkdir` / `Unlink` / `Rename` and path-scoped `ListDir`. Path grammar: `/`-separated components, optional leading `/`, max 48-byte paths (see `lerux-interface-types`). Alternate **FAT16** backend (`lerux-fat`, feature `backend-fat`) stays root-only, 8.3, single-cluster; hierarchy ops return `Error`. Select via board feature (`qemu_virt_aarch64_fs` vs `qemu_virt_aarch64_fs_fat`). Shell/edit/config stay on the same IPC.
 
 **Service async (Phase 45)**
 : Service PDs keep Microkit `Handler` as the root event loop. Long sequential device I/O may use **stackless cooperative async** (`lerux-service-async`: `SingleTask`, `poll_fn`, `WakeCell`) instead of only explicit step machines. Clients still use postcard `Poll` RPC. See [ADR-004](decisions/004-service-async.md).

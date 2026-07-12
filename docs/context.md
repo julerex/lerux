@@ -63,6 +63,9 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 **Service async (Phase 45)**
 : Service PDs keep Microkit `Handler` as the root event loop. Long sequential device I/O may use **stackless cooperative async** (`lerux-service-async`: `SingleTask`, `poll_fn`, `WakeCell`) instead of only explicit step machines. Clients still use postcard `Poll` RPC. See [ADR-004](decisions/004-service-async.md).
 
+**Debug / faults (Phase 46)**
+: Child PD faults can be delivered to a **parent** PD (`Handler::fault`) via Microkit hierarchy. Demo: `debug-handler` + `crash-demo` (`just test-debug`). Interactive host debugging uses QEMU’s gdbstub + `gdb-multiarch` ([`debug.md`](debug.md), [ADR-005](decisions/005-debug-pd.md)).
+
 **Package**
 : One PD crate plus its interface-types version and an optional profile fragment (`support/packages/<name>.toml`). “Installing” a package means adding the PD to a `support/profiles/*.toml` and rebuilding the static image via `lerux profile build` — Microkit does not load arbitrary ELFs at runtime. CI can publish per-PD ELF artifacts; pins live in `support/package-pins.toml` (`lerux package list|show|build|pin|diff`). (Phase 40)
 

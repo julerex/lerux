@@ -9,6 +9,8 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | Board | Arch | Smoke command | PDs (summary) |
 |-------|------|---------------|---------------|
 | `qemu_virt_aarch64` | aarch64 | `just test` | hello + serial |
+| `qemu_virt_aarch64_debug` | aarch64 | `just test-debug` | debug-handler (parent) + crash-demo (child fault) |
+| `qemu_virt_aarch64_debug` | aarch64 | `just test-debug` | debug-handler parent + crash-demo child fault |
 | `qemu_virt_aarch64_echo` | aarch64 | `just test-echo` | echo client/server + serial |
 | `qemu_virt_aarch64_virtio` | aarch64 | `just test-virtio` | hello + serial + virtio blk/net |
 | `qemu_virt_aarch64_blk` | aarch64 | `just test-blk` | blk client/server + serial + virtio-blk |

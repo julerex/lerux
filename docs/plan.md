@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-12 (Phase 45 service async; Phases 46–49 in plan-au-ts)
+Last updated: 2026-07-12 (Phase 46 debug PD; Phases 47–49 in plan-au-ts)
 
 ## Phase 1 — Bring-up
 
@@ -373,9 +373,13 @@ Apps on `NetRequest` via `net-server`; aarch64 virtio-net **unified-dma** (no se
 
 Stackless coop async for service PDs ([ADR-004](decisions/004-service-async.md), `lerux-service-async`). `fs-server` LERUXFS1 format runs as a `SingleTask` future; clients keep `Poll` RPC.
 
-## Phases 46+ — au-ts inspiration
+## Phase 46 — Debug PD ✅
 
-See [`plan-au-ts.md`](plan-au-ts.md) for Phases 46–49 (GDB, HW CI, optional QoS/perf).
+Microkit hierarchy fault parent + crash child (`just test-debug`); QEMU gdbstub docs ([`debug.md`](debug.md), [ADR-005](decisions/005-debug-pd.md)). libgdb deferred (needs forked seL4/Microkit).
+
+## Phases 47+ — au-ts inspiration
+
+See [`plan-au-ts.md`](plan-au-ts.md) for Phases 47–49 (HW CI, optional QoS/perf).
 
 ## Version alignment
 

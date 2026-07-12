@@ -1,0 +1,17 @@
+[package]
+name = "crash-demo"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Child PD that deliberately faults for Phase 46 debug demo"
+
+[lints]
+workspace = true
+
+[features]
+board-qemu_virt_aarch64_debug = []
+
+[dependencies]
+lerux-logging = { path = "../../crates/lerux-logging" }
+log = { workspace = true }
+sel4-microkit = { workspace = true }

@@ -30,6 +30,8 @@ const BOARD_FEATURE_CRATES: &[&str] = &[
     "config-server",
     "serial-driver",
     "serial-virt",
+    "debug-handler",
+    "crash-demo",
     "virtio-blk-driver",
     "virtio-net-driver",
     "virtio-pci-driver",
@@ -181,6 +183,7 @@ pub fn test_all(root: &Path, build_dir: &str, config: &str) -> Result<()> {
         "x86_64_generic_http",
         "qemu_virt_riscv64_http",
         "qemu_virt_aarch64_init",
+        "qemu_virt_aarch64_debug",
     ];
     let tests_after_disk = [
         "qemu_virt_aarch64_blk",

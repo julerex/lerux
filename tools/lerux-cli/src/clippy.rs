@@ -59,6 +59,14 @@ const AARCH64_CRATES: &[ClippyCrate<'_>] = &[
         feature: None,
     },
     ClippyCrate {
+        name: "debug-handler",
+        feature: Some("board-qemu_virt_aarch64_debug"),
+    },
+    ClippyCrate {
+        name: "crash-demo",
+        feature: Some("board-qemu_virt_aarch64_debug"),
+    },
+    ClippyCrate {
         name: "supervisor",
         feature: Some("board-qemu_virt_aarch64_http_composed"),
     },

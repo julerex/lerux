@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Phase 46: parent debug-handler receives faults from child crash-demo.
+  Nested protection_domain wires Microkit hierarchy (fault endpoint).
+-->
+<system>
+    <protection_domain name="debug_handler" priority="2" stack_size="0x10_000">
+        <program_image path="debug-handler.elf" />
+        <protection_domain name="crash_demo" priority="1" id="1" stack_size="0x10_000">
+            <program_image path="crash-demo.elf" />
+        </protection_domain>
+    </protection_domain>
+</system>

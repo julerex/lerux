@@ -194,6 +194,13 @@ pub fn default_expects(board: &str) -> Vec<String> {
                 "lerux-echo: lerux".into(),
             ]
         }
+        "qemu_virt_aarch64_debug" => vec![
+            "lerux-debug: ready".into(),
+            "crash-demo: about to fault".into(),
+            "lerux-debug: fault child=1".into(),
+            "lerux-debug: VmFault".into(),
+            "lerux-debug: crash-demo stopped".into(),
+        ],
         "qemu_virt_aarch64_blk_composed" => vec![
             "lerux-supervisor: RTC".into(),
             "lerux-supervisor: timer ok".into(),

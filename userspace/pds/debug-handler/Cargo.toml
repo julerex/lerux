@@ -1,0 +1,18 @@
+[package]
+name = "debug-handler"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Parent PD that logs child faults (Phase 46)"
+
+[lints]
+workspace = true
+
+[features]
+board-qemu_virt_aarch64_debug = []
+
+[dependencies]
+lerux-logging = { path = "../../crates/lerux-logging" }
+log = { workspace = true }
+sel4 = { workspace = true }
+sel4-microkit = { workspace = true }

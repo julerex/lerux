@@ -220,7 +220,7 @@ LionsOS `components/fs/fat`, `components/fs/nfs`, `examples/fileio`.
 
 ---
 
-## Phase 46 — Debug protection domain
+## Phase 46 — Debug protection domain ✅
 
 **Goal:** Attach GDB to a crashing or hung PD on QEMU (then RPi4).
 
@@ -230,20 +230,22 @@ LionsOS `components/fs/fat`, `components/fs/nfs`, `examples/fileio`.
 
 ### Scope
 
-- [ ] Feasibility: upstream Microkit/seL4 patches libgdb needs vs what 2.2.0 + rust-sel4 v4.0.0 expose
-- [ ] Minimal path: fault-handler PD + serial stub that speaks enough GDB RSP for breakpoints on `qemu_virt_aarch64`
-- [ ] Profile `debug` or feature flag on workstation that wires fault caps
-- [ ] Doc: how to attach `gdb-multiarch` from host
-- [ ] Optional: TCP via net-server once Phase 43 exists
+- [x] Feasibility: libgdb needs forked seL4/Microkit → **not** adopted on stock 2.2.0 ([ADR-005](decisions/005-debug-pd.md))
+- [x] Minimal path: Microkit hierarchy `debug-handler` (parent `fault`) + `crash-demo` (child VM fault) on `qemu_virt_aarch64_debug`
+- [x] Board + smoke `just test-debug` (fault log strings)
+- [x] Doc: QEMU gdbstub + `gdb-multiarch` — [`docs/debug.md`](debug.md)
+- [ ] Optional: in-guest GDB RSP / TCP (deferred until upstream APIs or explicit fork)
 
 ### Out of scope
 
 - Shipping a permanent debugger in production workstation images
 - x86/RISC-V debug until aarch64 works
+- libgdb + forked kernel as default
 
 ### Exit
 
-Documented QEMU workflow: deliberate fault in a demo PD → GDB backtrace.
+- [x] Documented QEMU + gdb-multiarch workflow
+- [x] Deliberate fault in demo PD → parent logs VmFault (smoke); host GDB for interactive backtrace
 
 ---
 

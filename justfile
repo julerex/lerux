@@ -143,6 +143,10 @@ test-fs:
 test-fs-fat:
     BOARD=qemu_virt_aarch64_fs_fat just test
 
+# Phase 46: parent fault handler + deliberate child crash
+test-debug:
+    BOARD=qemu_virt_aarch64_debug just test
+
 # Net IPC smoke test on RISC-V virt
 test-riscv-net:
     BOARD=qemu_virt_riscv64_net just test

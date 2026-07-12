@@ -36,6 +36,8 @@ members = [
     "userspace/pds/http-file-browser",
     "userspace/pds/log-server",
     "userspace/pds/config-server",
+    "userspace/pds/debug-handler",
+    "userspace/pds/crash-demo",
     "userspace/crates/lerux-sync",
     "userspace/crates/lerux-virtio-hal",
     "userspace/crates/lerux-virtio-pci",

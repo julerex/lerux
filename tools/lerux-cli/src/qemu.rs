@@ -64,6 +64,27 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
             ]);
             c
         }
+        "aarch64_debug" => {
+            // Same machine as other aarch64 virt boards; no virtio devices.
+            let mut c = Command::new("qemu-system-aarch64");
+            c.args([
+                "-machine",
+                "virt,virtualization=on",
+                "-cpu",
+                "cortex-a53",
+                "-m",
+                "size=2G",
+                "-serial",
+                "mon:stdio",
+                "-nographic",
+                "-device",
+                &format!(
+                    "loader,file={},addr=0x70000000,cpu-num=0",
+                    path_str(&loader)
+                ),
+            ]);
+            c
+        }
         "aarch64_init"
         | "aarch64_virtio"
         | "aarch64_blk"

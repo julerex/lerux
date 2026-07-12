@@ -354,6 +354,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "crash-demo"
+version = "0.1.0"
+dependencies = [
+ "lerux-logging",
+ "log",
+ "sel4-microkit",
+]
+
+[[package]]
 name = "crc"
 version = "3.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -385,6 +394,16 @@ checksum = "78c8292055d1c1df0cce5d180393dc8cce0abec0a7102adb6c7b1eef6016d60a"
 dependencies = [
  "generic-array",
  "typenum",
+]
+
+[[package]]
+name = "debug-handler"
+version = "0.1.0"
+dependencies = [
+ "lerux-logging",
+ "log",
+ "sel4",
+ "sel4-microkit",
 ]
 
 [[package]]

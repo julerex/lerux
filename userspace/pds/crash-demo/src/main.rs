@@ -19,7 +19,7 @@ fn init() -> HandlerImpl {
     log::info!("crash-demo: about to fault");
     // Deliberate null write — delivered to parent PD as VmFault.
     unsafe {
-        ptr::write_volatile(0 as *mut u32, 0xdead_beef);
+        ptr::write_volatile(ptr::null_mut::<u32>(), 0xdead_beef);
     }
     // Unreachable if the fault is delivered as expected.
     log::error!("crash-demo: survived fault (unexpected)");

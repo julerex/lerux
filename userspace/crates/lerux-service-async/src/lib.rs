@@ -140,9 +140,7 @@ impl<T> SingleTask<T> {
 
     /// Poll until pending or complete. Returns [`Some`] when the task finishes.
     pub fn run_until_stalled(&mut self) -> Option<T> {
-        let Some(fut) = self.fut.as_mut() else {
-            return None;
-        };
+        let fut = self.fut.as_mut()?;
         let waker = noop_waker();
         let mut cx = Context::from_waker(&waker);
         match fut.as_mut().poll(&mut cx) {

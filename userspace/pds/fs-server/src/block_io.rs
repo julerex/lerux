@@ -4,11 +4,15 @@
 //! [`write_sector`]) driven from Handler via [`lerux_service_async`].
 
 use alloc::rc::Rc;
-use core::{cell::RefCell, task::Poll};
+#[cfg(not(feature = "backend-fat"))]
+use core::cell::RefCell;
+use core::task::Poll;
 
 use async_unsync::semaphore::Semaphore;
 use lerux_interface_types::SECTOR_SIZE;
-use lerux_service_async::{poll_fn, WakeCell};
+#[cfg(not(feature = "backend-fat"))]
+use lerux_service_async::poll_fn;
+use lerux_service_async::WakeCell;
 use sel4_abstract_allocator::{basic::BasicAllocator, WithAlignmentBound};
 use sel4_microkit::{memory_region_symbol, Channel};
 use sel4_shared_memory::SharedMemoryRef;
@@ -118,7 +122,8 @@ fn advance_write(io_state: &mut IoState, io: &mut BlkIo) -> bool {
     }
 }
 
-/// Shared handle for async sector ops (Phase 45).
+/// Shared handle for async sector ops (Phase 45; LERUXFS backend only).
+#[cfg(not(feature = "backend-fat"))]
 pub type SharedSectorIo = Rc<RefCell<SectorIo>>;
 
 /// Sector I/O helper held by both backends.
@@ -154,6 +159,7 @@ impl SectorIo {
         }
     }
 
+    #[cfg(not(feature = "backend-fat"))]
     pub fn shared(block_size: usize) -> SharedSectorIo {
         Rc::new(RefCell::new(Self::new(block_size)))
     }
@@ -263,6 +269,7 @@ impl SectorIo {
 }
 
 /// Async read of one sector (Phase 45). Completes when the block driver notifies.
+#[cfg(not(feature = "backend-fat"))]
 pub async fn read_sector(io: SharedSectorIo, lba: u32) -> Result<[u8; SECTOR_SIZE], ()> {
     {
         let mut g = io.borrow_mut();
@@ -278,12 +285,12 @@ pub async fn read_sector(io: SharedSectorIo, lba: u32) -> Result<[u8; SECTOR_SIZ
         let mut g = io.borrow_mut();
         g.wake.set(cx.waker());
         // Opportunistic progress without notify (same PD edge cases).
-        if matches!(g.io_state, IoState::Reading { .. }) {
-            if let Some(data) = g.try_advance_read() {
-                g.completed_sector = Some(data);
-                g.pending_read_lba = None;
-                return Poll::Ready(Ok(data));
-            }
+        if matches!(g.io_state, IoState::Reading { .. })
+            && let Some(data) = g.try_advance_read()
+        {
+            g.completed_sector = Some(data);
+            g.pending_read_lba = None;
+            return Poll::Ready(Ok(data));
         }
         if g.pending_read_lba == Some(lba) {
             if let Some(data) = g.completed_sector.take() {
@@ -302,6 +309,7 @@ pub async fn read_sector(io: SharedSectorIo, lba: u32) -> Result<[u8; SECTOR_SIZ
 }
 
 /// Async write of one sector (Phase 45).
+#[cfg(not(feature = "backend-fat"))]
 pub async fn write_sector(io: SharedSectorIo, lba: u32, data: [u8; SECTOR_SIZE]) -> Result<(), ()> {
     {
         let mut g = io.borrow_mut();
@@ -316,12 +324,10 @@ pub async fn write_sector(io: SharedSectorIo, lba: u32, data: [u8; SECTOR_SIZE])
     poll_fn(move |cx| {
         let mut g = io.borrow_mut();
         g.wake.set(cx.waker());
-        if matches!(g.io_state, IoState::Writing { .. }) {
-            if g.try_advance_write() {
-                g.pending_write_lba = None;
-                g.completed_ok = false;
-                return Poll::Ready(Ok(()));
-            }
+        if matches!(g.io_state, IoState::Writing { .. }) && g.try_advance_write() {
+            g.pending_write_lba = None;
+            g.completed_ok = false;
+            return Poll::Ready(Ok(()));
         }
         if g.pending_write_lba == Some(lba) {
             if g.completed_ok {

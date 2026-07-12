@@ -652,11 +652,11 @@ impl HandlerImpl {
         if let Some(resp) = self.completed.take() {
             return resp;
         }
-        if self.format_task.is_running() {
-            if let Some(resp) = self.poll_format_task() {
-                self.finish_job(resp);
-                return self.completed.take().unwrap_or(FsResponse::Pending);
-            }
+        if self.format_task.is_running()
+            && let Some(resp) = self.poll_format_task()
+        {
+            self.finish_job(resp);
+            return self.completed.take().unwrap_or(FsResponse::Pending);
         }
         if let Some(resp) = self.advance_fs_job() {
             self.finish_job(resp);
@@ -714,10 +714,10 @@ impl Handler for HandlerImpl {
     fn notified(&mut self, channels: ChannelSet) -> Result<(), Self::Error> {
         if channels.contains(BLK_DRIVER) {
             self.handle_blk_driver();
-            if self.format_task.is_running() {
-                if let Some(resp) = self.poll_format_task() {
-                    self.finish_job(resp);
-                }
+            if self.format_task.is_running()
+                && let Some(resp) = self.poll_format_task()
+            {
+                self.finish_job(resp);
             }
         }
         Ok(())

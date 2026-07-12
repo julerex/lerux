@@ -435,7 +435,7 @@ impl HandlerImpl {
                 if let Some(sector) = self.io.poll_read_sector(lba) {
                     if let Some((idx, e)) = Self::find_in_root_sector(&sector, &short) {
                         let slot =
-                            root_sec as u16 * lerux_fat::ENTRIES_PER_SECTOR as u16 + idx as u16;
+                            root_sec * lerux_fat::ENTRIES_PER_SECTOR as u16 + idx as u16;
                         let Some(id) = self.alloc_handle(e.first_cluster, e.size, slot) else {
                             return Some(FsResponse::Error);
                         };
@@ -515,11 +515,11 @@ impl HandlerImpl {
                     // free_cluster: 0 = no free slot yet, 1 = free_slot valid
                     let mut have_slot = free_cluster == 1;
                     let mut slot_abs = free_slot;
-                    if !have_slot {
-                        if let Some(idx) = Self::free_slot_in_sector(&sector) {
-                            slot_abs = root_sec * lerux_fat::ENTRIES_PER_SECTOR as u16 + idx as u16;
-                            have_slot = true;
-                        }
+                    if !have_slot
+                        && let Some(idx) = Self::free_slot_in_sector(&sector)
+                    {
+                        slot_abs = root_sec * lerux_fat::ENTRIES_PER_SECTOR as u16 + idx as u16;
+                        have_slot = true;
                     }
                     let mut ended = false;
                     for index in 0..lerux_fat::ENTRIES_PER_SECTOR {

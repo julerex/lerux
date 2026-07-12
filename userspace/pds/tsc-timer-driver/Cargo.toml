@@ -1,0 +1,18 @@
+[package]
+name = "tsc-timer-driver"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "x86 RDTSC free-running timer PD (Phase 56)"
+
+[lints]
+workspace = true
+
+[features]
+board-x86_64_generic_init = []
+
+[dependencies]
+sel4-driver-interfaces = { workspace = true }
+sel4-microkit = { workspace = true }
+sel4-microkit-simple-ipc = { workspace = true }
+serde = { workspace = true }

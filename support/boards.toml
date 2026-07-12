@@ -78,6 +78,28 @@ pds = ["supervisor", "serial-driver", "pl031-driver", "sp804-driver"]
 qemu = "aarch64_init"
 system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, pl031_mmio_phys_addr = "0x9010000", pl031_irq = 34, sp804_mmio_phys_addr = "0x90d0000", sp804_irq = 43 }
 
+# Phase 56: RTC (Goldfish) + timer (rdtime CSR) on RISC-V virt (stock QEMU).
+[qemu_virt_riscv64_init]
+arch = "riscv64"
+microkit_board = "qemu_virt_riscv64"
+target = "riscv64-sel4-microkit"
+target_triple = "riscv64-sel4-microkit"
+template = "init-riscv.system.template"
+pds = ["supervisor", "serial-driver", "goldfish-rtc-driver", "rdtime-timer-driver"]
+qemu = "riscv64"
+system_vars = { serial_mmio_phys_addr = "0x1_000_0000", serial_irq = 10, goldfish_rtc_mmio_phys_addr = "0x101000", goldfish_rtc_irq = 11 }
+
+# Phase 56: RTC (CMOS) + timer (TSC) on x86_64 QEMU PC.
+[x86_64_generic_init]
+arch = "x86_64"
+microkit_board = "x86_64_generic"
+target = "x86_64-sel4-microkit"
+target_triple = "x86_64-sel4-microkit"
+template = "init-x86.system.template"
+pds = ["supervisor", "serial-driver", "cmos-rtc-driver", "tsc-timer-driver"]
+qemu = "x86_64"
+system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48, cmos_ioport_addr = "0x70" }
+
 [qemu_virt_aarch64_echo]
 arch = "aarch64"
 microkit_board = "qemu_virt_aarch64"

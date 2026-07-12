@@ -1,0 +1,17 @@
+[package]
+name = "goldfish-rtc-driver"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Google Goldfish RTC PD for QEMU RISC-V virt (Phase 56)"
+
+[lints]
+workspace = true
+
+[features]
+board-qemu_virt_riscv64_init = []
+
+[dependencies]
+rtcc = "0.4"
+sel4-microkit = { workspace = true }
+sel4-microkit-driver-adapters = { workspace = true }

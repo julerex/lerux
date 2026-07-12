@@ -292,6 +292,12 @@ jobs:
           - id: init
             board: qemu_virt_aarch64_init
             command: just test-init
+          - id: init-riscv
+            board: qemu_virt_riscv64_init
+            command: just test-init-riscv
+          - id: init-x86
+            board: x86_64_generic_init
+            command: just test-init-x86
           - id: composed
             board: qemu_virt_aarch64_composed
             command: just disk-img && just test-composed

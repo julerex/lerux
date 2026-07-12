@@ -53,7 +53,7 @@ Default: `qemu_virt_aarch64` (QEMU ARM virt). Override with `BOARD=... just run`
 | Serial hello | `qemu_virt_aarch64` | `just test` |
 | Echo IPC | `qemu_virt_aarch64_echo` | `just test-echo` |
 | Virtio blk/net | `qemu_virt_aarch64_virtio` | `just disk-img && just test-virtio` |
-| RTC + timer | `qemu_virt_aarch64_init` | `just test-init` |
+| RTC + timer (all arches) | `*_init` | `just test-init` / `test-init-riscv` / `test-init-x86` |
 | Init + virtio | `qemu_virt_aarch64_composed` | `just disk-img && just test-composed` |
 | HTTP over virtio-net | `qemu_virt_aarch64_http` | `just test-http` |
 | x86 HTTP over virtio-net | `x86_64_generic_http` | `just test-x86-http` |
@@ -71,7 +71,7 @@ Default: `qemu_virt_aarch64` (QEMU ARM virt). Override with `BOARD=... just run`
 
 Full board reference: [`docs/boards.md`](docs/boards.md).
 
-**Init and composed** need patched QEMU for SP804 at `0x90d0000` — run `cargo run -p lerux-cli -- install sp804-qemu` (Docker image includes build deps). Init is **aarch64 virt only**; cross-arch parity is in [`docs/plan.md`](docs/plan.md).
+**aarch64 init and composed** need patched QEMU for SP804 at `0x90d0000` — run `cargo run -p lerux-cli -- install sp804-qemu` (Docker image includes build deps). RISC-V/x86 init use stock QEMU (Goldfish RTC + `rdtime`; CMOS RTC + TSC). See Phase 56 in [`docs/plan.md`](docs/plan.md).
 
 ## Documentation
 

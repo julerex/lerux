@@ -21,18 +21,20 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `qemu_virt_aarch64_fs_fat` | aarch64 | `just test-fs-fat` | same SDF; fs-server FAT16 backend |
 | `qemu_virt_aarch64_net_composed` | aarch64 | `just test-net-composed` | boot-init + init drivers + net IPC + virtio-net |
 | `qemu_virt_aarch64_ipc_composed` | aarch64 | `just test-ipc-composed` | boot-init + init drivers + blk/net IPC + virtio-blk/net |
-| `qemu_virt_aarch64_init` | aarch64 | `just test-init` | boot-init + PL031 + SP804 + serial |
+| `qemu_virt_aarch64_init` | aarch64 | `just test-init` | supervisor + PL031 + SP804 + serial |
 | `qemu_virt_aarch64_composed` | aarch64 | `just test-composed` | boot-init + hello virtio + all drivers |
 | `qemu_virt_aarch64_http` | aarch64 | `just test-http` | serial + virtio-net + http-server |
 | `qemu_virt_aarch64_http_composed` | aarch64 | `just test-http-composed` | boot-init + init drivers + virtio-net + http-server |
 | `qemu_virt_riscv64` | riscv64 | `just test-riscv` | hello + serial (MMIO UART) |
 | `qemu_virt_riscv64_echo` | riscv64 | `just test-riscv-echo` | echo + serial |
 | `qemu_virt_riscv64_virtio` | riscv64 | `just test-riscv-virtio` | hello + serial + virtio |
+| `qemu_virt_riscv64_init` | riscv64 | `just test-init-riscv` | supervisor + Goldfish RTC + rdtime timer + serial |
 | `qemu_virt_riscv64_blk` | riscv64 | `just test-riscv-blk` | blk client/server + serial + virtio-blk |
 | `qemu_virt_riscv64_net` | riscv64 | `just test-riscv-net` | net client/server + serial + virtio-net |
 | `qemu_virt_riscv64_http` | riscv64 | `just test-riscv-http` | serial + virtio-net + http-server |
 | `x86_64_generic` | x86_64 | `BOARD=x86_64_generic just test` | hello + serial (COM1) |
 | `x86_64_generic_echo` | x86_64 | `just test-x86-echo` | echo + serial |
+| `x86_64_generic_init` | x86_64 | `just test-init-x86` | supervisor + CMOS RTC + TSC timer + serial |
 | `x86_64_generic_virtio` | x86_64 | `just test-x86-virtio` | hello + serial + virtio-pci blk/net |
 | `x86_64_generic_blk` | x86_64 | `just test-x86-blk` | blk client/server + serial + virtio-pci blk |
 | `x86_64_generic_net` | x86_64 | `just test-x86-net` | net client/server + serial + virtio-pci net |

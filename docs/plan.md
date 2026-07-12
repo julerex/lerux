@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-12 (Phase 55 package search/install/remove/upgrade + profile recipes)
+Last updated: 2026-07-12 (Phase 56 time/init cross-arch parity)
 
 ## Phase 1 — Bring-up
 
@@ -104,13 +104,13 @@ Last updated: 2026-07-12 (Phase 55 package search/install/remove/upgrade + profi
 | Serial hello | yes | yes | yes |
 | Echo IPC | yes | yes | yes |
 | Virtio blk/net | yes | yes | yes |
-| Init RTC+timer | yes | no | no |
+| Init RTC+timer | yes | yes | yes |
 | Composed init+virtio | yes | no | no |
 | HTTP over virtio-net | yes | yes | yes |
 | Block IPC service | yes | yes | yes |
 | Net IPC service | yes | yes | yes |
 
-Init (`just test-init`) uses PL031 + SP804 drivers from rust-sel4 v4.0.0, which target QEMU aarch64 virt MMIO only. RISC-V virt and x86 PC do not expose those devices in stock QEMU, and there are no equivalent rust-sel4 driver crates yet.
+Init: aarch64 uses PL031 + SP804 (patched QEMU); RISC-V uses Goldfish RTC + `rdtime` (stock QEMU); x86 uses CMOS RTC + TSC (stock QEMU). See Phase 56 / `just test-init{,-riscv,-x86}`.
 
 ## Phase 15 — Composed aarch64 system
 
@@ -442,9 +442,17 @@ Install-media path for RPi4 workstation (see [`boards.md`](boards.md#rpi4-workst
 - [x] Recipes: `dev-workstation`, `net-appliance` ([`docs/packages.md`](packages.md))
 - [x] Channel auto-wiring by fragment channel `name`
 
-## Phases 56–60 — Arch-level functionality (planned)
+## Phase 56 — Time and init parity (core done)
 
-Roadmap to “about Arch Linux” **workflow** (not ABI): multi-arch time parity, observability, app catalog, security.
+- [x] RISC-V: Goldfish RTC + `rdtime` timer PDs (`just test-init-riscv`)
+- [x] x86: CMOS RTC + TSC timer PDs (`just test-init-x86`)
+- [x] Supervisor `GetTime` / shell `time` path via stock `RtcClient`/`TimerClient` on all three arches
+- [x] Static service-graph log lines + post-bring-up timer watchdog
+- [x] Cross-arch smoke parity: init/time **yes** on aarch64, RISC-V, x86
+
+## Phases 57–60 — Arch-level functionality (planned)
+
+Roadmap to “about Arch Linux” **workflow** (not ABI): observability, app catalog, multi-arch workstation, security.
 
 Full checklist, priority order, and completion bar: **[`plan-arch.md`](plan-arch.md)**.
 
@@ -456,13 +464,13 @@ Full checklist, priority order, and completion bar: **[`plan-arch.md`](plan-arch
 | 53 | Shell + core utilities | core done |
 | 54 | Config, secrets, boot policy | core done (net hot-apply stretch) |
 | 55 | Package/profile UX (pacman-like host CLI) | core done |
-| 56 | Time/init cross-arch parity | planned |
+| 56 | Time/init cross-arch parity | core done |
 | 57 | Observability and ops | planned |
 | 58 | App catalog | planned |
 | 59 | Multi-arch workstation profiles | planned |
 | 60 | Security posture (stretch) | planned |
 
-Near-term priority: **56 time parity** or **58 app catalog**.
+Near-term priority: **57 observability** or **58 app catalog**.
 
 ## Version alignment
 

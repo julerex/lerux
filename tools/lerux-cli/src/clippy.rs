@@ -258,6 +258,22 @@ const RISCV64_CRATES: &[ClippyCrate<'_>] = &[
         feature: Some("board-qemu_virt_riscv64_http"),
     },
     ClippyCrate {
+        name: "serial-driver",
+        feature: Some("board-qemu_virt_riscv64_init"),
+    },
+    ClippyCrate {
+        name: "supervisor",
+        feature: Some("board-qemu_virt_riscv64_init"),
+    },
+    ClippyCrate {
+        name: "goldfish-rtc-driver",
+        feature: Some("board-qemu_virt_riscv64_init"),
+    },
+    ClippyCrate {
+        name: "rdtime-timer-driver",
+        feature: Some("board-qemu_virt_riscv64_init"),
+    },
+    ClippyCrate {
         name: "http-server",
         feature: Some("board-qemu_virt_riscv64_http"),
     },
@@ -299,6 +315,22 @@ const X86_64_CRATES: &[ClippyCrate<'_>] = &[
     ClippyCrate {
         name: "serial-driver",
         feature: Some("board-x86_64_generic_virtio"),
+    },
+    ClippyCrate {
+        name: "serial-driver",
+        feature: Some("board-x86_64_generic_init"),
+    },
+    ClippyCrate {
+        name: "supervisor",
+        feature: Some("board-x86_64_generic_init"),
+    },
+    ClippyCrate {
+        name: "cmos-rtc-driver",
+        feature: Some("board-x86_64_generic_init"),
+    },
+    ClippyCrate {
+        name: "tsc-timer-driver",
+        feature: Some("board-x86_64_generic_init"),
     },
     ClippyCrate {
         name: "virtio-pci-driver",

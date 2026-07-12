@@ -186,6 +186,8 @@ pub fn test_all(root: &Path, build_dir: &str, config: &str) -> Result<()> {
         "x86_64_generic_http",
         "qemu_virt_riscv64_http",
         "qemu_virt_aarch64_init",
+        "qemu_virt_riscv64_init",
+        "x86_64_generic_init",
         "qemu_virt_aarch64_debug",
     ];
     let tests_after_disk = [

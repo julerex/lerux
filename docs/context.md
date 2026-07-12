@@ -33,7 +33,7 @@ lerux builds **Rust-only userspace** on the formally verified [seL4](https://sel
 
 ## Platform parity
 
-Echo IPC and virtio smoke tests run on aarch64, RISC-V virt, and x86 (PCI virtio on q35). Block IPC (read + write) and net IPC (UDP TX) run on all three arches. RTC/timer init (`boot-init` + PL031/SP804) is aarch64 virt only until rust-sel4 adds drivers for other platforms.
+Echo IPC and virtio smoke tests run on aarch64, RISC-V virt, and x86 (PCI virtio on q35). Block IPC (read + write) and net IPC (UDP TX) run on all three arches. RTC/timer init runs on all three: aarch64 PL031/SP804, RISC-V Goldfish RTC + `rdtime`, x86 CMOS RTC + TSC (Phase 56).
 
 The composed board (`qemu_virt_aarch64_composed`) runs `boot-init` and `hello`+virtio in one system. Both PDs log via serial IPC (multi-client serial driver). `boot-init` notifies `hello` when init is complete before virtio starts (composed-sync). See [`boards.md`](boards.md) and [`plan.md`](plan.md).
 
@@ -85,7 +85,7 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 : One PD crate plus its interface-types version and an optional profile fragment (`support/packages/<name>.toml`). Host CLI: `lerux package search|install|remove|upgrade` merges fragments into profiles (channel auto-wiring by name), then `lerux profile build`. Pins in `support/package-pins.toml`. See [`packages.md`](packages.md). Microkit does not load arbitrary ELFs at runtime.
 
 **Supervisor**
-: Evolution of `boot-init` (Phase 33): `supervisor` PD provides RTC/timer, brings up FS/net services, performs ordered app notify (generalizes composed-sync), exposes reboot/status IPC.
+: Evolution of `boot-init` (Phase 33): `supervisor` PD provides RTC/timer, brings up FS/net services, performs ordered app notify (generalizes composed-sync), exposes reboot/status IPC. Phase 56: static **service graph** log lines (`unit=… after=… restart=no`) and a post-bring-up **watchdog** re-query of the timer PD.
 
 **Ported app checklist** (new PD that users interact with):
 

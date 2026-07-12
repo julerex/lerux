@@ -1,6 +1,6 @@
 # PLAN — Arch-level functionality (phases 50–60)
 
-Last updated: 2026-07-12
+Last updated: 2026-07-12 (Phase 56 core done)
 
 Related: [`plan.md`](plan.md) (completed phases 1–49), [`plan-au-ts.md`](plan-au-ts.md) (sDDF/LionsOS inspiration track), [`context.md`](context.md) (domain language).
 
@@ -187,20 +187,20 @@ Adding `edit` or a new app to a profile is one CLI command + rebuild; pins are a
 
 ---
 
-## Phase 56 — Time and init parity (Arch: timedatectl / systemd units)
+## Phase 56 — Time and init parity (Arch: timedatectl / systemd units) — core done
 
-**Why:** RTC/timer and composed init are **aarch64 virt-only**; RISC-V/x86 lack PL031/SP804 stack.
+**Why:** RTC/timer and composed init were **aarch64 virt-only**; RISC-V/x86 lacked PL031/SP804 stack.
 
 ### Steps
 
-- [ ] Platform timers: RISC-V CLINT/ACLINT or SBI time; x86 PIT/HPET or QEMU fw_cfg — prefer rust-sel4 drivers if/when available, else thin lerux drivers.
-- [ ] Supervisor `GetTime` / shell `time` on all arches used for workstation-class profiles.
-- [ ] Optional **service graph** description (dependencies, restart policy) beyond fixed notify chains — still static PDs, but ordered readiness like systemd units.
-- [ ] Watchdog / hang detection (timer + supervisor status).
+- [x] Platform timers: RISC-V Goldfish RTC + `rdtime` CSR (CLINT kernel-owned); x86 CMOS RTC + TSC (PIT owned by kernel for calibration) — thin lerux drivers.
+- [x] Supervisor `GetTime` / `GetUptime` via stock `RtcClient`/`TimerClient` on aarch64, RISC-V, and x86 init boards (`just test-init{,-riscv,-x86}`).
+- [x] Static **service graph** log lines (`unit=… after=… restart=no`) — still static PDs, ordered readiness like systemd units.
+- [x] Watchdog: post-bring-up timer re-query (`lerux-supervisor: watchdog ok`).
 
 ### Exit
 
-Cross-arch smoke parity table gains “init/time: yes” for at least one non-aarch64 board; workstation concepts portable.
+Cross-arch smoke parity table gains “init/time: yes” for RISC-V and x86; workstation concepts portable. **Met.**
 
 ---
 
@@ -318,7 +318,7 @@ If capacity is limited, do **not** start with graphics or scripting runtimes:
 
 1. **Phases 50–55 cores** — FS through package UX done
 2. **Phase 52 lab** — fill RPi4 REPL checklist on real hardware when available
-3. **Phase 56 / 58** — time parity or deeper app catalog
+3. **Phase 57 / 58** — observability or deeper app catalog
 
 ---
 

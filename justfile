@@ -132,6 +132,14 @@ test-x86-blk:
 test-init:
     BOARD=qemu_virt_aarch64_init just test
 
+# Phase 56: init/time on RISC-V virt (Goldfish RTC + rdtime; stock QEMU)
+test-init-riscv:
+    BOARD=qemu_virt_riscv64_init just test
+
+# Phase 56: init/time on x86_64 (CMOS RTC + TSC; stock QEMU)
+test-init-x86:
+    BOARD=x86_64_generic_init just test
+
 # Composed smoke: boot-init + hello virtio (both serial IPC; gated on init notify)
 test-composed:
     BOARD=qemu_virt_aarch64_composed just test

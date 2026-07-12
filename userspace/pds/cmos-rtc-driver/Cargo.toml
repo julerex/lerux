@@ -1,0 +1,18 @@
+[package]
+name = "cmos-rtc-driver"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "MC146818 CMOS RTC PD for x86 PC (Phase 56)"
+
+[lints]
+workspace = true
+
+[features]
+board-x86_64_generic_init = []
+
+[dependencies]
+rtcc = "0.4"
+sel4 = { workspace = true }
+sel4-microkit = { workspace = true }
+sel4-microkit-driver-adapters = { workspace = true }

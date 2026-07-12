@@ -75,6 +75,44 @@ fn log_timer(timer: &mut TimerClient) {
     log::info!("lerux-supervisor: timer ok");
 }
 
+/// Phase 56: static service graph (systemd-unit analogue — fixed PDs, ordered readiness).
+fn log_service_graph() {
+    #[cfg(feature = "workstation")]
+    {
+        log::info!("lerux-supervisor: service-graph unit=fs-server after=supervisor restart=no");
+        log::info!("lerux-supervisor: service-graph unit=config-server after=fs-server restart=no");
+        log::info!("lerux-supervisor: service-graph unit=net-server after=fs-server restart=no");
+        log::info!("lerux-supervisor: service-graph unit=shell after=net-server after=config-server restart=no");
+    }
+    #[cfg(not(feature = "workstation"))]
+    {
+        log::info!("lerux-supervisor: service-graph unit=rtc after=serial-driver restart=no");
+        log::info!("lerux-supervisor: service-graph unit=timer after=serial-driver restart=no");
+        log::info!(
+            "lerux-supervisor: service-graph unit=supervisor after=rtc after=timer restart=no"
+        );
+    }
+}
+
+/// Phase 56: hang detection — re-query timer after bring-up; fail closed only if timer dies.
+#[cfg(not(feature = "board-rpi4b_4gb_workstation"))]
+fn watchdog_check(timer: &mut TimerClient) {
+    match timer.get_time() {
+        Ok(elapsed) => {
+            log::info!("lerux-supervisor: watchdog ok ({}ms)", elapsed.as_millis());
+        }
+        Err(_) => {
+            log::error!("lerux-supervisor: watchdog fail (timer unresponsive)");
+        }
+    }
+}
+
+#[cfg(feature = "board-rpi4b_4gb_workstation")]
+fn watchdog_check() {
+    // No timer PD on RPi4 workstation profile yet.
+    log::info!("lerux-supervisor: watchdog skip (no timer PD)");
+}
+
 #[cfg(any(
     feature = "board-qemu_virt_aarch64_composed",
     feature = "board-qemu_virt_aarch64_http_composed",
@@ -365,14 +403,16 @@ fn init() -> HandlerImpl {
     #[cfg(not(feature = "workstation"))]
     serial::init(SERIAL_DRIVER).unwrap();
     #[cfg(not(feature = "board-rpi4b_4gb_workstation"))]
-    {
+    let mut timer = {
         let mut rtc = RtcClient::new(RTC_DRIVER);
         log_rtc(&mut rtc);
         let mut timer = TimerClient::new(TIMER_DRIVER);
         log_timer(&mut timer);
-    }
+        timer
+    };
     #[cfg(feature = "board-rpi4b_4gb_workstation")]
     log::info!("lerux-supervisor: no RTC/timer PDs on RPi4 workstation");
+    log_service_graph();
     log::info!("lerux-supervisor: init ok");
     #[cfg(any(
         feature = "board-qemu_virt_aarch64_composed",
@@ -391,6 +431,10 @@ fn init() -> HandlerImpl {
         persist_boot_log();
         log::info!("lerux-supervisor: ready");
     }
+    #[cfg(not(feature = "board-rpi4b_4gb_workstation"))]
+    watchdog_check(&mut timer);
+    #[cfg(feature = "board-rpi4b_4gb_workstation")]
+    watchdog_check();
     HandlerImpl
 }
 

@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Phase 56: supervisor + Goldfish RTC + rdtime timer on QEMU RISC-V virt. -->
+<system>
+    <memory_region name="serial_mmio" size="0x1_000" phys_addr="{serial_mmio_phys_addr}" />
+    <memory_region name="goldfish_rtc_mmio" size="0x1000" phys_addr="{goldfish_rtc_mmio_phys_addr}" />
+
+    <protection_domain name="serial_driver" priority="2" stack_size="0x10_000">
+        <program_image path="serial-driver.elf" />
+        <map mr="serial_mmio" vaddr="0x2_000_000" perms="rw" setvar_vaddr="serial_register_block" />
+        <irq irq="{serial_irq}" id="0" />
+    </protection_domain>
+
+    <protection_domain name="goldfish_rtc_driver" priority="3" stack_size="0x10_000">
+        <program_image path="goldfish-rtc-driver.elf" />
+        <map mr="goldfish_rtc_mmio" vaddr="0x3_000_000" perms="rw" cached="false" setvar_vaddr="goldfish_rtc_mmio_vaddr" />
+        <irq irq="{goldfish_rtc_irq}" id="0" />
+    </protection_domain>
+
+    <protection_domain name="rdtime_timer_driver" priority="4" stack_size="0x10_000">
+        <program_image path="rdtime-timer-driver.elf" />
+    </protection_domain>
+
+    <protection_domain name="supervisor" priority="1" stack_size="0x10_000">
+        <program_image path="supervisor.elf" />
+    </protection_domain>
+
+    <channel>
+        <end pd="serial_driver" id="1" />
+        <end pd="supervisor" id="0" pp="true" />
+    </channel>
+
+    <channel>
+        <end pd="goldfish_rtc_driver" id="1" />
+        <end pd="supervisor" id="1" pp="true" />
+    </channel>
+
+    <channel>
+        <end pd="rdtime_timer_driver" id="1" />
+        <end pd="supervisor" id="2" pp="true" />
+    </channel>
+</system>

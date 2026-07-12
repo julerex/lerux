@@ -172,7 +172,29 @@ expects = [
 expects = [
   "lerux-supervisor: RTC",
   "lerux-supervisor: timer ok",
+  "lerux-supervisor: service-graph",
   "lerux-supervisor: init ok",
+  "lerux-supervisor: watchdog ok",
+]
+
+# Phase 56: Goldfish RTC + rdtime timer (stock QEMU, no SP804 patch).
+[boards.qemu_virt_riscv64_init]
+expects = [
+  "lerux-supervisor: RTC",
+  "lerux-supervisor: timer ok",
+  "lerux-supervisor: service-graph",
+  "lerux-supervisor: init ok",
+  "lerux-supervisor: watchdog ok",
+]
+
+# Phase 56: CMOS RTC + TSC timer.
+[boards.x86_64_generic_init]
+expects = [
+  "lerux-supervisor: RTC",
+  "lerux-supervisor: timer ok",
+  "lerux-supervisor: service-graph",
+  "lerux-supervisor: init ok",
+  "lerux-supervisor: watchdog ok",
 ]
 
 [boards.qemu_virt_aarch64_virtio]

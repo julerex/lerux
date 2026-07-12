@@ -381,6 +381,18 @@ pub const MAX_SERVICES: usize = 8;
 /// Max bytes of one service name in [`SupervisorResponse::ServiceList`].
 pub const MAX_SERVICE_NAME: usize = 16;
 
+/// Max last-error string for [`SupervisorResponse::Status`] (Phase 57).
+pub const MAX_SERVICE_ERR: usize = 24;
+
+/// Service is up and probed successfully (Phase 57).
+pub const SERVICE_STATE_READY: u8 = 0;
+/// Service is present but not yet probed / still starting.
+pub const SERVICE_STATE_STARTING: u8 = 1;
+/// Service up with a non-fatal issue.
+pub const SERVICE_STATE_DEGRADED: u8 = 2;
+/// Service failed probe or reported an error.
+pub const SERVICE_STATE_ERROR: u8 = 3;
+
 /// Supervisor service requests (Phase 33/34 / 53).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SupervisorRequest {
@@ -394,7 +406,7 @@ pub enum SupervisorRequest {
     GetUptime,
 }
 
-/// Supervisor service responses (Phase 33/34 / Phase 40 / 53).
+/// Supervisor service responses (Phase 33/34 / Phase 40 / 53 / 57).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SupervisorResponse {
     Ok,
@@ -402,7 +414,7 @@ pub enum SupervisorResponse {
     Services {
         count: u8,
     },
-    /// Named service table for `top` / `ps` (Phase 40).
+    /// Named service table for `top` / `ps` (Phase 40 / 57).
     ServiceList {
         count: u8,
         #[serde(with = "service_name_lens")]
@@ -411,9 +423,17 @@ pub enum SupervisorResponse {
         names: [[u8; MAX_SERVICE_NAME]; MAX_SERVICES],
         #[serde(with = "service_ready_flags")]
         ready: [bool; MAX_SERVICES],
+        /// Phase 57: [`SERVICE_STATE_READY`] … [`SERVICE_STATE_ERROR`].
+        #[serde(with = "service_states_bytes")]
+        states: [u8; MAX_SERVICES],
     },
+    /// Phase 57: ready flag + state + optional last error string.
     Status {
         ready: bool,
+        state: u8,
+        err_len: u8,
+        #[serde(with = "service_err_bytes")]
+        err: [u8; MAX_SERVICE_ERR],
     },
     Time {
         year: u16,
@@ -525,36 +545,92 @@ pub const MAX_LOG_MSG: usize = 80;
 /// Max number of recent log lines returned by one LogResponse::Recent (for dmesg).
 pub const MAX_LOG_LINES: usize = 6;
 
-/// Log service requests (Phase 36 log-server).
+/// Max PD tag bytes in log entries (Phase 57).
+pub const MAX_LOG_TAG: usize = 8;
+
+/// Log level: error (Phase 57; matches typical syslog severity order).
+pub const LOG_LEVEL_ERROR: u8 = 1;
+/// Log level: warn.
+pub const LOG_LEVEL_WARN: u8 = 2;
+/// Log level: info (default).
+pub const LOG_LEVEL_INFO: u8 = 3;
+/// Log level: debug.
+pub const LOG_LEVEL_DEBUG: u8 = 4;
+
+/// Log service requests (Phase 36 / 57 log-server).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LogRequest {
     /// Append a (pre-formatted) log line to the ring buffer and output.
     Append {
         level: u8,
+        tag_len: u8,
+        #[serde(with = "log_tag_bytes")]
+        tag: [u8; MAX_LOG_TAG],
         len: u8,
         #[serde(with = "log_msg_bytes")]
         text: [u8; MAX_LOG_MSG],
     },
     /// Subscribe for future log notifications (stub for Phase 36).
     Subscribe,
-    /// Fetch recent logs (used by shell `dmesg` and supervisor persist).
-    GetRecent,
+    /// Fetch recent logs, optionally filtered by min level and/or PD tag (Phase 57).
+    ///
+    /// `min_level == 0` means any level; `tag_len == 0` means any tag.
+    GetRecent {
+        min_level: u8,
+        tag_len: u8,
+        #[serde(with = "log_tag_bytes")]
+        tag: [u8; MAX_LOG_TAG],
+    },
+    /// Drop lines below this level when appending (Phase 57; default info).
+    SetMinLevel { level: u8 },
 }
 
 impl LogRequest {
+    /// Append at info level with empty tag.
     pub fn append(text: &[u8]) -> Self {
+        Self::append_tagged(LOG_LEVEL_INFO, b"", text)
+    }
+
+    /// Append with explicit level and PD tag (Phase 57).
+    pub fn append_tagged(level: u8, tag: &[u8], text: &[u8]) -> Self {
+        let mut tbuf = [0u8; MAX_LOG_TAG];
+        let tag_len = tag.len().min(MAX_LOG_TAG) as u8;
+        tbuf[..tag_len as usize].copy_from_slice(&tag[..tag_len as usize]);
         let mut buf = [0u8; MAX_LOG_MSG];
         let len = text.len().min(MAX_LOG_MSG) as u8;
         buf[..len as usize].copy_from_slice(&text[..len as usize]);
         Self::Append {
-            level: 2, // info-ish
+            level,
+            tag_len,
+            tag: tbuf,
             len,
             text: buf,
         }
     }
+
+    /// Unfiltered recent log lines.
+    pub fn get_recent() -> Self {
+        Self::GetRecent {
+            min_level: 0,
+            tag_len: 0,
+            tag: [0u8; MAX_LOG_TAG],
+        }
+    }
+
+    /// Filtered recent log lines (`tag` empty = any PD).
+    pub fn get_filtered(min_level: u8, tag: &[u8]) -> Self {
+        let mut tbuf = [0u8; MAX_LOG_TAG];
+        let tag_len = tag.len().min(MAX_LOG_TAG) as u8;
+        tbuf[..tag_len as usize].copy_from_slice(&tag[..tag_len as usize]);
+        Self::GetRecent {
+            min_level,
+            tag_len,
+            tag: tbuf,
+        }
+    }
 }
 
-/// Log service responses (Phase 36).
+/// Log service responses (Phase 36 / 57).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[expect(
     clippy::large_enum_variant,
@@ -568,6 +644,10 @@ pub enum LogResponse {
         lens: [u8; MAX_LOG_LINES],
         #[serde(with = "log_lines_bytes")]
         lines: [[u8; MAX_LOG_MSG]; MAX_LOG_LINES],
+        levels: [u8; MAX_LOG_LINES],
+        tag_lens: [u8; MAX_LOG_LINES],
+        #[serde(with = "log_tags_bytes")]
+        tags: [[u8; MAX_LOG_TAG]; MAX_LOG_LINES],
     },
 }
 
@@ -1000,6 +1080,137 @@ mod net_payload_bytes {
         deserializer: D,
     ) -> Result<[u8; MAX_NET_UDP_PAYLOAD], D::Error> {
         deserializer.deserialize_bytes(PayloadVisitor)
+    }
+}
+
+mod log_tag_bytes {
+    use core::fmt;
+
+    use serde::{
+        de::{self, SeqAccess, Visitor},
+        Deserializer, Serializer,
+    };
+
+    use super::MAX_LOG_TAG;
+
+    pub fn serialize<S: Serializer>(
+        tag: &[u8; MAX_LOG_TAG],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bytes(tag)
+    }
+
+    struct TagVisitor;
+
+    impl<'de> Visitor<'de> for TagVisitor {
+        type Value = [u8; MAX_LOG_TAG];
+
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("a byte array of max log tag size")
+        }
+
+        fn visit_bytes<E: de::Error>(self, v: &[u8]) -> Result<Self::Value, E> {
+            if v.len() > MAX_LOG_TAG {
+                return Err(E::invalid_length(v.len(), &self));
+            }
+            let mut tag = [0u8; MAX_LOG_TAG];
+            tag[..v.len()].copy_from_slice(v);
+            Ok(tag)
+        }
+
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+            let mut tag = [0u8; MAX_LOG_TAG];
+            for (i, byte) in tag.iter_mut().enumerate() {
+                match seq.next_element()? {
+                    Some(value) => *byte = value,
+                    None => break,
+                }
+                if i == MAX_LOG_TAG - 1 && seq.next_element::<u8>()?.is_some() {
+                    return Err(de::Error::invalid_length(MAX_LOG_TAG + 1, &self));
+                }
+            }
+            Ok(tag)
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<[u8; MAX_LOG_TAG], D::Error> {
+        deserializer.deserialize_bytes(TagVisitor)
+    }
+}
+
+mod log_tags_bytes {
+    use core::fmt;
+
+    use serde::{
+        de::{self, SeqAccess, Visitor},
+        Deserializer, Serializer,
+    };
+
+    use super::{MAX_LOG_LINES, MAX_LOG_TAG};
+
+    pub fn serialize<S: Serializer>(
+        tags: &[[u8; MAX_LOG_TAG]; MAX_LOG_LINES],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        let mut flat = [0u8; MAX_LOG_LINES * MAX_LOG_TAG];
+        for (i, tag) in tags.iter().enumerate() {
+            let start = i * MAX_LOG_TAG;
+            flat[start..start + MAX_LOG_TAG].copy_from_slice(tag);
+        }
+        serializer.serialize_bytes(&flat)
+    }
+
+    struct TagsVisitor;
+
+    impl<'de> Visitor<'de> for TagsVisitor {
+        type Value = [[u8; MAX_LOG_TAG]; MAX_LOG_LINES];
+
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("flat byte array of log tags")
+        }
+
+        fn visit_bytes<E: de::Error>(self, v: &[u8]) -> Result<Self::Value, E> {
+            let need = MAX_LOG_LINES * MAX_LOG_TAG;
+            if v.len() != need {
+                return Err(E::invalid_length(v.len(), &self));
+            }
+            let mut tags = [[0u8; MAX_LOG_TAG]; MAX_LOG_LINES];
+            for (i, tag) in tags.iter_mut().enumerate() {
+                let start = i * MAX_LOG_TAG;
+                tag.copy_from_slice(&v[start..start + MAX_LOG_TAG]);
+            }
+            Ok(tags)
+        }
+
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+            let mut flat = [0u8; MAX_LOG_LINES * MAX_LOG_TAG];
+            for byte in flat.iter_mut() {
+                match seq.next_element()? {
+                    Some(value) => *byte = value,
+                    None => break,
+                }
+            }
+            if seq.next_element::<u8>()?.is_some() {
+                return Err(de::Error::invalid_length(
+                    MAX_LOG_LINES * MAX_LOG_TAG + 1,
+                    &self,
+                ));
+            }
+            let mut tags = [[0u8; MAX_LOG_TAG]; MAX_LOG_LINES];
+            for (i, tag) in tags.iter_mut().enumerate() {
+                let start = i * MAX_LOG_TAG;
+                tag.copy_from_slice(&flat[start..start + MAX_LOG_TAG]);
+            }
+            Ok(tags)
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<[[u8; MAX_LOG_TAG]; MAX_LOG_LINES], D::Error> {
+        deserializer.deserialize_bytes(TagsVisitor)
     }
 }
 
@@ -1731,6 +1942,120 @@ mod service_ready_flags {
         deserializer: D,
     ) -> Result<[bool; MAX_SERVICES], D::Error> {
         deserializer.deserialize_bytes(ReadyVisitor)
+    }
+}
+
+mod service_states_bytes {
+    use core::fmt;
+
+    use serde::{
+        de::{self, SeqAccess, Visitor},
+        Deserializer, Serializer,
+    };
+
+    use super::MAX_SERVICES;
+
+    pub fn serialize<S: Serializer>(
+        states: &[u8; MAX_SERVICES],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bytes(states)
+    }
+
+    struct StatesVisitor;
+
+    impl<'de> Visitor<'de> for StatesVisitor {
+        type Value = [u8; MAX_SERVICES];
+
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("byte array of service states")
+        }
+
+        fn visit_bytes<E: de::Error>(self, v: &[u8]) -> Result<Self::Value, E> {
+            if v.len() != MAX_SERVICES {
+                return Err(E::invalid_length(v.len(), &self));
+            }
+            let mut states = [0u8; MAX_SERVICES];
+            states.copy_from_slice(v);
+            Ok(states)
+        }
+
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+            let mut states = [0u8; MAX_SERVICES];
+            for byte in states.iter_mut() {
+                match seq.next_element()? {
+                    Some(value) => *byte = value,
+                    None => break,
+                }
+            }
+            if seq.next_element::<u8>()?.is_some() {
+                return Err(de::Error::invalid_length(MAX_SERVICES + 1, &self));
+            }
+            Ok(states)
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<[u8; MAX_SERVICES], D::Error> {
+        deserializer.deserialize_bytes(StatesVisitor)
+    }
+}
+
+mod service_err_bytes {
+    use core::fmt;
+
+    use serde::{
+        de::{self, SeqAccess, Visitor},
+        Deserializer, Serializer,
+    };
+
+    use super::MAX_SERVICE_ERR;
+
+    pub fn serialize<S: Serializer>(
+        err: &[u8; MAX_SERVICE_ERR],
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        serializer.serialize_bytes(err)
+    }
+
+    struct ErrVisitor;
+
+    impl<'de> Visitor<'de> for ErrVisitor {
+        type Value = [u8; MAX_SERVICE_ERR];
+
+        fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+            formatter.write_str("a byte array of max service error size")
+        }
+
+        fn visit_bytes<E: de::Error>(self, v: &[u8]) -> Result<Self::Value, E> {
+            if v.len() > MAX_SERVICE_ERR {
+                return Err(E::invalid_length(v.len(), &self));
+            }
+            let mut err = [0u8; MAX_SERVICE_ERR];
+            err[..v.len()].copy_from_slice(v);
+            Ok(err)
+        }
+
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Self::Value, A::Error> {
+            let mut err = [0u8; MAX_SERVICE_ERR];
+            for (i, byte) in err.iter_mut().enumerate() {
+                match seq.next_element()? {
+                    Some(value) => *byte = value,
+                    None => break,
+                }
+                if i == MAX_SERVICE_ERR - 1 && seq.next_element::<u8>()?.is_some() {
+                    return Err(de::Error::invalid_length(MAX_SERVICE_ERR + 1, &self));
+                }
+            }
+            Ok(err)
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<[u8; MAX_SERVICE_ERR], D::Error> {
+        deserializer.deserialize_bytes(ErrVisitor)
     }
 }
 

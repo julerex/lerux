@@ -1,3 +1,4 @@
+mod analyze;
 mod bench;
 mod board;
 mod build;
@@ -122,7 +123,7 @@ enum Commands {
         #[arg(long, default_value = "debug")]
         config: String,
     },
-    /// Phase 49: run echo/blk/net microbenches on QEMU; write md+json summary.
+    /// Phase 49/57: run echo/blk/net microbenches on QEMU; write md+json summary.
     Bench {
         #[arg(long, default_value = "build")]
         build_dir: String,
@@ -131,6 +132,16 @@ enum Commands {
         /// Output directory (default: `{build_dir}/bench`).
         #[arg(long)]
         out_dir: Option<PathBuf>,
+        /// Phase 57: fail if metrics miss `support/bench-thresholds.toml`.
+        #[arg(long, default_value_t = false)]
+        check: bool,
+    },
+    /// Phase 57: post-process a serial capture for faults/hangs/errors.
+    ///
+    /// Example: `lerux diagnose build/smoke-logs/qemu_virt_aarch64_workstation.serial.log`
+    Diagnose {
+        /// Path to serial log, or `-` for stdin.
+        path: String,
     },
     TcpEcho {
         #[arg(default_value_t = 18080)]
@@ -403,8 +414,12 @@ fn main() -> Result<()> {
             build_dir,
             config,
             out_dir,
+            check,
         } => {
-            bench::run_bench(&root, &build_dir, &config, out_dir.as_deref())?;
+            bench::run_bench(&root, &build_dir, &config, out_dir.as_deref(), check)?;
+        }
+        Commands::Diagnose { path } => {
+            analyze::analyze_log(&path)?;
         }
         Commands::TcpEcho { port } => tcp_echo::tcp_echo(port)?,
         Commands::HttpOne { port } => http_one::http_one(port)?,

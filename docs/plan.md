@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-12 (Phase 56 time/init cross-arch parity)
+Last updated: 2026-07-12 (Phase 57 observability and ops)
 
 ## Phase 1 — Bring-up
 
@@ -450,9 +450,17 @@ Install-media path for RPi4 workstation (see [`boards.md`](boards.md#rpi4-workst
 - [x] Static service-graph log lines + post-bring-up timer watchdog
 - [x] Cross-arch smoke parity: init/time **yes** on aarch64, RISC-V, x86
 
-## Phases 57–60 — Arch-level functionality (planned)
+## Phase 57 — Observability and ops (core done)
 
-Roadmap to “about Arch Linux” **workflow** (not ABI): observability, app catalog, multi-arch workstation, security.
+- [x] Tagged log ring + `dmesg --pd` / `-l`; `log.level` → log-server min filter
+- [x] Service state + last error; shell `ps`/`top`/`status`
+- [x] `lerux bench --check` thresholds; serial captures under `build/smoke-logs/`
+- [x] `lerux diagnose` + CI smoke-serial artifacts; debug crash-dump line
+- [x] Docs: [`ops.md`](ops.md)
+
+## Phases 58–60 — Arch-level functionality (planned)
+
+Roadmap to “about Arch Linux” **workflow** (not ABI): app catalog, multi-arch workstation, security.
 
 Full checklist, priority order, and completion bar: **[`plan-arch.md`](plan-arch.md)**.
 
@@ -465,12 +473,12 @@ Full checklist, priority order, and completion bar: **[`plan-arch.md`](plan-arch
 | 54 | Config, secrets, boot policy | core done (net hot-apply stretch) |
 | 55 | Package/profile UX (pacman-like host CLI) | core done |
 | 56 | Time/init cross-arch parity | core done |
-| 57 | Observability and ops | planned |
+| 57 | Observability and ops | core done |
 | 58 | App catalog | planned |
 | 59 | Multi-arch workstation profiles | planned |
 | 60 | Security posture (stretch) | planned |
 
-Near-term priority: **57 observability** or **58 app catalog**.
+Near-term priority: **58 app catalog**.
 
 ## Version alignment
 

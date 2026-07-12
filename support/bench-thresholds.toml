@@ -1,0 +1,16 @@
+# Phase 57: optional perf regression gate for `lerux bench --check`.
+# QEMU TCG is host-dependent; thresholds are deliberately loose (relative floors).
+# Values are minimum acceptable metrics (higher is better for iops/pps; lower is
+# better for latency — use max_ for ceilings).
+
+[echo_rtt]
+# Max average RTT in nanoseconds (loose for TCG).
+max_ns = 500000
+
+[blk_read]
+# Min completed sector reads per second.
+min_iops = 100
+
+[udp_tx]
+# Min completed UdpTx RPCs per second.
+min_pps = 100

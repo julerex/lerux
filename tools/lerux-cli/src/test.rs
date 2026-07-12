@@ -38,7 +38,19 @@ impl Default for SmokeTest {
     }
 }
 
-pub fn run_smoke(mut cmd: Command, test: &SmokeTest) -> Result<()> {
+pub fn run_smoke(cmd: Command, test: &SmokeTest) -> Result<()> {
+    run_smoke_with_capture(cmd, test, None)
+}
+
+/// Run smoke; on failure (or when `save_log` is set) write the serial capture.
+///
+/// Phase 57: default failure path writes `build/smoke-logs/<board>.serial.log` when
+/// `save_log` is `Some`.
+pub fn run_smoke_with_capture(
+    mut cmd: Command,
+    test: &SmokeTest,
+    save_log: Option<&std::path::Path>,
+) -> Result<()> {
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
     let mut child = cmd.spawn()?;
@@ -76,6 +88,39 @@ pub fn run_smoke(mut cmd: Command, test: &SmokeTest) -> Result<()> {
     let _ = child.wait();
     let _ = out_thread.join();
     let _ = err_thread.join();
+
+    let captured = output.lock().map(|s| s.clone()).unwrap_or_default();
+    if let Some(path) = save_log {
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Err(e) = std::fs::write(path, &captured) {
+            eprintln!(
+                "warning: could not write serial log {}: {e}",
+                path.display()
+            );
+        } else if result.is_err() {
+            eprintln!("==> serial capture: {}", path.display());
+            eprintln!(
+                "    re-run: cargo run -q -p lerux-cli -- diagnose {}",
+                path.display()
+            );
+        }
+    } else if result.is_err() {
+        // Always dump a short tail on failure for CI logs.
+        let tail: String = captured
+            .lines()
+            .rev()
+            .take(40)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect::<Vec<_>>()
+            .join("\n");
+        if !tail.is_empty() {
+            eprintln!("==> serial tail (failure):\n{tail}");
+        }
+    }
     result
 }
 
@@ -397,7 +442,12 @@ pub fn run_board_test_with_mode(
     let cmd = crate::qemu::qemu_command(&ctx)?;
     let test = crate::smoke_expects::smoke_test_for_board(root, board)?;
 
-    let result = run_smoke(cmd, &test);
+    // Phase 57: always capture serial under build/smoke-logs/ for diagnose.
+    let log_path = root
+        .join(build_dir)
+        .join("smoke-logs")
+        .join(format!("{board}.serial.log"));
+    let result = run_smoke_with_capture(cmd, &test, Some(&log_path));
     if let Some(mut child) = helper {
         let _ = child.kill();
     }

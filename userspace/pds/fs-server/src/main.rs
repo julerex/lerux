@@ -32,7 +32,7 @@ use block_io::LOG_SERVER;
 #[protection_domain(heap_size = 512 * 1024)]
 fn init() -> HandlerImpl {
     #[cfg(feature = "workstation")]
-    server::init(LOG_SERVER).unwrap();
+    server::init_with_tag(LOG_SERVER, b"fs").unwrap();
     #[cfg(not(feature = "workstation"))]
     debug::init().unwrap();
     let mut blk = BlockClient::new(BLK_DRIVER);

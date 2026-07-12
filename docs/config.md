@@ -23,7 +23,7 @@ Keys must be printable ASCII without `/` or NUL. Max lengths: key 32, value 64 (
 | `net.gateway` | dotted IPv4 | `10.0.2.2` / `192.168.1.1` | Default route |
 | `net.dns` | dotted IPv4 | `10.0.2.3` / `192.168.1.1` | DNS server |
 | `net.prefix` | `1`–`32` | `24` | Prefix length |
-| `log.level` | `error` \| `warn` \| `info` \| `debug` | `info` | Policy marker (filter not wired to all sinks yet) |
+| `log.level` | `error` \| `warn` \| `info` \| `debug` | `info` | Applied at boot via `LogRequest::SetMinLevel` (Phase 57) |
 | `log.rotate` | `0` \| `1` | `1` | When `1`, rename `/boot.log` → `/boot.log.1` before rewrite |
 | `boot.seeded` | `1` | set after first successful seed | Prevents overwriting operator edits on reboot |
 | `secret.*` | opaque | (none) | Stored under `/config/secrets/`; listed as keys only |

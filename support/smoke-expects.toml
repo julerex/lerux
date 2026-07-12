@@ -68,6 +68,7 @@ expects = [
   "lerux-debug: fault child=1",
   "lerux-debug: VmFault",
   "lerux-debug: crash-demo stopped",
+  "lerux-debug: crash dump",
 ]
 
 [boards.qemu_virt_aarch64_blk]
@@ -264,12 +265,12 @@ expects = [
   "lerux-supervisor: RTC",
   "lerux-supervisor: timer ok",
   "lerux-supervisor: init ok",
+  "log-server: ready ring=",
   "lerux-fs: ready",
   "virtio-blk:",
   "lerux-net: ready",
   "virtio-net: MAC",
   "lerux-supervisor: fs up",
-  "lerux-supervisor: first-boot seed ok",
   "lerux-supervisor: config hostname=",
   "lerux-supervisor: net up",
   "lerux-supervisor: ready",
@@ -294,7 +295,6 @@ expects = [
   "lerux-fs: ready",
   "lerux-net: ready",
   "lerux-supervisor: fs up",
-  "lerux-supervisor: first-boot seed ok",
   "lerux-supervisor: config hostname=",
   "lerux-supervisor: net up",
   "lerux-supervisor: ready",

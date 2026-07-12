@@ -24,7 +24,10 @@ use sel4_microkit_driver_adapters::{
 use lerux_interface_types::{
     ConfigRequest, ConfigResponse, FsRequest, FsResponse, LogRequest, LogResponse, NetRequest,
     NetResponse, CFG_BOOT_SEEDED, CFG_HOSTNAME, CFG_LOG_LEVEL, CFG_LOG_ROTATE, CFG_NET_DNS,
-    CFG_NET_GATEWAY, CFG_NET_IP, CFG_NET_MODE, CFG_NET_PREFIX, MAX_CONFIG_VAL_LEN,
+    CFG_NET_GATEWAY, CFG_NET_IP, CFG_NET_MODE, CFG_NET_PREFIX, LOG_LEVEL_DEBUG, LOG_LEVEL_ERROR,
+    LOG_LEVEL_INFO, LOG_LEVEL_WARN, MAX_CONFIG_VAL_LEN, MAX_SERVICES, MAX_SERVICE_ERR,
+    MAX_SERVICE_NAME, SERVICE_STATE_DEGRADED, SERVICE_STATE_ERROR, SERVICE_STATE_READY,
+    SERVICE_STATE_STARTING,
 };
 #[cfg(feature = "workstation")]
 use lerux_ipc::call;
@@ -55,6 +58,26 @@ const LOG_SERVER: Channel = Channel::new(6);
 #[cfg(feature = "workstation")]
 const CONFIG_SERVER: Channel = Channel::new(7);
 
+#[cfg(feature = "workstation")]
+const SERVICE_NAMES: &[&[u8]] = &[
+    b"supervisor",
+    b"fs-server",
+    b"net-server",
+    b"shell",
+    b"edit",
+    b"chat-client",
+    b"http-fs",
+    b"log-server",
+];
+
+#[cfg(feature = "workstation")]
+struct HandlerImpl {
+    states: [u8; MAX_SERVICES],
+    errs: [[u8; MAX_SERVICE_ERR]; MAX_SERVICES],
+    err_lens: [u8; MAX_SERVICES],
+}
+
+#[cfg(not(feature = "workstation"))]
 struct HandlerImpl;
 
 #[cfg(not(feature = "board-rpi4b_4gb_workstation"))]
@@ -144,13 +167,34 @@ fn fs_call(req: FsRequest) -> FsResponse {
 }
 
 #[cfg(feature = "workstation")]
-fn probe_fs() {
+fn set_service_err(h: &mut HandlerImpl, id: usize, state: u8, msg: &[u8]) {
+    if id >= MAX_SERVICES {
+        return;
+    }
+    h.states[id] = state;
+    let n = msg.len().min(MAX_SERVICE_ERR);
+    h.err_lens[id] = n as u8;
+    h.errs[id] = [0u8; MAX_SERVICE_ERR];
+    h.errs[id][..n].copy_from_slice(&msg[..n]);
+}
+
+#[cfg(feature = "workstation")]
+fn probe_fs(h: &mut HandlerImpl) {
     // Exercise FS server to ensure FS is "mounted" (triggers format if needed)
     match fs_call(FsRequest::list_root()) {
-        FsResponse::DirList { .. } | FsResponse::Ok | FsResponse::Error => {}
-        _ => {}
+        FsResponse::DirList { .. } | FsResponse::Ok => {
+            set_service_err(h, 1, SERVICE_STATE_READY, b"");
+            log::info!("lerux-supervisor: fs up");
+        }
+        FsResponse::Error => {
+            set_service_err(h, 1, SERVICE_STATE_ERROR, b"list_root error");
+            log::error!("lerux-supervisor: fs probe error");
+        }
+        _ => {
+            set_service_err(h, 1, SERVICE_STATE_DEGRADED, b"unexpected response");
+            log::warn!("lerux-supervisor: fs degraded");
+        }
     }
-    log::info!("lerux-supervisor: fs up");
 }
 
 #[cfg(feature = "workstation")]
@@ -214,7 +258,7 @@ fn seed_first_boot() {
     log::info!("lerux-supervisor: first-boot seed ok");
 }
 
-/// Phase 54: log active policy after seed (read, do not invent).
+/// Phase 54/57: log active policy; apply log.level to log-server min filter.
 #[cfg(feature = "workstation")]
 fn apply_config_policy() {
     let (h_len, h_buf) = config_get(CFG_HOSTNAME).unwrap_or((0, [0; MAX_CONFIG_VAL_LEN]));
@@ -241,30 +285,61 @@ fn apply_config_policy() {
         m,
         l
     );
+    let min = match l.as_bytes() {
+        b"error" => LOG_LEVEL_ERROR,
+        b"warn" => LOG_LEVEL_WARN,
+        b"debug" => LOG_LEVEL_DEBUG,
+        _ => LOG_LEVEL_INFO,
+    };
+    let _ = call::<LogRequest, LogResponse>(LOG_SERVER, LogRequest::SetMinLevel { level: min });
 }
 
 #[cfg(feature = "workstation")]
-fn probe_net() {
+fn probe_net(h: &mut HandlerImpl) {
     // Exercise net server to ensure "net up". Bound Poll so a stuck Pending
     // cannot hang init (http-file-browser may leave the stack busy briefly).
-    let pending =
-        call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::udp_tx(b"lerux-workstation"))
-            .expect("Net UdpTx IPC");
-    if matches!(pending, NetResponse::Pending) {
-        for _ in 0..512 {
-            match call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::Poll) {
-                Ok(NetResponse::Pending) => {}
-                Ok(_) | Err(_) => break,
+    match call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::udp_tx(b"lerux-workstation")) {
+        Ok(pending) => {
+            let mut saw_complete = !matches!(pending, NetResponse::Pending);
+            if matches!(pending, NetResponse::Pending) {
+                for _ in 0..512 {
+                    match call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::Poll) {
+                        Ok(NetResponse::Pending) => {}
+                        Ok(_) => {
+                            saw_complete = true;
+                            break;
+                        }
+                        Err(_) => {
+                            set_service_err(h, 2, SERVICE_STATE_ERROR, b"poll ipc");
+                            log::error!("lerux-supervisor: net poll error");
+                            return;
+                        }
+                    }
+                }
+            }
+            if saw_complete {
+                set_service_err(h, 2, SERVICE_STATE_READY, b"");
+                log::info!("lerux-supervisor: net up");
+            } else {
+                // Stack still busy after bound polls — treat as degraded but present.
+                set_service_err(h, 2, SERVICE_STATE_DEGRADED, b"poll timeout");
+                log::warn!("lerux-supervisor: net poll timeout");
+                // Keep historical smoke string so boot remains diagnosable.
+                log::info!("lerux-supervisor: net up");
             }
         }
+        Err(_) => {
+            set_service_err(h, 2, SERVICE_STATE_ERROR, b"udp ipc fail");
+            log::error!("lerux-supervisor: net probe error");
+        }
     }
-    log::info!("lerux-supervisor: net up");
 }
 
 #[cfg(feature = "workstation")]
 fn persist_boot_log() {
-    if let Ok(LogResponse::Recent { count, lens, lines }) =
-        call::<LogRequest, LogResponse>(LOG_SERVER, LogRequest::GetRecent)
+    if let Ok(LogResponse::Recent {
+        count, lens, lines, ..
+    }) = call::<LogRequest, LogResponse>(LOG_SERVER, LogRequest::get_recent())
     {
         // concatenate into a buffer for FS write
         let mut buf = [0u8; 512];
@@ -304,50 +379,51 @@ fn persist_boot_log() {
 }
 
 #[cfg(feature = "workstation")]
-fn service_list() -> SupervisorResponse {
-    const NAMES: &[&[u8]] = &[
-        b"supervisor",
-        b"fs-server",
-        b"net-server",
-        b"shell",
-        b"edit",
-        b"chat-client",
-        b"http-fs",
-        b"log-server",
-    ];
-    let mut name_lens = [0u8; lerux_interface_types::MAX_SERVICES];
-    let mut names =
-        [[0u8; lerux_interface_types::MAX_SERVICE_NAME]; lerux_interface_types::MAX_SERVICES];
-    let mut ready = [false; lerux_interface_types::MAX_SERVICES];
-    let count = NAMES.len().min(lerux_interface_types::MAX_SERVICES) as u8;
-    for (i, name) in NAMES.iter().take(count as usize).enumerate() {
-        let n = name.len().min(lerux_interface_types::MAX_SERVICE_NAME);
+fn service_list(h: &HandlerImpl) -> SupervisorResponse {
+    let mut name_lens = [0u8; MAX_SERVICES];
+    let mut names = [[0u8; MAX_SERVICE_NAME]; MAX_SERVICES];
+    let mut ready = [false; MAX_SERVICES];
+    let mut states = [SERVICE_STATE_STARTING; MAX_SERVICES];
+    let count = SERVICE_NAMES.len().min(MAX_SERVICES) as u8;
+    for (i, name) in SERVICE_NAMES.iter().take(count as usize).enumerate() {
+        let n = name.len().min(MAX_SERVICE_NAME);
         name_lens[i] = n as u8;
         names[i][..n].copy_from_slice(&name[..n]);
-        // Init probes mark FS/net up; remaining services are present in the image.
-        ready[i] = true;
+        states[i] = h.states[i];
+        ready[i] = matches!(h.states[i], SERVICE_STATE_READY | SERVICE_STATE_DEGRADED);
     }
     SupervisorResponse::ServiceList {
         count,
         name_lens,
         names,
         ready,
+        states,
     }
 }
 
 #[cfg(feature = "workstation")]
-fn handle_supervisor(req: SupervisorRequest) -> SupervisorResponse {
+fn handle_supervisor(h: &HandlerImpl, req: SupervisorRequest) -> SupervisorResponse {
     match req {
         SupervisorRequest::Reboot => {
             log::info!("lerux-supervisor: reboot requested");
             SupervisorResponse::Ok
         }
-        SupervisorRequest::ListServices => service_list(),
+        SupervisorRequest::ListServices => service_list(h),
         SupervisorRequest::ServiceStatus { id } => {
-            if let SupervisorResponse::ServiceList { count, ready, .. } = service_list() {
+            if let SupervisorResponse::ServiceList {
+                count,
+                ready,
+                states,
+                ..
+            } = service_list(h)
+            {
                 if (id as usize) < count as usize {
+                    let i = id as usize;
                     SupervisorResponse::Status {
-                        ready: ready[id as usize],
+                        ready: ready[i],
+                        state: states[i],
+                        err_len: h.err_lens[i],
+                        err: h.errs[i],
                     }
                 } else {
                     SupervisorResponse::Error
@@ -399,9 +475,27 @@ fn handle_supervisor(req: SupervisorRequest) -> SupervisorResponse {
 #[protection_domain]
 fn init() -> HandlerImpl {
     #[cfg(feature = "workstation")]
-    server::init(LOG_SERVER).unwrap();
+    server::init_with_tag(LOG_SERVER, b"supervis").unwrap();
     #[cfg(not(feature = "workstation"))]
     serial::init(SERIAL_DRIVER).unwrap();
+    #[cfg(feature = "workstation")]
+    let mut handler = {
+        let mut states = [SERVICE_STATE_STARTING; MAX_SERVICES];
+        // Image-resident services start as ready once supervisor itself is up.
+        states[0] = SERVICE_STATE_READY; // supervisor
+        states[3] = SERVICE_STATE_READY; // shell
+        states[4] = SERVICE_STATE_READY; // edit
+        states[5] = SERVICE_STATE_READY; // chat-client
+        states[6] = SERVICE_STATE_READY; // http-fs
+        states[7] = SERVICE_STATE_READY; // log-server
+        HandlerImpl {
+            states,
+            errs: [[0u8; MAX_SERVICE_ERR]; MAX_SERVICES],
+            err_lens: [0u8; MAX_SERVICES],
+        }
+    };
+    #[cfg(not(feature = "workstation"))]
+    let handler = HandlerImpl;
     #[cfg(not(feature = "board-rpi4b_4gb_workstation"))]
     let mut timer = {
         let mut rtc = RtcClient::new(RTC_DRIVER);
@@ -424,10 +518,10 @@ fn init() -> HandlerImpl {
     notify_app();
     #[cfg(feature = "workstation")]
     {
-        probe_fs();
+        probe_fs(&mut handler);
         seed_first_boot();
         apply_config_policy();
-        probe_net();
+        probe_net(&mut handler);
         persist_boot_log();
         log::info!("lerux-supervisor: ready");
     }
@@ -435,7 +529,7 @@ fn init() -> HandlerImpl {
     watchdog_check(&mut timer);
     #[cfg(feature = "board-rpi4b_4gb_workstation")]
     watchdog_check();
-    HandlerImpl
+    handler
 }
 
 impl Handler for HandlerImpl {
@@ -463,7 +557,7 @@ impl Handler for HandlerImpl {
         #[cfg(feature = "workstation")]
         if channel == SHELL {
             return Ok(match recv::<SupervisorRequest>(msg_info) {
-                Ok(req) => send(handle_supervisor(req)),
+                Ok(req) => send(handle_supervisor(self, req)),
                 Err(_) => send_unspecified_error(),
             });
         }

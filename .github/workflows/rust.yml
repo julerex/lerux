@@ -435,6 +435,15 @@ jobs:
             '
           sudo chown -R "$(id -u):$(id -g)" build deps
 
+      - name: Upload serial capture (Phase 57)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-serial-${{ matrix.id }}
+          path: build/smoke-logs/
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Save shared Cargo target cache
         if: always()
         uses: actions/cache/save@v4

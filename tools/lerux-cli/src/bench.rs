@@ -49,7 +49,15 @@ struct BenchResult {
 }
 
 /// Run all Phase 49 bench boards, parse metrics, write markdown + JSON summaries.
-pub fn run_bench(root: &Path, build_dir: &str, config: &str, out_dir: Option<&Path>) -> Result<()> {
+///
+/// When `check` is true, compare against `support/bench-thresholds.toml` (Phase 57).
+pub fn run_bench(
+    root: &Path,
+    build_dir: &str,
+    config: &str,
+    out_dir: Option<&Path>,
+    check: bool,
+) -> Result<()> {
     let out = out_dir
         .map(PathBuf::from)
         .unwrap_or_else(|| root.join(build_dir).join("bench"));
@@ -65,6 +73,9 @@ pub fn run_bench(root: &Path, build_dir: &str, config: &str, out_dir: Option<&Pa
         println!("\n==> bench board {board}");
         build::image(root, board, build_dir, config)?;
         let (captured, wall) = run_board_capture(root, board, build_dir, config)?;
+        // Always keep raw serial for diagnose (Phase 57).
+        let log_path = out.join(format!("{board}.serial.log"));
+        fs::write(&log_path, &captured).with_context(|| format!("write {}", log_path.display()))?;
         let parsed = derive_metrics(board, &captured, wall)?;
         for r in &parsed {
             println!(
@@ -104,7 +115,76 @@ pub fn run_bench(root: &Path, build_dir: &str, config: &str, out_dir: Option<&Pa
     println!("    {}", json_path.display());
     println!("    {}", md_path.display());
     println!("    {}", docs_snapshot.display());
+
+    if check {
+        check_thresholds(root, &report)?;
+    }
     Ok(())
+}
+
+#[derive(Debug, Default, serde::Deserialize)]
+struct ThresholdsFile {
+    echo_rtt: Option<EchoRttThresh>,
+    blk_read: Option<MinMetric>,
+    udp_tx: Option<MinMetric>,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct EchoRttThresh {
+    max_ns: u64,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct MinMetric {
+    #[serde(default)]
+    min_iops: Option<u64>,
+    #[serde(default)]
+    min_pps: Option<u64>,
+}
+
+fn check_thresholds(root: &Path, report: &BenchReport) -> Result<()> {
+    let path = root.join("support/bench-thresholds.toml");
+    let text = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
+    let thr: ThresholdsFile = toml::from_str(&text).context("parse bench-thresholds.toml")?;
+    let mut failures = Vec::new();
+    for r in &report.results {
+        match r.metric.as_str() {
+            "echo_rtt" => {
+                if let Some(t) = &thr.echo_rtt
+                    && r.value > t.max_ns
+                {
+                    failures.push(format!(
+                        "echo_rtt {} ns exceeds max_ns {}",
+                        r.value, t.max_ns
+                    ));
+                }
+            }
+            "blk_read" => {
+                if let Some(min) = thr.blk_read.as_ref().and_then(|t| t.min_iops)
+                    && r.value < min
+                {
+                    failures.push(format!("blk_read {} iops below min_iops {min}", r.value));
+                }
+            }
+            "udp_tx" => {
+                if let Some(min) = thr.udp_tx.as_ref().and_then(|t| t.min_pps)
+                    && r.value < min
+                {
+                    failures.push(format!("udp_tx {} pps below min_pps {min}", r.value));
+                }
+            }
+            _ => {}
+        }
+    }
+    if failures.is_empty() {
+        println!("==> bench thresholds OK ({})", path.display());
+        Ok(())
+    } else {
+        for f in &failures {
+            eprintln!("bench threshold fail: {f}");
+        }
+        bail!("{} bench threshold failure(s)", failures.len());
+    }
 }
 
 /// Returns (serial log, wall-clock from first start marker to matching done).

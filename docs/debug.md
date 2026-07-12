@@ -21,8 +21,25 @@ Expected log sequence (debug UART):
 3. `lerux-debug: fault child=1 …`
 4. `lerux-debug: VmFault ip=… addr=…`
 5. `lerux-debug: crash-demo stopped (no restart)`
+6. `lerux-debug: crash dump child=1 count=…` (Phase 57; machine-parseable for `lerux diagnose`)
 
 Layout: `crash-demo` is a **child** of `debug-handler` in `debug.system.template` (`id="1"` → `Child::new(1)`).
+
+## Optional workstation fault parent (Phase 57)
+
+Default **workstation** stays lean: flat PDs, no hierarchy (ADR-005). To catch faults in a bulk app:
+
+1. Nest that PD under `debug-handler` in a **debug-only** system template (do not ship as the production profile).
+2. Keep `just test-debug` as the CI fault-path smoke.
+3. On failure, use the serial capture:
+
+```bash
+just test-debug
+# or after any smoke:
+just diagnose LOG=build/smoke-logs/qemu_virt_aarch64_debug.serial.log
+```
+
+Host GDB remains the interactive path for production-image PDs (gdbstub, no template change).
 
 ## QEMU gdbstub + gdb-multiarch (backtraces)
 

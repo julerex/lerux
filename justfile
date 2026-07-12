@@ -228,6 +228,15 @@ bench:
     just disk-img
     {{lerux}} bench --build-dir {{build_dir}} --config {{config}}
 
+# Phase 57: microbenches + threshold gate (support/bench-thresholds.toml)
+bench-check:
+    just disk-img
+    {{lerux}} bench --build-dir {{build_dir}} --config {{config}} --check
+
+# Phase 57: analyze a serial capture (default: last workstation smoke log)
+diagnose LOG="build/smoke-logs/qemu_virt_aarch64_workstation.serial.log":
+    {{lerux}} diagnose {{LOG}}
+
 # Disk image for virtio-blk QEMU device (MBR boot signature at bytes 510–511)
 disk-img:
     {{lerux}} disk-img

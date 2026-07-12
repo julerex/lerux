@@ -1,6 +1,6 @@
 # PLAN — Arch-level functionality (phases 50–60)
 
-Last updated: 2026-07-12 (Phase 56 core done)
+Last updated: 2026-07-12 (Phase 57 core done)
 
 Related: [`plan.md`](plan.md) (completed phases 1–49), [`plan-au-ts.md`](plan-au-ts.md) (sDDF/LionsOS inspiration track), [`context.md`](context.md) (domain language).
 
@@ -204,21 +204,21 @@ Cross-arch smoke parity table gains “init/time: yes” for RISC-V and x86; wor
 
 ---
 
-## Phase 57 — Observability and ops (Arch: journalctl, systemd-analyze)
+## Phase 57 — Observability and ops (Arch: journalctl, systemd-analyze) — core done
 
 **Why:** Arch admins debug with logs, process state, and metrics; lerux has log-server + `top`/`qos` + microbenches.
 
 ### Steps
 
-- [ ] Structured log levels, per-PD tags, ring size config; shell filters (`dmesg --pd shell`).
-- [ ] Supervisor: richer `ServiceStatus` (ready/degraded/error, last error string).
-- [ ] Integrate or extend **bench** into optional continuous smoke thresholds (perf regression gate).
-- [ ] Fault path: wire workstation optional debug parent for non-demo PDs; keep production images lean (ADR-005).
-- [ ] Host tools: `lerux smoke` / serial capture post-processing; crash dump artifact in CI.
+- [x] Structured log levels, per-PD tags, ring=48; shell filters (`dmesg --pd shell`, `dmesg -l warn`).
+- [x] Supervisor: richer `ServiceStatus` (ready/degraded/error, last error string) + `status <id>`.
+- [x] `lerux bench --check` / `just bench-check` against `support/bench-thresholds.toml`.
+- [x] Fault path: `crash dump` line for `lerux diagnose`; production workstation stays lean (ADR-005); optional nesting documented in [`debug.md`](debug.md).
+- [x] Host tools: serial always saved under `build/smoke-logs/`; `lerux diagnose`; CI artifact `smoke-serial-*`.
 
 ### Exit
 
-A failed boot or hung service is diagnosable from serial + one host command.
+A failed boot or hung service is diagnosable from serial + one host command (`lerux diagnose`). **Met.**
 
 ---
 
@@ -318,7 +318,7 @@ If capacity is limited, do **not** start with graphics or scripting runtimes:
 
 1. **Phases 50–55 cores** — FS through package UX done
 2. **Phase 52 lab** — fill RPi4 REPL checklist on real hardware when available
-3. **Phase 57 / 58** — observability or deeper app catalog
+3. **Phase 58** — deeper app catalog
 
 ---
 

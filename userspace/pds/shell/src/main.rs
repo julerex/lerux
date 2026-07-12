@@ -37,8 +37,8 @@ const HISTORY_LINE: usize = 64;
 /// Machine-readable command list for smokes and `help -l` (Phase 53).
 const COMMANDS: &[&str] = &[
     "ls", "cat", "write", "mkdir", "rm", "mv", "cd", "pwd", "stat", "df", "ip", "ifconfig", "ping",
-    "time", "date", "uptime", "clear", "history", "ps", "top", "qos", "reboot", "fetch", "dmesg",
-    "edit", "chat", "echo", "config", "get", "set", "list", "hostname", "help",
+    "time", "date", "uptime", "clear", "history", "ps", "top", "status", "qos", "reboot", "fetch",
+    "dmesg", "edit", "chat", "echo", "config", "get", "set", "list", "hostname", "help",
 ];
 
 struct HandlerImpl {
@@ -548,7 +548,7 @@ fn help_cmd(console: &mut SerialClient, arg: Option<&[u8]>) {
             println(console, "net:    ip ifconfig ping fetch");
             println(
                 console,
-                "sys:    time date uptime ps top qos reboot dmesg clear history",
+                "sys:    time date uptime ps top status qos reboot dmesg clear history",
             );
             println(console, "config: config get|set|list|del  hostname");
             println(console, "apps:   edit chat echo help");
@@ -628,6 +628,16 @@ fn hostname_cmd(console: &mut SerialClient) {
     }
 }
 
+fn state_name(state: u8) -> &'static str {
+    match state {
+        lerux_interface_types::SERVICE_STATE_READY => "ready",
+        lerux_interface_types::SERVICE_STATE_STARTING => "start",
+        lerux_interface_types::SERVICE_STATE_DEGRADED => "degraded",
+        lerux_interface_types::SERVICE_STATE_ERROR => "error",
+        _ => "?",
+    }
+}
+
 fn render_services(console: &mut SerialClient) {
     match call::<SupervisorRequest, SupervisorResponse>(SUPERVISOR, SupervisorRequest::ListServices)
     {
@@ -636,14 +646,22 @@ fn render_services(console: &mut SerialClient) {
             name_lens,
             names,
             ready,
+            states,
         }) => {
-            println(console, "PID  READY  NAME");
+            println(console, "PID  READY  STATE     NAME");
             for i in 0..(count as usize) {
                 let n = name_lens[i] as usize;
                 let name =
                     core::str::from_utf8(&names[i][..n.min(MAX_SERVICE_NAME)]).unwrap_or("?");
                 let flag = if ready[i] { "yes" } else { "no" };
-                let _ = writeln!(ConsoleWriter(console), "{:>3}  {:<5}  {}", i, flag, name);
+                let _ = writeln!(
+                    ConsoleWriter(console),
+                    "{:>3}  {:<5}  {:<8}  {}",
+                    i,
+                    flag,
+                    state_name(states[i]),
+                    name
+                );
             }
         }
         Ok(SupervisorResponse::Services { count }) => {
@@ -657,6 +675,47 @@ fn render_services(console: &mut SerialClient) {
             | SupervisorResponse::Uptime { .. },
         )
         | Err(_) => println(console, "ps: error"),
+    }
+}
+
+fn status_cmd(console: &mut SerialClient, id_arg: Option<&[u8]>) {
+    let Some(raw) = id_arg else {
+        println(console, "usage: status <id>");
+        return;
+    };
+    let mut id: u8 = 0;
+    for &b in raw {
+        if !b.is_ascii_digit() {
+            println(console, "status: bad id");
+            return;
+        }
+        id = id.saturating_mul(10).saturating_add(b - b'0');
+    }
+    match call::<SupervisorRequest, SupervisorResponse>(
+        SUPERVISOR,
+        SupervisorRequest::ServiceStatus { id },
+    ) {
+        Ok(SupervisorResponse::Status {
+            ready,
+            state,
+            err_len,
+            err,
+        }) => {
+            let flag = if ready { "yes" } else { "no" };
+            let _ = writeln!(
+                ConsoleWriter(console),
+                "id={} ready={} state={}",
+                id,
+                flag,
+                state_name(state)
+            );
+            if err_len > 0 {
+                write_bytes(console, b"error: ");
+                write_bytes(console, &err[..err_len as usize]);
+                write_bytes(console, b"\r\n");
+            }
+        }
+        _ => println(console, "status: error"),
     }
 }
 
@@ -755,22 +814,88 @@ fn poll_net() -> NetResponse {
     }
 }
 
-fn dmesg(console: &mut SerialClient) {
-    match call::<LogRequest, LogResponse>(LOG_SERVER, LogRequest::GetRecent) {
-        Ok(LogResponse::Recent { count, lens, lines }) => {
+fn parse_log_level(s: &[u8]) -> u8 {
+    match s {
+        b"error" | b"E" | b"e" => lerux_interface_types::LOG_LEVEL_ERROR,
+        b"warn" | b"W" | b"w" => lerux_interface_types::LOG_LEVEL_WARN,
+        b"info" | b"I" | b"i" => lerux_interface_types::LOG_LEVEL_INFO,
+        b"debug" | b"D" | b"d" => lerux_interface_types::LOG_LEVEL_DEBUG,
+        _ => 0,
+    }
+}
+
+/// Phase 57: `dmesg`, `dmesg --pd shell`, `dmesg -l warn`.
+fn dmesg_bytes<'a>(console: &mut SerialClient, args: impl Iterator<Item = &'a [u8]>) {
+    let mut min_level: u8 = 0;
+    let mut tag: &[u8] = b"";
+    let mut args = args.peekable();
+    while let Some(a) = args.next() {
+        if a == b"--pd" || a == b"-p" {
+            if let Some(t) = args.next() {
+                tag = t;
+            } else {
+                println(console, "usage: dmesg [--pd TAG] [-l LEVEL]");
+                return;
+            }
+        } else if a == b"-l" || a == b"--level" {
+            if let Some(lv) = args.next() {
+                min_level = parse_log_level(lv);
+                if min_level == 0 && lv != b"0" {
+                    println(console, "dmesg: bad level (error|warn|info|debug)");
+                    return;
+                }
+            } else {
+                println(console, "usage: dmesg [--pd TAG] [-l LEVEL]");
+                return;
+            }
+        } else if let Some(rest) = a.strip_prefix(b"--pd=") {
+            tag = rest;
+        } else {
+            println(console, "usage: dmesg [--pd TAG] [-l LEVEL]");
+            return;
+        }
+    }
+    let req = if tag.is_empty() && min_level == 0 {
+        LogRequest::get_recent()
+    } else {
+        LogRequest::get_filtered(min_level, tag)
+    };
+    match call::<LogRequest, LogResponse>(LOG_SERVER, req) {
+        Ok(LogResponse::Recent {
+            count,
+            lens,
+            lines,
+            levels,
+            tag_lens,
+            tags,
+        }) => {
             let mut lines_on_page = 0usize;
             for i in 0..(count as usize) {
                 let l = lens[i] as usize;
-                if l > 0 {
-                    write_bytes(console, &lines[i][..l]);
-                    write_bytes(console, b"\r\n");
-                    lines_on_page += 1;
-                    if lines_on_page >= PAGE_LINES {
-                        if !wait_more(console) {
-                            return;
-                        }
-                        lines_on_page = 0;
+                if l == 0 {
+                    continue;
+                }
+                let lc = match levels[i] {
+                    lerux_interface_types::LOG_LEVEL_ERROR => b'E',
+                    lerux_interface_types::LOG_LEVEL_WARN => b'W',
+                    lerux_interface_types::LOG_LEVEL_INFO => b'I',
+                    lerux_interface_types::LOG_LEVEL_DEBUG => b'D',
+                    _ => b'?',
+                };
+                write_bytes(console, &[lc, b'[']);
+                let tn = tag_lens[i] as usize;
+                if tn > 0 {
+                    write_bytes(console, &tags[i][..tn]);
+                }
+                write_bytes(console, b"] ");
+                write_bytes(console, &lines[i][..l]);
+                write_bytes(console, b"\r\n");
+                lines_on_page += 1;
+                if lines_on_page >= PAGE_LINES {
+                    if !wait_more(console) {
+                        return;
                     }
+                    lines_on_page = 0;
                 }
             }
         }
@@ -866,6 +991,7 @@ fn process_command(h: &mut HandlerImpl, line: &[u8]) {
         b"history" => history_cmd(h),
         b"ps" => ps(&mut h.console),
         b"top" => top(&mut h.console),
+        b"status" => status_cmd(&mut h.console, parts.next()),
         b"qos" => qos(&mut h.console),
         b"reboot" => reboot(&mut h.console),
         b"fetch" => fetch_demo(&mut h.console),
@@ -966,7 +1092,7 @@ fn process_command(h: &mut HandlerImpl, line: &[u8]) {
             write_bytes(&mut h.console, rest);
             write_bytes(&mut h.console, b"\r\n");
         }
-        b"dmesg" => dmesg(&mut h.console),
+        b"dmesg" => dmesg_bytes(&mut h.console, parts),
         b"edit" => {
             if let Some(p) = parts.next() {
                 let mut abs = [0u8; lerux_interface_types::MAX_FS_PATH];
@@ -1009,7 +1135,7 @@ fn process_command(h: &mut HandlerImpl, line: &[u8]) {
 
 #[protection_domain]
 fn init() -> HandlerImpl {
-    server::init(LOG_SERVER).unwrap();
+    server::init_with_tag(LOG_SERVER, b"shell").unwrap();
     let _console = SerialClient::new(SERIAL_DRIVER);
     log::info!("lerux-shell: ready");
     // Machine-readable command discovery for smokes (Phase 53).

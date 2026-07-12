@@ -75,8 +75,8 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 **Microbenches (Phase 49)**
 : `just bench` runs guest-timed echo RTT, blk read IOPS, and UDP TX PPS on QEMU aarch64 and writes markdown/JSON summaries. See [`bench.md`](bench.md).
 
-**Shell (Phase 53)**
-: Interactive REPL over serial with file/net/sys built-ins (`ls`…`df`, `ip`/`ping`, `uptime`/`history`/`clear`, apps). Long `cat`/`dmesg` use a space/`q` pager. `help -l` and boot log `lerux-shell: cmds=` expose a machine-readable command list for smokes.
+**Shell (Phase 53 / 57)**
+: Interactive REPL over serial with file/net/sys built-ins (`ls`…`df`, `ip`/`ping`, `uptime`/`history`/`clear`, apps). Long `cat`/`dmesg` use a space/`q` pager. `dmesg --pd` / `-l` filter the log ring; `ps`/`top`/`status` show service state. `help -l` and boot log `lerux-shell: cmds=` expose a machine-readable command list for smokes.
 
 **Config policy (Phase 54)**
 : FS-backed keys under `/config/` via `config-server` ([`docs/config.md`](config.md)). Supervisor seeds missing keys only (`boot.seeded`), logs active hostname/net.mode/log.level, and may rotate `/boot.log`. Shell: `config get|set|list|del`, `hostname`. Secrets use the `secret.*` prefix (`/config/secrets/`). Host: `lerux config schema|defaults|seed-disk`.
@@ -85,7 +85,10 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 : One PD crate plus its interface-types version and an optional profile fragment (`support/packages/<name>.toml`). Host CLI: `lerux package search|install|remove|upgrade` merges fragments into profiles (channel auto-wiring by name), then `lerux profile build`. Pins in `support/package-pins.toml`. See [`packages.md`](packages.md). Microkit does not load arbitrary ELFs at runtime.
 
 **Supervisor**
-: Evolution of `boot-init` (Phase 33): `supervisor` PD provides RTC/timer, brings up FS/net services, performs ordered app notify (generalizes composed-sync), exposes reboot/status IPC. Phase 56: static **service graph** log lines (`unit=… after=… restart=no`) and a post-bring-up **watchdog** re-query of the timer PD.
+: Evolution of `boot-init` (Phase 33): `supervisor` PD provides RTC/timer, brings up FS/net services, performs ordered app notify (generalizes composed-sync), exposes reboot/status IPC. Phase 56: static **service graph** log lines (`unit=… after=… restart=no`) and a post-bring-up **watchdog** re-query of the timer PD. Phase 57: richer `ServiceStatus` (state + last error) from FS/net probes; applies `log.level` to log-server.
+
+**Observability (Phase 57)**
+: Tagged log ring (`log-server`), shell filters, host `lerux diagnose` on serial captures under `build/smoke-logs/`, optional `lerux bench --check` against `support/bench-thresholds.toml`. See [`ops.md`](ops.md).
 
 **Ported app checklist** (new PD that users interact with):
 

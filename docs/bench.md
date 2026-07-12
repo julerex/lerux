@@ -17,13 +17,19 @@ QEMU TCG numbers are for **relative** comparison on the same host — not bare-m
 ```bash
 just bench
 # or: cargo run -q -p lerux-cli -- bench
+
+# Phase 57: same run + fail if support/bench-thresholds.toml is missed
+just bench-check
 ```
 
 Outputs:
 
 - `build/bench/bench-results.json`
 - `build/bench/bench-results.md`
+- `build/bench/<board>.serial.log` (raw capture for `lerux diagnose`)
 - `docs/bench-results.latest.md` (snapshot; commit if you want a recorded baseline)
+
+Thresholds live in [`support/bench-thresholds.toml`](../support/bench-thresholds.toml) (loose QEMU TCG floors/ceilings).
 
 ## Latest snapshot
 

@@ -73,6 +73,12 @@ impl Handler for HandlerImpl {
             let _ = child.tcb().tcb_suspend();
             log::info!("lerux-debug: crash-demo stopped (no restart)");
         }
+        // Phase 57: machine-parseable one-liner for `lerux diagnose`.
+        log::info!(
+            "lerux-debug: crash dump child={} count={} (use host gdbstub for backtrace)",
+            child.index(),
+            self.fault_count
+        );
         // Do not reply to the fault (child stays suspended).
         Ok(None)
     }

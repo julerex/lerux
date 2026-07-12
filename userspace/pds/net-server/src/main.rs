@@ -15,7 +15,10 @@ use sel4_microkit_driver_adapters::net::client::Client as NetClient;
 mod config;
 mod net;
 
+// Channel IDs must match support/profiles + system templates (Phase 41/43).
+// Sole L2 client of virtio-net / genet / virtio-pci driver PDs.
 const NET_DRIVER: Channel = Channel::new(1);
+/// Default smoke client (net-client / supervisor on some boards).
 const CLIENT: Channel = Channel::new(2);
 #[cfg(feature = "workstation")]
 const LOG_SERVER: Channel = Channel::new(4);

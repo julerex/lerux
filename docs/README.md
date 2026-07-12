@@ -13,6 +13,8 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [system-generation.md](system-generation.md) | Phase 41: template inventory (mechanical vs board-specific) |
 | [decisions/001-in-tree-system-generation.md](decisions/001-in-tree-system-generation.md) | ADR-001: in-tree Rust SDF gen (not sdfgen) |
 | [decisions/002-serial-virtualiser.md](decisions/002-serial-virtualiser.md) | ADR-002: serial-driver + serial-virt (sDDF-shaped) |
+| [decisions/003-net-virtualiser.md](decisions/003-net-virtualiser.md) | ADR-003: net trust map; DMA split deferred |
+| [net-topology.md](net-topology.md) | NIC / net-server / app channel map |
 | [boards.md](boards.md) | Board names, PDs, QEMU profiles; [RPi4 workstation HW gate](boards.md#rpi4-workstation-manual-hw-gate-phase-39) |
 | [ci.md](ci.md) | GitHub Actions pipeline, caches, troubleshooting |
 | [seL4-whitepaper.pdf](seL4-whitepaper.pdf) | seL4 high-level overview (reference) |

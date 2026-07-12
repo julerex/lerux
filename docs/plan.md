@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-12 (Phase 42 serial virt on workstation; Phases 43–49 in plan-au-ts)
+Last updated: 2026-07-12 (Phase 43 net topology ADR; Phases 44–49 in plan-au-ts)
 
 ## Phase 1 — Bring-up
 
@@ -359,11 +359,15 @@ In-tree SDF composition in `lerux-cli` ([ADR-001](decisions/001-in-tree-system-g
 
 ## Phase 42 — Serial virtualiser ✅ (workstation)
 
-`serial-driver` (device-only) + `serial-virt` + `lerux-serial-queue` on workstation profiles ([ADR-002](decisions/002-serial-virtualiser.md)). Other boards keep the combined multi-client driver.
+`serial-driver` (device-only) + `serial-virt` on workstation profiles ([ADR-002](decisions/002-serial-virtualiser.md)). Other boards keep the combined multi-client driver. Smoke green.
 
-## Phases 43+ — au-ts inspiration
+## Phase 43 — Net topology ✅ design / app trust
 
-See [`plan-au-ts.md`](plan-au-ts.md) for Phases 43–49 (net virt, FS backends, sync runtime, GDB, HW CI, optional QoS/perf).
+Apps stay on `NetRequest` RPC via `net-server`; NIC driver still maps client DMA pending adapter work ([ADR-003](decisions/003-net-virtualiser.md), [`net-topology.md`](net-topology.md)).
+
+## Phases 44+ — au-ts inspiration
+
+See [`plan-au-ts.md`](plan-au-ts.md) for Phases 44–49 (FS backends, sync runtime, GDB, HW CI, optional QoS/perf) and deferred net DMA split.
 
 ## Version alignment
 

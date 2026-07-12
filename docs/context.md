@@ -52,7 +52,10 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 : Composed Microkit SDF = board `system_vars` + layout template (MRs/PDs/maps) + **generated channels** from the profile’s structured `[[channel]]` list ([ADR-001](decisions/001-in-tree-system-generation.md)). Workstation templates are channel-free; `lerux profile check-channels` guards PD `Channel::new` drift. Details: [`system-generation.md`](system-generation.md).
 
 **Serial virtualiser (Phase 42)**
-: On workstation, UART is owned by `serial-driver` (`device-only`); multi-client postcard RPC is served by `serial-virt` over sDDF-shaped SPSC queues (`lerux-serial-queue`). Apps still use `SerialClient` / `SERIAL_DRIVER` channel consts (peer is `serial_virt`). See [ADR-002](decisions/002-serial-virtualiser.md).
+: On workstation, UART is owned by `serial-driver` (`device-only`); multi-client postcard RPC is served by `serial-virt` (PPC to the driver). Apps still use `SerialClient` / `SERIAL_DRIVER` channel consts (peer is `serial_virt`). See [ADR-002](decisions/002-serial-virtualiser.md).
+
+**Network topology (Phase 43)**
+: Untrusted apps use only `NetRequest` / `NetResponse` against `net-server` (smoltcp + multi-client mux). The NIC driver PD has a single Microkit client (`net-server`) but still maps client DMA rings (rust-sel4 adapter). Target sDDF-shaped driver-without-client-DMA is deferred — [ADR-003](decisions/003-net-virtualiser.md), [`net-topology.md`](net-topology.md).
 
 **Package**
 : One PD crate plus its interface-types version and an optional profile fragment (`support/packages/<name>.toml`). “Installing” a package means adding the PD to a `support/profiles/*.toml` and rebuilding the static image via `lerux profile build` — Microkit does not load arbitrary ELFs at runtime. CI can publish per-PD ELF artifacts; pins live in `support/package-pins.toml` (`lerux package list|show|build|pin|diff`). (Phase 40)

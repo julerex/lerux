@@ -1,6 +1,6 @@
 # PLAN — au-ts inspiration
 
-Last updated: 2026-07-12 (Phase 42 serial virt on workstation)
+Last updated: 2026-07-12 (Phase 43 net topology + ADR-003)
 
 Upstream mirror: [`/home/julian/repos/github_orgs/au-ts`](https://github.com/au-ts) (Trustworthy Systems).  
 Related: [`plan.md`](plan.md) (main roadmap), [`context.md`](context.md) (domain language).
@@ -124,13 +124,13 @@ sDDF serial: driver ↔ Tx/Rx virtualisers ↔ clients; SPSC queues; power-of-tw
 
 ### Exit
 
-- [x] Driver PD has no client PPCs; maps only UART + queue regions
+- [x] Driver PD has no client PPCs (sole client = `serial-virt`); UART MMIO only
 - [x] Virt owns multi-client mux; workstation profile/template/board updated
-- [ ] Workstation smoke green (verify after image build)
+- [x] Workstation smoke green (`just test-workstation`, CI fix `cb3ef88`)
 
 ---
 
-## Phase 43 — Net virtualiser (sDDF net shape)
+## Phase 43 — Net virtualiser (sDDF net shape) ✅ design / app trust; DMA split deferred
 
 **Goal:** Multi-client ethernet with clear trust boundaries: NIC driver without client DMA; Rx/Tx virtualisers; optional per-client copy for untrusted clients.
 
@@ -140,22 +140,25 @@ sDDF network architecture ([`sddf/docs/network/network.md`](https://github.com/a
 
 ### Scope
 
-- [ ] Design note: map today’s `virtio-net-driver` | `genet-driver` → `net-server` (smoltcp) → apps onto sDDF roles
-- [ ] First vertical slice on QEMU virtio-net only (one trusted client = `net-server`)
-  - Driver lacks client DMA maps; virt owns buffer handoff
-- [ ] Second client path: e.g. `http-server` or `fetch-client` as separate net client **or** stay behind `net-server` RPC (prefer RPC for untrusted apps; virt for stack/driver boundary)
-- [ ] Preserve `NetRequest` / `NetResponse` as the app-facing API
-- [ ] Smoke: `just test-fetch`, `just test-http`, net-composed boards
-- [ ] Stretch: genet path on RPi4 after QEMU virt is stable
+- [x] Design note: map today’s `virtio-net-driver` | `genet-driver` → `net-server` (smoltcp) → apps onto sDDF roles → [ADR-003](decisions/003-net-virtualiser.md), [`net-topology.md`](net-topology.md)
+- [x] App trust vertical slice: untrusted apps stay behind `NetRequest` / `NetResponse` only (no app ring maps); sole L2 Microkit client of the NIC driver is `net-server`
+- [ ] Driver lacks client DMA maps; separate `net-virt` owns buffer handoff (**deferred** — needs rust-sel4 net driver-adapter change or lerux device-only reimplementation; see ADR-003)
+- [x] Prefer RPC for untrusted apps (shell / fetch / http-fs / chat); do not give them L2 DMA
+- [x] Preserve `NetRequest` / `NetResponse` as the app-facing API
+- [x] Smoke regression gate: `just test-net`, `just test-fetch`, `just test-http` green (2026-07-12)
+- [ ] Stretch: genet path after DMA split; net-composed boards as optional extra
 
 ### Out of scope
 
 - Full sDDF copy-PD swarm unless a second untrusted L2 client appears
 - Replacing smoltcp with lwIP
+- No-op passthrough `net-virt` PD without map changes
 
 ### Exit
 
-Documented trust map; at least one board where NIC driver address space excludes client DMA; fetch/HTTP smokes green.
+- [x] Documented trust map (ADR-003 + net-topology.md)
+- [ ] At least one board where NIC driver address space excludes client DMA (deferred)
+- [x] Apps never map NIC DMA; fetch/HTTP/net smokes green
 
 ---
 

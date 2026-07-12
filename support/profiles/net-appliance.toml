@@ -1,0 +1,7 @@
+# Net appliance recipe (Phase 55): HTTP server over virtio-net.
+# Layout channels live in the template; no package-app fragment yet.
+
+template = "http-virtio.system.template"
+pds = ["http-server", "serial-driver", "virtio-net-driver"]
+description = "Phase 55 recipe: network appliance (HTTP :8080 over virtio-net)"
+default_board = "qemu_virt_aarch64_http"

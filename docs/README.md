@@ -11,6 +11,7 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [plan.md](plan.md) | Roadmap and cross-arch smoke parity (phases 1–49 complete) |
 | [plan-arch.md](plan-arch.md) | Phases 50–60: Arch-level functionality gap plan |
 | [config.md](config.md) | Phase 54: config key schema, secrets, boot policy |
+| [packages.md](packages.md) | Phase 55: package CLI, pins, profile recipes, out-of-tree “AUR” |
 | [plan-au-ts.md](plan-au-ts.md) | Phases 41–49: sDDF/LionsOS/sdfgen-inspired work |
 | [system-generation.md](system-generation.md) | Phase 41: template inventory (mechanical vs board-specific) |
 | [decisions/001-in-tree-system-generation.md](decisions/001-in-tree-system-generation.md) | ADR-001: in-tree Rust SDF gen (not sdfgen) |

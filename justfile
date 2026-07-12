@@ -231,6 +231,13 @@ config-schema:
 config-seed-disk:
     {{lerux}} config seed-disk
 
+# Phase 55: package / profile helpers
+package-list:
+    {{lerux}} package list
+
+package-search QUERY:
+    {{lerux}} package search {{QUERY}}
+
 # Remove all build artifacts (shared target cache + per-board outputs).
 clean:
     rm -rf {{build_dir}} target deps/.sdk-path

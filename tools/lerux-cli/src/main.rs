@@ -25,7 +25,7 @@ mod test;
 
 use std::{path::PathBuf, process::Command};
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 
 use crate::{
@@ -260,8 +260,32 @@ enum ProfileCommands {
 enum PackageCommands {
     /// List packages under support/packages/.
     List,
+    /// Substring search over name / pd / description (Phase 55).
+    Search { query: String },
     /// Show one package manifest (PD, interface-types, fragment).
     Show { name: String },
+    /// Merge package fragment into a profile (pds + channels) and write TOML.
+    Install {
+        name: String,
+        /// Target profile under support/profiles/ (default: workstation).
+        #[arg(long, default_value = "workstation")]
+        profile: String,
+        /// Also run `profile build` after merge.
+        #[arg(long, default_value_t = false)]
+        build: bool,
+        #[arg(long)]
+        board: Option<String>,
+        #[arg(long, default_value = "build")]
+        build_dir: String,
+        #[arg(long, default_value = "debug")]
+        config: String,
+    },
+    /// Remove package fragment PDs/channels from a profile.
+    Remove {
+        name: String,
+        #[arg(long, default_value = "workstation")]
+        profile: String,
+    },
     /// Build the package PD ELF for a board.
     Build {
         name: String,
@@ -290,6 +314,21 @@ enum PackageCommands {
         board: String,
         #[arg(long, default_value = "build")]
         build_dir: String,
+    },
+    /// Rebuild + re-pin; print SHA256 / interface_types delta (Phase 55 rolling pins).
+    Upgrade {
+        /// Package name; omit with `--all` to upgrade every pin for the board.
+        name: Option<String>,
+        #[arg(long, default_value_t = false)]
+        all: bool,
+        #[arg(long, default_value = "qemu_virt_aarch64_workstation")]
+        board: String,
+        #[arg(long, default_value = "build")]
+        build_dir: String,
+        #[arg(long, default_value = "debug")]
+        config: String,
+        #[arg(long)]
+        git_ref: Option<String>,
     },
 }
 
@@ -507,9 +546,34 @@ fn main() -> Result<()> {
             let packages = crate::package::load_packages(&root)?;
             match command {
                 PackageCommands::List => crate::package::list_packages(&packages),
+                PackageCommands::Search { query } => {
+                    crate::package::search_packages(&packages, &query);
+                }
                 PackageCommands::Show { name } => {
                     let package = crate::package::get_package(&packages, &name)?;
                     crate::package::show_package(&name, package);
+                }
+                PackageCommands::Install {
+                    name,
+                    profile,
+                    build,
+                    board,
+                    build_dir,
+                    config,
+                } => {
+                    crate::package::install_package(
+                        &root,
+                        &packages,
+                        &name,
+                        &profile,
+                        build,
+                        board.as_deref(),
+                        &build_dir,
+                        &config,
+                    )?;
+                }
+                PackageCommands::Remove { name, profile } => {
+                    crate::package::remove_package(&root, &packages, &name, &profile)?;
                 }
                 PackageCommands::Build {
                     name,
@@ -542,6 +606,36 @@ fn main() -> Result<()> {
                     build_dir,
                 } => {
                     crate::package::diff_package_pins(&root, &name, &board, &build_dir)?;
+                }
+                PackageCommands::Upgrade {
+                    name,
+                    all,
+                    board,
+                    build_dir,
+                    config,
+                    git_ref,
+                } => {
+                    if all {
+                        crate::package::upgrade_all(
+                            &root,
+                            &packages,
+                            &board,
+                            &build_dir,
+                            &config,
+                            git_ref.as_deref(),
+                        )?;
+                    } else {
+                        let name = name.context("package name required (or pass --all)")?;
+                        crate::package::upgrade_package(
+                            &root,
+                            &packages,
+                            &name,
+                            &board,
+                            &build_dir,
+                            &config,
+                            git_ref.as_deref(),
+                        )?;
+                    }
                 }
             }
         }

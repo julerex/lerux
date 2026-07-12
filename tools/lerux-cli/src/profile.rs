@@ -1,22 +1,26 @@
-use std::{collections::BTreeMap, fs, path::Path};
+use std::{
+    collections::BTreeMap,
+    fs,
+    path::{Path, PathBuf},
+};
 
 use anyhow::{Context, Result};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::channels::{ensure_channels_valid, to_sdf_pd_name, ChannelSpec, ChannelValidation};
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Profile {
     pub template: String,
     pub pds: Vec<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_board: Option<String>,
     /// Structured channel manifest (`[[channel]]` tables). Source of truth for
     /// IPC topology: `render_system` splices these into the board template when
     /// `default_board` matches (Phase 41).
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub channel: Vec<ChannelSpec>,
 }
 
@@ -196,6 +200,25 @@ pub fn diff_profiles_with_sdf(
     Ok(())
 }
 
+/// Path to a profile TOML under `support/profiles/`.
+pub fn profile_path(root: &Path, name: &str) -> PathBuf {
+    root.join("support/profiles").join(format!("{name}.toml"))
+}
+
+/// Rewrite a profile file (Phase 55 install/remove). Preserves no free comments.
+pub fn save_profile(root: &Path, name: &str, profile: &Profile) -> Result<PathBuf> {
+    ensure_channels_valid(&profile.channel, &profile.pds, &format!("profile {name}"))?;
+    let path = profile_path(root, name);
+    let body = toml::to_string_pretty(profile).context("serialize profile")?;
+    let header = format!(
+        "# Profile `{name}` — managed by `lerux package install|remove` (Phase 55).\n\
+         # Template + default_board are authoritative; channels are the IPC source of truth.\n\n"
+    );
+    fs::write(&path, format!("{header}{body}"))
+        .with_context(|| format!("write {}", path.display()))?;
+    Ok(path)
+}
+
 /// Order-independent key for channel equality (ends sorted by pd:id).
 fn canonical_channel_key(ch: &ChannelSpec) -> String {
     let mut ends: Vec<String> = ch
@@ -236,8 +259,11 @@ pub fn find_profile_for_board<'a>(
     profiles: &'a Profiles,
     board_name: &str,
 ) -> Option<(&'a str, &'a Profile)> {
+    // Multiple recipes may share a default_board (e.g. workstation vs dev-workstation).
+    // Prefer the fullest PD set so board-level `lerux system` matches the product profile.
     profiles
         .iter()
-        .find(|(_, p)| p.default_board.as_deref() == Some(board_name))
+        .filter(|(_, p)| p.default_board.as_deref() == Some(board_name))
+        .max_by_key(|(_, p)| p.pds.len())
         .map(|(name, p)| (name.as_str(), p))
 }

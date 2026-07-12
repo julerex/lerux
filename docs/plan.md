@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-12 (Phase 54 config schema, seed-if-missing, shell config, host seed-disk)
+Last updated: 2026-07-12 (Phase 55 package search/install/remove/upgrade + profile recipes)
 
 ## Phase 1 — Bring-up
 
@@ -435,9 +435,16 @@ Install-media path for RPi4 workstation (see [`boards.md`](boards.md#rpi4-workst
 - [x] Host: `lerux config schema|defaults|seed-disk`
 - [ ] Hot-apply net.mode/static from config into live stack (still DHCP+fallback)
 
-## Phases 55–60 — Arch-level functionality (planned)
+## Phase 55 — Package and profile UX (core done)
 
-Roadmap to “about Arch Linux” **workflow** (not ABI): package UX, multi-arch workstation, app catalog, optional hardening.
+- [x] `lerux package search|install|remove` merges fragments into profiles
+- [x] `package upgrade` / `--all` for rolling ELF pins + interface_types notes
+- [x] Recipes: `dev-workstation`, `net-appliance` ([`docs/packages.md`](packages.md))
+- [x] Channel auto-wiring by fragment channel `name`
+
+## Phases 56–60 — Arch-level functionality (planned)
+
+Roadmap to “about Arch Linux” **workflow** (not ABI): multi-arch time parity, observability, app catalog, security.
 
 Full checklist, priority order, and completion bar: **[`plan-arch.md`](plan-arch.md)**.
 
@@ -448,14 +455,14 @@ Full checklist, priority order, and completion bar: **[`plan-arch.md`](plan-arch
 | 52 | Hardware closeout (RPi4 deploy + seed + harness) | core done (lab REPL sign-off open) |
 | 53 | Shell + core utilities | core done |
 | 54 | Config, secrets, boot policy | core done (net hot-apply stretch) |
-| 55 | Package/profile UX (pacman-like host CLI) | planned |
+| 55 | Package/profile UX (pacman-like host CLI) | core done |
 | 56 | Time/init cross-arch parity | planned |
 | 57 | Observability and ops | planned |
 | 58 | App catalog | planned |
 | 59 | Multi-arch workstation profiles | planned |
 | 60 | Security posture (stretch) | planned |
 
-Near-term priority: **55 package UX**.
+Near-term priority: **56 time parity** or **58 app catalog**.
 
 ## Version alignment
 

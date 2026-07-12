@@ -168,22 +168,22 @@ Changing hostname / net.* / log.* is a config write + reboot (values re-read and
 
 ---
 
-## Phase 55 — Package and profile UX (Arch: pacman + rolling)
+## Phase 55 — Package and profile UX (Arch: pacman + rolling) — core done
 
-**Why:** Arch’s soul is package management. lerux has pins and profiles but “install” is still a developer rebuild, not a clear product loop.
+**Why:** Arch’s soul is package management. lerux had pins and profiles but “install” was a manual TOML edit.
 
 ### Steps
 
-- [ ] **Host-side package UX:** `lerux package search|install|remove` that edits a profile’s `pds` + channels (or composes profile fragments), then `profile build`.
-- [ ] **Rolling pin workflow:** CI publishes ELF artifacts; `lerux package upgrade` bumps pins with `diff` of SHA256/interface-types; document breakage when `interface_types` major changes.
-- [ ] **Profile recipes:** expand beyond workstation/server/minimal (e.g. `net-appliance`, `dev-workstation` with extra apps).
-- [ ] **Channel auto-wiring:** when adding a package fragment, merge declared `[[channel]]` needs instead of hand-editing workstation TOML (extends Phase 41).
-- [ ] Docs: “AUR for lerux” = out-of-tree profile fragments + PD crates; contribution template matching ported-app checklist.
-- [ ] **Not in scope:** runtime dynamic loading of arbitrary ELFs into a running Microkit system (would need different system model / ADR).
+- [x] **Host-side package UX:** `lerux package search|install|remove` merges fragment `pds` + named channels into a profile; optional `--build`.
+- [x] **Rolling pin workflow:** `package upgrade` / `upgrade --all` rebuilds, re-pins, prints SHA256 + interface_types delta.
+- [x] **Profile recipes:** `net-appliance`, `dev-workstation` (+ existing minimal/server/workstation).
+- [x] **Channel auto-wiring:** install merges `[[fragment.channel]]` by `name` (skip duplicates).
+- [x] Docs: [`packages.md`](packages.md) (“AUR for lerux” + CLI).
+- [x] **Not in scope:** runtime dynamic ELF load (still out of scope).
 
 ### Exit
 
-Adding `edit` or a new app to a profile is one CLI command + rebuild; pins are auditable and rollable.
+Adding `edit` or a new app to a profile is one CLI command + rebuild; pins are auditable and rollable. **Met.**
 
 ---
 
@@ -316,9 +316,9 @@ That is Arch’s **workflow and completeness**, reimplemented as static Microkit
 
 If capacity is limited, do **not** start with graphics or scripting runtimes:
 
-1. **Phases 50–54 cores** — FS, net, deploy, shell, config policy done
+1. **Phases 50–55 cores** — FS through package UX done
 2. **Phase 52 lab** — fill RPi4 REPL checklist on real hardware when available
-3. **Phase 55** — package/profile UX
+3. **Phase 56 / 58** — time parity or deeper app catalog
 
 ---
 

@@ -269,5 +269,441 @@ pub fn diff_package_pins(root: &Path, name: &str, board: &str, build_dir: &str) 
             println!("package {name} / {board}: no pin (current={current})");
         }
     }
+    let tree_iface = interface_types_version(root)?;
+    if package.interface_types != tree_iface {
+        println!(
+            "  interface_types: package={} tree={} (rebuild required if major drift)",
+            package.interface_types, tree_iface
+        );
+    }
     Ok(())
+}
+
+// ── Phase 55: search / install / remove / upgrade ──────────────────────────
+
+/// Substring search over package name, pd, and description.
+pub fn search_packages(packages: &Packages, query: &str) {
+    let q = query.to_ascii_lowercase();
+    let mut hits = 0usize;
+    for (name, p) in packages {
+        let hay = format!(
+            "{} {} {} {}",
+            name,
+            p.pd,
+            p.interface_types,
+            p.description.as_deref().unwrap_or("")
+        )
+        .to_ascii_lowercase();
+        if hay.contains(&q) {
+            let desc = p.description.as_deref().unwrap_or("");
+            println!("{name:24} pd={} iface={}  {desc}", p.pd, p.interface_types);
+            hits += 1;
+        }
+    }
+    if hits == 0 {
+        println!("(no packages match {query:?})");
+    }
+}
+
+fn channel_name_key(ch: &ChannelSpec) -> Option<String> {
+    ch.name
+        .as_ref()
+        .map(|n| n.trim().to_string())
+        .filter(|n| !n.is_empty())
+}
+
+fn profile_has_pd(profile: &crate::profile::Profile, pd: &str) -> bool {
+    let want = crate::channels::to_sdf_pd_name(pd);
+    profile
+        .pds
+        .iter()
+        .any(|p| crate::channels::to_sdf_pd_name(p) == want)
+}
+
+/// Merge package fragment into a profile and write `support/profiles/<profile>.toml`.
+///
+/// Does not rebuild the image unless `build` is true.
+pub fn install_package(
+    root: &Path,
+    packages: &Packages,
+    name: &str,
+    profile_name: &str,
+    build: bool,
+    board: Option<&str>,
+    build_dir: &str,
+    config: &str,
+) -> Result<()> {
+    let package = get_package(packages, name)?;
+    let Some(frag) = &package.fragment else {
+        bail!(
+            "package {name} has no [fragment] — add pds/channels to support/packages/{name}.toml"
+        );
+    };
+
+    let profiles = crate::profile::load_profiles(root)?;
+    let mut profile = crate::profile::get_profile(&profiles, profile_name)?.clone();
+
+    // Requires must already be present (or be part of this fragment).
+    for req in &frag.requires {
+        let in_frag = frag
+            .pds
+            .iter()
+            .any(|p| crate::channels::to_sdf_pd_name(p) == crate::channels::to_sdf_pd_name(req));
+        if !in_frag && !profile_has_pd(&profile, req) {
+            bail!(
+                "package {name} requires {req:?} which is not in profile {profile_name:?} \
+                 (install prerequisites first or choose another profile)"
+            );
+        }
+    }
+
+    let mut added_pds = Vec::new();
+    for pd in &frag.pds {
+        if !profile_has_pd(&profile, pd) {
+            profile.pds.push(pd.clone());
+            added_pds.push(pd.clone());
+        }
+    }
+
+    let existing_names: BTreeMap<String, ()> = profile
+        .channel
+        .iter()
+        .filter_map(channel_name_key)
+        .map(|n| (n, ()))
+        .collect();
+
+    let mut added_ch = 0usize;
+    for ch in &frag.channel {
+        if let Some(n) = channel_name_key(ch)
+            && existing_names.contains_key(&n)
+        {
+            println!("  skip channel {n} (already in profile)");
+            continue;
+        }
+        profile.channel.push(ch.clone());
+        added_ch += 1;
+    }
+
+    if added_pds.is_empty() && added_ch == 0 {
+        println!("package {name}: already installed in profile {profile_name}");
+        return Ok(());
+    }
+
+    let path = crate::profile::save_profile(root, profile_name, &profile)?;
+    println!(
+        "package {name}: installed into profile {profile_name} (+pds {:?} +{added_ch} channels)",
+        added_pds
+    );
+    println!("  wrote {}", path.display());
+    println!("  next: lerux profile build {profile_name}");
+
+    if build {
+        let board_name = crate::profile::resolve_board_for_profile(
+            &crate::profile::load_profiles(root)?,
+            profile_name,
+            board,
+        )?;
+        build::image(root, &board_name, build_dir, config)?;
+        println!("  built loader.img for board {board_name}");
+    }
+    Ok(())
+}
+
+/// Remove package fragment PDs and named channels from a profile.
+pub fn remove_package(
+    root: &Path,
+    packages: &Packages,
+    name: &str,
+    profile_name: &str,
+) -> Result<()> {
+    let package = get_package(packages, name)?;
+    let Some(frag) = &package.fragment else {
+        bail!("package {name} has no [fragment] to remove");
+    };
+
+    let profiles = crate::profile::load_profiles(root)?;
+    let mut profile = crate::profile::get_profile(&profiles, profile_name)?.clone();
+
+    let remove_pds: BTreeMap<String, ()> = frag
+        .pds
+        .iter()
+        .map(|p| (crate::channels::to_sdf_pd_name(p), ()))
+        .collect();
+    let before_pd = profile.pds.len();
+    profile
+        .pds
+        .retain(|p| !remove_pds.contains_key(&crate::channels::to_sdf_pd_name(p)));
+    let removed_pd = before_pd - profile.pds.len();
+
+    let remove_ch: BTreeMap<String, ()> = frag
+        .channel
+        .iter()
+        .filter_map(channel_name_key)
+        .map(|n| (n, ()))
+        .collect();
+    let before_ch = profile.channel.len();
+    profile.channel.retain(|ch| match channel_name_key(ch) {
+        Some(n) => !remove_ch.contains_key(&n),
+        None => true,
+    });
+    let removed_ch = before_ch - profile.channel.len();
+
+    if removed_pd == 0 && removed_ch == 0 {
+        println!("package {name}: not present in profile {profile_name}");
+        return Ok(());
+    }
+
+    let path = crate::profile::save_profile(root, profile_name, &profile)?;
+    println!(
+        "package {name}: removed from profile {profile_name} (-{removed_pd} pds -{removed_ch} channels)"
+    );
+    println!("  wrote {}", path.display());
+    Ok(())
+}
+
+/// Rebuild + re-pin one package; print SHA256 / interface_types delta vs old pin.
+pub fn upgrade_package(
+    root: &Path,
+    packages: &Packages,
+    name: &str,
+    board: &str,
+    build_dir: &str,
+    config: &str,
+    git_ref: Option<&str>,
+) -> Result<()> {
+    let package = get_package(packages, name)?;
+    let pins_before = load_pins(root)?;
+    let old = pins_before
+        .packages
+        .get(name)
+        .and_then(|e| e.artifacts.get(board))
+        .cloned();
+    let old_iface = pins_before
+        .packages
+        .get(name)
+        .map(|e| e.interface_types.clone());
+
+    let path = build_package(root, packages, name, board, build_dir, config)?;
+    let new_hash = sha256_file(&path)?;
+    pin_package(root, packages, name, board, build_dir, git_ref)?;
+
+    println!("package {name}: upgrade summary for {board}");
+    match old {
+        Some(prev) if prev.elf_sha256 == new_hash => {
+            println!("  elf_sha256: unchanged ({new_hash})");
+        }
+        Some(prev) => {
+            println!("  elf_sha256:");
+            println!("    - {}", prev.elf_sha256);
+            println!("    + {new_hash}");
+        }
+        None => println!("  elf_sha256: (new pin) {new_hash}"),
+    }
+    let tree_iface = interface_types_version(root)?;
+    match old_iface {
+        Some(prev) if prev == package.interface_types => {
+            println!("  interface_types: {prev} (tree={tree_iface})");
+        }
+        Some(prev) => {
+            println!(
+                "  interface_types: {prev} → {} (tree={tree_iface})",
+                package.interface_types
+            );
+            if prev != tree_iface {
+                println!(
+                    "  warning: interface_types drift may break postcard IPC until all PDs rebuild"
+                );
+            }
+        }
+        None => println!(
+            "  interface_types: {} (tree={tree_iface})",
+            package.interface_types
+        ),
+    }
+    Ok(())
+}
+
+/// Upgrade every package that has a pin for `board`.
+pub fn upgrade_all(
+    root: &Path,
+    packages: &Packages,
+    board: &str,
+    build_dir: &str,
+    config: &str,
+    git_ref: Option<&str>,
+) -> Result<()> {
+    let pins = load_pins(root)?;
+    let mut names: Vec<_> = pins
+        .packages
+        .iter()
+        .filter(|(_, e)| e.artifacts.contains_key(board))
+        .map(|(n, _)| n.clone())
+        .collect();
+    names.sort();
+    if names.is_empty() {
+        println!("(no pinned packages for board {board})");
+        return Ok(());
+    }
+    for name in names {
+        if packages.contains_key(&name) {
+            upgrade_package(root, packages, &name, board, build_dir, config, git_ref)?;
+        } else {
+            println!("skip {name}: no support/packages/{name}.toml");
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        channels::{ChannelEnd, ChannelSpec},
+        profile::Profile,
+    };
+    use std::fs;
+
+    #[test]
+    fn search_matches_description() {
+        let mut packages = BTreeMap::new();
+        packages.insert(
+            "edit".into(),
+            Package {
+                pd: "edit".into(),
+                interface_types: "0.1.0".into(),
+                description: Some("Serial TUI text editor".into()),
+                fragment: None,
+            },
+        );
+        // smoke: does not panic
+        search_packages(&packages, "tui");
+        search_packages(&packages, "zzz-nope");
+    }
+
+    #[test]
+    fn install_merges_channels() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        fs::create_dir_all(root.join("support/packages")).unwrap();
+        fs::create_dir_all(root.join("support/profiles")).unwrap();
+        fs::write(
+            root.join("support/packages/toy.toml"),
+            r#"
+pd = "toy"
+interface_types = "0.1.0"
+description = "toy"
+
+[fragment]
+pds = ["toy"]
+requires = ["shell"]
+
+[[fragment.channel]]
+name = "toy_shell"
+ends = [
+  { pd = "shell", id = 9, pp = true },
+  { pd = "toy", id = 0 },
+]
+"#,
+        )
+        .unwrap();
+        fs::write(
+            root.join("support/profiles/sandbox.toml"),
+            r#"
+template = "serial-hello.system.template"
+pds = ["shell", "serial-driver"]
+description = "test sandbox"
+default_board = "qemu_virt_aarch64"
+
+[[channel]]
+name = "shell_serial"
+ends = [
+  { pd = "serial_driver", id = 1 },
+  { pd = "shell", id = 0, pp = true },
+]
+"#,
+        )
+        .unwrap();
+
+        let packages = load_packages(root).unwrap();
+        install_package(
+            root, &packages, "toy", "sandbox", false, None, "build", "debug",
+        )
+        .unwrap();
+        let profiles = crate::profile::load_profiles(root).unwrap();
+        let p = profiles.get("sandbox").unwrap();
+        assert!(p.pds.iter().any(|x| x == "toy"));
+        assert!(p
+            .channel
+            .iter()
+            .any(|c| c.name.as_deref() == Some("toy_shell")));
+
+        remove_package(root, &packages, "toy", "sandbox").unwrap();
+        let profiles = crate::profile::load_profiles(root).unwrap();
+        let p = profiles.get("sandbox").unwrap();
+        assert!(!p.pds.iter().any(|x| x == "toy"));
+        assert!(!p
+            .channel
+            .iter()
+            .any(|c| c.name.as_deref() == Some("toy_shell")));
+    }
+
+    #[test]
+    fn install_requires_missing_fails() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        fs::create_dir_all(root.join("support/packages")).unwrap();
+        fs::create_dir_all(root.join("support/profiles")).unwrap();
+        fs::write(
+            root.join("support/packages/toy.toml"),
+            r#"
+pd = "toy"
+interface_types = "0.1.0"
+[fragment]
+pds = ["toy"]
+requires = ["missing-pd"]
+"#,
+        )
+        .unwrap();
+        fs::write(
+            root.join("support/profiles/sandbox.toml"),
+            r#"
+template = "serial-hello.system.template"
+pds = ["shell"]
+"#,
+        )
+        .unwrap();
+        let packages = load_packages(root).unwrap();
+        let err = install_package(
+            root, &packages, "toy", "sandbox", false, None, "build", "debug",
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("requires"));
+    }
+
+    #[test]
+    fn channel_name_key_works() {
+        let ch = ChannelSpec {
+            name: Some("edit_shell".into()),
+            ends: vec![
+                ChannelEnd {
+                    pd: "shell".into(),
+                    id: 6,
+                    pp: true,
+                },
+                ChannelEnd {
+                    pd: "edit".into(),
+                    id: 0,
+                    pp: false,
+                },
+            ],
+        };
+        assert_eq!(channel_name_key(&ch).as_deref(), Some("edit_shell"));
+        let _ = Profile {
+            template: "t".into(),
+            pds: vec![],
+            description: None,
+            default_board: None,
+            channel: vec![],
+        };
+    }
 }

@@ -278,6 +278,11 @@ impl NetStack {
         self.completed.take()
     }
 
+    /// True while an async net operation is in flight (not yet completed).
+    pub fn is_busy(&self) -> bool {
+        self.op != Op::None
+    }
+
     fn init_udp_socket(sockets: &mut SocketSet<'static>) -> SocketHandle {
         let arena = unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_ARENA) };
         let udp = UdpSocket::new(
@@ -322,7 +327,8 @@ impl NetStack {
         let local = IpListenEndpoint::from((IpAddress::Ipv4(GUEST_IP), LOCAL_UDP_PORT));
         let remote = IpEndpoint::new(IpAddress::Ipv4(HOST_IP), REMOTE_UDP_PORT);
         let udp = sockets.get_mut::<UdpSocket>(udp_handle);
-        let payload = &self.pending_udp[..payload_len as usize];
+        let len = (payload_len as usize).min(MAX_NET_UDP_PAYLOAD);
+        let payload = &self.pending_udp[..len];
         if !arena.udp_bound {
             if udp.bind(local).is_err() {
                 return;
@@ -441,7 +447,8 @@ impl NetStack {
         if !tcp.may_send() {
             return;
         }
-        let payload = &self.pending_tcp_send[..payload_len as usize];
+        let len = (payload_len as usize).min(MAX_NET_TCP_PAYLOAD);
+        let payload = &self.pending_tcp_send[..len];
         if tcp.send_slice(payload).is_ok() {
             self.pending_tcp_send_len = None;
             self.completed = Some(NetResponse::Ok);

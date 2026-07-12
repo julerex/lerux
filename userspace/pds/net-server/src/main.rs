@@ -25,7 +25,10 @@ const HTTP_FS_CLIENT: Channel = Channel::new(7);
 
 struct HandlerImpl {
     net: net::NetStack,
+    /// Response waiting for the owning client to Poll.
     completed: Option<NetResponse>,
+    /// Client that owns the in-flight async operation (or pending completion).
+    active_client: Option<Channel>,
 }
 
 #[protection_domain(heap_size = 512 * 1024)]
@@ -53,20 +56,47 @@ fn init() -> HandlerImpl {
     HandlerImpl {
         net: net_stack,
         completed: None,
+        active_client: None,
     }
 }
 
 impl HandlerImpl {
-    fn handle_poll(&mut self) -> NetResponse {
+    /// Reserve this client for an async op. Returns false when another client owns the stack
+    /// or this client still has an undelivered completion.
+    fn begin_async(&mut self, channel: Channel) -> bool {
+        if self.completed.is_some() {
+            return false;
+        }
+        if self.net.is_busy() && self.active_client != Some(channel) {
+            return false;
+        }
+        self.active_client = Some(channel);
+        true
+    }
+
+    fn finish_async(&mut self) {
+        self.active_client = None;
+    }
+
+    fn handle_poll(&mut self, channel: Channel) -> NetResponse {
+        if self.active_client != Some(channel) {
+            return NetResponse::Pending;
+        }
         if let Some(resp) = self.completed.take() {
+            self.finish_async();
             return resp;
         }
         if let Some(resp) = self.net.take_completed() {
+            self.finish_async();
             return resp;
         }
         NET_DRIVER.notify();
         self.net.poll();
-        self.net.take_completed().unwrap_or(NetResponse::Pending)
+        if let Some(resp) = self.net.take_completed() {
+            self.finish_async();
+            return resp;
+        }
+        NetResponse::Pending
     }
 
     fn handle_net_driver(&mut self) {
@@ -108,10 +138,16 @@ impl Handler for HandlerImpl {
                     payload_len,
                     payload,
                 } => {
+                    if !self.begin_async(channel) {
+                        return Ok(send(NetResponse::Pending));
+                    }
                     self.net.queue_udp_tx(payload_len, payload);
                     send(NetResponse::Pending)
                 }
                 NetRequest::UdpRecv => {
+                    if !self.begin_async(channel) {
+                        return Ok(send(NetResponse::Pending));
+                    }
                     self.net.queue_udp_recv();
                     send(NetResponse::Pending)
                 }
@@ -120,10 +156,16 @@ impl Handler for HandlerImpl {
                     send(self.net.take_completed().unwrap_or(NetResponse::Pending))
                 }
                 NetRequest::TcpConnect { addr, port } => {
+                    if !self.begin_async(channel) {
+                        return Ok(send(NetResponse::Pending));
+                    }
                     self.net.queue_tcp_connect(addr, port);
                     send(NetResponse::Pending)
                 }
                 NetRequest::TcpListen { port } => {
+                    if !self.begin_async(channel) {
+                        return Ok(send(NetResponse::Pending));
+                    }
                     self.net.queue_tcp_listen(port);
                     send(NetResponse::Pending)
                 }
@@ -131,18 +173,27 @@ impl Handler for HandlerImpl {
                     payload_len,
                     payload,
                 } => {
+                    if !self.begin_async(channel) {
+                        return Ok(send(NetResponse::Pending));
+                    }
                     self.net.queue_tcp_send(payload_len, payload);
                     send(NetResponse::Pending)
                 }
                 NetRequest::TcpRecv => {
+                    if !self.begin_async(channel) {
+                        return Ok(send(NetResponse::Pending));
+                    }
                     self.net.queue_tcp_recv();
                     send(NetResponse::Pending)
                 }
                 NetRequest::TcpClose => {
+                    if !self.begin_async(channel) {
+                        return Ok(send(NetResponse::Pending));
+                    }
                     self.net.queue_tcp_close();
                     send(NetResponse::Pending)
                 }
-                NetRequest::Poll => send(self.handle_poll()),
+                NetRequest::Poll => send(self.handle_poll(channel)),
             },
             Err(_) => send_unspecified_error(),
         })

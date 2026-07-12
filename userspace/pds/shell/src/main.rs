@@ -250,13 +250,22 @@ fn reboot(console: &mut SerialClient) {
 }
 
 fn fetch_demo(console: &mut SerialClient) {
-    let pending = call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::udp_tx(b"lerux-fetch"));
-    if matches!(pending, Ok(NetResponse::Pending)) {
-        let _ = poll_net();
-        println(console, "fetch: demo udp sent");
-    } else {
-        println(console, "fetch: error");
+    for _ in 0..16 {
+        match call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::udp_tx(b"lerux-fetch")) {
+            Ok(NetResponse::Pending) => {
+                if poll_net() == NetResponse::Ok {
+                    println(console, "fetch: demo udp sent");
+                    return;
+                }
+            }
+            Ok(NetResponse::Ok) => {
+                println(console, "fetch: demo udp sent");
+                return;
+            }
+            _ => break,
+        }
     }
+    println(console, "fetch: error");
 }
 
 fn poll_net() -> NetResponse {

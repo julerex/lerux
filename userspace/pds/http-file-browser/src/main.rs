@@ -61,6 +61,7 @@ fn net_call_try(req: NetRequest) -> NetResponse {
                     Err(_) => return NetResponse::Error,
                 }
             }
+            let _ = call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::Abort);
             NetResponse::Pending
         }
         Ok(other) => other,

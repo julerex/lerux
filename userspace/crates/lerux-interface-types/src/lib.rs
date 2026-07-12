@@ -120,6 +120,8 @@ pub enum NetRequest {
     TcpRecv,
     /// Close the active TCP socket (client or accepted listen connection).
     TcpClose,
+    /// Abandon a pending recv without closing sockets (client timeout).
+    Abort,
     Poll,
 }
 

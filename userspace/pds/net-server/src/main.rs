@@ -78,6 +78,14 @@ impl HandlerImpl {
         self.active_client = None;
     }
 
+    fn abort_async(&mut self, channel: Channel) {
+        if self.active_client == Some(channel) {
+            self.net.cancel_recv();
+            self.completed = None;
+            self.finish_async();
+        }
+    }
+
     fn handle_poll(&mut self, channel: Channel) -> NetResponse {
         if self.active_client != Some(channel) {
             return NetResponse::Pending;
@@ -192,6 +200,10 @@ impl Handler for HandlerImpl {
                     }
                     self.net.queue_tcp_close();
                     send(NetResponse::Pending)
+                }
+                NetRequest::Abort => {
+                    self.abort_async(channel);
+                    send(NetResponse::Ok)
                 }
                 NetRequest::Poll => send(self.handle_poll(channel)),
             },

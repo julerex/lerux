@@ -283,6 +283,14 @@ impl NetStack {
         self.op != Op::None
     }
 
+    /// Drop a pending recv op without tearing down sockets (for client timeouts).
+    pub fn cancel_recv(&mut self) {
+        if matches!(self.op, Op::UdpRecv | Op::TcpRecv) {
+            self.op = Op::None;
+            self.completed = None;
+        }
+    }
+
     fn init_udp_socket(sockets: &mut SocketSet<'static>) -> SocketHandle {
         let arena = unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_ARENA) };
         let udp = UdpSocket::new(

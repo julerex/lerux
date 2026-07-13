@@ -317,7 +317,7 @@ impl NetStack {
     }
 
     pub fn queue_dns_resolve(&mut self, name_len: u8, name: [u8; MAX_DNS_NAME]) {
-        let len = name_len as usize;
+        let len = (name_len as usize).min(MAX_DNS_NAME);
         // Static aliases always win (deterministic smokes: host/dns).
         if let Some(addr) =
             resolve_static_dns(&name[..len], self.iface_state.gateway, self.iface_state.dns)
@@ -328,7 +328,7 @@ impl NetStack {
             return;
         }
         self.pending_dns_name = name;
-        self.pending_dns_len = name_len;
+        self.pending_dns_len = len as u8;
         self.dns_query = None;
         self.op = Op::DnsResolve;
         self.completed = None;
@@ -568,7 +568,7 @@ impl NetStack {
         }
 
         if self.dns_query.is_none() {
-            let len = self.pending_dns_len as usize;
+            let len = self.pending_dns_len.min(MAX_DNS_NAME as u8) as usize;
             let Ok(name) = core::str::from_utf8(&self.pending_dns_name[..len]) else {
                 self.completed = Some(NetResponse::Error);
                 self.op = Op::None;

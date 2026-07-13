@@ -237,11 +237,19 @@ fn read_file_body(path: &[u8], out: &mut [u8]) -> Option<usize> {
     }
 }
 
+fn open_or_create(path: &[u8]) -> Option<u8> {
+    match fs_call(FsRequest::create(path)) {
+        FsResponse::Handle { id } => Some(id),
+        _ => match fs_call(FsRequest::open(path)) {
+            FsResponse::Handle { id } => Some(id),
+            _ => None,
+        },
+    }
+}
+
 fn put_file(path: &[u8], body: &[u8]) -> bool {
-    let _ = fs_call(FsRequest::unlink(path));
-    let handle = match fs_call(FsRequest::create(path)) {
-        FsResponse::Handle { id } => id,
-        _ => return false,
+    let Some(handle) = open_or_create(path) else {
+        return false;
     };
     matches!(fs_call(FsRequest::write(handle, 0, body)), FsResponse::Ok)
 }

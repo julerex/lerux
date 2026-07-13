@@ -238,7 +238,7 @@ pub fn pin_package(
         board.to_string(),
         ArtifactPin {
             elf_sha256: hash.clone(),
-            target: board_cfg.target_triple.clone(),
+            target: board_cfg.target.clone(),
             built_at_ref: git_ref.map(str::to_string),
         },
     );

@@ -131,7 +131,7 @@ Stock QEMU `virt` lacks SP804 at `0x90d0000`. Init, composed, blk-composed, http
 |---------|----------------|
 | `Argument list too long` on `python3` | Corrupted `PATH` from capturing QEMU build stdout — fixed in SP804 installer stderr/stdout split |
 | Init passes, timer times out | Stock QEMU used instead of patched build — check `which qemu-system-aarch64` |
-| Composed flaky on `init ok` | Serial/debug interleaving — `boot-init` notifies `hello` before virtio (composed-sync) |
+| Composed flaky on `init ok` | Serial/debug interleaving — `supervisor` notifies `hello` before virtio (composed-sync) |
 | `x86-http`: serial shows `listening`, `curl` times out | Stale QEMU or `tcp-echo-server` on host **18080** — see [boards.md — x86 HTTP inbound](boards.md#x86-http-inbound-operational-notes); smoke recipe kills both before start |
 | `x86-http`: QEMU idle at `listening` | Expected until host `curl` — guest waits on driver notifications; use `just test-x86-http` or curl from another terminal |
 | `x86-virtio` fails `TCP RX ok` after `x86-http` | Usually port **18080** still in use; kill stale QEMU/echo server, rerun virtio test |

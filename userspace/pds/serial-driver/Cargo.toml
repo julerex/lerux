@@ -54,6 +54,7 @@ board-rpi4b_4gb_blk = ["board-rpi4b_4gb"]
 board-rpi4b_4gb_workstation = ["board-rpi4b_4gb", "device-only"]
 
 [dependencies]
+lerux-driver-protocols = { path = "../../crates/lerux-driver-protocols" }
 lerux-logging = { path = "../../crates/lerux-logging" }
 log = { workspace = true }
 sel4 = { workspace = true }
@@ -62,5 +63,4 @@ sel4-driver-interfaces = { workspace = true }
 sel4-pl011-driver = { workspace = true, optional = true }
 embedded-hal-nb = { workspace = true }
 heapless = { workspace = true }
-serde = { workspace = true }
 sel4-microkit-simple-ipc = { workspace = true }

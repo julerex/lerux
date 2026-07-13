@@ -2,12 +2,12 @@
 #![no_main]
 
 use lerux_interface_types::{BlockRequest, BlockResponse, SECTOR_SIZE};
-use lerux_ipc::call;
+use lerux_ipc::BlkClient;
 use lerux_logging::{log, serial};
 use sel4_microkit::{protection_domain, Channel, ChannelSet, Handler, Infallible};
 
 const SERIAL_DRIVER: Channel = Channel::new(0);
-const BLK_SERVER: Channel = Channel::new(1);
+const BLK_SERVER: BlkClient = BlkClient::new(Channel::new(1));
 #[cfg(feature = "composed-sync")]
 const SUPERVISOR: Channel = Channel::new(2);
 #[cfg(feature = "composed-chain")]
@@ -21,40 +21,17 @@ struct HandlerImpl {
     blk_pending: bool,
 }
 
-fn poll_blk() -> BlockResponse {
-    loop {
-        match call::<BlockRequest, BlockResponse>(BLK_SERVER, BlockRequest::Poll).expect("Poll IPC")
-        {
-            BlockResponse::Pending => {}
-            other => return other,
-        }
-    }
-}
-
 fn read_sector(lba: u32) -> [u8; SECTOR_SIZE] {
-    let pending = call::<BlockRequest, BlockResponse>(BLK_SERVER, BlockRequest::ReadSector { lba })
-        .expect("ReadSector IPC");
-    assert!(matches!(pending, BlockResponse::Pending));
-
-    match poll_blk() {
+    match BLK_SERVER.call(BlockRequest::ReadSector { lba }) {
         BlockResponse::Sector { data } => data,
-        BlockResponse::Pending | BlockResponse::Ok | BlockResponse::Error => {
-            panic!("blk read failed")
-        }
+        _ => panic!("blk read failed"),
     }
 }
 
 fn write_sector(lba: u32, data: [u8; SECTOR_SIZE]) {
-    let pending =
-        call::<BlockRequest, BlockResponse>(BLK_SERVER, BlockRequest::WriteSector { lba, data })
-            .expect("WriteSector IPC");
-    assert!(matches!(pending, BlockResponse::Pending));
-
-    match poll_blk() {
+    match BLK_SERVER.call(BlockRequest::WriteSector { lba, data }) {
         BlockResponse::Ok => {}
-        BlockResponse::Pending | BlockResponse::Sector { .. } | BlockResponse::Error => {
-            panic!("blk write failed")
-        }
+        _ => panic!("blk write failed"),
     }
 }
 

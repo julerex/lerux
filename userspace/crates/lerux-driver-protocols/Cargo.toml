@@ -1,0 +1,16 @@
+[package]
+name = "lerux-driver-protocols"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Shared postcard wire protocols for lerux driver PDs (serial passthrough, timer)"
+
+[lints]
+workspace = true
+
+[dependencies]
+embedded-hal-nb = { workspace = true }
+serde = { workspace = true }
+sel4-driver-interfaces = { workspace = true }
+sel4-microkit = { workspace = true }
+sel4-microkit-simple-ipc = { workspace = true }

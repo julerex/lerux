@@ -10,27 +10,30 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 |-------|------|---------------|---------------|
 | `qemu_virt_aarch64` | aarch64 | `just test` | hello + serial |
 | `qemu_virt_aarch64_debug` | aarch64 | `just test-debug` | debug-handler (parent) + crash-demo (child fault) |
-| `qemu_virt_aarch64_debug` | aarch64 | `just test-debug` | debug-handler parent + crash-demo child fault |
 | `qemu_virt_aarch64_echo` | aarch64 | `just test-echo` | echo client/server + serial |
 | `qemu_virt_aarch64_virtio` | aarch64 | `just test-virtio` | hello + serial + virtio blk/net |
 | `qemu_virt_aarch64_blk` | aarch64 | `just test-blk` | blk client/server + serial + virtio-blk |
-| `qemu_virt_aarch64_blk_composed` | aarch64 | `just test-blk-composed` | boot-init + init drivers + blk IPC + virtio-blk |
+| `qemu_virt_aarch64_blk_composed` | aarch64 | `just test-blk-composed` | supervisor + init drivers + blk IPC + virtio-blk |
 | `qemu_virt_aarch64_net` | aarch64 | `just test-net` | net client/server + serial + virtio-net |
 | `qemu_virt_aarch64_fetch` | aarch64 | `just test-fetch` | fetch-client + net-server + serial + virtio-net |
 | `qemu_virt_aarch64_fs` | aarch64 | `just test-fs` | fs-client + fs-server (LERUXFS2) + serial + virtio-blk |
 | `qemu_virt_aarch64_fs_fat` | aarch64 | `just test-fs-fat` | same SDF; fs-server FAT16 backend |
-| `qemu_virt_aarch64_net_composed` | aarch64 | `just test-net-composed` | boot-init + init drivers + net IPC + virtio-net |
-| `qemu_virt_aarch64_ipc_composed` | aarch64 | `just test-ipc-composed` | boot-init + init drivers + blk/net IPC + virtio-blk/net |
+| `qemu_virt_aarch64_net_composed` | aarch64 | `just test-net-composed` | supervisor + init drivers + net IPC + virtio-net |
+| `qemu_virt_aarch64_ipc_composed` | aarch64 | `just test-ipc-composed` | supervisor + init drivers + blk/net IPC + virtio-blk/net |
 | `qemu_virt_aarch64_init` | aarch64 | `just test-init` | supervisor + PL031 + SP804 + serial |
-| `qemu_virt_aarch64_composed` | aarch64 | `just test-composed` | boot-init + hello virtio + all drivers |
+| `qemu_virt_aarch64_composed` | aarch64 | `just test-composed` | supervisor + hello virtio + all drivers |
 | `qemu_virt_aarch64_http` | aarch64 | `just test-http` | serial + virtio-net + http-server |
-| `qemu_virt_aarch64_http_composed` | aarch64 | `just test-http-composed` | boot-init + init drivers + virtio-net + http-server |
+| `qemu_virt_aarch64_http_composed` | aarch64 | `just test-http-composed` | supervisor + init drivers + virtio-net + http-server |
+| `qemu_virt_aarch64_workstation` | aarch64 | `just test-workstation` | full workstation (profile `workstation`) |
 | `qemu_virt_riscv64` | riscv64 | `just test-riscv` | hello + serial (MMIO UART) |
 | `qemu_virt_riscv64_echo` | riscv64 | `just test-riscv-echo` | echo + serial |
 | `qemu_virt_riscv64_virtio` | riscv64 | `just test-riscv-virtio` | hello + serial + virtio |
 | `qemu_virt_riscv64_init` | riscv64 | `just test-init-riscv` | supervisor + Goldfish RTC + rdtime timer + serial |
 | `qemu_virt_riscv64_workstation` | riscv64 | `just test-workstation-riscv` | full workstation (Phase 59) |
 | `x86_64_generic_workstation` | x86_64 | `just test-workstation-x86` | full workstation PCI virtio (Phase 59) |
+| `qemu_virt_aarch64_bench_echo` | aarch64 | `just bench-echo` | echo microbench (Phase 49) |
+| `qemu_virt_aarch64_bench_blk` | aarch64 | `just bench-blk` | blk microbench |
+| `qemu_virt_aarch64_bench_net` | aarch64 | `just bench-net` | net microbench |
 | `qemu_virt_riscv64_blk` | riscv64 | `just test-riscv-blk` | blk client/server + serial + virtio-blk |
 | `qemu_virt_riscv64_net` | riscv64 | `just test-riscv-net` | net client/server + serial + virtio-net |
 | `qemu_virt_riscv64_http` | riscv64 | `just test-riscv-http` | serial + virtio-net + http-server |
@@ -43,6 +46,8 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `x86_64_generic_http` | x86_64 | `just test-x86-http` | serial + virtio-pci net + http-server |
 | `rpi4b_4gb` | aarch64 | `BOARD=rpi4b_4gb just image` | hello + serial (PL011; hardware only) |
 | `rpi4b_4gb_workstation` | aarch64 | `just test-rpi4-workstation` | workstation over native genet + emmc2 (hardware only) |
+| `rpi4b_4gb_net` | aarch64 | `BOARD=rpi4b_4gb_net just image` | net slice on hardware |
+| `rpi4b_4gb_blk` | aarch64 | `BOARD=rpi4b_4gb_blk just image` | blk slice on hardware |
 
 ## SDK boards
 
@@ -187,8 +192,8 @@ Without `LERUX_HW_SERIAL`, `just test` only verifies the image build.
 
 `qemu_virt_aarch64_composed` runs two app PDs in one system:
 
-- **boot-init** — RTC + SP804 via serial IPC.
-- **hello** — virtio blk/net via serial IPC; waits for `boot-init` notify before probing virtio.
+- **supervisor** — RTC + SP804 via serial IPC (crate `supervisor`; was `boot-init` before Phase 33).
+- **hello** — virtio blk/net via serial IPC; waits for `supervisor` notify before probing virtio.
 
 See [plan.md](plan.md) Phases 15 and 24.
 
@@ -196,7 +201,7 @@ See [plan.md](plan.md) Phases 15 and 24.
 
 `qemu_virt_aarch64_http` serves `GET /` on guest port **8080** (`10.0.2.15`). QEMU user netdev forwards host `127.0.0.1:18080` → guest `:8080`; smoke uses `curl` after serial shows `lerux-http: listening`.
 
-`qemu_virt_aarch64_http_composed` runs boot-init (RTC + SP804) then http-server over virtio-net — same notify gate as composed hello. See [plan.md](plan.md) Phase 17.
+`qemu_virt_aarch64_http_composed` runs supervisor (RTC + SP804) then http-server over virtio-net — same notify gate as composed hello. See [plan.md](plan.md) Phase 17.
 
 `x86_64_generic_http` uses the same HTTP PD and hostfwd layout on QEMU **q35** with PCI virtio-net via `virtio-pci-driver` (net-only). See [plan.md](plan.md) Phase 19.
 
@@ -212,9 +217,9 @@ See [plan.md](plan.md) Phases 15 and 24.
 
 `qemu_virt_aarch64_fs_fat` uses the same SDF and IPC; `fs-server` is built with `backend-fat` (Phase 44 minimal FAT16: root-only, 8.3 names, single-cluster files; hierarchy ops return Error). Smoke expects `lerux-fs: ready (FAT16)` and `lerux-fs: round-trip ok` (basic create/read only).
 
-`qemu_virt_aarch64_net_composed` gates net probe on boot-init notify (same composed-sync pattern as blk-composed). See [plan.md](plan.md) Phase 29.
+`qemu_virt_aarch64_net_composed` gates net probe on supervisor notify (same composed-sync pattern as blk-composed). See [plan.md](plan.md) Phase 29.
 
-`qemu_virt_aarch64_ipc_composed` runs boot-init plus both block and net IPC services in one system. Probes run sequentially via a notify chain: boot-init → blk-client → net-client. See [plan.md](plan.md) Phase 30.
+`qemu_virt_aarch64_ipc_composed` runs supervisor plus both block and net IPC services in one system. Probes run sequentially via a notify chain: supervisor → blk-client → net-client. See [plan.md](plan.md) Phase 30.
 
 ### x86 HTTP inbound (operational notes)
 

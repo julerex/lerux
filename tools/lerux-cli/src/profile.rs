@@ -24,6 +24,91 @@ pub struct Profile {
     pub channel: Vec<ChannelSpec>,
 }
 
+/// On-disk profile TOML before `extends` composition.
+#[derive(Debug, Clone, Deserialize)]
+struct ProfileFile {
+    #[serde(default)]
+    extends: Option<String>,
+    #[serde(flatten)]
+    body: ProfileBody,
+}
+
+/// Fields that may be inherited from a base profile when `extends` is set.
+#[derive(Debug, Clone, Default, Deserialize)]
+struct ProfileBody {
+    #[serde(default)]
+    template: Option<String>,
+    #[serde(default)]
+    pds: Vec<String>,
+    #[serde(default)]
+    description: Option<String>,
+    #[serde(default)]
+    default_board: Option<String>,
+    #[serde(default)]
+    channel: Vec<ChannelSpec>,
+}
+
+fn compose_profile(name: &str, file: ProfileFile, bases: &Profiles) -> Result<Profile> {
+    let base = if let Some(ref base_name) = file.extends {
+        Some(
+            bases
+                .get(base_name)
+                .with_context(|| format!("profile {name} extends unknown profile {base_name:?}"))?,
+        )
+    } else {
+        None
+    };
+
+    let template = file
+        .body
+        .template
+        .or_else(|| base.map(|b| b.template.clone()))
+        .with_context(|| format!("profile {name} missing template"))?;
+
+    let mut pds = base.map(|b| b.pds.clone()).unwrap_or_default();
+    for pd in file.body.pds {
+        if !pds.contains(&pd) {
+            pds.push(pd);
+        }
+    }
+    anyhow::ensure!(
+        !pds.is_empty(),
+        "profile {name} has no pds (set pds or extends)"
+    );
+
+    let description = file
+        .body
+        .description
+        .or_else(|| base.and_then(|b| b.description.clone()));
+    let default_board = file
+        .body
+        .default_board
+        .or_else(|| base.and_then(|b| b.default_board.clone()));
+
+    let base_channels = base.map(|b| b.channel.as_slice()).unwrap_or(&[]);
+    let channel = merge_channels(base_channels, &file.body.channel);
+
+    Ok(Profile {
+        template,
+        pds,
+        description,
+        default_board,
+        channel,
+    })
+}
+
+/// Overlay channels win on name; base channels not overridden keep base order.
+fn merge_channels(base: &[ChannelSpec], overlay: &[ChannelSpec]) -> Vec<ChannelSpec> {
+    let overlay_names: std::collections::BTreeSet<_> = overlay.iter().map(|c| &c.name).collect();
+    let mut out = overlay.to_vec();
+    for ch in base {
+        if !overlay_names.contains(&ch.name) {
+            out.push(ch.clone());
+        }
+    }
+    out
+}
+
 pub type Profiles = BTreeMap<String, Profile>;
 
 pub fn load_profiles(root: &Path) -> Result<Profiles> {
@@ -32,7 +117,7 @@ pub fn load_profiles(root: &Path) -> Result<Profiles> {
         return Ok(BTreeMap::new());
     }
 
-    let mut profiles = BTreeMap::new();
+    let mut raw: BTreeMap<String, ProfileFile> = BTreeMap::new();
     for entry in fs::read_dir(&dir).with_context(|| format!("read dir {}", dir.display()))? {
         let entry = entry?;
         let path = entry.path();
@@ -49,11 +134,40 @@ pub fn load_profiles(root: &Path) -> Result<Profiles> {
         }
         let contents =
             fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
-        let profile: Profile =
+        let file: ProfileFile =
             toml::from_str(&contents).with_context(|| format!("parse {}", path.display()))?;
-        ensure_channels_valid(&profile.channel, &profile.pds, &format!("profile {name}"))
-            .with_context(|| format!("validate channels in {}", path.display()))?;
-        profiles.insert(name, profile);
+        raw.insert(name, file);
+    }
+
+    // Compose `extends` in dependency order (bases before overlays).
+    let mut profiles = BTreeMap::new();
+    let mut pending: Vec<String> = raw.keys().cloned().collect();
+    while !pending.is_empty() {
+        let before = pending.len();
+        let mut still_pending = Vec::new();
+        for name in pending {
+            let file = raw
+                .get(&name)
+                .with_context(|| format!("profile {name} missing from raw map"))?;
+            if let Some(ref base_name) = file.extends
+                && !profiles.contains_key(base_name)
+            {
+                still_pending.push(name);
+                continue;
+            }
+            let profile = compose_profile(&name, file.clone(), &profiles)
+                .with_context(|| format!("compose profile {name}"))?;
+            ensure_channels_valid(&profile.channel, &profile.pds, &format!("profile {name}"))
+                .with_context(|| format!("validate channels in profile {name}"))?;
+            profiles.insert(name, profile);
+        }
+        pending = still_pending;
+        if pending.len() == before {
+            anyhow::bail!(
+                "unresolved profile extends (cycle or missing base?): {}",
+                pending.join(", ")
+            );
+        }
     }
     Ok(profiles)
 }

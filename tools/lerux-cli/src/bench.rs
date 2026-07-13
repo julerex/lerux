@@ -195,7 +195,7 @@ fn run_board_capture(
     config: &str,
 ) -> Result<(String, Option<WallSpan>)> {
     let ctx = crate::qemu::load_qemu_context(root, board, build_dir, config)?;
-    crate::qemu::ensure_qemu_binary(&ctx.root, ctx.board.qemu.as_deref().unwrap_or_default())?;
+    crate::qemu::ensure_qemu_binary(&ctx.root, &ctx.board)?;
     let cmd = crate::qemu::qemu_command(&ctx)?;
     let mut test: SmokeTest = smoke_expects::smoke_test_for_board(root, board)?;
     test.curls.clear();

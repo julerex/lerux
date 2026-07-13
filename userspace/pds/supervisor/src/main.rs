@@ -30,7 +30,7 @@ use lerux_interface_types::{
     SERVICE_STATE_STARTING,
 };
 #[cfg(feature = "workstation")]
-use lerux_ipc::call;
+use lerux_ipc::{call, FsClient, NetClient};
 
 #[cfg(not(feature = "workstation"))]
 const SERIAL_DRIVER: Channel = Channel::new(0);
@@ -48,9 +48,9 @@ const TIMER_DRIVER: Channel = Channel::new(2);
 const APP: Channel = Channel::new(3);
 
 #[cfg(feature = "workstation")]
-const FS_SERVER: Channel = Channel::new(3);
+const FS_SERVER: FsClient = FsClient::new(Channel::new(3));
 #[cfg(feature = "workstation")]
-const NET_SERVER: Channel = Channel::new(4);
+const NET_SERVER: NetClient = NetClient::new(Channel::new(4));
 #[cfg(feature = "workstation")]
 const SHELL: Channel = Channel::new(5);
 #[cfg(feature = "workstation")]
@@ -148,22 +148,8 @@ fn notify_app() {
 }
 
 #[cfg(feature = "workstation")]
-fn poll_fs() -> FsResponse {
-    loop {
-        match call::<FsRequest, FsResponse>(FS_SERVER, FsRequest::Poll).expect("FS Poll IPC") {
-            FsResponse::Pending => {}
-            other => return other,
-        }
-    }
-}
-
-#[cfg(feature = "workstation")]
 fn fs_call(req: FsRequest) -> FsResponse {
-    match call::<FsRequest, FsResponse>(FS_SERVER, req) {
-        Ok(FsResponse::Pending) => poll_fs(),
-        Ok(other) => other,
-        Err(_) => FsResponse::Error,
-    }
+    FS_SERVER.call(req)
 }
 
 #[cfg(feature = "workstation")]
@@ -298,39 +284,21 @@ fn apply_config_policy() {
 fn probe_net(h: &mut HandlerImpl) {
     // Exercise net server to ensure "net up". Bound Poll so a stuck Pending
     // cannot hang init (http-file-browser may leave the stack busy briefly).
-    match call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::udp_tx(b"lerux-workstation")) {
-        Ok(pending) => {
-            let mut saw_complete = !matches!(pending, NetResponse::Pending);
-            if matches!(pending, NetResponse::Pending) {
-                for _ in 0..512 {
-                    match call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::Poll) {
-                        Ok(NetResponse::Pending) => {}
-                        Ok(_) => {
-                            saw_complete = true;
-                            break;
-                        }
-                        Err(_) => {
-                            set_service_err(h, 2, SERVICE_STATE_ERROR, b"poll ipc");
-                            log::error!("lerux-supervisor: net poll error");
-                            return;
-                        }
-                    }
-                }
-            }
-            if saw_complete {
-                set_service_err(h, 2, SERVICE_STATE_READY, b"");
-                log::info!("lerux-supervisor: net up");
-            } else {
-                // Stack still busy after bound polls — treat as degraded but present.
-                set_service_err(h, 2, SERVICE_STATE_DEGRADED, b"poll timeout");
-                log::warn!("lerux-supervisor: net poll timeout");
-                // Keep historical smoke string so boot remains diagnosable.
-                log::info!("lerux-supervisor: net up");
-            }
+    match NET_SERVER.call_bounded(NetRequest::udp_tx(b"lerux-workstation"), 512) {
+        NetResponse::Pending => {
+            // Stack still busy after bound polls — treat as degraded but present.
+            set_service_err(h, 2, SERVICE_STATE_DEGRADED, b"poll timeout");
+            log::warn!("lerux-supervisor: net poll timeout");
+            // Keep historical smoke string so boot remains diagnosable.
+            log::info!("lerux-supervisor: net up");
         }
-        Err(_) => {
-            set_service_err(h, 2, SERVICE_STATE_ERROR, b"udp ipc fail");
+        NetResponse::Error => {
+            set_service_err(h, 2, SERVICE_STATE_ERROR, b"net probe error");
             log::error!("lerux-supervisor: net probe error");
+        }
+        _ => {
+            set_service_err(h, 2, SERVICE_STATE_READY, b"");
+            log::info!("lerux-supervisor: net up");
         }
     }
 }

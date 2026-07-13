@@ -1,54 +1,31 @@
 #![no_std]
 #![no_main]
 
-use lerux_interface_types::{FsRequest, FsResponse, MAX_FS_DATA};
-use lerux_ipc::call;
+#[cfg(not(feature = "board-qemu_virt_aarch64_fs_fat"))]
+use lerux_interface_types::MAX_FS_DATA;
+use lerux_interface_types::{FsRequest, FsResponse};
+use lerux_ipc::FsClient;
 use lerux_logging::{log, serial};
 use sel4_microkit::{protection_domain, Channel, Handler, Infallible};
 
 const SERIAL_DRIVER: Channel = Channel::new(0);
-const FS_SERVER: Channel = Channel::new(1);
+const FS_SERVER: FsClient = FsClient::new(Channel::new(1));
 
 const TEST_PATH: &[u8] = b"ping";
 const TEST_DATA: &[u8] = b"lerux-fs smoke";
-const DIR_PATH: &[u8] = b"/testdir";
-const NESTED_PATH: &[u8] = b"/testdir/nested";
-/// Multi-sector payload: > 512 bytes so Phase 50 extent growth is exercised.
-const BIG_PATH: &[u8] = b"/testdir/big";
 
 struct HandlerImpl;
 
-fn poll_fs() -> FsResponse {
-    loop {
-        match call::<FsRequest, FsResponse>(FS_SERVER, FsRequest::Poll).expect("Poll IPC") {
-            FsResponse::Pending => {}
-            other => return other,
-        }
-    }
-}
-
 fn fs_call(req: FsRequest) -> FsResponse {
-    match call::<FsRequest, FsResponse>(FS_SERVER, req).expect("FS IPC") {
-        FsResponse::Pending => poll_fs(),
-        other => other,
-    }
+    FS_SERVER.call(req)
 }
 
 fn fs_create(path: &[u8]) -> u8 {
-    match fs_call(FsRequest::create(path)) {
-        FsResponse::Handle { id } => id,
-        // Re-running smoke on a persistent disk.img often leaves files around.
-        FsResponse::Error => match fs_call(FsRequest::open(path)) {
-            FsResponse::Handle { id } => id,
-            _ => panic!("create failed and open fallback failed"),
-        },
-        FsResponse::Pending
-        | FsResponse::Ok
-        | FsResponse::Data { .. }
-        | FsResponse::Stat { .. }
-        | FsResponse::DirList { .. }
-        | FsResponse::DiskInfo { .. } => panic!("create failed"),
-    }
+    // Re-running smoke on a persistent disk.img often leaves files around,
+    // so fall back to opening an existing file.
+    FS_SERVER
+        .create_or_open(path)
+        .expect("create failed and open fallback failed")
 }
 
 fn fs_write(handle: u8, offset: u32, data: &[u8]) {
@@ -142,6 +119,11 @@ fn probe_fs() {
 
 #[cfg(not(feature = "board-qemu_virt_aarch64_fs_fat"))]
 fn probe_fs_v2() {
+    const DIR_PATH: &[u8] = b"/testdir";
+    const NESTED_PATH: &[u8] = b"/testdir/nested";
+    /// Multi-sector payload: > 512 bytes so Phase 50 extent growth is exercised.
+    const BIG_PATH: &[u8] = b"/testdir/big";
+
     // Hierarchy: mkdir + nested create.
     match fs_call(FsRequest::mkdir(DIR_PATH)) {
         FsResponse::Ok => {}

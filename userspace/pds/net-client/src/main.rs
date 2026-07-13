@@ -2,12 +2,12 @@
 #![no_main]
 
 use lerux_interface_types::{NetRequest, NetResponse};
-use lerux_ipc::call;
+use lerux_ipc::NetClient;
 use lerux_logging::{log, serial};
 use sel4_microkit::{protection_domain, Channel, ChannelSet, Handler, Infallible};
 
 const SERIAL_DRIVER: Channel = Channel::new(0);
-const NET_SERVER: Channel = Channel::new(1);
+const NET_SERVER: NetClient = NetClient::new(Channel::new(1));
 #[cfg(feature = "composed-sync")]
 const SUPERVISOR: Channel = Channel::new(2);
 
@@ -16,28 +16,10 @@ struct HandlerImpl {
     net_pending: bool,
 }
 
-fn poll_net() -> NetResponse {
-    loop {
-        match call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::Poll).expect("Poll IPC") {
-            NetResponse::Pending => {}
-            other => return other,
-        }
-    }
-}
-
 fn probe_net() {
-    let pending = call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::udp_tx(b"lerux-net"))
-        .expect("UdpTx IPC");
-    assert!(matches!(pending, NetResponse::Pending));
-
-    match poll_net() {
+    match NET_SERVER.call(NetRequest::udp_tx(b"lerux-net")) {
         NetResponse::Ok => log::info!("lerux-net: IPC ok"),
-        NetResponse::Pending
-        | NetResponse::Error
-        | NetResponse::Ipv4 { .. }
-        | NetResponse::Iface { .. }
-        | NetResponse::TcpData { .. }
-        | NetResponse::UdpData { .. } => panic!("net TX failed"),
+        _ => panic!("net TX failed"),
     }
 
     #[cfg(feature = "bench")]
@@ -50,17 +32,14 @@ fn bench_udp_tx() {
     const WARMUP: u32 = 16;
     const N: u32 = 200;
     for _ in 0..WARMUP {
-        let _ = call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::udp_tx(b"b")).unwrap();
-        let _ = poll_net();
+        let _ = NET_SERVER.call(NetRequest::udp_tx(b"b"));
     }
     log::info!("lerux-bench: udp_tx start n={N}");
     for _ in 0..N {
-        let pending =
-            call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::udp_tx(b"b")).unwrap();
-        assert!(matches!(pending, NetResponse::Pending | NetResponse::Ok));
-        if matches!(pending, NetResponse::Pending) {
-            assert!(matches!(poll_net(), NetResponse::Ok));
-        }
+        assert!(matches!(
+            NET_SERVER.call(NetRequest::udp_tx(b"b")),
+            NetResponse::Ok
+        ));
     }
     log::info!("lerux-bench: udp_tx done n={N}");
 }

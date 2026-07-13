@@ -13,14 +13,14 @@ use lerux_interface_types::{
     NetResponse, SupervisorRequest, SupervisorResponse, CFG_HOSTNAME, CFG_SECRET_PREFIX,
     MAX_CHAT_MSG, MAX_SERVICE_NAME,
 };
-use lerux_ipc::call;
+use lerux_ipc::{call, FsClient, NetClient};
 use lerux_logging::{log, server};
 use sel4_microkit::{protection_domain, Channel, ChannelSet, Handler, Infallible};
 use sel4_microkit_driver_adapters::serial::client::Client as SerialClient;
 
 const SERIAL_DRIVER: Channel = Channel::new(0);
-const FS_SERVER: Channel = Channel::new(1);
-const NET_SERVER: Channel = Channel::new(2);
+const FS_SERVER: FsClient = FsClient::new(Channel::new(1));
+const NET_SERVER: NetClient = NetClient::new(Channel::new(2));
 const SUPERVISOR: Channel = Channel::new(3);
 const LOG_SERVER: Channel = Channel::new(4);
 const CONFIG_SERVER: Channel = Channel::new(5);
@@ -80,22 +80,8 @@ fn print_prompt(console: &mut SerialClient) {
     print(console, "lerux> ");
 }
 
-fn poll_fs() -> FsResponse {
-    loop {
-        match call::<FsRequest, FsResponse>(FS_SERVER, FsRequest::Poll) {
-            Ok(FsResponse::Pending) => {}
-            Ok(other) => return other,
-            Err(_) => return FsResponse::Error,
-        }
-    }
-}
-
 fn fs_call(req: FsRequest) -> FsResponse {
-    match call::<FsRequest, FsResponse>(FS_SERVER, req) {
-        Ok(FsResponse::Pending) => poll_fs(),
-        Ok(other) => other,
-        Err(_) => FsResponse::Error,
-    }
+    FS_SERVER.call(req)
 }
 
 fn edit_call(req: EditRequest) -> EditResponse {
@@ -466,18 +452,9 @@ fn df_cmd(console: &mut SerialClient) {
 fn ping_cmd(console: &mut SerialClient) {
     // UDP reachability probe to default gateway (same path as fetch demo).
     for _ in 0..16 {
-        match call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::udp_tx(b"ping")) {
-            Ok(NetResponse::Pending) => {
-                if poll_net() == NetResponse::Ok {
-                    println(console, "ping: udp ok");
-                    return;
-                }
-            }
-            Ok(NetResponse::Ok) => {
-                println(console, "ping: udp ok");
-                return;
-            }
-            _ => break,
+        if NET_SERVER.call(NetRequest::udp_tx(b"ping")) == NetResponse::Ok {
+            println(console, "ping: udp ok");
+            return;
         }
     }
     println(console, "ping: failed");
@@ -778,18 +755,9 @@ fn fetch_cmd<'a>(console: &mut SerialClient, cwd: &[u8], mut args: impl Iterator
         println(console, "fetch: probing…");
         let mut ok = false;
         for _ in 0..16 {
-            match call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::udp_tx(b"lerux-fetch")) {
-                Ok(NetResponse::Pending) => {
-                    if poll_net() == NetResponse::Ok {
-                        ok = true;
-                        break;
-                    }
-                }
-                Ok(NetResponse::Ok) => {
-                    ok = true;
-                    break;
-                }
-                _ => break,
+            if NET_SERVER.call(NetRequest::udp_tx(b"lerux-fetch")) == NetResponse::Ok {
+                ok = true;
+                break;
             }
         }
         let body = if ok {
@@ -797,15 +765,9 @@ fn fetch_cmd<'a>(console: &mut SerialClient, cwd: &[u8], mut args: impl Iterator
         } else {
             b"lerux-fetch: error\n".as_slice()
         };
-        let handle = match fs_call(FsRequest::create(&abs[..n])) {
-            FsResponse::Handle { id } => id,
-            _ => match fs_call(FsRequest::open(&abs[..n])) {
-                FsResponse::Handle { id } => id,
-                _ => {
-                    println(console, "fetch: save failed");
-                    return;
-                }
-            },
+        let Ok(handle) = FS_SERVER.create_or_open(&abs[..n]) else {
+            println(console, "fetch: save failed");
+            return;
         };
         if matches!(fs_call(FsRequest::write(handle, 0, body)), FsResponse::Ok) {
             let _ = writeln!(
@@ -820,18 +782,9 @@ fn fetch_cmd<'a>(console: &mut SerialClient, cwd: &[u8], mut args: impl Iterator
     }
     println(console, "fetch: probing…");
     for _ in 0..16 {
-        match call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::udp_tx(b"lerux-fetch")) {
-            Ok(NetResponse::Pending) => {
-                if poll_net() == NetResponse::Ok {
-                    println(console, "fetch: ok (use `fetch save <path>` to write)");
-                    return;
-                }
-            }
-            Ok(NetResponse::Ok) => {
-                println(console, "fetch: ok (use `fetch save <path>` to write)");
-                return;
-            }
-            _ => break,
+        if NET_SERVER.call(NetRequest::udp_tx(b"lerux-fetch")) == NetResponse::Ok {
+            println(console, "fetch: ok (use `fetch save <path>` to write)");
+            return;
         }
     }
     println(console, "fetch: error");
@@ -998,14 +951,14 @@ impl Parser<'_> {
 }
 
 fn ip_cmd(console: &mut SerialClient) {
-    match call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::GetIface) {
-        Ok(NetResponse::Iface {
+    match NET_SERVER.call(NetRequest::GetIface) {
+        NetResponse::Iface {
             addr,
             prefix,
             gateway,
             dns,
             dhcp,
-        }) => {
+        } => {
             let mode = if dhcp { "dhcp" } else { "static" };
             let _ = writeln!(
                 ConsoleWriter(console),
@@ -1027,16 +980,6 @@ fn ip_cmd(console: &mut SerialClient) {
             );
         }
         _ => println(console, "ip: unavailable"),
-    }
-}
-
-fn poll_net() -> NetResponse {
-    loop {
-        match call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::Poll) {
-            Ok(NetResponse::Pending) => {}
-            Ok(other) => return other,
-            Err(_) => return NetResponse::Error,
-        }
     }
 }
 

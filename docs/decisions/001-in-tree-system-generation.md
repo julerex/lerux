@@ -10,7 +10,7 @@ Accepted (Phase 41 implemented 2026-07-12)
 
 ## Context
 
-lerux composes Microkit systems from hand-written `.system.template` XML under `userspace/systems/templates/` (28 templates, ~2k lines). `lerux-cli` only substitutes `{placeholders}` from `support/boards.toml` `system_vars`. Channel IDs are maintained in three places that can drift:
+lerux composes Microkit systems from hand-written `.system.template` XML under `userspace/systems/templates/` (33 templates; see [`system-generation.md`](../system-generation.md)). `lerux-cli` only substitutes `{placeholders}` from `support/boards.toml` `system_vars`. Channel IDs are maintained in three places that can drift:
 
 1. Template `<channel>` ends  
 2. Free-text `channels` strings in `support/profiles/*.toml` and package fragments  

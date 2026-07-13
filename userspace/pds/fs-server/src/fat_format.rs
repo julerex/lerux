@@ -1,4 +1,4 @@
-//! FAT16 backend for Phase 44 (root-only, single-cluster files, 8.3 names).
+//! FAT16 format adapter for Phase 44 (root-only, single-cluster files, 8.3 names).
 
 use core::cmp::min;
 
@@ -11,11 +11,9 @@ use lerux_fat::{
 use lerux_interface_types::{
     FsDirEntry, FsRequest, FsResponse, MAX_FS_DATA, MAX_FS_DIR_LIST, MAX_FS_PATH, SECTOR_SIZE,
 };
-use lerux_ipc::{recv, send, send_unspecified_error};
 use lerux_logging::log;
-use sel4_microkit::{Channel, ChannelSet, Handler, Infallible, MessageInfo};
 
-use crate::block_io::{SectorIo, BLK_DRIVER, CLIENT};
+use crate::{block_io::SectorIo, shell::FsFormat};
 
 #[derive(Clone, Copy)]
 struct OpenFile {
@@ -95,77 +93,32 @@ enum FsJob {
     },
 }
 
-pub struct HandlerImpl {
+/// FAT16 [`FsFormat`] adapter.
+pub struct FatFormat {
     io: SectorIo,
     bpb: Bpb,
     mounted: bool,
     fs_job: FsJob,
     after_format: Option<FsJob>,
-    completed: Option<FsResponse>,
     opens: [OpenFile; MAX_HANDLES],
     /// Scratch for root sector currently being edited.
     root_buf: [u8; SECTOR_SIZE],
     fat_buf: [u8; SECTOR_SIZE],
-    /// Client that owns the in-flight async operation (or pending completion).
-    active_client: Option<Channel>,
 }
 
-impl HandlerImpl {
-    pub fn new(block_size: usize) -> HandlerImpl {
+impl FatFormat {
+    pub fn new(block_size: usize) -> FatFormat {
         log::info!("lerux-fs: ready (FAT16)");
-        HandlerImpl {
+        FatFormat {
             io: SectorIo::new(block_size),
             bpb: Bpb::fixed(),
             mounted: false,
             fs_job: FsJob::None,
             after_format: None,
-            completed: None,
             opens: [OpenFile::empty(); MAX_HANDLES],
             root_buf: [0; SECTOR_SIZE],
             fat_buf: [0; SECTOR_SIZE],
-            active_client: None,
         }
-    }
-
-    fn is_client(channel: Channel) -> bool {
-        channel == CLIENT
-            || channel == Channel::new(3)
-            || channel == Channel::new(5)
-            || channel == Channel::new(6)
-            || channel == Channel::new(7)
-            || channel == Channel::new(8)
-    }
-
-    fn begin_async(&mut self, channel: Channel) -> bool {
-        if self.completed.is_some() {
-            return false;
-        }
-        let busy = !matches!(self.fs_job, FsJob::None);
-        if busy && self.active_client != Some(channel) {
-            return false;
-        }
-        self.active_client = Some(channel);
-        true
-    }
-
-    fn finish_async(&mut self) {
-        self.active_client = None;
-    }
-
-    fn take_completed(&mut self, channel: Channel) -> Option<FsResponse> {
-        if self.active_client != Some(channel) {
-            return None;
-        }
-        let resp = self.completed.take()?;
-        self.finish_async();
-        Some(resp)
-    }
-
-    fn sync_response(&mut self, resp: FsResponse) -> FsResponse {
-        if !matches!(resp, FsResponse::Pending) {
-            self.finish_async();
-        }
-        resp
     }
 
     fn alloc_handle(&mut self, cluster: u16, size: u32, root_slot: u16) -> Option<u8> {
@@ -244,11 +197,6 @@ impl HandlerImpl {
             out_count: 0,
             entries: [FsDirEntry::from_name_size(&[], 0); MAX_FS_DIR_LIST],
         };
-    }
-
-    fn finish_job(&mut self, response: FsResponse) {
-        self.fs_job = FsJob::None;
-        self.completed = Some(response);
     }
 
     fn restore_job(&mut self, job: FsJob) {
@@ -1070,129 +1018,70 @@ impl HandlerImpl {
             _ => Some(FsResponse::Error),
         }
     }
+}
 
-    fn handle_request(&mut self, channel: Channel, req: FsRequest) -> FsResponse {
-        if matches!(req, FsRequest::Poll) {
-            return self.handle_poll(channel);
-        }
-        if !self.begin_async(channel) {
-            return FsResponse::Pending;
-        }
-        if self.completed.is_some() || !matches!(self.fs_job, FsJob::None) {
-            return FsResponse::Pending;
-        }
+impl FsFormat for FatFormat {
+    fn begin(&mut self, req: FsRequest) -> Option<FsResponse> {
         match req {
-            FsRequest::Open { path_len, path } => {
-                if path_len as usize > MAX_FS_PATH {
-                    return self.sync_response(FsResponse::Error);
-                }
-                self.begin_open(path, path_len);
-            }
-            FsRequest::Create { path_len, path } => {
-                if path_len as usize > MAX_FS_PATH {
-                    return self.sync_response(FsResponse::Error);
-                }
-                self.begin_create(path, path_len);
-            }
+            FsRequest::Open { path_len, path } => self.begin_open(path, path_len),
+            FsRequest::Create { path_len, path } => self.begin_create(path, path_len),
             FsRequest::Write {
                 handle,
                 offset,
                 data_len,
                 data,
-            } => {
-                if data_len as usize > MAX_FS_DATA {
-                    return self.sync_response(FsResponse::Error);
-                }
-                self.begin_write(handle, offset, data, data_len);
-            }
+            } => self.begin_write(handle, offset, data, data_len),
             FsRequest::Read {
                 handle,
                 offset,
                 len,
             } => self.begin_read(handle, offset, len),
-            FsRequest::Stat { path_len, path } => {
-                if path_len as usize > MAX_FS_PATH {
-                    return self.sync_response(FsResponse::Error);
-                }
-                self.begin_stat(path, path_len);
-            }
+            FsRequest::Stat { path_len, path } => self.begin_stat(path, path_len),
             FsRequest::ListDir { path_len, path } => {
                 // Root-only FAT: only "" or "/" are accepted.
-                if path_len as usize > MAX_FS_PATH {
-                    return self.sync_response(FsResponse::Error);
-                }
                 let p = &path[..path_len.min(MAX_FS_PATH as u8) as usize];
                 if path_len == 0 || p == b"/" || p == b"." {
                     self.begin_list_dir();
                 } else {
-                    return self.sync_response(FsResponse::Error);
+                    return Some(FsResponse::Error);
                 }
             }
             FsRequest::Mkdir { .. } | FsRequest::Unlink { .. } | FsRequest::Rename { .. } => {
                 // Hierarchy ops are LERUXFS2-only (Phase 50); FAT stays root-only.
-                return self.sync_response(FsResponse::Error);
+                return Some(FsResponse::Error);
             }
             FsRequest::DiskInfo => {
                 // Approximate single-partition capacity (Phase 53 shell `df`).
                 if !self.mounted {
-                    return self.sync_response(FsResponse::Error);
+                    return Some(FsResponse::Error);
                 }
                 let data = self.bpb.total_sectors.saturating_sub(self.bpb.data_lba);
-                return self.sync_response(FsResponse::DiskInfo {
+                return Some(FsResponse::DiskInfo {
                     block_size: u32::from(self.bpb.bytes_per_sector),
                     total_blocks: data,
                     // Free-cluster walk is not tracked; report capacity only.
                     free_blocks: 0,
                 });
             }
-            FsRequest::Poll => return self.handle_poll(channel),
+            FsRequest::Poll => unreachable!("shell handles Poll"),
         }
-        if let Some(resp) = self.advance_fs_job() {
-            self.finish_job(resp);
-            return self.take_completed(channel).unwrap_or(FsResponse::Pending);
-        }
-        FsResponse::Pending
+        None
     }
 
-    fn handle_poll(&mut self, channel: Channel) -> FsResponse {
-        if let Some(resp) = self.take_completed(channel) {
-            return resp;
-        }
-        if self.active_client != Some(channel) {
-            return FsResponse::Pending;
-        }
-        if let Some(resp) = self.advance_fs_job() {
-            self.finish_job(resp);
-            return self.take_completed(channel).unwrap_or(FsResponse::Pending);
-        }
-        if self.io.io_busy() {
-            BLK_DRIVER.notify();
-        }
-        FsResponse::Pending
-    }
-}
-
-impl Handler for HandlerImpl {
-    type Error = Infallible;
-
-    fn protected(
-        &mut self,
-        channel: Channel,
-        msg_info: MessageInfo,
-    ) -> Result<MessageInfo, Self::Error> {
-        if !Self::is_client(channel) {
-            unreachable!("unexpected fs client");
-        }
-        Ok(match recv::<FsRequest>(msg_info) {
-            Ok(req) => send(self.handle_request(channel, req)),
-            Err(_) => send_unspecified_error(),
-        })
+    fn advance(&mut self) -> Option<FsResponse> {
+        self.advance_fs_job()
     }
 
-    fn notified(&mut self, channels: ChannelSet) -> Result<(), Self::Error> {
-        if channels.contains(BLK_DRIVER) {
-            self.io.handle_blk_driver();
-        }
-        Ok(())
+    fn busy(&self) -> bool {
+        !matches!(self.fs_job, FsJob::None)
+    }
+
+    fn io_busy(&self) -> bool {
+        self.io.io_busy()
+    }
+
+    fn on_blk_notified(&mut self) -> Option<FsResponse> {
+        self.io.handle_blk_driver();
+        None
     }
 }

@@ -8,55 +8,10 @@ use core::convert::Infallible;
 use heapless::Deque;
 use sel4_microkit::{Channel, ChannelSet, Handler, MessageInfo};
 use sel4_microkit_simple_ipc as simple_ipc;
-use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
-enum NonBlocking<T> {
-    Ready(T),
-    WouldBlock,
-}
-
-impl<T> From<Option<T>> for NonBlocking<T> {
-    fn from(v: Option<T>) -> Self {
-        match v {
-            Some(v) => NonBlocking::Ready(v),
-            None => NonBlocking::WouldBlock,
-        }
-    }
-}
-
-impl<T, E> From<NonBlocking<T>> for nb::Result<T, E> {
-    fn from(v: NonBlocking<T>) -> Self {
-        match v {
-            NonBlocking::Ready(v) => Ok(v),
-            NonBlocking::WouldBlock => Err(nb::Error::WouldBlock),
-        }
-    }
-}
-
-use embedded_hal_nb::nb;
-
-#[derive(Debug, Serialize, Deserialize)]
-enum Request {
-    Read,
-    Write(u8),
-    Flush,
-}
-
-type Response = Result<SuccessResponse, ErrorResponse>;
-
-#[derive(Debug, Serialize, Deserialize)]
-enum SuccessResponse {
-    Read(NonBlocking<u8>),
-    Write(NonBlocking<()>),
-    Flush(NonBlocking<()>),
-}
-
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
-enum ErrorResponse {
-    WriteError,
-    FlushError,
-}
+use lerux_driver_protocols::serial::{
+    ErrorResponse, NonBlocking, Request, Response, SuccessResponse,
+};
 
 pub struct HandlerImpl<const NUM_CLIENTS: usize, const READ_BUF_SIZE: usize = 256> {
     driver: Channel,

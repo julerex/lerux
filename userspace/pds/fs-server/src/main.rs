@@ -14,23 +14,25 @@ use sel4_microkit_driver_adapters::block::client::Client as BlockClient;
 
 mod block_io;
 mod config;
+mod shell;
 
 #[cfg(feature = "backend-fat")]
-mod fat_handler;
+mod fat_format;
 #[cfg(not(feature = "backend-fat"))]
-mod leruxfs_handler;
+mod leruxfs_format;
 
 #[cfg(feature = "backend-fat")]
-use fat_handler::HandlerImpl;
+use fat_format::FatFormat as Format;
 #[cfg(not(feature = "backend-fat"))]
-use leruxfs_handler::HandlerImpl;
+use leruxfs_format::LeruxFsFormat as Format;
+use shell::FsServer;
 
 use block_io::BLK_DRIVER;
 #[cfg(feature = "workstation")]
 use block_io::LOG_SERVER;
 
 #[protection_domain(heap_size = 512 * 1024)]
-fn init() -> HandlerImpl {
+fn init() -> FsServer<Format> {
     #[cfg(feature = "workstation")]
     server::init_with_tag(LOG_SERVER, b"fs").unwrap();
     #[cfg(not(feature = "workstation"))]
@@ -39,5 +41,5 @@ fn init() -> HandlerImpl {
     let block_size = blk.get_block_size().unwrap();
     let num_blocks = blk.get_num_blocks().unwrap();
     log::info!("virtio-blk: {num_blocks} blocks x {block_size} bytes");
-    HandlerImpl::new(block_size)
+    FsServer::new(Format::new(block_size))
 }

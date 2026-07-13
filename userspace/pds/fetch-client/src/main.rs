@@ -2,12 +2,12 @@
 #![no_main]
 
 use lerux_interface_types::{NetRequest, NetResponse};
-use lerux_ipc::call;
+use lerux_ipc::NetClient;
 use lerux_logging::{log, serial};
 use sel4_microkit::{protection_domain, Channel, Handler, Infallible};
 
 const SERIAL_DRIVER: Channel = Channel::new(0);
-const NET_SERVER: Channel = Channel::new(1);
+const NET_SERVER: NetClient = NetClient::new(Channel::new(1));
 
 const FETCH_HOST: &[u8] = b"host";
 const FETCH_PORT: u16 = 8081;
@@ -15,73 +15,24 @@ const HTTP_GET: &[u8] = b"GET / HTTP/1.1\r\nHost: host\r\nConnection: close\r\n\
 
 struct HandlerImpl;
 
-fn poll_until<F: Fn() -> NetResponse>(step: F) -> NetResponse {
-    loop {
-        match step() {
-            NetResponse::Pending => {}
-            other => return other,
-        }
-    }
-}
-
-fn poll_net() -> NetResponse {
-    poll_until(|| call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::Poll).expect("Poll IPC"))
-}
-
 fn dns_resolve(name: &[u8]) -> [u8; 4] {
-    match call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::dns_resolve(name))
-        .expect("Dns IPC")
-    {
+    match NET_SERVER.call(NetRequest::dns_resolve(name)) {
         NetResponse::Ipv4 { addr } => addr,
-        NetResponse::Pending => match poll_net() {
-            NetResponse::Ipv4 { addr } => addr,
-            NetResponse::Pending
-            | NetResponse::Ok
-            | NetResponse::Error
-            | NetResponse::Iface { .. }
-            | NetResponse::TcpData { .. }
-            | NetResponse::UdpData { .. } => {
-                panic!("dns resolve failed")
-            }
-        },
-        NetResponse::Ok
-        | NetResponse::Error
-        | NetResponse::Iface { .. }
-        | NetResponse::TcpData { .. }
-        | NetResponse::UdpData { .. } => {
-            panic!("dns resolve failed")
-        }
+        _ => panic!("dns resolve failed"),
     }
 }
 
 fn tcp_connect(addr: [u8; 4], port: u16) {
-    let pending =
-        call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::TcpConnect { addr, port })
-            .expect("TcpConnect IPC");
-    assert!(matches!(pending, NetResponse::Pending));
-    match poll_net() {
+    match NET_SERVER.call(NetRequest::TcpConnect { addr, port }) {
         NetResponse::Ok => {}
-        NetResponse::Pending
-        | NetResponse::Error
-        | NetResponse::Ipv4 { .. }
-        | NetResponse::Iface { .. }
-        | NetResponse::TcpData { .. }
-        | NetResponse::UdpData { .. } => panic!("tcp connect failed"),
+        _ => panic!("tcp connect failed"),
     }
 }
 
 fn tcp_send(data: &[u8]) {
-    let pending = call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::tcp_send(data))
-        .expect("TcpSend IPC");
-    assert!(matches!(pending, NetResponse::Pending));
-    match poll_net() {
+    match NET_SERVER.call(NetRequest::tcp_send(data)) {
         NetResponse::Ok => {}
-        NetResponse::Pending
-        | NetResponse::Error
-        | NetResponse::Ipv4 { .. }
-        | NetResponse::Iface { .. }
-        | NetResponse::TcpData { .. }
-        | NetResponse::UdpData { .. } => panic!("tcp send failed"),
+        _ => panic!("tcp send failed"),
     }
 }
 
@@ -89,10 +40,7 @@ fn recv_until_status_200() {
     let mut buf = [0u8; 256];
     let mut total = 0usize;
     for _ in 0..32 {
-        let pending =
-            call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::TcpRecv).expect("TcpRecv IPC");
-        assert!(matches!(pending, NetResponse::Pending));
-        match poll_net() {
+        match NET_SERVER.call(NetRequest::TcpRecv) {
             NetResponse::TcpData { data_len, data } => {
                 let len = data_len as usize;
                 if total + len <= buf.len() {

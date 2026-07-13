@@ -13,7 +13,6 @@ board-qemu_virt_riscv64_init = []
 board-qemu_virt_riscv64_workstation = []
 
 [dependencies]
+lerux-driver-protocols = { path = "../../crates/lerux-driver-protocols" }
 sel4-driver-interfaces = { workspace = true }
 sel4-microkit = { workspace = true }
-sel4-microkit-simple-ipc = { workspace = true }
-serde = { workspace = true }

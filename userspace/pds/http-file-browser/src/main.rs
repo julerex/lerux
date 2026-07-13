@@ -10,69 +10,28 @@
 use lerux_interface_types::{
     FsRequest, FsResponse, NetRequest, NetResponse, MAX_FS_PATH, MAX_NET_TCP_PAYLOAD,
 };
-use lerux_ipc::{call, send_unspecified_error};
+use lerux_ipc::{send_unspecified_error, FsClient, NetClient};
 use lerux_logging::{debug, log};
 use sel4_microkit::{protection_domain, Channel, ChannelSet, Handler, Infallible, MessageInfo};
 
-const NET_SERVER: Channel = Channel::new(0);
-const FS_SERVER: Channel = Channel::new(1);
+const NET_SERVER: NetClient = NetClient::new(Channel::new(0));
+const FS_SERVER: FsClient = FsClient::new(Channel::new(1));
 
 const HTTP_PORT: u16 = 8080;
 
-fn poll_fs() -> FsResponse {
-    loop {
-        match call::<FsRequest, FsResponse>(FS_SERVER, FsRequest::Poll) {
-            Ok(FsResponse::Pending) => {}
-            Ok(other) => return other,
-            Err(_) => return FsResponse::Error,
-        }
-    }
-}
-
 fn fs_call(req: FsRequest) -> FsResponse {
-    match call::<FsRequest, FsResponse>(FS_SERVER, req) {
-        Ok(FsResponse::Pending) => poll_fs(),
-        Ok(other) => other,
-        Err(_) => FsResponse::Error,
-    }
-}
-
-fn poll_net() -> NetResponse {
-    loop {
-        match call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::Poll) {
-            Ok(NetResponse::Pending) => {}
-            Ok(other) => return other,
-            Err(_) => return NetResponse::Error,
-        }
-    }
+    FS_SERVER.call(req)
 }
 
 fn net_call(req: NetRequest) -> NetResponse {
-    match call::<NetRequest, NetResponse>(NET_SERVER, req) {
-        Ok(NetResponse::Pending) => poll_net(),
-        Ok(other) => other,
-        Err(_) => NetResponse::Error,
-    }
+    NET_SERVER.call(req)
 }
 
 fn net_call_try(req: NetRequest) -> NetResponse {
-    match call::<NetRequest, NetResponse>(NET_SERVER, req) {
-        Ok(NetResponse::Pending) => {
-            // Bound polls: SYN may arrive before GET; keep the recv op alive so the
-            // next NET notify / Poll can deliver payload (do not Abort — that frees
-            // the slot but drops an in-flight accept on busy workstation nets).
-            for _ in 0..512 {
-                match call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::Poll) {
-                    Ok(NetResponse::Pending) => {}
-                    Ok(other) => return other,
-                    Err(_) => return NetResponse::Error,
-                }
-            }
-            NetResponse::Pending
-        }
-        Ok(other) => other,
-        Err(_) => NetResponse::Error,
-    }
+    // Bound polls: SYN may arrive before GET; keep the recv op alive so the
+    // next NET notify / Poll can deliver payload (do not Abort — that frees
+    // the slot but drops an in-flight accept on busy workstation nets).
+    NET_SERVER.call_bounded(req, 512)
 }
 
 fn write_u16_dec(buf: &mut [u8], mut n: u16) -> usize {
@@ -238,18 +197,8 @@ fn read_file_body(path: &[u8], out: &mut [u8]) -> Option<usize> {
     }
 }
 
-fn open_or_create(path: &[u8]) -> Option<u8> {
-    match fs_call(FsRequest::create(path)) {
-        FsResponse::Handle { id } => Some(id),
-        _ => match fs_call(FsRequest::open(path)) {
-            FsResponse::Handle { id } => Some(id),
-            _ => None,
-        },
-    }
-}
-
 fn put_file(path: &[u8], body: &[u8]) -> bool {
-    let Some(handle) = open_or_create(path) else {
+    let Ok(handle) = FS_SERVER.create_or_open(path) else {
         return false;
     };
     matches!(fs_call(FsRequest::write(handle, 0, body)), FsResponse::Ok)
@@ -258,12 +207,12 @@ fn put_file(path: &[u8], body: &[u8]) -> bool {
 fn try_serve() {
     // Deliver an in-flight TcpRecv completion before starting a new one. Leaving
     // recv pending across notifies is required when SYN wakes us before GET.
-    match call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::Poll) {
-        Ok(NetResponse::TcpData { data_len, data }) => {
+    match NET_SERVER.poll_once() {
+        NetResponse::TcpData { data_len, data } => {
             return serve_request(data_len, data);
         }
-        Ok(NetResponse::Pending) | Ok(NetResponse::Ok) => {}
-        Ok(_) | Err(_) => return,
+        NetResponse::Pending | NetResponse::Ok => {}
+        _ => return,
     }
     let NetResponse::TcpData { data_len, data } = net_call_try(NetRequest::TcpRecv) else {
         return;
@@ -367,7 +316,7 @@ impl Handler for HandlerImpl {
     }
 
     fn notified(&mut self, channels: ChannelSet) -> Result<(), Self::Error> {
-        if channels.contains(NET_SERVER) {
+        if channels.contains(NET_SERVER.channel()) {
             try_serve();
         }
         Ok(())

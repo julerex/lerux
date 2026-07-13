@@ -1,411 +1,82 @@
-use std::{path::Path, process::Command};
+//! Cross-target clippy derived from `support/boards.toml`.
+//!
+//! Every (PD crate, board) pair in the matrix is linted with the same
+//! `board-<name>` feature the build uses, so lint coverage cannot drift from
+//! the board matrix. Shared userspace crates without board features are
+//! linted once per arch.
+
+use std::{collections::BTreeSet, path::Path, process::Command};
 
 use anyhow::{bail, Context, Result};
 
 use crate::{
+    board::{crate_has_board_feature, load_boards, Boards},
     build_sdk::sdk_path,
     libclang::apply_libclang_env,
     process::{ensure_dir, path_str},
     system::shared_target_dir,
 };
 
-struct ClippyCrate<'a> {
-    name: &'a str,
-    feature: Option<&'a str>,
+/// Arch pass order and the SDK board whose include dir backs each pass.
+const ARCH_PASSES: &[(&str, &str)] = &[
+    ("aarch64", "qemu_virt_aarch64"),
+    ("riscv64", "qemu_virt_riscv64"),
+    ("x86_64", "x86_64_generic"),
+];
+
+/// Shared userspace library crates linted per-arch (no board features).
+const SHARED_CRATES: &[&str] = &[
+    "lerux-serial-queue",
+    "lerux-service-async",
+    "lerux-fat",
+    "lerux-driver-protocols",
+];
+
+struct ClippyEntry {
+    crate_name: String,
+    feature: Option<String>,
 }
 
-struct ClippyArch<'a> {
-    id: &'a str,
-    microkit_board: &'a str,
-    target_triple: &'a str,
-    crates: &'a [ClippyCrate<'a>],
+fn derive_entries(root: &Path, boards: &Boards, arch: &str) -> Vec<ClippyEntry> {
+    let mut seen: BTreeSet<(String, Option<String>)> = BTreeSet::new();
+    let mut entries = Vec::new();
+    for (board_name, board) in boards.iter().filter(|(_, b)| b.arch == arch) {
+        for pd in &board.pds {
+            let feature = crate_has_board_feature(root, pd, board_name)
+                .then(|| format!("board-{board_name}"));
+            if seen.insert((pd.clone(), feature.clone())) {
+                entries.push(ClippyEntry {
+                    crate_name: pd.clone(),
+                    feature,
+                });
+            }
+        }
+    }
+    if arch == "aarch64" {
+        for name in SHARED_CRATES {
+            entries.push(ClippyEntry {
+                crate_name: (*name).to_string(),
+                feature: None,
+            });
+        }
+    }
+    entries
 }
-
-const AARCH64_CRATES: &[ClippyCrate<'_>] = &[
-    ClippyCrate {
-        name: "hello",
-        feature: Some("board-qemu_virt_aarch64_composed"),
-    },
-    ClippyCrate {
-        name: "hello",
-        feature: Some("board-rpi4b_4gb"),
-    },
-    ClippyCrate {
-        name: "serial-driver",
-        feature: Some("board-qemu_virt_aarch64_http_composed"),
-    },
-    ClippyCrate {
-        name: "serial-driver",
-        feature: Some("board-qemu_virt_aarch64_workstation"),
-    },
-    ClippyCrate {
-        name: "serial-driver",
-        feature: Some("board-rpi4b_4gb"),
-    },
-    ClippyCrate {
-        name: "serial-virt",
-        feature: Some("board-qemu_virt_aarch64_workstation"),
-    },
-    ClippyCrate {
-        name: "lerux-serial-queue",
-        feature: None,
-    },
-    ClippyCrate {
-        name: "lerux-service-async",
-        feature: None,
-    },
-    ClippyCrate {
-        name: "lerux-fat",
-        feature: None,
-    },
-    ClippyCrate {
-        name: "debug-handler",
-        feature: Some("board-qemu_virt_aarch64_debug"),
-    },
-    ClippyCrate {
-        name: "crash-demo",
-        feature: Some("board-qemu_virt_aarch64_debug"),
-    },
-    ClippyCrate {
-        name: "supervisor",
-        feature: Some("board-qemu_virt_aarch64_http_composed"),
-    },
-    ClippyCrate {
-        name: "http-server",
-        feature: Some("board-qemu_virt_aarch64_http_composed"),
-    },
-    ClippyCrate {
-        name: "virtio-blk-driver",
-        feature: Some("board-qemu_virt_aarch64_composed"),
-    },
-    ClippyCrate {
-        name: "emmc2-driver",
-        feature: Some("board-rpi4b_4gb_blk"),
-    },
-    ClippyCrate {
-        name: "virtio-net-driver",
-        feature: Some("board-qemu_virt_aarch64_composed"),
-    },
-    ClippyCrate {
-        name: "genet-driver",
-        feature: Some("board-rpi4b_4gb_net"),
-    },
-    ClippyCrate {
-        name: "pl031-driver",
-        feature: None,
-    },
-    ClippyCrate {
-        name: "sp804-driver",
-        feature: None,
-    },
-    ClippyCrate {
-        name: "echo-server",
-        feature: Some("board-qemu_virt_aarch64_echo"),
-    },
-    ClippyCrate {
-        name: "echo-client",
-        feature: None,
-    },
-    ClippyCrate {
-        name: "blk-server",
-        feature: Some("board-qemu_virt_aarch64_blk"),
-    },
-    ClippyCrate {
-        name: "blk-client",
-        feature: None,
-    },
-    ClippyCrate {
-        name: "net-server",
-        feature: Some("board-qemu_virt_aarch64_net"),
-    },
-    ClippyCrate {
-        name: "net-server",
-        feature: Some("board-qemu_virt_aarch64_fetch"),
-    },
-    ClippyCrate {
-        name: "fetch-client",
-        feature: None,
-    },
-    ClippyCrate {
-        name: "fs-server",
-        feature: Some("board-qemu_virt_aarch64_fs"),
-    },
-    ClippyCrate {
-        name: "fs-server",
-        feature: Some("board-qemu_virt_aarch64_fs_fat"),
-    },
-    ClippyCrate {
-        name: "fs-client",
-        feature: None,
-    },
-    ClippyCrate {
-        name: "net-client",
-        feature: None,
-    },
-    ClippyCrate {
-        name: "net-server",
-        feature: Some("board-qemu_virt_aarch64_net_composed"),
-    },
-    ClippyCrate {
-        name: "net-client",
-        feature: Some("board-qemu_virt_aarch64_net_composed"),
-    },
-    ClippyCrate {
-        name: "serial-driver",
-        feature: Some("board-qemu_virt_aarch64_ipc_composed"),
-    },
-    ClippyCrate {
-        name: "supervisor",
-        feature: Some("board-qemu_virt_aarch64_ipc_composed"),
-    },
-    ClippyCrate {
-        name: "blk-client",
-        feature: Some("board-qemu_virt_aarch64_ipc_composed"),
-    },
-    ClippyCrate {
-        name: "net-client",
-        feature: Some("board-qemu_virt_aarch64_ipc_composed"),
-    },
-    ClippyCrate {
-        name: "supervisor",
-        feature: Some("board-qemu_virt_aarch64_workstation"),
-    },
-    ClippyCrate {
-        name: "fs-server",
-        feature: Some("board-qemu_virt_aarch64_workstation"),
-    },
-    ClippyCrate {
-        name: "net-server",
-        feature: Some("board-qemu_virt_aarch64_workstation"),
-    },
-    ClippyCrate {
-        name: "shell",
-        feature: Some("board-qemu_virt_aarch64_workstation"),
-    },
-    ClippyCrate {
-        name: "edit",
-        feature: Some("board-qemu_virt_aarch64_workstation"),
-    },
-    ClippyCrate {
-        name: "chat-client",
-        feature: Some("board-qemu_virt_aarch64_workstation"),
-    },
-    ClippyCrate {
-        name: "http-file-browser",
-        feature: Some("board-qemu_virt_aarch64_workstation"),
-    },
-    ClippyCrate {
-        name: "backup",
-        feature: Some("board-qemu_virt_aarch64_workstation"),
-    },
-    ClippyCrate {
-        name: "config-server",
-        feature: Some("board-qemu_virt_aarch64_workstation"),
-    },
-    ClippyCrate {
-        name: "supervisor",
-        feature: Some("board-rpi4b_4gb_workstation"),
-    },
-    ClippyCrate {
-        name: "fs-server",
-        feature: Some("board-rpi4b_4gb_workstation"),
-    },
-    ClippyCrate {
-        name: "net-server",
-        feature: Some("board-rpi4b_4gb_workstation"),
-    },
-    ClippyCrate {
-        name: "shell",
-        feature: Some("board-rpi4b_4gb_workstation"),
-    },
-    ClippyCrate {
-        name: "edit",
-        feature: Some("board-rpi4b_4gb_workstation"),
-    },
-    ClippyCrate {
-        name: "chat-client",
-        feature: Some("board-rpi4b_4gb_workstation"),
-    },
-    ClippyCrate {
-        name: "http-file-browser",
-        feature: Some("board-rpi4b_4gb_workstation"),
-    },
-    ClippyCrate {
-        name: "config-server",
-        feature: Some("board-rpi4b_4gb_workstation"),
-    },
-    ClippyCrate {
-        name: "log-server",
-        feature: Some("board-rpi4b_4gb_workstation"),
-    },
-    ClippyCrate {
-        name: "serial-driver",
-        feature: Some("board-rpi4b_4gb_workstation"),
-    },
-    ClippyCrate {
-        name: "genet-driver",
-        feature: Some("board-rpi4b_4gb_workstation"),
-    },
-    ClippyCrate {
-        name: "emmc2-driver",
-        feature: Some("board-rpi4b_4gb_workstation"),
-    },
-];
-
-const RISCV64_CRATES: &[ClippyCrate<'_>] = &[
-    ClippyCrate {
-        name: "hello",
-        feature: Some("board-qemu_virt_riscv64_virtio"),
-    },
-    ClippyCrate {
-        name: "serial-driver",
-        feature: Some("board-qemu_virt_riscv64_http"),
-    },
-    ClippyCrate {
-        name: "serial-driver",
-        feature: Some("board-qemu_virt_riscv64_init"),
-    },
-    ClippyCrate {
-        name: "supervisor",
-        feature: Some("board-qemu_virt_riscv64_init"),
-    },
-    ClippyCrate {
-        name: "goldfish-rtc-driver",
-        feature: Some("board-qemu_virt_riscv64_init"),
-    },
-    ClippyCrate {
-        name: "rdtime-timer-driver",
-        feature: Some("board-qemu_virt_riscv64_init"),
-    },
-    ClippyCrate {
-        name: "http-server",
-        feature: Some("board-qemu_virt_riscv64_http"),
-    },
-    ClippyCrate {
-        name: "virtio-blk-driver",
-        feature: Some("board-qemu_virt_riscv64_virtio"),
-    },
-    ClippyCrate {
-        name: "virtio-net-driver",
-        feature: Some("board-qemu_virt_riscv64_virtio"),
-    },
-    ClippyCrate {
-        name: "virtio-net-driver",
-        feature: Some("board-qemu_virt_riscv64_net"),
-    },
-    ClippyCrate {
-        name: "blk-server",
-        feature: Some("board-qemu_virt_riscv64_blk"),
-    },
-    ClippyCrate {
-        name: "blk-client",
-        feature: None,
-    },
-    ClippyCrate {
-        name: "net-server",
-        feature: Some("board-qemu_virt_riscv64_net"),
-    },
-    ClippyCrate {
-        name: "net-client",
-        feature: None,
-    },
-];
-
-const X86_64_CRATES: &[ClippyCrate<'_>] = &[
-    ClippyCrate {
-        name: "hello",
-        feature: Some("board-x86_64_generic_virtio"),
-    },
-    ClippyCrate {
-        name: "serial-driver",
-        feature: Some("board-x86_64_generic_virtio"),
-    },
-    ClippyCrate {
-        name: "serial-driver",
-        feature: Some("board-x86_64_generic_init"),
-    },
-    ClippyCrate {
-        name: "supervisor",
-        feature: Some("board-x86_64_generic_init"),
-    },
-    ClippyCrate {
-        name: "cmos-rtc-driver",
-        feature: Some("board-x86_64_generic_init"),
-    },
-    ClippyCrate {
-        name: "tsc-timer-driver",
-        feature: Some("board-x86_64_generic_init"),
-    },
-    ClippyCrate {
-        name: "virtio-pci-driver",
-        feature: Some("board-x86_64_generic_virtio"),
-    },
-    ClippyCrate {
-        name: "virtio-pci-driver",
-        feature: Some("board-x86_64_generic_blk"),
-    },
-    ClippyCrate {
-        name: "virtio-pci-driver",
-        feature: Some("board-x86_64_generic_net"),
-    },
-    ClippyCrate {
-        name: "virtio-blk-driver",
-        feature: Some("board-x86_64_generic_virtio"),
-    },
-    ClippyCrate {
-        name: "virtio-net-driver",
-        feature: Some("board-x86_64_generic_virtio"),
-    },
-    ClippyCrate {
-        name: "http-server",
-        feature: Some("board-x86_64_generic_http"),
-    },
-    ClippyCrate {
-        name: "blk-server",
-        feature: Some("board-x86_64_generic_blk"),
-    },
-    ClippyCrate {
-        name: "blk-client",
-        feature: None,
-    },
-    ClippyCrate {
-        name: "net-server",
-        feature: Some("board-x86_64_generic_net"),
-    },
-    ClippyCrate {
-        name: "net-client",
-        feature: None,
-    },
-];
-
-const ARCH_PROFILES: &[ClippyArch<'_>] = &[
-    ClippyArch {
-        id: "aarch64",
-        microkit_board: "qemu_virt_aarch64",
-        target_triple: "aarch64-sel4-microkit",
-        crates: AARCH64_CRATES,
-    },
-    ClippyArch {
-        id: "riscv64",
-        microkit_board: "qemu_virt_riscv64",
-        target_triple: "riscv64-sel4-microkit",
-        crates: RISCV64_CRATES,
-    },
-    ClippyArch {
-        id: "x86_64",
-        microkit_board: "x86_64_generic",
-        target_triple: "x86_64-sel4-microkit",
-        crates: X86_64_CRATES,
-    },
-];
 
 pub fn clippy_workspace(root: &Path, build_dir: &str, config: &str) -> Result<()> {
     let sdk = sdk_path(root)?;
     apply_libclang_env(root);
+    let boards = load_boards(root)?;
 
-    for profile in ARCH_PROFILES {
-        eprintln!("==> clippy ({})", profile.id);
-        clippy_arch(root, build_dir, config, &sdk, profile)?;
+    for (arch, sdk_board) in ARCH_PASSES {
+        let target = boards
+            .values()
+            .find(|b| b.arch == *arch)
+            .map(|b| b.target.clone())
+            .with_context(|| format!("no boards with arch {arch}"))?;
+        let entries = derive_entries(root, &boards, arch);
+        eprintln!("==> clippy ({arch}, {} crate combos)", entries.len());
+        clippy_arch(root, build_dir, config, &sdk, sdk_board, &target, &entries)?;
     }
 
     Ok(())
@@ -416,22 +87,22 @@ fn clippy_arch(
     build_dir: &str,
     config: &str,
     sdk: &str,
-    profile: &ClippyArch<'_>,
+    sdk_board: &str,
+    target: &str,
+    entries: &[ClippyEntry],
 ) -> Result<()> {
-    let target_spec = root
-        .join("support/targets")
-        .join(format!("{}.json", profile.target_triple));
+    let target_spec = root.join("support/targets").join(format!("{target}.json"));
     let target_dir = shared_target_dir(root, build_dir);
     ensure_dir(&target_dir)?;
 
-    let include = format!("{sdk}/board/{}/{config}/include", profile.microkit_board);
+    let include = format!("{sdk}/board/{sdk_board}/{config}/include");
 
-    for crate_spec in profile.crates {
+    for entry in entries {
         let mut cmd = Command::new("cargo");
         cmd.current_dir(root);
         cmd.arg("clippy")
             .arg("-p")
-            .arg(crate_spec.name)
+            .arg(&entry.crate_name)
             .arg("--target-dir")
             .arg(path_str(&target_dir))
             .arg("--target")
@@ -445,7 +116,7 @@ fn clippy_arch(
                 "build-std-features=compiler-builtins-mem",
             ]);
 
-        if let Some(feature) = crate_spec.feature {
+        if let Some(feature) = &entry.feature {
             cmd.arg("--features").arg(feature);
         }
 
@@ -457,12 +128,16 @@ fn clippy_arch(
 
         let status = cmd
             .status()
-            .with_context(|| format!("cargo clippy -p {}", crate_spec.name))?;
+            .with_context(|| format!("cargo clippy -p {}", entry.crate_name))?;
         if !status.success() {
             bail!(
-                "cargo clippy -p {} ({}) failed",
-                crate_spec.name,
-                profile.id
+                "cargo clippy -p {}{} failed",
+                entry.crate_name,
+                entry
+                    .feature
+                    .as_deref()
+                    .map(|f| format!(" --features {f}"))
+                    .unwrap_or_default()
             );
         }
     }

@@ -476,6 +476,13 @@ fn init() -> HandlerImpl {
     log::info!("lerux-supervisor: no RTC/timer PDs on RPi4 workstation");
     log_service_graph();
     log::info!("lerux-supervisor: init ok");
+    // Finish supervisor serial output before waking composed clients. Notifying
+    // first races the watchdog line with hello's banner on multi-client serial
+    // (smoke then misses the contiguous "Hello from Rust…" expect).
+    #[cfg(not(feature = "board-rpi4b_4gb_workstation"))]
+    watchdog_check(&mut timer);
+    #[cfg(feature = "board-rpi4b_4gb_workstation")]
+    watchdog_check();
     #[cfg(any(
         feature = "board-qemu_virt_aarch64_composed",
         feature = "board-qemu_virt_aarch64_http_composed",
@@ -493,10 +500,6 @@ fn init() -> HandlerImpl {
         persist_boot_log();
         log::info!("lerux-supervisor: ready");
     }
-    #[cfg(not(feature = "board-rpi4b_4gb_workstation"))]
-    watchdog_check(&mut timer);
-    #[cfg(feature = "board-rpi4b_4gb_workstation")]
-    watchdog_check();
     handler
 }
 

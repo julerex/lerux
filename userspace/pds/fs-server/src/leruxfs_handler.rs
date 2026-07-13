@@ -137,10 +137,12 @@ pub struct HandlerImpl {
     fs_job: FsJob,
     after_format: Option<FsJob>,
     completed: Option<FsResponse>,
+    /// Client that owns the in-flight async operation (or pending completion).
+    active_client: Option<Channel>,
 }
 
 fn path_slice(path: &[u8; MAX_FS_PATH], path_len: u8) -> &[u8] {
-    &path[..path_len as usize]
+    &path[..path_len.min(MAX_FS_PATH as u8) as usize]
 }
 
 impl HandlerImpl {
@@ -157,7 +159,51 @@ impl HandlerImpl {
             fs_job: FsJob::None,
             after_format: None,
             completed: None,
+            active_client: None,
         }
+    }
+
+    fn is_client(channel: Channel) -> bool {
+        channel == CLIENT
+            || channel == Channel::new(3)
+            || channel == Channel::new(5)
+            || channel == Channel::new(6)
+            || channel == Channel::new(7)
+            || channel == Channel::new(8)
+    }
+
+    /// Reserve this client for an async op. Returns false when another client owns the stack
+    /// or this client still has an undelivered completion.
+    fn begin_async(&mut self, channel: Channel) -> bool {
+        if self.completed.is_some() {
+            return false;
+        }
+        let busy = !matches!(self.fs_job, FsJob::None) || self.format_task.is_running();
+        if busy && self.active_client != Some(channel) {
+            return false;
+        }
+        self.active_client = Some(channel);
+        true
+    }
+
+    fn finish_async(&mut self) {
+        self.active_client = None;
+    }
+
+    fn take_completed(&mut self, channel: Channel) -> Option<FsResponse> {
+        if self.active_client != Some(channel) {
+            return None;
+        }
+        let resp = self.completed.take()?;
+        self.finish_async();
+        Some(resp)
+    }
+
+    fn sync_response(&mut self, resp: FsResponse) -> FsResponse {
+        if !matches!(resp, FsResponse::Pending) {
+            self.finish_async();
+        }
+        resp
     }
 
     fn begin_path_op(
@@ -2168,9 +2214,13 @@ impl HandlerImpl {
         }
     }
 
-    fn handle_request(&mut self, req: FsRequest) -> FsResponse {
+    fn handle_request(&mut self, channel: Channel, req: FsRequest) -> FsResponse {
         if matches!(req, FsRequest::Poll) {
-            return self.handle_poll();
+            return self.handle_poll(channel);
+        }
+
+        if !self.begin_async(channel) {
+            return FsResponse::Pending;
         }
 
         if self.completed.is_some()
@@ -2183,9 +2233,15 @@ impl HandlerImpl {
         // Resume freemap flush if left pending from previous (shouldn't hit with None job).
         match req {
             FsRequest::Open { path_len, path } => {
+                if path_len as usize > MAX_FS_PATH {
+                    return self.sync_response(FsResponse::Error);
+                }
                 self.begin_path_op(PathOp::Open, path, path_len, [0; MAX_FS_PATH], 0);
             }
             FsRequest::Create { path_len, path } => {
+                if path_len as usize > MAX_FS_PATH {
+                    return self.sync_response(FsResponse::Error);
+                }
                 self.begin_path_op(PathOp::Create, path, path_len, [0; MAX_FS_PATH], 0);
             }
             FsRequest::Write {
@@ -2194,6 +2250,9 @@ impl HandlerImpl {
                 data_len,
                 data,
             } => {
+                if data_len as usize > MAX_FS_DATA {
+                    return self.sync_response(FsResponse::Error);
+                }
                 self.begin_write(handle, offset, data, data_len);
             }
             FsRequest::Read {
@@ -2204,15 +2263,27 @@ impl HandlerImpl {
                 self.begin_read(handle, offset, len);
             }
             FsRequest::Stat { path_len, path } => {
+                if path_len as usize > MAX_FS_PATH {
+                    return self.sync_response(FsResponse::Error);
+                }
                 self.begin_path_op(PathOp::Stat, path, path_len, [0; MAX_FS_PATH], 0);
             }
             FsRequest::ListDir { path_len, path } => {
+                if path_len as usize > MAX_FS_PATH {
+                    return self.sync_response(FsResponse::Error);
+                }
                 self.begin_path_op(PathOp::ListDir, path, path_len, [0; MAX_FS_PATH], 0);
             }
             FsRequest::Mkdir { path_len, path } => {
+                if path_len as usize > MAX_FS_PATH {
+                    return self.sync_response(FsResponse::Error);
+                }
                 self.begin_path_op(PathOp::Mkdir, path, path_len, [0; MAX_FS_PATH], 0);
             }
             FsRequest::Unlink { path_len, path } => {
+                if path_len as usize > MAX_FS_PATH {
+                    return self.sync_response(FsResponse::Error);
+                }
                 self.begin_path_op(PathOp::Unlink, path, path_len, [0; MAX_FS_PATH], 0);
             }
             FsRequest::Rename {
@@ -2221,6 +2292,9 @@ impl HandlerImpl {
                 to_len,
                 to,
             } => {
+                if from_len as usize > MAX_FS_PATH || to_len as usize > MAX_FS_PATH {
+                    return self.sync_response(FsResponse::Error);
+                }
                 self.begin_path_op(PathOp::RenameFrom, from, from_len, to, to_len);
             }
             FsRequest::DiskInfo => {
@@ -2234,7 +2308,7 @@ impl HandlerImpl {
                     if let Some(resp) = self.poll_format_task() {
                         // Discard Ok from format; fall through if now formatted.
                         if !self.formatted {
-                            return resp;
+                            return self.sync_response(resp);
                         }
                     } else {
                         return FsResponse::Pending;
@@ -2245,13 +2319,13 @@ impl HandlerImpl {
                     .superblock
                     .total_lbas
                     .saturating_sub(self.superblock.data_start_lba);
-                return FsResponse::DiskInfo {
+                return self.sync_response(FsResponse::DiskInfo {
                     block_size: SECTOR_SIZE as u32,
                     total_blocks: total,
                     free_blocks: free,
-                };
+                });
             }
-            FsRequest::Poll => return self.handle_poll(),
+            FsRequest::Poll => return self.handle_poll(channel),
         }
 
         // Handle freemap flush resume step 31 if we ever stash it as active job with only freemap.
@@ -2269,22 +2343,25 @@ impl HandlerImpl {
             }
             // Also handle step 31 in advance_path — add case:
             self.finish_job(resp);
-            return self.completed.take().unwrap_or(FsResponse::Pending);
+            return self.take_completed(channel).unwrap_or(FsResponse::Pending);
         }
         // If job is freemap flush step 31 pending:
         if let FsJob::Path { step: 31, .. } = self.fs_job {
             // try again
             if let Some(resp) = self.advance_fs_job() {
                 self.finish_job(resp);
-                return self.completed.take().unwrap_or(FsResponse::Pending);
+                return self.take_completed(channel).unwrap_or(FsResponse::Pending);
             }
         }
         FsResponse::Pending
     }
 
-    fn handle_poll(&mut self) -> FsResponse {
-        if let Some(resp) = self.completed.take() {
+    fn handle_poll(&mut self, channel: Channel) -> FsResponse {
+        if let Some(resp) = self.take_completed(channel) {
             return resp;
+        }
+        if self.active_client != Some(channel) {
+            return FsResponse::Pending;
         }
         // Resume freemap flush.
         if let FsJob::Path {
@@ -2301,7 +2378,7 @@ impl HandlerImpl {
             };
             if let Some(r) = self.advance_flush_freemap(resp) {
                 self.finish_job(r);
-                return self.completed.take().unwrap_or(FsResponse::Pending);
+                return self.take_completed(channel).unwrap_or(FsResponse::Pending);
             }
             return FsResponse::Pending;
         }
@@ -2314,11 +2391,11 @@ impl HandlerImpl {
             && let Some(resp) = self.poll_format_task()
         {
             self.finish_job(resp);
-            return self.completed.take().unwrap_or(FsResponse::Pending);
+            return self.take_completed(channel).unwrap_or(FsResponse::Pending);
         }
         if let Some(resp) = self.advance_fs_job() {
             self.finish_job(resp);
-            return self.completed.take().unwrap_or(FsResponse::Pending);
+            return self.take_completed(channel).unwrap_or(FsResponse::Pending);
         }
         if self.io.borrow().io_busy() {
             BLK_DRIVER.notify();
@@ -2363,17 +2440,12 @@ impl Handler for HandlerImpl {
         channel: Channel,
         msg_info: MessageInfo,
     ) -> Result<MessageInfo, Self::Error> {
-        if channel != CLIENT
-            && channel != Channel::new(3)
-            && channel != Channel::new(5)
-            && channel != Channel::new(6)
-            && channel != Channel::new(7)
-        {
+        if !Self::is_client(channel) {
             unreachable!("unexpected fs client");
         }
 
         Ok(match recv::<FsRequest>(msg_info) {
-            Ok(req) => send(self.handle_request(req)),
+            Ok(req) => send(self.handle_request(channel, req)),
             Err(_) => send_unspecified_error(),
         })
     }

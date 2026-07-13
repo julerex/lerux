@@ -8,7 +8,7 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 |-----|---------|
 | [../AGENTS.md](../AGENTS.md) | LLM agent instructions for idiomatic Rust in this repo |
 | [context.md](context.md) | Domain language and architectural decisions |
-| [plan.md](plan.md) | Roadmap and cross-arch smoke parity (phases 1–49 complete) |
+| [plan.md](plan.md) | Roadmap and cross-arch smoke parity (phases 1–60; 50–59 core done) |
 | [plan-arch.md](plan-arch.md) | Phases 50–60: Arch-level functionality gap plan |
 | [config.md](config.md) | Phase 54: config key schema, secrets, boot policy |
 | [packages.md](packages.md) | Phase 55: package CLI, pins, profile recipes, out-of-tree “AUR” |
@@ -23,6 +23,8 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [qos.md](qos.md) | Phase 48: workstation service classes / PD priorities |
 | [decisions/006-workstation-qos.md](decisions/006-workstation-qos.md) | ADR-006: priority policy |
 | [bench.md](bench.md) | Phase 49: microbench methodology |
+| [ops.md](ops.md) | Operations: diagnose, smoke logs, host helpers |
+| [platforms.md](platforms.md) | Platform notes and hardware bring-up |
 | [bench-results.latest.md](bench-results.latest.md) | Latest `just bench` snapshot (regenerated) |
 | [net-topology.md](net-topology.md) | NIC / net-server / app channel map |
 | [boards.md](boards.md) | Board names, PDs, QEMU profiles; [RPi4 install path (Phase 52)](boards.md#rpi4-workstation-install-path-phase-52) |

@@ -9,6 +9,7 @@ description = "lerux IPC helpers built on sel4-microkit-simple-ipc"
 workspace = true
 
 [dependencies]
+lerux-interface-types = { path = "../lerux-interface-types" }
 serde = { workspace = true }
 sel4-microkit = { workspace = true }
 sel4-microkit-simple-ipc = { workspace = true }

@@ -54,7 +54,7 @@ Workstation and workstation-rpi4 templates are **channel-free**: channels exist 
 
 ## Template catalog (layout bodies)
 
-28 templates under `userspace/systems/templates/`. Most still embed hand channels for smoke boards that have **no** profile. Profile-owned boards splice channels on every `render_system`.
+33 templates under `userspace/systems/templates/`. Most still embed hand channels for smoke boards that have **no** profile. Profile-owned boards splice channels on every `render_system`.
 
 | Kind | Board-specific | Mechanical |
 |------|----------------|------------|

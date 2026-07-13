@@ -10,58 +10,14 @@ use heapless::Deque;
 use sel4_driver_interfaces::HandleInterrupt;
 use sel4_microkit::{Channel, ChannelSet, Handler, MessageInfo};
 use sel4_microkit_simple_ipc as simple_ipc;
-use serde::{Deserialize, Serialize};
+
+use lerux_driver_protocols::serial::{
+    ErrorResponse, NonBlocking, Request, Response, SuccessResponse,
+};
 
 /// Channel 0 = device IRQ; channel 1 = protected RPC from `serial-virt`.
 pub const DEVICE: Channel = Channel::new(0);
 pub const VIRT: Channel = Channel::new(1);
-
-#[derive(Debug, Serialize, Deserialize)]
-enum NonBlocking<T> {
-    Ready(T),
-    WouldBlock,
-}
-
-impl<T> NonBlocking<T> {
-    fn from_nb_result<E>(r: nb::Result<T, E>) -> Result<Self, E> {
-        match r {
-            Ok(v) => Ok(Self::Ready(v)),
-            Err(nb::Error::WouldBlock) => Ok(Self::WouldBlock),
-            Err(nb::Error::Other(err)) => Err(err),
-        }
-    }
-}
-
-impl<T> From<Option<T>> for NonBlocking<T> {
-    fn from(v: Option<T>) -> Self {
-        match v {
-            Some(v) => NonBlocking::Ready(v),
-            None => NonBlocking::WouldBlock,
-        }
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-enum Request {
-    Read,
-    Write(u8),
-    Flush,
-}
-
-type Response = Result<SuccessResponse, ErrorResponse>;
-
-#[derive(Debug, Serialize, Deserialize)]
-enum SuccessResponse {
-    Read(NonBlocking<u8>),
-    Write(NonBlocking<()>),
-    Flush(NonBlocking<()>),
-}
-
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
-enum ErrorResponse {
-    WriteError,
-    FlushError,
-}
 
 pub struct DeviceHandler<Driver, const READ_BUF_SIZE: usize = 256> {
     driver: Driver,

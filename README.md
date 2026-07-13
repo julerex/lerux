@@ -30,7 +30,7 @@ just test-all
 
 ## CI
 
-GitHub Actions runs on every push to `main`: **check** (`just check`), one **sdk** job (SDK + patched SP804 QEMU), **check-pd** (cross-target clippy on userspace crates), then **26 smoke** matrix jobs. Local lint: `just check` (host crates) or `just check-all` (host + PD, needs SDK). Details: [`docs/ci.md`](docs/ci.md).
+GitHub Actions runs on every push to `main`: **check** (`just check`), one **sdk** job (SDK + patched SP804 QEMU), **check-pd** (cross-target clippy on userspace crates), then **31 smoke** matrix jobs (`just test-all` runs **33** boards — includes `debug` and `fs_fat`, which are not in CI). Local lint: `just check` (host crates) or `just check-all` (host + PD, needs SDK). Details: [`docs/ci.md`](docs/ci.md).
 
 ## Architecture
 
@@ -39,7 +39,7 @@ GitHub Actions runs on every push to `main`: **check** (`just check`), one **sdk
 | Kernel | [seL4/seL4](https://github.com/seL4/seL4) — built by `build_sdk.py` |
 | System framework | [seL4/microkit](https://github.com/seL4/microkit) SDK |
 | Userspace | Rust protection domains in `userspace/pds/` via `sel4-microkit` |
-| Utilities | Shared crates in `userspace/crates/` (`lerux-logging`, `lerux-ipc`, `lerux-sync`) |
+| Utilities | Shared crates in `userspace/crates/` (`lerux-logging`, `lerux-ipc`, `lerux-driver-protocols`) |
 | Serial console | Driver PD + IPC client PDs — PL011 (aarch64), NS16550 MMIO (riscv64), or NS16550/COM1 (x86) |
 
 Version pins: [`deps/versions.toml`](deps/versions.toml).
@@ -71,7 +71,7 @@ Default: `qemu_virt_aarch64` (QEMU ARM virt). Override with `BOARD=... just run`
 
 Full board reference: [`docs/boards.md`](docs/boards.md).
 
-**aarch64 init and composed** need patched QEMU for SP804 at `0x90d0000` — run `cargo run -p lerux-cli -- install sp804-qemu` (Docker image includes build deps). RISC-V/x86 init use stock QEMU (Goldfish RTC + `rdtime`; CMOS RTC + TSC). See Phase 56 in [`docs/plan.md`](docs/plan.md).
+**aarch64 init and composed** need patched QEMU for SP804 at `0x90d0000` — run `cargo run -p lerux-cli -- install sp804-qemu` (Docker image includes build deps). RISC-V/x86 init use stock QEMU (Goldfish RTC + `rdtime`; CMOS RTC + TSC). See Phase 12 in [`docs/plan.md`](docs/plan.md).
 
 ## Documentation
 
@@ -80,7 +80,7 @@ Full board reference: [`docs/boards.md`](docs/boards.md).
 | [AGENTS.md](AGENTS.md) | LLM agent instructions for idiomatic Rust |
 | [docs/README.md](docs/README.md) | Documentation index |
 | [docs/context.md](docs/context.md) | Domain language and decisions |
-| [docs/plan.md](docs/plan.md) | Roadmap and smoke parity table (phases 1–49) |
+| [docs/plan.md](docs/plan.md) | Roadmap and smoke parity table (phases 1–60) |
 | [docs/plan-arch.md](docs/plan-arch.md) | Arch-level functionality gap plan (phases 50–60) |
 | [docs/boards.md](docs/boards.md) | Board and QEMU profile reference |
 | [docs/ci.md](docs/ci.md) | CI pipeline, caches, troubleshooting |

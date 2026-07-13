@@ -17,10 +17,9 @@ board-qemu_virt_riscv64_workstation = ["multi-client-3"]
 board-x86_64_generic_workstation = ["multi-client-3"]
 
 [dependencies]
+lerux-driver-protocols = { path = "../../crates/lerux-driver-protocols" }
 lerux-logging = { path = "../../crates/lerux-logging" }
 log = { workspace = true }
 sel4-microkit = { workspace = true }
 heapless = { workspace = true }
-serde = { workspace = true }
 sel4-microkit-simple-ipc = { workspace = true }
-embedded-hal-nb = { workspace = true }

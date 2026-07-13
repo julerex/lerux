@@ -4,29 +4,15 @@
 #![no_main]
 
 use lerux_interface_types::{BackupRequest, BackupResponse, FsRequest, FsResponse};
-use lerux_ipc::{call, recv, send, send_unspecified_error};
+use lerux_ipc::{recv, send, send_unspecified_error, FsClient};
 use lerux_logging::{debug, log};
 use sel4_microkit::{protection_domain, Channel, Handler, Infallible, MessageInfo};
 
 const SHELL: Channel = Channel::new(0);
-const FS_SERVER: Channel = Channel::new(1);
-
-fn poll_fs() -> FsResponse {
-    loop {
-        match call::<FsRequest, FsResponse>(FS_SERVER, FsRequest::Poll) {
-            Ok(FsResponse::Pending) => {}
-            Ok(other) => return other,
-            Err(_) => return FsResponse::Error,
-        }
-    }
-}
+const FS_SERVER: FsClient = FsClient::new(Channel::new(1));
 
 fn fs_call(req: FsRequest) -> FsResponse {
-    match call::<FsRequest, FsResponse>(FS_SERVER, req) {
-        Ok(FsResponse::Pending) => poll_fs(),
-        Ok(other) => other,
-        Err(_) => FsResponse::Error,
-    }
+    FS_SERVER.call(req)
 }
 
 struct HandlerImpl {
@@ -58,12 +44,8 @@ impl HandlerImpl {
             pos += 1;
             files = files.saturating_add(1);
         }
-        let handle = match fs_call(FsRequest::create(b"/backup/manifest")) {
-            FsResponse::Handle { id } => id,
-            _ => match fs_call(FsRequest::open(b"/backup/manifest")) {
-                FsResponse::Handle { id } => id,
-                _ => return BackupResponse::Error,
-            },
+        let Ok(handle) = FS_SERVER.create_or_open(b"/backup/manifest") else {
+            return BackupResponse::Error;
         };
         match fs_call(FsRequest::write(handle, 0, &buf[..pos])) {
             FsResponse::Ok => {

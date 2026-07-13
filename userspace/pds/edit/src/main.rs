@@ -5,11 +5,11 @@ use lerux_interface_types::{
     EditRequest, EditResponse, FsRequest, FsResponse, MAX_EDIT_LINES, MAX_EDIT_LINE_LEN,
     MAX_FS_PATH,
 };
-use lerux_ipc::{call, recv, send, send_unspecified_error};
+use lerux_ipc::{recv, send, send_unspecified_error, FsClient};
 use lerux_logging::{debug, log};
 use sel4_microkit::{protection_domain, Channel, Handler, Infallible, MessageInfo};
 
-const FS_SERVER: Channel = Channel::new(1);
+const FS_SERVER: FsClient = FsClient::new(Channel::new(1));
 const SHELL: Channel = Channel::new(0);
 
 /// Simple fixed-size editor buffer. Cursor is always valid.
@@ -309,22 +309,8 @@ impl Editor {
     }
 }
 
-fn poll_fs() -> FsResponse {
-    loop {
-        match call::<FsRequest, FsResponse>(FS_SERVER, FsRequest::Poll) {
-            Ok(FsResponse::Pending) => {}
-            Ok(other) => return other,
-            Err(_) => return FsResponse::Error,
-        }
-    }
-}
-
 fn fs_call(req: FsRequest) -> FsResponse {
-    match call::<FsRequest, FsResponse>(FS_SERVER, req) {
-        Ok(FsResponse::Pending) => poll_fs(),
-        Ok(other) => other,
-        Err(_) => FsResponse::Error,
-    }
+    FS_SERVER.call(req)
 }
 
 #[protection_domain]

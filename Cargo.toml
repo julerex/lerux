@@ -6,6 +6,7 @@ members = [
     "userspace/pds/serial-driver",
     "userspace/pds/serial-virt",
     "userspace/crates/lerux-serial-queue",
+    "userspace/crates/lerux-driver-protocols",
     "userspace/pds/echo-server",
     "userspace/pds/echo-client",
     "userspace/pds/blk-server",
@@ -43,7 +44,6 @@ members = [
     "userspace/pds/config-server",
     "userspace/pds/debug-handler",
     "userspace/pds/crash-demo",
-    "userspace/crates/lerux-sync",
     "userspace/crates/lerux-virtio-hal",
     "userspace/crates/lerux-virtio-pci",
 ]

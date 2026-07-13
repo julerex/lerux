@@ -3,43 +3,12 @@ use std::{path::Path, process::Command};
 use anyhow::{bail, Context, Result};
 
 use crate::{
-    board::{get_board, load_boards},
+    board::{crate_has_board_feature, get_board, load_boards},
     build_sdk::sdk_path,
     libclang::apply_libclang_env,
     process::{ensure_dir, path_str, run_inherit},
     system::{board_build_dir, generate_system, shared_target_dir, system_file},
 };
-
-const BOARD_FEATURE_CRATES: &[&str] = &[
-    "hello",
-    "echo-server",
-    "echo-client",
-    "http-server",
-    "supervisor",
-    "blk-server",
-    "blk-client",
-    "net-server",
-    "net-client",
-    "fetch-client",
-    "fs-server",
-    "fs-client",
-    "shell",
-    "edit",
-    "chat-client",
-    "http-file-browser",
-    "backup",
-    "log-server",
-    "config-server",
-    "serial-driver",
-    "serial-virt",
-    "debug-handler",
-    "crash-demo",
-    "virtio-blk-driver",
-    "virtio-net-driver",
-    "virtio-pci-driver",
-    "genet-driver",
-    "emmc2-driver",
-];
 
 pub fn system(root: &Path, board: &str, build_dir: &str) -> Result<()> {
     let out = system_file(root, board, build_dir);
@@ -68,7 +37,7 @@ pub fn build_pd(
     let sdk = sdk_path(root)?;
     let target_spec = root
         .join("support/targets")
-        .join(format!("{}.json", board_cfg.target_triple));
+        .join(format!("{}.json", board_cfg.target));
     let board_build = board_build_dir(root, board, build_dir);
     let target_dir = shared_target_dir(root, build_dir);
 
@@ -79,7 +48,7 @@ pub fn build_pd(
     let mut cmd = Command::new("cargo");
     cmd.current_dir(root);
     cmd.arg("build").arg("--release").arg("-p").arg(crate_name);
-    if BOARD_FEATURE_CRATES.contains(&crate_name) {
+    if crate_has_board_feature(root, crate_name, board) {
         cmd.arg("--features").arg(format!("board-{board}"));
     }
     cmd.args([
@@ -109,7 +78,7 @@ pub fn build_pd(
     }
 
     let elf_src = target_dir
-        .join(&board_cfg.target_triple)
+        .join(&board_cfg.target)
         .join("release")
         .join(format!("{crate_name}.elf"));
     let elf_dst = board_build.join(format!("{crate_name}.elf"));
@@ -157,7 +126,7 @@ pub fn run(root: &Path, board: &str, build_dir: &str, config: &str) -> Result<()
         );
         return Ok(());
     }
-    if crate::qemu::is_http_board(board) {
+    if crate::qemu::is_http_board(&ctx.board) {
         crate::qemu::cleanup_http_conflicts();
         crate::qemu::print_http_hint(&ctx);
     }
@@ -173,51 +142,19 @@ pub fn run(root: &Path, board: &str, build_dir: &str, config: &str) -> Result<()
     Ok(())
 }
 
+/// Run every board with `ci = true` in boards.toml: diskless boards first,
+/// then the disk image is created once and the disk boards follow.
 pub fn test_all(root: &Path, build_dir: &str, config: &str) -> Result<()> {
-    let tests_before_disk = [
-        "qemu_virt_aarch64",
-        "x86_64_generic",
-        "qemu_virt_riscv64",
-        "qemu_virt_riscv64_echo",
-        "qemu_virt_aarch64_virtio",
-        "qemu_virt_riscv64_virtio",
-        "qemu_virt_aarch64_echo",
-        "x86_64_generic_echo",
-        "x86_64_generic_virtio",
-        "x86_64_generic_http",
-        "qemu_virt_riscv64_http",
-        "qemu_virt_aarch64_init",
-        "qemu_virt_riscv64_init",
-        "x86_64_generic_init",
-        "qemu_virt_aarch64_debug",
-    ];
-    let tests_after_disk = [
-        "qemu_virt_aarch64_blk",
-        "qemu_virt_riscv64_blk",
-        "x86_64_generic_blk",
-        "qemu_virt_aarch64_composed",
-        "qemu_virt_aarch64_blk_composed",
-        "qemu_virt_aarch64_http",
-        "qemu_virt_aarch64_http_composed",
-        "qemu_virt_aarch64_net",
-        "qemu_virt_aarch64_fetch",
-        "qemu_virt_aarch64_fs",
-        "qemu_virt_aarch64_fs_fat",
-        "qemu_virt_aarch64_net_composed",
-        "qemu_virt_aarch64_ipc_composed",
-        "qemu_virt_aarch64_workstation",
-        "qemu_virt_riscv64_workstation",
-        "x86_64_generic_workstation",
-        "qemu_virt_riscv64_net",
-        "x86_64_generic_net",
-    ];
+    let boards = load_boards(root)?;
+    let ci_boards: Vec<(&String, &crate::board::Board)> =
+        boards.iter().filter(|(_, b)| b.ci).collect();
 
-    for board in tests_before_disk {
+    for (board, _) in ci_boards.iter().filter(|(_, b)| !b.needs_disk()) {
         image(root, board, build_dir, config)?;
         crate::test::run_board_test(root, board, build_dir, config)?;
     }
     crate::disk_img::disk_img(root)?;
-    for board in tests_after_disk {
+    for (board, _) in ci_boards.iter().filter(|(_, b)| b.needs_disk()) {
         image(root, board, build_dir, config)?;
         crate::test::run_board_test(root, board, build_dir, config)?;
     }

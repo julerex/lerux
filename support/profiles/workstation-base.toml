@@ -1,0 +1,195 @@
+# Shared workstation channel manifest (Phase 41). Arch profiles extend this
+# with template, default_board, and driver-specific PDs + [[channel]] deltas.
+# Template is a placeholder; overlays always override.
+
+template = "workstation.system.template"
+
+pds = [
+  "supervisor",
+  "shell",
+  "edit",
+  "chat-client",
+  "http-file-browser",
+  "backup",
+  "fs-server",
+  "net-server",
+  "log-server",
+  "config-server",
+  "serial-driver",
+  "serial-virt",
+]
+
+[[channel]]
+name = "driver_virt"
+ends = [
+  { pd = "serial_driver", id = 1 },
+  { pd = "serial_virt", id = 0, pp = true },
+]
+
+[[channel]]
+name = "shell_serial"
+ends = [
+  { pd = "serial_virt", id = 1 },
+  { pd = "shell", id = 0, pp = true },
+]
+
+[[channel]]
+name = "supervisor_serial"
+ends = [
+  { pd = "serial_virt", id = 2 },
+  { pd = "supervisor", id = 0, pp = true },
+]
+
+[[channel]]
+name = "log_serial"
+ends = [
+  { pd = "serial_virt", id = 3 },
+  { pd = "log_server", id = 0, pp = true },
+]
+
+[[channel]]
+name = "supervisor_fs"
+ends = [
+  { pd = "fs_server", id = 2 },
+  { pd = "supervisor", id = 3, pp = true },
+]
+
+[[channel]]
+name = "shell_fs"
+ends = [
+  { pd = "fs_server", id = 3 },
+  { pd = "shell", id = 1, pp = true },
+]
+
+[[channel]]
+name = "supervisor_net"
+ends = [
+  { pd = "net_server", id = 2 },
+  { pd = "supervisor", id = 4, pp = true },
+]
+
+[[channel]]
+name = "shell_net"
+ends = [
+  { pd = "net_server", id = 3 },
+  { pd = "shell", id = 2, pp = true },
+]
+
+[[channel]]
+name = "shell_supervisor"
+ends = [
+  { pd = "supervisor", id = 5 },
+  { pd = "shell", id = 3, pp = true },
+]
+
+[[channel]]
+name = "shell_log"
+ends = [
+  { pd = "log_server", id = 1 },
+  { pd = "shell", id = 4, pp = true },
+]
+
+[[channel]]
+name = "supervisor_log"
+ends = [
+  { pd = "log_server", id = 2 },
+  { pd = "supervisor", id = 6, pp = true },
+]
+
+[[channel]]
+name = "fs_log"
+ends = [
+  { pd = "log_server", id = 3 },
+  { pd = "fs_server", id = 4, pp = true },
+]
+
+[[channel]]
+name = "net_log"
+ends = [
+  { pd = "log_server", id = 4 },
+  { pd = "net_server", id = 4, pp = true },
+]
+
+[[channel]]
+name = "config_fs"
+ends = [
+  { pd = "fs_server", id = 5 },
+  { pd = "config_server", id = 3, pp = true },
+]
+
+[[channel]]
+name = "config_supervisor"
+ends = [
+  { pd = "supervisor", id = 7, pp = true },
+  { pd = "config_server", id = 0 },
+]
+
+[[channel]]
+name = "config_shell"
+ends = [
+  { pd = "shell", id = 5, pp = true },
+  { pd = "config_server", id = 1 },
+]
+
+[[channel]]
+name = "config_net"
+ends = [
+  { pd = "net_server", id = 5 },
+  { pd = "config_server", id = 2, pp = true },
+]
+
+[[channel]]
+name = "edit_shell"
+ends = [
+  { pd = "shell", id = 6, pp = true },
+  { pd = "edit", id = 0 },
+]
+
+[[channel]]
+name = "edit_fs"
+ends = [
+  { pd = "fs_server", id = 6 },
+  { pd = "edit", id = 1, pp = true },
+]
+
+[[channel]]
+name = "chat_shell"
+ends = [
+  { pd = "shell", id = 7, pp = true },
+  { pd = "chat_client", id = 0 },
+]
+
+[[channel]]
+name = "chat_net"
+ends = [
+  { pd = "net_server", id = 6 },
+  { pd = "chat_client", id = 1, pp = true },
+]
+
+[[channel]]
+name = "http_fs_net"
+ends = [
+  { pd = "net_server", id = 7 },
+  { pd = "http_file_browser", id = 0, pp = true },
+]
+
+[[channel]]
+name = "http_fs_fs"
+ends = [
+  { pd = "fs_server", id = 7 },
+  { pd = "http_file_browser", id = 1, pp = true },
+]
+
+[[channel]]
+name = "backup_shell"
+ends = [
+  { pd = "shell", id = 8, pp = true },
+  { pd = "backup", id = 0 },
+]
+
+[[channel]]
+name = "backup_fs"
+ends = [
+  { pd = "fs_server", id = 8 },
+  { pd = "backup", id = 1, pp = true },
+]

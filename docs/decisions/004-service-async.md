@@ -35,7 +35,7 @@ Constraints from lerux:
 
 2. **Ship `lerux-service-async`**: minimal `no_std` helpers (`poll_fn`, single-task runner, channel wake flag). No full multi-task executor, no preemption, no cothread stacks.
 
-3. **Adopt first in `fs-server`**: sector I/O gains a waker-friendly API; the LERUXFS1 **format** path runs as an async task. Remaining FS jobs may stay as step machines until migrated. Net-server migration is a follow-up.
+3. **Adopt first in `fs-server`**: sector I/O gains a waker-friendly API; the LERUXFS2 **format** path runs as an async task. Remaining FS jobs may stay as step machines until migrated. Net-server migration is a follow-up.
 
 4. **Do not** change app-facing `FsRequest` / `NetRequest` contracts in this phase.
 

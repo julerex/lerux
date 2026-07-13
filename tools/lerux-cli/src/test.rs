@@ -339,26 +339,16 @@ fn curl_check(url: &str, expect_substr: &str, timeout_secs: u64) -> Result<()> {
     bail!("curl {url} failed: expected {expect_substr:?}, last={last_error:?}");
 }
 
-pub fn default_curls(board: &str) -> Vec<(String, String)> {
-    if matches!(
-        board,
-        "qemu_virt_aarch64_http"
-            | "qemu_virt_aarch64_http_composed"
-            | "qemu_virt_riscv64_http"
-            | "x86_64_generic_http"
-    ) {
-        vec![("http://127.0.0.1:18080/".into(), "lerux: HTTP ok".into())]
-    } else if matches!(
-        board,
-        "qemu_virt_aarch64_workstation"
-            | "qemu_virt_riscv64_workstation"
-            | "x86_64_generic_workstation"
-    ) {
-        // Supervisor writes /boot.log; HTML listing (Phase 58) includes the name.
-        vec![("http://127.0.0.1:18080/".into(), "boot.log".into())]
-    } else {
-        Vec::new()
-    }
+/// Host curls after boot, from the board's `curl_expect` in boards.toml.
+pub fn default_curls(root: &std::path::Path, board: &str) -> Vec<(String, String)> {
+    let Ok(boards) = crate::board::load_boards(root) else {
+        return Vec::new();
+    };
+    boards
+        .get(board)
+        .and_then(|b| b.curl_expect.clone())
+        .map(|expect| vec![("http://127.0.0.1:18080/".into(), expect)])
+        .unwrap_or_default()
 }
 
 pub fn run_board_test(
@@ -377,11 +367,10 @@ pub fn run_board_test_with_mode(
     config: &str,
     mode: TestMode,
 ) -> Result<()> {
-    if crate::qemu::is_http_board(board) {
+    let ctx = crate::qemu::load_qemu_context(root, board, build_dir, config)?;
+    if crate::qemu::is_http_board(&ctx.board) {
         crate::qemu::cleanup_http_conflicts();
     }
-
-    let ctx = crate::qemu::load_qemu_context(root, board, build_dir, config)?;
     let hardware = crate::qemu::is_hardware_board(&ctx);
     let hw_serial_set = std::env::var_os("LERUX_HW_SERIAL").is_some();
 
@@ -425,18 +414,10 @@ pub fn run_board_test_with_mode(
         return run_hw_serial_smoke(&test);
     }
 
-    crate::qemu::ensure_qemu_binary(&ctx.root, ctx.board.qemu.as_deref().unwrap_or_default())?;
+    crate::qemu::ensure_qemu_binary(&ctx.root, &ctx.board)?;
     crate::qemu::print_http_hint(&ctx);
 
-    if matches!(
-        board,
-        "qemu_virt_aarch64_virtio"
-            | "qemu_virt_aarch64_composed"
-            | "qemu_virt_aarch64_blk_composed"
-            | "qemu_virt_aarch64_ipc_composed"
-            | "qemu_virt_riscv64_virtio"
-            | "x86_64_generic_virtio"
-    ) {
+    if ctx.board.needs_disk() {
         let disk = root.join("support/disk.img");
         if !disk.is_file() {
             crate::disk_img::disk_img(root)?;

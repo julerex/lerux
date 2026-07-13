@@ -174,7 +174,7 @@ LionsOS `components/fs/fat`, `components/fs/nfs`, `examples/fileio`.
 - [x] Keep LERUXFS as the default smoke FS (`just test-fs`; Phase 50 → **LERUXFS2**)
 - [x] FAT16 backend behind `fs-server` (`lerux-fat` + `backend-fat`) matching `Open`/`Create`/`Read`/`Write`/`Stat`/`ListDir`/`Poll` on virtio-blk
 - [ ] Optional NFS client PD or `fs-server` backend for QEMU user-net (deferred)
-- [x] Board/feature selection: `qemu_virt_aarch64_fs` (LERUXFS1) vs `qemu_virt_aarch64_fs_fat` (FAT16); Cargo features `backend-lerux` / `backend-fat`
+- [x] Board/feature selection: `qemu_virt_aarch64_fs` (LERUXFS2) vs `qemu_virt_aarch64_fs_fat` (FAT16); Cargo features `backend-lerux` / `backend-fat`
 - [x] Shell / edit unchanged at IPC boundary
 - [x] Smoke: `just test-fs-fat`; format choice in `docs/context.md`
 
@@ -203,7 +203,7 @@ LionsOS `components/fs/fat`, `components/fs/nfs`, `examples/fileio`.
 
 - [x] Spike: stackful libmicrokitco **vs** rust-sel4 `LocalPool` **vs** thin in-tree stackless async → [ADR-004](decisions/004-service-async.md)
 - [x] ADR: **stackless coop async** server-internal; clients keep poll RPC
-- [x] Adopt in `fs-server`: `lerux-service-async` + async sector helpers; LERUXFS1 **format/mount** as `SingleTask` future
+- [x] Adopt in `fs-server`: `lerux-service-async` + async sector helpers; LERUXFS2 **format/mount** as `SingleTask` future
 - [x] Clients keep poll-based RPC (`FsRequest::Poll`)
 - [x] Smokes: `just test-fs`, `just test-fs-fat`
 

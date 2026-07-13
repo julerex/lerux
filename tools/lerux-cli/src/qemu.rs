@@ -1,3 +1,8 @@
+//! QEMU launch derived from `support/boards.toml` (`[board].qemu` table).
+//!
+//! The board entry is the whole interface: arch picks the base machine,
+//! `disk`/`net`/`sp804`/`tcp_echo`/`http_one` pick devices and host helpers.
+
 use std::{
     path::{Path, PathBuf},
     process::Command,
@@ -6,7 +11,7 @@ use std::{
 use anyhow::{bail, Result};
 
 use crate::{
-    board::{get_board, load_boards, Board},
+    board::{get_board, load_boards, Board, DiskMode, NetMode, QemuConfig},
     build_sdk::sdk_path,
     install::install_sp804_qemu,
     path::host_path,
@@ -23,307 +28,35 @@ pub struct QemuContext {
     pub config: String,
 }
 
+const HOSTFWD: &str = "user,id=netdev0,hostfwd=tcp::18080-:8080";
+
 pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
     let board_build = board_build_dir(&ctx.root, &ctx.board_name, &ctx.build_dir);
     let loader = board_build.join("loader.img");
     let disk = ctx.root.join("support/disk.img");
 
-    let qemu_profile = ctx.board.qemu.as_deref();
-    if qemu_profile.is_none() {
+    let Some(qemu) = ctx.board.qemu() else {
         bail!(
             "board {:?} is hardware-only (no QEMU profile); run `lerux image --board {}` then deploy loader.img manually (e.g. via U-Boot)",
             ctx.board_name, ctx.board_name
         );
-    }
-    let qemu_profile = qemu_profile.unwrap();
+    };
 
     let mut path = host_path(&ctx.root);
-    if needs_sp804(qemu_profile) {
+    if qemu.sp804 {
         let sp804 = install_sp804_qemu(&ctx.root)?;
         path = format!("{}:{}", sp804.display(), path);
     }
 
-    let mut cmd = match qemu_profile {
-        "aarch64" => {
-            let mut c = Command::new("qemu-system-aarch64");
-            c.args([
-                "-machine",
-                "virt,virtualization=on",
-                "-cpu",
-                "cortex-a53",
-                "-m",
-                "size=2G",
-                "-serial",
-                "mon:stdio",
-                "-nographic",
-                "-device",
-                &format!(
-                    "loader,file={},addr=0x70000000,cpu-num=0",
-                    path_str(&loader)
-                ),
-            ]);
-            c
-        }
-        "aarch64_debug" => {
-            // Same machine as other aarch64 virt boards; no virtio devices.
-            let mut c = Command::new("qemu-system-aarch64");
-            c.args([
-                "-machine",
-                "virt,virtualization=on",
-                "-cpu",
-                "cortex-a53",
-                "-m",
-                "size=2G",
-                "-serial",
-                "mon:stdio",
-                "-nographic",
-                "-device",
-                &format!(
-                    "loader,file={},addr=0x70000000,cpu-num=0",
-                    path_str(&loader)
-                ),
-            ]);
-            c
-        }
-        "aarch64_init"
-        | "aarch64_virtio"
-        | "aarch64_blk"
-        | "aarch64_blk_composed"
-        | "aarch64_fs"
-        | "aarch64_fs_fat"
-        | "aarch64_composed"
-        | "aarch64_http"
-        | "aarch64_http_composed"
-        | "aarch64_ipc_composed"
-        | "aarch64_net"
-        | "aarch64_fetch"
-        | "aarch64_net_composed"
-        | "aarch64_workstation" => {
-            let mut c = Command::new("qemu-system-aarch64");
-            c.args([
-                "-machine",
-                "virt,virtualization=on",
-                "-cpu",
-                "cortex-a53",
-                "-m",
-                "size=2G",
-                "-serial",
-                "mon:stdio",
-                "-nographic",
-                "-device",
-                &format!(
-                    "loader,file={},addr=0x70000000,cpu-num=0",
-                    path_str(&loader)
-                ),
-            ]);
-            if matches!(qemu_profile, "aarch64_virtio" | "aarch64_composed") {
-                ensure_disk(&disk)?;
-                c.args([
-                    "-device",
-                    "virtio-net-device,netdev=netdev0",
-                    "-netdev",
-                    "user,id=netdev0",
-                    "-device",
-                    "virtio-blk-device,drive=blkdev0",
-                    "-blockdev",
-                    &format!(
-                        "node-name=blkdev0,read-only=on,driver=file,filename={}",
-                        path_str(&disk)
-                    ),
-                ]);
-            } else if matches!(qemu_profile, "aarch64_workstation") {
-                ensure_disk(&disk)?;
-                // Blk + net with hostfwd for Phase 40 HTTP file browser smoke.
-                c.args([
-                    "-device",
-                    "virtio-net-device,netdev=netdev0",
-                    "-netdev",
-                    "user,id=netdev0,hostfwd=tcp::18080-:8080",
-                    "-device",
-                    "virtio-blk-device,drive=blkdev0",
-                    "-blockdev",
-                    &format!(
-                        "node-name=blkdev0,read-only=off,driver=file,filename={}",
-                        path_str(&disk)
-                    ),
-                ]);
-            } else if matches!(
-                qemu_profile,
-                "aarch64_blk"
-                    | "aarch64_blk_composed"
-                    | "aarch64_fs"
-                    | "aarch64_fs_fat"
-                    | "aarch64_ipc_composed"
-            ) {
-                ensure_disk(&disk)?;
-                // Net device occupies the first virtio-mmio slot; blk stays at +0xc00
-                // in the same page (see virtio-blk-driver VIRTIO_BLK_MMIO_OFFSET).
-                c.args([
-                    "-device",
-                    "virtio-net-device,netdev=netdev0",
-                    "-netdev",
-                    "user,id=netdev0",
-                    "-device",
-                    "virtio-blk-device,drive=blkdev0",
-                    "-blockdev",
-                    &format!(
-                        "node-name=blkdev0,read-only=off,driver=file,filename={}",
-                        path_str(&disk)
-                    ),
-                ]);
-            } else if matches!(
-                qemu_profile,
-                "aarch64_net" | "aarch64_fetch" | "aarch64_net_composed"
-            ) {
-                c.args([
-                    "-device",
-                    "virtio-net-device,netdev=netdev0",
-                    "-netdev",
-                    "user,id=netdev0",
-                ]);
-            } else if matches!(qemu_profile, "aarch64_http" | "aarch64_http_composed") {
-                c.args([
-                    "-device",
-                    "virtio-net-device,netdev=netdev0",
-                    "-netdev",
-                    "user,id=netdev0,hostfwd=tcp::18080-:8080",
-                ]);
-            }
-            c
-        }
-        "riscv64" => {
-            let mut c = Command::new("qemu-system-riscv64");
-            c.args([
-                "-machine",
-                "virt",
-                "-m",
-                "size=2G",
-                "-nographic",
-                "-serial",
-                "mon:stdio",
-                "-kernel",
-                &path_str(&loader),
-            ]);
-            c
-        }
-        "riscv64_virtio" => {
-            ensure_disk(&disk)?;
-            let mut c = Command::new("qemu-system-riscv64");
-            c.args([
-                "-machine",
-                "virt",
-                "-m",
-                "size=2G",
-                "-nographic",
-                "-serial",
-                "mon:stdio",
-                "-kernel",
-                &path_str(&loader),
-                "-device",
-                "virtio-blk-device,bus=virtio-mmio-bus.0,drive=blkdev0",
-                "-blockdev",
-                &format!(
-                    "node-name=blkdev0,read-only=on,driver=file,filename={}",
-                    path_str(&disk)
-                ),
-                "-device",
-                "virtio-net-device,bus=virtio-mmio-bus.1,netdev=netdev0",
-                "-netdev",
-                "user,id=netdev0",
-            ]);
-            c
-        }
-        "riscv64_blk" => {
-            ensure_disk(&disk)?;
-            let mut c = Command::new("qemu-system-riscv64");
-            c.args([
-                "-machine",
-                "virt",
-                "-m",
-                "size=2G",
-                "-nographic",
-                "-serial",
-                "mon:stdio",
-                "-kernel",
-                &path_str(&loader),
-                "-device",
-                "virtio-blk-device,bus=virtio-mmio-bus.0,drive=blkdev0",
-                "-blockdev",
-                &format!(
-                    "node-name=blkdev0,read-only=off,driver=file,filename={}",
-                    path_str(&disk)
-                ),
-            ]);
-            c
-        }
-        "riscv64_http" => {
-            let mut c = Command::new("qemu-system-riscv64");
-            c.args([
-                "-machine",
-                "virt",
-                "-m",
-                "size=2G",
-                "-nographic",
-                "-serial",
-                "mon:stdio",
-                "-kernel",
-                &path_str(&loader),
-                "-device",
-                "virtio-net-device,bus=virtio-mmio-bus.1,netdev=netdev0",
-                "-netdev",
-                "user,id=netdev0,hostfwd=tcp::18080-:8080",
-            ]);
-            c
-        }
-        "riscv64_workstation" => {
-            ensure_disk(&disk)?;
-            let mut c = Command::new("qemu-system-riscv64");
-            c.args([
-                "-machine",
-                "virt",
-                "-m",
-                "size=2G",
-                "-nographic",
-                "-serial",
-                "mon:stdio",
-                "-kernel",
-                &path_str(&loader),
-                "-device",
-                "virtio-blk-device,bus=virtio-mmio-bus.0,drive=blkdev0",
-                "-blockdev",
-                &format!(
-                    "node-name=blkdev0,read-only=off,driver=file,filename={}",
-                    path_str(&disk)
-                ),
-                "-device",
-                "virtio-net-device,bus=virtio-mmio-bus.1,netdev=netdev0",
-                "-netdev",
-                "user,id=netdev0,hostfwd=tcp::18080-:8080",
-            ]);
-            c
-        }
-        "riscv64_net" => {
-            let mut c = Command::new("qemu-system-riscv64");
-            c.args([
-                "-machine",
-                "virt",
-                "-m",
-                "size=2G",
-                "-nographic",
-                "-serial",
-                "mon:stdio",
-                "-kernel",
-                &path_str(&loader),
-                "-device",
-                "virtio-net-device,bus=virtio-mmio-bus.1,netdev=netdev0",
-                "-netdev",
-                "user,id=netdev0",
-            ]);
-            c
-        }
-        "x86_64" | "x86_64_virtio" | "x86_64_blk" | "x86_64_http" | "x86_64_net"
-        | "x86_64_workstation" => x86_command(ctx, &loader, &disk)?,
-        other => bail!("unsupported qemu profile {other}"),
+    if qemu.disk != DiskMode::None {
+        ensure_disk(&disk)?;
+    }
+
+    let mut cmd = match ctx.board.arch.as_str() {
+        "aarch64" => aarch64_command(qemu, &loader, &disk),
+        "riscv64" => riscv64_command(qemu, &loader, &disk),
+        "x86_64" => x86_command(ctx, qemu, &loader, &disk)?,
+        other => bail!("unsupported arch {other}"),
     };
 
     cmd.env("PATH", path);
@@ -331,7 +64,101 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
     Ok(cmd)
 }
 
-fn x86_command(ctx: &QemuContext, loader: &Path, disk: &Path) -> Result<Command> {
+fn netdev_arg(net: NetMode) -> Option<&'static str> {
+    match net {
+        NetMode::None => None,
+        NetMode::User => Some("user,id=netdev0"),
+        NetMode::Hostfwd => Some(HOSTFWD),
+    }
+}
+
+fn blockdev_arg(disk: DiskMode, disk_path: &Path) -> Option<String> {
+    let read_only = match disk {
+        DiskMode::None => return None,
+        DiskMode::Ro => "on",
+        DiskMode::Rw => "off",
+    };
+    Some(format!(
+        "node-name=blkdev0,read-only={read_only},driver=file,filename={}",
+        path_str(disk_path)
+    ))
+}
+
+fn aarch64_command(qemu: &QemuConfig, loader: &Path, disk: &Path) -> Command {
+    let mut c = Command::new("qemu-system-aarch64");
+    c.args([
+        "-machine",
+        "virt,virtualization=on",
+        "-cpu",
+        "cortex-a53",
+        "-m",
+        "size=2G",
+        "-serial",
+        "mon:stdio",
+        "-nographic",
+        "-device",
+        &format!("loader,file={},addr=0x70000000,cpu-num=0", path_str(loader)),
+    ]);
+    // Virtio-mmio slot order matters: net first, blk at +0xc00 in the same page
+    // (see virtio-blk-driver VIRTIO_BLK_MMIO_OFFSET).
+    if let Some(netdev) = netdev_arg(qemu.net) {
+        c.args([
+            "-device",
+            "virtio-net-device,netdev=netdev0",
+            "-netdev",
+            netdev,
+        ]);
+    }
+    if let Some(blockdev) = blockdev_arg(qemu.disk, disk) {
+        c.args([
+            "-device",
+            "virtio-blk-device,drive=blkdev0",
+            "-blockdev",
+            &blockdev,
+        ]);
+    }
+    c
+}
+
+fn riscv64_command(qemu: &QemuConfig, loader: &Path, disk: &Path) -> Command {
+    let mut c = Command::new("qemu-system-riscv64");
+    c.args([
+        "-machine",
+        "virt",
+        "-m",
+        "size=2G",
+        "-nographic",
+        "-serial",
+        "mon:stdio",
+        "-kernel",
+        &path_str(loader),
+    ]);
+    // Fixed virtio-mmio bus slots: blk on bus.0, net on bus.1 (match system_vars).
+    if let Some(blockdev) = blockdev_arg(qemu.disk, disk) {
+        c.args([
+            "-device",
+            "virtio-blk-device,bus=virtio-mmio-bus.0,drive=blkdev0",
+            "-blockdev",
+            &blockdev,
+        ]);
+    }
+    if let Some(netdev) = netdev_arg(qemu.net) {
+        c.args([
+            "-device",
+            "virtio-net-device,bus=virtio-mmio-bus.1,netdev=netdev0",
+            "-netdev",
+            netdev,
+        ]);
+    }
+    c
+}
+
+fn x86_command(
+    ctx: &QemuContext,
+    qemu: &QemuConfig,
+    loader: &Path,
+    disk: &Path,
+) -> Result<Command> {
     let sdk = sdk_path(&ctx.root)?;
     let kernel = PathBuf::from(&sdk)
         .join("board")
@@ -363,69 +190,22 @@ fn x86_command(ctx: &QemuContext, loader: &Path, disk: &Path) -> Result<Command>
         "-initrd",
         &path_str(loader),
     ]);
-
-    match ctx.board.qemu.as_deref().unwrap_or_default() {
-        "x86_64_virtio" => {
-            ensure_disk(disk)?;
-            c.args([
-                "-device",
-                "virtio-blk-pci,id=blk0,addr=0x3.0x0,drive=blkdev0",
-                "-blockdev",
-                &format!(
-                    "node-name=blkdev0,read-only=on,driver=file,filename={}",
-                    path_str(disk)
-                ),
-                "-device",
-                "virtio-net-pci,id=net0,addr=0x4.0x0,netdev=netdev0",
-                "-netdev",
-                "user,id=netdev0",
-            ]);
-        }
-        "x86_64_workstation" => {
-            ensure_disk(disk)?;
-            c.args([
-                "-device",
-                "virtio-blk-pci,id=blk0,addr=0x3.0x0,drive=blkdev0",
-                "-blockdev",
-                &format!(
-                    "node-name=blkdev0,read-only=off,driver=file,filename={}",
-                    path_str(disk)
-                ),
-                "-device",
-                "virtio-net-pci,id=net0,addr=0x4.0x0,netdev=netdev0",
-                "-netdev",
-                "user,id=netdev0,hostfwd=tcp::18080-:8080",
-            ]);
-        }
-        "x86_64_blk" => {
-            ensure_disk(disk)?;
-            c.args([
-                "-device",
-                "virtio-blk-pci,id=blk0,addr=0x3.0x0,drive=blkdev0",
-                "-blockdev",
-                &format!(
-                    "node-name=blkdev0,read-only=off,driver=file,filename={}",
-                    path_str(disk)
-                ),
-            ]);
-        }
-        "x86_64_http" => {
-            c.args([
-                "-device",
-                "virtio-net-pci,id=net0,addr=0x4.0x0,netdev=netdev0",
-                "-netdev",
-                "user,id=netdev0,hostfwd=tcp::18080-:8080",
-            ]);
-        }
-        "x86_64_net" => {
-            c.args([
-                "-device",
-                "virtio-net-pci,id=net0,addr=0x4.0x0,netdev=netdev0",
-                "-netdev",
-                "user,id=netdev0",
-            ]);
-        }
-        _ => {}
+    // Fixed PCI slots: blk at 0x3, net at 0x4 (match system_vars BAR addresses).
+    if let Some(blockdev) = blockdev_arg(qemu.disk, disk) {
+        c.args([
+            "-device",
+            "virtio-blk-pci,id=blk0,addr=0x3.0x0,drive=blkdev0",
+            "-blockdev",
+            &blockdev,
+        ]);
+    }
+    if let Some(netdev) = netdev_arg(qemu.net) {
+        c.args([
+            "-device",
+            "virtio-net-pci,id=net0,addr=0x4.0x0,netdev=netdev0",
+            "-netdev",
+            netdev,
+        ]);
     }
     Ok(c)
 }
@@ -437,31 +217,14 @@ fn ensure_disk(disk: &Path) -> Result<()> {
     bail!("missing {}; run `lerux disk-img`", disk.display());
 }
 
-fn needs_sp804(profile: &str) -> bool {
-    matches!(
-        profile,
-        "aarch64_init"
-            | "aarch64_composed"
-            | "aarch64_blk_composed"
-            | "aarch64_http_composed"
-            | "aarch64_ipc_composed"
-            | "aarch64_net_composed"
-            | "aarch64_workstation"
-    )
-}
-
-pub fn is_fetch_board(board: &str) -> bool {
-    board == "qemu_virt_aarch64_fetch"
-}
-
 pub fn setup_test_helpers(ctx: &QemuContext) -> Result<Option<std::process::Child>> {
-    if is_fetch_board(&ctx.board_name) {
+    let Some(qemu) = ctx.board.qemu() else {
+        return Ok(None);
+    };
+    if qemu.http_one {
         return Ok(Some(crate::http_one::start_http_one_background(8081)?));
     }
-    if matches!(
-        ctx.board.qemu.as_deref().unwrap_or_default(),
-        "aarch64_virtio" | "aarch64_composed" | "riscv64_virtio" | "x86_64_virtio"
-    ) {
+    if qemu.tcp_echo {
         return Ok(Some(start_tcp_echo_background(18080)?));
     }
     Ok(None)
@@ -481,17 +244,9 @@ pub fn cleanup_http_conflicts() {
     std::thread::sleep(std::time::Duration::from_millis(500));
 }
 
-pub fn is_http_board(board: &str) -> bool {
-    matches!(
-        board,
-        "qemu_virt_aarch64_http"
-            | "qemu_virt_aarch64_http_composed"
-            | "qemu_virt_riscv64_http"
-            | "x86_64_generic_http"
-            | "qemu_virt_aarch64_workstation"
-            | "qemu_virt_riscv64_workstation"
-            | "x86_64_generic_workstation"
-    )
+/// Boards whose smoke includes a host curl of the hostfwd port.
+pub fn is_http_board(board: &Board) -> bool {
+    board.curl_expect.is_some()
 }
 
 pub fn is_hardware_board(ctx: &QemuContext) -> bool {
@@ -516,33 +271,20 @@ pub fn load_qemu_context(
 }
 
 pub fn print_http_hint(ctx: &QemuContext) {
-    if matches!(
-        ctx.board.qemu.as_deref().unwrap_or_default(),
-        "aarch64_http" | "aarch64_http_composed" | "riscv64_http" | "x86_64_http"
-    ) {
+    if ctx.board.qemu().is_some_and(|q| q.net == NetMode::Hostfwd) {
         eprintln!("Guest listens on :8080; hostfwd maps 127.0.0.1:18080. In another terminal:");
         eprintln!("  curl http://127.0.0.1:18080/");
     }
 }
 
-pub fn ensure_qemu_binary(root: &Path, profile: &str) -> Result<()> {
-    let binary = match profile {
-        "riscv64"
-        | "riscv64_virtio"
-        | "riscv64_blk"
-        | "riscv64_http"
-        | "riscv64_net"
-        | "riscv64_workstation" => "qemu-system-riscv64",
-        "x86_64" | "x86_64_virtio" | "x86_64_blk" | "x86_64_http" | "x86_64_net"
-        | "x86_64_workstation" => "qemu-system-x86_64",
-        _ => "qemu-system-aarch64",
-    };
+pub fn ensure_qemu_binary(root: &Path, board: &Board) -> Result<()> {
+    let binary = format!("qemu-system-{}", board.arch);
     let path = host_path(root);
     // SAFETY: host build tooling mutates the current process environment only.
     unsafe {
         std::env::set_var("PATH", &path);
     }
-    if !command_on_path(binary) {
+    if !command_on_path(&binary) {
         bail!("{binary} not found in PATH");
     }
     Ok(())

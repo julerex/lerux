@@ -277,7 +277,7 @@ Tracer-bullet order: FS (32) → TCP/fetch (31) → shell (34) → supervisor (3
 - [x] `lerux-fs` crate + `fs-server` PD — virtio-blk client + `LERUXFS1` on-disk format (LBAs 1+)
 - [x] `fs-client` PD — write/read round-trip smoke
 - [x] Board `qemu_virt_aarch64_fs` (`just test-fs`); smoke expects `lerux-fs: round-trip ok`
-- [x] CI matrix job `fs` (26 smoke jobs total)
+- [x] CI matrix job `fs` (31 smoke jobs in CI; `just test-all` runs 33 boards)
 
 ## Phase 33 — Supervisor + service graph
 
@@ -367,11 +367,11 @@ Apps on `NetRequest` via `net-server`; aarch64 virtio-net **unified-dma** (no se
 
 ## Phase 44 — FS backends ✅ (FAT slice)
 
-`LERUXFS1` remains default (`just test-fs`). Alternate **FAT16** backend (`lerux-fat`, `backend-fat`, `just test-fs-fat`). NFS and multi-cluster stretch deferred — [`plan-au-ts.md`](plan-au-ts.md).
+`LERUXFS2` is default (`just test-fs`). Alternate **FAT16** backend (`lerux-fat`, `backend-fat`, `just test-fs-fat`). NFS and multi-cluster stretch deferred — [`plan-au-ts.md`](plan-au-ts.md).
 
 ## Phase 45 — Service async ✅
 
-Stackless coop async for service PDs ([ADR-004](decisions/004-service-async.md), `lerux-service-async`). `fs-server` LERUXFS1 format runs as a `SingleTask` future; clients keep `Poll` RPC.
+Stackless coop async for service PDs ([ADR-004](decisions/004-service-async.md), `lerux-service-async`). `fs-server` LERUXFS2 format runs as a `SingleTask` future; clients keep `Poll` RPC.
 
 ## Phase 46 — Debug PD ✅
 

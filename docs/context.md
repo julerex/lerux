@@ -35,7 +35,7 @@ lerux builds **Rust-only userspace** on the formally verified [seL4](https://sel
 
 Echo IPC and virtio smoke tests run on aarch64, RISC-V virt, and x86 (PCI virtio on q35). Block IPC (read + write) and net IPC (UDP TX) run on all three arches. RTC/timer init runs on all three: aarch64 PL031/SP804, RISC-V Goldfish RTC + `rdtime`, x86 CMOS RTC + TSC (Phase 56).
 
-The composed board (`qemu_virt_aarch64_composed`) runs `boot-init` and `hello`+virtio in one system. Both PDs log via serial IPC (multi-client serial driver). `boot-init` notifies `hello` when init is complete before virtio starts (composed-sync). See [`boards.md`](boards.md) and [`plan.md`](plan.md).
+The composed board (`qemu_virt_aarch64_composed`) runs `supervisor` (historically `boot-init`) and `hello`+virtio in one system. Both PDs log via serial IPC (multi-client serial driver). `supervisor` notifies `hello` when init is complete before virtio starts (composed-sync). See [`boards.md`](boards.md) and [`plan.md`](plan.md).
 
 ## Non-POSIX direction
 
@@ -100,7 +100,7 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 
 1. Define request/response types in `lerux-interface-types`
 2. Implement client and/or server PD (`#![no_std]`, `lerux-ipc`)
-3. Wire channels in a profile `.system` template; match `Channel` constants to XML
+3. Wire channels in the profile `[[channel]]` manifest (workstation templates are channel-free; `lerux profile check-channels` validates ends)
 4. Add `board-<profile>` features in PD `Cargo.toml` files
 5. Register board in `support/boards.toml`, smoke expects in `lerux-cli`, CI job if needed
 

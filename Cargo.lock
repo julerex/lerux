@@ -942,6 +942,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "lerux-driver-protocols"
+version = "0.1.0"
+dependencies = [
+ "embedded-hal-nb",
+ "sel4-driver-interfaces",
+ "sel4-microkit",
+ "sel4-microkit-simple-ipc",
+ "serde",
+]
+
+[[package]]
 name = "lerux-fat"
 version = "0.1.0"
 dependencies = [
@@ -959,6 +970,7 @@ dependencies = [
 name = "lerux-interface-types"
 version = "0.1.0"
 dependencies = [
+ "postcard",
  "serde",
 ]
 
@@ -966,6 +978,7 @@ dependencies = [
 name = "lerux-ipc"
 version = "0.1.0"
 dependencies = [
+ "lerux-interface-types",
  "sel4-microkit",
  "sel4-microkit-simple-ipc",
  "serde",
@@ -992,14 +1005,6 @@ version = "0.1.0"
 [[package]]
 name = "lerux-service-async"
 version = "0.1.0"
-
-[[package]]
-name = "lerux-sync"
-version = "0.1.0"
-dependencies = [
- "lock_api",
- "sel4-sync",
-]
 
 [[package]]
 name = "lerux-virtio-hal"
@@ -1343,10 +1348,9 @@ checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
 name = "rdtime-timer-driver"
 version = "0.1.0"
 dependencies = [
+ "lerux-driver-protocols",
  "sel4-driver-interfaces",
  "sel4-microkit",
- "sel4-microkit-simple-ipc",
- "serde",
 ]
 
 [[package]]
@@ -1850,16 +1854,6 @@ version = "0.1.0"
 source = "git+https://github.com/seL4/rust-sel4?tag=v4.0.0#7a2321f2d84310ba7a09fe7f5988e6dcecde3566"
 
 [[package]]
-name = "sel4-sync"
-version = "0.1.0"
-source = "git+https://github.com/seL4/rust-sel4?tag=v4.0.0#7a2321f2d84310ba7a09fe7f5988e6dcecde3566"
-dependencies = [
- "lock_api",
- "sel4",
- "sel4-immediate-sync-once-cell",
-]
-
-[[package]]
 name = "sel4-sys"
 version = "0.1.0"
 source = "git+https://github.com/seL4/rust-sel4?tag=v4.0.0#7a2321f2d84310ba7a09fe7f5988e6dcecde3566"
@@ -1972,6 +1966,7 @@ version = "0.1.0"
 dependencies = [
  "embedded-hal-nb",
  "heapless",
+ "lerux-driver-protocols",
  "lerux-logging",
  "log",
  "sel4",
@@ -1979,20 +1974,18 @@ dependencies = [
  "sel4-microkit",
  "sel4-microkit-simple-ipc",
  "sel4-pl011-driver",
- "serde",
 ]
 
 [[package]]
 name = "serial-virt"
 version = "0.1.0"
 dependencies = [
- "embedded-hal-nb",
  "heapless",
+ "lerux-driver-protocols",
  "lerux-logging",
  "log",
  "sel4-microkit",
  "sel4-microkit-simple-ipc",
- "serde",
 ]
 
 [[package]]
@@ -2203,10 +2196,9 @@ checksum = "5d99f8c9a7727884afe522e9bd5edbfc91a3312b36a77b5fb8926e4c31a41801"
 name = "tsc-timer-driver"
 version = "0.1.0"
 dependencies = [
+ "lerux-driver-protocols",
  "sel4-driver-interfaces",
  "sel4-microkit",
- "sel4-microkit-simple-ipc",
- "serde",
 ]
 
 [[package]]

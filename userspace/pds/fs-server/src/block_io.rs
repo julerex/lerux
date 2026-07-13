@@ -24,7 +24,6 @@ use sel4_shared_ring_buffer_block_io_types::BlockIORequest;
 use crate::config;
 
 pub const BLK_DRIVER: Channel = Channel::new(1);
-pub const CLIENT: Channel = Channel::new(2);
 #[cfg(feature = "workstation")]
 pub const LOG_SERVER: Channel = Channel::new(4);
 

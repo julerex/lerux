@@ -7,31 +7,17 @@ use lerux_interface_types::{
     ConfigRequest, ConfigResponse, FsRequest, FsResponse, CFG_SECRET_PREFIX, MAX_CONFIG_KEY_LEN,
     MAX_CONFIG_VAL_LEN, MAX_FS_PATH,
 };
-use lerux_ipc::{call, recv, send, send_unspecified_error};
+use lerux_ipc::{recv, send, send_unspecified_error, FsClient};
 use lerux_logging::{debug, log};
 use sel4_microkit::{protection_domain, Channel, Handler, Infallible, MessageInfo};
 
-const FS_SERVER: Channel = Channel::new(3);
+const FS_SERVER: FsClient = FsClient::new(Channel::new(3));
 const SUPERVISOR: Channel = Channel::new(0);
 const SHELL: Channel = Channel::new(1);
 const NET_SERVER: Channel = Channel::new(2);
 
 fn fs_call(req: FsRequest) -> FsResponse {
-    match call::<FsRequest, FsResponse>(FS_SERVER, req) {
-        Ok(FsResponse::Pending) => poll_fs(),
-        Ok(other) => other,
-        Err(_) => FsResponse::Error,
-    }
-}
-
-fn poll_fs() -> FsResponse {
-    loop {
-        match call::<FsRequest, FsResponse>(FS_SERVER, FsRequest::Poll) {
-            Ok(FsResponse::Pending) => {}
-            Ok(other) => return other,
-            Err(_) => return FsResponse::Error,
-        }
-    }
+    FS_SERVER.call(req)
 }
 
 fn is_secret_key(key: &[u8]) -> bool {
@@ -109,11 +95,8 @@ fn write_config_file(key: &[u8], value: &[u8]) -> bool {
     let Some(pos) = key_to_path(key, &mut path) else {
         return false;
     };
-    // Unlink existing so create is clean (size may shrink).
-    let _ = fs_call(FsRequest::unlink(&path[..pos]));
-    let handle = match fs_call(FsRequest::create(&path[..pos])) {
-        FsResponse::Handle { id } => id,
-        _ => return false,
+    let Ok(handle) = FS_SERVER.create_clean(&path[..pos]) else {
+        return false;
     };
     matches!(fs_call(FsRequest::write(handle, 0, value)), FsResponse::Ok)
 }

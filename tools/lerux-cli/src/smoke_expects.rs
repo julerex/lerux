@@ -85,7 +85,7 @@ pub fn smoke_test_for_board(root: &Path, board: &str) -> Result<SmokeTest> {
 
     Ok(SmokeTest {
         expects: spec.expects.clone(),
-        curls: crate::test::default_curls(board),
+        curls: crate::test::default_curls(root, board),
         unordered: spec.unordered.unwrap_or(file.defaults.unordered),
         timeout_secs: spec
             .timeout_secs

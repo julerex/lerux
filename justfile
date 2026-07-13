@@ -17,10 +17,11 @@ export RUSTC_BOOTSTRAP := "1"
 
 default: build
 
-# Format and clippy for host crates (no SDK required)
+# Format, clippy, and host tests for host crates (no SDK required)
 check:
     cargo fmt --all --check
     CARGO_TARGET_DIR={{root}}/build/host cargo clippy -p lerux-cli -p lerux-interface-types --all-targets -- -D warnings
+    CARGO_TARGET_DIR={{root}}/build/host cargo test -p lerux-interface-types
 
 # Cross-target clippy for PD + shared userspace crates (requires SDK)
 check-pd:

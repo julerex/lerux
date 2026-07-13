@@ -7,12 +7,12 @@ use lerux_interface_types::{
     ChatRequest, ChatResponse, NetRequest, NetResponse, MAX_CHAT_LINES, MAX_CHAT_MSG,
     MAX_CHAT_ROOM, MAX_CHAT_ROOMS,
 };
-use lerux_ipc::{call, recv, send, send_unspecified_error};
+use lerux_ipc::{recv, send, send_unspecified_error, NetClient};
 use lerux_logging::{debug, log};
 use sel4_microkit::{protection_domain, Channel, Handler, Infallible, MessageInfo};
 
 const SHELL: Channel = Channel::new(0);
-const NET_SERVER: Channel = Channel::new(1);
+const NET_SERVER: NetClient = NetClient::new(Channel::new(1));
 
 struct ChatRing {
     count: u8,
@@ -73,22 +73,8 @@ impl ChatRing {
     }
 }
 
-fn poll_net() -> NetResponse {
-    loop {
-        match call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::Poll) {
-            Ok(NetResponse::Pending) => {}
-            Ok(other) => return other,
-            Err(_) => return NetResponse::Error,
-        }
-    }
-}
-
 fn net_call(req: NetRequest) -> NetResponse {
-    match call::<NetRequest, NetResponse>(NET_SERVER, req) {
-        Ok(NetResponse::Pending) => poll_net(),
-        Ok(other) => other,
-        Err(_) => NetResponse::Error,
-    }
+    NET_SERVER.call(req)
 }
 
 #[protection_domain]

@@ -29,6 +29,8 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `qemu_virt_riscv64_echo` | riscv64 | `just test-riscv-echo` | echo + serial |
 | `qemu_virt_riscv64_virtio` | riscv64 | `just test-riscv-virtio` | hello + serial + virtio |
 | `qemu_virt_riscv64_init` | riscv64 | `just test-init-riscv` | supervisor + Goldfish RTC + rdtime timer + serial |
+| `qemu_virt_riscv64_workstation` | riscv64 | `just test-workstation-riscv` | full workstation (Phase 59) |
+| `x86_64_generic_workstation` | x86_64 | `just test-workstation-x86` | full workstation PCI virtio (Phase 59) |
 | `qemu_virt_riscv64_blk` | riscv64 | `just test-riscv-blk` | blk client/server + serial + virtio-blk |
 | `qemu_virt_riscv64_net` | riscv64 | `just test-riscv-net` | net client/server + serial + virtio-net |
 | `qemu_virt_riscv64_http` | riscv64 | `just test-riscv-http` | serial + virtio-net + http-server |

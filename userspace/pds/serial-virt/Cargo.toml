@@ -13,6 +13,8 @@ multi-client-2 = []
 multi-client-3 = []
 board-qemu_virt_aarch64_workstation = ["multi-client-3"]
 board-rpi4b_4gb_workstation = ["multi-client-3"]
+board-qemu_virt_riscv64_workstation = ["multi-client-3"]
+board-x86_64_generic_workstation = ["multi-client-3"]
 
 [dependencies]
 lerux-logging = { path = "../../crates/lerux-logging" }

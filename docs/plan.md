@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-12 (Phase 58 app catalog)
+Last updated: 2026-07-12 (Phase 59 multi-arch workstation)
 
 ## Phase 1 — Bring-up
 
@@ -464,11 +464,16 @@ Install-media path for RPi4 workstation (see [`boards.md`](boards.md#rpi4-workst
 - [x] `backup` PD + package; packages: edit, chat, http-fs, backup, fetch-client
 - [x] Docs: [`packages.md`](packages.md) catalog table
 
-## Phases 59–60 — Arch-level functionality (planned)
+## Phase 59 — Multi-arch workstation (core done)
 
-Roadmap: multi-arch workstation, security.
+- [x] Profiles: `workstation-riscv`, `workstation-x86` (+ existing aarch64/RPi4)
+- [x] Boards + templates + QEMU: `qemu_virt_riscv64_workstation`, `x86_64_generic_workstation`
+- [x] CI smokes `workstation-riscv` / `workstation-x86`
+- [x] Docs: [`platforms.md`](platforms.md) tiers
 
-Full checklist: **[`plan-arch.md`](plan-arch.md)**.
+## Phase 60 — Arch-level functionality (planned)
+
+Security posture (stretch). Full checklist: **[`plan-arch.md`](plan-arch.md)**.
 
 | Phase | Theme | Status |
 |-------|--------|--------|
@@ -481,10 +486,10 @@ Full checklist: **[`plan-arch.md`](plan-arch.md)**.
 | 56 | Time/init cross-arch parity | core done |
 | 57 | Observability and ops | core done |
 | 58 | App catalog | core done |
-| 59 | Multi-arch workstation profiles | planned |
+| 59 | Multi-arch workstation profiles | core done |
 | 60 | Security posture (stretch) | planned |
 
-Near-term priority: **59 multi-arch workstation**.
+Near-term priority: **60 security posture** (stretch) or polish.
 
 ## Version alignment
 

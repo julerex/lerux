@@ -284,6 +284,51 @@ expects = [
   "lerux-shell: top count=",
 ]
 
+# Phase 59: multi-arch workstation (same guest expects; hostfwd curl via default_curls).
+[boards.qemu_virt_riscv64_workstation]
+unordered = true
+timeout_secs = 90
+expects = [
+  "lerux-supervisor: RTC",
+  "lerux-supervisor: timer ok",
+  "lerux-supervisor: init ok",
+  "log-server: ready ring=",
+  "lerux-fs: ready",
+  "virtio-blk:",
+  "lerux-net: ready",
+  "virtio-net: MAC",
+  "lerux-supervisor: fs up",
+  "lerux-supervisor: config hostname=",
+  "lerux-supervisor: net up",
+  "lerux-supervisor: ready",
+  "lerux-shell: ready",
+  "lerux-shell: cmds=",
+  # App PDs log concurrently via serial-virt; full "lerux-*: ready" lines often
+  # fragment. Shell top count is the liveness proxy for the app set.
+  "lerux-shell: top count=",
+]
+
+[boards.x86_64_generic_workstation]
+unordered = true
+timeout_secs = 90
+expects = [
+  "lerux-supervisor: RTC",
+  "lerux-supervisor: timer ok",
+  "lerux-supervisor: init ok",
+  "log-server: ready ring=",
+  "lerux-fs: ready",
+  "virtio-blk:",
+  "lerux-net: ready",
+  "virtio-net: MAC",
+  "lerux-supervisor: fs up",
+  "lerux-supervisor: config hostname=",
+  "lerux-supervisor: net up",
+  "lerux-supervisor: ready",
+  "lerux-shell: ready",
+  "lerux-shell: cmds=",
+  "lerux-shell: top count=",
+]
+
 # --- Hardware (hw-serial mode) ---
 
 [boards.rpi4b_4gb_workstation]

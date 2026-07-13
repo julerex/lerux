@@ -79,7 +79,7 @@ fn init() -> impl Handler {
     device::DeviceHandler::new(driver)
 }
 
-#[cfg(feature = "board-x86_64_generic")]
+#[cfg(all(feature = "board-x86_64_generic", not(feature = "device-only")))]
 #[protection_domain]
 fn init() -> impl Handler {
     debug::init().unwrap();
@@ -88,11 +88,29 @@ fn init() -> impl Handler {
     SerialHandler::new(driver, DEVICE, CLIENTS)
 }
 
-#[cfg(feature = "board-qemu_virt_riscv64")]
+#[cfg(all(feature = "board-x86_64_generic", feature = "device-only"))]
+#[protection_domain]
+fn init() -> impl Handler {
+    debug::init().unwrap();
+    log::info!("serial driver: NS16550 COM1 (device-only → serial-virt)");
+    let driver = Ns16550Driver::from_system_vars();
+    device::DeviceHandler::new(driver)
+}
+
+#[cfg(all(feature = "board-qemu_virt_riscv64", not(feature = "device-only")))]
 #[protection_domain]
 fn init() -> impl Handler {
     debug::init().unwrap();
     log::info!("serial driver: NS16550 MMIO (IRQ RX)");
     let driver = Ns16550MmioDriver::from_mmio();
     SerialHandler::new(driver, DEVICE, CLIENTS)
+}
+
+#[cfg(all(feature = "board-qemu_virt_riscv64", feature = "device-only"))]
+#[protection_domain]
+fn init() -> impl Handler {
+    debug::init().unwrap();
+    log::info!("serial driver: NS16550 MMIO (device-only → serial-virt)");
+    let driver = Ns16550MmioDriver::from_mmio();
+    device::DeviceHandler::new(driver)
 }

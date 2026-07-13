@@ -5,15 +5,19 @@ pub mod channels {
     pub const CLIENT: Channel = Channel::new(1);
 }
 
+// RISC-V: each virtio-mmio bus has its own page; device registers start at offset 0.
+// aarch64 QEMU virt packs net@0xe00 and blk@0xc00 into one page (see qemu.rs).
 #[cfg(any(
     feature = "board-qemu_virt_riscv64_virtio",
-    feature = "board-qemu_virt_riscv64_blk"
+    feature = "board-qemu_virt_riscv64_blk",
+    feature = "board-qemu_virt_riscv64_workstation",
 ))]
 pub const VIRTIO_BLK_MMIO_OFFSET: usize = 0;
 
 #[cfg(all(
     not(feature = "board-qemu_virt_riscv64_virtio"),
     not(feature = "board-qemu_virt_riscv64_blk"),
+    not(feature = "board-qemu_virt_riscv64_workstation"),
     not(feature = "board-x86_64_generic_virtio")
 ))]
 pub const VIRTIO_BLK_MMIO_OFFSET: usize = 0xc00;

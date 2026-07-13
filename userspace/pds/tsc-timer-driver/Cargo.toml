@@ -10,6 +10,7 @@ workspace = true
 
 [features]
 board-x86_64_generic_init = []
+board-x86_64_generic_workstation = []
 
 [dependencies]
 sel4-driver-interfaces = { workspace = true }

@@ -84,7 +84,7 @@ impl HandlerImpl {
         let (use_tag, use_tag_len) = if tag_len > 0 {
             (&tag[..tag_len as usize], tag_len)
         } else {
-            (fallback, fallback_len as u8)
+            (fallback, fallback_len)
         };
 
         let mut line = LogLine {

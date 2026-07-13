@@ -81,6 +81,9 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 **App catalog (Phase 58)**
 : Installable PD packages under `support/packages/`: edit, chat-client, http-file-browser, backup, fetch-client (≥5). See [`packages.md`](packages.md).
 
+**Multi-arch workstation (Phase 59)**
+: Workstation is a profile concept across arches: `workstation` (aarch64), `workstation-riscv`, `workstation-x86`, `workstation-rpi4`. Shared app channels; arch-specific serial/virtio/time drivers. Tiers: [`platforms.md`](platforms.md).
+
 **Config policy (Phase 54)**
 : FS-backed keys under `/config/` via `config-server` ([`docs/config.md`](config.md)). Supervisor seeds missing keys only (`boot.seeded`), logs active hostname/net.mode/log.level, and may rotate `/boot.log`. Shell: `config get|set|list|del`, `hostname`. Secrets use the `secret.*` prefix (`/config/secrets/`). Host: `lerux config schema|defaults|seed-disk`.
 

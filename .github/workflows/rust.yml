@@ -346,6 +346,12 @@ jobs:
           - id: workstation
             board: qemu_virt_aarch64_workstation
             command: just disk-img && just test-workstation
+          - id: workstation-riscv
+            board: qemu_virt_riscv64_workstation
+            command: just disk-img && just test-workstation-riscv
+          - id: workstation-x86
+            board: x86_64_generic_workstation
+            command: just disk-img && just test-workstation-x86
           - id: riscv-net
             board: qemu_virt_riscv64_net
             command: just test-riscv-net

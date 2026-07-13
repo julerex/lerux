@@ -9,6 +9,8 @@ workspace = true
 
 [features]
 board-x86_64_generic_virtio = ["dep:lerux-virtio-hal", "dep:lerux-virtio-pci"]
+# Phase 59: same combo path as virtio hello (blk + net PCI).
+board-x86_64_generic_workstation = ["board-x86_64_generic_virtio"]
 board-x86_64_generic_http = ["dep:lerux-virtio-hal", "dep:lerux-virtio-pci"]
 board-x86_64_generic_blk = ["dep:lerux-virtio-hal", "dep:lerux-virtio-pci"]
 board-x86_64_generic_net = ["dep:lerux-virtio-hal", "dep:lerux-virtio-pci"]

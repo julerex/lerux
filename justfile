@@ -188,6 +188,13 @@ test-ipc-composed:
 test-workstation:
     BOARD=qemu_virt_aarch64_workstation just test
 
+# Phase 59: multi-arch workstation smokes
+test-workstation-riscv:
+    just disk-img && BOARD=qemu_virt_riscv64_workstation just test
+
+test-workstation-x86:
+    just disk-img && BOARD=x86_64_generic_workstation just test
+
 # Hardware slice (Phase 37): build image (no QEMU).
 # `just test` / `lerux test` for hardware boards does build verification + manual note.
 # Deploy e.g. build/rpi4b_4gb/loader.img via U-Boot on RPi.

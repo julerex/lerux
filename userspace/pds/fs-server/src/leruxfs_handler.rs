@@ -2305,6 +2305,11 @@ impl HandlerImpl {
             }
             return FsResponse::Pending;
         }
+        // Opportunistically drain blk completions even if the driver notify was
+        // coalesced while we were only handling PPC Poll (busy-wait clients).
+        if self.io.borrow().io_busy() {
+            self.handle_blk_driver();
+        }
         if self.format_task.is_running()
             && let Some(resp) = self.poll_format_task()
         {

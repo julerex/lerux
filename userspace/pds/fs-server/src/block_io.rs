@@ -10,6 +10,7 @@ use core::task::Poll;
 
 use async_unsync::semaphore::Semaphore;
 use lerux_interface_types::SECTOR_SIZE;
+use lerux_logging::log;
 #[cfg(not(feature = "backend-fat"))]
 use lerux_service_async::poll_fn;
 use lerux_service_async::WakeCell;
@@ -88,15 +89,21 @@ fn advance_read(io_state: &mut IoState, io: &mut BlkIo) -> Option<[u8; SECTOR_SI
         return None;
     };
 
-    io.poll().unwrap();
-    match io.poll_read_request(*request_index, buf, None).unwrap() {
-        Poll::Ready(Ok(())) => {
+    // Fast PCI virtio can complete before we resume from notify; never panic the
+    // PD on ring misbehavior — that hangs busy-wait PPC clients forever.
+    if io.poll().is_err() {
+        log::error!("lerux-fs: blk used-ring poll failed (read)");
+        *io_state = IoState::Idle;
+        return None;
+    }
+    match io.poll_read_request(*request_index, buf, None) {
+        Ok(Poll::Ready(Ok(()))) => {
             let data = *buf;
             *io_state = IoState::Idle;
             Some(data)
         }
-        Poll::Pending => None,
-        Poll::Ready(Err(_)) => {
+        Ok(Poll::Pending) => None,
+        Ok(Poll::Ready(Err(_))) | Err(_) => {
             *io_state = IoState::Idle;
             None
         }
@@ -108,14 +115,18 @@ fn advance_write(io_state: &mut IoState, io: &mut BlkIo) -> bool {
         return false;
     };
 
-    io.poll().unwrap();
-    match io.poll_write_request(*request_index, None).unwrap() {
-        Poll::Ready(Ok(())) => {
+    if io.poll().is_err() {
+        log::error!("lerux-fs: blk used-ring poll failed (write)");
+        *io_state = IoState::Idle;
+        return false;
+    }
+    match io.poll_write_request(*request_index, None) {
+        Ok(Poll::Ready(Ok(()))) => {
             *io_state = IoState::Idle;
             true
         }
-        Poll::Pending => false,
-        Poll::Ready(Err(_)) => {
+        Ok(Poll::Pending) => false,
+        Ok(Poll::Ready(Err(_))) | Err(_) => {
             *io_state = IoState::Idle;
             false
         }
@@ -174,6 +185,11 @@ impl SectorIo {
             buf: [0; SECTOR_SIZE],
         };
         self.pending_read_lba = Some(lba);
+        // Higher-prio driver may complete during issue_read's notify (x86 PCI).
+        // Keep pending_read_lba set so poll_fn observes completed_sector.
+        if let Some(data) = advance_read(&mut self.io_state, &mut self.blk_io) {
+            self.completed_sector = Some(data);
+        }
     }
 
     pub fn start_write(&mut self, lba: u32, data: &[u8; SECTOR_SIZE]) {
@@ -184,6 +200,10 @@ impl SectorIo {
         let request_index = issue_write(&mut self.blk_io, lba, &self.sector_buf[..self.block_size]);
         self.io_state = IoState::Writing { request_index };
         self.pending_write_lba = Some(lba);
+        // Same sync-completion race as start_read; keep pending_write_lba set.
+        if advance_write(&mut self.io_state, &mut self.blk_io) {
+            self.completed_ok = true;
+        }
     }
 
     pub fn poll_read_sector(&mut self, lba: u32) -> Option<[u8; SECTOR_SIZE]> {
@@ -245,10 +265,19 @@ impl SectorIo {
     }
 
     pub fn handle_blk_driver(&mut self) {
+        // Always drain the used ring first. Sync completions can land while
+        // IoState is still Idle (notify during issue_read before Reading is set).
+        if self.blk_io.poll().is_err() {
+            log::error!("lerux-fs: blk used-ring poll failed (notify)");
+            return;
+        }
         match self.io_state {
             IoState::Reading { .. } => self.store_completed_read(),
             IoState::Writing { .. } => self.store_completed_write(),
-            IoState::Idle => {}
+            IoState::Idle => {
+                // Completion may already be in SlotTracker as Complete; the next
+                // start_read/poll_fn path observes completed_sector / advance.
+            }
         }
     }
 

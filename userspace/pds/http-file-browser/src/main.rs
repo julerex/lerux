@@ -18,7 +18,6 @@ const NET_SERVER: Channel = Channel::new(0);
 const FS_SERVER: Channel = Channel::new(1);
 
 const HTTP_PORT: u16 = 8080;
-const INIT_SERVE_ROUNDS: usize = 100;
 
 fn poll_fs() -> FsResponse {
     loop {
@@ -59,14 +58,16 @@ fn net_call(req: NetRequest) -> NetResponse {
 fn net_call_try(req: NetRequest) -> NetResponse {
     match call::<NetRequest, NetResponse>(NET_SERVER, req) {
         Ok(NetResponse::Pending) => {
-            for _ in 0..32 {
+            // Bound polls: SYN may arrive before GET; keep the recv op alive so the
+            // next NET notify / Poll can deliver payload (do not Abort — that frees
+            // the slot but drops an in-flight accept on busy workstation nets).
+            for _ in 0..512 {
                 match call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::Poll) {
                     Ok(NetResponse::Pending) => {}
                     Ok(other) => return other,
                     Err(_) => return NetResponse::Error,
                 }
             }
-            let _ = call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::Abort);
             NetResponse::Pending
         }
         Ok(other) => other,
@@ -247,9 +248,22 @@ fn put_file(path: &[u8], body: &[u8]) -> bool {
 }
 
 fn try_serve() {
+    // Deliver an in-flight TcpRecv completion before starting a new one. Leaving
+    // recv pending across notifies is required when SYN wakes us before GET.
+    match call::<NetRequest, NetResponse>(NET_SERVER, NetRequest::Poll) {
+        Ok(NetResponse::TcpData { data_len, data }) => {
+            return serve_request(data_len, data);
+        }
+        Ok(NetResponse::Pending) | Ok(NetResponse::Ok) => {}
+        Ok(_) | Err(_) => return,
+    }
     let NetResponse::TcpData { data_len, data } = net_call_try(NetRequest::TcpRecv) else {
         return;
     };
+    serve_request(data_len, data);
+}
+
+fn serve_request(data_len: u16, data: [u8; MAX_NET_TCP_PAYLOAD]) {
     let req = &data[..data_len as usize];
     let Some((method, url_path)) = parse_request_line(req) else {
         let mut resp = [0u8; MAX_NET_TCP_PAYLOAD];
@@ -326,9 +340,8 @@ fn init() -> HandlerImpl {
         log::info!("lerux-http-fs: listening");
     }
     log::info!("lerux-http-fs: ready (v2 mime/put)");
-    for _ in 0..INIT_SERVE_ROUNDS {
-        try_serve();
-    }
+    // Serve only on NET notifies. Busy-polling TcpRecv here held the net-server
+    // async slot through supervisor net probe (Phase 59 x86 workstation).
     HandlerImpl
 }
 

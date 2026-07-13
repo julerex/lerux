@@ -283,6 +283,28 @@ pds = ["supervisor", "shell", "edit", "chat-client", "http-file-browser", "backu
 qemu = "aarch64_workstation"
 system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, pl031_mmio_phys_addr = "0x9010000", pl031_irq = 34, sp804_mmio_phys_addr = "0x90d0000", sp804_irq = 43, virtio_mmio_phys_addr = "0xa003000", virtio_blk_irq = 78, virtio_net_irq = 79 }
 
+# Phase 59: RISC-V virt full workstation (MMIO virtio + Goldfish/rdtime).
+[qemu_virt_riscv64_workstation]
+arch = "riscv64"
+microkit_board = "qemu_virt_riscv64"
+target = "riscv64-sel4-microkit"
+target_triple = "riscv64-sel4-microkit"
+template = "workstation-riscv.system.template"
+pds = ["supervisor", "shell", "edit", "chat-client", "http-file-browser", "backup", "fs-server", "net-server", "log-server", "config-server", "serial-driver", "serial-virt", "goldfish-rtc-driver", "rdtime-timer-driver", "virtio-blk-driver", "virtio-net-driver"]
+qemu = "riscv64_workstation"
+system_vars = { serial_mmio_phys_addr = "0x1_000_0000", serial_irq = 10, goldfish_rtc_mmio_phys_addr = "0x101000", goldfish_rtc_irq = 11, virtio_blk_mmio_phys_addr = "0x10_001_000", virtio_net_mmio_phys_addr = "0x10_002_000", virtio_blk_irq = 1, virtio_net_irq = 2 }
+
+# Phase 59: x86_64 q35 full workstation (PCI virtio + CMOS/TSC).
+[x86_64_generic_workstation]
+arch = "x86_64"
+microkit_board = "x86_64_generic"
+target = "x86_64-sel4-microkit"
+target_triple = "x86_64-sel4-microkit"
+template = "workstation-x86.system.template"
+pds = ["supervisor", "shell", "edit", "chat-client", "http-file-browser", "backup", "fs-server", "net-server", "log-server", "config-server", "serial-driver", "serial-virt", "cmos-rtc-driver", "tsc-timer-driver", "virtio-pci-driver"]
+qemu = "x86_64_workstation"
+system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48, cmos_ioport_addr = "0x70", virtio_blk_bar1_phys_addr = "0xfed0_0000", virtio_blk_bar4_phys_addr = "0xfed1_0000", virtio_net_bar1_phys_addr = "0xfed2_0000", virtio_net_bar4_phys_addr = "0xfed3_0000", virtio_blk_ioapic_pin = 10, virtio_blk_ioapic_vector = 49, virtio_net_ioapic_pin = 11, virtio_net_ioapic_vector = 50, virtio_blk_driver_dma_phys_addr = "0x6000_0000", virtio_net_client_dma_phys_addr = "0x6040_0000", virtio_net_rx_free_phys_addr = "0x6060_0000", virtio_net_rx_used_phys_addr = "0x6080_0000", virtio_net_tx_free_phys_addr = "0x60a0_0000", virtio_net_tx_used_phys_addr = "0x60c0_0000", virtio_blk_client_dma_phys_addr = "0x60e0_0000", virtio_blk_free_phys_addr = "0x6100_0000", virtio_blk_used_phys_addr = "0x6120_0000" }
+
 [x86_64_generic]
 arch = "x86_64"
 microkit_board = "x86_64_generic"

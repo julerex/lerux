@@ -1,6 +1,6 @@
 # PLAN — Arch-level functionality (phases 50–60)
 
-Last updated: 2026-07-12 (Phase 58 core done)
+Last updated: 2026-07-12 (Phase 59 core done)
 
 Related: [`plan.md`](plan.md) (completed phases 1–49), [`plan-au-ts.md`](plan-au-ts.md) (sDDF/LionsOS inspiration track), [`context.md`](context.md) (domain language).
 
@@ -251,20 +251,20 @@ Defer heavy GUI browsers and language ecosystems until/unless a runtime PD prove
 
 ---
 
-## Phase 59 — Multi-arch / multi-profile workstation (Arch: multi-architecture)
+## Phase 59 — Multi-arch / multi-profile workstation (Arch: multi-architecture) — core done
 
-**Why:** Arch supports many arches; lerux workstation is essentially aarch64 QEMU (+ RPi4 path).
+**Why:** Arch supports many arches; lerux workstation was essentially aarch64 QEMU (+ RPi4 path).
 
 ### Steps
 
-- [ ] `workstation-x86` / `workstation-riscv` profiles using PCI/MMIO virtio and arch-appropriate serial.
-- [ ] Shared channel manifests; board-specific drivers only in board vars / layout templates.
-- [ ] CI matrix: at least one non-aarch64 workstation smoke (may be serial+fs+shell without full HTTP if cost is high).
-- [ ] Document supported platform tiers (Tier 1: aarch64 virt + RPi4; Tier 2: x86/riscv virt; etc.).
+- [x] `workstation-x86` / `workstation-riscv` profiles (PCI / MMIO virtio + arch serial + time).
+- [x] Shared app channel ends; driver PDs/templates board-specific.
+- [x] CI: `workstation-riscv` + `workstation-x86` smokes (full FS/net/shell/apps + hostfwd).
+- [x] Platform tiers: [`platforms.md`](platforms.md).
 
 ### Exit
 
-“Workstation” is a product concept, not a single board name.
+“Workstation” is a product concept, not a single board name. **Met.**
 
 ---
 
@@ -320,7 +320,7 @@ If capacity is limited, do **not** start with graphics or scripting runtimes:
 
 1. **Phases 50–55 cores** — FS through package UX done
 2. **Phase 52 lab** — fill RPi4 REPL checklist on real hardware when available
-3. **Phase 59** — multi-arch workstation
+3. **Phase 60** — security posture (stretch)
 
 ---
 

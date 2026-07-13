@@ -797,10 +797,17 @@ fn fetch_cmd<'a>(console: &mut SerialClient, cwd: &[u8], mut args: impl Iterator
         } else {
             b"lerux-fetch: error\n".as_slice()
         };
-        let _ = fs_call(FsRequest::unlink(&abs[..n]));
-        if let FsResponse::Handle { id } = fs_call(FsRequest::create(&abs[..n]))
-            && matches!(fs_call(FsRequest::write(id, 0, body)), FsResponse::Ok)
-        {
+        let handle = match fs_call(FsRequest::create(&abs[..n])) {
+            FsResponse::Handle { id } => id,
+            _ => match fs_call(FsRequest::open(&abs[..n])) {
+                FsResponse::Handle { id } => id,
+                _ => {
+                    println(console, "fetch: save failed");
+                    return;
+                }
+            },
+        };
+        if matches!(fs_call(FsRequest::write(handle, 0, body)), FsResponse::Ok) {
             let _ = writeln!(
                 ConsoleWriter(console),
                 "fetch: saved {} bytes to path",

@@ -58,10 +58,12 @@ impl HandlerImpl {
             pos += 1;
             files = files.saturating_add(1);
         }
-        let _ = fs_call(FsRequest::unlink(b"/backup/manifest"));
         let handle = match fs_call(FsRequest::create(b"/backup/manifest")) {
             FsResponse::Handle { id } => id,
-            _ => return BackupResponse::Error,
+            _ => match fs_call(FsRequest::open(b"/backup/manifest")) {
+                FsResponse::Handle { id } => id,
+                _ => return BackupResponse::Error,
+            },
         };
         match fs_call(FsRequest::write(handle, 0, &buf[..pos])) {
             FsResponse::Ok => {

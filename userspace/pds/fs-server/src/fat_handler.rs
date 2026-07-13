@@ -106,6 +106,8 @@ pub struct HandlerImpl {
     /// Scratch for root sector currently being edited.
     root_buf: [u8; SECTOR_SIZE],
     fat_buf: [u8; SECTOR_SIZE],
+    /// Client that owns the in-flight async operation (or pending completion).
+    active_client: Option<Channel>,
 }
 
 impl HandlerImpl {
@@ -121,7 +123,49 @@ impl HandlerImpl {
             opens: [OpenFile::empty(); MAX_HANDLES],
             root_buf: [0; SECTOR_SIZE],
             fat_buf: [0; SECTOR_SIZE],
+            active_client: None,
         }
+    }
+
+    fn is_client(channel: Channel) -> bool {
+        channel == CLIENT
+            || channel == Channel::new(3)
+            || channel == Channel::new(5)
+            || channel == Channel::new(6)
+            || channel == Channel::new(7)
+            || channel == Channel::new(8)
+    }
+
+    fn begin_async(&mut self, channel: Channel) -> bool {
+        if self.completed.is_some() {
+            return false;
+        }
+        let busy = !matches!(self.fs_job, FsJob::None);
+        if busy && self.active_client != Some(channel) {
+            return false;
+        }
+        self.active_client = Some(channel);
+        true
+    }
+
+    fn finish_async(&mut self) {
+        self.active_client = None;
+    }
+
+    fn take_completed(&mut self, channel: Channel) -> Option<FsResponse> {
+        if self.active_client != Some(channel) {
+            return None;
+        }
+        let resp = self.completed.take()?;
+        self.finish_async();
+        Some(resp)
+    }
+
+    fn sync_response(&mut self, resp: FsResponse) -> FsResponse {
+        if !matches!(resp, FsResponse::Pending) {
+            self.finish_async();
+        }
+        resp
     }
 
     fn alloc_handle(&mut self, cluster: u16, size: u32, root_slot: u16) -> Option<u8> {
@@ -1027,70 +1071,99 @@ impl HandlerImpl {
         }
     }
 
-    fn handle_request(&mut self, req: FsRequest) -> FsResponse {
+    fn handle_request(&mut self, channel: Channel, req: FsRequest) -> FsResponse {
         if matches!(req, FsRequest::Poll) {
-            return self.handle_poll();
+            return self.handle_poll(channel);
+        }
+        if !self.begin_async(channel) {
+            return FsResponse::Pending;
         }
         if self.completed.is_some() || !matches!(self.fs_job, FsJob::None) {
             return FsResponse::Pending;
         }
         match req {
-            FsRequest::Open { path_len, path } => self.begin_open(path, path_len),
-            FsRequest::Create { path_len, path } => self.begin_create(path, path_len),
+            FsRequest::Open { path_len, path } => {
+                if path_len as usize > MAX_FS_PATH {
+                    return self.sync_response(FsResponse::Error);
+                }
+                self.begin_open(path, path_len);
+            }
+            FsRequest::Create { path_len, path } => {
+                if path_len as usize > MAX_FS_PATH {
+                    return self.sync_response(FsResponse::Error);
+                }
+                self.begin_create(path, path_len);
+            }
             FsRequest::Write {
                 handle,
                 offset,
                 data_len,
                 data,
-            } => self.begin_write(handle, offset, data, data_len),
+            } => {
+                if data_len as usize > MAX_FS_DATA {
+                    return self.sync_response(FsResponse::Error);
+                }
+                self.begin_write(handle, offset, data, data_len);
+            }
             FsRequest::Read {
                 handle,
                 offset,
                 len,
             } => self.begin_read(handle, offset, len),
-            FsRequest::Stat { path_len, path } => self.begin_stat(path, path_len),
+            FsRequest::Stat { path_len, path } => {
+                if path_len as usize > MAX_FS_PATH {
+                    return self.sync_response(FsResponse::Error);
+                }
+                self.begin_stat(path, path_len);
+            }
             FsRequest::ListDir { path_len, path } => {
                 // Root-only FAT: only "" or "/" are accepted.
-                let p = &path[..path_len as usize];
+                if path_len as usize > MAX_FS_PATH {
+                    return self.sync_response(FsResponse::Error);
+                }
+                let p = &path[..path_len.min(MAX_FS_PATH as u8) as usize];
                 if path_len == 0 || p == b"/" || p == b"." {
                     self.begin_list_dir();
                 } else {
-                    return FsResponse::Error;
+                    return self.sync_response(FsResponse::Error);
                 }
             }
             FsRequest::Mkdir { .. } | FsRequest::Unlink { .. } | FsRequest::Rename { .. } => {
                 // Hierarchy ops are LERUXFS2-only (Phase 50); FAT stays root-only.
-                return FsResponse::Error;
+                return self.sync_response(FsResponse::Error);
             }
             FsRequest::DiskInfo => {
                 // Approximate single-partition capacity (Phase 53 shell `df`).
                 if !self.mounted {
-                    return FsResponse::Error;
+                    return self.sync_response(FsResponse::Error);
                 }
                 let data = self.bpb.total_sectors.saturating_sub(self.bpb.data_lba);
-                return FsResponse::DiskInfo {
+                return self.sync_response(FsResponse::DiskInfo {
                     block_size: u32::from(self.bpb.bytes_per_sector),
                     total_blocks: data,
                     // Free-cluster walk is not tracked; report capacity only.
                     free_blocks: 0,
-                };
+                });
             }
-            FsRequest::Poll => return self.handle_poll(),
+            FsRequest::Poll => return self.handle_poll(channel),
         }
         if let Some(resp) = self.advance_fs_job() {
             self.finish_job(resp);
-            return self.completed.take().unwrap_or(FsResponse::Pending);
+            return self.take_completed(channel).unwrap_or(FsResponse::Pending);
         }
         FsResponse::Pending
     }
 
-    fn handle_poll(&mut self) -> FsResponse {
-        if let Some(resp) = self.completed.take() {
+    fn handle_poll(&mut self, channel: Channel) -> FsResponse {
+        if let Some(resp) = self.take_completed(channel) {
             return resp;
+        }
+        if self.active_client != Some(channel) {
+            return FsResponse::Pending;
         }
         if let Some(resp) = self.advance_fs_job() {
             self.finish_job(resp);
-            return self.completed.take().unwrap_or(FsResponse::Pending);
+            return self.take_completed(channel).unwrap_or(FsResponse::Pending);
         }
         if self.io.io_busy() {
             BLK_DRIVER.notify();
@@ -1107,16 +1180,11 @@ impl Handler for HandlerImpl {
         channel: Channel,
         msg_info: MessageInfo,
     ) -> Result<MessageInfo, Self::Error> {
-        if channel != CLIENT
-            && channel != Channel::new(3)
-            && channel != Channel::new(5)
-            && channel != Channel::new(6)
-            && channel != Channel::new(7)
-        {
+        if !Self::is_client(channel) {
             unreachable!("unexpected fs client");
         }
         Ok(match recv::<FsRequest>(msg_info) {
-            Ok(req) => send(self.handle_request(req)),
+            Ok(req) => send(self.handle_request(channel, req)),
             Err(_) => send_unspecified_error(),
         })
     }

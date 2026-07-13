@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Architecture review — lerux</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { border-left: 2px dashed #64748b; }
+      .seam-h { border-top: 2px dashed #64748b; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .band { display: flex; align-items: center; padding: 0 .75rem; }
+      .sliver { height: 9px; border-radius: 2px; }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-14">
+
+      <header class="space-y-3">
+        <h1 class="font-serif text-4xl tracking-tight">Architecture review — <span class="italic">lerux</span></h1>
+        <p class="text-sm text-slate-500">2026-07-13 · 34 protection domains · 10 shared crates · 28 CLI modules · 40 boards · 33 templates</p>
+        <div class="flex flex-wrap gap-4 text-xs text-slate-600 pt-1">
+          <span class="inline-flex items-center gap-1.5"><span class="inline-block w-4 h-3 border border-slate-400 bg-white rounded-sm"></span> module</span>
+          <span class="inline-flex items-center gap-1.5"><span class="inline-block w-5 border-t-2 border-dashed border-slate-500"></span> seam</span>
+          <span class="inline-flex items-center gap-1.5"><span class="inline-block w-5 border-t-2 border-red-600"></span> leakage / duplication</span>
+          <span class="inline-flex items-center gap-1.5"><span class="inline-block w-4 h-3 rounded-sm deep"></span> deep module</span>
+          <span class="inline-flex items-center gap-1.5"><span class="inline-block w-4 h-3 rounded-sm bg-slate-200"></span> faded = internal (not on the interface)</span>
+        </div>
+      </header>
+
+      <section id="candidates" class="space-y-12">
+
+        <!-- ══════════════ 1. fs-server ══════════════ -->
+        <article class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4" id="c1">
+          <div class="flex items-start justify-between gap-4">
+            <h2 class="font-serif text-2xl">1 · Deepen the fs-server: one server shell, one filesystem-format seam</h2>
+            <div class="flex gap-2 shrink-0">
+              <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800">Strong</span>
+              <span class="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">in-process</span>
+            </div>
+          </div>
+          <p class="font-mono text-sm text-slate-500">userspace/pds/fs-server/src/{leruxfs_handler.rs · fat_handler.rs · block_io.rs} &nbsp;·&nbsp; userspace/crates/{lerux-fs, lerux-fat}</p>
+
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 p-4 space-y-2" style="min-height:320px">
+              <p class="text-xs uppercase tracking-wider text-slate-400">Before — two parallel implementations</p>
+              <div class="grid grid-cols-2 gap-3 pt-1">
+                <div class="space-y-1">
+                  <p class="text-xs uppercase tracking-wider text-center text-slate-500">leruxfs_handler · 2,464 ln</p>
+                  <div class="band h-9 border border-slate-300 rounded bg-red-50 text-xs">IPC dispatch + is_client(3,5,6,7,8)</div>
+                  <div class="band h-9 border border-slate-300 rounded bg-red-50 text-xs">OpenFile table · FsJob machine</div>
+                  <div class="band h-9 border border-slate-300 rounded bg-red-50 text-xs">Poll RPC · single-flight mux</div>
+                  <div class="band h-9 border border-slate-300 rounded bg-white text-xs">LERUXFS2 format logic</div>
+                </div>
+                <div class="space-y-1">
+                  <p class="text-xs uppercase tracking-wider text-center text-slate-500">fat_handler · 1,198 ln</p>
+                  <div class="band h-9 border border-slate-300 rounded bg-red-50 text-xs">IPC dispatch + is_client(3,5,6,7,8)</div>
+                  <div class="band h-9 border border-slate-300 rounded bg-red-50 text-xs">OpenFile table · FsJob machine</div>
+                  <div class="band h-9 border border-slate-300 rounded bg-red-50 text-xs">Poll RPC · single-flight mux</div>
+                  <div class="band h-9 border border-slate-300 rounded bg-white text-xs">FAT16 format logic</div>
+                </div>
+              </div>
+              <p class="text-xs text-red-700 pt-1">Red bands = same 18 method names, maintained twice. Commit <span class="font-mono">ac58fc5</span> (multi-client race fix) patched <b>both</b> files: +114 and +116 lines.</p>
+            </div>
+            <div class="rounded-lg border border-slate-200 p-4 space-y-2" style="min-height:320px">
+              <p class="text-xs uppercase tracking-wider text-slate-400">After — deep server shell, format adapters</p>
+              <div class="deep rounded-lg p-3 text-white space-y-1 mt-1">
+                <p class="text-xs uppercase tracking-wider text-slate-300">fs-server shell (once)</p>
+                <div class="band h-8 rounded bg-slate-700/60 text-xs text-slate-200">IPC dispatch · client table</div>
+                <div class="band h-8 rounded bg-slate-700/60 text-xs text-slate-200">OpenFile table · job machine · Poll RPC</div>
+              </div>
+              <div class="seam-h mx-6 my-2 relative"><span class="absolute -top-2.5 right-0 text-[10px] uppercase tracking-wider text-slate-500 bg-white px-1">FsFormat interface</span></div>
+              <div class="grid grid-cols-2 gap-3">
+                <div class="band h-10 border border-slate-300 rounded bg-white text-xs justify-center">lerux-fs adapter (LERUXFS2)</div>
+                <div class="band h-10 border border-slate-300 rounded bg-white text-xs justify-center">lerux-fat adapter (FAT16)</div>
+              </div>
+              <p class="text-xs text-slate-500 pt-1">Two adapters already exist — the seam is real, it just lives in the wrong place today (cfg-swap of the whole module in <span class="font-mono">main.rs:18–26</span>).</p>
+            </div>
+          </div>
+
+          <p><b>Problem</b> — the seam sits at the whole-handler level: <span class="font-mono text-sm">#[cfg(feature = "backend-fat")]</span> swaps 2,464 vs 1,198 lines that duplicate dispatch, open-file table, job machine, and magic client channels; only the format logic actually varies.</p>
+          <p><b>Solution</b> — move the seam to a <i>FsFormat</i> interface consumed by one server shell; lerux-fs and lerux-fat become its two adapters.</p>
+          <ul class="text-sm text-slate-700 grid md:grid-cols-2 gap-x-6 gap-y-1 list-disc list-inside">
+            <li>locality: race fixes land once, not twice</li>
+            <li>leverage: one dispatch tested against both adapters</li>
+            <li>delete ~1,000 duplicated lines</li>
+            <li>interface is host-testable (both format crates already are)</li>
+          </ul>
+          <div class="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-900">Touches ADR-004 positively: async sector I/O currently exists only on the LERUXFS side; a single shell would let FAT inherit it for free.</div>
+        </article>
+
+        <!-- ══════════════ 2. interface-types visitors ══════════════ -->
+        <article class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4" id="c2">
+          <div class="flex items-start justify-between gap-4">
+            <h2 class="font-serif text-2xl">2 · Collapse 25 copy-pasted serde visitors in lerux-interface-types</h2>
+            <div class="flex gap-2 shrink-0">
+              <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800">Strong</span>
+              <span class="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">in-process</span>
+            </div>
+          </div>
+          <p class="font-mono text-sm text-slate-500">userspace/crates/lerux-interface-types/src/lib.rs (2,358 lines, single file)</p>
+
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 p-4" style="min-height:320px">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Before — mass diagram</p>
+              <div class="flex gap-6 items-end">
+                <div class="flex-1">
+                  <p class="text-[10px] uppercase tracking-wider text-slate-500 mb-1">interface (wire contract)</p>
+                  <div class="border border-slate-400 rounded bg-white" style="height:78px"></div>
+                  <p class="text-[10px] text-slate-500 mt-1">10 request/response enum pairs · ~690 ln</p>
+                </div>
+                <div class="flex-1">
+                  <p class="text-[10px] uppercase tracking-wider text-slate-500 mb-1">implementation</p>
+                  <div class="border border-red-400 rounded bg-red-50 p-1 space-y-0.5 overflow-hidden" style="height:190px">
+                    <div class="sliver bg-red-200"></div><div class="sliver bg-red-200"></div><div class="sliver bg-red-200"></div><div class="sliver bg-red-200"></div><div class="sliver bg-red-200"></div><div class="sliver bg-red-200"></div><div class="sliver bg-red-200"></div><div class="sliver bg-red-200"></div><div class="sliver bg-red-200"></div><div class="sliver bg-red-200"></div><div class="sliver bg-red-200"></div><div class="sliver bg-red-200"></div><div class="sliver bg-red-200"></div><div class="sliver bg-red-200"></div><div class="sliver bg-red-200"></div>
+                  </div>
+                  <p class="text-[10px] text-red-700 mt-1">25 × <span class="font-mono">mod *_bytes</span> visitors, ~57 ln each ≈ 1,450 ln — identical except one length const</p>
+                </div>
+              </div>
+              <p class="text-xs text-slate-500 mt-3">lib.rs:688–2358 · <span class="font-mono">fs_path_bytes, fs_name_bytes, sector_bytes, dns_name_bytes, chat_lines_bytes…</span></p>
+            </div>
+            <div class="rounded-lg border border-slate-200 p-4" style="min-height:320px">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">After</p>
+              <div class="flex gap-6 items-end">
+                <div class="flex-1">
+                  <p class="text-[10px] uppercase tracking-wider text-slate-500 mb-1">interface (unchanged wire format)</p>
+                  <div class="border border-slate-400 rounded bg-white" style="height:78px"></div>
+                  <p class="text-[10px] text-slate-500 mt-1">same enums, <span class="font-mono">#[serde(with = "bounded")]</span></p>
+                </div>
+                <div class="flex-1">
+                  <p class="text-[10px] uppercase tracking-wider text-slate-500 mb-1">implementation</p>
+                  <div class="deep rounded p-1" style="height:34px"></div>
+                  <p class="text-[10px] text-slate-500 mt-1">one generic visitor over <span class="font-mono">const N: usize</span> (+ one for nested arrays) ≈ 80 ln, plus postcard round-trip tests</p>
+                </div>
+              </div>
+              <p class="text-xs text-slate-500 mt-3">This crate is the cross-PD compatibility pin — and today it has <b>zero</b> host tests. The interface is the test surface; give it one.</p>
+            </div>
+          </div>
+
+          <p><b>Problem</b> — the module is shallow: ~60% of the crate is mechanical visitor boilerplate that restates the interface constants; every new bounded field costs another 57-line module.</p>
+          <p><b>Solution</b> — one generic bounded-bytes serde helper (const-generic), delete 25 modules; add postcard round-trip tests. Optionally split protocol families into submodules while touching it.</p>
+          <ul class="text-sm text-slate-700 grid md:grid-cols-2 gap-x-6 gap-y-1 list-disc list-inside">
+            <li>delete ~1,400 lines, wire format unchanged</li>
+            <li>locality: length-check bug fixed once</li>
+            <li>leverage: new fields become one-liners</li>
+            <li>wire regressions caught on host, not in QEMU</li>
+          </ul>
+        </article>
+
+        <!-- ══════════════ 3. service client ══════════════ -->
+        <article class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4" id="c3">
+          <div class="flex items-start justify-between gap-4">
+            <h2 class="font-serif text-2xl">3 · Deepen lerux-ipc into a service-client module</h2>
+            <div class="flex gap-2 shrink-0">
+              <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800">Strong</span>
+              <span class="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">in-process</span>
+            </div>
+          </div>
+          <p class="font-mono text-sm text-slate-500">userspace/crates/lerux-ipc/src/lib.rs (12 lines) · shell, supervisor, fs-client, net-client, blk-client, backup, edit, config-server, http-file-browser, fetch-client</p>
+
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 bg-white p-3" style="min-height:320px">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">Before — every caller re-implements the protocol</p>
+              <pre class="mermaid">
+flowchart LR
+  subgraph callers[10 PDs]
+    S[shell] --- SU[supervisor] --- B[backup] --- E[edit] --- H[http-fs]
+  end
+  S -->|own poll_fs + fs_call| F[fs-server]
+  SU -->|own poll_fs copy| F
+  B -->|own poll_fs copy| F
+  E -->|own poll_fs copy| F
+  H -->|own poll_fs + poll_net copies| F
+  linkStyle 3,4,5,6,7 stroke:#dc2626,stroke-width:2px
+              </pre>
+              <p class="text-xs text-red-700">Same loop pasted ≥10×: call → on <span class="font-mono">Pending</span> spin <span class="font-mono">Poll</span>. Commit <span class="font-mono">fb76b16</span> fixed unlink-before-create in <b>three</b> app PDs separately.</p>
+            </div>
+            <div class="rounded-lg border border-slate-200 bg-white p-3" style="min-height:320px">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-1">After — one adapter at a real seam</p>
+              <pre class="mermaid">
+flowchart LR
+  subgraph callers[10 PDs]
+    S[shell] --- SU[supervisor] --- B[backup] --- E[edit] --- H[http-fs]
+  end
+  S --> C
+  SU --> C
+  B --> C
+  E --> C
+  H --> C
+  C[FsClient / NetClient / BlkClient<br/>in deepened lerux-ipc] ==> F[fs-server]
+  style C fill:#0f172a,color:#fff,stroke:#0f172a
+              </pre>
+              <p class="text-xs text-slate-500">lerux-ipc currently fails the deletion test (pure re-export). The call-then-drain-Pending behaviour, error policy, and helpers like open-or-create finally get a home — and a host-testable interface.</p>
+            </div>
+          </div>
+
+          <p><b>Problem</b> — the real client behaviour (poll draining, error mapping, write-safely idioms) lives in 10 divergent copies; the shared crate that should hold it is a pass-through.</p>
+          <p><b>Solution</b> — typed <span class="font-mono text-sm">FsClient</span>/<span class="font-mono text-sm">NetClient</span>/<span class="font-mono text-sm">BlkClient</span> wrappers (channel + poll policy) in lerux-ipc or a small <span class="font-mono text-sm">lerux-client</span> crate; PDs delete their loops.</p>
+          <ul class="text-sm text-slate-700 grid md:grid-cols-2 gap-x-6 gap-y-1 list-disc list-inside">
+            <li>locality: fix the loop once, fixed in 10 PDs</li>
+            <li>leverage: one interface, N call sites</li>
+            <li>error policy stops diverging (expect vs Error)</li>
+            <li>lerux-ipc passes the deletion test again</li>
+          </ul>
+        </article>
+
+        <!-- ══════════════ 4. host tooling matrices ══════════════ -->
+        <article class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4" id="c4">
+          <div class="flex items-start justify-between gap-4">
+            <h2 class="font-serif text-2xl">4 · One source of truth for the board matrix in lerux-cli</h2>
+            <div class="flex gap-2 shrink-0">
+              <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800">Strong</span>
+              <span class="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">local-substitutable</span>
+            </div>
+          </div>
+          <p class="font-mono text-sm text-slate-500">support/boards.toml · tools/lerux-cli/src/{qemu.rs, clippy.rs, test.rs, build.rs}</p>
+
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 p-4 space-y-1.5" style="min-height:320px">
+              <p class="text-xs uppercase tracking-wider text-slate-400">Before — adding one board touches 6 places</p>
+              <div class="band h-10 border-l-4 border-slate-400 bg-slate-50 text-xs">boards.toml — entry (target_triple = target in all 40 rows; serial vars repeated 19×)</div>
+              <div class="band h-10 border-l-4 border-red-400 bg-red-50 text-xs">qemu.rs:46–327 — ~300-line match from board tag to QEMU args</div>
+              <div class="band h-10 border-l-4 border-red-400 bg-red-50 text-xs">clippy.rs:24–253 — hand-kept (crate, board-feature) matrices per arch</div>
+              <div class="band h-10 border-l-4 border-red-400 bg-red-50 text-xs">test.rs — default_curls + needs-disk board-name lists</div>
+              <div class="band h-10 border-l-4 border-red-400 bg-red-50 text-xs">build.rs:192–205 — test_all board array (33, vs 31 in CI)</div>
+              <div class="band h-10 border-l-4 border-slate-400 bg-slate-50 text-xs">smoke-expects.toml — expects (fine: already data)</div>
+            </div>
+            <div class="rounded-lg border border-slate-200 p-4 space-y-2" style="min-height:320px">
+              <p class="text-xs uppercase tracking-wider text-slate-400">After — one thick band</p>
+              <div class="deep rounded-lg p-3 text-white">
+                <p class="text-xs uppercase tracking-wider text-slate-300 mb-1">boards.toml (the interface)</p>
+                <p class="text-xs text-slate-200">entry + qemu machine/args or profile key + needs_disk / needs_sp804 / curl flags + in_ci</p>
+              </div>
+              <div class="seam-h mx-8 my-1"></div>
+              <div class="grid grid-cols-3 gap-2">
+                <div class="band h-9 border border-slate-300 rounded text-xs justify-center bg-slate-100 text-slate-500">qemu.rs (derives)</div>
+                <div class="band h-9 border border-slate-300 rounded text-xs justify-center bg-slate-100 text-slate-500">clippy.rs (derives from pds×features)</div>
+                <div class="band h-9 border border-slate-300 rounded text-xs justify-center bg-slate-100 text-slate-500">test.rs (derives)</div>
+              </div>
+              <p class="text-xs text-slate-500">The consumers become faded internals; the TOML row is the whole interface for “add a board”. Drop the redundant <span class="font-mono">target_triple</span> while at it.</p>
+            </div>
+          </div>
+
+          <p><b>Problem</b> — board knowledge leaks across four Rust modules as hardcoded name lists and match arms; the boards.toml interface is nearly as wide as the implementations it feeds.</p>
+          <p><b>Solution</b> — fold QEMU args, lint targets, disk/SP804/curl flags, and CI membership into the board entry (or derive them); delete the parallel matrices.</p>
+          <ul class="text-sm text-slate-700 grid md:grid-cols-2 gap-x-6 gap-y-1 list-disc list-inside">
+            <li>adding a board = one TOML entry</li>
+            <li>delete ~700 lines of match arms and tables</li>
+            <li>test-all vs CI drift becomes impossible</li>
+            <li>qemu.rs / clippy.rs / test.rs become derivations</li>
+          </ul>
+          <div class="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-900">Aligned with ADR-001’s stated trade-off (“board entries stay numerous until device bindings factor common system_vars sets”) — this is the follow-through, not a contradiction.</div>
+        </article>
+
+        <!-- ══════════════ 5. profile overlays ══════════════ -->
+        <article class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4" id="c5">
+          <div class="flex items-start justify-between gap-4">
+            <h2 class="font-serif text-2xl">5 · Workstation profiles: base manifest + arch overlay</h2>
+            <div class="flex gap-2 shrink-0">
+              <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800">Worth exploring</span>
+              <span class="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">in-process</span>
+            </div>
+          </div>
+          <p class="font-mono text-sm text-slate-500">support/profiles/workstation{,-riscv,-x86,-rpi4}.toml · tools/lerux-cli/src/profile.rs</p>
+
+          <div class="grid md:grid-cols-2 gap-4">
+            <div class="rounded-lg border border-slate-200 p-4" style="min-height:280px">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">Before — the channel graph ×4</p>
+              <div class="grid grid-cols-4 gap-2">
+                <div><div class="rounded border border-slate-300 overflow-hidden"><div class="bg-red-100" style="height:150px"></div><div class="bg-white border-t border-slate-300" style="height:16px"></div></div><p class="text-[10px] text-center text-slate-500 mt-1">aarch64<br/>232 ln</p></div>
+                <div><div class="rounded border border-slate-300 overflow-hidden"><div class="bg-red-100" style="height:150px"></div><div class="bg-white border-t border-slate-300" style="height:14px"></div></div><p class="text-[10px] text-center text-slate-500 mt-1">riscv<br/>229 ln · Δ21</p></div>
+                <div><div class="rounded border border-slate-300 overflow-hidden"><div class="bg-red-100" style="height:148px"></div><div class="bg-white border-t border-slate-300" style="height:18px"></div></div><p class="text-[10px] text-center text-slate-500 mt-1">x86<br/>228 ln · Δ28</p></div>
+                <div><div class="rounded border border-slate-300 overflow-hidden"><div class="bg-red-100" style="height:132px"></div><div class="bg-white border-t border-slate-300" style="height:32px"></div></div><p class="text-[10px] text-center text-slate-500 mt-1">rpi4<br/>223 ln · Δ51</p></div>
+              </div>
+              <p class="text-xs text-red-700 mt-2">Red = identical shared app channel manifest, copied four times; renumbering means four edits guarded only by check-channels.</p>
+            </div>
+            <div class="rounded-lg border border-slate-200 p-4" style="min-height:280px">
+              <p class="text-xs uppercase tracking-wider text-slate-400 mb-2">After</p>
+              <div class="deep rounded-lg text-white p-3 mb-2"><p class="text-xs uppercase tracking-wider text-slate-300">workstation-base [[channel]] (once)</p></div>
+              <div class="grid grid-cols-4 gap-2">
+                <div class="band h-9 border border-slate-300 rounded text-[10px] justify-center bg-white">aarch64 Δ</div>
+                <div class="band h-9 border border-slate-300 rounded text-[10px] justify-center bg-white">riscv Δ</div>
+                <div class="band h-9 border border-slate-300 rounded text-[10px] justify-center bg-white">x86 Δ</div>
+                <div class="band h-9 border border-slate-300 rounded text-[10px] justify-center bg-white">rpi4 Δ</div>
+              </div>
+              <p class="text-xs text-slate-500 mt-2">The profile loader is already structured Rust (serde round-trip in profile.rs); an <span class="font-mono">extends = "workstation-base"</span> key is a small change with real leverage. Context.md already calls multi-arch workstation “a profile concept across arches” — the data should say so too.</p>
+            </div>
+          </div>
+
+          <p><b>Problem</b> — the workstation channel manifest (the thing ADR-001 made the single source of truth) is quadruplicated; drift across arches is only caught after the fact.</p>
+          <p><b>Solution</b> — base + overlay composition in profile.rs; arch profiles hold only their delta (serial/virtio/time drivers).</p>
+          <ul class="text-sm text-slate-700 grid md:grid-cols-2 gap-x-6 gap-y-1 list-disc list-inside">
+            <li>~600 duplicated TOML lines collapse</li>
+            <li>channel renumbering = one edit</li>
+            <li>package install fragments merge into one place</li>
+          </ul>
+        </article>
+
+        <!-- ══════════════ 6. wire-protocol escapes ══════════════ -->
+        <article class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4" id="c6">
+          <div class="flex items-start justify-between gap-4">
+            <h2 class="font-serif text-2xl">6 · Wire types escaping their modules (serial, timer)</h2>
+            <div class="flex gap-2 shrink-0">
+              <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800">Worth exploring</span>
+              <span class="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">in-process</span>
+            </div>
+          </div>
+          <p class="font-mono text-sm text-slate-500">serial-driver/src/handler.rs:12–57 · serial-virt/src/handler.rs:13–59 · rdtime-timer-driver/src/main.rs:23–46 · tsc-timer-driver/src/main.rs:23–46</p>
+
+          <div class="rounded-lg border border-slate-200 bg-white p-3" style="min-height:260px">
+            <pre class="mermaid">
+flowchart LR
+  subgraph serial[serial passthrough protocol]
+    SD[serial-driver<br/>Request/Response enums] -. identical copy .- SV[serial-virt<br/>Request/Response enums]
+  end
+  subgraph timer[timer protocol - mirrors PRIVATE upstream adapter types]
+    RD[rdtime-timer-driver<br/>Request enum] -. identical copy .- TS[tsc-timer-driver<br/>Request enum]
+  end
+  UP[rust-sel4 adapters<br/>message_types are private] -.->|forces re-declaration| RD
+  UP -.->|forces re-declaration| TS
+  linkStyle 0,1 stroke:#dc2626,stroke-width:2px
+            </pre>
+            <p class="text-xs text-slate-500 px-2">The postcard enums are the interface between two PDs, yet each end declares its own copy — the compiler can’t see a mismatch, only QEMU can. The timer pair exists because upstream keeps <span class="font-mono">message_types</span> private (noted in the code comments).</p>
+          </div>
+
+          <p><b>Problem</b> — four private re-declarations of two wire protocols; a one-byte drift becomes a runtime decode failure instead of a compile error.</p>
+          <p><b>Solution</b> — move both protocols into shared modules (lerux-interface-types or a tiny lerux-driver-protocols crate); the timer handler body (identical in rdtime/tsc, lines 101–146) can become one generic module over a <span class="font-mono text-sm">Clock</span> interface.</p>
+          <ul class="text-sm text-slate-700 grid md:grid-cols-2 gap-x-6 gap-y-1 list-disc list-inside">
+            <li>protocol drift becomes a type error</li>
+            <li>~120 duplicated lines per timer pair deleted</li>
+            <li>new arch timers implement Clock only</li>
+          </ul>
+        </article>
+
+        <!-- ══════════════ 7. zero-adapter crates ══════════════ -->
+        <article class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4" id="c7">
+          <div class="flex items-start justify-between gap-4">
+            <h2 class="font-serif text-2xl">7 · Zero-adapter modules: lerux-sync, lerux-serial-queue, unused async surface</h2>
+            <div class="flex gap-2 shrink-0">
+              <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-200 text-slate-700">Speculative</span>
+              <span class="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">housekeeping</span>
+            </div>
+          </div>
+          <p class="font-mono text-sm text-slate-500">userspace/crates/{lerux-sync (15 ln), lerux-serial-queue (221 ln), lerux-service-async exports EventFlag/poll_once}</p>
+
+          <div class="rounded-lg border border-slate-200 p-4 grid md:grid-cols-3 gap-3" style="min-height:200px">
+            <div class="border border-slate-300 rounded p-3 text-center">
+              <p class="text-xs uppercase tracking-wider text-slate-500">lerux-sync</p>
+              <p class="text-3xl font-serif mt-2">0</p>
+              <p class="text-xs text-slate-500">dependent crates</p>
+            </div>
+            <div class="border border-slate-300 rounded p-3 text-center">
+              <p class="text-xs uppercase tracking-wider text-slate-500">lerux-serial-queue</p>
+              <p class="text-3xl font-serif mt-2">0</p>
+              <p class="text-xs text-slate-500">use sites (well-tested, shipped ahead per ADR-002)</p>
+            </div>
+            <div class="border border-slate-300 rounded p-3 text-center">
+              <p class="text-xs uppercase tracking-wider text-slate-500">EventFlag · poll_once</p>
+              <p class="text-3xl font-serif mt-2">0</p>
+              <p class="text-xs text-slate-500">production adopters (fs-server uses SingleTask/WakeCell only)</p>
+            </div>
+          </div>
+
+          <p><b>Problem</b> — one adapter means a hypothetical seam; zero adapters means speculation. These modules cost workspace surface, clippy passes, and reader attention with no callers.</p>
+          <p><b>Solution</b> — delete lerux-sync (trivially recreatable); either land the queue-backed serial transport that justifies lerux-serial-queue or park the crate on a branch; trim unused exports.</p>
+          <ul class="text-sm text-slate-700 grid md:grid-cols-2 gap-x-6 gap-y-1 list-disc list-inside">
+            <li>deletion test passes today: nothing breaks</li>
+            <li>workspace and lint surface shrink</li>
+          </ul>
+          <div class="rounded-md bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-900">Brushes against ADR-002, which deliberately shipped the queue ahead of need — worth reopening only if the queue transport isn’t on the near-term path; otherwise keep and note the plan.</div>
+        </article>
+
+        <!-- ══════════════ 8. docs drift ══════════════ -->
+        <article class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4" id="c8">
+          <div class="flex items-start justify-between gap-4">
+            <h2 class="font-serif text-2xl">8 · Docs drift: the docs describe a slightly older system</h2>
+            <div class="flex gap-2 shrink-0">
+              <span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800">Strong</span>
+              <span class="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">docs</span>
+            </div>
+          </div>
+          <p class="text-sm text-slate-600">Not an architecture card — a fix list. Everything below was verified against code/CI, not just cross-read.</p>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead><tr class="text-left text-xs uppercase tracking-wider text-slate-400 border-b border-slate-200">
+                <th class="py-2 pr-3">Claim</th><th class="py-2 pr-3">Reality</th><th class="py-2">Where</th>
+              </tr></thead>
+              <tbody class="divide-y divide-slate-100 align-top">
+                <tr><td class="py-2 pr-3">“26 smoke matrix jobs”</td><td class="py-2 pr-3">31 in CI (and <span class="font-mono">test-all</span> runs 33 — debug + fs_fat aren’t in CI, undocumented)</td><td class="py-2 font-mono text-xs">README.md:33 · rust.yml · build.rs:192–205</td></tr>
+                <tr><td class="py-2 pr-3">“boot-init” PD</td><td class="py-2 pr-3">crate is <span class="font-mono">supervisor</span>; boards.md (10×), context.md (2×), ci.md still say boot-init</td><td class="py-2 font-mono text-xs">docs/boards.md:17,190 · docs/context.md:38</td></tr>
+                <tr><td class="py-2 pr-3">“LERUXFS1 remains default”</td><td class="py-2 pr-3">default is LERUXFS2 (context.md:61, code logs LERUXFS2)</td><td class="py-2 font-mono text-xs">plan.md:370,374 · ADR-004:38 · plan-au-ts.md:177,206</td></tr>
+                <tr><td class="py-2 pr-3">SP804 patched QEMU “see Phase 56”</td><td class="py-2 pr-3">SP804 is Phase 12; Phase 56 is RTC/timer parity</td><td class="py-2 font-mono text-xs">README.md:74 · plan.md:113</td></tr>
+                <tr><td class="py-2 pr-3">plan.md covers “phases 1–49”</td><td class="py-2 pr-3">it spans 1–60, 50–59 “core done”</td><td class="py-2 font-mono text-xs">README.md:83 · docs/README.md:11 · plan-arch.md:5</td></tr>
+                <tr><td class="py-2 pr-3">“28 templates, ~2k lines”</td><td class="py-2 pr-3">33 templates, ~1.83k lines</td><td class="py-2 font-mono text-xs">ADR-001:13 · system-generation.md:57</td></tr>
+                <tr><td class="py-2 pr-3">boards.md table</td><td class="py-2 pr-3">34 rows (one duplicated debug row) vs 40 boards; workstation/bench/rpi4-net/rpi4-blk missing</td><td class="py-2 font-mono text-xs">docs/boards.md:11–45</td></tr>
+                <tr><td class="py-2 pr-3">docs index complete</td><td class="py-2 pr-3">ops.md, platforms.md, and the RISC-V platforms PDF exist but aren’t indexed</td><td class="py-2 font-mono text-xs">docs/README.md</td></tr>
+                <tr><td class="py-2 pr-3">Ported-app checklist step 3: “wire channels in a profile .system template”</td><td class="py-2 pr-3">contradicts the ADR-001 model — workstation templates are channel-free; channels come from [[channel]]</td><td class="py-2 font-mono text-xs">context.md:103 vs system-generation.md:33</td></tr>
+                <tr><td class="py-2 pr-3">AGENTS.md “channel numbers come from the profile manifest”</td><td class="py-2 pr-3">true for workstation; but fs-server hardcodes clients as bare <span class="font-mono">Channel::new(3|5|6|7|8)</span> in both handlers — exactly the “freehand magic” the rule bans</td><td class="py-2 font-mono text-xs">leruxfs_handler.rs:166–173 · fat_handler.rs:130–137</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="text-sm text-slate-600">Root cause worth noting: phase numbers double as vocabulary (“Phase 40 / 55”-style citations in context.md), and counts (smokes, templates, boards) are hardcoded in prose across five documents. Fewer hardcoded counts, more links, and one rename sweep (boot-init → supervisor, LERUXFS1 → LERUXFS2) would fix most of it.</p>
+        </article>
+
+      </section>
+
+      <!-- ══════════════ top recommendation ══════════════ -->
+      <section id="top-recommendation" class="rounded-xl deep text-white p-8 space-y-3">
+        <p class="text-xs uppercase tracking-wider text-slate-400">Top recommendation</p>
+        <h2 class="font-serif text-3xl"><a href="#c1" class="underline decoration-slate-500 underline-offset-4">Deepen the fs-server</a></h2>
+        <p class="text-slate-300 max-w-3xl">It is the largest module in userspace, the duplication is already costing real fixes (the multi-client race patch had to land twice, +114/+116 lines), and both adapters for the FsFormat seam already exist as host-tested crates — the deepening is a reshuffle, not new invention. Candidates <a href="#c2" class="underline underline-offset-2">2</a> and <a href="#c3" class="underline underline-offset-2">3</a> are close seconds and independent enough to run in parallel.</p>
+      </section>
+
+    </main>
+  </body>
+</html>

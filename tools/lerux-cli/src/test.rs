@@ -348,8 +348,13 @@ pub fn default_curls(board: &str) -> Vec<(String, String)> {
             | "x86_64_generic_http"
     ) {
         vec![("http://127.0.0.1:18080/".into(), "lerux: HTTP ok".into())]
-    } else if board == "qemu_virt_aarch64_workstation" {
-        // Supervisor writes /boot.log; listing body includes the name.
+    } else if matches!(
+        board,
+        "qemu_virt_aarch64_workstation"
+            | "qemu_virt_riscv64_workstation"
+            | "x86_64_generic_workstation"
+    ) {
+        // Supervisor writes /boot.log; HTML listing (Phase 58) includes the name.
         vec![("http://127.0.0.1:18080/".into(), "boot.log".into())]
     } else {
         Vec::new()

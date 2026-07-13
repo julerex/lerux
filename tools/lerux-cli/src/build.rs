@@ -206,6 +206,8 @@ pub fn test_all(root: &Path, build_dir: &str, config: &str) -> Result<()> {
         "qemu_virt_aarch64_net_composed",
         "qemu_virt_aarch64_ipc_composed",
         "qemu_virt_aarch64_workstation",
+        "qemu_virt_riscv64_workstation",
+        "x86_64_generic_workstation",
         "qemu_virt_riscv64_net",
         "x86_64_generic_net",
     ];

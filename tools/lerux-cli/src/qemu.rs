@@ -275,6 +275,33 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
             ]);
             c
         }
+        "riscv64_workstation" => {
+            ensure_disk(&disk)?;
+            let mut c = Command::new("qemu-system-riscv64");
+            c.args([
+                "-machine",
+                "virt",
+                "-m",
+                "size=2G",
+                "-nographic",
+                "-serial",
+                "mon:stdio",
+                "-kernel",
+                &path_str(&loader),
+                "-device",
+                "virtio-blk-device,bus=virtio-mmio-bus.0,drive=blkdev0",
+                "-blockdev",
+                &format!(
+                    "node-name=blkdev0,read-only=off,driver=file,filename={}",
+                    path_str(&disk)
+                ),
+                "-device",
+                "virtio-net-device,bus=virtio-mmio-bus.1,netdev=netdev0",
+                "-netdev",
+                "user,id=netdev0,hostfwd=tcp::18080-:8080",
+            ]);
+            c
+        }
         "riscv64_net" => {
             let mut c = Command::new("qemu-system-riscv64");
             c.args([
@@ -294,9 +321,8 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
             ]);
             c
         }
-        "x86_64" | "x86_64_virtio" | "x86_64_blk" | "x86_64_http" | "x86_64_net" => {
-            x86_command(ctx, &loader, &disk)?
-        }
+        "x86_64" | "x86_64_virtio" | "x86_64_blk" | "x86_64_http" | "x86_64_net"
+        | "x86_64_workstation" => x86_command(ctx, &loader, &disk)?,
         other => bail!("unsupported qemu profile {other}"),
     };
 
@@ -353,6 +379,22 @@ fn x86_command(ctx: &QemuContext, loader: &Path, disk: &Path) -> Result<Command>
                 "virtio-net-pci,id=net0,addr=0x4.0x0,netdev=netdev0",
                 "-netdev",
                 "user,id=netdev0",
+            ]);
+        }
+        "x86_64_workstation" => {
+            ensure_disk(disk)?;
+            c.args([
+                "-device",
+                "virtio-blk-pci,id=blk0,addr=0x3.0x0,drive=blkdev0",
+                "-blockdev",
+                &format!(
+                    "node-name=blkdev0,read-only=off,driver=file,filename={}",
+                    path_str(disk)
+                ),
+                "-device",
+                "virtio-net-pci,id=net0,addr=0x4.0x0,netdev=netdev0",
+                "-netdev",
+                "user,id=netdev0,hostfwd=tcp::18080-:8080",
             ]);
         }
         "x86_64_blk" => {
@@ -447,6 +489,8 @@ pub fn is_http_board(board: &str) -> bool {
             | "qemu_virt_riscv64_http"
             | "x86_64_generic_http"
             | "qemu_virt_aarch64_workstation"
+            | "qemu_virt_riscv64_workstation"
+            | "x86_64_generic_workstation"
     )
 }
 
@@ -483,12 +527,14 @@ pub fn print_http_hint(ctx: &QemuContext) {
 
 pub fn ensure_qemu_binary(root: &Path, profile: &str) -> Result<()> {
     let binary = match profile {
-        "riscv64" | "riscv64_virtio" | "riscv64_blk" | "riscv64_http" | "riscv64_net" => {
-            "qemu-system-riscv64"
-        }
-        "x86_64" | "x86_64_virtio" | "x86_64_blk" | "x86_64_http" | "x86_64_net" => {
-            "qemu-system-x86_64"
-        }
+        "riscv64"
+        | "riscv64_virtio"
+        | "riscv64_blk"
+        | "riscv64_http"
+        | "riscv64_net"
+        | "riscv64_workstation" => "qemu-system-riscv64",
+        "x86_64" | "x86_64_virtio" | "x86_64_blk" | "x86_64_http" | "x86_64_net"
+        | "x86_64_workstation" => "qemu-system-x86_64",
         _ => "qemu-system-aarch64",
     };
     let path = host_path(root);

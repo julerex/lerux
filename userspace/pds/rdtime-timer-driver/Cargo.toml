@@ -10,6 +10,7 @@ workspace = true
 
 [features]
 board-qemu_virt_riscv64_init = []
+board-qemu_virt_riscv64_workstation = []
 
 [dependencies]
 sel4-driver-interfaces = { workspace = true }

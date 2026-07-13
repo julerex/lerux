@@ -76,6 +76,16 @@ mod pci;
 use config::channels;
 use lerux_virtio_hal::HalImpl;
 
+/// OR an extra channel bit into a [`ChannelSet`] (badge bitmask). Used when a PCI
+/// combo wake arrives on the wrong device channel so we can still drain the peer.
+#[cfg(feature = "board-x86_64_generic_virtio")]
+fn channel_set_or(channels: ChannelSet, extra: Channel) -> ChannelSet {
+    let badge: sel4::Badge =
+        unsafe { core::mem::transmute_copy::<ChannelSet, sel4::Badge>(&channels) };
+    let badge = badge | (1 << extra.index());
+    unsafe { core::mem::transmute(badge) }
+}
+
 #[cfg(any(
     feature = "board-x86_64_generic_virtio",
     feature = "board-x86_64_generic_blk"
@@ -393,15 +403,24 @@ impl BlkHandler {
     }
 
     fn drive_notified(&mut self, channels: ChannelSet) -> bool {
-        if !channels.contains(channels::BLK_DEVICE) && !channels.contains(channels::BLK_CLIENT) {
+        let blk_device = channels.contains(channels::BLK_DEVICE);
+        let blk_client = channels.contains(channels::BLK_CLIENT);
+        if !blk_device && !blk_client && self.pending.is_empty() {
             return false;
         }
         // Issue before complete so a CLIENT notify can poll the used ring when IRQ is late.
-        let notify = self.issue_pending_requests() | self.complete_used_requests();
-        if notify {
+        let issued = self.issue_pending_requests();
+        let completed = self.complete_used_requests();
+        // Match MMIO virtio-blk: do not Signal the client while handling a CLIENT notify
+        // (caller is already runnable; reverse Signal has wedged x86 workstation).
+        if (issued || completed) && !blk_client {
             self.ring_buffers.notify();
         }
-        if channels.contains(channels::BLK_DEVICE) {
+        // Ack when the device interrupted us, when CLIENT may have completed I/O
+        // synchronously (level-triggered line still asserted), or when we retired a
+        // request while draining on a net wake. Skip ack on a pure net wake with no
+        // blk progress so we do not touch an idle blk line (Phase 59).
+        if blk_device || blk_client || issued || completed {
             self.ack_device_irq();
         }
         true
@@ -436,11 +455,25 @@ impl Handler for ComboHandler {
     type Error = Infallible;
 
     fn notified(&mut self, channels: ChannelSet) -> Result<(), Self::Error> {
-        if channels.contains(channels::BLK_DEVICE) || channels.contains(channels::BLK_CLIENT) {
+        // Progress blk on its channels, or when in-flight requests may have completed
+        // under a net IRQ (coalesced wake on the combo PD).
+        if channels.contains(channels::BLK_DEVICE)
+            || channels.contains(channels::BLK_CLIENT)
+            || !self.blk.pending.is_empty()
+        {
             self.blk.drive_notified(channels);
         }
-        if channels.contains(channels::NET_DEVICE) || channels.contains(channels::NET_CLIENT) {
-            self.net.notified(channels)?;
+        // Hostfwd curls raise interrupts that arrive on the blk IOAPIC channel on
+        // q35 combo (net ISR stays asserted → IRQ storm if we only ack blk). Always
+        // drain net when blk's device line woke us (Phase 59).
+        let mut net_channels = channels;
+        if channels.contains(channels::BLK_DEVICE) {
+            net_channels = channel_set_or(net_channels, channels::NET_DEVICE);
+        }
+        if net_channels.contains(channels::NET_DEVICE)
+            || net_channels.contains(channels::NET_CLIENT)
+        {
+            self.net.notified(net_channels)?;
         }
         Ok(())
     }

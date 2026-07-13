@@ -10,6 +10,8 @@ workspace = true
 [features]
 workstation = []
 board-qemu_virt_aarch64_workstation = ["workstation"]
+board-qemu_virt_riscv64_workstation = ["workstation"]
+board-x86_64_generic_workstation = ["workstation"]
 board-rpi4b_4gb_workstation = ["workstation"]
 
 [dependencies]

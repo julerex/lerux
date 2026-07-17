@@ -44,7 +44,7 @@ impl HandlerImpl {
             pos += 1;
             files = files.saturating_add(1);
         }
-        let Ok(handle) = FS_SERVER.create_or_open(b"/backup/manifest") else {
+        let Ok(handle) = FS_SERVER.create_clean(b"/backup/manifest") else {
             return BackupResponse::Error;
         };
         match fs_call(FsRequest::write(handle, 0, &buf[..pos])) {

@@ -279,9 +279,8 @@ impl Editor {
         }
         let data = &buf[..pos];
 
-        let handle = match fs_call(FsRequest::create(self.path_bytes())) {
-            FsResponse::Handle { id } => id,
-            _ => return false,
+        let Ok(handle) = FS_SERVER.create_clean(self.path_bytes()) else {
+            return false;
         };
         match fs_call(FsRequest::write(handle, 0, data)) {
             FsResponse::Ok => {

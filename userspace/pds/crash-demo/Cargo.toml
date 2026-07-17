@@ -10,6 +10,7 @@ workspace = true
 
 [features]
 board-qemu_virt_aarch64_debug = []
+board-qemu_virt_aarch64_isolation = []
 
 [dependencies]
 lerux-logging = { path = "../../crates/lerux-logging" }

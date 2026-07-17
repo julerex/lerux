@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-12 (Phase 59 multi-arch workstation)
+Last updated: 2026-07-17 (Phase 60 isolation smoke + threat model)
 
 ## Phase 1 — Bring-up
 
@@ -471,9 +471,16 @@ Install-media path for RPi4 workstation (see [`boards.md`](boards.md#rpi4-workst
 - [x] CI smokes `workstation-riscv` / `workstation-x86`
 - [x] Docs: [`platforms.md`](platforms.md) tiers
 
-## Phase 60 — Arch-level functionality (planned)
+## Phase 60 — Security posture (core done; stretch open)
 
-Security posture (stretch). Full checklist: **[`plan-arch.md`](plan-arch.md)**.
+Threat model + automated isolation smoke. Full checklist: **[`plan-arch.md`](plan-arch.md)**, doc: **[`security.md`](security.md)**.
+
+- [x] Threat model / trust map ([`security.md`](security.md))
+- [x] Isolation smoke: `qemu_virt_aarch64_isolation` / `just test-isolation` (crash-demo → fs-server still serves)
+- [ ] Capability audit: admin vs untrusted profiles; shrink shell surface
+- [ ] Image signing / measured boot (host-side first)
+- [ ] Channel/QoS abuse tests; optional MCS budgets
+- [ ] Dependency pin security-update runbook
 
 | Phase | Theme | Status |
 |-------|--------|--------|
@@ -487,9 +494,9 @@ Security posture (stretch). Full checklist: **[`plan-arch.md`](plan-arch.md)**.
 | 57 | Observability and ops | core done |
 | 58 | App catalog | core done |
 | 59 | Multi-arch workstation profiles | core done |
-| 60 | Security posture (stretch) | planned |
+| 60 | Security posture | core done (signing / ACL / runbook stretch open) |
 
-Near-term priority: **60 security posture** (stretch) or polish.
+Near-term priority: Phase 60 stretch (signing, admin profiles) or lab gates (RPi4, TLS).
 
 ## Version alignment
 

@@ -66,6 +66,9 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 **Debug / faults (Phase 46)**
 : Child PD faults can be delivered to a **parent** PD (`Handler::fault`) via Microkit hierarchy. Demo: `debug-handler` + `crash-demo` (`just test-debug`). Interactive host debugging uses QEMU’s gdbstub + `gdb-multiarch` ([`debug.md`](debug.md), [ADR-005](decisions/005-debug-pd.md)).
 
+**Security posture (Phase 60)**
+: Trust map and threat model in [`security.md`](security.md). Automated isolation smoke (`just test-isolation`): untrusted `crash-demo` faults, then `fs-client` still completes an FS round-trip against `fs-server`. Production workstation stays without a debug parent (ADR-005).
+
 **Hardware serial smoke (Phase 47 / 52)**
 : On-device boot checks use `LERUX_HW_SERIAL` + `--mode hw-serial` / `just test-hw`, with expects from `support/smoke-expects.toml` and a local board lock. Phase 52 adds optional **scripted REPL** steps (`script = [{send, expect}, …]`) after boot match, and `lerux deploy` / `just deploy-rpi4` for SD boot media. First-boot seeds `/config` via supervisor. Cloud CI stays QEMU-only; optional self-hosted workflow is documented in [`ci.md`](ci.md). Install path: [`boards.md`](boards.md#rpi4-workstation-install-path-phase-52).
 

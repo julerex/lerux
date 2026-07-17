@@ -37,4 +37,4 @@ CI uploads `build/smoke-logs/` as artifact `smoke-serial-<matrix.id>` on every s
 
 ## Fault path
 
-See [`debug.md`](debug.md): `just test-debug` for hierarchy faults; QEMU gdbstub for interactive backtraces. Production workstation images stay without a debug parent (ADR-005).
+See [`debug.md`](debug.md): `just test-debug` for hierarchy faults; `just test-isolation` for crash-then-FS (Phase 60); QEMU gdbstub for interactive backtraces. Production workstation images stay without a debug parent (ADR-005). Trust map: [`security.md`](security.md).

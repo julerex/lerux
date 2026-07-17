@@ -10,6 +10,7 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 |-------|------|---------------|---------------|
 | `qemu_virt_aarch64` | aarch64 | `just test` | hello + serial |
 | `qemu_virt_aarch64_debug` | aarch64 | `just test-debug` | debug-handler (parent) + crash-demo (child fault) |
+| `qemu_virt_aarch64_isolation` | aarch64 | `just test-isolation` | Phase 60: crash-demo fault then fs-client vs live fs-server |
 | `qemu_virt_aarch64_echo` | aarch64 | `just test-echo` | echo client/server + serial |
 | `qemu_virt_aarch64_virtio` | aarch64 | `just test-virtio` | hello + serial + virtio blk/net |
 | `qemu_virt_aarch64_blk` | aarch64 | `just test-blk` | blk client/server + serial + virtio-blk |
@@ -214,6 +215,8 @@ See [plan.md](plan.md) Phases 15 and 24.
 `qemu_virt_aarch64_fetch` runs `fetch-client` over extended net IPC (DNS resolve, TCP connect/send/recv) to perform `GET /` against a host HTTP server at `10.0.2.2:8081`. Smoke expects `lerux-fetch: 200`. See [plan.md](plan.md) Phase 31.
 
 `qemu_virt_aarch64_fs` runs `fs-client` over filesystem IPC (`Create`/`Write`/`Read`/`Stat`/`ListDir`/`Mkdir`/`Unlink`/`Rename`) backed by `fs-server` on virtio-blk with **LERUXFS2** (hierarchical dirs, multi-sector files). Smoke expects `lerux-fs: ready (LERUXFS2)` and `lerux-fs: round-trip ok` (includes nested path + multi-sector). See [plan.md](plan.md) Phase 50.
+
+`qemu_virt_aarch64_isolation` (Phase 60) nests `crash-demo` under `debug-handler`, then notifies `fs-client` only after the untrusted PD is suspended. Smoke expects fault strings plus `lerux-isolation: fs-server survived untrusted PD crash`. See [`security.md`](security.md).
 
 `qemu_virt_aarch64_fs_fat` uses the same SDF and IPC; `fs-server` is built with `backend-fat` (Phase 44 minimal FAT16: root-only, 8.3 names, single-cluster files; hierarchy ops return Error). Smoke expects `lerux-fs: ready (FAT16)` and `lerux-fs: round-trip ok` (basic create/read only).
 

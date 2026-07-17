@@ -169,6 +169,11 @@ test-fs-fat:
 test-debug:
     BOARD=qemu_virt_aarch64_debug just test
 
+# Phase 60: untrusted PD crash must not take down fs-server
+test-isolation:
+    just disk-img
+    BOARD=qemu_virt_aarch64_isolation just test
+
 # Net IPC smoke test on RISC-V virt
 test-riscv-net:
     BOARD=qemu_virt_riscv64_net just test

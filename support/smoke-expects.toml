@@ -71,6 +71,18 @@ expects = [
   "lerux-debug: crash dump",
 ]
 
+# Phase 60: crash-demo faults first; fs-client probes only after notify.
+[boards.qemu_virt_aarch64_isolation]
+expects = [
+  "lerux-debug: ready",
+  "crash-demo: about to fault",
+  "lerux-debug: crash-demo stopped",
+  "lerux-isolation: notified survivor",
+  "lerux-fs: ready",
+  "lerux-fs: round-trip ok",
+  "lerux-isolation: fs-server survived untrusted PD crash",
+]
+
 [boards.qemu_virt_aarch64_blk]
 expects = [
   "lerux-blk: ready",

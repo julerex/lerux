@@ -56,6 +56,7 @@ Local mirror: `just check` (format + clippy for `lerux-cli` and `lerux-interface
 | `net-composed` | `just test-net-composed` | init + net IPC; patched QEMU |
 | `ipc-composed` | `just disk-img && just test-ipc-composed` | init + blk/net IPC; patched QEMU |
 | `fs` | `just disk-img && just test-fs` | aarch64 FS IPC |
+| `isolation` | `just disk-img && just test-isolation` | Phase 60: untrusted PD crash + FS survives |
 | `workstation` | `just disk-img && just test-workstation` | supervisor+shell+edit+chat+http-fs; SP804 + hostfwd curl |
 | `workstation-riscv` | `just test-workstation-riscv` | Phase 59 RISC-V virt workstation |
 | `workstation-x86` | `just test-workstation-x86` | Phase 59 x86 q35 workstation |

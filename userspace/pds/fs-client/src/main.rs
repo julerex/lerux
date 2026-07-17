@@ -6,15 +6,23 @@ use lerux_interface_types::MAX_FS_DATA;
 use lerux_interface_types::{FsRequest, FsResponse};
 use lerux_ipc::FsClient;
 use lerux_logging::{log, serial};
+#[cfg(feature = "isolation-sync")]
+use sel4_microkit::ChannelSet;
 use sel4_microkit::{protection_domain, Channel, Handler, Infallible};
 
 const SERIAL_DRIVER: Channel = Channel::new(0);
 const FS_SERVER: FsClient = FsClient::new(Channel::new(1));
+/// Phase 60 isolation: notify from `debug-handler` after untrusted crash.
+#[cfg(feature = "isolation-sync")]
+const ISOLATION_GATE: Channel = Channel::new(2);
 
 const TEST_PATH: &[u8] = b"ping";
 const TEST_DATA: &[u8] = b"lerux-fs smoke";
 
-struct HandlerImpl;
+struct HandlerImpl {
+    #[cfg(feature = "isolation-sync")]
+    probe_pending: bool,
+}
 
 fn fs_call(req: FsRequest) -> FsResponse {
     FS_SERVER.call(req)
@@ -115,6 +123,8 @@ fn probe_fs() {
     probe_fs_v2();
 
     log::info!("lerux-fs: round-trip ok");
+    #[cfg(feature = "isolation-sync")]
+    log::info!("lerux-isolation: fs-server survived untrusted PD crash");
 }
 
 #[cfg(not(feature = "board-qemu_virt_aarch64_fs_fat"))]
@@ -185,10 +195,30 @@ fn probe_fs_v2() {
 #[protection_domain]
 fn init() -> HandlerImpl {
     serial::init(SERIAL_DRIVER).unwrap();
-    probe_fs();
-    HandlerImpl
+    #[cfg(feature = "isolation-sync")]
+    {
+        log::info!("lerux-isolation: waiting for untrusted PD crash");
+        HandlerImpl {
+            probe_pending: true,
+        }
+    }
+    #[cfg(not(feature = "isolation-sync"))]
+    {
+        probe_fs();
+        HandlerImpl {}
+    }
 }
 
 impl Handler for HandlerImpl {
     type Error = Infallible;
+
+    #[cfg(feature = "isolation-sync")]
+    fn notified(&mut self, channels: ChannelSet) -> Result<(), Self::Error> {
+        if self.probe_pending && channels.contains(ISOLATION_GATE) {
+            self.probe_pending = false;
+            log::info!("lerux-isolation: probe after crash");
+            probe_fs();
+        }
+        Ok(())
+    }
 }

@@ -337,6 +337,9 @@ jobs:
           - id: fs
             board: qemu_virt_aarch64_fs
             command: just disk-img && just test-fs
+          - id: isolation
+            board: qemu_virt_aarch64_isolation
+            command: just disk-img && just test-isolation
           - id: net-composed
             board: qemu_virt_aarch64_net_composed
             command: just test-net-composed

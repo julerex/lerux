@@ -1,6 +1,6 @@
 # PLAN — Arch-level functionality (phases 50–60)
 
-Last updated: 2026-07-12 (Phase 59 core done)
+Last updated: 2026-07-17 (Phase 60 isolation smoke + threat model)
 
 Related: [`plan.md`](plan.md) (completed phases 1–49), [`plan-au-ts.md`](plan-au-ts.md) (sDDF/LionsOS inspiration track), [`context.md`](context.md) (domain language).
 
@@ -268,21 +268,22 @@ Defer heavy GUI browsers and language ecosystems until/unless a runtime PD prove
 
 ---
 
-## Phase 60 — Security posture (Arch: hardening baseline) — stretch
+## Phase 60 — Security posture (Arch: hardening baseline) — core done
 
 **Why:** seL4 sells isolation; Arch users care about least privilege and updates.
 
 ### Steps
 
-- [ ] Threat model doc: which PDs trust which channels; untrusted apps never map DMA (already net policy).
+- [x] Threat model doc: which PDs trust which channels; untrusted apps never map DMA — [`security.md`](security.md).
+- [x] Isolation smoke: `just test-isolation` / `qemu_virt_aarch64_isolation` — crash-demo VmFault then FS round-trip (`lerux-isolation: fs-server survived untrusted PD crash`).
 - [ ] Capability audit: reduce shell’s surface; separate admin vs untrusted app profiles.
 - [ ] Image signing / measured boot story (host-side first; hardware roots later).
 - [ ] Channel/QoS abuse tests; optional MCS budgets if Microkit/seL4 config allows (beyond ADR-006 fixed priorities).
-- [ ] Dependency pin hygiene (rust-sel4, Microkit) and security update runbook.
+- [ ] Dependency pin hygiene (rust-sel4, Microkit) and security update runbook (partial: pins documented in `security.md`).
 
 ### Exit
 
-Documented trust map + one automated isolation test (e.g. crash in app PD does not take down fs-server).
+Documented trust map + one automated isolation test (e.g. crash in app PD does not take down fs-server). **Met** for core; signing/ACL remain stretch.
 
 ---
 
@@ -318,9 +319,9 @@ That is Arch’s **workflow and completeness**, reimplemented as static Microkit
 
 If capacity is limited, do **not** start with graphics or scripting runtimes:
 
-1. **Phases 50–55 cores** — FS through package UX done
+1. **Phases 50–60 cores** — FS through isolation/threat model done
 2. **Phase 52 lab** — fill RPi4 REPL checklist on real hardware when available
-3. **Phase 60** — security posture (stretch)
+3. **Phase 60 stretch** — image signing, admin profiles, pin update runbook
 
 ---
 

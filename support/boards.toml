@@ -164,6 +164,17 @@ qemu = {}
 ci = true
 system_vars = {}
 
+# Phase 60: untrusted crash-demo fault then fs-client round-trip (isolation).
+[qemu_virt_aarch64_isolation]
+arch = "aarch64"
+microkit_board = "qemu_virt_aarch64"
+target = "aarch64-sel4-microkit"
+template = "isolation.system.template"
+pds = ["debug-handler", "crash-demo", "fs-client", "fs-server", "serial-driver", "virtio-blk-driver"]
+qemu = { disk = "rw", net = "user" }
+ci = true
+system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_blk_irq = 78 }
+
 [qemu_virt_aarch64_virtio]
 arch = "aarch64"
 microkit_board = "qemu_virt_aarch64"

@@ -110,8 +110,18 @@ For a hung (non-faulting) PD, interrupt with Ctrl-C in GDB after `continue` and 
 
 Hardware GDB (OpenOCD / JTAG) is out of Phase 46 scope. On device, keep serial logging and reproduce issues under QEMU when possible. A future phase may document JTAG once hierarchy debugging is proven on virt.
 
+## Isolation smoke (Phase 60)
+
+```bash
+just test-isolation
+# BOARD=qemu_virt_aarch64_isolation
+```
+
+Combines hierarchy fault handling with the FS stack: after `crash-demo` is suspended, `debug-handler` notifies `fs-client`, which must still get `lerux-fs: round-trip ok`. Trust map: [`security.md`](security.md).
+
 ## Related
 
 - [ADR-005](decisions/005-debug-pd.md)
+- [security.md](security.md) — Phase 60 threat model + isolation
 - Microkit hierarchy example (upstream `example/hierarchy`)
-- [boards.md](boards.md) — `qemu_virt_aarch64_debug`
+- [boards.md](boards.md) — `qemu_virt_aarch64_debug`, `qemu_virt_aarch64_isolation`

@@ -4,16 +4,25 @@
 //! [`Handler::fault`] instead of only the system monitor. This PD logs a
 //! structured summary (enough for smoke tests and as a hook for a future
 //! GDB RSP stub). Full libgdb requires forked seL4/Microkit — see ADR-005.
+//!
+//! Phase 60 (`isolation-notify`): after suspending `crash-demo`, notify
+//! `fs-client` so the FS stack is exercised only after the untrusted fault.
 
 #![no_std]
 #![no_main]
 
 use lerux_logging::{debug, log};
 use sel4::Fault;
+#[cfg(feature = "isolation-notify")]
+use sel4_microkit::Channel;
 use sel4_microkit::{protection_domain, Child, Handler, Infallible, MessageInfo};
 
 /// Child PD index from the system description (`id="1"` on crash_demo).
 const CRASH_DEMO: Child = Child::new(1);
+
+/// Isolation board: channel 0 → `fs_client` (notify after crash).
+#[cfg(feature = "isolation-notify")]
+const FS_SURVIVOR: Channel = Channel::new(0);
 
 struct HandlerImpl {
     fault_count: u32,
@@ -72,6 +81,11 @@ impl Handler for HandlerImpl {
             // Suspend so the fault reply slot is not left dangling for the next recv.
             let _ = child.tcb().tcb_suspend();
             log::info!("lerux-debug: crash-demo stopped (no restart)");
+            #[cfg(feature = "isolation-notify")]
+            {
+                FS_SURVIVOR.notify();
+                log::info!("lerux-isolation: notified survivor after crash-demo fault");
+            }
         }
         // Phase 57: machine-parseable one-liner for `lerux diagnose`.
         log::info!(

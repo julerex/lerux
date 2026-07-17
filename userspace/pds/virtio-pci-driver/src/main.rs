@@ -411,8 +411,11 @@ impl BlkHandler {
         // Issue before complete so a CLIENT notify can poll the used ring when IRQ is late.
         let issued = self.issue_pending_requests();
         let completed = self.complete_used_requests();
-        // Match MMIO virtio-blk: do not Signal the client while handling a CLIENT notify
-        // (caller is already runnable; reverse Signal has wedged x86 workstation).
+        // Do not reverse-Signal the client while handling a CLIENT notify: the higher-prio
+        // driver often completes during issue, and reverse Signal has wedged x86 workstation.
+        // Clients (fs-server, hello) must poll the used ring immediately after issue for the
+        // sync-complete case; DEVICE IRQ path still notifies for async completions.
+        // (Unlike MMIO virtio-blk-driver, which always notifies.)
         if (issued || completed) && !blk_client {
             self.ring_buffers.notify();
         }

@@ -211,12 +211,18 @@ fn start_blk_read() -> BlkRead {
     let mut io =
         OwnedSharedRingBufferBlockIO::new(dma_region, bounce_buffer_allocator, ring_buffers);
     let request_index = issue_blk_read(&mut io);
-    BlkRead {
+    let mut blk = BlkRead {
         io,
         request_index,
         buf: [0; 512],
         done: false,
-    }
+    };
+    // Higher-prio x86 PCI virtio-pci can complete during issue_read's notify and
+    // deliberately skips reverse Signal on the CLIENT path (see virtio-pci-driver
+    // drive_notified / Phase 59). Poll once so we observe sync completion instead of
+    // hanging forever waiting for a notify that never arrives — same race as fs-server.
+    finish_blk_read(&mut blk);
+    blk
 }
 
 #[cfg(feature = "virtio")]

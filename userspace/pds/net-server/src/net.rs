@@ -175,6 +175,8 @@ pub struct NetStack {
     millis: i64,
     dhcp_done: bool,
     dhcp_fallback_applied: bool,
+    /// When false, try_tcp_listen succeeds silently (background re-listen).
+    listen_notify_client: bool,
 }
 
 fn create_dma_region() -> SharedMemoryRef<'static, [u8]> {
@@ -296,6 +298,7 @@ impl NetStack {
             millis: 0,
             dhcp_done: false,
             dhcp_fallback_applied: false,
+            listen_notify_client: true,
         }
     }
 
@@ -352,6 +355,7 @@ impl NetStack {
         self.listen_port = Some(port);
         self.op = Op::TcpListen;
         self.tcp_role = TcpRole::Listen;
+        self.listen_notify_client = true;
         self.completed = None;
         let arena = unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_ARENA) };
         arena.tcp_listen_handle = None;
@@ -423,14 +427,14 @@ impl NetStack {
         self.op != Op::None
     }
 
-    pub fn cancel_recv(&mut self) {
-        if matches!(self.op, Op::UdpRecv | Op::TcpRecv | Op::DnsResolve) {
-            if self.op == Op::DnsResolve {
-                self.dns_query = None;
-            }
-            self.op = Op::None;
-            self.completed = None;
+    /// Drop any in-flight async op (Abort). Prevents a later driver notify from
+    /// stashing a completion with no owning client.
+    pub fn cancel_async(&mut self) {
+        if self.op == Op::DnsResolve {
+            self.dns_query = None;
         }
+        self.op = Op::None;
+        self.completed = None;
     }
 
     fn ensure_core_sockets(&mut self, sockets: &mut SocketSet<'static>) {
@@ -646,15 +650,21 @@ impl NetStack {
         let endpoint = IpListenEndpoint { addr: None, port };
         let tcp = sockets.get_mut::<TcpSocket>(tcp_handle);
         if !tcp.is_open() && tcp.listen(endpoint).is_err() {
-            self.completed = Some(NetResponse::Error);
             self.op = Op::None;
+            if self.listen_notify_client {
+                self.completed = Some(NetResponse::Error);
+            }
+            self.listen_notify_client = true;
             return;
         }
         self.tcp_listening = true;
         self.pending_tcp_listen = None;
-        self.completed = Some(NetResponse::Ok);
         self.op = Op::None;
-        log::info!("lerux-net: listen :{}", port);
+        if self.listen_notify_client {
+            self.completed = Some(NetResponse::Ok);
+            log::info!("lerux-net: listen :{}", port);
+        }
+        self.listen_notify_client = true;
     }
 
     fn tcp_handle_for_role(&self, role: TcpRole) -> Option<SocketHandle> {
@@ -896,6 +906,7 @@ impl NetStack {
             if arena.tcp_listen_handle.is_none() {
                 self.pending_tcp_listen = Some(port);
                 self.op = Op::TcpListen;
+                self.listen_notify_client = false;
                 self.try_tcp_listen(&mut sockets);
             }
         }

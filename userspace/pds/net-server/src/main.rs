@@ -85,7 +85,7 @@ impl HandlerImpl {
 
     fn abort_async(&mut self, channel: Channel) {
         if self.active_client == Some(channel) {
-            self.net.cancel_recv();
+            self.net.cancel_async();
             self.completed = None;
             self.finish_async();
         }
@@ -114,7 +114,12 @@ impl HandlerImpl {
 
     fn handle_net_driver(&mut self) {
         self.net.poll();
-        if let Some(resp) = self.net.take_completed() {
+        // Only stash completions for the owning client. Background work (e.g.
+        // auto re-listen after TcpClose) can finish with no active_client; an
+        // orphan completion blocks begin_async() for every client forever.
+        if self.active_client.is_some()
+            && let Some(resp) = self.net.take_completed()
+        {
             self.completed = Some(resp);
         }
         #[cfg(feature = "workstation")]

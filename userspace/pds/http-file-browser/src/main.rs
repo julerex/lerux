@@ -198,7 +198,7 @@ fn read_file_body(path: &[u8], out: &mut [u8]) -> Option<usize> {
 }
 
 fn put_file(path: &[u8], body: &[u8]) -> bool {
-    let Ok(handle) = FS_SERVER.create_or_open(path) else {
+    let Ok(handle) = FS_SERVER.create_clean(path) else {
         return false;
     };
     matches!(fs_call(FsRequest::write(handle, 0, body)), FsResponse::Ok)

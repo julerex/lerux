@@ -1717,7 +1717,13 @@ impl LeruxFsFormat {
                 if end > MAX_FILE_SECTORS * SECTOR_SIZE as u32 {
                     return Some(FsResponse::Error);
                 }
-                new_size = size.max(end);
+                // Shorter overwrite from offset 0 must shrink metadata size so reads
+                // do not expose stale tail bytes (create_clean used to unlink for this).
+                new_size = if offset == 0 && end < size {
+                    end
+                } else {
+                    size.max(end)
+                };
                 let need = if new_size == 0 {
                     1
                 } else {

@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-21 (Phase 60 Track A–C)
+Last updated: 2026-07-21 (Phase 60 Track A–D stretch complete)
 
 ## Phase 1 — Bring-up
 
@@ -480,7 +480,7 @@ Threat model + automated isolation smoke. Full checklist: **[`plan-arch.md`](pla
 - [x] **Track A** — Capability audit: admin vs reduced profiles; config `secret.*` ACL; `lerux profile audit`
 - [x] **Track B** — Dependency pin security-update runbook ([`security.md`](security.md#dependency-pins-and-security-update-runbook-track-b))
 - [x] **Track C** — Host-side `loader.img` SHA-256 sidecars; `lerux digest` / `verify-image`; deploy verifies by default
-- [ ] **Track D** — Channel/QoS abuse tests; optional MCS budgets
+- [x] **Track D** — QoS abuse checks: `lerux profile check-qos` + workstation concurrent-boot smoke (`qos ok`); MCS deferred
 
 Stretch order and exit criteria: **[`plan-arch.md` § Phase 60 stretch sequence](plan-arch.md#stretch-sequence-2026-07-21)**.
 
@@ -496,7 +496,7 @@ Stretch order and exit criteria: **[`plan-arch.md` § Phase 60 stretch sequence]
 | 57 | Observability and ops | core done |
 | 58 | App catalog | core done |
 | 59 | Multi-arch workstation profiles | core done |
-| 60 | Security posture | core done (stretch A–D open) |
+| 60 | Security posture | core + stretch A–D done (MCS / asymmetric signing deferred) |
 
 Near-term priority: Phase 60 stretch **A → B → C → D**, or lab gates (RPi4, TLS).
 

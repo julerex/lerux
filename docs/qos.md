@@ -75,15 +75,44 @@ interactive  1      shell (below all PPC servers)
 note: Microkit PPC requires callee priority > caller
 ```
 
-## Stress / load note
+## Abuse tests (Phase 60 Track D)
 
-**Smoke proxy:** `just test-workstation` starts supervisor, shell, fs, net, edit, chat, and http-fs together and still expects `lerux-shell: ready` and `lerux-shell: top count=` — shell remains live while higher-priority services initialize and bulk apps attach.
+### Host (CI / `just check`)
 
-**Manual stress:**
+```bash
+lerux profile check-qos              # all profiles with default_board
+lerux profile check-qos workstation  # one profile
+```
 
-1. Boot workstation (`just disk-img && just run` with `BOARD=qemu_virt_aarch64_workstation`, or smoke then attach serial).
-2. At `lerux>`: `fetch` (net bulk), then `ls` / `top` immediately.
+Parses the composed SDF and fails if:
+
+1. Any PPC edge has caller priority ≥ callee priority (Microkit rule; also caught at image build).
+2. On **admin** / **admin-core** profiles: service-class floors from this doc are violated (e.g. shell ≠ 1, platform drivers &lt; 6, fs/net &lt; 4).
+
+### Guest concurrent-boot smoke
+
+`just test-workstation` (and riscv/x86/rpi variants) expects:
+
+- Higher-priority path: `lerux-supervisor: timer ok`, `lerux-fs: ready`, `lerux-net: ready`
+- Bulk apps attach: `lerux-edit: ready` / `top count=` (arch-dependent)
+- Interactive still live: `lerux-shell: ready` and **`lerux-shell: qos ok`**
+
+That proves shell initialization completed while platform/service/bulk PDs also ran — the practical anti-starvation signal under fixed priorities + single-flight I/O. It is **not** a synthetic CPU-spin stress benchmark.
+
+### Manual stress
+
+1. Boot workstation (`just disk-img && just run` with `BOARD=qemu_virt_aarch64_workstation`).
+2. At `lerux>`: `fetch` (net bulk), then `ls` / `top` / `qos` immediately.
 3. Pass: prompt returns without multi-second freeze; `ls` succeeds.
+
+### Residual / deferred
+
+| Mechanism | Status |
+|-----------|--------|
+| Fixed priority bands | Enforced by template + `check-qos` |
+| Single-flight fs/net jobs | Code path; serializes bulk clients (`Pending`) |
+| MCS / time partitions | **Deferred** — needs ADR; not enabled |
+| Shell above bulk apps | **Impossible** while shell→app launch is PPC |
 
 If measured starvation appears (busy higher-prio PD), next steps: MCS budgets or convert shell→app launch off PPC — not priority inversion against the PPC rule.
 

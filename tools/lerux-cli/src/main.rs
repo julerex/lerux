@@ -20,6 +20,7 @@ mod path;
 mod process;
 mod profile;
 mod qemu;
+mod qos_check;
 mod smoke_expects;
 mod system;
 mod tcp_echo;
@@ -299,6 +300,15 @@ enum ProfileCommands {
     /// Phase 60: capability audit — trust class, PD domains, high-risk edges.
     Audit {
         /// Profile name; omit to audit all profiles under support/profiles/.
+        name: Option<String>,
+    },
+    /// Phase 60 Track D: validate PD priorities and PPC edges (no MCS).
+    ///
+    /// Checks composed SDF: every `pp="true"` caller has strictly lower
+    /// priority than its callee; admin/admin-core profiles also get
+    /// service-class band checks (docs/qos.md).
+    CheckQos {
+        /// Profile name; omit to check all profiles with a default_board.
         name: Option<String>,
     },
 }
@@ -593,6 +603,9 @@ fn main() -> Result<()> {
                 }
                 ProfileCommands::Audit { name } => {
                     crate::profile::audit_profiles(&profiles, name.as_deref())?;
+                }
+                ProfileCommands::CheckQos { name } => {
+                    crate::qos_check::check_profiles_qos(&root, &profiles, name.as_deref())?;
                 }
             }
         }

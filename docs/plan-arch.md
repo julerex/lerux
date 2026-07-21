@@ -1,6 +1,6 @@
 # PLAN — Arch-level functionality (phases 50–60)
 
-Last updated: 2026-07-21 (Phase 60 Track A–C done)
+Last updated: 2026-07-21 (Phase 60 Track A–D stretch complete)
 
 Related: [`plan.md`](plan.md) (completed phases 1–49), [`plan-au-ts.md`](plan-au-ts.md) (sDDF/LionsOS inspiration track), [`context.md`](context.md) (domain language).
 
@@ -279,7 +279,7 @@ Defer heavy GUI browsers and language ecosystems until/unless a runtime PD prove
 - [x] Capability audit: profile trust tiers + `lerux profile audit`; config-server `secret.*` write ACL (supervisor only). **Track A**
 - [x] Dependency pin hygiene and security update runbook ([`security.md`](security.md#dependency-pins-and-security-update-runbook-track-b)). **Track B**
 - [x] Host-side image digests: `loader.img.sha256`, `lerux digest` / `verify-image`, deploy verify ([`security.md`](security.md#image-integrity-track-c)). **Track C**
-- [ ] Channel/QoS abuse tests; optional MCS budgets if Microkit/seL4 config allows (beyond ADR-006 fixed priorities). **Track D**
+- [x] QoS / channel abuse checks: `lerux profile check-qos` + concurrent-boot smoke; MCS deferred ([`qos.md`](qos.md#abuse-tests-phase-60-track-d)). **Track D**
 
 ### Exit
 
@@ -294,7 +294,7 @@ Do **not** start MCS, graphics, or POSIX. Order by leverage and dependence:
 | **A** | Capability audit | Profile risk tiers + `lerux profile audit`; config-server ACL (`secret.*` write = supervisor only); document admin vs reduced surfaces | core 60 — **done** |
 | **B** | Pin security runbook | Incident steps for seL4 / Microkit / rust-sel4 bumps in [`security.md`](security.md) | core 60 — **done** |
 | **C** | Host image digests | SHA-256 sidecars for `loader.img`; auto on `lerux image`; `lerux digest` / `verify-image`; deploy verifies by default | A, deploy path — **done** |
-| **D** | Channel/QoS abuse tests | Smoke that busy bulk client does not starve IRQ/service progress; MCS deferred | A, ADR-006 |
+| **D** | Channel/QoS abuse tests | `lerux profile check-qos` + workstation concurrent-boot smoke; MCS deferred | A, ADR-006 — **done** |
 
 **Track A detail** — done (tiers, audit CLI, secret ACL).
 
@@ -302,7 +302,7 @@ Do **not** start MCS, graphics, or POSIX. Order by leverage and dependence:
 
 **Track C detail** — done (host SHA-256 only; ed25519 / measured boot deferred). See [`security.md`](security.md#image-integrity-track-c).
 
-**Track D detail** — extend smoke expects or a small stress PD; document residual single-flight throttle; **no** MCS without ADR.
+**Track D detail** — done: host PPC/band checks in `just check`; guest `lerux-shell: qos ok` on workstation smokes; MCS still deferred (ADR-006).
 
 ---
 
@@ -338,9 +338,9 @@ That is Arch’s **workflow and completeness**, reimplemented as static Microkit
 
 If capacity is limited, do **not** start with graphics or scripting runtimes:
 
-1. **Phases 50–60 cores** — FS through isolation/threat model done
-2. **Phase 60 stretch** — Track A → B → C → D (table above)
-3. **Phase 52 lab** — fill RPi4 REPL checklist on real hardware when available
+1. **Phases 50–60 cores + stretch A–D** — security posture hardening done (MCS / asymmetric signing deferred)
+2. **Phase 52 lab** — fill RPi4 REPL checklist on real hardware when available
+3. **Stretch elsewhere** — TLS (51), net config hot-apply (54), FAT multi-cluster (50) as capacity allows
 
 ---
 

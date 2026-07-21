@@ -1328,6 +1328,9 @@ fn init() -> HandlerImpl {
     server::init_with_tag(LOG_SERVER, b"shell").unwrap();
     let _console = SerialClient::new(SERIAL_DRIVER);
     log::info!("lerux-shell: ready");
+    // Phase 60 Track D: guest signal that interactive shell came up while
+    // higher-priority services/bulk apps initialized (concurrent boot smoke).
+    log::info!("lerux-shell: qos ok (policy=phase48 single-flight fs/net)");
     // Machine-readable command discovery for smokes (Phase 53).
     // Keep under MAX_LOG_MSG (~80) by logging a short marker + count.
     log::info!("lerux-shell: cmds={} (help -l)", COMMANDS.len());

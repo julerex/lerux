@@ -22,6 +22,8 @@ check:
     cargo fmt --all --check
     CARGO_TARGET_DIR={{root}}/build/host cargo clippy -p lerux-cli -p lerux-interface-types --all-targets -- -D warnings
     CARGO_TARGET_DIR={{root}}/build/host cargo test -p lerux-interface-types
+    # Phase 60 Track D: PPC priority + service-class band checks (host, no QEMU)
+    {{lerux}} profile check-qos
 
 # Cross-target clippy for PD + shared userspace crates (requires SDK)
 check-pd:

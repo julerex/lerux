@@ -68,7 +68,7 @@ Channel numbers come from profile `[[channel]]` manifests; PPC callees outrank c
 | Secrets on disk readable by any FS client | **Partial** | Path prefix `/config/secrets/`; no encryption; FS RPC clients can still open paths |
 | Compromised net-server | **Accepted residual** | Stack is trusted; full sDDF copy-swarm deferred |
 | Malicious `loader.img` | **Partial (host digest)** | SHA-256 sidecar at image build; `lerux deploy` verifies by default; asymmetric / measured boot still open |
-| Channel/QoS abuse (starve shell) | **Partial** | Fixed priorities + single-flight jobs; MCS budgets deferred (Track D) |
+| Channel/QoS abuse (starve shell) | **Mitigated (checks)** | Fixed priorities + single-flight; `lerux profile check-qos` + workstation concurrent-boot smoke; MCS deferred |
 | Supply-chain pin drift | **Mitigated (process)** | Pins in `deps/versions.toml` / `Cargo.toml` / package pins; [runbook](#dependency-pins-and-security-update-runbook-track-b) for bumps and CVE response |
 
 ## Isolation smoke (automated)
@@ -145,11 +145,20 @@ lerux deploy --board rpi4b_4gb_workstation --dest /media/$USER/boot
 
 **Out of scope for Track C:** ed25519/cosign signatures, TPM/fuse measured boot, in-guest verification.
 
-### Remaining stretch (Track D)
+### QoS / channel abuse (Track D)
 
-1. **Channel/QoS abuse tests** — Track D; MCS deferred
-2. **Reduce shell channel set further** — launch apps without giving shell every service end (may need non-PPC notify; see ADR-006)
-3. **Asymmetric image signing / measured boot** — follow-on after host digests
+| Check | How |
+|-------|-----|
+| PPC priority rule | `lerux profile check-qos` (host; also in `just check`) |
+| Service-class bands | Same command on admin/admin-core profiles ([`qos.md`](qos.md)) |
+| Concurrent boot under bulk apps | `just test-workstation` expects `lerux-shell: qos ok` after services/apps init |
+
+MCS budgets and raising shell above bulk apps remain **deferred** (ADR-006). See [`qos.md`](qos.md#abuse-tests-phase-60-track-d).
+
+### Remaining stretch
+
+1. **Reduce shell channel set further** — launch apps without giving shell every service end (may need non-PPC notify; see ADR-006)
+2. **Asymmetric image signing / measured boot** — follow-on after host digests
 
 ## Dependency pins and security update runbook (Track B)
 

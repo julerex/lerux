@@ -22,9 +22,11 @@ flowchart LR
   sdk --> package
 ```
 
-Local mirror: `just check` (format + clippy for `lerux-cli` and `lerux-interface-types`); `just check-pd` after `just build-sdk` (or `just check-all` for both).
+Local mirror: `just check` (format + clippy for `lerux-cli` and `lerux-interface-types`, plus `lerux profile check-qos`); `just check-pd` after `just build-sdk` (or `just check-all` for both).
 
 **Security pin bumps** (seL4 / Microkit / rust-sel4): follow the Phase 60 Track B runbook in [`security.md`](security.md#dependency-pins-and-security-update-runbook-track-b) — pin edit → SDK refresh → check / check-pd → smoke matrix → rebuild images.
+
+**QoS (Track D):** `lerux profile check-qos` is part of `just check`. Guest concurrent-boot signal is `lerux-shell: qos ok` on workstation smokes ([`qos.md`](qos.md#abuse-tests-phase-60-track-d)).
 
 ## Smoke matrix
 

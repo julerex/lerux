@@ -82,7 +82,8 @@ Graphics, POSIX layers, and guest Linux (libvmm) stay **explicit non-goals** unl
 
 - [x] Extend `FsRequest` / `FsResponse` for paths with directories, `Unlink`/`Rename`/`Mkdir` (path grammar on `MAX_FS_PATH` / interface-types docs).
 - [x] **LERUXFS2**: multi-sector contiguous files (≤32 sectors / 16 KiB), directory sectors, free-map bitmap; magic `LERUXFS2`; LERUXFS1 superblocks reformat on mount.
-- [ ] Finish **FAT** stretch: multi-cluster files, subdirs (or LFN if needed for host interchange); optional workstation FAT demo (`plan-au-ts` deferred items).
+- [x] FAT **multi-cluster** files (chain walk/extend; ≤32 clusters / 16 KiB; root-only 8.3).
+- [ ] FAT subdirs / LFN (optional host interchange); optional workstation FAT demo.
 - [ ] Optional **NFS** or host-backed FS for QEMU user-net (dev convenience; LionsOS-inspired).
 - [x] Shell: `mkdir`, `rm`, `mv`, `cd`/`pwd` (shell-local cwd); larger `cat`/`write` via chunked IPC.
 - [x] Smokes: `just test-fs` (hierarchy + multi-sector), `just test-fs-fat` (basic parity; new ops Error on FAT), workstation boots.

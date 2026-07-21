@@ -1,9 +1,7 @@
 #![no_std]
 #![no_main]
 
-#[cfg(not(feature = "board-qemu_virt_aarch64_fs_fat"))]
-use lerux_interface_types::MAX_FS_DATA;
-use lerux_interface_types::{FsRequest, FsResponse};
+use lerux_interface_types::{FsRequest, FsResponse, MAX_FS_DATA, SECTOR_SIZE};
 use lerux_ipc::FsClient;
 use lerux_logging::{log, serial};
 #[cfg(feature = "isolation-sync")]
@@ -59,21 +57,23 @@ fn fs_read(handle: u8, offset: u32, len: u16) -> FsResponse {
     })
 }
 
-#[cfg(not(feature = "board-qemu_virt_aarch64_fs_fat"))]
+/// Chunk writes so each request stays inside one 512-byte sector (FAT multi-cluster
+/// and LERUXFS2 both accept this; FAT rejects cross-cluster single Writes).
 fn write_all(handle: u8, data: &[u8]) {
     let mut offset = 0u32;
     while (offset as usize) < data.len() {
-        let end = (offset as usize + MAX_FS_DATA).min(data.len());
+        let sector_left = SECTOR_SIZE - (offset as usize % SECTOR_SIZE);
+        let end = (offset as usize + MAX_FS_DATA.min(sector_left)).min(data.len());
         fs_write(handle, offset, &data[offset as usize..end]);
         offset = end as u32;
     }
 }
 
-#[cfg(not(feature = "board-qemu_virt_aarch64_fs_fat"))]
 fn read_all(handle: u8, len: usize, out: &mut [u8]) {
     let mut offset = 0u32;
     while (offset as usize) < len {
-        let chunk = (len - offset as usize).min(MAX_FS_DATA) as u16;
+        let sector_left = SECTOR_SIZE - (offset as usize % SECTOR_SIZE);
+        let chunk = (len - offset as usize).min(MAX_FS_DATA).min(sector_left) as u16;
         let FsResponse::Data { data_len, data } = fs_read(handle, offset, chunk) else {
             panic!("read failed at offset {offset}");
         };
@@ -118,13 +118,44 @@ fn probe_fs() {
         _ => panic!("listdir failed"),
     }
 
-    // Phase 50 hierarchy + multi-sector (LERUXFS2 only; FAT stays root/single-cluster).
+    // Phase 50 hierarchy + multi-sector (LERUXFS2 only).
     #[cfg(not(feature = "board-qemu_virt_aarch64_fs_fat"))]
     probe_fs_v2();
+
+    // Phase 50 FAT stretch: multi-cluster root file (> 512 B).
+    #[cfg(feature = "board-qemu_virt_aarch64_fs_fat")]
+    probe_fs_fat_multi();
 
     log::info!("lerux-fs: round-trip ok");
     #[cfg(feature = "isolation-sync")]
     log::info!("lerux-isolation: fs-server survived untrusted PD crash");
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_fs_fat")]
+fn probe_fs_fat_multi() {
+    /// Multi-cluster payload: > 512 B so FAT chain growth is exercised.
+    const BIG_PATH: &[u8] = b"big.dat";
+    let mut big = [0u8; 600];
+    for (i, b) in big.iter_mut().enumerate() {
+        *b = (i % 251) as u8;
+    }
+    // Re-run on persistent disk: open-or-create via create path (FAT create fails if exists).
+    let big_h = match FS_SERVER.create_or_open(BIG_PATH) {
+        Ok(id) => id,
+        Err(_) => panic!("big create/open failed"),
+    };
+    write_all(big_h, &big);
+    match fs_call(FsRequest::stat(BIG_PATH)) {
+        FsResponse::Stat {
+            size,
+            is_dir: false,
+        } => assert_eq!(size, 600, "fat multi-cluster size"),
+        _ => panic!("big stat failed"),
+    }
+    let mut got = [0u8; 600];
+    read_all(big_h, 600, &mut got);
+    assert_eq!(&got, &big, "fat multi-cluster round-trip mismatch");
+    log::info!("lerux-fs: fat multi-cluster ok");
 }
 
 #[cfg(not(feature = "board-qemu_virt_aarch64_fs_fat"))]

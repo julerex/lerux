@@ -3,7 +3,7 @@ name = "lerux-fat"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-description = "Minimal FAT16 codec for lerux fs-server (root-only, short names)"
+description = "Minimal FAT16 codec for lerux fs-server (root-only, multi-cluster, short names)"
 
 [lints]
 workspace = true

@@ -367,7 +367,7 @@ Apps on `NetRequest` via `net-server`; aarch64 virtio-net **unified-dma** (no se
 
 ## Phase 44 — FS backends ✅ (FAT slice)
 
-`LERUXFS2` is default (`just test-fs`). Alternate **FAT16** backend (`lerux-fat`, `backend-fat`, `just test-fs-fat`). NFS and multi-cluster stretch deferred — [`plan-au-ts.md`](plan-au-ts.md).
+`LERUXFS2` is default (`just test-fs`). Alternate **FAT16** backend (`lerux-fat`, `backend-fat`, `just test-fs-fat`) supports multi-cluster root files. NFS / FAT subdirs remain stretch — [`plan-au-ts.md`](plan-au-ts.md).
 
 ## Phase 45 — Service async ✅
 
@@ -397,7 +397,8 @@ LERUXFS2 + hierarchical IPC (see [`plan-arch.md`](plan-arch.md) Phase 50 for ful
 - [x] **LERUXFS2**: free-map allocation, multi-sector contiguous files (≤16 KiB), directory sectors, auto-create parents on `Create`/`Mkdir`; legacy LERUXFS1 volumes reformat on mount
 - [x] Shell: `mkdir` / `rm` / `mv` / `cd` / `pwd`; chunked `write`/`cat`; cwd-relative paths
 - [x] Smokes: `just test-fs` (hierarchy + multi-sector), `just test-fs-fat` (root-only FAT stubs new ops), `just test-workstation`
-- [ ] FAT stretch: multi-cluster files / subdirs (still root-only single-cluster)
+- [x] FAT stretch: multi-cluster files (root-only, ≤16 KiB / 32 clusters; `just test-fs-fat`)
+- [ ] FAT subdirs / LFN (still root-only 8.3)
 - [ ] Optional NFS / host-backed FS
 
 ## Phase 51 — Network stack v2 (core done)

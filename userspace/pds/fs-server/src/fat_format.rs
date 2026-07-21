@@ -1,12 +1,16 @@
-//! FAT16 format adapter for Phase 44 (root-only, single-cluster files, 8.3 names).
+//! FAT16 format adapter (Phase 44 + multi-cluster stretch).
+//!
+//! Root-only, 8.3 names. Files may span up to [`lerux_fat::MAX_FILE_CLUSTERS`]
+//! via FAT chains. Hierarchy ops (`Mkdir`/`Unlink`/`Rename`) still return Error.
 
 use core::cmp::min;
 
 use lerux_fat::{
     decode_bpb, decode_dir_entry, encode_boot_sector, encode_dir_entry, encode_fat_first_sector,
-    encode_zero_sector, fat_get, fat_sector_index, fat_set, format_payload_is_fat_head,
-    format_payload_lba, format_payload_sectors, path_to_short_name, root_slot_location,
-    short_name_to_display, Bpb, DirEntry, BOOT_LBA, EOC, FREE, MAX_HANDLES,
+    encode_zero_sector, fat_get, fat_sector_index, fat_set, file_cluster_index,
+    file_cluster_offset, format_payload_is_fat_head, format_payload_lba, format_payload_sectors,
+    is_data_cluster, is_eoc, path_to_short_name, root_slot_location, short_name_to_display, Bpb,
+    DirEntry, BOOT_LBA, EOC, FREE, MAX_FILE_BYTES, MAX_FILE_CLUSTERS, MAX_HANDLES,
 };
 use lerux_interface_types::{
     FsDirEntry, FsRequest, FsResponse, MAX_FS_DATA, MAX_FS_DIR_LIST, MAX_FS_PATH, SECTOR_SIZE,
@@ -67,10 +71,23 @@ enum FsJob {
         data: [u8; MAX_FS_DATA],
         data_len: u16,
         step: u8,
+        /// Resolved LBA of the target data sector.
         data_lba: u32,
         new_size: u32,
         root_slot: u16,
         root_sec_off: u32,
+        /// 0-based cluster index along the file chain for this write.
+        need_idx: u16,
+        /// Byte offset within the target cluster/sector.
+        cluster_off: u32,
+        /// Current cluster while walking / after resolve.
+        walk_cluster: u16,
+        /// Index of `walk_cluster` on the chain (0 = first).
+        walk_idx: u16,
+        /// FAT sector index being mutated when extending.
+        fat_sec: u32,
+        /// Newly allocated cluster when extending.
+        alloc_cluster: u16,
     },
     Read {
         handle: u8,
@@ -78,6 +95,10 @@ enum FsJob {
         len: u16,
         step: u8,
         data_lba: u32,
+        need_idx: u16,
+        cluster_off: u32,
+        walk_cluster: u16,
+        walk_idx: u16,
     },
     Stat {
         path: [u8; MAX_FS_PATH],
@@ -168,6 +189,12 @@ impl FatFormat {
             new_size: 0,
             root_slot: 0,
             root_sec_off: 0,
+            need_idx: 0,
+            cluster_off: 0,
+            walk_cluster: 0,
+            walk_idx: 0,
+            fat_sec: 0,
+            alloc_cluster: 0,
         };
     }
 
@@ -178,6 +205,10 @@ impl FatFormat {
             len,
             step: 0,
             data_lba: 0,
+            need_idx: 0,
+            cluster_off: 0,
+            walk_cluster: 0,
+            walk_idx: 0,
         };
     }
 
@@ -240,6 +271,12 @@ impl FatFormat {
                 new_size,
                 root_slot,
                 root_sec_off,
+                need_idx,
+                cluster_off,
+                walk_cluster,
+                walk_idx,
+                fat_sec,
+                alloc_cluster,
             } => self.advance_write(
                 handle,
                 offset,
@@ -250,6 +287,12 @@ impl FatFormat {
                 new_size,
                 root_slot,
                 root_sec_off,
+                need_idx,
+                cluster_off,
+                walk_cluster,
+                walk_idx,
+                fat_sec,
+                alloc_cluster,
             ),
             FsJob::Read {
                 handle,
@@ -257,7 +300,21 @@ impl FatFormat {
                 len,
                 step,
                 data_lba,
-            } => self.advance_read(handle, offset, len, step, data_lba),
+                need_idx,
+                cluster_off,
+                walk_cluster,
+                walk_idx,
+            } => self.advance_read(
+                handle,
+                offset,
+                len,
+                step,
+                data_lba,
+                need_idx,
+                cluster_off,
+                walk_cluster,
+                walk_idx,
+            ),
             FsJob::Stat {
                 path,
                 path_len,
@@ -683,6 +740,12 @@ impl FatFormat {
         new_size: u32,
         root_slot: u16,
         root_sec_off: u32,
+        need_idx: u16,
+        cluster_off: u32,
+        walk_cluster: u16,
+        walk_idx: u16,
+        fat_sec: u32,
+        alloc_cluster: u16,
     ) -> Option<FsResponse> {
         let job = FsJob::Write {
             handle,
@@ -694,15 +757,43 @@ impl FatFormat {
             new_size,
             root_slot,
             root_sec_off,
+            need_idx,
+            cluster_off,
+            walk_cluster,
+            walk_idx,
+            fat_sec,
+            alloc_cluster,
         };
         let h = handle as usize;
         if h >= MAX_HANDLES || !self.opens[h].in_use {
             return Some(FsResponse::Error);
         }
+        let cl_size = self.bpb.cluster_size_bytes();
         match step {
+            // Validate + start chain walk / extend.
             0 => {
-                let cluster = self.opens[h].first_cluster;
-                let lba = self.bpb.cluster_to_lba(cluster);
+                let len = data_len as u32;
+                if data_len as usize > MAX_FS_DATA || self.opens[h].first_cluster < 2 {
+                    return Some(FsResponse::Error);
+                }
+                let c_off = file_cluster_offset(offset, cl_size);
+                if c_off.saturating_add(len) > cl_size {
+                    // One Write must stay inside a single cluster (clients chunk).
+                    return Some(FsResponse::Error);
+                }
+                let n_idx = file_cluster_index(offset, cl_size);
+                if n_idx >= MAX_FILE_CLUSTERS {
+                    return Some(FsResponse::Error);
+                }
+                let end = offset.saturating_add(len);
+                if end > MAX_FILE_BYTES {
+                    return Some(FsResponse::Error);
+                }
+                let size = if offset == 0 && end < self.opens[h].size {
+                    end
+                } else {
+                    self.opens[h].size.max(end)
+                };
                 let slot = self.opens[h].root_slot;
                 let (sec_off, _) = root_slot_location(slot);
                 self.fs_job = FsJob::Write {
@@ -711,16 +802,356 @@ impl FatFormat {
                     data,
                     data_len,
                     step: 1,
-                    data_lba: lba,
-                    new_size: self.opens[h].size,
+                    data_lba: 0,
+                    new_size: size,
                     root_slot: slot,
                     root_sec_off: sec_off,
+                    need_idx: n_idx,
+                    cluster_off: c_off,
+                    walk_cluster: self.opens[h].first_cluster,
+                    walk_idx: 0,
+                    fat_sec: 0,
+                    alloc_cluster: 0,
                 };
                 self.advance_fs_job()
             }
+            // Walk chain until walk_idx == need_idx; extend if EOC early.
             1 => {
+                if walk_idx == need_idx {
+                    let lba = self.bpb.cluster_to_lba(walk_cluster);
+                    self.fs_job = FsJob::Write {
+                        handle,
+                        offset,
+                        data,
+                        data_len,
+                        step: 5,
+                        data_lba: lba,
+                        new_size,
+                        root_slot,
+                        root_sec_off,
+                        need_idx,
+                        cluster_off,
+                        walk_cluster,
+                        walk_idx,
+                        fat_sec,
+                        alloc_cluster,
+                    };
+                    return self.advance_fs_job();
+                }
+                let (sec_i, idx) = fat_sector_index(walk_cluster);
+                let lba = self.bpb.fat1_lba + sec_i;
+                if let Some(sector) = self.io.poll_read_sector(lba) {
+                    self.fat_buf = sector;
+                    let next = fat_get(&self.fat_buf, idx);
+                    if is_data_cluster(next) {
+                        self.fs_job = FsJob::Write {
+                            handle,
+                            offset,
+                            data,
+                            data_len,
+                            step: 1,
+                            data_lba,
+                            new_size,
+                            root_slot,
+                            root_sec_off,
+                            need_idx,
+                            cluster_off,
+                            walk_cluster: next,
+                            walk_idx: walk_idx + 1,
+                            fat_sec,
+                            alloc_cluster,
+                        };
+                        return self.advance_fs_job();
+                    }
+                    if is_eoc(next) {
+                        // Need more clusters.
+                        self.fs_job = FsJob::Write {
+                            handle,
+                            offset,
+                            data,
+                            data_len,
+                            step: 2,
+                            data_lba,
+                            new_size,
+                            root_slot,
+                            root_sec_off,
+                            need_idx,
+                            cluster_off,
+                            walk_cluster,
+                            walk_idx,
+                            fat_sec: 0,
+                            alloc_cluster: 2,
+                        };
+                        return self.advance_fs_job();
+                    }
+                    return Some(FsResponse::Error);
+                }
+                self.restore_job(job);
+                None
+            }
+            // Scan FAT for a free cluster starting at alloc_cluster.
+            2 => {
+                let (sec_i, _idx) = fat_sector_index(alloc_cluster);
+                let lba = self.bpb.fat1_lba + sec_i;
+                if let Some(sector) = self.io.poll_read_sector(lba) {
+                    self.fat_buf = sector;
+                    let max = self.bpb.max_cluster();
+                    let mut c = alloc_cluster;
+                    loop {
+                        let (s, i) = fat_sector_index(c);
+                        if s != sec_i {
+                            self.fs_job = FsJob::Write {
+                                handle,
+                                offset,
+                                data,
+                                data_len,
+                                step: 2,
+                                data_lba,
+                                new_size,
+                                root_slot,
+                                root_sec_off,
+                                need_idx,
+                                cluster_off,
+                                walk_cluster,
+                                walk_idx,
+                                fat_sec: s,
+                                alloc_cluster: c,
+                            };
+                            return self.advance_fs_job();
+                        }
+                        if fat_get(&self.fat_buf, i) == FREE {
+                            // Link walk_cluster → c, c → EOC (may need two FAT sectors).
+                            self.fs_job = FsJob::Write {
+                                handle,
+                                offset,
+                                data,
+                                data_len,
+                                step: 3,
+                                data_lba,
+                                new_size,
+                                root_slot,
+                                root_sec_off,
+                                need_idx,
+                                cluster_off,
+                                walk_cluster,
+                                walk_idx,
+                                fat_sec: sec_i,
+                                alloc_cluster: c,
+                            };
+                            return self.advance_fs_job();
+                        }
+                        if c >= max {
+                            return Some(FsResponse::Error);
+                        }
+                        c += 1;
+                    }
+                }
+                self.restore_job(job);
+                None
+            }
+            // Set FAT[walk]=alloc, FAT[alloc]=EOC; write FAT1 (and maybe FAT2).
+            // Uses fat_buf for one sector; if walk and alloc share a sector, set both.
+            3 => {
+                let (walk_sec, walk_i) = fat_sector_index(walk_cluster);
+                let (alloc_sec, alloc_i) = fat_sector_index(alloc_cluster);
+                if walk_sec == alloc_sec {
+                    // fat_buf should already be that sector from step 2, or reload.
+                    let lba = self.bpb.fat1_lba + walk_sec;
+                    if let Some(mut sector) = self.io.poll_read_sector(lba) {
+                        fat_set(&mut sector, walk_i, alloc_cluster);
+                        fat_set(&mut sector, alloc_i, EOC);
+                        self.fat_buf = sector;
+                        self.fs_job = FsJob::Write {
+                            handle,
+                            offset,
+                            data,
+                            data_len,
+                            step: 4,
+                            data_lba,
+                            new_size,
+                            root_slot,
+                            root_sec_off,
+                            need_idx,
+                            cluster_off,
+                            walk_cluster,
+                            walk_idx,
+                            fat_sec: walk_sec,
+                            alloc_cluster,
+                        };
+                        return self.advance_fs_job();
+                    }
+                    self.restore_job(job);
+                    return None;
+                }
+                // Different sectors: first write walk's link.
+                let lba = self.bpb.fat1_lba + walk_sec;
+                if let Some(mut sector) = self.io.poll_read_sector(lba) {
+                    fat_set(&mut sector, walk_i, alloc_cluster);
+                    self.fat_buf = sector;
+                    self.fs_job = FsJob::Write {
+                        handle,
+                        offset,
+                        data,
+                        data_len,
+                        step: 10, // write walk FAT1, then handle alloc sector
+                        data_lba,
+                        new_size,
+                        root_slot,
+                        root_sec_off,
+                        need_idx,
+                        cluster_off,
+                        walk_cluster,
+                        walk_idx,
+                        fat_sec: walk_sec,
+                        alloc_cluster,
+                    };
+                    return self.advance_fs_job();
+                }
+                self.restore_job(job);
+                None
+            }
+            // Write fat_buf to FAT1[fat_sec] then FAT2; continue walk at new cluster.
+            4 => {
+                let lba = self.bpb.fat1_lba + fat_sec;
+                let sector = self.fat_buf;
+                if self.io.poll_write_sector(lba, &sector) {
+                    self.fs_job = FsJob::Write {
+                        handle,
+                        offset,
+                        data,
+                        data_len,
+                        step: 11,
+                        data_lba,
+                        new_size,
+                        root_slot,
+                        root_sec_off,
+                        need_idx,
+                        cluster_off,
+                        walk_cluster,
+                        walk_idx,
+                        fat_sec,
+                        alloc_cluster,
+                    };
+                    return self.advance_fs_job();
+                }
+                self.restore_job(job);
+                None
+            }
+            // Write FAT2 mirror for fat_sec, then walk into alloc_cluster.
+            11 => {
+                let lba = self.bpb.fat1_lba + u32::from(self.bpb.fat_sectors) + fat_sec;
+                let sector = self.fat_buf;
+                if self.io.poll_write_sector(lba, &sector) {
+                    self.fs_job = FsJob::Write {
+                        handle,
+                        offset,
+                        data,
+                        data_len,
+                        step: 1,
+                        data_lba,
+                        new_size,
+                        root_slot,
+                        root_sec_off,
+                        need_idx,
+                        cluster_off,
+                        walk_cluster: alloc_cluster,
+                        walk_idx: walk_idx + 1,
+                        fat_sec: 0,
+                        alloc_cluster: 0,
+                    };
+                    return self.advance_fs_job();
+                }
+                self.restore_job(job);
+                None
+            }
+            // Split-sector extend: write walk FAT1
+            10 => {
+                let lba = self.bpb.fat1_lba + fat_sec;
+                let sector = self.fat_buf;
+                if self.io.poll_write_sector(lba, &sector) {
+                    self.fs_job = FsJob::Write {
+                        handle,
+                        offset,
+                        data,
+                        data_len,
+                        step: 12,
+                        data_lba,
+                        new_size,
+                        root_slot,
+                        root_sec_off,
+                        need_idx,
+                        cluster_off,
+                        walk_cluster,
+                        walk_idx,
+                        fat_sec,
+                        alloc_cluster,
+                    };
+                    return self.advance_fs_job();
+                }
+                self.restore_job(job);
+                None
+            }
+            // Split: write walk FAT2, then set alloc EOC
+            12 => {
+                let lba = self.bpb.fat1_lba + u32::from(self.bpb.fat_sectors) + fat_sec;
+                let sector = self.fat_buf;
+                if self.io.poll_write_sector(lba, &sector) {
+                    let (alloc_sec, _) = fat_sector_index(alloc_cluster);
+                    self.fs_job = FsJob::Write {
+                        handle,
+                        offset,
+                        data,
+                        data_len,
+                        step: 13,
+                        data_lba,
+                        new_size,
+                        root_slot,
+                        root_sec_off,
+                        need_idx,
+                        cluster_off,
+                        walk_cluster,
+                        walk_idx,
+                        fat_sec: alloc_sec,
+                        alloc_cluster,
+                    };
+                    return self.advance_fs_job();
+                }
+                self.restore_job(job);
+                None
+            }
+            // Split: read alloc sector, set EOC
+            13 => {
+                let (alloc_sec, alloc_i) = fat_sector_index(alloc_cluster);
+                let lba = self.bpb.fat1_lba + alloc_sec;
+                if let Some(mut sector) = self.io.poll_read_sector(lba) {
+                    fat_set(&mut sector, alloc_i, EOC);
+                    self.fat_buf = sector;
+                    self.fs_job = FsJob::Write {
+                        handle,
+                        offset,
+                        data,
+                        data_len,
+                        step: 4,
+                        data_lba,
+                        new_size,
+                        root_slot,
+                        root_sec_off,
+                        need_idx,
+                        cluster_off,
+                        walk_cluster,
+                        walk_idx,
+                        fat_sec: alloc_sec,
+                        alloc_cluster,
+                    };
+                    return self.advance_fs_job();
+                }
+                self.restore_job(job);
+                None
+            }
+            // RMW data sector
+            5 => {
                 if let Some(mut sector) = self.io.poll_read_sector(data_lba) {
-                    let off = offset as usize;
+                    let off = cluster_off as usize;
                     let len = data_len as usize;
                     if off >= SECTOR_SIZE
                         || len > MAX_FS_DATA
@@ -730,29 +1161,29 @@ impl FatFormat {
                     }
                     sector[off..off + len].copy_from_slice(&data[..len]);
                     self.io.sector_buf = sector;
-                    let end = (off + len) as u32;
-                    let size = if offset == 0 && end < new_size {
-                        end
-                    } else {
-                        new_size.max(end)
-                    };
                     self.fs_job = FsJob::Write {
                         handle,
                         offset,
                         data,
                         data_len,
-                        step: 2,
+                        step: 6,
                         data_lba,
-                        new_size: size,
+                        new_size,
                         root_slot,
                         root_sec_off,
+                        need_idx,
+                        cluster_off,
+                        walk_cluster,
+                        walk_idx,
+                        fat_sec,
+                        alloc_cluster,
                     };
                     return self.advance_fs_job();
                 }
                 self.restore_job(job);
                 None
             }
-            2 => {
+            6 => {
                 let sector = self.io.sector_buf;
                 if self.io.poll_write_sector(data_lba, &sector) {
                     self.fs_job = FsJob::Write {
@@ -760,11 +1191,17 @@ impl FatFormat {
                         offset,
                         data,
                         data_len,
-                        step: 3,
+                        step: 7,
                         data_lba,
                         new_size,
                         root_slot,
                         root_sec_off,
+                        need_idx,
+                        cluster_off,
+                        walk_cluster,
+                        walk_idx,
+                        fat_sec,
+                        alloc_cluster,
                     };
                     return self.advance_fs_job();
                 }
@@ -772,7 +1209,7 @@ impl FatFormat {
                 None
             }
             // Update dirent size
-            3 => {
+            7 => {
                 let lba = self.bpb.root_lba + root_sec_off;
                 if let Some(mut sector) = self.io.poll_read_sector(lba) {
                     let (_, idx) = root_slot_location(root_slot);
@@ -786,18 +1223,24 @@ impl FatFormat {
                         offset,
                         data,
                         data_len,
-                        step: 4,
+                        step: 8,
                         data_lba,
                         new_size,
                         root_slot,
                         root_sec_off,
+                        need_idx,
+                        cluster_off,
+                        walk_cluster,
+                        walk_idx,
+                        fat_sec,
+                        alloc_cluster,
                     };
                     return self.advance_fs_job();
                 }
                 self.restore_job(job);
                 None
             }
-            4 => {
+            8 => {
                 let lba = self.bpb.root_lba + root_sec_off;
                 let sector = self.root_buf;
                 if self.io.poll_write_sector(lba, &sector) {
@@ -810,6 +1253,7 @@ impl FatFormat {
         }
     }
 
+    #[expect(clippy::too_many_arguments, reason = "read job stage state")]
     fn advance_read(
         &mut self,
         handle: u8,
@@ -817,6 +1261,10 @@ impl FatFormat {
         len: u16,
         step: u8,
         data_lba: u32,
+        need_idx: u16,
+        cluster_off: u32,
+        walk_cluster: u16,
+        walk_idx: u16,
     ) -> Option<FsResponse> {
         let job = FsJob::Read {
             handle,
@@ -824,34 +1272,97 @@ impl FatFormat {
             len,
             step,
             data_lba,
+            need_idx,
+            cluster_off,
+            walk_cluster,
+            walk_idx,
         };
         let h = handle as usize;
         if h >= MAX_HANDLES || !self.opens[h].in_use {
             return Some(FsResponse::Error);
         }
+        let cl_size = self.bpb.cluster_size_bytes();
         match step {
             0 => {
-                let cluster = self.opens[h].first_cluster;
-                let lba = self.bpb.cluster_to_lba(cluster);
+                if self.opens[h].first_cluster < 2 {
+                    return Some(FsResponse::Error);
+                }
+                let c_off = file_cluster_offset(offset, cl_size);
+                let n_idx = file_cluster_index(offset, cl_size);
+                if n_idx >= MAX_FILE_CLUSTERS {
+                    return Some(FsResponse::Error);
+                }
+                // Empty read past EOF
+                if offset >= self.opens[h].size {
+                    return Some(FsResponse::Data {
+                        data_len: 0,
+                        data: [0u8; MAX_FS_DATA],
+                    });
+                }
                 self.fs_job = FsJob::Read {
                     handle,
                     offset,
                     len,
                     step: 1,
-                    data_lba: lba,
+                    data_lba: 0,
+                    need_idx: n_idx,
+                    cluster_off: c_off,
+                    walk_cluster: self.opens[h].first_cluster,
+                    walk_idx: 0,
                 };
                 self.advance_fs_job()
             }
             1 => {
+                if walk_idx == need_idx {
+                    let lba = self.bpb.cluster_to_lba(walk_cluster);
+                    self.fs_job = FsJob::Read {
+                        handle,
+                        offset,
+                        len,
+                        step: 2,
+                        data_lba: lba,
+                        need_idx,
+                        cluster_off,
+                        walk_cluster,
+                        walk_idx,
+                    };
+                    return self.advance_fs_job();
+                }
+                let (sec_i, idx) = fat_sector_index(walk_cluster);
+                let lba = self.bpb.fat1_lba + sec_i;
+                if let Some(sector) = self.io.poll_read_sector(lba) {
+                    let next = fat_get(&sector, idx);
+                    if !is_data_cluster(next) {
+                        return Some(FsResponse::Error);
+                    }
+                    self.fs_job = FsJob::Read {
+                        handle,
+                        offset,
+                        len,
+                        step: 1,
+                        data_lba,
+                        need_idx,
+                        cluster_off,
+                        walk_cluster: next,
+                        walk_idx: walk_idx + 1,
+                    };
+                    return self.advance_fs_job();
+                }
+                self.restore_job(job);
+                None
+            }
+            2 => {
                 if let Some(sector) = self.io.poll_read_sector(data_lba) {
                     let size = self.opens[h].size as usize;
-                    let off = offset as usize;
+                    let file_off = offset as usize;
                     let want = len as usize;
+                    let off = cluster_off as usize;
                     if off >= SECTOR_SIZE {
                         return Some(FsResponse::Error);
                     }
-                    let avail = min(size, SECTOR_SIZE).saturating_sub(off);
-                    let copy_len = min(want, avail).min(MAX_FS_DATA);
+                    let file_avail = size.saturating_sub(file_off);
+                    let sector_avail = SECTOR_SIZE.saturating_sub(off);
+                    let copy_len = min(want, min(file_avail, sector_avail)).min(MAX_FS_DATA);
                     let mut out = [0u8; MAX_FS_DATA];
                     out[..copy_len].copy_from_slice(&sector[off..off + copy_len]);
                     return Some(FsResponse::Data {

@@ -1,4 +1,4 @@
-//! Minimal FAT16 layout helpers for lerux Phase 44.
+//! Minimal FAT16 layout helpers for lerux Phase 44 / 50 stretch.
 //!
 //! Supports a fixed small-volume layout suitable for QEMU `disk.img` (4 MiB):
 //! - 512-byte sectors, 1 sector per cluster
@@ -7,12 +7,19 @@
 //! - 512 root directory entries (32 sectors)
 //! - data area from LBA 97
 //!
-//! File size is limited to one cluster (512 bytes) by the server for v1,
-//! matching the practical IPC payload (`MAX_FS_DATA` = 448). Root only; 8.3 names.
+//! Files may span **multiple clusters** (FAT chain, up to
+//! [`MAX_FILE_CLUSTERS`]). Root directory only; 8.3 short names. Hierarchy
+//! ops stay out of scope for this backend.
 
 #![no_std]
 
 use lerux_interface_types::SECTOR_SIZE;
+
+/// Max clusters per file (32 × 512 B = 16 KiB), aligned with LERUXFS2 caps.
+pub const MAX_FILE_CLUSTERS: u16 = 32;
+
+/// Max file size in bytes for the multi-cluster server path.
+pub const MAX_FILE_BYTES: u32 = MAX_FILE_CLUSTERS as u32 * SECTOR_SIZE as u32;
 
 /// Boot / BPB sector.
 pub const BOOT_LBA: u32 = 0;
@@ -53,11 +60,23 @@ pub const ENTRIES_PER_SECTOR: usize = SECTOR_SIZE / DIR_ENTRY_SIZE;
 /// Maximum open-file handles tracked by the server (not part of on-disk format).
 pub const MAX_HANDLES: usize = 16;
 
-/// End-of-chain marker (FAT16).
+/// End-of-chain marker written by this implementation (FAT16).
 pub const EOC: u16 = 0xFFFF;
 
 /// Free cluster marker.
 pub const FREE: u16 = 0x0000;
+
+/// FAT16 end-of-chain range is `0xFFF8`..=`0xFFFF` (plus media/reserved below 2).
+#[inline]
+pub const fn is_eoc(value: u16) -> bool {
+    value >= 0xFFF8
+}
+
+/// True if `value` is a valid data-cluster link (not free / reserved / bad / EOC).
+#[inline]
+pub const fn is_data_cluster(value: u16) -> bool {
+    value >= 2 && value <= 0xFFF6
+}
 
 /// Media descriptor in FAT[0] low byte.
 pub const MEDIA: u8 = 0xF8;
@@ -102,12 +121,33 @@ impl Bpb {
         self.data_lba + u32::from(cluster.saturating_sub(2)) * u32::from(self.sectors_per_cluster)
     }
 
+    /// Bytes per cluster (sectors_per_cluster × sector size).
+    pub fn cluster_size_bytes(&self) -> u32 {
+        u32::from(self.sectors_per_cluster) * u32::from(self.bytes_per_sector)
+    }
+
     pub fn max_cluster(&self) -> u16 {
         let data_sectors = self.total_sectors.saturating_sub(self.data_lba);
         let clusters = data_sectors / u32::from(self.sectors_per_cluster);
         // Cluster numbers: 2 ..= (clusters + 1)
         2u16.saturating_add(clusters.saturating_sub(1) as u16)
     }
+}
+
+/// Cluster index (0-based along the file chain) for a byte `offset`.
+pub fn file_cluster_index(offset: u32, cluster_size: u32) -> u16 {
+    if cluster_size == 0 {
+        return 0;
+    }
+    (offset / cluster_size) as u16
+}
+
+/// Byte offset within a cluster for a file `offset`.
+pub fn file_cluster_offset(offset: u32, cluster_size: u32) -> u32 {
+    if cluster_size == 0 {
+        return 0;
+    }
+    offset % cluster_size
 }
 
 /// Returns true if `sector` looks like a FAT12/16 boot sector with our geometry.
@@ -511,5 +551,45 @@ mod tests {
         fat_set(&mut sec, 2, EOC);
         assert_eq!(fat_get(&sec, 2), EOC);
         assert_eq!(fat_sector_index(300), (1, 44));
+    }
+
+    #[test]
+    fn eoc_and_data_cluster_ranges() {
+        assert!(is_eoc(EOC));
+        assert!(is_eoc(0xFFF8));
+        assert!(!is_eoc(FREE));
+        assert!(!is_eoc(3));
+        assert!(is_data_cluster(2));
+        assert!(is_data_cluster(100));
+        assert!(!is_data_cluster(FREE));
+        assert!(!is_data_cluster(EOC));
+    }
+
+    #[test]
+    fn file_offset_to_cluster_index() {
+        assert_eq!(file_cluster_index(0, 512), 0);
+        assert_eq!(file_cluster_index(511, 512), 0);
+        assert_eq!(file_cluster_index(512, 512), 1);
+        assert_eq!(file_cluster_offset(600, 512), 88);
+        assert_eq!(MAX_FILE_BYTES, 32 * 512);
+    }
+
+    /// Synthetic chain 2 → 3 → EOC; walk two steps.
+    #[test]
+    fn walk_two_cluster_chain() {
+        let mut fat = [0u8; SECTOR_SIZE];
+        fat_set(&mut fat, 2, 3);
+        fat_set(&mut fat, 3, EOC);
+        let mut c = 2u16;
+        let mut idx = 0u16;
+        let need = 1u16;
+        while idx < need {
+            let next = fat_get(&fat, c as usize);
+            assert!(is_data_cluster(next), "link {c} -> {next}");
+            c = next;
+            idx += 1;
+        }
+        assert_eq!(c, 3);
+        assert!(is_eoc(fat_get(&fat, 3)));
     }
 }

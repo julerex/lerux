@@ -178,6 +178,7 @@ expects = ["lerux-fs: ready", "virtio-blk:", "lerux-fs: round-trip ok"]
 expects = [
   "lerux-fs: ready (FAT16)",
   "virtio-blk:",
+  "lerux-fs: fat multi-cluster ok",
   "lerux-fs: round-trip ok",
 ]
 

@@ -118,8 +118,10 @@ mod tests {
         assert_eq!(t.timeout_secs, 120);
         assert!(t.expects.iter().any(|e| e.contains("lerux-shell")));
         assert!(
-            t.expects.iter().any(|e| e.contains("first-boot seed ok")),
-            "Phase 52 first-boot seed expect missing"
+            t.expects
+                .iter()
+                .any(|e| e.contains("config hostname=") || e.contains("first-boot seed ok")),
+            "Phase 52/54 config policy expect missing"
         );
         assert!(
             !t.script.is_empty(),

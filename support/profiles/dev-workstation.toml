@@ -2,6 +2,8 @@
 # Template + default_board are authoritative; channels are the IPC source of truth.
 
 template = "workstation.system.template"
+# Phase 60: shell + services without bulk apps (install via package CLI).
+trust_class = "admin-core"
 pds = [
     "supervisor",
     "shell",

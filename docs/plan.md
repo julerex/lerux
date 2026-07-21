@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-17 (Phase 60 isolation smoke + threat model)
+Last updated: 2026-07-21 (Phase 60 stretch sequence A–D)
 
 ## Phase 1 — Bring-up
 
@@ -477,10 +477,12 @@ Threat model + automated isolation smoke. Full checklist: **[`plan-arch.md`](pla
 
 - [x] Threat model / trust map ([`security.md`](security.md))
 - [x] Isolation smoke: `qemu_virt_aarch64_isolation` / `just test-isolation` (crash-demo → fs-server still serves)
-- [ ] Capability audit: admin vs untrusted profiles; shrink shell surface
-- [ ] Image signing / measured boot (host-side first)
-- [ ] Channel/QoS abuse tests; optional MCS budgets
-- [ ] Dependency pin security-update runbook
+- [x] **Track A** — Capability audit: admin vs reduced profiles; config `secret.*` ACL; `lerux profile audit`
+- [ ] **Track B** — Dependency pin security-update runbook
+- [ ] **Track C** — Image signing / measured boot (host-side first)
+- [ ] **Track D** — Channel/QoS abuse tests; optional MCS budgets
+
+Stretch order and exit criteria: **[`plan-arch.md` § Phase 60 stretch sequence](plan-arch.md#stretch-sequence-2026-07-21)**.
 
 | Phase | Theme | Status |
 |-------|--------|--------|
@@ -494,9 +496,9 @@ Threat model + automated isolation smoke. Full checklist: **[`plan-arch.md`](pla
 | 57 | Observability and ops | core done |
 | 58 | App catalog | core done |
 | 59 | Multi-arch workstation profiles | core done |
-| 60 | Security posture | core done (signing / ACL / runbook stretch open) |
+| 60 | Security posture | core done (stretch A–D open) |
 
-Near-term priority: Phase 60 stretch (signing, admin profiles) or lab gates (RPi4, TLS).
+Near-term priority: Phase 60 stretch **A → B → C → D**, or lab gates (RPi4, TLS).
 
 ## Version alignment
 

@@ -265,6 +265,11 @@ enum ProfileCommands {
         /// Profile name; omit to check all profiles.
         name: Option<String>,
     },
+    /// Phase 60: capability audit — trust class, PD domains, high-risk edges.
+    Audit {
+        /// Profile name; omit to audit all profiles under support/profiles/.
+        name: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -554,6 +559,9 @@ fn main() -> Result<()> {
                             println!("profile {name}: channel consts ok");
                         }
                     }
+                }
+                ProfileCommands::Audit { name } => {
+                    crate::profile::audit_profiles(&profiles, name.as_deref())?;
                 }
             }
         }

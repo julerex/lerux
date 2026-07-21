@@ -1,4 +1,8 @@
 //! Phase 36/54: FS-backed config under `/config/` (+ `/config/secrets/` for `secret.*`).
+//!
+//! Phase 60 ACL: only the supervisor channel may `Set`/`Delete` keys under the
+//! `secret.*` prefix. Shell (and other clients) may still `Get`/`List` secrets
+//! for operator inspection; writes require the trusted control path.
 
 #![no_std]
 #![no_main]
@@ -15,6 +19,11 @@ const FS_SERVER: FsClient = FsClient::new(Channel::new(3));
 const SUPERVISOR: Channel = Channel::new(0);
 const SHELL: Channel = Channel::new(1);
 const NET_SERVER: Channel = Channel::new(2);
+
+/// `secret.*` mutations are supervisor-only (Phase 60 capability audit).
+fn may_write_secret(channel: Channel) -> bool {
+    channel == SUPERVISOR
+}
 
 fn fs_call(req: FsRequest) -> FsResponse {
     FS_SERVER.call(req)
@@ -160,7 +169,7 @@ fn list_config_keys() -> (u8, [[u8; MAX_CONFIG_KEY_LEN]; 8], [u8; 8]) {
     (count, keys, lens)
 }
 
-fn handle_config(req: ConfigRequest) -> ConfigResponse {
+fn handle_config(channel: Channel, req: ConfigRequest) -> ConfigResponse {
     match req {
         ConfigRequest::Get { key_len, key } => {
             let k = &key[..key_len as usize];
@@ -181,6 +190,9 @@ fn handle_config(req: ConfigRequest) -> ConfigResponse {
         } => {
             let k = &key[..key_len as usize];
             let v = &value[..val_len as usize];
+            if is_secret_key(k) && !may_write_secret(channel) {
+                return ConfigResponse::Denied;
+            }
             if write_config_file(k, v) {
                 ConfigResponse::Ok
             } else {
@@ -189,6 +201,9 @@ fn handle_config(req: ConfigRequest) -> ConfigResponse {
         }
         ConfigRequest::Delete { key_len, key } => {
             let k = &key[..key_len as usize];
+            if is_secret_key(k) && !may_write_secret(channel) {
+                return ConfigResponse::Denied;
+            }
             if delete_config_file(k) {
                 ConfigResponse::Ok
             } else {
@@ -207,7 +222,7 @@ struct HandlerImpl;
 #[protection_domain]
 fn init() -> HandlerImpl {
     debug::init().unwrap();
-    log::info!("config-server: ready (Phase 54 schema)");
+    log::info!("config-server: ready (Phase 54 schema; Phase 60 secret ACL)");
     HandlerImpl
 }
 
@@ -221,7 +236,7 @@ impl Handler for HandlerImpl {
     ) -> Result<MessageInfo, Self::Error> {
         if channel == SUPERVISOR || channel == SHELL || channel == NET_SERVER {
             return Ok(match recv::<ConfigRequest>(msg_info) {
-                Ok(req) => send(handle_config(req)),
+                Ok(req) => send(handle_config(channel, req)),
                 Err(_) => send_unspecified_error(),
             });
         }

@@ -1,8 +1,10 @@
 # Shared workstation channel manifest (Phase 41). Arch profiles extend this
 # with template, default_board, and driver-specific PDs + [[channel]] deltas.
 # Template is a placeholder; overlays always override.
+# trust_class = admin: full shell + bulk apps (Phase 60).
 
 template = "workstation.system.template"
+trust_class = "admin"
 
 pds = [
   "supervisor",

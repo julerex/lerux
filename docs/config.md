@@ -61,10 +61,12 @@ Guest first-boot still seeds if the image is empty; `seed-disk` is for reproduci
 
 ## Secrets
 
-- Write with `config set secret.api_token …` → file `/config/secrets/api_token`.
+- Logical key `secret.<name>` maps to file `/config/secrets/<name>`.
 - `config list` includes `secret.api_token` but not the value.
-- `config get secret.api_token` returns the value (shell is trusted).
-- No encryption at rest yet; isolation is path + IPC-only access via `config-server`.
+- `config get secret.api_token` returns the value (shell may read for operator inspection).
+- **Phase 60 ACL:** shell (and any non-supervisor client) **cannot** `Set`/`Delete` `secret.*` keys. Writes return `ConfigResponse::Denied` (shell prints `config set: denied (secret.* write is supervisor-only)`). Supervisor seeds secrets at first boot / control path only.
+- Ordinary keys (`hostname`, `net.*`, `log.*`) remain shell-writable.
+- No encryption at rest yet; prefer config IPC over direct FS open of `/config/secrets/` from untrusted apps.
 
 ## Exit criteria (Phase 54)
 

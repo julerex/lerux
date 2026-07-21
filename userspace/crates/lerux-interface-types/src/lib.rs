@@ -545,6 +545,9 @@ pub enum ConfigResponse {
         keys: [[u8; MAX_CONFIG_KEY_LEN]; MAX_CONFIG_KEYS],
         lens: [u8; MAX_CONFIG_KEYS],
     },
+    /// Phase 60 ACL: caller is not allowed to perform this op (e.g. shell
+    /// `Set`/`Delete` on `secret.*` — only supervisor may write secrets).
+    Denied,
 }
 
 /// Max length of one log message text for LogRequest / ring.
@@ -1191,6 +1194,7 @@ mod tests {
             lens: [8, 0, 0, 0, 0, 0, 0, 0],
         };
         assert_eq!(round_trip(resp), resp);
+        assert_eq!(round_trip(ConfigResponse::Denied), ConfigResponse::Denied);
     }
 
     #[test]

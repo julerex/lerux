@@ -5,3 +5,5 @@ template = "http-virtio.system.template"
 pds = ["http-server", "serial-driver", "virtio-net-driver"]
 description = "Phase 55 recipe: network appliance (HTTP :8080 over virtio-net)"
 default_board = "qemu_virt_aarch64_http"
+# Phase 60: fixed-function, no interactive shell.
+trust_class = "appliance"

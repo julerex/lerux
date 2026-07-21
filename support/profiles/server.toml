@@ -4,8 +4,9 @@
 template = "echo.system.template"
 pds = ["echo-client", "echo-server", "serial-driver"]
 description = "Echo client/server (typed IPC demo) + serial"
-
 default_board = "qemu_virt_aarch64_echo"
+# Phase 60: fixed-function IPC demo, no interactive shell.
+trust_class = "appliance"
 
 [[channel]]
 name = "echo_client_serial"

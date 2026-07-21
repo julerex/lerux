@@ -1,6 +1,6 @@
 # PLAN — Arch-level functionality (phases 50–60)
 
-Last updated: 2026-07-17 (Phase 60 isolation smoke + threat model)
+Last updated: 2026-07-21 (Phase 60 stretch sequence A–D)
 
 Related: [`plan.md`](plan.md) (completed phases 1–49), [`plan-au-ts.md`](plan-au-ts.md) (sDDF/LionsOS inspiration track), [`context.md`](context.md) (domain language).
 
@@ -276,14 +276,38 @@ Defer heavy GUI browsers and language ecosystems until/unless a runtime PD prove
 
 - [x] Threat model doc: which PDs trust which channels; untrusted apps never map DMA — [`security.md`](security.md).
 - [x] Isolation smoke: `just test-isolation` / `qemu_virt_aarch64_isolation` — crash-demo VmFault then FS round-trip (`lerux-isolation: fs-server survived untrusted PD crash`).
-- [ ] Capability audit: reduce shell’s surface; separate admin vs untrusted app profiles.
-- [ ] Image signing / measured boot story (host-side first; hardware roots later).
-- [ ] Channel/QoS abuse tests; optional MCS budgets if Microkit/seL4 config allows (beyond ADR-006 fixed priorities).
-- [ ] Dependency pin hygiene (rust-sel4, Microkit) and security update runbook (partial: pins documented in `security.md`).
+- [x] Capability audit: profile trust tiers + `lerux profile audit`; config-server `secret.*` write ACL (supervisor only). **Track A**
+- [ ] Dependency pin hygiene and security update runbook. **Track B**
+- [ ] Image signing / measured boot story (host-side first; hardware roots later). **Track C**
+- [ ] Channel/QoS abuse tests; optional MCS budgets if Microkit/seL4 config allows (beyond ADR-006 fixed priorities). **Track D**
 
 ### Exit
 
-Documented trust map + one automated isolation test (e.g. crash in app PD does not take down fs-server). **Met** for core; signing/ACL remain stretch.
+Documented trust map + one automated isolation test (e.g. crash in app PD does not take down fs-server). **Met** for core; stretch tracks below.
+
+### Stretch sequence (2026-07-21)
+
+Do **not** start MCS, graphics, or POSIX. Order by leverage and dependence:
+
+| Order | Track | Deliverable | Depends on |
+|-------|-------|-------------|------------|
+| **A** | Capability audit | Profile risk tiers + `lerux profile audit`; config-server ACL (`secret.*` write = supervisor only); document admin vs reduced surfaces | core 60 |
+| **B** | Pin security runbook | Incident steps for seL4 / Microkit / rust-sel4 bumps in [`security.md`](security.md) | core 60 |
+| **C** | Host image signing | SHA-256 sidecars for `loader.img`; `lerux deploy --verify` / `lerux image sign\|verify` | A (trust map), deploy path |
+| **D** | Channel/QoS abuse tests | Smoke that busy bulk client does not starve IRQ/service progress; MCS deferred | A, ADR-006 |
+
+**Track A detail**
+
+1. Classify recipes: `workstation*` = **admin** (full shell + apps); `dev-workstation` = **admin-core** (shell/services, no bulk apps); `net-appliance` / `server` / `minimal` = **appliance** / **minimal** (no interactive admin shell).
+2. `lerux profile audit [name]` — PD trust classes, high-risk edges (shell→supervisor reboot, shell→config, apps→fs/net).
+3. Config ACL: `ConfigResponse::Denied` when non-supervisor `Set`/`Delete` on `secret.*`.
+4. Docs: capability matrix in [`security.md`](security.md); secrets policy in [`config.md`](config.md).
+
+**Track B detail** — runbook: pin file → rebuild SDK → `just check` / `check-pd` → smoke matrix → rebuild images; CVE response template.
+
+**Track C detail** — host-only: write `loader.img.sha256` at image build; verify before deploy; optional ed25519 later (not required for exit).
+
+**Track D detail** — extend smoke expects or a small stress PD; document residual single-flight throttle; **no** MCS without ADR.
 
 ---
 
@@ -320,8 +344,8 @@ That is Arch’s **workflow and completeness**, reimplemented as static Microkit
 If capacity is limited, do **not** start with graphics or scripting runtimes:
 
 1. **Phases 50–60 cores** — FS through isolation/threat model done
-2. **Phase 52 lab** — fill RPi4 REPL checklist on real hardware when available
-3. **Phase 60 stretch** — image signing, admin profiles, pin update runbook
+2. **Phase 60 stretch** — Track A → B → C → D (table above)
+3. **Phase 52 lab** — fill RPi4 REPL checklist on real hardware when available
 
 ---
 

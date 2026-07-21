@@ -6,8 +6,8 @@
 template = "net-genet-rpi.system.template"
 pds = ["net-client", "net-server", "serial-driver", "genet-driver"]
 description = "Net over native RPi4 genet Ethernet"
-
 default_board = "rpi4b_4gb_net"
+trust_class = "appliance"
 
 [[channel]]
 name = "net_client_serial"

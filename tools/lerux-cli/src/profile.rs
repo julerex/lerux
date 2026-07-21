@@ -9,6 +9,43 @@ use serde::{Deserialize, Serialize};
 
 use crate::channels::{ensure_channels_valid, to_sdf_pd_name, ChannelSpec, ChannelValidation};
 
+/// Phase 60 capability tier for a system profile (operator-facing surface).
+///
+/// Declared in profile TOML as `trust_class = "admin"` etc. When omitted, host
+/// tooling infers a class from the PD set (`infer_trust_class`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum TrustClass {
+    /// Full shell + bulk apps (edit/chat/http-fs/backup). Highest interactive risk.
+    Admin,
+    /// Shell + services, no bulk app PDs (`dev-workstation`).
+    AdminCore,
+    /// Fixed-function appliance (HTTP/echo), no interactive admin shell.
+    Appliance,
+    /// Serial hello / bring-up only.
+    Minimal,
+    /// Isolation / debug layouts (fault parent, crash child).
+    Debug,
+}
+
+impl TrustClass {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Admin => "admin",
+            Self::AdminCore => "admin-core",
+            Self::Appliance => "appliance",
+            Self::Minimal => "minimal",
+            Self::Debug => "debug",
+        }
+    }
+}
+
+impl core::fmt::Display for TrustClass {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Profile {
     pub template: String,
@@ -17,6 +54,9 @@ pub struct Profile {
     pub description: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_board: Option<String>,
+    /// Phase 60: declared risk tier (`admin`, `admin-core`, `appliance`, …).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub trust_class: Option<TrustClass>,
     /// Structured channel manifest (`[[channel]]` tables). Source of truth for
     /// IPC topology: `render_system` splices these into the board template when
     /// `default_board` matches (Phase 41).
@@ -44,6 +84,8 @@ struct ProfileBody {
     description: Option<String>,
     #[serde(default)]
     default_board: Option<String>,
+    #[serde(default)]
+    trust_class: Option<TrustClass>,
     #[serde(default)]
     channel: Vec<ChannelSpec>,
 }
@@ -84,6 +126,10 @@ fn compose_profile(name: &str, file: ProfileFile, bases: &Profiles) -> Result<Pr
         .body
         .default_board
         .or_else(|| base.and_then(|b| b.default_board.clone()));
+    let trust_class = file
+        .body
+        .trust_class
+        .or_else(|| base.and_then(|b| b.trust_class));
 
     let base_channels = base.map(|b| b.channel.as_slice()).unwrap_or(&[]);
     let channel = merge_channels(base_channels, &file.body.channel);
@@ -93,6 +139,7 @@ fn compose_profile(name: &str, file: ProfileFile, bases: &Profiles) -> Result<Pr
         pds,
         description,
         default_board,
+        trust_class,
         channel,
     })
 }
@@ -186,7 +233,8 @@ pub fn list_profiles(profiles: &Profiles) {
     for (name, p) in profiles {
         let desc = p.description.as_deref().unwrap_or("");
         let n = p.channel.len();
-        println!("{name:20} [{n:2} ch] {desc}");
+        let tier = effective_trust_class(p);
+        println!("{name:20} [{n:2} ch] [{tier:10}] {desc}");
     }
 }
 
@@ -199,10 +247,188 @@ pub fn show_profile(name: &str, profile: &Profile) {
     if let Some(desc) = &profile.description {
         println!("  description: {desc}");
     }
+    let tier = effective_trust_class(profile);
+    let src = if profile.trust_class.is_some() {
+        "declared"
+    } else {
+        "inferred"
+    };
+    println!("  trust_class: {tier} ({src})");
     println!("  pds: {}", profile.pds.join(", "));
     println!("  channels ({}):", profile.channel.len());
     for ch in &profile.channel {
         println!("    - {ch}");
+    }
+}
+
+/// Infer a trust class from the PD set when the profile omits `trust_class`.
+pub fn infer_trust_class(pds: &[String]) -> TrustClass {
+    let has = |name: &str| pds.iter().any(|p| p == name);
+    if has("debug-handler") || has("crash-demo") {
+        return TrustClass::Debug;
+    }
+    let bulk = ["edit", "chat-client", "http-file-browser", "backup"];
+    let has_bulk = bulk.iter().any(|p| has(p));
+    if has("shell") && has_bulk {
+        return TrustClass::Admin;
+    }
+    if has("shell") {
+        return TrustClass::AdminCore;
+    }
+    if has("http-server") || has("echo-server") || has("echo-client") {
+        return TrustClass::Appliance;
+    }
+    TrustClass::Minimal
+}
+
+pub fn effective_trust_class(profile: &Profile) -> TrustClass {
+    profile
+        .trust_class
+        .unwrap_or_else(|| infer_trust_class(&profile.pds))
+}
+
+/// Trust domain of a single PD (matches docs/security.md map).
+pub fn pd_trust_domain(pd: &str) -> &'static str {
+    match pd {
+        "serial-driver"
+        | "virtio-blk-driver"
+        | "virtio-net-driver"
+        | "virtio-pci-driver"
+        | "genet-driver"
+        | "emmc2-driver"
+        | "pl031-driver"
+        | "sp804-driver"
+        | "goldfish-rtc-driver"
+        | "rdtime-timer-driver"
+        | "cmos-rtc-driver"
+        | "tsc-timer-driver" => "platform",
+        "fs-server" | "net-server" | "serial-virt" | "config-server" | "log-server"
+        | "blk-server" => "service",
+        "supervisor" => "control",
+        "debug-handler" => "debug",
+        "shell" | "edit" | "chat-client" | "http-file-browser" | "backup" | "fetch-client"
+        | "crash-demo" | "hello" | "echo-client" | "echo-server" | "http-server" | "fs-client"
+        | "net-client" | "blk-client" => "untrusted",
+        _ => "unknown",
+    }
+}
+
+fn profile_has_channel_between(profile: &Profile, a: &str, b: &str) -> bool {
+    let a = to_sdf_pd_name(a);
+    let b = to_sdf_pd_name(b);
+    profile.channel.iter().any(|ch| {
+        let pds: Vec<_> = ch.ends.iter().map(|e| to_sdf_pd_name(&e.pd)).collect();
+        pds.contains(&a) && pds.contains(&b)
+    })
+}
+
+/// Print a Phase 60 capability audit for one profile (or all if `name` is None).
+pub fn audit_profiles(profiles: &Profiles, name: Option<&str>) -> Result<()> {
+    match name {
+        Some(n) => {
+            let p = get_profile(profiles, n)?;
+            audit_one(n, p);
+        }
+        None => {
+            for (n, p) in profiles {
+                audit_one(n, p);
+                println!();
+            }
+        }
+    }
+    Ok(())
+}
+
+fn audit_one(name: &str, profile: &Profile) {
+    let tier = effective_trust_class(profile);
+    let src = if profile.trust_class.is_some() {
+        "declared"
+    } else {
+        "inferred"
+    };
+    println!("==> profile {name}");
+    println!("    trust_class: {tier} ({src})");
+    if let Some(desc) = &profile.description {
+        println!("    description: {desc}");
+    }
+    if let Some(board) = &profile.default_board {
+        println!("    default_board: {board}");
+    }
+
+    println!("    PDs by trust domain:");
+    let mut by_domain: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+    for pd in &profile.pds {
+        by_domain
+            .entry(pd_trust_domain(pd))
+            .or_default()
+            .push(pd.as_str());
+    }
+    for (domain, pds) in by_domain {
+        println!("      {domain:10} {}", pds.join(", "));
+    }
+
+    println!("    High-risk edges (capability surface):");
+    let mut notes: Vec<String> = Vec::new();
+    if profile.pds.iter().any(|p| p == "shell") {
+        if profile_has_channel_between(profile, "shell", "supervisor") {
+            notes.push("shell ↔ supervisor (reboot / status IPC)".into());
+        }
+        if profile_has_channel_between(profile, "shell", "config-server") {
+            notes.push(
+                "shell ↔ config-server (policy R/W; secret.* write denied — supervisor only)"
+                    .into(),
+            );
+        }
+        if profile_has_channel_between(profile, "shell", "fs-server") {
+            notes.push("shell ↔ fs-server (full FS RPC)".into());
+        }
+        if profile_has_channel_between(profile, "shell", "net-server") {
+            notes.push("shell ↔ net-server (full net RPC)".into());
+        }
+        for app in ["edit", "chat-client", "backup", "http-file-browser"] {
+            if profile.pds.iter().any(|p| p == app)
+                && profile_has_channel_between(profile, "shell", app)
+            {
+                notes.push(format!("shell ↔ {app} (launch / control)"));
+            }
+        }
+    }
+    for app in ["edit", "http-file-browser", "backup"] {
+        if profile.pds.iter().any(|p| p == app)
+            && profile_has_channel_between(profile, app, "fs-server")
+        {
+            notes.push(format!("{app} ↔ fs-server (untrusted app FS access)"));
+        }
+    }
+    for app in ["chat-client", "http-file-browser", "fetch-client"] {
+        if profile.pds.iter().any(|p| p == app)
+            && profile_has_channel_between(profile, app, "net-server")
+        {
+            notes.push(format!("{app} ↔ net-server (untrusted app net access)"));
+        }
+    }
+    if notes.is_empty() {
+        println!("      (none flagged — appliance/minimal layout)");
+    } else {
+        for n in notes {
+            println!("      - {n}");
+        }
+    }
+
+    match tier {
+        TrustClass::Admin => println!(
+            "    note: admin surface — full REPL + bulk apps; use only on trusted consoles"
+        ),
+        TrustClass::AdminCore => println!(
+            "    note: admin-core — shell/services without bulk apps; install apps via package CLI"
+        ),
+        TrustClass::Appliance => {
+            println!("    note: appliance — no interactive shell; fixed PD set")
+        }
+        TrustClass::Minimal => println!("    note: minimal bring-up layout"),
+        TrustClass::Debug => {
+            println!("    note: debug/isolation only — not a production workstation default")
+        }
     }
 }
 
@@ -380,4 +606,51 @@ pub fn find_profile_for_board<'a>(
         .filter(|(_, p)| p.default_board.as_deref() == Some(board_name))
         .max_by_key(|(_, p)| p.pds.len())
         .map(|(name, p)| (name.as_str(), p))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn infer_trust_class_from_pds() {
+        assert_eq!(
+            infer_trust_class(&["hello".into(), "serial-driver".into()]),
+            TrustClass::Minimal
+        );
+        assert_eq!(
+            infer_trust_class(&[
+                "http-server".into(),
+                "serial-driver".into(),
+                "virtio-net-driver".into()
+            ]),
+            TrustClass::Appliance
+        );
+        assert_eq!(
+            infer_trust_class(&["shell".into(), "fs-server".into(), "supervisor".into()]),
+            TrustClass::AdminCore
+        );
+        assert_eq!(
+            infer_trust_class(&[
+                "shell".into(),
+                "edit".into(),
+                "fs-server".into(),
+                "supervisor".into()
+            ]),
+            TrustClass::Admin
+        );
+        assert_eq!(
+            infer_trust_class(&["debug-handler".into(), "crash-demo".into()]),
+            TrustClass::Debug
+        );
+    }
+
+    #[test]
+    fn pd_trust_domain_map() {
+        assert_eq!(pd_trust_domain("serial-driver"), "platform");
+        assert_eq!(pd_trust_domain("fs-server"), "service");
+        assert_eq!(pd_trust_domain("supervisor"), "control");
+        assert_eq!(pd_trust_domain("shell"), "untrusted");
+        assert_eq!(pd_trust_domain("debug-handler"), "debug");
+    }
 }

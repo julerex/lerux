@@ -4,8 +4,9 @@
 template = "serial-hello.system.template"
 pds = ["hello", "serial-driver"]
 description = "Minimal hello world over serial driver"
-
 default_board = "qemu_virt_aarch64"
+# Phase 60: bring-up only.
+trust_class = "minimal"
 
 [[channel]]
 name = "hello_serial"

@@ -30,16 +30,21 @@ lerux profile check-channels
 
 Install checks `fragment.requires` against the profile’s current PD set, merges `fragment.pds`, and appends named `[[fragment.channel]]` edges (skips channels whose `name` already exists).
 
-## Recipes (Phase 55)
+## Recipes (Phase 55 / 60)
 
-| Profile | Role |
-|---------|------|
-| `minimal` | Serial hello |
-| `server` | Echo IPC demo |
-| `net-appliance` | HTTP server over virtio-net |
-| `dev-workstation` | Workstation **core** without apps — use `package install` |
-| `workstation` | Full apps pre-wired (edit/chat/http-fs/backup) |
-| `workstation-rpi4` | RPi4 native drivers + full apps |
+| Profile | `trust_class` | Role |
+|---------|---------------|------|
+| `minimal` | minimal | Serial hello |
+| `server` | appliance | Echo IPC demo |
+| `net-appliance` | appliance | HTTP server over virtio-net |
+| `dev-workstation` | admin-core | Workstation **core** without bulk apps — use `package install` |
+| `workstation` | admin | Full apps pre-wired (edit/chat/http-fs/backup) |
+| `workstation-riscv` / `-x86` / `-rpi4` | admin | Arch / hardware variants of full workstation |
+
+```bash
+lerux profile audit workstation   # Phase 60: PD trust domains + high-risk edges
+lerux profile list                # shows [trust_class] column
+```
 
 ## App catalog packages (Phase 58)
 

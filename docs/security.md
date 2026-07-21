@@ -63,12 +63,13 @@ Channel numbers come from profile `[[channel]]` manifests; PPC callees outrank c
 | Untrusted app corrupts FS DMA / disk | **Mitigated** | Apps use postcard FS RPC only; only `fs-server` maps blk rings |
 | Untrusted app sniffs NIC DMA | **Mitigated** (aarch64 virtio-net) | Unified-dma + net-server sole stack; apps have no DMA map (ADR-003) |
 | App crash takes down services | **Mitigated (smoke)** | Separate PDs; `just test-isolation` crashes a child then FS round-trips |
-| Shell over-privileged surface | **Partial** | Shell is lowest priority but holds many RPC ends; admin vs untrusted profile split is open |
-| Secrets on disk readable by any FS client | **Partial** | Path prefix `/config/secrets/`; no encryption; any FS client with open rights can read |
+| Shell over-privileged surface | **Partial** | Profile tiers (`admin` / `admin-core` / `appliance`); `lerux profile audit`; shell still holds many ends on admin images |
+| Secrets on disk writable by shell | **Mitigated (ACL)** | `secret.*` Set/Delete is supervisor-only (`ConfigResponse::Denied` for shell) |
+| Secrets on disk readable by any FS client | **Partial** | Path prefix `/config/secrets/`; no encryption; FS RPC clients can still open paths |
 | Compromised net-server | **Accepted residual** | Stack is trusted; full sDDF copy-swarm deferred |
-| Malicious `loader.img` | **Open (stretch)** | Host-side image signing / measured boot not implemented |
-| Channel/QoS abuse (starve shell) | **Partial** | Fixed priorities + single-flight jobs; MCS budgets deferred |
-| Supply-chain pin drift | **Partial** | Pins in `deps/versions.toml` + package pins; no formal security update runbook yet |
+| Malicious `loader.img` | **Open (stretch)** | Host-side image signing / measured boot not implemented (Track C) |
+| Channel/QoS abuse (starve shell) | **Partial** | Fixed priorities + single-flight jobs; MCS budgets deferred (Track D) |
+| Supply-chain pin drift | **Partial** | Pins in `deps/versions.toml` + package pins; formal runbook Track B |
 
 ## Isolation smoke (automated)
 
@@ -85,15 +86,49 @@ Success strings prove the untrusted fault path ran **and** the FS service remain
 
 Production **workstation** images stay flat (no debug parent) per ADR-005. Isolation is a CI property of the PD layout, not something users enable on device.
 
-## Capability direction (open)
+## Capability audit (Track A)
 
-Near-term hardening without redesigning Microkit:
+### Profile risk tiers
 
-1. **Admin vs untrusted profiles** — e.g. `net-appliance` without shell edit/chat; workstation with full surface documented as higher risk.
-2. **Reduce shell channel set** — launch apps without giving shell every service end where possible (may need non-PPC notify patterns; see ADR-006).
-3. **Config ACL** — optional config-server deny for non-supervisor writers on `secret.*`.
-4. **Image signing** — host CLI verifies digest before `deploy`; hardware roots later.
-5. **Pin update runbook** — document response when rust-sel4 / Microkit / seL4 ship security fixes.
+| `trust_class` | Profiles | Surface |
+|---------------|----------|---------|
+| **admin** | `workstation`, `workstation-riscv`, `workstation-x86`, `workstation-rpi4` | Shell + FS/net/config/supervisor + bulk apps (edit/chat/http-fs/backup) |
+| **admin-core** | `dev-workstation` | Shell + services only; install apps via `lerux package` |
+| **appliance** | `net-appliance`, `server` | Fixed PD set; no interactive admin shell |
+| **minimal** | `minimal`, `hardware-rpi4` | Serial hello / bring-up |
+| **debug** | isolation/debug boards (inferred) | Fault parent + crash child — not production default |
+
+Declare with `trust_class = "admin"` (etc.) in `support/profiles/*.toml`. Host tooling:
+
+```bash
+lerux profile list              # shows [trust_class] column
+lerux profile audit             # all profiles
+lerux profile audit workstation # one profile: PD domains + high-risk edges
+```
+
+### Shell surface (admin)
+
+The shell holds many RPC ends by design (REPL admin console). High-risk edges flagged by `profile audit`:
+
+- shell ↔ supervisor — reboot / status
+- shell ↔ config-server — policy R/W (see secrets ACL)
+- shell ↔ fs-server / net-server — full storage and network RPC
+- shell ↔ edit / chat / backup — app launch
+
+**Shrink the surface by choosing a lower tier profile**, not by runtime capability dropping (Microkit is static). Prefer `dev-workstation` or `net-appliance` when bulk apps or a full REPL are unnecessary.
+
+### Config ACL (`secret.*`)
+
+`config-server` allows `Get`/`List` of secrets from shell (operator inspection) but **`Set`/`Delete` on `secret.*` is supervisor-only**. Non-supervisor writers receive `ConfigResponse::Denied`. Ordinary keys (`hostname`, `net.*`, `log.*`) remain writable from shell.
+
+Still open: encryption at rest; path-level FS ACL for apps that speak `FsRequest` directly (any FS client can open `/config/secrets/` if it has FS rights — prefer config IPC).
+
+### Remaining stretch (Tracks B–D)
+
+1. **Pin update runbook** — Track B
+2. **Image signing** — host CLI verifies digest before `deploy`; hardware roots later — Track C
+3. **Channel/QoS abuse tests** — Track D; MCS deferred
+4. **Reduce shell channel set further** — launch apps without giving shell every service end (may need non-PPC notify; see ADR-006)
 
 ## Dependency pins (hygiene)
 

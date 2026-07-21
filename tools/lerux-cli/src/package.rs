@@ -707,6 +707,7 @@ pds = ["shell"]
             pds: vec![],
             description: None,
             default_board: None,
+            trust_class: None,
             channel: vec![],
         };
     }

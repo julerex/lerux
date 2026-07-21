@@ -591,6 +591,12 @@ fn config_get_cmd(console: &mut SerialClient, key: &[u8]) {
 fn config_set_cmd(console: &mut SerialClient, key: &[u8], value: &[u8]) {
     match config_call(ConfigRequest::set(key, value)) {
         ConfigResponse::Ok => println(console, "config set: ok"),
+        ConfigResponse::Denied => {
+            println(
+                console,
+                "config set: denied (secret.* write is supervisor-only)",
+            );
+        }
         _ => println(console, "config set: failed"),
     }
 }
@@ -598,6 +604,12 @@ fn config_set_cmd(console: &mut SerialClient, key: &[u8], value: &[u8]) {
 fn config_del_cmd(console: &mut SerialClient, key: &[u8]) {
     match config_call(ConfigRequest::delete(key)) {
         ConfigResponse::Ok => println(console, "config del: ok"),
+        ConfigResponse::Denied => {
+            println(
+                console,
+                "config del: denied (secret.* write is supervisor-only)",
+            );
+        }
         _ => println(console, "config del: failed"),
     }
 }

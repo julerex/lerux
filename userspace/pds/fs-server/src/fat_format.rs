@@ -731,7 +731,11 @@ impl FatFormat {
                     sector[off..off + len].copy_from_slice(&data[..len]);
                     self.io.sector_buf = sector;
                     let end = (off + len) as u32;
-                    let size = new_size.max(end);
+                    let size = if offset == 0 && end < new_size {
+                        end
+                    } else {
+                        new_size.max(end)
+                    };
                     self.fs_job = FsJob::Write {
                         handle,
                         offset,

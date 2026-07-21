@@ -171,18 +171,14 @@ impl FsClient {
         }
     }
 
-    /// Unlink any existing file at `path`, then create it fresh. The unlink
-    /// keeps the create clean when the new content is shorter (the
-    /// unlink-before-create data-loss fix). Returns the file handle.
+    /// Open or create `path` for a full-file overwrite. fs-server shrinks file
+    /// metadata when a shorter payload is written from offset 0, so callers do
+    /// not need unlink-before-create (which deletes the file if create fails).
     #[expect(
         clippy::result_large_err,
         reason = "Err is the FsResponse wire enum; callers need the full variant"
     )]
     pub fn create_clean(&self, path: &[u8]) -> Result<u8, FsResponse> {
-        let _ = self.call(FsRequest::unlink(path));
-        match self.call(FsRequest::create(path)) {
-            FsResponse::Handle { id } => Ok(id),
-            other => Err(other),
-        }
+        self.create_or_open(path)
     }
 }

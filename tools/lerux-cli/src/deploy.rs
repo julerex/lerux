@@ -1,4 +1,5 @@
 //! Phase 52: one-command host deploy of `loader.img` onto a mounted SD boot partition.
+//! Phase 60 Track C: optional SHA-256 sidecar verify before copy.
 
 use std::{
     fs,
@@ -11,6 +12,8 @@ use anyhow::{bail, Context, Result};
 /// Copy the board's `loader.img` to a mounted FAT boot directory and print U-Boot steps.
 ///
 /// `dest` is typically the mounted boot partition (e.g. `/media/$USER/boot`).
+/// When `verify` is true (default from CLI), the image is checked against
+/// `loader.img.sha256` before copy, and the sidecar is copied alongside.
 pub fn deploy_loader(
     root: &Path,
     board: &str,
@@ -18,6 +21,7 @@ pub fn deploy_loader(
     config: &str,
     dest: &Path,
     build_if_missing: bool,
+    verify: bool,
 ) -> Result<PathBuf> {
     if !dest.is_dir() {
         bail!(
@@ -40,9 +44,23 @@ pub fn deploy_loader(
         }
     }
 
+    if verify {
+        // Sidecar is written by `lerux image` / `lerux digest`. Do not invent a
+        // digest from an unknown on-disk image — that would bless tampering.
+        crate::image_digest::verify_sidecar(&loader)?;
+    }
+
     let dest_loader = dest.join("loader.img");
     fs::copy(&loader, &dest_loader)
         .with_context(|| format!("copy {} → {}", loader.display(), dest_loader.display()))?;
+
+    let side = crate::image_digest::sidecar_path(&loader);
+    if side.is_file() {
+        let dest_side = crate::image_digest::sidecar_path(&dest_loader);
+        fs::copy(&side, &dest_side)
+            .with_context(|| format!("copy {} → {}", side.display(), dest_side.display()))?;
+        println!("==> Copied integrity sidecar → {}", dest_side.display());
+    }
 
     // Sidecar with U-Boot commands for operators (and optional paste into uEnv).
     let uboot_txt = dest.join("lerux-uboot.txt");
@@ -107,14 +125,50 @@ mod tests {
             let mut f = fs::File::create(&loader).unwrap();
             f.write_all(b"fake-loader").unwrap();
         }
+        crate::image_digest::write_sidecar(&loader).unwrap();
         let dest = tmp.path().join("boot");
         fs::create_dir_all(&dest).unwrap();
 
         // Call inner copy path without full image build: simulate via deploy_loader
         // with a minimal fake tree (board path under tmp as root).
-        let out = deploy_loader(tmp.path(), "fake_board", "build", "debug", &dest, false).unwrap();
+        let out = deploy_loader(
+            tmp.path(),
+            "fake_board",
+            "build",
+            "debug",
+            &dest,
+            false,
+            true,
+        )
+        .unwrap();
         assert_eq!(out, dest.join("loader.img"));
         assert_eq!(fs::read(dest.join("loader.img")).unwrap(), b"fake-loader");
         assert!(dest.join("lerux-uboot.txt").is_file());
+        assert!(dest.join("loader.img.sha256").is_file());
+    }
+
+    #[test]
+    fn deploy_refuses_tampered_image() {
+        let tmp = tempfile::tempdir().unwrap();
+        let board_dir = tmp.path().join("build").join("fake_board");
+        fs::create_dir_all(&board_dir).unwrap();
+        let loader = board_dir.join("loader.img");
+        fs::write(&loader, b"good").unwrap();
+        crate::image_digest::write_sidecar(&loader).unwrap();
+        fs::write(&loader, b"evil").unwrap();
+        let dest = tmp.path().join("boot");
+        fs::create_dir_all(&dest).unwrap();
+        let err = deploy_loader(
+            tmp.path(),
+            "fake_board",
+            "build",
+            "debug",
+            &dest,
+            false,
+            true,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains("integrity check failed"), "{err}");
     }
 }

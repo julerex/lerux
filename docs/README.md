@@ -20,7 +20,7 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [decisions/004-service-async.md](decisions/004-service-async.md) | ADR-004: stackless coop async in service PDs |
 | [decisions/005-debug-pd.md](decisions/005-debug-pd.md) | ADR-005: fault parent + QEMU GDB (not libgdb fork) |
 | [debug.md](debug.md) | Phase 46: `test-debug` + gdb-multiarch workflow |
-| [security.md](security.md) | Phase 60: threat model, trust map, isolation smoke, pin update runbook |
+| [security.md](security.md) | Phase 60: threat model, pin runbook, image digests, isolation smoke |
 | [qos.md](qos.md) | Phase 48: workstation service classes / PD priorities |
 | [decisions/006-workstation-qos.md](decisions/006-workstation-qos.md) | ADR-006: priority policy |
 | [bench.md](bench.md) | Phase 49: microbench methodology |

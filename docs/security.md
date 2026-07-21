@@ -67,7 +67,7 @@ Channel numbers come from profile `[[channel]]` manifests; PPC callees outrank c
 | Secrets on disk writable by shell | **Mitigated (ACL)** | `secret.*` Set/Delete is supervisor-only (`ConfigResponse::Denied` for shell) |
 | Secrets on disk readable by any FS client | **Partial** | Path prefix `/config/secrets/`; no encryption; FS RPC clients can still open paths |
 | Compromised net-server | **Accepted residual** | Stack is trusted; full sDDF copy-swarm deferred |
-| Malicious `loader.img` | **Open (stretch)** | Host-side image signing / measured boot not implemented (Track C) |
+| Malicious `loader.img` | **Partial (host digest)** | SHA-256 sidecar at image build; `lerux deploy` verifies by default; asymmetric / measured boot still open |
 | Channel/QoS abuse (starve shell) | **Partial** | Fixed priorities + single-flight jobs; MCS budgets deferred (Track D) |
 | Supply-chain pin drift | **Mitigated (process)** | Pins in `deps/versions.toml` / `Cargo.toml` / package pins; [runbook](#dependency-pins-and-security-update-runbook-track-b) for bumps and CVE response |
 
@@ -123,11 +123,33 @@ The shell holds many RPC ends by design (REPL admin console). High-risk edges fl
 
 Still open: encryption at rest; path-level FS ACL for apps that speak `FsRequest` directly (any FS client can open `/config/secrets/` if it has FS rights — prefer config IPC).
 
-### Remaining stretch (Tracks C–D)
+### Image integrity (Track C)
 
-1. **Image signing** — host CLI verifies digest before `deploy`; hardware roots later — Track C
-2. **Channel/QoS abuse tests** — Track D; MCS deferred
-3. **Reduce shell channel set further** — launch apps without giving shell every service end (may need non-PPC notify; see ADR-006)
+Host-side **SHA-256 digests** for `loader.img` (not asymmetric signing, not measured boot):
+
+| Step | Command / behavior |
+|------|--------------------|
+| Write | Automatic after `lerux image` → `build/<board>/loader.img.sha256` (`sha256sum` format) |
+| Write (manual) | `lerux digest --board <board>` or `lerux digest -p path/to/loader.img` |
+| Verify | `lerux verify-image --board <board>` |
+| Deploy | `lerux deploy …` verifies the sidecar **by default**; copies `.sha256` to media; skip with `--no-verify` |
+
+```bash
+BOARD=rpi4b_4gb_workstation just image   # writes loader.img + loader.img.sha256
+lerux verify-image --board rpi4b_4gb_workstation
+lerux deploy --board rpi4b_4gb_workstation --dest /media/$USER/boot
+# sha256sum -c build/rpi4b_4gb_workstation/loader.img.sha256   # host cross-check
+```
+
+**Trust model:** the sidecar is only as strong as the host that wrote it (CI or developer machine). It catches accidental corruption and casual SD-card swap of `loader.img` without the matching digest. It does **not** replace secure boot, signed releases, or a hardware root of trust.
+
+**Out of scope for Track C:** ed25519/cosign signatures, TPM/fuse measured boot, in-guest verification.
+
+### Remaining stretch (Track D)
+
+1. **Channel/QoS abuse tests** — Track D; MCS deferred
+2. **Reduce shell channel set further** — launch apps without giving shell every service end (may need non-PPC notify; see ADR-006)
+3. **Asymmetric image signing / measured boot** — follow-on after host digests
 
 ## Dependency pins and security update runbook (Track B)
 

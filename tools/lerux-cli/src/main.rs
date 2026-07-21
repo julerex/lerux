@@ -12,6 +12,7 @@ mod disk_img;
 mod fetch;
 mod http_one;
 mod hw_lock;
+mod image_digest;
 mod install;
 mod libclang;
 mod package;
@@ -182,6 +183,8 @@ enum Commands {
     /// Phase 52: copy board `loader.img` onto a mounted SD boot partition.
     ///
     /// Example: `lerux deploy --board rpi4b_4gb_workstation --dest /media/$USER/boot`
+    ///
+    /// Phase 60 Track C: verifies `loader.img.sha256` before copy unless `--no-verify`.
     Deploy {
         #[arg(long, default_value = "rpi4b_4gb_workstation")]
         board: String,
@@ -198,6 +201,34 @@ enum Commands {
         /// Skip building even if loader.img is missing (error instead).
         #[arg(long, default_value_t = false)]
         no_build: bool,
+        /// Verify SHA-256 sidecar before copy (default: true).
+        #[arg(long, default_value_t = true)]
+        verify: bool,
+        /// Skip integrity check (not recommended for field media).
+        #[arg(long, default_value_t = false)]
+        no_verify: bool,
+    },
+    /// Phase 60 Track C: write `loader.img.sha256` next to an image.
+    ///
+    /// Also runs automatically after `lerux image`. Format is `sha256sum`-compatible.
+    Digest {
+        #[arg(long, default_value = "qemu_virt_aarch64")]
+        board: String,
+        #[arg(long, default_value = "build")]
+        build_dir: String,
+        /// Explicit path to `loader.img` (overrides board layout).
+        #[arg(long, short = 'p')]
+        path: Option<PathBuf>,
+    },
+    /// Phase 60 Track C: verify `loader.img` against its `.sha256` sidecar.
+    VerifyImage {
+        #[arg(long, default_value = "qemu_virt_aarch64")]
+        board: String,
+        #[arg(long, default_value = "build")]
+        build_dir: String,
+        /// Explicit path to `loader.img` (overrides board layout).
+        #[arg(long, short = 'p')]
+        path: Option<PathBuf>,
     },
     /// Phase 54: config schema and disk seed helpers.
     Config {
@@ -669,8 +700,11 @@ fn main() -> Result<()> {
             config,
             build,
             no_build,
+            verify,
+            no_verify,
         } => {
             let build_if_missing = build && !no_build;
+            let do_verify = verify && !no_verify;
             crate::deploy::deploy_loader(
                 &root,
                 &board,
@@ -678,7 +712,26 @@ fn main() -> Result<()> {
                 &config,
                 &dest,
                 build_if_missing,
+                do_verify,
             )?;
+        }
+        Commands::Digest {
+            board,
+            build_dir,
+            path,
+        } => {
+            let loader =
+                crate::image_digest::resolve_loader(&root, &board, &build_dir, path.as_deref())?;
+            crate::image_digest::write_sidecar(&loader)?;
+        }
+        Commands::VerifyImage {
+            board,
+            build_dir,
+            path,
+        } => {
+            let loader =
+                crate::image_digest::resolve_loader(&root, &board, &build_dir, path.as_deref())?;
+            crate::image_digest::verify_sidecar(&loader)?;
         }
         Commands::Config { command } => match command {
             ConfigCommands::Schema => crate::config_cmd::print_schema(),

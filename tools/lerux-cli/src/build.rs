@@ -96,6 +96,7 @@ pub fn image(root: &Path, board: &str, build_dir: &str, config: &str) -> Result<
     let system = system_file(root, board, build_dir);
     let microkit = format!("{}/bin/microkit", sdk);
 
+    let loader = board_build.join("loader.img");
     run_inherit(
         &microkit,
         &[
@@ -109,9 +110,12 @@ pub fn image(root: &Path, board: &str, build_dir: &str, config: &str) -> Result<
             "-r",
             &path_str(&board_build.join("report.txt")),
             "-o",
-            &path_str(&board_build.join("loader.img")),
+            &path_str(&loader),
         ],
-    )
+    )?;
+    // Phase 60 Track C: host-side integrity sidecar next to loader.img.
+    crate::image_digest::write_sidecar(&loader)?;
+    Ok(())
 }
 
 pub fn run(root: &Path, board: &str, build_dir: &str, config: &str) -> Result<()> {

@@ -89,9 +89,11 @@ Board `rpi4b_4gb_workstation` (profile `workstation-rpi4`) is the **install-medi
 **One-command deploy** (after mounting the SD FAT boot partition on the host):
 
 ```bash
-# Build (if needed) + copy loader.img + write lerux-uboot.txt
+# Build (if needed) + verify loader.img.sha256 + copy image/sidecar + write lerux-uboot.txt
 DEST=/media/$USER/boot just deploy-rpi4
 # equivalent: cargo run -p lerux-cli -- deploy --board rpi4b_4gb_workstation --dest /media/$USER/boot
+# Skip integrity check only if needed: lerux deploy … --no-verify
+# Manual: lerux digest / lerux verify-image  (Phase 60 Track C; docs/security.md)
 ```
 
 **Full path**

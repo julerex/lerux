@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-21 (Phase 60 stretch sequence A–D)
+Last updated: 2026-07-21 (Phase 60 Track A + B)
 
 ## Phase 1 — Bring-up
 
@@ -478,7 +478,7 @@ Threat model + automated isolation smoke. Full checklist: **[`plan-arch.md`](pla
 - [x] Threat model / trust map ([`security.md`](security.md))
 - [x] Isolation smoke: `qemu_virt_aarch64_isolation` / `just test-isolation` (crash-demo → fs-server still serves)
 - [x] **Track A** — Capability audit: admin vs reduced profiles; config `secret.*` ACL; `lerux profile audit`
-- [ ] **Track B** — Dependency pin security-update runbook
+- [x] **Track B** — Dependency pin security-update runbook ([`security.md`](security.md#dependency-pins-and-security-update-runbook-track-b))
 - [ ] **Track C** — Image signing / measured boot (host-side first)
 - [ ] **Track D** — Channel/QoS abuse tests; optional MCS budgets
 

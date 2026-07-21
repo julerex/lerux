@@ -69,7 +69,7 @@ Channel numbers come from profile `[[channel]]` manifests; PPC callees outrank c
 | Compromised net-server | **Accepted residual** | Stack is trusted; full sDDF copy-swarm deferred |
 | Malicious `loader.img` | **Open (stretch)** | Host-side image signing / measured boot not implemented (Track C) |
 | Channel/QoS abuse (starve shell) | **Partial** | Fixed priorities + single-flight jobs; MCS budgets deferred (Track D) |
-| Supply-chain pin drift | **Partial** | Pins in `deps/versions.toml` + package pins; formal runbook Track B |
+| Supply-chain pin drift | **Mitigated (process)** | Pins in `deps/versions.toml` / `Cargo.toml` / package pins; [runbook](#dependency-pins-and-security-update-runbook-track-b) for bumps and CVE response |
 
 ## Isolation smoke (automated)
 
@@ -123,22 +123,135 @@ The shell holds many RPC ends by design (REPL admin console). High-risk edges fl
 
 Still open: encryption at rest; path-level FS ACL for apps that speak `FsRequest` directly (any FS client can open `/config/secrets/` if it has FS rights — prefer config IPC).
 
-### Remaining stretch (Tracks B–D)
+### Remaining stretch (Tracks C–D)
 
-1. **Pin update runbook** — Track B
-2. **Image signing** — host CLI verifies digest before `deploy`; hardware roots later — Track C
-3. **Channel/QoS abuse tests** — Track D; MCS deferred
-4. **Reduce shell channel set further** — launch apps without giving shell every service end (may need non-PPC notify; see ADR-006)
+1. **Image signing** — host CLI verifies digest before `deploy`; hardware roots later — Track C
+2. **Channel/QoS abuse tests** — Track D; MCS deferred
+3. **Reduce shell channel set further** — launch apps without giving shell every service end (may need non-PPC notify; see ADR-006)
 
-## Dependency pins (hygiene)
+## Dependency pins and security update runbook (Track B)
 
-| Component | Pin location | Notes |
-|-----------|--------------|--------|
-| seL4 / Microkit | `deps/versions.toml` | Upstream tags; rebuild SDK after bump |
-| rust-sel4 | root `Cargo.toml` git tag | Workspace-wide |
-| PD packages | `support/package-pins.toml` | Rolling ELF pins via `lerux package upgrade` |
+lerux does **not** vendor seL4 / Microkit / rust-sel4 trees into git. Security and feature bumps are **pin updates** followed by rebuild and smoke. This section is the operational runbook.
 
-Security updates today: bump pin → `just check` / `just check-pd` → smoke matrix → rebuild images. A dedicated incident runbook remains stretch.
+### Pin inventory
+
+| Component | Pin location | Current (see also plan version table) | When to bump |
+|-----------|--------------|----------------------------------------|--------------|
+| seL4 | `deps/versions.toml` → `[repos].sel4.tag` | 15.0.0 | Kernel CVE / release notes from seL4 Foundation |
+| Microkit | `deps/versions.toml` → `[repos].microkit.tag` | 2.2.0 | Microkit release; often paired with seL4 |
+| rust-sel4 (docs mirror) | `deps/versions.toml` → `[rust].rust_sel4.tag` | v4.0.0 | Keep in sync with Cargo.toml |
+| rust-sel4 (build) | root `Cargo.toml` workspace git `tag = "…"` for all `sel4*` deps | v4.0.0 | rust-sel4 release / API fixes; **must match** versions.toml |
+| Rust toolchain | `rust-toolchain.toml` | nightly-2026-03-18 | rustc regressions, or when rust-sel4 requires a newer nightly |
+| PD package ELFs | `support/package-pins.toml` | per-board sha256 | After any PD/interface rebuild that ships CI artifacts |
+| Host crates (clap, etc.) | `Cargo.lock` | resolved | Dependabot / `cargo update` for **host** crates only; PD path is git-pinned |
+
+**Invariant:** `deps/versions.toml` `[rust].rust_sel4.tag` and every `sel4*` git dep tag in root `Cargo.toml` must be the **same** string. `lerux fetch` clones seL4/Microkit from versions.toml; Cargo resolves rust-sel4 from `Cargo.toml`.
+
+### Severity triage
+
+| Signal | Action |
+|--------|--------|
+| seL4 Foundation security advisory / kernel CVE in pinned tag | **P0** — bump seL4 (+ Microkit if required), rebuild SDK, full smoke, redeploy images |
+| Microkit bug that breaks isolation or loader integrity | **P0** — bump Microkit, rebuild SDK, full smoke |
+| rust-sel4 fix for driver/IPC safety used by lerux PDs | **P1** — bump tag in Cargo.toml + versions.toml, `cargo update -p sel4…`, check-pd + smoke subset |
+| Host-only crate CVE (clap, serde on host tools) | **P2** — `cargo update` host path; `just check`; no SDK rebuild |
+| PD package pin drift (sha256 mismatch in CI) | **P2** — `lerux package upgrade --all` after green build; commit `package-pins.toml` |
+| Nightly rustc break on pinned channel | **P1** — move `rust-toolchain.toml` only after `just check` + `just check-pd` |
+
+Document the CVE / advisory ID in the commit message and, if user-facing, a short note in `docs/plan.md` version table when seL4/Microkit major pins move.
+
+### Standard bump procedure
+
+Work on a branch. Prefer one logical bump per PR (e.g. “seL4 15.0.0 → 15.0.1” or “rust-sel4 v4.0.0 → v4.0.1”).
+
+#### 1. Edit pins
+
+```bash
+# seL4 and/or Microkit
+$EDITOR deps/versions.toml
+
+# rust-sel4: edit root Cargo.toml (all sel4* git tags) AND deps/versions.toml [rust].rust_sel4
+# Then refresh the lockfile for git deps:
+cargo update -p sel4
+# (or cargo update for a broader refresh; review Cargo.lock diff)
+```
+
+#### 2. Refresh sources and SDK
+
+```bash
+# Drop stale checkouts when tags change (fetch re-clones/updates deps/workspace/)
+rm -rf deps/workspace/seL4 deps/workspace/microkit   # only if tags moved
+just fetch
+
+# Rebuild SDK for boards you care about (CI builds a matrix; local minimum:)
+MICROKIT_BOARDS=qemu_virt_aarch64,x86_64_generic,qemu_virt_riscv64,rpi4b_4gb just build-sdk
+# Or prebuilt fallback when the pin matches a published SDK:
+# just fetch-sdk
+```
+
+If only **rust-sel4** moved (kernel/Microkit tags unchanged), SDK rebuild is usually **not** required; still run `just check-pd` so PD crates recompile against new bindings.
+
+#### 3. Quality gates (local)
+
+```bash
+just check          # host fmt + clippy (lerux-cli, interface-types)
+just check-pd       # cross-arch PD clippy (needs SDK)
+just test-isolation # Phase 60 isolation smoke (fast security-relevant)
+just test-workstation
+# Prefer full matrix before merge when seL4/Microkit moved:
+# just test-all
+```
+
+CI also runs `check` → `sdk` → `check-pd` + smoke matrix ([`ci.md`](ci.md)).
+
+#### 4. Package pins (if PD ELFs are published)
+
+```bash
+lerux package build edit --board qemu_virt_aarch64_workstation
+lerux package upgrade --all --board qemu_virt_aarch64_workstation
+# review support/package-pins.toml; commit with the bump
+```
+
+#### 5. Ship
+
+- Commit pin files + `Cargo.lock` + any necessary PD/API fixups.
+- Push and wait for green CI (smoke matrix is the acceptance bar for kernel/Microkit bumps).
+- Rebuild and redeploy field images (`just image` / `lerux deploy`) for boards in use; **old `loader.img` files are not hot-patched**.
+- Optional lab: RPi4 `just test-hw` after deploy ([`boards.md`](boards.md)).
+
+### Incident response template
+
+Copy into the PR or issue body:
+
+```markdown
+## Security pin update
+
+- **Advisory / CVE / issue:** …
+- **Component:** seL4 | Microkit | rust-sel4 | host crate | package pin
+- **Old pin → new pin:** …
+- **Affects deployed images?** yes/no (if yes: boards …)
+- **SDK rebuild required?** yes/no
+- **Verification:**
+  - [ ] `just check`
+  - [ ] `just check-pd`
+  - [ ] smoke: isolation / workstation / test-all (link CI)
+  - [ ] package-pins updated (if applicable)
+  - [ ] field images rebuilt / operators notified
+- **Residual risk:** …
+```
+
+### What not to do
+
+- Do not commit trees under `deps/workspace/` or `deps/microkit-sdk/` (gitignored).
+- Do not bump seL4 without checking Microkit compatibility notes for that release.
+- Do not leave `versions.toml` rust-sel4 tag different from `Cargo.toml`.
+- Do not treat `lerux package` pins as a substitute for rebuilding from source in CI — they record artifact digests, they do not load arbitrary remote ELFs at runtime.
+
+### Related ops
+
+- Smoke matrix and caches: [`ci.md`](ci.md)
+- RPi4 deploy after image rebuild: [`boards.md`](boards.md#rpi4-workstation-install-path-phase-52)
+- Package pin CLI: [`packages.md`](packages.md)
 
 ## Related
 
@@ -148,3 +261,4 @@ Security updates today: bump pin → `just check` / `just check-pd` → smoke ma
 - [debug.md](debug.md) — `test-debug` and GDB
 - [plan-arch.md](plan-arch.md) — Phase 60 checklist
 - [net-topology.md](net-topology.md) — NIC channel map
+- [ci.md](ci.md) — CI gates after pin bumps

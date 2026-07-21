@@ -1,5 +1,7 @@
 # Pinned versions for external seL4 ecosystem dependencies.
 # Source checkouts live in deps/workspace/ (gitignored).
+# Security bumps: docs/security.md#dependency-pins-and-security-update-runbook-track-b
+# Keep [rust].rust_sel4.tag in sync with root Cargo.toml sel4* git tags.
 
 [repos]
 sel4 = { remote = "https://github.com/seL4/seL4.git", tag = "15.0.0" }

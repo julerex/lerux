@@ -1,6 +1,6 @@
 # PLAN — Arch-level functionality (phases 50–60)
 
-Last updated: 2026-07-21 (Phase 60 stretch sequence A–D)
+Last updated: 2026-07-21 (Phase 60 Track A + B done)
 
 Related: [`plan.md`](plan.md) (completed phases 1–49), [`plan-au-ts.md`](plan-au-ts.md) (sDDF/LionsOS inspiration track), [`context.md`](context.md) (domain language).
 
@@ -277,7 +277,7 @@ Defer heavy GUI browsers and language ecosystems until/unless a runtime PD prove
 - [x] Threat model doc: which PDs trust which channels; untrusted apps never map DMA — [`security.md`](security.md).
 - [x] Isolation smoke: `just test-isolation` / `qemu_virt_aarch64_isolation` — crash-demo VmFault then FS round-trip (`lerux-isolation: fs-server survived untrusted PD crash`).
 - [x] Capability audit: profile trust tiers + `lerux profile audit`; config-server `secret.*` write ACL (supervisor only). **Track A**
-- [ ] Dependency pin hygiene and security update runbook. **Track B**
+- [x] Dependency pin hygiene and security update runbook ([`security.md`](security.md#dependency-pins-and-security-update-runbook-track-b)). **Track B**
 - [ ] Image signing / measured boot story (host-side first; hardware roots later). **Track C**
 - [ ] Channel/QoS abuse tests; optional MCS budgets if Microkit/seL4 config allows (beyond ADR-006 fixed priorities). **Track D**
 
@@ -291,8 +291,8 @@ Do **not** start MCS, graphics, or POSIX. Order by leverage and dependence:
 
 | Order | Track | Deliverable | Depends on |
 |-------|-------|-------------|------------|
-| **A** | Capability audit | Profile risk tiers + `lerux profile audit`; config-server ACL (`secret.*` write = supervisor only); document admin vs reduced surfaces | core 60 |
-| **B** | Pin security runbook | Incident steps for seL4 / Microkit / rust-sel4 bumps in [`security.md`](security.md) | core 60 |
+| **A** | Capability audit | Profile risk tiers + `lerux profile audit`; config-server ACL (`secret.*` write = supervisor only); document admin vs reduced surfaces | core 60 — **done** |
+| **B** | Pin security runbook | Incident steps for seL4 / Microkit / rust-sel4 bumps in [`security.md`](security.md) | core 60 — **done** |
 | **C** | Host image signing | SHA-256 sidecars for `loader.img`; `lerux deploy --verify` / `lerux image sign\|verify` | A (trust map), deploy path |
 | **D** | Channel/QoS abuse tests | Smoke that busy bulk client does not starve IRQ/service progress; MCS deferred | A, ADR-006 |
 

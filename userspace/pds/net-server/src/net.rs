@@ -349,6 +349,16 @@ impl NetStack {
     }
 
     pub fn queue_tcp_listen(&mut self, port: u16) {
+        let arena = unsafe { &*core::ptr::addr_of!(SOCKET_ARENA) };
+        // Idempotent: after TcpClose, poll() may already have re-listened silently.
+        // Clearing tcp_listen_handle without removing the socket orphans a slot in the
+        // fixed-size arena and panics once SOCK_SLOTS is exhausted.
+        if self.listen_port == Some(port) && self.tcp_listening && arena.tcp_listen_handle.is_some()
+        {
+            self.op = Op::None;
+            self.completed = Some(NetResponse::Ok);
+            return;
+        }
         self.tcp_listening = false;
         self.pending_tcp_send_len = None;
         self.pending_tcp_listen = Some(port);

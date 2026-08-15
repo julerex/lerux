@@ -17,6 +17,7 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `qemu_virt_aarch64_blk_composed` | aarch64 | `just test-blk-composed` | supervisor + init drivers + blk IPC + virtio-blk |
 | `qemu_virt_aarch64_net` | aarch64 | `just test-net` | net client/server + serial + virtio-net |
 | `qemu_virt_aarch64_fetch` | aarch64 | `just test-fetch` | fetch-client + net-server + serial + virtio-net |
+| `qemu_virt_aarch64_fetch_tls` | aarch64 | `just test-fetch-tls` | fetch-client + tls-proxy + net-server + serial + virtio-net |
 | `qemu_virt_aarch64_fs` | aarch64 | `just test-fs` | fs-client + fs-server (LERUXFS2) + serial + virtio-blk |
 | `qemu_virt_aarch64_fs_fat` | aarch64 | `just test-fs-fat` | same SDF; fs-server FAT16 backend |
 | `qemu_virt_aarch64_net_composed` | aarch64 | `just test-net-composed` | supervisor + init drivers + net IPC + virtio-net |
@@ -139,7 +140,9 @@ Success prints `==> hardware serial smoke passed` and holds a board lock under `
 
 Without `LERUX_HW_SERIAL`, `just test` only verifies the image build.
 
-**Manual REPL checklist** (record pass/fail for the Phase 39/52 gate)
+Living work list (what still needs a Pi): [`plan-arch.md` — Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated). This page is the procedure and result grid.
+
+**Manual REPL checklist** (record pass/fail for the lab gate)
 
 | Command | Pass criteria | Result |
 |---------|---------------|--------|

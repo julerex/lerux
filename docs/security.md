@@ -48,7 +48,8 @@ This document is the Phase 60 threat model and trust map. It does not claim form
 | `serial-driver` | platform | UART | no | `serial-virt` (device-only mode) | app channels |
 | `serial-virt` | service | no | no | apps (serial RPC) | UART MMIO |
 | `fs-server` | service | no | blk client DMA | shell, edit, backup, http-fs, config | NIC DMA |
-| `net-server` | service | no | net bounce (unified-dma) | shell, fetch, chat, http-fs | blk DMA |
+| `net-server` | service | no | net bounce (unified-dma) | shell, fetch, chat, http-fs, tls-proxy | blk DMA |
+| `tls-proxy` | service | no | no | fetch-client (TlsRequest) | NIC / blk DMA |
 | `config-server` / `log-server` | service | no | no | shell, supervisor | device DMA |
 | `supervisor` | control | no | no | shell (status/reboot/time) | device DMA |
 | shell / apps | untrusted | no | **none** | each other only via typed RPC | any DMA / MMIO |

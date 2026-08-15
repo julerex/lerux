@@ -45,6 +45,9 @@ pub struct QemuConfig {
     /// Start the host one-shot HTTP origin on :8081 (fetch smoke).
     #[serde(default)]
     pub http_one: bool,
+    /// Start the host one-shot HTTPS origin on :8443 (fetch-tls smoke).
+    #[serde(default)]
+    pub https_one: bool,
 }
 
 /// One entry of `support/boards.toml` — the single source of truth for the

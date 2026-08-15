@@ -11,6 +11,7 @@ mod deploy;
 mod disk_img;
 mod fetch;
 mod http_one;
+mod https_one;
 mod hw_lock;
 mod image_digest;
 mod install;
@@ -151,6 +152,10 @@ enum Commands {
     },
     HttpOne {
         #[arg(default_value_t = 8081)]
+        port: u16,
+    },
+    HttpsOne {
+        #[arg(default_value_t = 8443)]
         port: u16,
     },
     /// Probe whether something is listening on the TCP echo port.
@@ -469,6 +474,7 @@ fn main() -> Result<()> {
         }
         Commands::TcpEcho { port } => tcp_echo::tcp_echo(port)?,
         Commands::HttpOne { port } => http_one::http_one(port)?,
+        Commands::HttpsOne { port } => https_one::https_one(port)?,
         Commands::TcpEchoProbe { port } => {
             let code = if tcp_echo::port_is_listening(port) {
                 0

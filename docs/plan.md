@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-07-21 (Phase 60 Track A–D stretch complete)
+Last updated: 2026-08-16 (physical RPi4 lab extracted)
 
 ## Phase 1 — Bring-up
 
@@ -257,11 +257,13 @@ Tracer-bullet order: FS (32) → TCP/fetch (31) → shell (34) → supervisor (3
 | Block IPC | yes | yes (`rpi4b_4gb_blk`, `emmc2-driver`; workstation uses same driver) |
 | Net IPC (UDP TX) | yes | yes (`rpi4b_4gb_net`, `genet-driver`; workstation uses same driver) |
 | Net TCP + DNS | yes | no (workstation `fetch` is UDP demo only) |
-| Filesystem IPC | yes | yes (`rpi4b_4gb_workstation`; deploy+seed+hw-serial; lab REPL checklist open) |
-| Interactive shell | yes | yes (`rpi4b_4gb_workstation`; scripted ls/pwd/ip on hw-serial; lab REPL open) |
+| Filesystem IPC | yes | yes (`rpi4b_4gb_workstation`; deploy+seed+hw-serial) |
+| Interactive shell | yes | yes (`rpi4b_4gb_workstation`; scripted ls/pwd/ip on hw-serial) |
 | Logging / config | yes | yes (workstation profile) |
-| Edit TUI | yes | yes (workstation profile; manual gate pending) |
+| Edit TUI | yes | yes (workstation profile) |
 | Profile-based build | yes | yes (`workstation-rpi4`, `hardware-rpi4`, hello/net/blk slices) |
+
+Open on-device items (REPL sign-off, GENET TCP/DNS/DHCP) live in [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated).
 
 ## Phase 31 — Net service v2 (TCP + DNS)
 
@@ -277,7 +279,7 @@ Tracer-bullet order: FS (32) → TCP/fetch (31) → shell (34) → supervisor (3
 - [x] `lerux-fs` crate + `fs-server` PD — virtio-blk client + `LERUXFS1` on-disk format (LBAs 1+)
 - [x] `fs-client` PD — write/read round-trip smoke
 - [x] Board `qemu_virt_aarch64_fs` (`just test-fs`); smoke expects `lerux-fs: round-trip ok`
-- [x] CI matrix job `fs` (31 smoke jobs in CI; `just test-all` runs 33 boards)
+- [x] CI matrix job `fs` (32 smoke jobs in CI; `just test-all` runs 34 boards)
 
 ## Phase 33 — Supervisor + service graph
 
@@ -339,8 +341,10 @@ Bring the QEMU workstation stack to real hardware on `rpi4b_4gb`.
 - [x] `workstation-rpi4` profile + `workstation-rpi4.system.template` + `rpi4b_4gb_workstation` board
 - [x] `emmc2-driver`: SDHCI PIO block read/write + virtio_blk ring IPC + `GetBlockDeviceLayout`; clock/CMD41/4-bit bus hardening
 - [x] `genet-driver`: Linux GENET v5 register map, ring-16 DMA descriptors, MDIO/INTRL2/IRQ enable
-- [ ] Manual HW gate on device: serial REPL `ls`/`cat`/`fetch`/`edit` — procedure + result table in [docs/boards.md](boards.md#rpi4-workstation-install-path-phase-52); image build verified (`BOARD=rpi4b_4gb_workstation just image`)
 - [x] Optional serial-capture HW CI harness: `LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD=rpi4b_4gb_workstation just test`
+- [x] Image build verified (`BOARD=rpi4b_4gb_workstation just image`); procedure + empty result grid in [docs/boards.md](boards.md#rpi4-workstation-install-path-phase-52)
+
+On-device REPL sign-off is [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated).
 
 ## Phase 40 — Packages and more apps (complete)
 
@@ -407,17 +411,20 @@ LERUXFS2 + hierarchical IPC (see [`plan-arch.md`](plan-arch.md) Phase 50 for ful
 - [x] Real DNS socket; static `host`/`dns` aliases for smokes
 - [x] Dual TCP (client + listen); `NetRequest::GetIface` + shell `ip`
 - [x] Smokes: `just test-net`, `just test-fetch`, `just test-workstation`
-- [ ] TLS outbound / multi-client op queue (stretch)
+- [x] TLS outbound via `tls-proxy` + rustls ([ADR-007](decisions/007-tls-proxy.md)); `just test-fetch-tls`
+- [ ] Full multi-client op queue (stretch)
+- [ ] Unified-dma on x86 PCI (ADR-003 residual; GENET is [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated))
 
-## Phase 52 — Hardware closeout (core done; lab gate open)
+## Phase 52 — Hardware closeout (core done)
 
 Install-media path for RPi4 workstation (see [`boards.md`](boards.md#rpi4-workstation-install-path-phase-52), [`plan-arch.md`](plan-arch.md)):
 
 - [x] `lerux deploy` / `just deploy-rpi4 DEST=…` — copy `loader.img` + `lerux-uboot.txt`
 - [x] First-boot: format LERUXFS2 → `mkdir /config` → seed `net.*`/`hostname` → log `first-boot seed ok`
 - [x] hw-serial expects expanded (fs/net/seed); **scripted REPL** (`ls`/`pwd`/`ip`) after boot match
-- [x] Docs: install path table, failure modes, manual checklist result grid
-- [ ] On-device lab sign-off: fill checklist on real Pi (requires hardware)
+- [x] Docs: install path table, failure modes, empty checklist result grid
+
+On-device sign-off is [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated).
 
 ## Phase 53 — Shell + core utilities (core done)
 
@@ -488,8 +495,8 @@ Stretch order and exit criteria: **[`plan-arch.md` § Phase 60 stretch sequence]
 | Phase | Theme | Status |
 |-------|--------|--------|
 | 50 | Filesystem v2 (multi-sector, dirs, unlink/rename) | core done (FAT/NFS stretch open) |
-| 51 | Network stack v2 (DHCP, DNS, multi-conn, TLS) | core done (TLS stretch open) |
-| 52 | Hardware closeout (RPi4 deploy + seed + harness) | core done (lab REPL sign-off open) |
+| 51 | Network stack v2 (DHCP, DNS, multi-conn, TLS) | core done (TLS fetch smoke done; multi-client queue stretch) |
+| 52 | Hardware closeout (RPi4 deploy + seed + harness) | core done (on-device gate → [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated)) |
 | 53 | Shell + core utilities | core done |
 | 54 | Config, secrets, boot policy | core done (net hot-apply stretch) |
 | 55 | Package/profile UX (pacman-like host CLI) | core done |
@@ -499,7 +506,17 @@ Stretch order and exit criteria: **[`plan-arch.md` § Phase 60 stretch sequence]
 | 59 | Multi-arch workstation profiles | core done |
 | 60 | Security posture | core + stretch A–D done (MCS / asymmetric signing deferred) |
 
-Near-term priority: Phase 60 stretch **A → B → C → D**, or lab gates (RPi4, TLS).
+Near-term priority: software stretch (net hot-apply, FAT subdirs). On-device work is [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated) and does not block that list. TLS fetch is done (`just test-fetch-tls`).
+
+## Physical RPi4 lab (hardware-gated)
+
+On-device work extracted from Phases 39, 51, and 52. Software for those phases is done. Canonical checklist: **[`plan-arch.md` § Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated)**.
+
+- [ ] Lab REPL sign-off (`ls` / `cat` / `fetch` / `edit`) + fill [boards.md](boards.md#rpi4-workstation-install-path-phase-52) grid
+- [ ] `just test-hw` on real metal
+- [ ] GENET: TCP + DNS + DHCP (`fetch` is UDP-demo-only on HW)
+- [ ] Unified-dma on `genet-driver`
+- [ ] Optional second SBC after RPi4 is reliable
 
 ## Version alignment
 

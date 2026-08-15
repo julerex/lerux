@@ -14,6 +14,7 @@ Untrusted apps never see the NIC. They use postcard RPC:
 | http-file-browser | TCP listen/send/recv | 7 |
 | config-server | (optional) | 5 |
 | fetch-client / net-client | UDP/TCP | board-specific |
+| tls-proxy | TCP (then rustls) | board-specific (`fetch_tls`) |
 
 Server entry: `userspace/pds/net-server` (`smoltcp` + multi-client `Handler`).
 
@@ -45,6 +46,7 @@ Serial needed a virt because the UART driver multi-cliented apps. Net multi-clie
 |----------------|-----------|
 | `just test-net` | unified-dma + UDP IPC |
 | `just test-fetch` | TCP fetch |
+| `just test-fetch-tls` | HTTPS via tls-proxy (ADR-007) |
 | `just test-http` | inbound HTTP |
 | `just test-workstation` | multi-client net-server + http-fs |
 

@@ -8,8 +8,8 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 |-----|---------|
 | [../AGENTS.md](../AGENTS.md) | LLM agent instructions for idiomatic Rust in this repo |
 | [context.md](context.md) | Domain language and architectural decisions |
-| [plan.md](plan.md) | Roadmap and cross-arch smoke parity (phases 1–60; 50–60 core done) |
-| [plan-arch.md](plan-arch.md) | Phases 50–60: Arch-level functionality gap plan |
+| [plan.md](plan.md) | Roadmap and cross-arch smoke parity (phases 1–60; 50–60 core done); [Physical RPi4 lab](plan.md#physical-rpi4-lab-hardware-gated) |
+| [plan-arch.md](plan-arch.md) | Phases 50–60 living checklist; [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated) (hardware-gated) |
 | [config.md](config.md) | Phase 54: config key schema, secrets, boot policy |
 | [packages.md](packages.md) | Phase 55: package CLI, pins, profile recipes, out-of-tree “AUR” |
 | [plan-au-ts.md](plan-au-ts.md) | Phases 41–49: sDDF/LionsOS/sdfgen-inspired work |
@@ -17,6 +17,7 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [decisions/001-in-tree-system-generation.md](decisions/001-in-tree-system-generation.md) | ADR-001: in-tree Rust SDF gen (not sdfgen) |
 | [decisions/002-serial-virtualiser.md](decisions/002-serial-virtualiser.md) | ADR-002: serial-driver + serial-virt (sDDF-shaped) |
 | [decisions/003-net-virtualiser.md](decisions/003-net-virtualiser.md) | ADR-003: net trust map; unified-dma on aarch64 virtio |
+| [decisions/007-tls-proxy.md](decisions/007-tls-proxy.md) | ADR-007: tls-proxy PD; rustls + smoke CA |
 | [decisions/004-service-async.md](decisions/004-service-async.md) | ADR-004: stackless coop async in service PDs |
 | [decisions/005-debug-pd.md](decisions/005-debug-pd.md) | ADR-005: fault parent + QEMU GDB (not libgdb fork) |
 | [debug.md](debug.md) | Phase 46: `test-debug` + gdb-multiarch workflow |

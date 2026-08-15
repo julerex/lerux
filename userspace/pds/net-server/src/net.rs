@@ -724,15 +724,19 @@ impl NetStack {
             return;
         };
         let tcp = sockets.get_mut::<TcpSocket>(tcp_handle);
-        if !tcp.may_recv() {
+        // may_recv is true for the whole ESTABLISHED lifetime. recv_slice on an
+        // empty buffer returns Ok(0), which is not EOF — wait for can_recv.
+        if !tcp.can_recv() {
+            if tcp.may_recv() {
+                return;
+            }
+            self.completed = Some(NetResponse::Ok);
+            self.op = Op::None;
             return;
         }
         let mut buf = [0u8; MAX_NET_TCP_PAYLOAD];
         match tcp.recv_slice(&mut buf) {
-            Ok(0) => {
-                self.completed = Some(NetResponse::Ok);
-                self.op = Op::None;
-            }
+            Ok(0) => {}
             Ok(len) => {
                 let mut data = [0u8; MAX_NET_TCP_PAYLOAD];
                 data[..len].copy_from_slice(&buf[..len]);

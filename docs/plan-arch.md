@@ -1,6 +1,6 @@
 # PLAN — Arch-level functionality (phases 50–60)
 
-Last updated: 2026-07-21 (Phase 60 Track A–D stretch complete)
+Last updated: 2026-08-16 (physical RPi4 lab extracted)
 
 Related: [`plan.md`](plan.md) (completed phases 1–49), [`plan-au-ts.md`](plan-au-ts.md) (sDDF/LionsOS inspiration track), [`context.md`](context.md) (domain language).
 
@@ -29,7 +29,7 @@ This plan maps **Arch Linux workflow and capability surface** onto that constrai
 | Config | `config-server` FS-backed under `/config/` |
 | Apps | `edit`, `chat-client`, `http-file-browser` |
 | Multiarch bring-up | aarch64 / riscv64 / x86 serial+echo+virtio smokes |
-| Hardware | RPi4 serial/net/blk/workstation profiles (manual HW gate still open) |
+| Hardware | RPi4 serial/net/blk/workstation profiles (on-device gate: [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated)) |
 
 ### Hard ceiling (do not plan as “become Arch”)
 
@@ -70,7 +70,7 @@ Graphics, POSIX layers, and guest Linux (libvmm) stay **explicit non-goals** unl
 | Profiles / packages | `support/profiles/`, `support/packages/`, `support/package-pins.toml` |
 | System gen | `tools/lerux-cli/` (`profile`, `package`, `render_system`), ADR-001 |
 | Ported-app checklist | `docs/context.md` (“Ported app checklist”) |
-| HW gate | `docs/boards.md` (RPi4 workstation section), Phase 47 `hw-serial` |
+| HW gate | [`boards.md`](boards.md#rpi4-workstation-install-path-phase-52) procedure; remaining work in [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated) |
 
 ---
 
@@ -103,14 +103,13 @@ Files large enough for configs, logs, and edit buffers without artificial 512 B 
 - [x] **DHCP client** in `net-server` (smoltcp `Dhcpv4Socket`); apply on bring-up; static fallback after timeout; shell `ip` / `GetIface` show address.
 - [x] **Real DNS** over smoltcp DNS socket; static map for `host`/`dns` still wins (deterministic smokes).
 - [x] **Dual TCP** sockets (client + listen) so outbound connect and inbound listen can coexist; exclusive async client lock remains for mid-op serialization.
-- [ ] **TLS** for outbound fetch (e.g. `rustls` + `webpki-roots` in a dedicated `tls-proxy` PD or net-server feature) — keep apps on cleartext IPC to the proxy if cert store is large.
-- [ ] RPi4 workstation: TCP+DNS+DHCP on GENET (today `fetch` is UDP-demo-only on HW).
-- [ ] Unified-dma / trust map on genet + x86 PCI (ADR-003 residual).
+- [x] **TLS** for outbound fetch: dedicated `tls-proxy` PD (`rustls` + rustls-rustcrypto; smoke CA). Apps stay on cleartext `TlsRequest`. `just test-fetch-tls`. [ADR-007](decisions/007-tls-proxy.md). `webpki-roots` remains an optional crate feature.
+- [ ] Unified-dma / trust map on x86 PCI (ADR-003 residual). GENET unified-dma is [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated).
 - [ ] Full multi-client queue (shell fetch while http-fs TcpRecv pending without `Pending`).
 
 ### Exit
 
-`fetch https://…` (or TLS-terminated `fetch`) works on QEMU; RPi4 can reach a real host; smokes stay deterministic (DHCP mock or fixed QEMU DHCP). **Partial:** DHCP+DNS+GetIface+dual TCP on QEMU; TLS/RPi4 remain open.
+`fetch https://…` (or TLS-terminated `fetch`) works on QEMU; smokes stay deterministic (local `https-one` + smoke CA). **Met** for QEMU TLS fetch; multi-client queue and `webpki-roots` remain stretch. RPi4 GENET path is hardware-gated.
 
 ---
 
@@ -120,15 +119,15 @@ Files large enough for configs, logs, and edit buffers without artificial 512 B 
 
 ### Steps
 
-- [ ] Complete Phase 39 **lab** gate: serial REPL `ls`/`cat`/`fetch`/`edit` on device; record results in the boards.md checklist; fix drivers if failures recur.
 - [x] Automate Phase 47 harness further: expand rpi4 workstation expects (fs/net/seed); **scripted** `ls`/`pwd`/`ip` over hw-serial after boot match.
 - [x] First-boot disk format story: empty block → LERUXFS2 format → `mkdir /config` → seed net/hostname keys (`first-boot seed ok`).
 - [x] Deploy ergonomics: `lerux deploy` / `just deploy-rpi4 DEST=…`, U-Boot helper file, install path in [`boards.md`](boards.md#rpi4-workstation-install-path-phase-52).
-- [ ] Optional second board (e.g. another aarch64 SBC) only after RPi4 is reliable.
+
+On-device sign-off, GENET TCP/DNS/DHCP, and a second SBC are [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated) — they need a board, not more host tooling.
 
 ### Exit
 
-Documented “install media → boot → shell works” path on RPi4 without folklore. **Met for tooling/docs/harness**; physical lab sign-off remains open.
+Documented “install media → boot → shell works” path without folklore. **Met** for tooling, docs, and harness.
 
 ---
 
@@ -307,6 +306,39 @@ Do **not** start MCS, graphics, or POSIX. Order by leverage and dependence:
 
 ---
 
+## Physical RPi4 lab (hardware-gated)
+
+Work that **cannot close on QEMU**. Phases 37, 39, 47, and 52 shipped the profiles, native drivers, deploy path, first-boot seed, and `just test-hw` harness. This section is the remaining on-device gate.
+
+It does **not** block TLS, net hot-apply, FAT stretch, x86 unified-dma, or other software work.
+
+Procedure and empty result grid: [`boards.md` — RPi4 workstation install path](boards.md#rpi4-workstation-install-path-phase-52).
+
+### Open (needs a Pi on the desk)
+
+- [ ] **Lab sign-off** (was Phase 39 / 52): serial REPL `ls` / `cat /boot.log` / `fetch` / `edit` on device; record pass/fail in the boards.md checklist; fix `emmc2` / `genet` if failures recur.
+- [ ] **`just test-hw` on metal**: boot expects + scripted `ls` / `pwd` / `ip` (`LERUX_HW_SERIAL=… BOARD=rpi4b_4gb_workstation`).
+- [ ] **GENET TCP + DNS + DHCP**: workstation `fetch` is UDP-demo-only on HW today; enable the QEMU net-server path on `genet-driver`.
+- [ ] **Unified-dma on genet** (ADR-003 residual). x86 PCI unified-dma stays a software stretch under Phase 51.
+
+### Follow-on (after the RPi4 gate)
+
+- [ ] Optional second aarch64 SBC only after RPi4 is reliable.
+
+### Already shipped (no Pi required)
+
+- `workstation-rpi4` profile, `genet-driver` + `emmc2-driver`, image build
+- `lerux deploy` / `just deploy-rpi4`, U-Boot helper
+- First-boot LERUXFS2 format + `/config` seed
+- hw-serial harness + scripted REPL
+- Install path + empty result grid in [`boards.md`](boards.md#rpi4-workstation-install-path-phase-52)
+
+### Exit
+
+Documented “install media → boot → shell works” on a real Pi, with the checklist filled and `just test-hw` green. Optional self-hosted `hw-serial.yml` remains opt-in ([`ci.md`](ci.md)).
+
+---
+
 ## Deferred stretch (from existing plans)
 
 Fold in as capacity allows; see also [`plan-au-ts.md`](plan-au-ts.md) and ADRs:
@@ -323,9 +355,9 @@ Fold in as capacity allows; see also [`plan-au-ts.md`](plan-au-ts.md) and ADRs:
 
 Treat the system as **done enough** when a developer can:
 
-1. Flash or boot a **profile image** on QEMU and RPi4 without hand-editing XML.
+1. Flash or boot a **profile image** on QEMU without hand-editing XML. (RPi4: [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated).)
 2. Use a **shell** to manage hierarchical storage, config, logs, time, and services.
-3. **Fetch** content over the network (DHCP/DNS/TLS path) and edit/save files on disk.
+3. **Fetch** content over the network (DHCP/DNS/TLS path) and edit/save files on disk. (RPi4 GENET: lab.)
 4. **Add/remove/upgrade** PD packages via host CLI with rolling pins and rebuild.
 5. Run a small **catalog of apps** (edit, chat, http-fs, …) selected by profile.
 6. Diagnose failures via **logs + service status + optional GDB/fault path**.
@@ -339,9 +371,8 @@ That is Arch’s **workflow and completeness**, reimplemented as static Microkit
 
 If capacity is limited, do **not** start with graphics or scripting runtimes:
 
-1. **Phases 50–60 cores + stretch A–D** — security posture hardening done (MCS / asymmetric signing deferred)
-2. **Phase 52 lab** — fill RPi4 REPL checklist on real hardware when available
-3. **Stretch elsewhere** — TLS (51), net config hot-apply (54), FAT multi-cluster (50) as capacity allows
+1. **Software stretch** — net config hot-apply (54), FAT subdirs/LFN (50), x86 unified-dma (51). Completable on QEMU.
+2. **[Physical RPi4 lab](#physical-rpi4-lab-hardware-gated)** — when a board is on the desk. Does not block (1).
 
 ---
 
@@ -353,9 +384,9 @@ If capacity is limited, do **not** start with graphics or scripting runtimes:
 | PD lint | `just check-pd` (needs SDK) |
 | Workstation QEMU | `just test-workstation` |
 | FS | `just test-fs` / `just test-fs-fat` (+ new multi-sector tests) |
-| Net/fetch | `just test-net`, `just test-fetch` (+ TLS/DHCP smokes when added) |
+| Net/fetch | `just test-net`, `just test-fetch`, `just test-fetch-tls` |
 | Packages | `lerux package list|diff`; profile build after install simulation |
-| HW | `LERUX_HW_SERIAL=… BOARD=rpi4b_4gb_workstation just test-hw` + REPL checklist |
+| HW | [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated): `LERUX_HW_SERIAL=… BOARD=rpi4b_4gb_workstation just test-hw` + REPL checklist |
 | Bench (optional) | `just bench` vs `docs/bench-results.latest.md` |
 | Docs | Update `docs/plan.md` when a phase completes; keep this file as the living checklist |
 
@@ -375,4 +406,4 @@ Each phase should add or extend **one** profile board smoke rather than only uni
 
 ## Summary
 
-Phases **1–49** built the **kernel of an Arch-like workflow** (profiles, init, shell, FS/net, packages). Reaching “about Arch level” of **functionality** still needs real storage (50), production networking (51), hardware truth (52), admin UX (53–55), parity and ops (56–57), a deeper app catalog (58), multi-arch workstation (59), and optional hardening (60) — all as **ported Rust PDs and host tooling**, never as a Linux compatibility layer.
+Phases **1–60** built the **kernel of an Arch-like workflow** (profiles, init, shell, FS/net, packages, multi-arch workstation, hardening). Remaining QEMU work is stretch (TLS, net hot-apply, FAT hierarchy). On-device truth is a separate track: [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated). All of it as **ported Rust PDs and host tooling**, never as a Linux compatibility layer.

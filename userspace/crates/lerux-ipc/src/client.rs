@@ -12,7 +12,8 @@ use sel4_microkit::Channel;
 use sel4_microkit_simple_ipc as simple_ipc;
 
 use lerux_interface_types::{
-    BlockRequest, BlockResponse, FsRequest, FsResponse, NetRequest, NetResponse,
+    BlockRequest, BlockResponse, FsRequest, FsResponse, NetRequest, NetResponse, TlsRequest,
+    TlsResponse,
 };
 
 /// A request/response protocol with the Pending → Poll completion model.
@@ -150,9 +151,30 @@ impl PollProtocol for BlkProtocol {
     }
 }
 
+/// TLS proxy protocol (`tls-proxy`).
+pub enum TlsProtocol {}
+
+impl PollProtocol for TlsProtocol {
+    type Request = TlsRequest;
+    type Response = TlsResponse;
+
+    fn poll_request() -> TlsRequest {
+        TlsRequest::Poll
+    }
+
+    fn is_pending(resp: &TlsResponse) -> bool {
+        matches!(resp, TlsResponse::Pending)
+    }
+
+    fn transport_error() -> TlsResponse {
+        TlsResponse::Error
+    }
+}
+
 pub type FsClient = ServiceClient<FsProtocol>;
 pub type NetClient = ServiceClient<NetProtocol>;
 pub type BlkClient = ServiceClient<BlkProtocol>;
+pub type TlsClient = ServiceClient<TlsProtocol>;
 
 impl FsClient {
     /// Create `path`, opening it instead when it already exists (persistent

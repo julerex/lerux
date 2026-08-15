@@ -4,7 +4,7 @@
 #   arch / microkit_board / target  build inputs (target json = support/targets/<target>.json)
 #   template / pds / system_vars    system generation inputs
 #   qemu                            QEMU launch: disk = "none"|"ro"|"rw", net = "none"|"user"|"hostfwd",
-#                                   sp804 (patched QEMU), tcp_echo / http_one (host smoke helpers).
+#                                   sp804 (patched QEMU), tcp_echo / http_one / https_one (host smoke helpers).
 #                                   Omit `qemu` entirely for hardware-only boards.
 #   ci                              board runs in `lerux test-all` (and CI smoke)
 #   curl_expect                     smoke curls http://127.0.0.1:18080/ for this substring
@@ -213,6 +213,16 @@ target = "aarch64-sel4-microkit"
 template = "fetch.system.template"
 pds = ["fetch-client", "net-server", "serial-driver", "virtio-net-driver"]
 qemu = { net = "user", http_one = true }
+ci = true
+system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_net_irq = 79 }
+
+[qemu_virt_aarch64_fetch_tls]
+arch = "aarch64"
+microkit_board = "qemu_virt_aarch64"
+target = "aarch64-sel4-microkit"
+template = "fetch-tls.system.template"
+pds = ["fetch-client", "tls-proxy", "net-server", "serial-driver", "virtio-net-driver"]
+qemu = { net = "user", https_one = true }
 ci = true
 system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_net_irq = 79 }
 

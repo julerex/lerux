@@ -1,5 +1,5 @@
 [package]
-name = "fetch-client"
+name = "tls-proxy"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
@@ -8,12 +8,11 @@ license = "MIT"
 workspace = true
 
 [features]
-board-qemu_virt_aarch64_fetch = []
-board-qemu_virt_aarch64_fetch_tls = ["tls"]
-tls = []
+board-qemu_virt_aarch64_fetch_tls = []
 
 [dependencies]
 lerux-interface-types = { path = "../../crates/lerux-interface-types" }
 lerux-ipc = { path = "../../crates/lerux-ipc" }
-lerux-logging = { path = "../../crates/lerux-logging", features = ["serial"] }
-sel4-microkit = { workspace = true }
+lerux-logging = { path = "../../crates/lerux-logging" }
+lerux-tls = { path = "../../crates/lerux-tls" }
+sel4-microkit = { workspace = true, features = ["alloc"] }

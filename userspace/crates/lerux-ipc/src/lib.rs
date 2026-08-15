@@ -10,7 +10,7 @@ mod client;
 
 pub use client::{
     BlkClient, BlkProtocol, FsClient, FsProtocol, NetClient, NetProtocol, PollProtocol,
-    ServiceClient,
+    ServiceClient, TlsClient, TlsProtocol,
 };
 pub use sel4_microkit::Channel;
 pub use sel4_microkit_simple_ipc::{

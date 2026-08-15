@@ -7,7 +7,7 @@ GitHub Actions workflow: [`.github/workflows/rust.yml`](../.github/workflows/rus
 1. **check** — `just check` (`cargo fmt --all --check` + clippy on host crates; no SDK).
 2. **sdk** — Docker image, fetch sources, build Microkit SDK (cached), **prebuild patched SP804 QEMU** (cached), upload SDK artifact.
 3. **check-pd** — `just check-pd` (cross-target clippy on PD + shared userspace crates; needs SDK artifact).
-4. **smoke** — 31 parallel matrix jobs; each restores SDK artifact, per-job `build/` cache, and SP804 QEMU (init/composed/blk-composed/http-composed/net-composed/ipc-composed/workstation only; init-riscv/init-x86 use stock QEMU). Serial captures land in `build/smoke-logs/` and upload as `smoke-serial-<id>` (Phase 57).
+4. **smoke** — 32 parallel matrix jobs; each restores SDK artifact, per-job `build/` cache, and SP804 QEMU (init/composed/blk-composed/http-composed/net-composed/ipc-composed/workstation only; init-riscv/init-x86 use stock QEMU). Serial captures land in `build/smoke-logs/` and upload as `smoke-serial-<id>` (Phase 57).
 5. **package** — Phase 40: build `edit` / `chat-client` / `http-file-browser` ELFs for workstation, pin sha256, upload artifacts.
 
 ```mermaid
@@ -15,7 +15,7 @@ flowchart LR
   check[check job]
   sdk[sdk job]
   checkPd[check-pd job]
-  smoke[smoke matrix x31]
+  smoke[smoke matrix x32]
   package[package ELF artifacts]
   sdk --> checkPd
   sdk --> smoke
@@ -55,6 +55,7 @@ Local mirror: `just check` (format + clippy for `lerux-cli` and `lerux-interface
 | `x86-blk` | `just test-x86-blk` | x86 PCI virtio-blk block IPC |
 | `net` | `just test-net` | aarch64 net IPC over virtio-net (UDP TX) |
 | `fetch` | `just test-fetch` | aarch64 HTTP fetch over net IPC (TCP + DNS) |
+| `fetch-tls` | `just test-fetch-tls` | aarch64 HTTPS fetch via tls-proxy (rustls + smoke CA) |
 | `riscv-net` | `just test-riscv-net` | RISC-V net IPC |
 | `x86-net` | `just test-x86-net` | x86 PCI virtio-net net IPC |
 | `net-composed` | `just test-net-composed` | init + net IPC; patched QEMU |

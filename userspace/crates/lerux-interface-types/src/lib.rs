@@ -696,6 +696,76 @@ pub enum NetResponse {
     },
 }
 
+/// Maximum hostname length for [`TlsRequest::Connect`].
+pub const MAX_TLS_NAME: usize = 64;
+
+/// TLS proxy requests (Phase 51). Apps send cleartext; `tls-proxy` runs rustls.
+///
+/// Payload size matches [`MAX_NET_TCP_PAYLOAD`] so the proxy can shuttle
+/// records over existing net-server TCP IPC without a second size class.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "Send carries inline payload for IPC"
+)]
+pub enum TlsRequest {
+    /// DNS + TCP + TLS handshake. `name` is SNI and the DNS query.
+    Connect {
+        name_len: u8,
+        #[serde(with = "bounded_bytes")]
+        name: [u8; MAX_TLS_NAME],
+        port: u16,
+    },
+    Send {
+        payload_len: u16,
+        #[serde(with = "bounded_bytes")]
+        payload: [u8; MAX_NET_TCP_PAYLOAD],
+    },
+    Recv,
+    Close,
+    Poll,
+}
+
+impl TlsRequest {
+    pub fn connect(name: &[u8], port: u16) -> Self {
+        let mut buf = [0u8; MAX_TLS_NAME];
+        let name_len = name.len().min(MAX_TLS_NAME) as u8;
+        buf[..name_len as usize].copy_from_slice(&name[..name_len as usize]);
+        Self::Connect {
+            name_len,
+            name: buf,
+            port,
+        }
+    }
+
+    pub fn send(data: &[u8]) -> Self {
+        let mut payload = [0u8; MAX_NET_TCP_PAYLOAD];
+        let payload_len = data.len().min(MAX_NET_TCP_PAYLOAD) as u16;
+        payload[..payload_len as usize].copy_from_slice(&data[..payload_len as usize]);
+        Self::Send {
+            payload_len,
+            payload,
+        }
+    }
+}
+
+/// TLS proxy responses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "Data carries inline payload for IPC"
+)]
+pub enum TlsResponse {
+    Pending,
+    Ok,
+    Error,
+    Data {
+        data_len: u16,
+        #[serde(with = "bounded_bytes")]
+        data: [u8; MAX_NET_TCP_PAYLOAD],
+    },
+}
+
 /// Chat client (Phase 40 / 58 multi-room).
 pub const MAX_CHAT_MSG: usize = 80;
 pub const MAX_CHAT_LINES: usize = 12;
@@ -1139,6 +1209,18 @@ mod tests {
             dns: [1, 1, 1, 1],
             dhcp: true,
         };
+        assert_eq!(round_trip(resp), resp);
+    }
+
+    #[test]
+    fn tls_round_trip() {
+        let req = TlsRequest::connect(b"host", 8443);
+        assert_eq!(round_trip(req), req);
+        let req = TlsRequest::send(b"GET / HTTP/1.1\r\n\r\n");
+        assert_eq!(round_trip(req), req);
+        let mut data = [0u8; MAX_NET_TCP_PAYLOAD];
+        data[..3].copy_from_slice(b"200");
+        let resp = TlsResponse::Data { data_len: 3, data };
         assert_eq!(round_trip(resp), resp);
     }
 

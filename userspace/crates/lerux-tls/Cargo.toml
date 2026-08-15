@@ -1,0 +1,27 @@
+[package]
+name = "lerux-tls"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "no_std rustls client session for the tls-proxy PD"
+
+[lints]
+workspace = true
+
+[features]
+default = []
+webpki-roots = ["dep:webpki-roots"]
+
+[dependencies]
+webpki-roots = { version = "0.26", default-features = false, optional = true }
+
+[target.'cfg(not(target_os = "none"))'.dependencies]
+rustls = { version = "0.23", default-features = false, features = ["std", "tls12", "ring"] }
+
+[target.'cfg(target_os = "none")'.dependencies]
+getrandom = { version = "0.2", default-features = false, features = ["custom"] }
+rustls = { version = "0.23", default-features = false, features = ["tls12"] }
+rustls-rustcrypto = { version = "0.0.2-alpha", default-features = false, features = ["alloc", "tls12"] }
+
+[dev-dependencies]
+rustls-pemfile = "2"

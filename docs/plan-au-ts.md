@@ -146,7 +146,7 @@ sDDF network architecture ([`sddf/docs/network/network.md`](https://github.com/a
 - [x] Prefer RPC for untrusted apps; no app L2 DMA
 - [x] Preserve `NetRequest` / `NetResponse`
 - [x] Smoke: `just test-net`, `just test-fetch`, `just test-http` (and workstation)
-- [ ] Stretch: genet / x86 unified-dma; separate Rx/Tx virt PDs / copy PDs
+- [ ] Stretch: x86 unified-dma; separate Rx/Tx virt PDs / copy PDs. GENET unified-dma is [`plan-arch.md` — Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated).
 
 ### Out of scope
 
@@ -273,7 +273,7 @@ LionsOS `components/fs/fat`, `components/fs/nfs`, `examples/fileio`.
 ### Exit
 
 - [x] Golden path: `BOARD=rpi4b_4gb_workstation LERUX_HW_SERIAL=… just test-hw`
-- [x] Phase 39 boot expects automated via TOML + hw-serial; REPL checklist remains manual
+- [x] Phase 39 boot expects automated via TOML + hw-serial; on-device REPL sign-off → [`plan-arch.md` — Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated)
 
 ---
 
@@ -358,4 +358,4 @@ Track alongside [`plan.md`](plan.md) version table. Revisit when adopting debug 
 - Inspiration is visible as **Rust PDs + profiles**, not as C submodules
 - Workstation QEMU smokes remain green after each phase
 - At least one of: generated SDF (41), serial virt (42), or net virt (43) ships before optional 48–49 — **Phase 41 done**
-- HW bring-up (47) closes the Phase 39 manual gate for workstation-rpi4
+- HW bring-up (47) shipped the harness; on-device sign-off is [`plan-arch.md` — Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated)

@@ -1,6 +1,6 @@
 # PLAN — Arch-level functionality (phases 50–60)
 
-Last updated: 2026-08-16 (net config hot-apply)
+Last updated: 2026-08-16 (FAT subdirs / LFN)
 
 Related: [`plan.md`](plan.md) (completed phases 1–49), [`plan-au-ts.md`](plan-au-ts.md) (sDDF/LionsOS inspiration track), [`context.md`](context.md) (domain language).
 
@@ -76,21 +76,21 @@ Graphics, POSIX layers, and guest Linux (libvmm) stay **explicit non-goals** unl
 
 ## Phase 50 — Filesystem v2 (Arch: real storage) — core done
 
-**Why:** Arch assumes hierarchical dirs, multi-block files, delete/rename, and usable capacity. LERUXFS1 was flat (≤16 files, one 512-byte sector each); FAT remains root-only, 8.3, single-cluster.
+**Why:** Arch assumes hierarchical dirs, multi-block files, delete/rename, and usable capacity. LERUXFS1 was flat (≤16 files, one 512-byte sector each).
 
 ### Steps
 
 - [x] Extend `FsRequest` / `FsResponse` for paths with directories, `Unlink`/`Rename`/`Mkdir` (path grammar on `MAX_FS_PATH` / interface-types docs).
 - [x] **LERUXFS2**: multi-sector contiguous files (≤32 sectors / 16 KiB), directory sectors, free-map bitmap; magic `LERUXFS2`; LERUXFS1 superblocks reformat on mount.
-- [x] FAT **multi-cluster** files (chain walk/extend; ≤32 clusters / 16 KiB; root-only 8.3).
-- [ ] FAT subdirs / LFN (optional host interchange); optional workstation FAT demo.
+- [x] FAT **multi-cluster** files (chain walk/extend; ≤32 clusters / 16 KiB).
+- [x] FAT subdirs / LFN (cluster directories + VFAT names); optional workstation FAT demo still open.
 - [ ] Optional **NFS** or host-backed FS for QEMU user-net (dev convenience; LionsOS-inspired).
 - [x] Shell: `mkdir`, `rm`, `mv`, `cd`/`pwd` (shell-local cwd); larger `cat`/`write` via chunked IPC.
-- [x] Smokes: `just test-fs` (hierarchy + multi-sector), `just test-fs-fat` (basic parity; new ops Error on FAT), workstation boots.
+- [x] Smokes: `just test-fs` (hierarchy + multi-sector), `just test-fs-fat` (hierarchy + LFN + multi-cluster), workstation boots.
 
 ### Exit
 
-Files large enough for configs, logs, and edit buffers without artificial 512 B caps; hierarchical layout usable from shell. **Met for LERUXFS2**; FAT/NFS remain stretch.
+Files large enough for configs, logs, and edit buffers without artificial 512 B caps; hierarchical layout usable from shell. **Met for LERUXFS2 and FAT**; NFS remains stretch.
 
 ---
 
@@ -310,7 +310,7 @@ Do **not** start MCS, graphics, or POSIX. Order by leverage and dependence:
 
 Work that **cannot close on QEMU**. Phases 37, 39, 47, and 52 shipped the profiles, native drivers, deploy path, first-boot seed, and `just test-hw` harness. This section is the remaining on-device gate.
 
-It does **not** block FAT stretch, x86 unified-dma, or other software work.
+It does **not** block x86 unified-dma or other software work.
 
 Procedure and empty result grid: [`boards.md` — RPi4 workstation install path](boards.md#rpi4-workstation-install-path-phase-52).
 
@@ -371,7 +371,7 @@ That is Arch’s **workflow and completeness**, reimplemented as static Microkit
 
 If capacity is limited, do **not** start with graphics or scripting runtimes:
 
-1. **Software stretch** — FAT subdirs/LFN (50), x86 unified-dma (51). Completable on QEMU.
+1. **Software stretch** — x86 unified-dma (51). Completable on QEMU.
 2. **[Physical RPi4 lab](#physical-rpi4-lab-hardware-gated)** — when a board is on the desk. Does not block (1).
 
 ---
@@ -406,4 +406,4 @@ Each phase should add or extend **one** profile board smoke rather than only uni
 
 ## Summary
 
-Phases **1–60** built the **kernel of an Arch-like workflow** (profiles, init, shell, FS/net, packages, multi-arch workstation, hardening). Remaining QEMU work is stretch (FAT hierarchy, x86 unified-dma). On-device truth is a separate track: [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated). All of it as **ported Rust PDs and host tooling**, never as a Linux compatibility layer.
+Phases **1–60** built the **kernel of an Arch-like workflow** (profiles, init, shell, FS/net, packages, multi-arch workstation, hardening). Remaining QEMU work is stretch (x86 unified-dma). On-device truth is a separate track: [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated). All of it as **ported Rust PDs and host tooling**, never as a Linux compatibility layer.

@@ -8,12 +8,21 @@
 //! - data area from LBA 97
 //!
 //! Files may span **multiple clusters** (FAT chain, up to
-//! [`MAX_FILE_CLUSTERS`]). Root directory only; 8.3 short names. Hierarchy
-//! ops stay out of scope for this backend.
+//! [`MAX_FILE_CLUSTERS`]). Subdirectories are cluster chains with `.` / `..`
+//! plus optional VFAT long names ([`lfn`]).
 
 #![no_std]
 
+pub mod lfn;
+
 use lerux_interface_types::SECTOR_SIZE;
+
+pub use lfn::{
+    decode_lfn_entry, encode_lfn_entry, encode_lfn_run, entry_matches, is_pure_short_name,
+    lfn_checksum, lfn_entry_count, make_short_alias, names_eq_ci, slots_for_name, LfnBuilder,
+    LfnPiece, ATTR_ARCHIVE, ATTR_DIR, ATTR_LFN, ATTR_VOLUME, LFN_CHARS_PER_ENTRY, LFN_LAST,
+    MAX_LFN_CHARS, MAX_LFN_ENTRIES,
+};
 
 /// Max clusters per file (32 × 512 B = 16 KiB), aligned with LERUXFS2 caps.
 pub const MAX_FILE_CLUSTERS: u16 = 32;
@@ -50,6 +59,9 @@ pub const DATA_LBA: u32 = ROOT_LBA + ROOT_SECTORS;
 
 /// Total sectors for a 4 MiB image.
 pub const TOTAL_SECTORS: u32 = 4 * 1024 * 1024 / SECTOR_SIZE as u32;
+
+/// Maximum clusters in one subdirectory chain.
+pub const MAX_DIR_CLUSTERS: u16 = 8;
 
 /// Directory entry size.
 pub const DIR_ENTRY_SIZE: usize = 32;
@@ -395,11 +407,74 @@ impl DirEntry {
     }
 
     pub fn is_volume_or_lfn(&self) -> bool {
-        self.attr & 0x08 != 0 || self.attr & 0x0F == 0x0F
+        self.attr & ATTR_VOLUME != 0 || self.attr & 0x0F == ATTR_LFN
+    }
+
+    pub fn is_lfn(&self) -> bool {
+        self.attr == ATTR_LFN
     }
 
     pub fn is_dir(&self) -> bool {
-        self.attr & 0x10 != 0
+        self.attr & ATTR_DIR != 0 && !self.is_lfn()
+    }
+
+    pub fn is_dot(&self) -> bool {
+        is_dot_name(&self.name)
+    }
+}
+
+/// Location of a FAT16 directory.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DirLoc {
+    /// Fixed root directory (not a cluster chain).
+    Root,
+    /// Subdirectory starting at this first cluster.
+    Cluster(u16),
+}
+
+impl DirLoc {
+    /// Cluster number stored in a child `..` entry (0 if this is root).
+    pub fn parent_cluster(self) -> u16 {
+        match self {
+            DirLoc::Root => 0,
+            DirLoc::Cluster(c) => c,
+        }
+    }
+
+    pub fn is_root(self) -> bool {
+        matches!(self, DirLoc::Root)
+    }
+}
+
+/// True for `.` or `..` 8.3 directory names.
+pub fn is_dot_name(name: &ShortName) -> bool {
+    name[0] == b'.'
+        && ((name[1] == b' ' && name[2..].iter().all(|&b| b == b' '))
+            || (name[1] == b'.' && name[2..].iter().all(|&b| b == b' ')))
+}
+
+/// `.` directory entry pointing at `cluster`.
+pub fn dot_entry(cluster: u16) -> DirEntry {
+    let mut name = [b' '; 11];
+    name[0] = b'.';
+    DirEntry {
+        name,
+        attr: ATTR_DIR,
+        first_cluster: cluster,
+        size: 0,
+    }
+}
+
+/// `..` directory entry pointing at the parent (0 if parent is root).
+pub fn dotdot_entry(parent_cluster: u16) -> DirEntry {
+    let mut name = [b' '; 11];
+    name[0] = b'.';
+    name[1] = b'.';
+    DirEntry {
+        name,
+        attr: ATTR_DIR,
+        first_cluster: parent_cluster,
+        size: 0,
     }
 }
 
@@ -591,5 +666,149 @@ mod tests {
         }
         assert_eq!(c, 3);
         assert!(is_eoc(fat_get(&fat, 3)));
+    }
+
+    #[test]
+    fn lfn_checksum_matches_known_ping() {
+        let short = path_to_short_name(b"ping").unwrap();
+        assert_eq!(lfn_checksum(&short), lfn_checksum(&short));
+        let mut other = short;
+        other[0] = b'X';
+        assert_ne!(lfn_checksum(&short), lfn_checksum(&other));
+    }
+
+    #[test]
+    fn slots_for_short_name_is_one() {
+        assert_eq!(slots_for_name(b"ping"), 1);
+        assert_eq!(slots_for_name(b"boot.log"), 1);
+        assert!(is_pure_short_name(b"testdir"));
+    }
+
+    #[test]
+    fn slots_for_long_name_includes_lfn() {
+        assert!(!is_pure_short_name(b"longfilename"));
+        assert_eq!(slots_for_name(b"longfilename"), 2);
+        assert_eq!(slots_for_name(b"hello-world.txt"), 3);
+    }
+
+    #[test]
+    fn make_short_alias_preserves_valid_83() {
+        assert_eq!(
+            make_short_alias(b"ping", 1).unwrap(),
+            path_to_short_name(b"ping").unwrap()
+        );
+    }
+
+    #[test]
+    fn make_short_alias_uses_tilde_for_long_names() {
+        let alias = make_short_alias(b"longfilename", 1).unwrap();
+        let mut disp = [0u8; 12];
+        let len = short_name_to_display(&alias, &mut disp);
+        assert_eq!(&disp[..len as usize], b"LONGFI~1");
+    }
+
+    #[test]
+    fn make_short_alias_keeps_extension() {
+        let alias = make_short_alias(b"hello-world.txt", 1).unwrap();
+        assert_eq!(&alias[8..11], b"TXT");
+        assert_eq!(alias[6], b'~');
+        assert_eq!(alias[7], b'1');
+    }
+
+    #[test]
+    fn lfn_round_trip_longfilename() {
+        let name = b"longfilename";
+        let short = make_short_alias(name, 1).unwrap();
+        let mut pieces = [LfnPiece {
+            seq: 0,
+            last: false,
+            checksum: 0,
+            chars: [0; LFN_CHARS_PER_ENTRY],
+        }; MAX_LFN_ENTRIES];
+        let n = encode_lfn_run(name, &short, &mut pieces);
+        assert_eq!(n, 1);
+        assert!(pieces[0].last);
+        assert_eq!(pieces[0].checksum, lfn_checksum(&short));
+
+        let mut sector = [0u8; SECTOR_SIZE];
+        encode_lfn_entry(&mut sector, 0, &pieces[0]);
+        let mut e = DirEntry::empty();
+        e.name = short;
+        e.attr = ATTR_ARCHIVE;
+        encode_dir_entry(&mut sector, 1, &e);
+
+        let decoded = decode_lfn_entry(&sector, 0).expect("lfn");
+        let mut builder = LfnBuilder::new();
+        builder.feed(0, &decoded);
+        let short_e = decode_dir_entry(&sector, 1);
+        let (got, glen, start) = builder.take(&short_e.name).expect("assembled");
+        assert_eq!(&got[..glen as usize], name);
+        assert_eq!(start, 0);
+        assert!(entry_matches(
+            &short_e.name,
+            Some(&got[..glen as usize]),
+            name
+        ));
+    }
+
+    #[test]
+    fn lfn_round_trip_two_fragments() {
+        let name = b"hello-world.txt";
+        let short = make_short_alias(name, 1).unwrap();
+        let mut pieces = [LfnPiece {
+            seq: 0,
+            last: false,
+            checksum: 0,
+            chars: [0; LFN_CHARS_PER_ENTRY],
+        }; MAX_LFN_ENTRIES];
+        let n = encode_lfn_run(name, &short, &mut pieces);
+        assert_eq!(n, 2);
+        assert!(pieces[0].last);
+        assert_eq!(pieces[0].seq, 2);
+        assert_eq!(pieces[1].seq, 1);
+
+        let mut sector = [0u8; SECTOR_SIZE];
+        encode_lfn_entry(&mut sector, 2, &pieces[0]);
+        encode_lfn_entry(&mut sector, 3, &pieces[1]);
+        let mut e = DirEntry::empty();
+        e.name = short;
+        e.attr = ATTR_ARCHIVE;
+        encode_dir_entry(&mut sector, 4, &e);
+
+        let mut builder = LfnBuilder::new();
+        builder.feed(2, &decode_lfn_entry(&sector, 2).unwrap());
+        builder.feed(3, &decode_lfn_entry(&sector, 3).unwrap());
+        let short_e = decode_dir_entry(&sector, 4);
+        let (got, glen, start) = builder.take(&short_e.name).expect("assembled");
+        assert_eq!(&got[..glen as usize], name);
+        assert_eq!(start, 2);
+    }
+
+    #[test]
+    fn names_eq_ci_ignores_ascii_case() {
+        assert!(names_eq_ci(b"Ping", b"ping"));
+        assert!(!names_eq_ci(b"ping", b"pong"));
+    }
+
+    #[test]
+    fn dot_entries_round_trip() {
+        let mut sector = [0u8; SECTOR_SIZE];
+        encode_dir_entry(&mut sector, 0, &dot_entry(5));
+        encode_dir_entry(&mut sector, 1, &dotdot_entry(0));
+        let d = decode_dir_entry(&sector, 0);
+        let p = decode_dir_entry(&sector, 1);
+        assert!(d.is_dir());
+        assert!(d.is_dot());
+        assert_eq!(d.first_cluster, 5);
+        assert!(p.is_dot());
+        assert_eq!(p.first_cluster, 0);
+        assert!(!is_dot_name(&path_to_short_name(b"ping").unwrap()));
+    }
+
+    #[test]
+    fn dir_loc_parent_cluster() {
+        assert_eq!(DirLoc::Root.parent_cluster(), 0);
+        assert_eq!(DirLoc::Cluster(7).parent_cluster(), 7);
+        assert!(DirLoc::Root.is_root());
     }
 }

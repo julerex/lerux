@@ -223,7 +223,7 @@ See [plan.md](plan.md) Phases 15 and 24.
 
 `qemu_virt_aarch64_isolation` (Phase 60) nests `crash-demo` under `debug-handler`, then notifies `fs-client` only after the untrusted PD is suspended. Smoke expects fault strings plus `lerux-isolation: fs-server survived untrusted PD crash`. See [`security.md`](security.md).
 
-`qemu_virt_aarch64_fs_fat` uses the same SDF and IPC; `fs-server` is built with `backend-fat` (Phase 44 minimal FAT16: root-only, 8.3 names, single-cluster files; hierarchy ops return Error). Smoke expects `lerux-fs: ready (FAT16)` and `lerux-fs: round-trip ok` (basic create/read only).
+`qemu_virt_aarch64_fs_fat` uses the same SDF and IPC; `fs-server` is built with `backend-fat` (FAT16: hierarchical directories, VFAT long names, multi-cluster files). Smoke expects `lerux-fs: ready (FAT16)`, `lerux-fs: fat hierarchy ok`, `lerux-fs: fat lfn ok`, and `lerux-fs: round-trip ok`.
 
 `qemu_virt_aarch64_net_composed` gates net probe on supervisor notify (same composed-sync pattern as blk-composed). See [plan.md](plan.md) Phase 29.
 

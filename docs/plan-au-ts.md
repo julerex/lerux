@@ -182,12 +182,12 @@ LionsOS `components/fs/fat`, `components/fs/nfs`, `examples/fileio`.
 
 - Mounting Linux rootfs or glibc apps
 - Full POSIX VFS
-- Multi-cluster files / LFN / subdirectories (v1 FAT is root + single cluster)
+- NFS client / host-backed FS (FAT now has multi-cluster files, LFN, and subdirectories)
 
 ### Exit
 
 - [x] One alternate FS backend selectable by board/feature; `just test-fs` and `just test-fs-fat` green
-- [ ] Workstation optional FAT demo (stretch)
+- [ ] Workstation optional FAT demo (stretch; FAT hierarchy/LFN is in `just test-fs-fat`)
 
 ---
 

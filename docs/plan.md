@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-08-16 (net config hot-apply)
+Last updated: 2026-08-16 (FAT subdirs / LFN)
 
 ## Phase 1 — Bring-up
 
@@ -371,7 +371,7 @@ Apps on `NetRequest` via `net-server`; aarch64 virtio-net **unified-dma** (no se
 
 ## Phase 44 — FS backends ✅ (FAT slice)
 
-`LERUXFS2` is default (`just test-fs`). Alternate **FAT16** backend (`lerux-fat`, `backend-fat`, `just test-fs-fat`) supports multi-cluster root files. NFS / FAT subdirs remain stretch — [`plan-au-ts.md`](plan-au-ts.md).
+`LERUXFS2` is default (`just test-fs`). Alternate **FAT16** backend (`lerux-fat`, `backend-fat`, `just test-fs-fat`) supports hierarchical directories, VFAT long names, and multi-cluster files. NFS remains stretch — [`plan-au-ts.md`](plan-au-ts.md).
 
 ## Phase 45 — Service async ✅
 
@@ -400,9 +400,9 @@ LERUXFS2 + hierarchical IPC (see [`plan-arch.md`](plan-arch.md) Phase 50 for ful
 - [x] Extend `FsRequest` / `FsResponse`: `Mkdir`, `Unlink`, `Rename`, path-scoped `ListDir`, `Stat.is_dir`; path grammar on `MAX_FS_PATH` (48)
 - [x] **LERUXFS2**: free-map allocation, multi-sector contiguous files (≤16 KiB), directory sectors, auto-create parents on `Create`/`Mkdir`; legacy LERUXFS1 volumes reformat on mount
 - [x] Shell: `mkdir` / `rm` / `mv` / `cd` / `pwd`; chunked `write`/`cat`; cwd-relative paths
-- [x] Smokes: `just test-fs` (hierarchy + multi-sector), `just test-fs-fat` (root-only FAT stubs new ops), `just test-workstation`
-- [x] FAT stretch: multi-cluster files (root-only, ≤16 KiB / 32 clusters; `just test-fs-fat`)
-- [ ] FAT subdirs / LFN (still root-only 8.3)
+- [x] Smokes: `just test-fs` (hierarchy + multi-sector), `just test-fs-fat` (hierarchy + LFN + multi-cluster), `just test-workstation`
+- [x] FAT stretch: multi-cluster files (≤16 KiB / 32 clusters; `just test-fs-fat`)
+- [x] FAT subdirs / LFN (cluster directories + VFAT names)
 - [ ] Optional NFS / host-backed FS
 
 ## Phase 51 — Network stack v2 (core done)
@@ -494,7 +494,7 @@ Stretch order and exit criteria: **[`plan-arch.md` § Phase 60 stretch sequence]
 
 | Phase | Theme | Status |
 |-------|--------|--------|
-| 50 | Filesystem v2 (multi-sector, dirs, unlink/rename) | core done (FAT/NFS stretch open) |
+| 50 | Filesystem v2 (multi-sector, dirs, unlink/rename) | core done (FAT hierarchy/LFN done; NFS stretch open) |
 | 51 | Network stack v2 (DHCP, DNS, multi-conn, TLS) | core done (TLS fetch smoke done; multi-client queue stretch) |
 | 52 | Hardware closeout (RPi4 deploy + seed + harness) | core done (on-device gate → [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated)) |
 | 53 | Shell + core utilities | core done |
@@ -506,7 +506,7 @@ Stretch order and exit criteria: **[`plan-arch.md` § Phase 60 stretch sequence]
 | 59 | Multi-arch workstation profiles | core done |
 | 60 | Security posture | core + stretch A–D done (MCS / asymmetric signing deferred) |
 
-Near-term priority: software stretch (FAT subdirs/LFN, x86 unified-dma). On-device work is [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated) and does not block that list. TLS fetch and net hot-apply are done.
+Near-term priority: software stretch (x86 unified-dma). On-device work is [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated) and does not block that list. TLS fetch, net hot-apply, and FAT hierarchy/LFN are done.
 
 ## Physical RPi4 lab (hardware-gated)
 

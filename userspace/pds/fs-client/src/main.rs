@@ -118,13 +118,13 @@ fn probe_fs() {
         _ => panic!("listdir failed"),
     }
 
-    // Phase 50 hierarchy + multi-sector (LERUXFS2 only).
+    // Phase 50 hierarchy + multi-sector (LERUXFS2).
     #[cfg(not(feature = "board-qemu_virt_aarch64_fs_fat"))]
     probe_fs_v2();
 
-    // Phase 50 FAT stretch: multi-cluster root file (> 512 B).
+    // Phase 50 FAT stretch: subdirs, LFN, multi-cluster.
     #[cfg(feature = "board-qemu_virt_aarch64_fs_fat")]
-    probe_fs_fat_multi();
+    probe_fs_fat();
 
     log::info!("lerux-fs: round-trip ok");
     #[cfg(feature = "isolation-sync")]
@@ -132,14 +132,86 @@ fn probe_fs() {
 }
 
 #[cfg(feature = "board-qemu_virt_aarch64_fs_fat")]
-fn probe_fs_fat_multi() {
-    /// Multi-cluster payload: > 512 B so FAT chain growth is exercised.
+fn list_contains(path: &[u8], name: &[u8], expect_dir: bool) -> bool {
+    match fs_call(FsRequest::list_dir(path)) {
+        FsResponse::DirList { count, entries } => entries
+            .iter()
+            .take(count as usize)
+            .any(|e| e.name_slice() == name && e.is_dir == expect_dir),
+        _ => panic!("listdir failed"),
+    }
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_fs_fat")]
+fn mkdir_idempotent(path: &[u8]) {
+    match fs_call(FsRequest::mkdir(path)) {
+        FsResponse::Ok => {}
+        FsResponse::Error => match fs_call(FsRequest::stat(path)) {
+            FsResponse::Stat { is_dir: true, .. } => {}
+            _ => panic!("mkdir failed"),
+        },
+        _ => panic!("mkdir failed"),
+    }
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_fs_fat")]
+fn probe_fs_fat() {
+    const DIR_PATH: &[u8] = b"/testdir";
+    const NESTED_PATH: &[u8] = b"/testdir/nested";
+    const LFN_PATH: &[u8] = b"/testdir/longfilename";
+    const LFN_NAME: &[u8] = b"longfilename";
     const BIG_PATH: &[u8] = b"big.dat";
+
+    mkdir_idempotent(DIR_PATH);
+    match fs_call(FsRequest::stat(DIR_PATH)) {
+        FsResponse::Stat { is_dir: true, .. } => {}
+        _ => panic!("testdir stat failed"),
+    }
+
+    let nested = fs_create(NESTED_PATH);
+    fs_write(nested, 0, b"nested-ok");
+    match fs_call(FsRequest::stat(NESTED_PATH)) {
+        FsResponse::Stat {
+            size,
+            is_dir: false,
+        } => assert_eq!(size, 9),
+        _ => panic!("nested stat failed"),
+    }
+    assert!(
+        list_contains(DIR_PATH, b"nested", false),
+        "nested not listed"
+    );
+
+    let lfn = fs_create(LFN_PATH);
+    fs_write(lfn, 0, b"lfn-ok");
+    match fs_call(FsRequest::stat(LFN_PATH)) {
+        FsResponse::Stat {
+            size,
+            is_dir: false,
+        } => assert_eq!(size, 6),
+        _ => panic!("lfn stat failed"),
+    }
+    assert!(
+        list_contains(DIR_PATH, LFN_NAME, false),
+        "longfilename not listed"
+    );
+    log::info!("lerux-fs: fat lfn ok");
+
+    let _ = fs_call(FsRequest::unlink(b"/testdir/renamed"));
+    match fs_call(FsRequest::rename(NESTED_PATH, b"/testdir/renamed")) {
+        FsResponse::Ok => {}
+        _ => panic!("rename failed"),
+    }
+    match fs_call(FsRequest::unlink(b"/testdir/renamed")) {
+        FsResponse::Ok => {}
+        _ => panic!("unlink failed"),
+    }
+    log::info!("lerux-fs: fat hierarchy ok");
+
     let mut big = [0u8; 600];
     for (i, b) in big.iter_mut().enumerate() {
         *b = (i % 251) as u8;
     }
-    // Re-run on persistent disk: open-or-create via create path (FAT create fails if exists).
     let big_h = match FS_SERVER.create_or_open(BIG_PATH) {
         Ok(id) => id,
         Err(_) => panic!("big create/open failed"),

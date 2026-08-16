@@ -26,5 +26,7 @@ which = "7"
 regex = "1"
 tempfile = "3"
 sha2 = "0.10"
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+rand = "0.8"
 lerux-interface-types = { path = "../../userspace/crates/lerux-interface-types" }
 lerux-fs = { path = "../../userspace/crates/lerux-fs" }

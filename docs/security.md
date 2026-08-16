@@ -144,7 +144,15 @@ lerux deploy --board rpi4b_4gb_workstation --dest /media/$USER/boot
 
 **Trust model:** the sidecar is only as strong as the host that wrote it (CI or developer machine). It catches accidental corruption and casual SD-card swap of `loader.img` without the matching digest. It does **not** replace secure boot, signed releases, or a hardware root of trust.
 
-**Out of scope for Track C:** ed25519/cosign signatures, TPM/fuse measured boot, in-guest verification.
+**Phase 67:** optional ed25519 signatures next to the digest (`loader.img.sig`). Smoke key: `support/keys/smoke.ed25519` (not a production secret).
+
+```bash
+lerux keygen --out support/keys/smoke.ed25519
+lerux sign --board qemu_virt_aarch64
+lerux verify-image --board qemu_virt_aarch64 --key support/keys/smoke.ed25519.pub --require-sig
+```
+
+Measured boot / TPM / in-guest verification remain out of scope.
 
 ### QoS / channel abuse (Track D)
 

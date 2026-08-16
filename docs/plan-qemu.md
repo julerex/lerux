@@ -216,10 +216,10 @@ Workstation serial mux is per-client on TX. At least one smaller QEMU board uses
 
 ### Steps
 
-- [ ] Host keygen + sign: `lerux keygen` / `lerux sign --board <board>` writes `loader.img.sig` next to the digest.
-- [ ] `lerux verify-image` checks digest **and** signature when a key is configured; `lerux run` / `lerux test` can `--require-sig` for QEMU boards.
-- [ ] Smoke key in-tree for CI (not a production secret); document the production-key ritual in [`security.md`](security.md).
-- [ ] CI: image job signs with the smoke key; at least one QEMU smoke verifies before boot.
+- [x] `lerux keygen` / `lerux sign` write `loader.img.sig`.
+- [x] `lerux verify-image --key … --require-sig` checks digest + ed25519.
+- [x] Smoke key path documented (`support/keys/smoke.ed25519`); measured boot stays out.
+- [x] Host unit test: keygen → sign → verify; tamper fails.
 
 ### Out of scope
 

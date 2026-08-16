@@ -15,6 +15,7 @@ mod http_one;
 mod https_one;
 mod hw_lock;
 mod image_digest;
+mod image_sign;
 mod install;
 mod libclang;
 mod package;
@@ -227,7 +228,7 @@ enum Commands {
         #[arg(long, short = 'p')]
         path: Option<PathBuf>,
     },
-    /// Phase 60 Track C: verify `loader.img` against its `.sha256` sidecar.
+    /// Phase 60 Track C / 67: verify digest, and ed25519 sig when present.
     VerifyImage {
         #[arg(long, default_value = "qemu_virt_aarch64")]
         board: String,
@@ -236,6 +237,28 @@ enum Commands {
         /// Explicit path to `loader.img` (overrides board layout).
         #[arg(long, short = 'p')]
         path: Option<PathBuf>,
+        /// Public key (32-byte raw). Required when a `.sig` is present or with `--require-sig`.
+        #[arg(long)]
+        key: Option<PathBuf>,
+        /// Fail if `loader.img.sig` is missing.
+        #[arg(long, default_value_t = false)]
+        require_sig: bool,
+    },
+    /// Phase 67: write an ed25519 keypair (`path` + `path.pub`).
+    Keygen {
+        #[arg(long, default_value = "support/keys/smoke.ed25519")]
+        out: PathBuf,
+    },
+    /// Phase 67: sign `loader.img` with an ed25519 secret key.
+    Sign {
+        #[arg(long, default_value = "qemu_virt_aarch64")]
+        board: String,
+        #[arg(long, default_value = "build")]
+        build_dir: String,
+        #[arg(long, short = 'p')]
+        path: Option<PathBuf>,
+        #[arg(long, default_value = "support/keys/smoke.ed25519")]
+        key: PathBuf,
     },
     /// Phase 54: config schema and disk seed helpers.
     Config {
@@ -765,10 +788,36 @@ fn main() -> Result<()> {
             board,
             build_dir,
             path,
+            key,
+            require_sig,
         } => {
             let loader =
                 crate::image_digest::resolve_loader(&root, &board, &build_dir, path.as_deref())?;
-            crate::image_digest::verify_sidecar(&loader)?;
+            let key = key.map(|k| if k.is_absolute() { k } else { root.join(k) });
+            crate::image_sign::verify_image(&loader, key.as_deref(), require_sig)?;
+        }
+        Commands::Keygen { out } => {
+            let out = if out.is_absolute() {
+                out
+            } else {
+                root.join(out)
+            };
+            crate::image_sign::keygen(&out)?;
+        }
+        Commands::Sign {
+            board,
+            build_dir,
+            path,
+            key,
+        } => {
+            let loader =
+                crate::image_digest::resolve_loader(&root, &board, &build_dir, path.as_deref())?;
+            let key = if key.is_absolute() {
+                key
+            } else {
+                root.join(key)
+            };
+            crate::image_sign::sign(&loader, &key)?;
         }
         Commands::Config { command } => match command {
             ConfigCommands::Schema => crate::config_cmd::print_schema(),

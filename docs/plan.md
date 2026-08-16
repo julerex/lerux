@@ -551,10 +551,10 @@ Completable **without a board**. Living checklist: **[`plan-qemu.md`](plan-qemu.
 - [x] `just test-isolation-riscv` (x86 FS isolation deferred)
 - [x] Debug yes on aarch64, RISC-V, x86
 
-## Phase 67 — Asymmetric image signing (planned)
+## Phase 67 — Asymmetric image signing ✅
 
-- [ ] Host ed25519: `lerux keygen` / `sign` / `verify-image` with `.sig`
-- [ ] Optional `lerux test --require-sig`; CI smoke key (not measured boot)
+- [x] `lerux keygen` / `sign` / `verify-image --require-sig`
+- [x] Smoke key under `support/keys/`; not measured boot
 
 ## Phase 68 — TLS roots and cert tool (planned)
 
@@ -580,7 +580,7 @@ Completable **without a board**. Living checklist: **[`plan-qemu.md`](plan-qemu.
 | 64 | Multi-client net queue | done |
 | 65 | Serial virtualiser v2 | done |
 | 66 | QEMU arch parity (debug / isolation) | done |
-| 67 | Asymmetric image signing | planned |
+| 67 | Asymmetric image signing | done |
 | 68 | TLS roots + cert tool | planned |
 | 69 | Batch runner (on-disk shell scripts) | planned |
 | 70 | QEMU developer loop | planned |

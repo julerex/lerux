@@ -60,12 +60,18 @@ fn fs_read(handle: u8, offset: u32, len: u16) -> FsResponse {
 /// Chunk writes so each request stays inside one 512-byte sector (FAT multi-cluster
 /// and LERUXFS2 both accept this; FAT rejects cross-cluster single Writes).
 fn write_all(handle: u8, data: &[u8]) {
-    let mut offset = 0u32;
-    while (offset as usize) < data.len() {
+    write_all_at(handle, 0, data);
+}
+
+fn write_all_at(handle: u8, start: u32, data: &[u8]) {
+    let mut offset = start;
+    let end_abs = start as usize + data.len();
+    while (offset as usize) < end_abs {
         let sector_left = SECTOR_SIZE - (offset as usize % SECTOR_SIZE);
-        let end = (offset as usize + MAX_FS_DATA.min(sector_left)).min(data.len());
-        fs_write(handle, offset, &data[offset as usize..end]);
-        offset = end as u32;
+        let rel = offset as usize - start as usize;
+        let end_rel = (rel + MAX_FS_DATA.min(sector_left)).min(data.len());
+        fs_write(handle, offset, &data[rel..end_rel]);
+        offset = start + end_rel as u32;
     }
 }
 
@@ -81,6 +87,36 @@ fn read_all(handle: u8, len: usize, out: &mut [u8]) {
         let n = data_len as usize;
         out[offset as usize..offset as usize + n].copy_from_slice(&data[..n]);
         offset += data_len as u32;
+    }
+}
+
+fn write_pattern(handle: u8, len: usize) {
+    let mut offset = 0u32;
+    while (offset as usize) < len {
+        let mut chunk = [0u8; 256];
+        let n = (len - offset as usize).min(256);
+        for (i, b) in chunk[..n].iter_mut().enumerate() {
+            *b = ((offset as usize + i) % 251) as u8;
+        }
+        write_all_at(handle, offset, &chunk[..n]);
+        offset += n as u32;
+    }
+}
+
+fn verify_pattern(handle: u8, len: usize) {
+    let mut offset = 0u32;
+    while (offset as usize) < len {
+        let sector_left = SECTOR_SIZE - (offset as usize % SECTOR_SIZE);
+        let n = (len - offset as usize).min(MAX_FS_DATA).min(sector_left) as u16;
+        let FsResponse::Data { data_len, data } = fs_read(handle, offset, n) else {
+            panic!("huge read failed at {offset}");
+        };
+        assert_eq!(data_len, n, "short huge read at {offset}");
+        for i in 0..n as usize {
+            let expect = ((offset as usize + i) % 251) as u8;
+            assert_eq!(data[i], expect, "huge mismatch at {}", offset as usize + i);
+        }
+        offset += u32::from(n);
     }
 }
 
@@ -283,6 +319,35 @@ fn probe_fs_v2() {
     let mut got = [0u8; 600];
     read_all(big_h, 600, &mut got);
     assert_eq!(&got, &big, "multi-sector round-trip mismatch");
+
+    // Phase 62: file larger than the old 16 KiB cap, verified in chunks.
+    const HUGE_PATH: &[u8] = b"/testdir/huge";
+    const HUGE_LEN: usize = 20 * 1024;
+    let _ = fs_call(FsRequest::unlink(HUGE_PATH));
+    let huge_h = fs_create(HUGE_PATH);
+    write_pattern(huge_h, HUGE_LEN);
+    match fs_call(FsRequest::stat(HUGE_PATH)) {
+        FsResponse::Stat {
+            size,
+            is_dir: false,
+        } => assert_eq!(size, HUGE_LEN as u32, "v3 size"),
+        _ => panic!("huge stat failed"),
+    }
+    verify_pattern(huge_h, HUGE_LEN);
+    log::info!("lerux-fs: v3 20k ok");
+
+    // Phase 62: path longer than the old 48-byte cap.
+    const LONG_PATH: &[u8] = b"/testdir/a/b/c/deep-component-name";
+    let long_h = fs_create(LONG_PATH);
+    fs_write(long_h, 0, b"deep-ok");
+    match fs_call(FsRequest::stat(LONG_PATH)) {
+        FsResponse::Stat {
+            size,
+            is_dir: false,
+        } => assert_eq!(size, 7),
+        _ => panic!("long path stat failed"),
+    }
+    log::info!("lerux-fs: v3 long path ok");
 
     // Rename + unlink.
     match fs_call(FsRequest::rename(b"/testdir/nested", b"/testdir/renamed")) {

@@ -302,7 +302,10 @@ pub fn parse_net_policy(
 /// - `""` or `"/"` is the root directory.
 /// - Components are non-empty, not `.` / `..`, max 22 bytes each, max 8 components.
 /// - No trailing-only empty segments (`//` collapses).
-pub const MAX_FS_PATH: usize = 48;
+///
+/// Phase 62 raised this from 48 to 128. Postcard still prefixes the used
+/// length (`path_len`); old 48-byte clients remain valid as a subset.
+pub const MAX_FS_PATH: usize = 128;
 
 /// Maximum name length returned in [`FsDirEntry`] (one path component).
 pub const MAX_FS_NAME: usize = 24;
@@ -350,10 +353,6 @@ impl FsDirEntry {
 
 /// Filesystem service requests.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[expect(
-    clippy::large_enum_variant,
-    reason = "Write/Rename carry inline path/payload for IPC"
-)]
 pub enum FsRequest {
     Open {
         path_len: u8,
@@ -1369,6 +1368,14 @@ mod tests {
             core::array::from_fn(|i| FsDirEntry::from_name(b"entry", (i * 10) as u32, i % 2 == 0));
         let resp = FsResponse::DirList { count: 8, entries };
         assert_eq!(round_trip(resp), resp);
+        // Phase 62: 128-byte path buffers still postcard-round-trip.
+        let long = [b'x'; 80];
+        let req = FsRequest::open(&long);
+        match req {
+            FsRequest::Open { path_len, .. } => assert_eq!(path_len, 80),
+            _ => panic!("expected Open"),
+        }
+        assert_eq!(round_trip(req), req);
     }
 
     #[test]

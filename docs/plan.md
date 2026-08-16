@@ -398,7 +398,7 @@ Service-class PD priorities and Microkit PPC rules; [`qos.md`](qos.md), [ADR-006
 LERUXFS2 + hierarchical IPC (see [`plan-arch.md`](plan-arch.md) Phase 50 for full checklist).
 
 - [x] Extend `FsRequest` / `FsResponse`: `Mkdir`, `Unlink`, `Rename`, path-scoped `ListDir`, `Stat.is_dir`; path grammar on `MAX_FS_PATH` (48)
-- [x] **LERUXFS2**: free-map allocation, multi-sector contiguous files (≤16 KiB), directory sectors, auto-create parents on `Create`/`Mkdir`; legacy LERUXFS1 volumes reformat on mount
+- [x] **LERUXFS2**: free-map allocation, multi-sector contiguous files (≤256 KiB, Phase 62), directory sectors, auto-create parents on `Create`/`Mkdir`; legacy LERUXFS1 volumes reformat on mount
 - [x] Shell: `mkdir` / `rm` / `mv` / `cd` / `pwd`; chunked `write`/`cat`; cwd-relative paths
 - [x] Smokes: `just test-fs` (hierarchy + multi-sector), `just test-fs-fat` (hierarchy + LFN + multi-cluster), `just test-workstation`
 - [x] FAT stretch: multi-cluster files (≤16 KiB / 32 clusters; `just test-fs-fat`)
@@ -518,11 +518,12 @@ Completable **without a board**. Living checklist: **[`plan-qemu.md`](plan-qemu.
 - [x] Host test: QEMU net boards have no `virtio_net_client_dma` MR
 - [x] GENET remains lab-only
 
-## Phase 62 — Filesystem v3 (planned)
+## Phase 62 — Filesystem v3 ✅
 
-- [ ] LERUXFS2 files **≥ 256 KiB** via extents (keep chunked `Read`/`Write`)
-- [ ] Longer paths (`MAX_FS_PATH` ~128) with postcard compatibility
-- [ ] `just test-fs` writes/reads a file > 16 KiB
+- [x] LERUXFS2 files **≥ 256 KiB** (512-sector contiguous extent + in-place grow)
+- [x] `MAX_FS_PATH` = 128 (postcard `path_len` stays compatible)
+- [x] FAT documented as 16 KiB small-file alternate
+- [x] `just test-fs` writes/reads 20 KiB + long path
 
 ## Phase 63 — Host-backed FS (planned)
 
@@ -571,7 +572,7 @@ Completable **without a board**. Living checklist: **[`plan-qemu.md`](plan-qemu.
 | Phase | Theme | Status |
 |-------|--------|--------|
 | 61 | QEMU DMA parity (x86 PCI + RISC-V virtio) | done |
-| 62 | Filesystem v3 (size + paths) | planned |
+| 62 | Filesystem v3 (size + paths) | done |
 | 63 | Host-backed FS (virtio-9p) | planned |
 | 64 | Multi-client net queue | planned |
 | 65 | Serial virtualiser v2 | planned |

@@ -24,7 +24,8 @@ pub use lfn::{
     MAX_LFN_CHARS, MAX_LFN_ENTRIES,
 };
 
-/// Max clusters per file (32 × 512 B = 16 KiB), aligned with LERUXFS2 caps.
+/// Max clusters per file (32 × 512 B = 16 KiB). FAT stays the small-file
+/// alternate; LERUXFS2 raised its cap to 256 KiB in Phase 62.
 pub const MAX_FILE_CLUSTERS: u16 = 32;
 
 /// Max file size in bytes for the multi-cluster server path.

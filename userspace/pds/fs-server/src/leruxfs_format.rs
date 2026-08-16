@@ -6,8 +6,8 @@ use lerux_fs::{
     alloc_contiguous, count_entries, count_free_blocks, decode_dir_entry, decode_superblock,
     dir_is_empty, encode_dir_entry, encode_free_map_fresh, encode_superblock, file_lba_for_offset,
     find_by_name, find_free_slot, free_contiguous, is_formatted, is_legacy_v1, make_entry,
-    sector_offset, split_path, DirEntry, PathParts, Superblock, DATA_START_LBA, FREE_MAP_LBA,
-    MAX_ENTRIES, MAX_FILE_SECTORS, ROOT_DIR_LBA, SUPERBLOCK_LBA,
+    sector_offset, split_path, try_extend_contiguous, DirEntry, PathParts, Superblock,
+    DATA_START_LBA, FREE_MAP_LBA, MAX_ENTRIES, MAX_FILE_SECTORS, ROOT_DIR_LBA, SUPERBLOCK_LBA,
 };
 use lerux_interface_types::{
     FsDirEntry, FsRequest, FsResponse, MAX_FS_DATA, MAX_FS_DIR_LIST, MAX_FS_PATH, SECTOR_SIZE,
@@ -1732,6 +1732,28 @@ impl LeruxFsFormat {
                         .clamp(1, MAX_FILE_SECTORS)
                 };
                 if need > n_sectors {
+                    if try_extend_contiguous(
+                        &mut self.free_map,
+                        &self.superblock,
+                        first_lba,
+                        n_sectors,
+                        need,
+                    ) {
+                        n_sectors = need;
+                        freemap_dirty = true;
+                        done = 0;
+                        return self.continue_write(job(
+                            2,
+                            first_lba,
+                            size,
+                            dir_lba,
+                            slot,
+                            done,
+                            new_size,
+                            n_sectors,
+                            freemap_dirty,
+                        ));
+                    }
                     // Grow: allocate new extent, copy old sectors (step 1..).
                     let Some(new_lba) =
                         alloc_contiguous(&mut self.free_map, &self.superblock, need)

@@ -14,7 +14,7 @@
 //! ## Directory entries
 //!
 //! Sixteen 32-byte entries per directory sector. Each entry is a file (contiguous
-//! extent) or a subdirectory (points at another directory sector).
+//! extent, up to [`MAX_FILE_SECTORS`] / 256 KiB) or a subdirectory.
 //!
 //! ## Path grammar (IPC)
 //!
@@ -61,8 +61,8 @@ pub const ENTRY_SIZE: usize = 32;
 /// Directory entry flag: entry is a subdirectory.
 pub const FLAG_DIR: u8 = 0x01;
 
-/// Maximum contiguous sectors per file (16 KiB).
-pub const MAX_FILE_SECTORS: u32 = 32;
+/// Maximum contiguous sectors per file (256 KiB). Phase 62.
+pub const MAX_FILE_SECTORS: u32 = 512;
 
 /// Maximum path components when splitting an IPC path.
 pub const MAX_COMPONENTS: usize = 8;
@@ -326,6 +326,35 @@ pub fn alloc_contiguous(map: &mut [u8; SECTOR_SIZE], sb: &Superblock, count: u32
     None
 }
 
+/// Grow an existing extent in place when the following LBAs are free.
+///
+/// Returns `true` if `first_lba..first_lba+new_count` is now allocated.
+pub fn try_extend_contiguous(
+    map: &mut [u8; SECTOR_SIZE],
+    sb: &Superblock,
+    first_lba: u32,
+    old_count: u32,
+    new_count: u32,
+) -> bool {
+    if new_count <= old_count || new_count > MAX_FILE_SECTORS {
+        return false;
+    }
+    let extra = new_count - old_count;
+    let extra_start = first_lba.saturating_add(old_count);
+    if extra_start.saturating_add(extra) > sb.total_lbas {
+        return false;
+    }
+    for i in 0..extra {
+        if !is_free(map, extra_start + i) {
+            return false;
+        }
+    }
+    for i in 0..extra {
+        set_free(map, extra_start + i, false);
+    }
+    true
+}
+
 /// Free `count` contiguous LBAs starting at `lba`.
 pub fn free_contiguous(map: &mut [u8; SECTOR_SIZE], lba: u32, count: u32) {
     for i in 0..count {
@@ -549,5 +578,24 @@ mod tests {
         let before = count_free_blocks(&map, &sb);
         let _ = alloc_contiguous(&mut map, &sb, 2).unwrap();
         assert_eq!(count_free_blocks(&map, &sb), before - 2);
+    }
+
+    #[test]
+    fn extend_in_place_then_alloc_large() {
+        let sb = Superblock::new();
+        let mut map = [0u8; SECTOR_SIZE];
+        encode_free_map_fresh(&mut map, &sb);
+        let first = alloc_contiguous(&mut map, &sb, 1).expect("seed");
+        assert!(try_extend_contiguous(&mut map, &sb, first, 1, 4));
+        assert!(!is_free(&map, first + 3));
+        assert!(!try_extend_contiguous(
+            &mut map,
+            &sb,
+            first,
+            4,
+            MAX_FILE_SECTORS + 1
+        ));
+        let big = alloc_contiguous(&mut map, &sb, MAX_FILE_SECTORS).expect("256 KiB extent");
+        assert!(big + MAX_FILE_SECTORS <= sb.total_lbas);
     }
 }

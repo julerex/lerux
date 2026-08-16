@@ -98,11 +98,11 @@ Every QEMU net board used in CI has **no** distinct client-DMA map in the NIC dr
 
 ### Steps
 
-- [ ] On-disk: extent list (or equivalent) so a file is no longer one contiguous ≤32-sector run. Target **≥ 256 KiB** per file on LERUXFS2 (1 MiB if the free-map stays simple).
-- [ ] Keep chunked `Read`/`Write` (`MAX_FS_DATA`); do not grow a single IPC message to the file cap.
-- [ ] Path grammar: raise `MAX_FS_PATH` (128 suggested) without breaking existing 48-byte clients — version the postcard types or keep a compatible encoding.
-- [ ] FAT backend: raise the 32-cluster cap to match, or document FAT as the small-file alternate.
-- [ ] Smokes: `just test-fs` writes and reads a file **> 16 KiB**; workstation `cat`/`write` of the same; existing hierarchy/unlink tests stay green.
+- [x] On-disk: contiguous extent cap **512 sectors / 256 KiB**; in-place `try_extend_contiguous` so grow is not always copy+realloc.
+- [x] Keep chunked `Read`/`Write` (`MAX_FS_DATA`); do not grow a single IPC message to the file cap.
+- [x] Path grammar: `MAX_FS_PATH` is 128; postcard still prefixes `path_len` so shorter clients stay valid.
+- [x] FAT remains the 16 KiB small-file alternate (documented).
+- [x] Smokes: `just test-fs` writes/reads 20 KiB (`lerux-fs: v3 20k ok`) and a path > 48 bytes.
 
 ### Out of scope
 

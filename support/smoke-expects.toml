@@ -179,7 +179,13 @@ expects = ["lerux-net: ready", "virtio-net: MAC", "lerux-fetch: 200"]
 expects = ["lerux-net: ready", "virtio-net: MAC", "lerux-tls: handshake ok", "lerux-fetch: 200"]
 
 [boards.qemu_virt_aarch64_fs]
-expects = ["lerux-fs: ready", "virtio-blk:", "lerux-fs: round-trip ok"]
+expects = [
+  "lerux-fs: ready",
+  "virtio-blk:",
+  "lerux-fs: v3 20k ok",
+  "lerux-fs: v3 long path ok",
+  "lerux-fs: round-trip ok",
+]
 
 [boards.qemu_virt_aarch64_fs_fat]
 expects = [

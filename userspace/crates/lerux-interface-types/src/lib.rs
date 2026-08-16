@@ -131,6 +131,18 @@ pub enum NetRequest {
     /// Return current IPv4 configuration (static or DHCP). Non-blocking.
     GetIface,
     Poll,
+    /// Apply IPv4 policy immediately (Phase 54 hot-apply).
+    ///
+    /// Appended after [`Self::Poll`] so existing Poll wires keep variant index 10.
+    /// `dhcp = true` restarts DHCP; the address fields are the static fallback
+    /// (and the live config when `dhcp = false`).
+    ApplyIface {
+        dhcp: bool,
+        addr: [u8; 4],
+        prefix: u8,
+        gateway: [u8; 4],
+        dns: [u8; 4],
+    },
 }
 
 impl NetRequest {
@@ -163,6 +175,124 @@ impl NetRequest {
             payload,
         }
     }
+
+    pub fn apply_iface(
+        dhcp: bool,
+        addr: [u8; 4],
+        prefix: u8,
+        gateway: [u8; 4],
+        dns: [u8; 4],
+    ) -> Self {
+        Self::ApplyIface {
+            dhcp,
+            addr,
+            prefix,
+            gateway,
+            dns,
+        }
+    }
+}
+
+/// Parsed `net.*` keys used to build [`NetRequest::ApplyIface`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NetPolicy {
+    pub dhcp: bool,
+    pub addr: [u8; 4],
+    pub prefix: u8,
+    pub gateway: [u8; 4],
+    pub dns: [u8; 4],
+}
+
+impl NetPolicy {
+    pub fn to_apply(self) -> NetRequest {
+        NetRequest::apply_iface(self.dhcp, self.addr, self.prefix, self.gateway, self.dns)
+    }
+}
+
+/// True for `net.mode`, `net.ip`, and the other `net.*` schema keys.
+pub fn is_net_config_key(key: &[u8]) -> bool {
+    key.starts_with(b"net.")
+}
+
+/// Parse a dotted IPv4 address (`a.b.c.d`, each octet 0–255).
+pub fn parse_ipv4(s: &[u8]) -> Option<[u8; 4]> {
+    let mut out = [0u8; 4];
+    let mut oct = 0u16;
+    let mut idx = 0usize;
+    let mut digits = 0u8;
+    if s.is_empty() {
+        return None;
+    }
+    for &b in s {
+        match b {
+            b'0'..=b'9' => {
+                digits = digits.checked_add(1)?;
+                if digits > 3 {
+                    return None;
+                }
+                oct = oct.checked_mul(10)?.checked_add(u16::from(b - b'0'))?;
+                if oct > 255 {
+                    return None;
+                }
+            }
+            b'.' => {
+                if digits == 0 || idx >= 3 {
+                    return None;
+                }
+                out[idx] = oct as u8;
+                idx += 1;
+                oct = 0;
+                digits = 0;
+            }
+            _ => return None,
+        }
+    }
+    if digits == 0 || idx != 3 {
+        return None;
+    }
+    out[3] = oct as u8;
+    Some(out)
+}
+
+/// Parse `net.prefix` (`1`–`32`).
+pub fn parse_prefix_len(s: &[u8]) -> Option<u8> {
+    if s.is_empty() || s.len() > 2 {
+        return None;
+    }
+    let mut n = 0u8;
+    for &b in s {
+        if !b.is_ascii_digit() {
+            return None;
+        }
+        n = n.checked_mul(10)?.checked_add(b - b'0')?;
+    }
+    (1..=32).contains(&n).then_some(n)
+}
+
+/// Parse `net.mode`: `dhcp` → `true`, `static` → `false`.
+pub fn parse_net_mode_dhcp(s: &[u8]) -> Option<bool> {
+    match s {
+        b"dhcp" => Some(true),
+        b"static" => Some(false),
+        _ => None,
+    }
+}
+
+/// Parse a full `net.*` snapshot. All five values must be well-formed.
+pub fn parse_net_policy(
+    mode: &[u8],
+    ip: &[u8],
+    gateway: &[u8],
+    dns: &[u8],
+    prefix: &[u8],
+) -> Option<NetPolicy> {
+    Some(NetPolicy {
+        dhcp: parse_net_mode_dhcp(mode)?,
+        addr: parse_ipv4(ip)?,
+        prefix: parse_prefix_len(prefix)?,
+        gateway: parse_ipv4(gateway)?,
+        dns: parse_ipv4(dns)?,
+    })
 }
 
 /// Maximum path length for filesystem IPC (`Open`, `Create`, `Stat`, …).
@@ -1199,6 +1329,7 @@ mod tests {
                 addr: [10, 0, 0, 1],
                 port: 80,
             },
+            NetRequest::apply_iface(false, [10, 0, 2, 15], 24, [10, 0, 2, 2], [10, 0, 2, 3]),
         ] {
             assert_eq!(round_trip(req), req);
         }
@@ -1330,6 +1461,58 @@ mod tests {
             modified: true,
         };
         assert_eq!(round_trip(view), view);
+    }
+
+    #[test]
+    fn apply_iface_is_appended_after_poll() {
+        // Poll stays index 10; ApplyIface is 11 so existing Poll wires keep working.
+        let mut buf = [0u8; 32];
+        let poll = postcard::to_slice(&NetRequest::Poll, &mut buf).expect("poll");
+        assert_eq!(poll[0], 10);
+        let apply = postcard::to_slice(
+            &NetRequest::apply_iface(true, [0; 4], 24, [0; 4], [0; 4]),
+            &mut buf,
+        )
+        .expect("apply");
+        assert_eq!(apply[0], 11);
+    }
+
+    #[test]
+    fn parse_ipv4_accepts_dotted_octets() {
+        assert_eq!(parse_ipv4(b"10.0.2.15"), Some([10, 0, 2, 15]));
+        assert_eq!(parse_ipv4(b"0.0.0.0"), Some([0, 0, 0, 0]));
+        assert_eq!(parse_ipv4(b"255.255.255.255"), Some([255, 255, 255, 255]));
+    }
+
+    #[test]
+    fn parse_ipv4_rejects_malformed() {
+        assert_eq!(parse_ipv4(b""), None);
+        assert_eq!(parse_ipv4(b"10.0.2"), None);
+        assert_eq!(parse_ipv4(b"10.0.2.15.1"), None);
+        assert_eq!(parse_ipv4(b"10.0.2.256"), None);
+        assert_eq!(parse_ipv4(b"10.0.2.15x"), None);
+        assert_eq!(parse_ipv4(b"10.0..15"), None);
+    }
+
+    #[test]
+    fn parse_prefix_len_accepts_1_through_32() {
+        assert_eq!(parse_prefix_len(b"1"), Some(1));
+        assert_eq!(parse_prefix_len(b"24"), Some(24));
+        assert_eq!(parse_prefix_len(b"32"), Some(32));
+        assert_eq!(parse_prefix_len(b"0"), None);
+        assert_eq!(parse_prefix_len(b"33"), None);
+        assert_eq!(parse_prefix_len(b""), None);
+    }
+
+    #[test]
+    fn parse_net_policy_rejects_bad_mode() {
+        assert!(parse_net_policy(b"dhcp", b"10.0.2.15", b"10.0.2.2", b"10.0.2.3", b"24").is_some());
+        assert!(
+            parse_net_policy(b"static", b"10.0.2.15", b"10.0.2.2", b"10.0.2.3", b"24").is_some()
+        );
+        assert!(parse_net_policy(b"auto", b"10.0.2.15", b"10.0.2.2", b"10.0.2.3", b"24").is_none());
+        assert!(!is_net_config_key(b"hostname"));
+        assert!(is_net_config_key(b"net.mode"));
     }
 
     #[test]

@@ -1,6 +1,6 @@
 # Config schema (Phase 54)
 
-Configuration is FS-backed under **`/config/`** via `config-server` (`ConfigRequest` / `ConfigResponse`). Changing policy is a **config write + reboot** (or re-read on next service init), not an image rebuild.
+Configuration is FS-backed under **`/config/`** via `config-server` (`ConfigRequest` / `ConfigResponse`). Changing `net.*` is a **config write + live apply** (`NetRequest::ApplyIface`); other keys still take effect on the next service re-read or reboot. Policy is not an image rebuild.
 
 ## Path layout
 
@@ -18,8 +18,8 @@ Keys must be printable ASCII without `/` or NUL. Max lengths: key 32, value 64 (
 | Key | Values | Default (QEMU / RPi4) | Notes |
 |-----|--------|------------------------|-------|
 | `hostname` | short name | `lerux` / `lerux-rpi4` | Logged at boot; not applied to DNS yet |
-| `net.mode` | `dhcp` \| `static` | `dhcp` | Informational for now; stack still tries DHCP then static fallback |
-| `net.ip` | dotted IPv4 | `10.0.2.15` / `192.168.1.10` | Static fallback address |
+| `net.mode` | `dhcp` \| `static` | `dhcp` | Live-applied via `ApplyIface`. `static` installs immediately; `dhcp` restarts discover (static keys remain the timeout fallback) |
+| `net.ip` | dotted IPv4 | `10.0.2.15` / `192.168.1.10` | Static address / DHCP fallback |
 | `net.gateway` | dotted IPv4 | `10.0.2.2` / `192.168.1.1` | Default route |
 | `net.dns` | dotted IPv4 | `10.0.2.3` / `192.168.1.1` | DNS server |
 | `net.prefix` | `1`–`32` | `24` | Prefix length |
@@ -37,17 +37,19 @@ Constants live in `lerux-interface-types` (`CFG_*`).
 3. **Seed missing keys only** (if `boot.seeded` is absent or incomplete). Never overwrite existing values.
 4. Set `boot.seeded=1` and log `lerux-supervisor: first-boot seed ok` (or `config already seeded`).
 5. **Read and log policy:** `lerux-supervisor: config hostname=… net.mode=… log.level=…`.
-6. Bring up net; rotate/write `/boot.log` according to `log.rotate`.
+6. If `net.mode=static`, `ApplyIface` before the net probe (`lerux-supervisor: net apply static`). DHCP mode leaves net-server’s boot discover + fallback alone.
+7. Bring up net; rotate/write `/boot.log` according to `log.rotate`.
 
 ## Shell
 
 ```text
 config list              # list keys (secrets shown without values)
 config get <key>
-config set <key> <value>
+config set <key> <value> # net.* also ApplyIface (prints `net apply: static …` / `dhcp`)
 config del <key>
 get / set / list         # aliases when first arg looks like a key or `config`
 hostname                 # print hostname from config (fallback: lerux)
+ip                       # live iface (dhcp vs static) from net-server
 ```
 
 ## Host tooling
@@ -70,4 +72,4 @@ Guest first-boot still seeds if the image is empty; `seed-disk` is for reproduci
 
 ## Exit criteria (Phase 54)
 
-Operator can change hostname / net.* / log.* via shell, reboot, and see the new values applied in supervisor config log without rebuilding `loader.img`.
+Operator can change hostname / net.* / log.* via shell without rebuilding `loader.img`. `net.*` applies live (`ip` shows the new mode/address); hostname and `log.*` still apply on the next re-read or reboot.

@@ -35,8 +35,8 @@ See docs/config.md for the full table.
 
 Well-known keys:
   hostname          short name (default: lerux)
-  net.mode          dhcp | static
-  net.ip            dotted IPv4 (static fallback)
+  net.mode          dhcp | static  (live-applied; static installs now)
+  net.ip            dotted IPv4 (static address / DHCP fallback)
   net.gateway       dotted IPv4
   net.dns           dotted IPv4
   net.prefix        1-32

@@ -8,10 +8,11 @@ use embedded_hal_nb::{
     serial::{Read as _, Write as _},
 };
 use lerux_interface_types::{
-    BackupRequest, BackupResponse, ChatRequest, ChatResponse, ConfigRequest, ConfigResponse,
-    EditRequest, EditResponse, FsRequest, FsResponse, LogRequest, LogResponse, NetRequest,
-    NetResponse, SupervisorRequest, SupervisorResponse, CFG_HOSTNAME, CFG_SECRET_PREFIX,
-    MAX_CHAT_MSG, MAX_SERVICE_NAME,
+    is_net_config_key, parse_net_policy, BackupRequest, BackupResponse, ChatRequest, ChatResponse,
+    ConfigRequest, ConfigResponse, EditRequest, EditResponse, FsRequest, FsResponse, LogRequest,
+    LogResponse, NetPolicy, NetRequest, NetResponse, SupervisorRequest, SupervisorResponse,
+    CFG_HOSTNAME, CFG_NET_DNS, CFG_NET_GATEWAY, CFG_NET_IP, CFG_NET_MODE, CFG_NET_PREFIX,
+    CFG_SECRET_PREFIX, MAX_CHAT_MSG, MAX_CONFIG_VAL_LEN, MAX_SERVICE_NAME,
 };
 use lerux_ipc::{call, FsClient, NetClient};
 use lerux_logging::{log, server};
@@ -534,7 +535,10 @@ fn help_cmd(console: &mut SerialClient, arg: Option<&[u8]>) {
                 console,
                 "sys:    time date uptime ps top status qos reboot dmesg clear history",
             );
-            println(console, "config: config get|set|list|del  hostname");
+            println(
+                console,
+                "config: config get|set|list|del  hostname  (net.* applies live)",
+            );
             println(console, "apps:   edit chat backup calc fetch echo help");
         }
         Some(other) => {
@@ -590,7 +594,12 @@ fn config_get_cmd(console: &mut SerialClient, key: &[u8]) {
 
 fn config_set_cmd(console: &mut SerialClient, key: &[u8], value: &[u8]) {
     match config_call(ConfigRequest::set(key, value)) {
-        ConfigResponse::Ok => println(console, "config set: ok"),
+        ConfigResponse::Ok => {
+            println(console, "config set: ok");
+            if is_net_config_key(key) {
+                apply_net_from_config(console);
+            }
+        }
         ConfigResponse::Denied => {
             println(
                 console,
@@ -598,6 +607,53 @@ fn config_set_cmd(console: &mut SerialClient, key: &[u8], value: &[u8]) {
             );
         }
         _ => println(console, "config set: failed"),
+    }
+}
+
+fn config_value(key: &[u8]) -> Option<(u8, [u8; MAX_CONFIG_VAL_LEN])> {
+    match config_call(ConfigRequest::get(key)) {
+        ConfigResponse::Value { val_len, value } => Some((val_len, value)),
+        _ => None,
+    }
+}
+
+fn read_net_policy() -> Option<NetPolicy> {
+    let (ml, mb) = config_value(CFG_NET_MODE)?;
+    let (il, ib) = config_value(CFG_NET_IP)?;
+    let (gl, gb) = config_value(CFG_NET_GATEWAY)?;
+    let (dl, db) = config_value(CFG_NET_DNS)?;
+    let (pl, pb) = config_value(CFG_NET_PREFIX)?;
+    parse_net_policy(
+        &mb[..ml as usize],
+        &ib[..il as usize],
+        &gb[..gl as usize],
+        &db[..dl as usize],
+        &pb[..pl as usize],
+    )
+}
+
+fn apply_net_from_config(console: &mut SerialClient) {
+    let Some(policy) = read_net_policy() else {
+        println(console, "net apply: skipped (invalid net.*)");
+        return;
+    };
+    match NET_SERVER.call_raw(policy.to_apply()) {
+        NetResponse::Ok => {
+            if policy.dhcp {
+                println(console, "net apply: dhcp");
+            } else {
+                let _ = writeln!(
+                    ConsoleWriter(console),
+                    "net apply: static {}.{}.{}.{}/{}",
+                    policy.addr[0],
+                    policy.addr[1],
+                    policy.addr[2],
+                    policy.addr[3],
+                    policy.prefix
+                );
+            }
+        }
+        _ => println(console, "net apply: failed"),
     }
 }
 

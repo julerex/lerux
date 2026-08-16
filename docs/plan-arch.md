@@ -1,6 +1,6 @@
 # PLAN — Arch-level functionality (phases 50–60)
 
-Last updated: 2026-08-16 (physical RPi4 lab extracted)
+Last updated: 2026-08-16 (net config hot-apply)
 
 Related: [`plan.md`](plan.md) (completed phases 1–49), [`plan-au-ts.md`](plan-au-ts.md) (sDDF/LionsOS inspiration track), [`context.md`](context.md) (domain language).
 
@@ -160,11 +160,11 @@ A new user can administer files, net identity, services, and logs without knowin
 - [x] Shell `config get|set|list|del` + `hostname`; host `lerux config schema|defaults|seed-disk`.
 - [x] Secrets: `secret.*` → `/config/secrets/` (path isolation; no encryption yet).
 - [x] Boot log rotation: `log.rotate` renames `/boot.log` → `/boot.log.1`.
-- [ ] Hot-apply static net from config into `net-server` (stretch).
+- [x] Hot-apply static net from config into `net-server` (`NetRequest::ApplyIface`; shell `config set net.*`; supervisor applies `net.mode=static` at boot).
 
 ### Exit
 
-Changing hostname / net.* / log.* is a config write + reboot (values re-read and logged), not a rebuild. **Met** for policy surface; live net reconfigure remains stretch.
+Changing hostname / log.* is a config write + reboot (values re-read and logged), not a rebuild. `net.*` applies live. **Met** including hot-apply.
 
 ---
 
@@ -310,7 +310,7 @@ Do **not** start MCS, graphics, or POSIX. Order by leverage and dependence:
 
 Work that **cannot close on QEMU**. Phases 37, 39, 47, and 52 shipped the profiles, native drivers, deploy path, first-boot seed, and `just test-hw` harness. This section is the remaining on-device gate.
 
-It does **not** block TLS, net hot-apply, FAT stretch, x86 unified-dma, or other software work.
+It does **not** block FAT stretch, x86 unified-dma, or other software work.
 
 Procedure and empty result grid: [`boards.md` — RPi4 workstation install path](boards.md#rpi4-workstation-install-path-phase-52).
 
@@ -371,7 +371,7 @@ That is Arch’s **workflow and completeness**, reimplemented as static Microkit
 
 If capacity is limited, do **not** start with graphics or scripting runtimes:
 
-1. **Software stretch** — net config hot-apply (54), FAT subdirs/LFN (50), x86 unified-dma (51). Completable on QEMU.
+1. **Software stretch** — FAT subdirs/LFN (50), x86 unified-dma (51). Completable on QEMU.
 2. **[Physical RPi4 lab](#physical-rpi4-lab-hardware-gated)** — when a board is on the desk. Does not block (1).
 
 ---
@@ -406,4 +406,4 @@ Each phase should add or extend **one** profile board smoke rather than only uni
 
 ## Summary
 
-Phases **1–60** built the **kernel of an Arch-like workflow** (profiles, init, shell, FS/net, packages, multi-arch workstation, hardening). Remaining QEMU work is stretch (TLS, net hot-apply, FAT hierarchy). On-device truth is a separate track: [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated). All of it as **ported Rust PDs and host tooling**, never as a Linux compatibility layer.
+Phases **1–60** built the **kernel of an Arch-like workflow** (profiles, init, shell, FS/net, packages, multi-arch workstation, hardening). Remaining QEMU work is stretch (FAT hierarchy, x86 unified-dma). On-device truth is a separate track: [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated). All of it as **ported Rust PDs and host tooling**, never as a Linux compatibility layer.

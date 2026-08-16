@@ -124,6 +124,7 @@ expects = [
   "virtio-net: MAC",
   "lerux-net: TX ok",
   "lerux-net: IPC ok",
+  "lerux-net: apply static",
 ]
 
 [boards.qemu_virt_riscv64_net]
@@ -132,6 +133,7 @@ expects = [
   "virtio-net: MAC",
   "lerux-net: TX ok",
   "lerux-net: IPC ok",
+  "lerux-net: apply static",
 ]
 
 [boards.x86_64_generic_net]
@@ -140,6 +142,7 @@ expects = [
   "virtio-net: MAC",
   "lerux-net: TX ok",
   "lerux-net: IPC ok",
+  "lerux-net: apply static",
 ]
 
 [boards.qemu_virt_aarch64_net_composed]
@@ -151,6 +154,7 @@ expects = [
   "virtio-net: MAC",
   "lerux-net: TX ok",
   "lerux-net: IPC ok",
+  "lerux-net: apply static",
 ]
 
 [boards.qemu_virt_aarch64_ipc_composed]
@@ -382,6 +386,8 @@ script = [
   { send = "uptime\r", expect = "up " },
   { send = "hostname\r", expect = "lerux" },
   { send = "config list\r", expect = "hostname" },
+  { send = "config set net.mode static\r", expect = "net apply: static" },
+  { send = "ip\r", expect = "static" },
 ]
 
 [boards.rpi4b_4gb_net]

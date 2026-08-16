@@ -24,6 +24,34 @@ fn probe_net() {
 
     #[cfg(feature = "bench")]
     bench_udp_tx();
+
+    apply_static_smoke();
+}
+
+/// Phase 54: ApplyIface static must be visible on GetIface without reboot.
+fn apply_static_smoke() {
+    let NetResponse::Iface {
+        addr,
+        prefix,
+        gateway,
+        dns,
+        ..
+    } = NET_SERVER.call(NetRequest::GetIface)
+    else {
+        panic!("net iface unavailable");
+    };
+    match NET_SERVER.call(NetRequest::apply_iface(false, addr, prefix, gateway, dns)) {
+        NetResponse::Ok => {}
+        _ => panic!("net apply failed"),
+    }
+    match NET_SERVER.call(NetRequest::GetIface) {
+        NetResponse::Iface {
+            dhcp: false,
+            addr: got,
+            ..
+        } if got == addr => log::info!("lerux-net: apply static"),
+        _ => panic!("net apply not visible"),
+    }
 }
 
 /// Phase 49: N UdpTx+Poll completions; host times wall-clock between start/done.

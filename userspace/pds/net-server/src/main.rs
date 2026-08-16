@@ -183,6 +183,13 @@ impl Handler for HandlerImpl {
                     }
                 }
                 NetRequest::GetIface => send(self.net.iface_response()),
+                NetRequest::ApplyIface {
+                    dhcp,
+                    addr,
+                    prefix,
+                    gateway,
+                    dns,
+                } => send(self.net.apply_iface(dhcp, addr, prefix, gateway, dns)),
                 NetRequest::TcpConnect { addr, port } => {
                     if !self.begin_async(channel) {
                         return Ok(send(NetResponse::Pending));

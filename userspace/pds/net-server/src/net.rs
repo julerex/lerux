@@ -148,6 +148,26 @@ impl IfaceState {
     }
 }
 
+/// Compile-time / operator static snapshot used as DHCP fallback and for ApplyIface.
+#[derive(Clone, Copy)]
+struct StaticPolicy {
+    addr: Ipv4Address,
+    prefix: u8,
+    gateway: Ipv4Address,
+    dns: Ipv4Address,
+}
+
+impl StaticPolicy {
+    const fn compile_time() -> Self {
+        Self {
+            addr: STATIC_GUEST_IP,
+            prefix: STATIC_PREFIX,
+            gateway: STATIC_GATEWAY,
+            dns: STATIC_DNS,
+        }
+    }
+}
+
 pub struct NetStack {
     device: DeviceImpl<WithAlignmentBound<BasicAllocator>>,
     iface: Interface,
@@ -175,6 +195,11 @@ pub struct NetStack {
     millis: i64,
     dhcp_done: bool,
     dhcp_fallback_applied: bool,
+    /// When false, DHCP events are ignored (static ApplyIface).
+    dhcp_enabled: bool,
+    /// Fake-time deadline for DHCP → static fallback (from last DHCP start).
+    dhcp_deadline_ms: i64,
+    static_policy: StaticPolicy,
     /// When false, try_tcp_listen succeeds silently (background re-listen).
     listen_notify_client: bool,
 }
@@ -298,6 +323,9 @@ impl NetStack {
             millis: 0,
             dhcp_done: false,
             dhcp_fallback_applied: false,
+            dhcp_enabled: true,
+            dhcp_deadline_ms: DHCP_GIVE_UP_MS,
+            static_policy: StaticPolicy::compile_time(),
             listen_notify_client: true,
         }
     }
@@ -798,7 +826,7 @@ impl NetStack {
     }
 
     fn process_dhcp(&mut self, sockets: &mut SocketSet<'static>) {
-        if self.dhcp_done {
+        if !self.dhcp_enabled || self.dhcp_done {
             return;
         }
         let arena = unsafe { &*core::ptr::addr_of!(SOCKET_ARENA) };
@@ -824,6 +852,7 @@ impl NetStack {
                     dhcp: true,
                     configured: true,
                 };
+                self.close_udp(sockets);
                 self.dhcp_done = true;
                 // Refresh DNS socket servers.
                 if let Some(dns_h) = arena.dns_handle {
@@ -846,40 +875,115 @@ impl NetStack {
             None => {}
         }
 
-        if !self.dhcp_done && !self.dhcp_fallback_applied && self.millis >= DHCP_GIVE_UP_MS {
+        if !self.dhcp_done && !self.dhcp_fallback_applied && self.millis >= self.dhcp_deadline_ms {
             self.apply_static_fallback(sockets);
         }
     }
 
-    fn apply_static_fallback(&mut self, sockets: &mut SocketSet<'static>) {
-        apply_ipv4(
-            &mut self.iface,
-            STATIC_GUEST_IP,
-            STATIC_PREFIX,
-            STATIC_GATEWAY,
-        );
+    fn close_udp(&mut self, sockets: &mut SocketSet<'static>) {
+        let arena = unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_ARENA) };
+        if let Some(h) = arena.udp_handle
+            && arena.udp_bound
+        {
+            sockets.get_mut::<UdpSocket>(h).close();
+            arena.udp_bound = false;
+        }
+    }
+
+    fn reset_dhcp_socket(&mut self, sockets: &mut SocketSet<'static>) {
+        let arena = unsafe { &*core::ptr::addr_of!(SOCKET_ARENA) };
+        if let Some(h) = arena.dhcp_handle {
+            let dhcp = sockets.get_mut::<DhcpSocket>(h);
+            dhcp.reset();
+            let _ = dhcp.poll();
+        }
+    }
+
+    fn install_static(&mut self, sockets: &mut SocketSet<'static>) {
+        let p = self.static_policy;
+        apply_ipv4(&mut self.iface, p.addr, p.prefix, p.gateway);
         self.iface_state = IfaceState {
-            addr: STATIC_GUEST_IP,
-            prefix: STATIC_PREFIX,
-            gateway: STATIC_GATEWAY,
-            dns: STATIC_DNS,
+            addr: p.addr,
+            prefix: p.prefix,
+            gateway: p.gateway,
+            dns: p.dns,
             dhcp: false,
             configured: true,
         };
-        self.dhcp_fallback_applied = true;
-        self.dhcp_done = true;
+        self.close_udp(sockets);
         let arena = unsafe { &*core::ptr::addr_of!(SOCKET_ARENA) };
         if let Some(dns_h) = arena.dns_handle {
             let dns_sock = sockets.get_mut::<DnsSocket>(dns_h);
-            dns_sock.update_servers(&[IpAddress::Ipv4(STATIC_DNS)]);
+            dns_sock.update_servers(&[IpAddress::Ipv4(p.dns)]);
         }
+    }
+
+    fn apply_static_fallback(&mut self, sockets: &mut SocketSet<'static>) {
+        self.dhcp_fallback_applied = true;
+        self.dhcp_done = true;
+        self.install_static(sockets);
+        let addr = self.static_policy.addr.octets();
         log::info!(
             "lerux-net: static {}.{}.{}.{}",
-            STATIC_GUEST_IP.octets()[0],
-            STATIC_GUEST_IP.octets()[1],
-            STATIC_GUEST_IP.octets()[2],
-            STATIC_GUEST_IP.octets()[3]
+            addr[0],
+            addr[1],
+            addr[2],
+            addr[3]
         );
+    }
+
+    /// Apply operator policy now. Static takes effect immediately; DHCP restarts
+    /// with `static_policy` as the timeout fallback.
+    pub fn apply_iface(
+        &mut self,
+        dhcp: bool,
+        addr: [u8; 4],
+        prefix: u8,
+        gateway: [u8; 4],
+        dns: [u8; 4],
+    ) -> NetResponse {
+        if !(1..=32).contains(&prefix) {
+            return NetResponse::Error;
+        }
+        self.static_policy = StaticPolicy {
+            addr: Ipv4Address::new(addr[0], addr[1], addr[2], addr[3]),
+            prefix,
+            gateway: Ipv4Address::new(gateway[0], gateway[1], gateway[2], gateway[3]),
+            dns: Ipv4Address::new(dns[0], dns[1], dns[2], dns[3]),
+        };
+        let arena = unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_ARENA) };
+        let mut sockets = SocketSet::new(&mut arena.storage[..]);
+        self.ensure_core_sockets(&mut sockets);
+        if dhcp {
+            self.dhcp_enabled = true;
+            self.dhcp_done = false;
+            self.dhcp_fallback_applied = false;
+            self.dhcp_deadline_ms = self.millis.saturating_add(DHCP_GIVE_UP_MS);
+            self.reset_dhcp_socket(&mut sockets);
+            log::info!(
+                "lerux-net: apply dhcp (fallback {}.{}.{}.{}/{})",
+                addr[0],
+                addr[1],
+                addr[2],
+                addr[3],
+                prefix
+            );
+        } else {
+            self.dhcp_enabled = false;
+            self.dhcp_done = true;
+            self.dhcp_fallback_applied = true;
+            self.reset_dhcp_socket(&mut sockets);
+            self.install_static(&mut sockets);
+            log::info!(
+                "lerux-net: apply static {}.{}.{}.{}/{}",
+                addr[0],
+                addr[1],
+                addr[2],
+                addr[3],
+                prefix
+            );
+        }
+        NetResponse::Ok
     }
 
     fn log_udp_tx_done(&mut self) {

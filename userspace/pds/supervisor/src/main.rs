@@ -22,12 +22,12 @@ use sel4_microkit_driver_adapters::{
 
 #[cfg(feature = "workstation")]
 use lerux_interface_types::{
-    ConfigRequest, ConfigResponse, FsRequest, FsResponse, LogRequest, LogResponse, NetRequest,
-    NetResponse, CFG_BOOT_SEEDED, CFG_HOSTNAME, CFG_LOG_LEVEL, CFG_LOG_ROTATE, CFG_NET_DNS,
-    CFG_NET_GATEWAY, CFG_NET_IP, CFG_NET_MODE, CFG_NET_PREFIX, LOG_LEVEL_DEBUG, LOG_LEVEL_ERROR,
-    LOG_LEVEL_INFO, LOG_LEVEL_WARN, MAX_CONFIG_VAL_LEN, MAX_SERVICES, MAX_SERVICE_ERR,
-    MAX_SERVICE_NAME, SERVICE_STATE_DEGRADED, SERVICE_STATE_ERROR, SERVICE_STATE_READY,
-    SERVICE_STATE_STARTING,
+    parse_net_policy, ConfigRequest, ConfigResponse, FsRequest, FsResponse, LogRequest,
+    LogResponse, NetPolicy, NetRequest, NetResponse, CFG_BOOT_SEEDED, CFG_HOSTNAME, CFG_LOG_LEVEL,
+    CFG_LOG_ROTATE, CFG_NET_DNS, CFG_NET_GATEWAY, CFG_NET_IP, CFG_NET_MODE, CFG_NET_PREFIX,
+    LOG_LEVEL_DEBUG, LOG_LEVEL_ERROR, LOG_LEVEL_INFO, LOG_LEVEL_WARN, MAX_CONFIG_VAL_LEN,
+    MAX_SERVICES, MAX_SERVICE_ERR, MAX_SERVICE_NAME, SERVICE_STATE_DEGRADED, SERVICE_STATE_ERROR,
+    SERVICE_STATE_READY, SERVICE_STATE_STARTING,
 };
 #[cfg(feature = "workstation")]
 use lerux_ipc::{call, FsClient, NetClient};
@@ -281,6 +281,38 @@ fn apply_config_policy() {
 }
 
 #[cfg(feature = "workstation")]
+fn read_net_policy() -> Option<NetPolicy> {
+    let (ml, mb) = config_get(CFG_NET_MODE)?;
+    let (il, ib) = config_get(CFG_NET_IP)?;
+    let (gl, gb) = config_get(CFG_NET_GATEWAY)?;
+    let (dl, db) = config_get(CFG_NET_DNS)?;
+    let (pl, pb) = config_get(CFG_NET_PREFIX)?;
+    parse_net_policy(
+        &mb[..ml as usize],
+        &ib[..il as usize],
+        &gb[..gl as usize],
+        &db[..dl as usize],
+        &pb[..pl as usize],
+    )
+}
+
+/// Apply `net.mode=static` before the UDP probe. DHCP stays on net-server's
+/// boot discover + fallback so we do not restart a completed lease.
+#[cfg(feature = "workstation")]
+fn apply_net_policy() {
+    let Some(policy) = read_net_policy() else {
+        return;
+    };
+    if policy.dhcp {
+        return;
+    }
+    match NET_SERVER.call_raw(policy.to_apply()) {
+        NetResponse::Ok => log::info!("lerux-supervisor: net apply static"),
+        _ => log::warn!("lerux-supervisor: net apply failed"),
+    }
+}
+
+#[cfg(feature = "workstation")]
 fn probe_net(h: &mut HandlerImpl) {
     // Exercise net server to ensure "net up". Bound Poll so a stuck Pending
     // cannot hang init (http-file-browser may leave the stack busy briefly).
@@ -496,6 +528,7 @@ fn init() -> HandlerImpl {
         probe_fs(&mut handler);
         seed_first_boot();
         apply_config_policy();
+        apply_net_policy();
         probe_net(&mut handler);
         persist_boot_log();
         log::info!("lerux-supervisor: ready");

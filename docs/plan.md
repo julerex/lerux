@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-08-16 (physical RPi4 lab extracted)
+Last updated: 2026-08-16 (net config hot-apply)
 
 ## Phase 1 — Bring-up
 
@@ -441,7 +441,7 @@ On-device sign-off is [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardwar
 - [x] Shell: `config get|set|list|del`, `hostname`; secrets under `/config/secrets/`
 - [x] Boot log rotate via `log.rotate` (`/boot.log` → `/boot.log.1`)
 - [x] Host: `lerux config schema|defaults|seed-disk`
-- [ ] Hot-apply net.mode/static from config into live stack (still DHCP+fallback)
+- [x] Hot-apply net.mode/static from config into live stack (`NetRequest::ApplyIface`; shell `config set net.*`; supervisor applies static at boot)
 
 ## Phase 55 — Package and profile UX (core done)
 
@@ -498,7 +498,7 @@ Stretch order and exit criteria: **[`plan-arch.md` § Phase 60 stretch sequence]
 | 51 | Network stack v2 (DHCP, DNS, multi-conn, TLS) | core done (TLS fetch smoke done; multi-client queue stretch) |
 | 52 | Hardware closeout (RPi4 deploy + seed + harness) | core done (on-device gate → [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated)) |
 | 53 | Shell + core utilities | core done |
-| 54 | Config, secrets, boot policy | core done (net hot-apply stretch) |
+| 54 | Config, secrets, boot policy | core done (net hot-apply done) |
 | 55 | Package/profile UX (pacman-like host CLI) | core done |
 | 56 | Time/init cross-arch parity | core done |
 | 57 | Observability and ops | core done |
@@ -506,7 +506,7 @@ Stretch order and exit criteria: **[`plan-arch.md` § Phase 60 stretch sequence]
 | 59 | Multi-arch workstation profiles | core done |
 | 60 | Security posture | core + stretch A–D done (MCS / asymmetric signing deferred) |
 
-Near-term priority: software stretch (net hot-apply, FAT subdirs). On-device work is [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated) and does not block that list. TLS fetch is done (`just test-fetch-tls`).
+Near-term priority: software stretch (FAT subdirs/LFN, x86 unified-dma). On-device work is [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated) and does not block that list. TLS fetch and net hot-apply are done.
 
 ## Physical RPi4 lab (hardware-gated)
 

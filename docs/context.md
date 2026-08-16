@@ -88,7 +88,7 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 : Workstation is a profile concept across arches: `workstation` (aarch64), `workstation-riscv`, `workstation-x86`, `workstation-rpi4`. Shared app channels; arch-specific serial/virtio/time drivers. Tiers: [`platforms.md`](platforms.md).
 
 **Config policy (Phase 54)**
-: FS-backed keys under `/config/` via `config-server` ([`docs/config.md`](config.md)). Supervisor seeds missing keys only (`boot.seeded`), logs active hostname/net.mode/log.level, and may rotate `/boot.log`. Shell: `config get|set|list|del`, `hostname`. Secrets use the `secret.*` prefix (`/config/secrets/`). Host: `lerux config schema|defaults|seed-disk`.
+: FS-backed keys under `/config/` via `config-server` ([`docs/config.md`](config.md)). Supervisor seeds missing keys only (`boot.seeded`), logs active hostname/net.mode/log.level, and may rotate `/boot.log`. `net.*` is live-applied (`NetRequest::ApplyIface`); shell `config set net.*` updates the stack without reboot. Secrets use the `secret.*` prefix (`/config/secrets/`). Host: `lerux config schema|defaults|seed-disk`.
 
 **Package (Phase 40 / 55)**
 : One PD crate plus its interface-types version and an optional profile fragment (`support/packages/<name>.toml`). Host CLI: `lerux package search|install|remove|upgrade` merges fragments into profiles (channel auto-wiring by name), then `lerux profile build`. Pins in `support/package-pins.toml`. See [`packages.md`](packages.md). Microkit does not load arbitrary ELFs at runtime.

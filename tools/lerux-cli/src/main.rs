@@ -109,6 +109,12 @@ enum Commands {
         build_dir: String,
         #[arg(long, default_value = "debug")]
         config: String,
+        /// Phase 70: QEMU gdbstub on tcp::1234 (`-s`).
+        #[arg(long, default_value_t = false)]
+        gdb: bool,
+        /// Phase 70: QEMU `-snapshot` (do not persist disk.img writes).
+        #[arg(long, default_value_t = false)]
+        snapshot: bool,
     },
     Test {
         #[arg(long, default_value = "qemu_virt_aarch64")]
@@ -121,6 +127,10 @@ enum Commands {
         /// Also set via `LERUX_TEST_MODE`. hw-serial requires `LERUX_HW_SERIAL`.
         #[arg(long)]
         mode: Option<String>,
+        #[arg(long, default_value_t = false)]
+        gdb: bool,
+        #[arg(long, default_value_t = false)]
+        snapshot: bool,
     },
     TestAll {
         #[arg(long, default_value = "build")]
@@ -486,7 +496,17 @@ fn main() -> Result<()> {
             board,
             build_dir,
             config,
+            gdb,
+            snapshot,
         } => {
+            if gdb {
+                // SAFETY: CLI is single-threaded here.
+                unsafe { std::env::set_var("LERUX_QEMU_GDB", "1") };
+            }
+            if snapshot {
+                // SAFETY: CLI is single-threaded here.
+                unsafe { std::env::set_var("LERUX_QEMU_SNAPSHOT", "1") };
+            }
             build::run(&root, &board, &build_dir, &config)?;
         }
         Commands::Test {
@@ -494,7 +514,17 @@ fn main() -> Result<()> {
             build_dir,
             config,
             mode,
+            gdb,
+            snapshot,
         } => {
+            if gdb {
+                // SAFETY: CLI is single-threaded here.
+                unsafe { std::env::set_var("LERUX_QEMU_GDB", "1") };
+            }
+            if snapshot {
+                // SAFETY: CLI is single-threaded here.
+                unsafe { std::env::set_var("LERUX_QEMU_SNAPSHOT", "1") };
+            }
             let mode = test::TestMode::from_env_or_flag(mode.as_deref())?;
             build::image(&root, &board, &build_dir, &config)?;
             test::run_board_test_with_mode(&root, &board, &build_dir, &config, mode)?;

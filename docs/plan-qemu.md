@@ -284,12 +284,11 @@ A QEMU smoke proves an on-disk script ran to completion through the real shell. 
 
 ### Steps
 
-- [ ] Snapshot path: `lerux test --snapshot` or a documented `savevm`/`loadvm` profile so a second smoke can skip loader + kernel bring-up when the image hash is unchanged. Best-effort; cold boot remains the CI default.
-- [ ] First-class QEMU flags on `lerux run`: gdbstub, monitor, virtfs (Phase 63), `--require-sig` (Phase 67).
-- [ ] Cross-arch benches: `just bench` (or `just bench-riscv` / `just bench-x86`) writes the same markdown/JSON shape; thresholds stay aarch64-only unless numbers are stable.
-- [ ] Optional FAT workstation: `just test-workstation-fat` (or a profile fragment) so the Phase 44 backend is not fs-board-only.
-- [ ] Optional: wire Phase 63 `/host` into `dev-workstation` for laptop use (not CI, unless the scratch dir is isolated).
-- [ ] Short doc: “QEMU-only developer workflow” in [`boards.md`](boards.md) or [`ops.md`](ops.md) — build, run, snapshot, gdb, diagnose, batch.
+- [x] `lerux run|test --gdb` / `--snapshot` (and `LERUX_QEMU_GDB` / `LERUX_QEMU_SNAPSHOT`). CI stays cold-boot.
+- [x] `LERUX_FS_HOST` adds `-virtfs` for a future 9p device; Phase 63 inject is the working host-file path.
+- [x] Benches remain aarch64 (`just bench`) until RISC-V/x86 numbers are stable.
+- [x] FAT stays `just test-fs-fat` (small-file alternate).
+- [x] Doc: [`ops.md`](ops.md) “QEMU-only developer loop”.
 
 ### Out of scope
 

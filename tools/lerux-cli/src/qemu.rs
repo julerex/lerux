@@ -26,6 +26,10 @@ pub struct QemuContext {
     pub board: Board,
     pub build_dir: String,
     pub config: String,
+    /// Phase 70: `-s` gdbstub (also `LERUX_QEMU_GDB=1`).
+    pub gdb: bool,
+    /// Phase 70: QEMU `-snapshot` overlay (also `LERUX_QEMU_SNAPSHOT=1`).
+    pub snapshot: bool,
 }
 
 const HOSTFWD: &str = "user,id=netdev0,hostfwd=tcp::18080-:8080";
@@ -59,9 +63,31 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
         other => bail!("unsupported arch {other}"),
     };
 
+    apply_dev_flags(&mut cmd, ctx);
     cmd.env("PATH", path);
     cmd.stdin(std::process::Stdio::inherit());
     Ok(cmd)
+}
+
+fn env_flag(name: &str) -> bool {
+    matches!(std::env::var(name).as_deref(), Ok("1" | "true" | "yes"))
+}
+
+fn apply_dev_flags(cmd: &mut Command, ctx: &QemuContext) {
+    if ctx.gdb || env_flag("LERUX_QEMU_GDB") {
+        cmd.arg("-s");
+    }
+    if ctx.snapshot || env_flag("LERUX_QEMU_SNAPSHOT") {
+        cmd.arg("-snapshot");
+    }
+    if let Ok(dir) = std::env::var("LERUX_FS_HOST")
+        && !dir.is_empty()
+    {
+        cmd.args([
+            "-virtfs",
+            &format!("local,path={dir},mount_tag=host,security_model=mapped-xattr,id=fsdev0"),
+        ]);
+    }
 }
 
 fn netdev_arg(net: NetMode) -> Option<&'static str> {
@@ -270,6 +296,8 @@ pub fn load_qemu_context(
         board,
         build_dir: build_dir.to_string(),
         config: config.to_string(),
+        gdb: false,
+        snapshot: false,
     })
 }
 

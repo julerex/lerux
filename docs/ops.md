@@ -35,6 +35,36 @@ cargo run -q -p lerux-cli -- diagnose /tmp/lerux.serial.log
 
 CI uploads `build/smoke-logs/` as artifact `smoke-serial-<matrix.id>` on every smoke job.
 
+## QEMU-only developer loop (Phase 70)
+
+Work without a board. Default smokes stay cold-boot.
+
+```bash
+# Interactive workstation (SP804 QEMU for aarch64)
+just test-echo                         # small loop
+lerux run --board qemu_virt_aarch64 --gdb
+# another terminal: gdb-multiarch -ex 'target remote :1234'
+
+# Do not persist disk.img writes
+lerux test --board qemu_virt_aarch64_fs --snapshot
+
+# Host files into /host (Phase 63 inject), then boot
+printf 'hello from host\n' > build/fs-host/hello.txt
+lerux fs-host seed --dir build/fs-host
+just test-fs-host
+
+# Sign and verify before a QEMU boot
+lerux sign --board qemu_virt_aarch64
+lerux verify-image --board qemu_virt_aarch64 --key support/keys/smoke.ed25519.pub --require-sig
+
+# FAT remains the small-file alternate
+just test-fs-fat
+```
+
+Monitor is already on stdio (`mon:stdio`): `Ctrl-A c` then `savevm` / `loadvm` for a manual snapshot. CI never uses `--snapshot` or `--gdb`.
+
+Benches stay aarch64 (`just bench`) unless numbers on RISC-V/x86 prove stable.
+
 ## Fault path
 
 See [`debug.md`](debug.md): `just test-debug` for hierarchy faults; `just test-isolation` for crash-then-FS (Phase 60); QEMU gdbstub for interactive backtraces. Production workstation images stay without a debug parent (ADR-005). Trust map: [`security.md`](security.md).

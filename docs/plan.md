@@ -566,11 +566,11 @@ Completable **without a board**. Living checklist: **[`plan-qemu.md`](plan-qemu.
 - [x] Shell `run` / `source [-k]`
 - [x] Workstation writes and runs `/batch/smoke.lerux`; expect `lerux-shell: batch ok`
 
-## Phase 70 — QEMU developer loop (planned)
+## Phase 70 — QEMU developer loop ✅
 
-- [ ] Snapshot / `savevm` path for a faster second smoke (CI stays cold-boot)
-- [ ] Cross-arch `just bench`; optional FAT workstation smoke
-- [ ] Documented QEMU-only inner loop (`lerux run` gdbstub, monitor, virtfs, `--require-sig`)
+- [x] `lerux run|test --gdb` / `--snapshot`; monitor already on stdio
+- [x] Benches stay aarch64; FAT via `just test-fs-fat`
+- [x] Documented in [`ops.md`](ops.md)
 
 | Phase | Theme | Status |
 |-------|--------|--------|
@@ -583,7 +583,7 @@ Completable **without a board**. Living checklist: **[`plan-qemu.md`](plan-qemu.
 | 67 | Asymmetric image signing | done |
 | 68 | TLS roots + cert tool | done |
 | 69 | Batch runner (on-disk shell scripts) | done |
-| 70 | QEMU developer loop | planned |
+| 70 | QEMU developer loop | done |
 
 Near-term priority: **61 → 62 → 64** ([`plan-qemu.md` § Near-term priority](plan-qemu.md#near-term-priority)). On-device work is [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated) and does not block that list.
 

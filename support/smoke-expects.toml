@@ -26,7 +26,12 @@ expects = ["lerux: Hello from Rust on seL4 Microkit!"]
 expects = ["lerux: Hello from Rust on seL4 Microkit!"]
 
 [boards.qemu_virt_aarch64_echo]
-expects = ["echo-server ready", "lerux-echo: pong", "lerux-echo: lerux"]
+expects = [
+  "serial-virt: per-client tx",
+  "echo-server ready",
+  "lerux-echo: pong",
+  "lerux-echo: lerux",
+]
 
 [boards.qemu_virt_aarch64_bench_echo]
 timeout_secs = 90

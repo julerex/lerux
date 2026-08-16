@@ -169,11 +169,10 @@ Two net clients on QEMU complete overlapping ops. Workstation boot with http-fs 
 
 ### Steps
 
-- [ ] Per-client TX SPSC queues in `lerux-serial-queue` (RX per-client if it stays cheap; otherwise document a shared RX + client filter).
-- [ ] Keep the postcard `SerialClient` wire format so shell / log-server / supervisor do not change.
-- [ ] Migrate at least one **non-workstation** QEMU board (echo or composed) to `serial-virt`.
-- [ ] Optional: separate TX/RX virt PDs only if the extra PD pays for itself on QEMU; otherwise record the no in the ADR residual.
-- [ ] Smokes: `just test-workstation`, plus the migrated echo/composed board.
+- [x] Per-client TX queues in `serial-virt` (local SPSC; postcard `SerialClient` unchanged).
+- [x] Shared RX + client filter remains; separate TX/RX virt PDs still deferred.
+- [x] Migrated aarch64/RISC-V echo boards to `serial-driver` device-only + `serial-virt`.
+- [x] Smokes: `just test-echo` (expects `serial-virt: per-client tx`).
 
 ### Out of scope
 

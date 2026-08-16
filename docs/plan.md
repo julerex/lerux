@@ -537,10 +537,11 @@ Completable **without a board**. Living checklist: **[`plan-qemu.md`](plan-qemu.
 - [x] Second client is queued, not rejected with the other’s `Pending`
 - [x] `just test-net` (workstation overlap logs `lerux-net: multi-client ok` when it happens)
 
-## Phase 65 — Serial virtualiser v2 (planned)
+## Phase 65 — Serial virtualiser v2 ✅
 
-- [ ] Per-client TX SPSC queues; postcard `SerialClient` unchanged
-- [ ] Migrate one non-workstation QEMU board (echo or composed) to `serial-virt`
+- [x] Per-client TX queues in `serial-virt`
+- [x] Echo (aarch64 + RISC-V) uses `serial-virt`; x86 echo stays combined
+- [x] `just test-echo` expects `serial-virt: per-client tx`
 
 ## Phase 66 — QEMU arch parity (planned)
 
@@ -576,7 +577,7 @@ Completable **without a board**. Living checklist: **[`plan-qemu.md`](plan-qemu.
 | 62 | Filesystem v3 (size + paths) | done |
 | 63 | Host-backed FS (QEMU inject) | done |
 | 64 | Multi-client net queue | done |
-| 65 | Serial virtualiser v2 | planned |
+| 65 | Serial virtualiser v2 | done |
 | 66 | QEMU arch parity (debug / isolation) | planned |
 | 67 | Asymmetric image signing | planned |
 | 68 | TLS roots + cert tool | planned |

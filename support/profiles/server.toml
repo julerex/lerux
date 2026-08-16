@@ -2,23 +2,30 @@
 # Demonstrates a typed IPC server package wired to clients.
 
 template = "echo.system.template"
-pds = ["echo-client", "echo-server", "serial-driver"]
+pds = ["echo-client", "echo-server", "serial-driver", "serial-virt"]
 description = "Echo client/server (typed IPC demo) + serial"
 default_board = "qemu_virt_aarch64_echo"
 # Phase 60: fixed-function IPC demo, no interactive shell.
 trust_class = "appliance"
 
 [[channel]]
-name = "echo_client_serial"
+name = "driver_virt"
 ends = [
   { pd = "serial_driver", id = 1 },
+  { pd = "serial_virt", id = 0, pp = true },
+]
+
+[[channel]]
+name = "echo_client_serial"
+ends = [
+  { pd = "serial_virt", id = 1 },
   { pd = "echo_client", id = 0, pp = true },
 ]
 
 [[channel]]
 name = "echo_server_serial"
 ends = [
-  { pd = "serial_driver", id = 2 },
+  { pd = "serial_virt", id = 2 },
   { pd = "echo_server", id = 0, pp = true },
 ]
 

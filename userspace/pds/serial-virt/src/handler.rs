@@ -17,6 +17,8 @@ pub struct HandlerImpl<const NUM_CLIENTS: usize, const READ_BUF_SIZE: usize = 25
     driver: Channel,
     clients: [Channel; NUM_CLIENTS],
     buffer: Deque<u8, READ_BUF_SIZE>,
+    /// Phase 65: per-client TX so one writer cannot clobber another's pending byte.
+    tx: [Deque<u8, 64>; NUM_CLIENTS],
     notify_rx_client: bool,
 }
 
@@ -26,6 +28,7 @@ impl<const NUM_CLIENTS: usize, const READ_BUF_SIZE: usize> HandlerImpl<NUM_CLIEN
             driver,
             clients,
             buffer: Deque::new(),
+            tx: [const { Deque::new() }; NUM_CLIENTS],
             notify_rx_client: true,
         }
     }
@@ -50,7 +53,20 @@ impl<const NUM_CLIENTS: usize, const READ_BUF_SIZE: usize> HandlerImpl<NUM_CLIEN
         }
     }
 
-    fn handle_request(&mut self, req: Request) -> Response {
+    fn drain_tx(&mut self, idx: usize) {
+        while let Some(b) = self.tx[idx].pop_front() {
+            match self.driver_request(Request::Write(b)) {
+                Ok(SuccessResponse::Write(NonBlocking::Ready(()))) => {}
+                Ok(SuccessResponse::Write(NonBlocking::WouldBlock)) => {
+                    let _ = self.tx[idx].push_front(b);
+                    break;
+                }
+                _ => break,
+            }
+        }
+    }
+
+    fn handle_request(&mut self, idx: usize, req: Request) -> Response {
         match req {
             Request::Read => {
                 self.pull_rx_from_driver();
@@ -60,16 +76,21 @@ impl<const NUM_CLIENTS: usize, const READ_BUF_SIZE: usize> HandlerImpl<NUM_CLIEN
                 }
                 Ok(SuccessResponse::Read(v.into()))
             }
-            Request::Write(c) => match self.driver_request(Request::Write(c)) {
-                Ok(SuccessResponse::Write(nb)) => Ok(SuccessResponse::Write(nb)),
-                Ok(_) => Err(ErrorResponse::WriteError),
-                Err(e) => Err(e),
-            },
-            Request::Flush => match self.driver_request(Request::Flush) {
-                Ok(SuccessResponse::Flush(nb)) => Ok(SuccessResponse::Flush(nb)),
-                Ok(_) => Err(ErrorResponse::FlushError),
-                Err(e) => Err(e),
-            },
+            Request::Write(c) => {
+                if self.tx[idx].push_back(c).is_err() {
+                    return Ok(SuccessResponse::Write(NonBlocking::WouldBlock));
+                }
+                self.drain_tx(idx);
+                Ok(SuccessResponse::Write(NonBlocking::Ready(())))
+            }
+            Request::Flush => {
+                self.drain_tx(idx);
+                match self.driver_request(Request::Flush) {
+                    Ok(SuccessResponse::Flush(nb)) => Ok(SuccessResponse::Flush(nb)),
+                    Ok(_) => Err(ErrorResponse::FlushError),
+                    Err(e) => Err(e),
+                }
+            }
         }
     }
 }
@@ -93,12 +114,12 @@ impl<const NUM_CLIENTS: usize> Handler for HandlerImpl<NUM_CLIENTS> {
         channel: Channel,
         msg_info: MessageInfo,
     ) -> Result<MessageInfo, Self::Error> {
-        if self.client_index(channel).is_none() {
+        let Some(idx) = self.client_index(channel) else {
             unreachable!("unexpected IPC channel");
-        }
+        };
 
         Ok(match simple_ipc::recv::<Request>(msg_info) {
-            Ok(req) => simple_ipc::send(self.handle_request(req)),
+            Ok(req) => simple_ipc::send(self.handle_request(idx, req)),
             Err(_) => simple_ipc::send_unspecified_error(),
         })
     }

@@ -8,7 +8,11 @@
         <irq irq="{serial_irq}" id="0" />
     </protection_domain>
 
-    <protection_domain name="echo_server" priority="3" stack_size="0x10_000">
+    <protection_domain name="serial_virt" priority="3" stack_size="0x10_000">
+        <program_image path="serial-virt.elf" />
+    </protection_domain>
+
+    <protection_domain name="echo_server" priority="2" stack_size="0x10_000">
         <program_image path="echo-server.elf" />
     </protection_domain>
 
@@ -18,11 +22,16 @@
 
     <channel>
         <end pd="serial_driver" id="1" />
+        <end pd="serial_virt" id="0" pp="true" />
+    </channel>
+
+    <channel>
+        <end pd="serial_virt" id="1" />
         <end pd="echo_client" id="0" pp="true" />
     </channel>
 
     <channel>
-        <end pd="serial_driver" id="2" />
+        <end pd="serial_virt" id="2" />
         <end pd="echo_server" id="0" pp="true" />
     </channel>
 

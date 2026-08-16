@@ -37,5 +37,6 @@ type VirtHandler = HandlerImpl<3>;
 fn init() -> impl Handler {
     debug::init().unwrap();
     log::info!("serial-virt: multi-client mux → serial-driver");
+    log::info!("serial-virt: per-client tx");
     VirtHandler::new(DRIVER, CLIENTS)
 }

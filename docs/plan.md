@@ -525,11 +525,11 @@ Completable **without a board**. Living checklist: **[`plan-qemu.md`](plan-qemu.
 - [x] FAT documented as 16 KiB small-file alternate
 - [x] `just test-fs` writes/reads 20 KiB + long path
 
-## Phase 63 — Host-backed FS (planned)
+## Phase 63 — Host-backed FS ✅
 
-- [ ] ADR: virtio-9p vs NFS vs disk.img inject; prefer 9p behind `FsRequest`
-- [ ] Board `qemu_virt_aarch64_fs_host`; `just test-fs-host`
-- [ ] Guest `/host/…` next to LERUXFS2 root (not a Linux rootfs)
+- [x] [ADR-008](decisions/008-host-backed-fs.md): disk inject (`lerux fs-host seed`); 9p deferred
+- [x] Board `qemu_virt_aarch64_fs_host`; `just test-fs-host`
+- [x] Guest `/host/hello.txt` via existing FS IPC
 
 ## Phase 64 — Multi-client net queue (planned)
 
@@ -573,7 +573,7 @@ Completable **without a board**. Living checklist: **[`plan-qemu.md`](plan-qemu.
 |-------|--------|--------|
 | 61 | QEMU DMA parity (x86 PCI + RISC-V virtio) | done |
 | 62 | Filesystem v3 (size + paths) | done |
-| 63 | Host-backed FS (virtio-9p) | planned |
+| 63 | Host-backed FS (QEMU inject) | done |
 | 64 | Multi-client net queue | planned |
 | 65 | Serial virtualiser v2 | planned |
 | 66 | QEMU arch parity (debug / isolation) | planned |

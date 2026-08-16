@@ -120,6 +120,21 @@ fn verify_pattern(handle: u8, len: usize) {
     }
 }
 
+#[cfg(feature = "host-share")]
+fn probe_host_share() {
+    const HOST_PATH: &[u8] = b"/host/hello.txt";
+    const WANT: &[u8] = b"hello from host\n";
+    let handle = match FS_SERVER.call(FsRequest::open(HOST_PATH)) {
+        FsResponse::Handle { id } => id,
+        other => panic!("host open failed: {other:?}"),
+    };
+    let FsResponse::Data { data_len, data } = fs_read(handle, 0, WANT.len() as u16) else {
+        panic!("host read failed");
+    };
+    assert_eq!(&data[..data_len as usize], WANT, "host file mismatch");
+    log::info!("lerux-fs: host hello ok");
+}
+
 fn probe_fs() {
     // Basic create / write / read / stat (root file).
     let handle = fs_create(TEST_PATH);
@@ -153,6 +168,9 @@ fn probe_fs() {
         }
         _ => panic!("listdir failed"),
     }
+
+    #[cfg(feature = "host-share")]
+    probe_host_share();
 
     // Phase 50 hierarchy + multi-sector (LERUXFS2).
     #[cfg(not(feature = "board-qemu_virt_aarch64_fs_fat"))]

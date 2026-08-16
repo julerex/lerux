@@ -122,11 +122,11 @@ A developer can store a real edit buffer and a multi-page `/boot.log` without hi
 
 ### Steps
 
-- [ ] ADR: **virtio-9p** (`-virtfs local,path=…,mount_tag=host`) vs NFS-over-user-net vs a host tool that injects into `disk.img`. Prefer 9p if a thin Rust driver + `fs-server` backend stays behind `FsRequest`.
-- [ ] `fs-server` backend (feature `backend-9p` or `backend-host`) so shell / edit / backup do not grow a second IPC.
-- [ ] Guest path: `/host/…` (or a documented mount tag) next to LERUXFS2 on virtio-blk — 9p is extra storage, not a replacement root.
-- [ ] Board `qemu_virt_aarch64_fs_host` + QEMU profile; `just test-fs-host`.
-- [ ] Smoke: host writes `build/fs-host/hello.txt`, guest `cat /host/hello.txt` (or equivalent) matches.
+- [x] ADR: [ADR-008](decisions/008-host-backed-fs.md) — **disk inject** for v1 (`lerux fs-host seed`); virtio-9p / NFS deferred.
+- [x] Host files land in LERUXFS2 `/host/` so shell / edit stay on `FsRequest`.
+- [x] Guest path `/host/…` next to the rest of the volume (not a Linux rootfs).
+- [x] Board `qemu_virt_aarch64_fs_host`; `just test-fs-host`.
+- [x] Smoke: host writes `build/fs-host/hello.txt`, guest reads it (`lerux-fs: host hello ok`).
 
 ### Out of scope
 

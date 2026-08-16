@@ -187,6 +187,14 @@ expects = [
   "lerux-fs: round-trip ok",
 ]
 
+[boards.qemu_virt_aarch64_fs_host]
+expects = [
+  "lerux-fs: ready",
+  "virtio-blk:",
+  "lerux-fs: host hello ok",
+  "lerux-fs: round-trip ok",
+]
+
 [boards.qemu_virt_aarch64_fs_fat]
 expects = [
   "lerux-fs: ready (FAT16)",

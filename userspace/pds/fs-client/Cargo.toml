@@ -10,6 +10,8 @@ workspace = true
 [features]
 board-qemu_virt_aarch64_fs = []
 board-qemu_virt_aarch64_fs_fat = []
+host-share = []
+board-qemu_virt_aarch64_fs_host = ["host-share"]
 # Phase 60: wait for debug-handler notify, then probe FS (isolation smoke).
 isolation-sync = []
 board-qemu_virt_aarch64_isolation = ["isolation-sync"]

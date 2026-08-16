@@ -167,6 +167,13 @@ test-fetch-tls:
 test-fs:
     BOARD=qemu_virt_aarch64_fs just test
 
+# Phase 63: host-seeded /host on LERUXFS2
+test-fs-host:
+    mkdir -p build/fs-host
+    printf 'hello from host\n' > build/fs-host/hello.txt
+    cargo run -q -p lerux-cli -- fs-host seed --dir build/fs-host
+    BOARD=qemu_virt_aarch64_fs_host just test
+
 # Phase 44: FAT16 backend on same fs SDF / virtio-blk
 test-fs-fat:
     BOARD=qemu_virt_aarch64_fs_fat just test

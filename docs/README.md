@@ -19,6 +19,7 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [decisions/002-serial-virtualiser.md](decisions/002-serial-virtualiser.md) | ADR-002: serial-driver + serial-virt (sDDF-shaped) |
 | [decisions/003-net-virtualiser.md](decisions/003-net-virtualiser.md) | ADR-003: net trust map; unified-dma on aarch64 virtio |
 | [decisions/007-tls-proxy.md](decisions/007-tls-proxy.md) | ADR-007: tls-proxy PD; rustls + smoke CA |
+| [decisions/008-host-backed-fs.md](decisions/008-host-backed-fs.md) | ADR-008: QEMU host FS inject (`/host`) |
 | [decisions/004-service-async.md](decisions/004-service-async.md) | ADR-004: stackless coop async in service PDs |
 | [decisions/005-debug-pd.md](decisions/005-debug-pd.md) | ADR-005: fault parent + QEMU GDB (not libgdb fork) |
 | [debug.md](debug.md) | Phase 46: `test-debug` + gdb-multiarch workflow |

@@ -10,6 +10,7 @@ mod config_cmd;
 mod deploy;
 mod disk_img;
 mod fetch;
+mod fs_host;
 mod http_one;
 mod https_one;
 mod hw_lock;
@@ -240,6 +241,23 @@ enum Commands {
     Config {
         #[command(subcommand)]
         command: ConfigCommands,
+    },
+    /// Phase 63: seed a host directory into LERUXFS2 `/host/` (QEMU inject).
+    FsHost {
+        #[command(subcommand)]
+        command: FsHostCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum FsHostCommands {
+    /// Copy regular files from DIR into `/host/` on the disk image.
+    Seed {
+        #[arg(long)]
+        dir: PathBuf,
+        /// Override path (default: support/disk.img).
+        #[arg(long)]
+        disk: Option<PathBuf>,
     },
 }
 
@@ -757,6 +775,11 @@ fn main() -> Result<()> {
             ConfigCommands::Defaults => crate::config_cmd::print_defaults(),
             ConfigCommands::SeedDisk { disk } => {
                 crate::config_cmd::seed_disk(&root, disk.as_deref())?;
+            }
+        },
+        Commands::FsHost { command } => match command {
+            FsHostCommands::Seed { dir, disk } => {
+                crate::fs_host::seed_host_dir(&root, &dir, disk.as_deref())?;
             }
         },
     }

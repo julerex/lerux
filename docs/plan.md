@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-08-16 (FAT subdirs / LFN)
+Last updated: 2026-08-16 (phases 61–70 QEMU-only plan)
 
 ## Phase 1 — Bring-up
 
@@ -367,7 +367,7 @@ In-tree SDF composition in `lerux-cli` ([ADR-001](decisions/001-in-tree-system-g
 
 ## Phase 43 — Net sDDF topology ✅
 
-Apps on `NetRequest` via `net-server`; aarch64 virtio-net **unified-dma** (no separate client_dma MR in the driver SDF). [ADR-003](decisions/003-net-virtualiser.md), [`net-topology.md`](net-topology.md).
+Apps on `NetRequest` via `net-server`; QEMU virtio-net **unified-dma** on aarch64, RISC-V, and x86 PCI (no separate client_dma MR in the driver SDF). [ADR-003](decisions/003-net-virtualiser.md), [`net-topology.md`](net-topology.md).
 
 ## Phase 44 — FS backends ✅ (FAT slice)
 
@@ -403,7 +403,7 @@ LERUXFS2 + hierarchical IPC (see [`plan-arch.md`](plan-arch.md) Phase 50 for ful
 - [x] Smokes: `just test-fs` (hierarchy + multi-sector), `just test-fs-fat` (hierarchy + LFN + multi-cluster), `just test-workstation`
 - [x] FAT stretch: multi-cluster files (≤16 KiB / 32 clusters; `just test-fs-fat`)
 - [x] FAT subdirs / LFN (cluster directories + VFAT names)
-- [ ] Optional NFS / host-backed FS
+- [ ] Optional NFS / host-backed FS → [Phase 63](plan-qemu.md#phase-63--host-backed-fs-qemu-virtfs--9p)
 
 ## Phase 51 — Network stack v2 (core done)
 
@@ -412,8 +412,8 @@ LERUXFS2 + hierarchical IPC (see [`plan-arch.md`](plan-arch.md) Phase 50 for ful
 - [x] Dual TCP (client + listen); `NetRequest::GetIface` + shell `ip`
 - [x] Smokes: `just test-net`, `just test-fetch`, `just test-workstation`
 - [x] TLS outbound via `tls-proxy` + rustls ([ADR-007](decisions/007-tls-proxy.md)); `just test-fetch-tls`
-- [ ] Full multi-client op queue (stretch)
-- [ ] Unified-dma on x86 PCI (ADR-003 residual; GENET is [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated))
+- [ ] Full multi-client op queue → [Phase 64](plan-qemu.md#phase-64--multi-client-net-queue)
+- [x] Unified-dma on x86 PCI + RISC-V virtio (Phase 61). GENET is [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated)
 
 ## Phase 52 — Hardware closeout (core done)
 
@@ -505,8 +505,83 @@ Stretch order and exit criteria: **[`plan-arch.md` § Phase 60 stretch sequence]
 | 58 | App catalog | core done |
 | 59 | Multi-arch workstation profiles | core done |
 | 60 | Security posture | core + stretch A–D done (MCS / asymmetric signing deferred) |
+| 61–70 | QEMU-only workstation deepening | planned — [`plan-qemu.md`](plan-qemu.md) |
 
-Near-term priority: software stretch (x86 unified-dma). On-device work is [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated) and does not block that list. TLS fetch, net hot-apply, and FAT hierarchy/LFN are done.
+## Phases 61–70 — QEMU-only workstation deepening (planned)
+
+Completable **without a board**. Living checklist: **[`plan-qemu.md`](plan-qemu.md)**. Hardware stays in [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated).
+
+## Phase 61 — QEMU DMA parity ✅
+
+- [x] `unified-dma` on x86 `virtio-pci-driver` (drop distinct client-DMA MR)
+- [x] RISC-V virtio-net matches aarch64 (Hal + bounce in `virtio_net_driver_dma`)
+- [x] Host test: QEMU net boards have no `virtio_net_client_dma` MR
+- [x] GENET remains lab-only
+
+## Phase 62 — Filesystem v3 (planned)
+
+- [ ] LERUXFS2 files **≥ 256 KiB** via extents (keep chunked `Read`/`Write`)
+- [ ] Longer paths (`MAX_FS_PATH` ~128) with postcard compatibility
+- [ ] `just test-fs` writes/reads a file > 16 KiB
+
+## Phase 63 — Host-backed FS (planned)
+
+- [ ] ADR: virtio-9p vs NFS vs disk.img inject; prefer 9p behind `FsRequest`
+- [ ] Board `qemu_virt_aarch64_fs_host`; `just test-fs-host`
+- [ ] Guest `/host/…` next to LERUXFS2 root (not a Linux rootfs)
+
+## Phase 64 — Multi-client net queue (planned)
+
+- [ ] Per-client in-flight slot in `net-server` (no `Pending` for the other client’s op)
+- [ ] Overlap smoke: fetch + http-fs on one QEMU net board
+
+## Phase 65 — Serial virtualiser v2 (planned)
+
+- [ ] Per-client TX SPSC queues; postcard `SerialClient` unchanged
+- [ ] Migrate one non-workstation QEMU board (echo or composed) to `serial-virt`
+
+## Phase 66 — QEMU arch parity (planned)
+
+- [ ] `just test-debug-riscv` / `just test-debug-x86`
+- [ ] Isolation smoke on RISC-V and x86
+- [ ] virtio-rng (or equivalent) if TLS/signing need entropy
+- [ ] Parity table: debug + isolation **yes** on all three QEMU arches
+
+## Phase 67 — Asymmetric image signing (planned)
+
+- [ ] Host ed25519: `lerux keygen` / `sign` / `verify-image` with `.sig`
+- [ ] Optional `lerux test --require-sig`; CI smoke key (not measured boot)
+
+## Phase 68 — TLS roots and cert tool (planned)
+
+- [ ] `webpki-roots` feature for interactive QEMU; smokes stay on smoke CA
+- [ ] Shell `cert list|show|trust`; store under `/config/certs/`
+
+## Phase 69 — Batch runner (planned)
+
+- [ ] Shell `source`/`run` of an on-disk command list (no new language)
+- [ ] Smoke: `lerux-shell: batch ok` (`just test-batch` or workstation expect)
+
+## Phase 70 — QEMU developer loop (planned)
+
+- [ ] Snapshot / `savevm` path for a faster second smoke (CI stays cold-boot)
+- [ ] Cross-arch `just bench`; optional FAT workstation smoke
+- [ ] Documented QEMU-only inner loop (`lerux run` gdbstub, monitor, virtfs, `--require-sig`)
+
+| Phase | Theme | Status |
+|-------|--------|--------|
+| 61 | QEMU DMA parity (x86 PCI + RISC-V virtio) | done |
+| 62 | Filesystem v3 (size + paths) | planned |
+| 63 | Host-backed FS (virtio-9p) | planned |
+| 64 | Multi-client net queue | planned |
+| 65 | Serial virtualiser v2 | planned |
+| 66 | QEMU arch parity (debug / isolation) | planned |
+| 67 | Asymmetric image signing | planned |
+| 68 | TLS roots + cert tool | planned |
+| 69 | Batch runner (on-disk shell scripts) | planned |
+| 70 | QEMU developer loop | planned |
+
+Near-term priority: **61 → 62 → 64** ([`plan-qemu.md` § Near-term priority](plan-qemu.md#near-term-priority)). On-device work is [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated) and does not block that list.
 
 ## Physical RPi4 lab (hardware-gated)
 

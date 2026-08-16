@@ -343,7 +343,7 @@ pds = ["supervisor", "shell", "edit", "chat-client", "http-file-browser", "backu
 qemu = { disk = "rw", net = "hostfwd" }
 ci = true
 curl_expect = "boot.log"
-system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48, cmos_ioport_addr = "0x70", virtio_blk_bar1_phys_addr = "0xfed0_0000", virtio_blk_bar4_phys_addr = "0xfed1_0000", virtio_net_bar1_phys_addr = "0xfed2_0000", virtio_net_bar4_phys_addr = "0xfed3_0000", virtio_blk_ioapic_pin = 10, virtio_blk_ioapic_vector = 49, virtio_net_ioapic_pin = 11, virtio_net_ioapic_vector = 50, virtio_blk_driver_dma_phys_addr = "0x6000_0000", virtio_net_client_dma_phys_addr = "0x6040_0000", virtio_net_rx_free_phys_addr = "0x6060_0000", virtio_net_rx_used_phys_addr = "0x6080_0000", virtio_net_tx_free_phys_addr = "0x60a0_0000", virtio_net_tx_used_phys_addr = "0x60c0_0000", virtio_blk_client_dma_phys_addr = "0x60e0_0000", virtio_blk_free_phys_addr = "0x6100_0000", virtio_blk_used_phys_addr = "0x6120_0000" }
+system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48, cmos_ioport_addr = "0x70", virtio_blk_bar1_phys_addr = "0xfed0_0000", virtio_blk_bar4_phys_addr = "0xfed1_0000", virtio_net_bar1_phys_addr = "0xfed2_0000", virtio_net_bar4_phys_addr = "0xfed3_0000", virtio_blk_ioapic_pin = 10, virtio_blk_ioapic_vector = 49, virtio_net_ioapic_pin = 11, virtio_net_ioapic_vector = 50, virtio_blk_driver_dma_phys_addr = "0x6000_0000", virtio_net_rx_free_phys_addr = "0x6060_0000", virtio_net_rx_used_phys_addr = "0x6080_0000", virtio_net_tx_free_phys_addr = "0x60a0_0000", virtio_net_tx_used_phys_addr = "0x60c0_0000", virtio_blk_client_dma_phys_addr = "0x60e0_0000", virtio_blk_free_phys_addr = "0x6100_0000", virtio_blk_used_phys_addr = "0x6120_0000" }
 
 [x86_64_generic]
 arch = "x86_64"
@@ -373,7 +373,7 @@ template = "virtio-hello-x86.system.template"
 pds = ["hello", "serial-driver", "virtio-pci-driver"]
 qemu = { disk = "ro", net = "user", tcp_echo = true }
 ci = true
-system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48, virtio_blk_bar1_phys_addr = "0xfed0_0000", virtio_blk_bar4_phys_addr = "0xfed1_0000", virtio_net_bar1_phys_addr = "0xfed2_0000", virtio_net_bar4_phys_addr = "0xfed3_0000", virtio_blk_ioapic_pin = 10, virtio_blk_ioapic_vector = 49, virtio_net_ioapic_pin = 11, virtio_net_ioapic_vector = 50, virtio_blk_driver_dma_phys_addr = "0x6000_0000", virtio_net_client_dma_phys_addr = "0x6040_0000", virtio_net_rx_free_phys_addr = "0x6060_0000", virtio_net_rx_used_phys_addr = "0x6080_0000", virtio_net_tx_free_phys_addr = "0x60a0_0000", virtio_net_tx_used_phys_addr = "0x60c0_0000", virtio_blk_client_dma_phys_addr = "0x60e0_0000", virtio_blk_free_phys_addr = "0x6100_0000", virtio_blk_used_phys_addr = "0x6120_0000" }
+system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48, virtio_blk_bar1_phys_addr = "0xfed0_0000", virtio_blk_bar4_phys_addr = "0xfed1_0000", virtio_net_bar1_phys_addr = "0xfed2_0000", virtio_net_bar4_phys_addr = "0xfed3_0000", virtio_blk_ioapic_pin = 10, virtio_blk_ioapic_vector = 49, virtio_net_ioapic_pin = 11, virtio_net_ioapic_vector = 50, virtio_blk_driver_dma_phys_addr = "0x6000_0000", virtio_net_rx_free_phys_addr = "0x6060_0000", virtio_net_rx_used_phys_addr = "0x6080_0000", virtio_net_tx_free_phys_addr = "0x60a0_0000", virtio_net_tx_used_phys_addr = "0x60c0_0000", virtio_blk_client_dma_phys_addr = "0x60e0_0000", virtio_blk_free_phys_addr = "0x6100_0000", virtio_blk_used_phys_addr = "0x6120_0000" }
 
 [x86_64_generic_http]
 arch = "x86_64"
@@ -384,7 +384,7 @@ pds = ["http-server", "serial-driver", "virtio-pci-driver"]
 qemu = { net = "hostfwd" }
 ci = true
 curl_expect = "lerux: HTTP ok"
-system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48, virtio_net_bar1_phys_addr = "0xfed2_0000", virtio_net_bar4_phys_addr = "0xfed3_0000", virtio_net_ioapic_pin = 11, virtio_net_ioapic_vector = 50, virtio_net_driver_dma_phys_addr = "0x6000_0000", virtio_net_client_dma_phys_addr = "0x6020_0000", virtio_net_rx_free_phys_addr = "0x6040_0000", virtio_net_rx_used_phys_addr = "0x6060_0000", virtio_net_tx_free_phys_addr = "0x6080_0000", virtio_net_tx_used_phys_addr = "0x60a0_0000" }
+system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48, virtio_net_bar1_phys_addr = "0xfed2_0000", virtio_net_bar4_phys_addr = "0xfed3_0000", virtio_net_ioapic_pin = 11, virtio_net_ioapic_vector = 50, virtio_net_driver_dma_phys_addr = "0x6000_0000", virtio_net_rx_free_phys_addr = "0x6040_0000", virtio_net_rx_used_phys_addr = "0x6060_0000", virtio_net_tx_free_phys_addr = "0x6080_0000", virtio_net_tx_used_phys_addr = "0x60a0_0000" }
 
 [x86_64_generic_blk]
 arch = "x86_64"
@@ -404,7 +404,7 @@ template = "net-x86.system.template"
 pds = ["net-client", "net-server", "serial-driver", "virtio-pci-driver"]
 qemu = { net = "user" }
 ci = true
-system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48, virtio_net_bar1_phys_addr = "0xfed2_0000", virtio_net_bar4_phys_addr = "0xfed3_0000", virtio_net_ioapic_pin = 11, virtio_net_ioapic_vector = 50, virtio_net_driver_dma_phys_addr = "0x6000_0000", virtio_net_client_dma_phys_addr = "0x6020_0000", virtio_net_rx_free_phys_addr = "0x6040_0000", virtio_net_rx_used_phys_addr = "0x6060_0000", virtio_net_tx_free_phys_addr = "0x6080_0000", virtio_net_tx_used_phys_addr = "0x60a0_0000" }
+system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48, virtio_net_bar1_phys_addr = "0xfed2_0000", virtio_net_bar4_phys_addr = "0xfed3_0000", virtio_net_ioapic_pin = 11, virtio_net_ioapic_vector = 50, virtio_net_driver_dma_phys_addr = "0x6000_0000", virtio_net_rx_free_phys_addr = "0x6040_0000", virtio_net_rx_used_phys_addr = "0x6060_0000", virtio_net_tx_free_phys_addr = "0x6080_0000", virtio_net_tx_used_phys_addr = "0x60a0_0000" }
 
 # Real hardware example (Phase 37). Produces loader.img for deployment (U-Boot on RPi4: fatload + go 0x10000000).
 # Uses PL011 at the ARM peripheral base (0xfe20_1000 on RPi4 BCM2711). IRQ is GIC SPI 121 (verify per seL4 platform).

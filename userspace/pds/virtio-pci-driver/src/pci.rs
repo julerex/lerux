@@ -29,10 +29,14 @@ const NET_QUEUE_SIZE: usize = 16;
 ))]
 const NET_BUFFER_LEN: usize = 2048;
 
+pub fn driver_dma_vaddr() -> usize {
+    *var!(virtio_blk_driver_dma_vaddr: usize = 0)
+}
+
 pub fn init_hal() {
     HalImpl::init(
         config::VIRTIO_DRIVER_DMA_SIZE,
-        *var!(virtio_blk_driver_dma_vaddr: usize = 0),
+        driver_dma_vaddr(),
         *var!(virtio_blk_driver_dma_paddr: usize = 0),
         config::pci::BAR_REGIONS,
     );

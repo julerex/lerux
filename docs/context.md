@@ -41,7 +41,7 @@ The composed board (`qemu_virt_aarch64_composed`) runs `supervisor` (historicall
 
 lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection domains that speak **typed postcard RPC** (`lerux-interface-types`) over Microkit channels — not file descriptors, `errno`, or `fork`/`exec`.
 
-“Arch-like” means **workflow**, not binary compatibility: rolling PD artifact pins, named system profiles, init ordering, shell + core utilities — each implemented as PDs you port deliberately. Unmodified Arch packages (`bash`, `pacman`, `firefox`, etc.) are out of scope. Gap plan for Arch-level capability (phases 50–60): [`plan-arch.md`](plan-arch.md).
+“Arch-like” means **workflow**, not binary compatibility: rolling PD artifact pins, named system profiles, init ordering, shell + core utilities — each implemented as PDs you port deliberately. Unmodified Arch packages (`bash`, `pacman`, `firefox`, etc.) are out of scope. Gap plan for Arch-level capability (phases 50–60): [`plan-arch.md`](plan-arch.md). Next program is **QEMU-only deepening** (phases 61–70): [`plan-qemu.md`](plan-qemu.md).
 
 ## System profiles and packages
 
@@ -55,7 +55,7 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 : On workstation, UART is owned by `serial-driver` (`device-only`); multi-client postcard RPC is served by `serial-virt` (PPC to the driver). Apps still use `SerialClient` / `SERIAL_DRIVER` channel consts (peer is `serial_virt`). See [ADR-002](decisions/002-serial-virtualiser.md).
 
 **Network topology (Phase 43 / 51)**
-: Untrusted apps use only `NetRequest` / `NetResponse` against `net-server`. On aarch64 virtio-net, **unified-dma** removes the separate client_dma MR: Hal + bounce share `virtio_net_driver_dma`; the stack maps the bounce half only. Apps never map net DMA. See [ADR-003](decisions/003-net-virtualiser.md), [`net-topology.md`](net-topology.md). Phase 51: **DHCP** (with static fallback), **real DNS** (static `host`/`dns` aliases for smokes), dual TCP (client + listen), `GetIface` / shell `ip`, and **TLS fetch** via `tls-proxy` ([ADR-007](decisions/007-tls-proxy.md), `just test-fetch-tls`).
+: Untrusted apps use only `NetRequest` / `NetResponse` against `net-server`. On QEMU virtio-net (aarch64, RISC-V, x86 PCI), **unified-dma** removes the separate client_dma MR: Hal + bounce share the driver DMA region; the stack maps the bounce half only. Apps never map net DMA. See [ADR-003](decisions/003-net-virtualiser.md), [`net-topology.md`](net-topology.md). Phase 51: **DHCP** (with static fallback), **real DNS** (static `host`/`dns` aliases for smokes), dual TCP (client + listen), `GetIface` / shell `ip`, and **TLS fetch** via `tls-proxy` ([ADR-007](decisions/007-tls-proxy.md), `just test-fetch-tls`).
 
 **Filesystem backends (Phase 44 / 50)**
 : `fs-server` serves `FsRequest` / `FsResponse` over virtio-blk (or emmc2). Default on-disk format is **LERUXFS2** (`lerux-fs`): hierarchical directories, free-map allocation, multi-sector contiguous files (up to 16 KiB). IPC includes `Mkdir` / `Unlink` / `Rename` and path-scoped `ListDir`. Path grammar: `/`-separated components, optional leading `/`, max 48-byte paths (see `lerux-interface-types`). Alternate **FAT16** backend (`lerux-fat`, feature `backend-fat`) has hierarchical directories, VFAT long names, and **multi-cluster** files (up to 32 clusters / 16 KiB). Select via board feature (`qemu_virt_aarch64_fs` vs `qemu_virt_aarch64_fs_fat`). Shell/edit/config stay on the same IPC.

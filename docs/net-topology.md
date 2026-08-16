@@ -18,23 +18,27 @@ Untrusted apps never see the NIC. They use postcard RPC:
 
 Server entry: `userspace/pds/net-server` (`smoltcp` + multi-client `Handler`).
 
-## L2 path (QEMU aarch64 virtio-net, Phase 43 unified-dma)
+## L2 path (QEMU virtio-net, Phase 43 / 61 unified-dma)
 
 ```
-virtio_net_driver  ←IRQ→  NIC
-  maps: MMIO + virtio_net_driver_dma (Hal | bounce) + rings
+virtio_net_driver / virtio_pci_driver  ←IRQ→  NIC
+  maps: MMIO/PCI + driver_dma (Hal | bounce) + rings
        ↕ channel 1 (pp on server)
    net_server  (smoltcp + app RPC virt)
-  maps: virtio_net_driver_dma (bounce half) + rings
+  maps: driver_dma (bounce half) + rings
 ```
 
-There is **no** `virtio_net_client_dma` region. Feature `unified-dma` on driver + stack PDs.
+There is **no** `virtio_net_client_dma` region on QEMU aarch64, RISC-V, or x86. Feature `unified-dma` on driver + stack PDs.
+
+- aarch64 / RISC-V MMIO: bounce is the high half of `virtio_net_driver_dma` (1 MiB + 1 MiB).
+- x86 net-only (http/net): same 1+1 MiB split of `virtio_pci_driver_dma`.
+- x86 combo (virtio hello / workstation): bounce sits after the 4 MiB Hal in a 6 MiB `virtio_pci_driver_dma`.
 
 Template example: `userspace/systems/templates/net.system.template`.
 
-## L2 path (RPi4 genet / x86)
+## L2 path (RPi4 genet)
 
-Still use a separate client_dma-style region until ported to unified-dma.
+Still uses a separate client_dma-style region ([Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated)).
 
 ## Why there is no extra `net-virt` PD
 
@@ -52,5 +56,5 @@ Serial needed a virt because the UART driver multi-cliented apps. Net multi-clie
 
 ## Follow-up
 
-- genet / x86 unified-dma
+- genet unified-dma stays [lab](plan-arch.md#physical-rpi4-lab-hardware-gated) (Phase 61 closed QEMU arches)
 - Optional Rx/Tx virt PD split + copy PDs if a second untrusted L2 client appears

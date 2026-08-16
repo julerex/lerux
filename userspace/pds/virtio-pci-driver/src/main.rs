@@ -92,6 +92,42 @@ fn channel_set_or(channels: ChannelSet, extra: Channel) -> ChannelSet {
 ))]
 const BLK_QUEUE_SIZE: usize = 4;
 
+#[cfg(all(
+    feature = "unified-dma",
+    any(
+        feature = "board-x86_64_generic_virtio",
+        feature = "board-x86_64_generic_http",
+        feature = "board-x86_64_generic_net"
+    )
+))]
+fn create_net_bounce() -> SharedMemoryRef<'static, [u8]> {
+    use core::ptr::{self, NonNull};
+    let base = pci::driver_dma_vaddr();
+    let ptr = NonNull::new(ptr::slice_from_raw_parts_mut(
+        (base + config::VIRTIO_DRIVER_DMA_SIZE) as *mut u8,
+        config::VIRTIO_NET_BOUNCE_SIZE,
+    ))
+    .expect("net bounce region");
+    unsafe { SharedMemoryRef::new(ptr) }
+}
+
+#[cfg(all(
+    not(feature = "unified-dma"),
+    any(
+        feature = "board-x86_64_generic_virtio",
+        feature = "board-x86_64_generic_http",
+        feature = "board-x86_64_generic_net"
+    )
+))]
+fn create_net_bounce() -> SharedMemoryRef<'static, [u8]> {
+    unsafe {
+        SharedMemoryRef::<'static, _>::new(memory_region_symbol!(
+            virtio_net_client_dma_vaddr: *mut [u8],
+            n = config::VIRTIO_NET_CLIENT_DMA_SIZE
+        ))
+    }
+}
+
 #[cfg(any(
     feature = "board-x86_64_generic_virtio",
     feature = "board-x86_64_generic_http",
@@ -100,12 +136,7 @@ const BLK_QUEUE_SIZE: usize = 4;
 fn create_net_handler(
     mut net_dev: virtio_drivers::device::net::VirtIONet<HalImpl, PciTransport, 16>,
 ) -> NetHandlerImpl<DeviceWrapper<HalImpl, PciTransport>> {
-    let net_client_region = unsafe {
-        SharedMemoryRef::<'static, _>::new(memory_region_symbol!(
-            virtio_net_client_dma_vaddr: *mut [u8],
-            n = config::VIRTIO_NET_CLIENT_DMA_SIZE
-        ))
-    };
+    let net_client_region = create_net_bounce();
     let notify_net_client: fn() = || channels::NET_CLIENT.notify();
     let net_rx_ring_buffers =
         RingBuffers::<'_, Use, fn()>::from_ptrs_using_default_initialization_strategy_for_role(
@@ -122,6 +153,8 @@ fn create_net_handler(
 
     net_dev.ack_interrupt();
     channels::NET_DEVICE.irq_ack().unwrap();
+    #[cfg(feature = "unified-dma")]
+    log::info!("virtio-net: unified-dma (no client_dma map)");
     log::info!("virtio-net driver ready");
 
     NetHandlerImpl::new(

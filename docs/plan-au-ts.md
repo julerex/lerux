@@ -120,7 +120,7 @@ sDDF serial: driver ↔ Tx/Rx virtualisers ↔ clients; SPSC queues; power-of-tw
 
 - Porting C sDDF serial components
 - Changing postcard `LogRequest` / shell line protocol
-- Per-client shared queues / separate TX+RX virt PDs (future)
+- Per-client shared queues / separate TX+RX virt PDs → [Phase 65](plan-qemu.md#phase-65--serial-virtualiser-v2)
 
 ### Exit
 
@@ -146,7 +146,7 @@ sDDF network architecture ([`sddf/docs/network/network.md`](https://github.com/a
 - [x] Prefer RPC for untrusted apps; no app L2 DMA
 - [x] Preserve `NetRequest` / `NetResponse`
 - [x] Smoke: `just test-net`, `just test-fetch`, `just test-http` (and workstation)
-- [ ] Stretch: x86 unified-dma; separate Rx/Tx virt PDs / copy PDs. GENET unified-dma is [`plan-arch.md` — Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated).
+- [x] Stretch: x86 + RISC-V unified-dma → [Phase 61](plan-qemu.md#phase-61--qemu-dma-parity-x86-pci--risc-v-virtio); separate Rx/Tx virt PDs / copy PDs still deferred. GENET unified-dma is [`plan-arch.md` — Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated).
 
 ### Out of scope
 
@@ -173,7 +173,7 @@ LionsOS `components/fs/fat`, `components/fs/nfs`, `examples/fileio`.
 
 - [x] Keep LERUXFS as the default smoke FS (`just test-fs`; Phase 50 → **LERUXFS2**)
 - [x] FAT16 backend behind `fs-server` (`lerux-fat` + `backend-fat`) matching `Open`/`Create`/`Read`/`Write`/`Stat`/`ListDir`/`Poll` on virtio-blk
-- [ ] Optional NFS client PD or `fs-server` backend for QEMU user-net (deferred)
+- [ ] Optional NFS client PD or `fs-server` backend for QEMU user-net → [Phase 63](plan-qemu.md#phase-63--host-backed-fs-qemu-virtfs--9p)
 - [x] Board/feature selection: `qemu_virt_aarch64_fs` (LERUXFS2) vs `qemu_virt_aarch64_fs_fat` (FAT16); Cargo features `backend-lerux` / `backend-fat`
 - [x] Shell / edit unchanged at IPC boundary
 - [x] Smoke: `just test-fs-fat`; format choice in `docs/context.md`
@@ -182,12 +182,12 @@ LionsOS `components/fs/fat`, `components/fs/nfs`, `examples/fileio`.
 
 - Mounting Linux rootfs or glibc apps
 - Full POSIX VFS
-- NFS client / host-backed FS (FAT now has multi-cluster files, LFN, and subdirectories)
+- NFS client / host-backed FS → [Phase 63](plan-qemu.md#phase-63--host-backed-fs-qemu-virtfs--9p) (FAT now has multi-cluster files, LFN, and subdirectories)
 
 ### Exit
 
 - [x] One alternate FS backend selectable by board/feature; `just test-fs` and `just test-fs-fat` green
-- [ ] Workstation optional FAT demo (stretch; FAT hierarchy/LFN is in `just test-fs-fat`)
+- [ ] Workstation optional FAT demo → [Phase 70](plan-qemu.md#phase-70--qemu-developer-loop) (FAT hierarchy/LFN is in `just test-fs-fat`)
 
 ---
 

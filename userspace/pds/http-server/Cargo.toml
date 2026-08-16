@@ -11,8 +11,8 @@ workspace = true
 unified-dma = []
 board-qemu_virt_aarch64_http = ["serial-ipc", "unified-dma"]
 board-qemu_virt_aarch64_http_composed = ["composed-sync", "serial-ipc", "unified-dma"]
-board-qemu_virt_riscv64_http = ["serial-ipc"]
-board-x86_64_generic_http = ["serial-ipc"]
+board-qemu_virt_riscv64_http = ["serial-ipc", "unified-dma"]
+board-x86_64_generic_http = ["serial-ipc", "unified-dma"]
 composed-sync = []
 serial-ipc = ["lerux-logging/serial"]
 

@@ -60,7 +60,8 @@ Serial Phase 42 taught us to prefer a working trust boundary (device-only driver
 
 | PD (other platforms) | Notes |
 |----------------------|--------|
-| genet / virtio-pci | Still use separate client_dma until ported |
+| virtio-pci (x86 QEMU) | Unified-dma (Phase 61); combo Hal 4 MiB + bounce 2 MiB |
+| genet | Still uses separate client_dma until the RPi4 lab port |
 
 ## Alternatives considered
 
@@ -81,7 +82,7 @@ Rejected: duplicates stacks; weakens isolation story; conflicts with existing `N
 - Aarch64 virtio-net boards (`net`, `fetch`, `http`, workstation, composed variants) use **unified-dma**: no `virtio_net_client_dma` region in the SDF.
 - Driver address space no longer includes a separate client_dma mapping; bounce lives in the high half of `virtio_net_driver_dma`.
 - Apps still never map net DMA; `NetRequest` remains the API.
-- Residual vs full sDDF: no separate Rx/Tx virt PDs or per-client copy PDs; genet/x86 not yet on unified-dma.
+- Residual vs full sDDF: no separate Rx/Tx virt PDs or per-client copy PDs; genet not yet on unified-dma. QEMU x86/RISC-V unified-dma is Phase 61.
 
 ## References
 

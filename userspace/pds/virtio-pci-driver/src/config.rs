@@ -25,16 +25,30 @@ pub mod channels {
     pub const NET_DEVICE: Channel = Channel::new(3);
 }
 
+/// HalImpl region at the base of `virtio_pci_driver_dma`.
 #[cfg(any(
     feature = "board-x86_64_generic_virtio",
     feature = "board-x86_64_generic_blk"
 ))]
 pub const VIRTIO_DRIVER_DMA_SIZE: usize = 0x400_000;
+/// Net-only: 1 MiB Hal + 1 MiB bounce in one 2 MiB MR (Phase 61).
 #[cfg(any(
     feature = "board-x86_64_generic_http",
     feature = "board-x86_64_generic_net"
 ))]
-pub const VIRTIO_DRIVER_DMA_SIZE: usize = 0x200_000;
+pub const VIRTIO_DRIVER_DMA_SIZE: usize = 0x100_000;
+#[cfg(all(
+    feature = "unified-dma",
+    any(
+        feature = "board-x86_64_generic_http",
+        feature = "board-x86_64_generic_net"
+    )
+))]
+pub const VIRTIO_NET_BOUNCE_SIZE: usize = 0x100_000;
+/// Combo: bounce sits after the 4 MiB Hal in a 6 MiB driver DMA MR.
+#[cfg(all(feature = "unified-dma", feature = "board-x86_64_generic_virtio"))]
+pub const VIRTIO_NET_BOUNCE_SIZE: usize = 0x200_000;
+#[cfg(not(feature = "unified-dma"))]
 #[cfg(any(
     feature = "board-x86_64_generic_virtio",
     feature = "board-x86_64_generic_http",

@@ -1,8 +1,8 @@
 # PLAN — Arch-level functionality (phases 50–60)
 
-Last updated: 2026-08-16 (FAT subdirs / LFN)
+Last updated: 2026-08-16 (phases 61–70 QEMU-only plan)
 
-Related: [`plan.md`](plan.md) (completed phases 1–49), [`plan-au-ts.md`](plan-au-ts.md) (sDDF/LionsOS inspiration track), [`context.md`](context.md) (domain language).
+Related: [`plan.md`](plan.md) (completed phases 1–49), [`plan-qemu.md`](plan-qemu.md) (phases 61–70, QEMU-only), [`plan-au-ts.md`](plan-au-ts.md) (sDDF/LionsOS inspiration track), [`context.md`](context.md) (domain language).
 
 ## Context
 
@@ -84,13 +84,13 @@ Graphics, POSIX layers, and guest Linux (libvmm) stay **explicit non-goals** unl
 - [x] **LERUXFS2**: multi-sector contiguous files (≤32 sectors / 16 KiB), directory sectors, free-map bitmap; magic `LERUXFS2`; LERUXFS1 superblocks reformat on mount.
 - [x] FAT **multi-cluster** files (chain walk/extend; ≤32 clusters / 16 KiB).
 - [x] FAT subdirs / LFN (cluster directories + VFAT names); optional workstation FAT demo still open.
-- [ ] Optional **NFS** or host-backed FS for QEMU user-net (dev convenience; LionsOS-inspired).
+- [ ] Optional **NFS** or host-backed FS for QEMU user-net → [Phase 63](plan-qemu.md#phase-63--host-backed-fs-qemu-virtfs--9p).
 - [x] Shell: `mkdir`, `rm`, `mv`, `cd`/`pwd` (shell-local cwd); larger `cat`/`write` via chunked IPC.
 - [x] Smokes: `just test-fs` (hierarchy + multi-sector), `just test-fs-fat` (hierarchy + LFN + multi-cluster), workstation boots.
 
 ### Exit
 
-Files large enough for configs, logs, and edit buffers without artificial 512 B caps; hierarchical layout usable from shell. **Met for LERUXFS2 and FAT**; NFS remains stretch.
+Files large enough for configs, logs, and edit buffers without artificial 512 B caps; hierarchical layout usable from shell. **Met for LERUXFS2 and FAT**; NFS / host-backed FS is [Phase 63](plan-qemu.md#phase-63--host-backed-fs-qemu-virtfs--9p). File size > 16 KiB is [Phase 62](plan-qemu.md#phase-62--filesystem-v3-usable-size).
 
 ---
 
@@ -104,12 +104,12 @@ Files large enough for configs, logs, and edit buffers without artificial 512 B 
 - [x] **Real DNS** over smoltcp DNS socket; static map for `host`/`dns` still wins (deterministic smokes).
 - [x] **Dual TCP** sockets (client + listen) so outbound connect and inbound listen can coexist; exclusive async client lock remains for mid-op serialization.
 - [x] **TLS** for outbound fetch: dedicated `tls-proxy` PD (`rustls` + rustls-rustcrypto; smoke CA). Apps stay on cleartext `TlsRequest`. `just test-fetch-tls`. [ADR-007](decisions/007-tls-proxy.md). `webpki-roots` remains an optional crate feature.
-- [ ] Unified-dma / trust map on x86 PCI (ADR-003 residual). GENET unified-dma is [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated).
-- [ ] Full multi-client queue (shell fetch while http-fs TcpRecv pending without `Pending`).
+- [x] Unified-dma / trust map on x86 PCI + RISC-V virtio ([Phase 61](plan-qemu.md#phase-61--qemu-dma-parity-x86-pci--risc-v-virtio)). GENET unified-dma is [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated).
+- [ ] Full multi-client queue → [Phase 64](plan-qemu.md#phase-64--multi-client-net-queue).
 
 ### Exit
 
-`fetch https://…` (or TLS-terminated `fetch`) works on QEMU; smokes stay deterministic (local `https-one` + smoke CA). **Met** for QEMU TLS fetch; multi-client queue and `webpki-roots` remain stretch. RPi4 GENET path is hardware-gated.
+`fetch https://…` (or TLS-terminated `fetch`) works on QEMU; smokes stay deterministic (local `https-one` + smoke CA). **Met** for QEMU TLS fetch; multi-client queue is [Phase 64](plan-qemu.md#phase-64--multi-client-net-queue); `webpki-roots` is [Phase 68](plan-qemu.md#phase-68--tls-roots-and-cert-tool). RPi4 GENET path is hardware-gated.
 
 ---
 
@@ -238,8 +238,8 @@ Each row = interface types + PD + package fragment + smoke.
 | Calculator / REPL math | shell only | done (`calc`) |
 | `irc`/`chat` multi-room | net | done (`chat [#room]`) |
 | Backup/sync PD | FS | done (`backup` PD + package) |
-| Scripting runtime PD | FS + net | deferred (stretch) |
-| Cert/key tool | secrets + FS | deferred (shell `config`/secrets covers store) |
+| Scripting runtime PD | FS + net | [Phase 69](plan-qemu.md#phase-69--batch-runner-on-disk-shell-scripts) (batch of shell lines, not a language VM) |
+| Cert/key tool | secrets + FS | [Phase 68](plan-qemu.md#phase-68--tls-roots-and-cert-tool) |
 
 Packages installable via Phase 55: **edit**, **chat-client**, **http-file-browser**, **backup**, **fetch-client** (≥5).
 
@@ -300,7 +300,7 @@ Do **not** start MCS, graphics, or POSIX. Order by leverage and dependence:
 
 **Track B detail** — done (runbook in security.md).
 
-**Track C detail** — done (host SHA-256 only; ed25519 / measured boot deferred). See [`security.md`](security.md#image-integrity-track-c).
+**Track C detail** — done (host SHA-256 only). ed25519 signing is [Phase 67](plan-qemu.md#phase-67--asymmetric-image-signing); measured boot stays deferred (needs hardware). See [`security.md`](security.md#image-integrity-track-c).
 
 **Track D detail** — done: host PPC/band checks in `just check`; guest `lerux-shell: qos ok` on workstation smokes; MCS still deferred (ADR-006).
 
@@ -310,7 +310,7 @@ Do **not** start MCS, graphics, or POSIX. Order by leverage and dependence:
 
 Work that **cannot close on QEMU**. Phases 37, 39, 47, and 52 shipped the profiles, native drivers, deploy path, first-boot seed, and `just test-hw` harness. This section is the remaining on-device gate.
 
-It does **not** block x86 unified-dma or other software work.
+It does **not** block [QEMU-only phases 61–70](plan-qemu.md) (including x86 unified-dma).
 
 Procedure and empty result grid: [`boards.md` — RPi4 workstation install path](boards.md#rpi4-workstation-install-path-phase-52).
 
@@ -343,9 +343,9 @@ Documented “install media → boot → shell works” on a real Pi, with the c
 
 Fold in as capacity allows; see also [`plan-au-ts.md`](plan-au-ts.md) and ADRs:
 
-- Per-client serial queues / separate TX+RX virt PDs
-- Full sDDF net copy-PD swarm
-- In-guest GDB RSP (needs fork or upstream APIs)
+- Per-client serial queues / separate TX+RX virt PDs → [Phase 65](plan-qemu.md#phase-65--serial-virtualiser-v2)
+- Full sDDF net copy-PD swarm (still deferred after Phase 64’s RPC queue)
+- In-guest GDB RSP (needs fork or upstream APIs; QEMU gdbstub parity is [Phase 66](plan-qemu.md#phase-66--qemu-arch-parity-debug-isolation-serial-virt))
 - libvmm / guest Linux — **only with dedicated ADR** (explicit non-goal today)
 - Formal verification of lerux PDs
 
@@ -369,9 +369,9 @@ That is Arch’s **workflow and completeness**, reimplemented as static Microkit
 
 ## Near-term priority
 
-If capacity is limited, do **not** start with graphics or scripting runtimes:
+If capacity is limited, do **not** start with graphics or language VMs:
 
-1. **Software stretch** — x86 unified-dma (51). Completable on QEMU.
+1. **[QEMU-only phases 61–70](plan-qemu.md)** — start 61 (x86 unified-dma), then 62 (FS size), then 64 (net queue).
 2. **[Physical RPi4 lab](#physical-rpi4-lab-hardware-gated)** — when a board is on the desk. Does not block (1).
 
 ---
@@ -406,4 +406,4 @@ Each phase should add or extend **one** profile board smoke rather than only uni
 
 ## Summary
 
-Phases **1–60** built the **kernel of an Arch-like workflow** (profiles, init, shell, FS/net, packages, multi-arch workstation, hardening). Remaining QEMU work is stretch (x86 unified-dma). On-device truth is a separate track: [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated). All of it as **ported Rust PDs and host tooling**, never as a Linux compatibility layer.
+Phases **1–60** built the **kernel of an Arch-like workflow** (profiles, init, shell, FS/net, packages, multi-arch workstation, hardening). The next QEMU-only program is **[phases 61–70](plan-qemu.md)**. On-device truth is a separate track: [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated). All of it as **ported Rust PDs and host tooling**, never as a Linux compatibility layer.

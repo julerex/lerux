@@ -229,6 +229,27 @@ mod tests {
     }
 
     #[test]
+    fn qemu_net_boards_have_no_distinct_client_dma_mr() {
+        let root = repo_root();
+        for board in [
+            "qemu_virt_aarch64_net",
+            "qemu_virt_riscv64_net",
+            "qemu_virt_riscv64_http",
+            "qemu_virt_riscv64_workstation",
+            "x86_64_generic_net",
+            "x86_64_generic_http",
+            "x86_64_generic_virtio",
+            "x86_64_generic_workstation",
+        ] {
+            let sdf = render_system(&root, board).unwrap_or_else(|e| panic!("{board}: {e}"));
+            assert!(
+                !sdf.contains("name=\"virtio_net_client_dma\""),
+                "{board} still declares a distinct virtio_net_client_dma MR"
+            );
+        }
+    }
+
+    #[test]
     fn sdf_diff_identical() {
         let s = "<system>\n</system>\n";
         let summary = sdf_diff_summary("a", s, "b", s);

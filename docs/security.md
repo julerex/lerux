@@ -62,7 +62,7 @@ Channel numbers come from profile `[[channel]]` manifests; PPC callees outrank c
 | Threat | Status | Mitigation |
 |--------|--------|------------|
 | Untrusted app corrupts FS DMA / disk | **Mitigated** | Apps use postcard FS RPC only; only `fs-server` maps blk rings |
-| Untrusted app sniffs NIC DMA | **Mitigated** (aarch64 virtio-net) | Unified-dma + net-server sole stack; apps have no DMA map (ADR-003) |
+| Untrusted app sniffs NIC DMA | **Mitigated** (QEMU virtio-net all arches) | Unified-dma + net-server sole stack; apps have no DMA map (ADR-003, Phase 61) |
 | App crash takes down services | **Mitigated (smoke)** | Separate PDs; `just test-isolation` crashes a child then FS round-trips |
 | Shell over-privileged surface | **Partial** | Profile tiers (`admin` / `admin-core` / `appliance`); `lerux profile audit`; shell still holds many ends on admin images |
 | Secrets on disk writable by shell | **Mitigated (ACL)** | `secret.*` Set/Delete is supervisor-only (`ConfigResponse::Denied` for shell) |
@@ -159,7 +159,7 @@ MCS budgets and raising shell above bulk apps remain **deferred** (ADR-006). See
 ### Remaining stretch
 
 1. **Reduce shell channel set further** — launch apps without giving shell every service end (may need non-PPC notify; see ADR-006)
-2. **Asymmetric image signing / measured boot** — follow-on after host digests
+2. **Asymmetric image signing / measured boot** — ed25519 is [Phase 67](plan-qemu.md#phase-67--asymmetric-image-signing); measured boot stays hardware-gated
 
 ## Dependency pins and security update runbook (Track B)
 

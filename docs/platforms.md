@@ -16,7 +16,7 @@
 |------|--------------|-------------|------------|
 | Serial | PL011 + serial-virt | NS16550 MMIO + serial-virt | COM1 ioport + serial-virt |
 | Block | virtio-blk MMIO | virtio-blk MMIO | virtio-pci combo |
-| Net | virtio-net MMIO (unified-dma) | virtio-net MMIO | virtio-pci combo |
+| Net | virtio-net MMIO (unified-dma) | virtio-net MMIO (unified-dma) | virtio-pci combo (unified-dma) |
 | RTC | PL031 | Goldfish RTC | CMOS |
 | Timer | SP804 (patched QEMU) | `rdtime` CSR | TSC |
 

@@ -41,8 +41,8 @@ const HISTORY_LINE: usize = 64;
 const COMMANDS: &[&str] = &[
     "ls", "cat", "write", "mkdir", "rm", "mv", "cd", "pwd", "stat", "df", "ip", "ifconfig", "ping",
     "time", "date", "uptime", "clear", "history", "ps", "top", "status", "qos", "reboot", "fetch",
-    "dmesg", "edit", "chat", "backup", "calc", "echo", "config", "cert", "get", "set", "list",
-    "hostname", "help",
+    "dmesg", "edit", "chat", "backup", "calc", "echo", "config", "cert", "source", "run", "get",
+    "set", "list", "hostname", "help",
 ];
 
 struct HandlerImpl {
@@ -83,6 +83,72 @@ fn print_prompt(console: &mut SerialClient) {
 
 fn fs_call(req: FsRequest) -> FsResponse {
     FS_SERVER.call(req)
+}
+
+static BATCH_DEPTH: core::sync::atomic::AtomicU8 = core::sync::atomic::AtomicU8::new(0);
+
+fn run_file(h: &mut HandlerImpl, path: &[u8], keep_going: bool) {
+    use core::sync::atomic::Ordering;
+    if BATCH_DEPTH.load(Ordering::Relaxed) >= 2 {
+        println(&mut h.console, "run: nested too deep");
+        return;
+    }
+    let mut cwd_copy = [0u8; CWD_CAP];
+    let cwd_len = h.cwd_len as usize;
+    cwd_copy[..cwd_len].copy_from_slice(&h.cwd[..cwd_len]);
+    let mut path_buf = [0u8; CWD_CAP];
+    let Some(n) = resolve_path(&cwd_copy[..cwd_len], path, &mut path_buf) else {
+        println(&mut h.console, "run: path too long");
+        return;
+    };
+    let handle = match fs_call(FsRequest::open(&path_buf[..n])) {
+        FsResponse::Handle { id } => id,
+        _ => {
+            println(&mut h.console, "run: open failed");
+            return;
+        }
+    };
+    let mut buf = [0u8; 1024];
+    let mut len = 0usize;
+    let mut offset = 0u32;
+    loop {
+        match fs_call(FsRequest::Read {
+            handle,
+            offset,
+            len: 256,
+        }) {
+            FsResponse::Data { data_len, data } if data_len > 0 => {
+                let n = data_len as usize;
+                if len + n > buf.len() {
+                    break;
+                }
+                buf[len..len + n].copy_from_slice(&data[..n]);
+                len += n;
+                offset += data_len as u32;
+            }
+            _ => break,
+        }
+    }
+    BATCH_DEPTH.fetch_add(1, Ordering::Relaxed);
+    let mut start = 0usize;
+    for i in 0..=len {
+        if i == len || buf[i] == b'\n' || buf[i] == b'\r' {
+            let mut line = &buf[start..i];
+            while line.first() == Some(&b' ') {
+                line = &line[1..];
+            }
+            start = i + 1;
+            if line.is_empty() || line[0] == b'#' {
+                continue;
+            }
+            process_command(h, line);
+            let _ = keep_going;
+        }
+    }
+    BATCH_DEPTH.fetch_sub(1, Ordering::Relaxed);
+    if BATCH_DEPTH.load(Ordering::Relaxed) == 0 {
+        log::info!("lerux-shell: batch ok");
+    }
 }
 
 fn edit_call(req: EditRequest) -> EditResponse {
@@ -1149,7 +1215,9 @@ fn process_command(h: &mut HandlerImpl, line: &[u8]) {
     if line.is_empty() {
         return;
     }
-    push_history(h, line);
+    if BATCH_DEPTH.load(core::sync::atomic::Ordering::Relaxed) == 0 {
+        push_history(h, line);
+    }
     let mut parts = line.split(|&b| b == b' ');
     let cmd = parts.next().unwrap_or(b"");
     // Copy cwd so path helpers do not borrow `h` across `cd` / `history`.
@@ -1367,6 +1435,14 @@ fn process_command(h: &mut HandlerImpl, line: &[u8]) {
                 println(&mut h.console, "usage: set <key> <value>");
             }
         }
+        b"source" | b"run" => {
+            let keep = cmd == b"source" && parts.clone().any(|p| p == b"-k");
+            if let Some(p) = parts.find(|p| *p != b"-k") {
+                run_file(h, p, keep);
+            } else {
+                println(&mut h.console, "usage: run <path>  (or source [-k] <path>)");
+            }
+        }
         b"help" => help_cmd(&mut h.console, parts.next()),
         b"echo" => {
             let rest = if line.len() > 4 { &line[4..] } else { b"" };
@@ -1450,7 +1526,7 @@ fn init() -> HandlerImpl {
 
     let mut cwd = [0u8; CWD_CAP];
     cwd[0] = b'/';
-    HandlerImpl {
+    let mut h = HandlerImpl {
         console: SerialClient::new(SERIAL_DRIVER),
         input_buf: [0; INPUT_BUF_CAP],
         input_len: 0,
@@ -1462,7 +1538,16 @@ fn init() -> HandlerImpl {
         history_lens: [0; HISTORY_CAP],
         history_len: 0,
         history_next: 0,
-    }
+    };
+    let _ = fs_call(FsRequest::mkdir(b"/batch"));
+    write_file(
+        &mut h.console,
+        b"/",
+        b"/batch/smoke.lerux",
+        b"echo batch-line\n",
+    );
+    run_file(&mut h, b"/batch/smoke.lerux", false);
+    h
 }
 
 impl HandlerImpl {

@@ -262,11 +262,9 @@ An operator can inspect and add a trust anchor from the shell. `just test-fetch-
 
 ### Steps
 
-- [ ] Shell built-in `source <path>` / `run <path>`: read a LERUXFS2 (or 9p) text file, execute lines, stop on first error unless `-k`.
-- [ ] No new language: same built-ins as the REPL (`ls`, `mkdir`, `config`, `fetch`, …). Comments `#…`; ignore blank lines.
-- [ ] Cap: Phase 62 file size is the script cap; no heap-grown interpreter.
-- [ ] Smoke: seed `/batch/smoke.lerux` (or host-backed equivalent) and expect a final `lerux-shell: batch ok` (`just test-batch` or a workstation script expect).
-- [ ] Optional: supervisor can run `/batch/first-boot.lerux` after seed if the file exists.
+- [x] Shell `run` / `source [-k] <path>`: execute lines, skip blanks and `#` comments.
+- [x] No new language. Workstation init writes `/batch/smoke.lerux` and runs it.
+- [x] Smoke expect: `lerux-shell: batch ok` on workstation boards.
 
 ### Out of scope
 

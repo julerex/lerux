@@ -349,6 +349,7 @@ expects = [
   "lerux-shell: ready",
   "lerux-shell: qos ok",
   "lerux-shell: cmds=",
+  "lerux-shell: batch ok",
   "lerux-edit: ready",
   "lerux-chat: ready",
   "lerux-backup:",
@@ -377,6 +378,7 @@ expects = [
   "lerux-shell: ready",
   "lerux-shell: qos ok",
   "lerux-shell: cmds=",
+  "lerux-shell: batch ok",
   # App PDs log concurrently via serial-virt; full "lerux-*: ready" lines often
   # fragment. Shell top count is the liveness proxy for the app set.
   "lerux-shell: top count=",
@@ -401,6 +403,7 @@ expects = [
   "lerux-shell: ready",
   "lerux-shell: qos ok",
   "lerux-shell: cmds=",
+  "lerux-shell: batch ok",
   "lerux-shell: top count=",
 ]
 
@@ -423,6 +426,7 @@ expects = [
   "lerux-shell: ready",
   "lerux-shell: qos ok",
   "lerux-shell: cmds=",
+  "lerux-shell: batch ok",
   "lerux-edit: ready",
   "lerux-chat: ready",
   "lerux-http-fs:",

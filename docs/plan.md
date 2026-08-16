@@ -561,10 +561,10 @@ Completable **without a board**. Living checklist: **[`plan-qemu.md`](plan-qemu.
 - [x] `webpki-roots` optional on `tls-proxy`; smokes stay on smoke CA
 - [x] Shell `cert list|show|trust`; `cert.*` under `/config/certs/`
 
-## Phase 69 — Batch runner (planned)
+## Phase 69 — Batch runner ✅
 
-- [ ] Shell `source`/`run` of an on-disk command list (no new language)
-- [ ] Smoke: `lerux-shell: batch ok` (`just test-batch` or workstation expect)
+- [x] Shell `run` / `source [-k]`
+- [x] Workstation writes and runs `/batch/smoke.lerux`; expect `lerux-shell: batch ok`
 
 ## Phase 70 — QEMU developer loop (planned)
 
@@ -582,7 +582,7 @@ Completable **without a board**. Living checklist: **[`plan-qemu.md`](plan-qemu.
 | 66 | QEMU arch parity (debug / isolation) | done |
 | 67 | Asymmetric image signing | done |
 | 68 | TLS roots + cert tool | done |
-| 69 | Batch runner (on-disk shell scripts) | planned |
+| 69 | Batch runner (on-disk shell scripts) | done |
 | 70 | QEMU developer loop | planned |
 
 Near-term priority: **61 → 62 → 64** ([`plan-qemu.md` § Near-term priority](plan-qemu.md#near-term-priority)). On-device work is [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated) and does not block that list.

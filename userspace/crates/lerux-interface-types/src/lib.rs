@@ -602,6 +602,8 @@ pub const CFG_LOG_ROTATE: &[u8] = b"log.rotate";
 
 /// Prefix for secret keys (`secret.token` → file under `/config/secrets/`).
 pub const CFG_SECRET_PREFIX: &[u8] = b"secret.";
+/// Phase 68: trust anchors (`cert.smoke` → `/config/certs/smoke`).
+pub const CFG_CERT_PREFIX: &[u8] = b"cert.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ConfigRequest {

@@ -8,6 +8,8 @@ license = "MIT"
 workspace = true
 
 [features]
+# Phase 68: public Web trust store for interactive QEMU; smokes stay on smoke CA.
+webpki-roots = ["lerux-tls/webpki-roots"]
 board-qemu_virt_aarch64_fetch_tls = []
 
 [dependencies]

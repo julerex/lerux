@@ -8,6 +8,7 @@ Configuration is FS-backed under **`/config/`** via `config-server` (`ConfigRequ
 |------|---------|
 | `/config/<key>` | Ordinary policy keys (dot names, e.g. `net.ip`) |
 | `/config/secrets/<name>` | Secret material for key `secret.<name>` |
+| `/config/certs/<name>` | Phase 68 trust anchors (`cert.<name>`) |
 | `/boot.log` | Last boot log ring dump (supervisor) |
 | `/boot.log.1` | Previous boot log when `log.rotate=1` |
 
@@ -27,6 +28,7 @@ Keys must be printable ASCII without `/` or NUL. Max lengths: key 32, value 64 (
 | `log.rotate` | `0` \| `1` | `1` | When `1`, rename `/boot.log` → `/boot.log.1` before rewrite |
 | `boot.seeded` | `1` | set after first successful seed | Prevents overwriting operator edits on reboot |
 | `secret.*` | opaque | (none) | Stored under `/config/secrets/`; listed as keys only |
+| `cert.*` | opaque | (none) | Phase 68: trust-anchor labels under `/config/certs/`; shell `cert list\|show\|trust` |
 
 Constants live in `lerux-interface-types` (`CFG_*`).
 

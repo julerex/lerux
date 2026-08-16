@@ -41,8 +41,8 @@ const HISTORY_LINE: usize = 64;
 const COMMANDS: &[&str] = &[
     "ls", "cat", "write", "mkdir", "rm", "mv", "cd", "pwd", "stat", "df", "ip", "ifconfig", "ping",
     "time", "date", "uptime", "clear", "history", "ps", "top", "status", "qos", "reboot", "fetch",
-    "dmesg", "edit", "chat", "backup", "calc", "echo", "config", "get", "set", "list", "hostname",
-    "help",
+    "dmesg", "edit", "chat", "backup", "calc", "echo", "config", "cert", "get", "set", "list",
+    "hostname", "help",
 ];
 
 struct HandlerImpl {
@@ -1241,6 +1241,45 @@ fn process_command(h: &mut HandlerImpl, line: &[u8]) {
         b"ping" => ping_cmd(&mut h.console),
         b"ip" | b"ifconfig" => ip_cmd(&mut h.console),
         b"hostname" => hostname_cmd(&mut h.console),
+        b"cert" => match parts.next() {
+            Some(b"list") | None => config_list_cmd(&mut h.console),
+            Some(b"show") => {
+                if let Some(name) = parts.next() {
+                    let mut key = [0u8; 32];
+                    let pref = b"cert.";
+                    if pref.len() + name.len() > key.len() {
+                        println(&mut h.console, "cert name too long");
+                    } else {
+                        key[..pref.len()].copy_from_slice(pref);
+                        key[pref.len()..pref.len() + name.len()].copy_from_slice(name);
+                        config_get_cmd(&mut h.console, &key[..pref.len() + name.len()]);
+                    }
+                } else {
+                    println(&mut h.console, "usage: cert show <name>");
+                }
+            }
+            Some(b"trust") => {
+                if let Some(name) = parts.next() {
+                    let mut key = [0u8; 32];
+                    let pref = b"cert.";
+                    if pref.len() + name.len() > key.len() {
+                        println(&mut h.console, "cert name too long");
+                    } else {
+                        key[..pref.len()].copy_from_slice(pref);
+                        key[pref.len()..pref.len() + name.len()].copy_from_slice(name);
+                        let rest = parts.next().unwrap_or(b"");
+                        if rest.is_empty() {
+                            println(&mut h.console, "usage: cert trust <name> <value>");
+                        } else {
+                            config_set_cmd(&mut h.console, &key[..pref.len() + name.len()], rest);
+                        }
+                    }
+                } else {
+                    println(&mut h.console, "usage: cert trust <name> <value>");
+                }
+            }
+            Some(_) => println(&mut h.console, "usage: cert list|show|trust …"),
+        },
         b"config" => match parts.next() {
             Some(b"list") | None => config_list_cmd(&mut h.console),
             Some(b"get") => {

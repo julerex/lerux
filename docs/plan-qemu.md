@@ -239,11 +239,10 @@ A QEMU board refuses to be the smoke image if the signature is missing or wrong 
 
 ### Steps
 
-- [ ] `webpki-roots` feature on `tls-proxy` for interactive `lerux run` workstation; **smokes stay on the smoke CA**.
-- [ ] Cert store under `/config/certs/` (or `secret.*`-adjacent keys) via config-server; shell `cert list|show|trust`.
-- [ ] Small `cert` built-in (prefer shell over a new PD unless IPC types demand it).
-- [ ] Optional virtio-rng wire if Phase 66 did not already provide entropy for rustls.
-- [ ] Docs: how to enable webpki-roots for a laptop QEMU session; CI remains `just test-fetch-tls` + smoke CA.
+- [x] `webpki-roots` feature on `tls-proxy` / `lerux-tls`; fetch-tls board does **not** enable it.
+- [x] `cert.*` keys under `/config/certs/`; shell `cert list|show|trust`.
+- [x] virtio-rng still deferred (software CSPRNG).
+- [x] Docs: [`config.md`](config.md); CI stays `just test-fetch-tls` + smoke CA.
 
 ### Out of scope
 

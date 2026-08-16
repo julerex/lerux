@@ -8,8 +8,8 @@
 #![no_main]
 
 use lerux_interface_types::{
-    ConfigRequest, ConfigResponse, FsRequest, FsResponse, CFG_SECRET_PREFIX, MAX_CONFIG_KEY_LEN,
-    MAX_CONFIG_VAL_LEN, MAX_FS_PATH,
+    ConfigRequest, ConfigResponse, FsRequest, FsResponse, CFG_CERT_PREFIX, CFG_SECRET_PREFIX,
+    MAX_CONFIG_KEY_LEN, MAX_CONFIG_VAL_LEN, MAX_FS_PATH,
 };
 use lerux_ipc::{recv, send, send_unspecified_error, FsClient};
 use lerux_logging::{debug, log};
@@ -33,6 +33,10 @@ fn is_secret_key(key: &[u8]) -> bool {
     key.starts_with(CFG_SECRET_PREFIX)
 }
 
+fn is_cert_key(key: &[u8]) -> bool {
+    key.starts_with(CFG_CERT_PREFIX)
+}
+
 /// Map logical key → absolute FS path under `/config/` or `/config/secrets/`.
 fn key_to_path(key: &[u8], path: &mut [u8; MAX_FS_PATH]) -> Option<usize> {
     if key.is_empty() || key.iter().any(|&b| b == 0 || b == b'/') {
@@ -40,6 +44,8 @@ fn key_to_path(key: &[u8], path: &mut [u8; MAX_FS_PATH]) -> Option<usize> {
     }
     let (prefix, name): (&[u8], &[u8]) = if is_secret_key(key) {
         (b"/config/secrets/", &key[CFG_SECRET_PREFIX.len()..])
+    } else if is_cert_key(key) {
+        (b"/config/certs/", &key[CFG_CERT_PREFIX.len()..])
     } else {
         (b"/config/", key)
     };
@@ -64,6 +70,7 @@ fn key_to_path(key: &[u8], path: &mut [u8; MAX_FS_PATH]) -> Option<usize> {
 fn ensure_config_dirs() {
     let _ = fs_call(FsRequest::mkdir(b"/config"));
     let _ = fs_call(FsRequest::mkdir(b"/config/secrets"));
+    let _ = fs_call(FsRequest::mkdir(b"/config/certs"));
 }
 
 fn read_config_file(key: &[u8]) -> Option<(u8, [u8; MAX_CONFIG_VAL_LEN])> {
@@ -157,6 +164,24 @@ fn list_config_keys() -> (u8, [[u8; MAX_CONFIG_KEY_LEN]; 8], [u8; 8]) {
             // Present as secret.<name>
             let mut full = [0u8; MAX_CONFIG_KEY_LEN];
             let pref = CFG_SECRET_PREFIX;
+            if pref.len() + e.name_slice().len() > MAX_CONFIG_KEY_LEN {
+                continue;
+            }
+            full[..pref.len()].copy_from_slice(pref);
+            let n = e.name_slice().len();
+            full[pref.len()..pref.len() + n].copy_from_slice(e.name_slice());
+            push_key(&mut keys, &mut lens, &mut count, &full[..pref.len() + n]);
+        }
+    }
+    if let FsResponse::DirList { count: dc, entries } =
+        fs_call(FsRequest::list_dir(b"/config/certs"))
+    {
+        for e in entries.iter().take(dc as usize) {
+            if e.is_dir {
+                continue;
+            }
+            let mut full = [0u8; MAX_CONFIG_KEY_LEN];
+            let pref = CFG_CERT_PREFIX;
             if pref.len() + e.name_slice().len() > MAX_CONFIG_KEY_LEN {
                 continue;
             }

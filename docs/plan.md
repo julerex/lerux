@@ -556,10 +556,10 @@ Completable **without a board**. Living checklist: **[`plan-qemu.md`](plan-qemu.
 - [x] `lerux keygen` / `sign` / `verify-image --require-sig`
 - [x] Smoke key under `support/keys/`; not measured boot
 
-## Phase 68 — TLS roots and cert tool (planned)
+## Phase 68 — TLS roots and cert tool ✅
 
-- [ ] `webpki-roots` feature for interactive QEMU; smokes stay on smoke CA
-- [ ] Shell `cert list|show|trust`; store under `/config/certs/`
+- [x] `webpki-roots` optional on `tls-proxy`; smokes stay on smoke CA
+- [x] Shell `cert list|show|trust`; `cert.*` under `/config/certs/`
 
 ## Phase 69 — Batch runner (planned)
 
@@ -581,7 +581,7 @@ Completable **without a board**. Living checklist: **[`plan-qemu.md`](plan-qemu.
 | 65 | Serial virtualiser v2 | done |
 | 66 | QEMU arch parity (debug / isolation) | done |
 | 67 | Asymmetric image signing | done |
-| 68 | TLS roots + cert tool | planned |
+| 68 | TLS roots + cert tool | done |
 | 69 | Batch runner (on-disk shell scripts) | planned |
 | 70 | QEMU developer loop | planned |
 

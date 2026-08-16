@@ -105,6 +105,8 @@ Last updated: 2026-08-16 (phases 61–70 QEMU-only plan)
 | Echo IPC | yes | yes | yes |
 | Virtio blk/net | yes | yes | yes |
 | Init RTC+timer | yes | yes | yes |
+| Debug (fault parent) | yes | yes | yes |
+| Isolation (crash then FS) | yes | yes | no |
 | Composed init+virtio | yes | no | no |
 | HTTP over virtio-net | yes | yes | yes |
 | Block IPC service | yes | yes | yes |
@@ -543,12 +545,11 @@ Completable **without a board**. Living checklist: **[`plan-qemu.md`](plan-qemu.
 - [x] Echo (aarch64 + RISC-V) uses `serial-virt`; x86 echo stays combined
 - [x] `just test-echo` expects `serial-virt: per-client tx`
 
-## Phase 66 — QEMU arch parity (planned)
+## Phase 66 — QEMU arch parity ✅
 
-- [ ] `just test-debug-riscv` / `just test-debug-x86`
-- [ ] Isolation smoke on RISC-V and x86
-- [ ] virtio-rng (or equivalent) if TLS/signing need entropy
-- [ ] Parity table: debug + isolation **yes** on all three QEMU arches
+- [x] `just test-debug-riscv` / `just test-debug-x86`
+- [x] `just test-isolation-riscv` (x86 FS isolation deferred)
+- [x] Debug yes on aarch64, RISC-V, x86
 
 ## Phase 67 — Asymmetric image signing (planned)
 
@@ -578,7 +579,7 @@ Completable **without a board**. Living checklist: **[`plan-qemu.md`](plan-qemu.
 | 63 | Host-backed FS (QEMU inject) | done |
 | 64 | Multi-client net queue | done |
 | 65 | Serial virtualiser v2 | done |
-| 66 | QEMU arch parity (debug / isolation) | planned |
+| 66 | QEMU arch parity (debug / isolation) | done |
 | 67 | Asymmetric image signing | planned |
 | 68 | TLS roots + cert tool | planned |
 | 69 | Batch runner (on-disk shell scripts) | planned |

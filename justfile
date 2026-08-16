@@ -178,14 +178,24 @@ test-fs-host:
 test-fs-fat:
     BOARD=qemu_virt_aarch64_fs_fat just test
 
-# Phase 46: parent fault handler + deliberate child crash
+# Phase 46 / 66: parent fault handler + deliberate child crash
 test-debug:
     BOARD=qemu_virt_aarch64_debug just test
 
-# Phase 60: untrusted PD crash must not take down fs-server
+test-debug-riscv:
+    BOARD=qemu_virt_riscv64_debug just test
+
+test-debug-x86:
+    BOARD=x86_64_generic_debug just test
+
+# Phase 60 / 66: untrusted PD crash must not take down fs-server
 test-isolation:
     just disk-img
     BOARD=qemu_virt_aarch64_isolation just test
+
+test-isolation-riscv:
+    just disk-img
+    BOARD=qemu_virt_riscv64_isolation just test
 
 # Net IPC smoke test on RISC-V virt
 test-riscv-net:

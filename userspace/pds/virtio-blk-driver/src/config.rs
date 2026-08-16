@@ -11,6 +11,7 @@ pub mod channels {
     feature = "board-qemu_virt_riscv64_virtio",
     feature = "board-qemu_virt_riscv64_blk",
     feature = "board-qemu_virt_riscv64_workstation",
+    feature = "board-qemu_virt_riscv64_isolation",
 ))]
 pub const VIRTIO_BLK_MMIO_OFFSET: usize = 0;
 
@@ -18,6 +19,7 @@ pub const VIRTIO_BLK_MMIO_OFFSET: usize = 0;
     not(feature = "board-qemu_virt_riscv64_virtio"),
     not(feature = "board-qemu_virt_riscv64_blk"),
     not(feature = "board-qemu_virt_riscv64_workstation"),
+    not(feature = "board-qemu_virt_riscv64_isolation"),
     not(feature = "board-x86_64_generic_virtio")
 ))]
 pub const VIRTIO_BLK_MMIO_OFFSET: usize = 0xc00;

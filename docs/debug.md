@@ -101,7 +101,7 @@ For a hung (non-faulting) PD, interrupt with Ctrl-C in GDB after `continue` and 
 
 | Tip | Detail |
 |-----|--------|
-| Architecture | `set architecture aarch64` if GDB does not auto-detect |
+| Architecture | `set architecture aarch64` / `riscv:rv64` / `i386:x86-64` if GDB does not auto-detect |
 | Multiple PDs | Load one ELF at a time; VAs are per-PD address spaces |
 | Release builds | Symbols may be thinner; use `debug` Microkit config for kernel UART |
 | Workstation | Same QEMU flags; prefer a smaller board first |
@@ -114,7 +114,9 @@ Hardware GDB (OpenOCD / JTAG) is out of Phase 46 scope. On device, keep serial l
 
 ```bash
 just test-isolation
-# BOARD=qemu_virt_aarch64_isolation
+just test-isolation-riscv
+just test-debug-riscv
+just test-debug-x86
 ```
 
 Combines hierarchy fault handling with the FS stack: after `crash-demo` is suspended, `debug-handler` notifies `fs-client`, which must still get `lerux-fs: round-trip ok`. Trust map: [`security.md`](security.md).

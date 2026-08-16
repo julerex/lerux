@@ -52,23 +52,13 @@ impl Handler for HandlerImpl {
         );
         match fault {
             Fault::VmFault(vm) => {
-                log::info!(
-                    "lerux-debug: VmFault ip={:#x} addr={:#x} prefetch={} fsr={:#x}",
-                    vm.ip(),
-                    vm.addr(),
-                    vm.is_prefetch(),
-                    vm.fsr()
-                );
+                log::info!("lerux-debug: VmFault {vm:?}");
             }
             Fault::CapFault(_) => {
                 log::info!("lerux-debug: CapFault");
             }
             Fault::UnknownSyscall(u) => {
-                log::info!(
-                    "lerux-debug: UnknownSyscall ip={:#x} syscall={}",
-                    u.fault_ip(),
-                    u.syscall()
-                );
+                log::info!("lerux-debug: UnknownSyscall {u:?}");
             }
             Fault::UserException(_) => {
                 log::info!("lerux-debug: UserException");

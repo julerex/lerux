@@ -192,11 +192,11 @@ Workstation serial mux is per-client on TX. At least one smaller QEMU board uses
 
 ### Steps
 
-- [ ] `debug-handler` + `crash-demo` on `qemu_virt_riscv64_debug` and `x86_64_generic_debug`; `just test-debug-riscv` / `just test-debug-x86`.
-- [ ] Isolation smoke on RISC-V and x86 (crash child, then FS or echo still serves). New boards or reuse workstation-minus-apps if PD count hurts.
-- [ ] Confirm `workstation-riscv` / `workstation-x86` are on serial-virt (Phase 59 claimed it); add expects if missing.
-- [ ] virtio-rng (or equivalent QEMU entropy source) on at least aarch64 workstation if TLS/signing still starve for randomness — small PD or a `rng-driver` behind a tiny IPC.
-- [ ] Update the Phase 14 parity table: debug + isolation become **yes** on all three QEMU arches. Treat legacy `composed` as superseded by workstation where the capability already exists.
+- [x] `just test-debug-riscv` / `just test-debug-x86` (same `debug.system.template`).
+- [x] Isolation on RISC-V (`just test-isolation-riscv`). x86 FS isolation still deferred (PCI combo); debug-x86 covers the fault path.
+- [x] workstation-riscv / workstation-x86 already use serial-virt (Phase 59).
+- [ ] virtio-rng deferred (tls-proxy still uses the software CSPRNG).
+- [x] Parity: debug yes on all three QEMU arches; isolation yes on aarch64 + RISC-V.
 
 ### Out of scope
 

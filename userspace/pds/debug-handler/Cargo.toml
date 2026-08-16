@@ -10,9 +10,12 @@ workspace = true
 
 [features]
 board-qemu_virt_aarch64_debug = []
+board-qemu_virt_riscv64_debug = []
+board-x86_64_generic_debug = []
 # Phase 60: notify fs-client after suspending crash-demo.
 isolation-notify = []
 board-qemu_virt_aarch64_isolation = ["isolation-notify"]
+board-qemu_virt_riscv64_isolation = ["isolation-notify"]
 
 [dependencies]
 lerux-logging = { path = "../../crates/lerux-logging" }

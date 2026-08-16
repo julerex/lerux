@@ -153,6 +153,37 @@ pds = ["net-client", "net-server", "serial-driver", "virtio-net-driver"]
 qemu = { net = "user" }
 system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_net_irq = 79 }
 
+# Phase 66: debug hierarchy on RISC-V / x86 (same SDF as aarch64).
+[qemu_virt_riscv64_debug]
+arch = "riscv64"
+microkit_board = "qemu_virt_riscv64"
+target = "riscv64-sel4-microkit"
+template = "debug.system.template"
+pds = ["debug-handler", "crash-demo"]
+qemu = {}
+ci = true
+system_vars = {}
+
+[x86_64_generic_debug]
+arch = "x86_64"
+microkit_board = "x86_64_generic"
+target = "x86_64-sel4-microkit"
+template = "debug.system.template"
+pds = ["debug-handler", "crash-demo"]
+qemu = {}
+ci = true
+system_vars = {}
+
+[qemu_virt_riscv64_isolation]
+arch = "riscv64"
+microkit_board = "qemu_virt_riscv64"
+target = "riscv64-sel4-microkit"
+template = "isolation-riscv.system.template"
+pds = ["debug-handler", "crash-demo", "fs-client", "fs-server", "serial-driver", "virtio-blk-driver"]
+qemu = { disk = "rw" }
+ci = true
+system_vars = { serial_mmio_phys_addr = "0x1_000_0000", serial_irq = 10, virtio_blk_mmio_phys_addr = "0x10_001_000", virtio_blk_irq = 1 }
+
 # Phase 46: parent debug-handler + child crash-demo (Microkit hierarchy faults).
 [qemu_virt_aarch64_debug]
 arch = "aarch64"

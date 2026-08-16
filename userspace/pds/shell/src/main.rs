@@ -359,9 +359,9 @@ fn write_file(console: &mut SerialClient, cwd: &[u8], path: &[u8], data: &[u8]) 
         println(console, "write: path too long");
         return;
     };
-    let handle = match fs_call(FsRequest::create(&path_buf[..n])) {
-        FsResponse::Handle { id } => id,
-        _ => {
+    let handle = match FS_SERVER.create_or_open(&path_buf[..n]) {
+        Ok(id) => id,
+        Err(_) => {
             println(console, "write: create failed");
             return;
         }

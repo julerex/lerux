@@ -90,6 +90,7 @@ fn read_all(handle: u8, len: usize, out: &mut [u8]) {
     }
 }
 
+#[cfg(not(feature = "board-qemu_virt_aarch64_fs_fat"))]
 fn write_pattern(handle: u8, len: usize) {
     let mut offset = 0u32;
     while (offset as usize) < len {
@@ -103,6 +104,7 @@ fn write_pattern(handle: u8, len: usize) {
     }
 }
 
+#[cfg(not(feature = "board-qemu_virt_aarch64_fs_fat"))]
 fn verify_pattern(handle: u8, len: usize) {
     let mut offset = 0u32;
     while (offset as usize) < len {
@@ -112,9 +114,9 @@ fn verify_pattern(handle: u8, len: usize) {
             panic!("huge read failed at {offset}");
         };
         assert_eq!(data_len, n, "short huge read at {offset}");
-        for i in 0..n as usize {
+        for (i, &got) in data.iter().take(n as usize).enumerate() {
             let expect = ((offset as usize + i) % 251) as u8;
-            assert_eq!(data[i], expect, "huge mismatch at {}", offset as usize + i);
+            assert_eq!(got, expect, "huge mismatch at {}", offset as usize + i);
         }
         offset += u32::from(n);
     }

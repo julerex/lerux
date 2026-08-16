@@ -21,7 +21,9 @@ use crate::{
     shell::FsFormat,
 };
 
-const MAX_OPEN: usize = 8;
+/// Workstation first-boot seeds ~9 config files plus `/boot.log` and the
+/// shell batch file; there is no Close RPC yet, so keep enough slots.
+const MAX_OPEN: usize = 32;
 
 #[derive(Clone, Copy)]
 struct OpenFile {
@@ -221,6 +223,15 @@ impl LeruxFsFormat {
     }
 
     fn alloc_handle(&mut self, of: OpenFile) -> Option<u8> {
+        // Reuse the existing slot when the same dirent is opened again
+        // (config get/set on a just-seeded key).
+        for (i, slot) in self.open.iter_mut().enumerate() {
+            if slot.in_use && slot.dir_lba == of.dir_lba && slot.slot == of.slot {
+                *slot = of;
+                slot.in_use = true;
+                return Some(i as u8);
+            }
+        }
         for (i, slot) in self.open.iter_mut().enumerate() {
             if !slot.in_use {
                 *slot = of;

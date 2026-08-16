@@ -225,6 +225,7 @@ impl PathJob {
     }
 }
 
+#[expect(clippy::large_enum_variant)] // PathJob holds a sector-sized dir scan buffer
 enum FsJob {
     None,
     /// step0: read boot; step1: write boot; step2+: write FAT/root payload sectors

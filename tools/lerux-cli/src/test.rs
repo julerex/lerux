@@ -150,7 +150,11 @@ fn expect_ordered(
     for pattern in patterns {
         let deadline = Instant::now() + Duration::from_secs(per);
         loop {
-            if output.lock().map(|s| s.contains(pattern)).unwrap_or(false) {
+            if output
+                .lock()
+                .map(|s| capture_contains(&s, pattern))
+                .unwrap_or(false)
+            {
                 break;
             }
             if Instant::now() >= deadline {
@@ -178,7 +182,7 @@ fn expect_unordered(
             bail!("timed out waiting for: {missing}");
         }
         if let Ok(buf) = output.lock() {
-            remaining.retain(|p| !buf.contains(p));
+            remaining.retain(|p| !capture_contains(&buf, p));
         }
         std::thread::sleep(Duration::from_millis(50));
     }
@@ -293,7 +297,7 @@ pub fn run_hw_serial_smoke(test: &SmokeTest) -> Result<()> {
             loop {
                 let found = output
                     .lock()
-                    .map(|s| s.len() > mark && s[mark..].contains(&step.expect))
+                    .map(|s| s.len() > mark && capture_contains(&s[mark..], &step.expect))
                     .unwrap_or(false);
                 if found {
                     println!("ok");
@@ -317,6 +321,99 @@ pub fn run_hw_serial_smoke(test: &SmokeTest) -> Result<()> {
     drop(reader_thread);
     println!("\n==> hardware serial smoke passed");
     Ok(())
+}
+
+/// sel4-logging line prefix: `{level:<5} [{target}] `.
+fn sel4_log_prefix_len(s: &str) -> Option<usize> {
+    let level = ["ERROR", "WARN", "INFO", "DEBUG", "TRACE"]
+        .iter()
+        .find(|l| s.starts_with(*l))?;
+    let after_level = &s[level.len()..];
+    let spaces = after_level.bytes().take_while(|&b| b == b' ').count();
+    if spaces == 0 {
+        return None;
+    }
+    let after_spaces = &after_level[spaces..];
+    let rest = after_spaces.strip_prefix('[')?;
+    let close = rest.find(']')?;
+    let after_brack = &rest[close + 1..];
+    if !after_brack.starts_with(' ') {
+        return None;
+    }
+    Some(level.len() + spaces + 1 + close + 1 + 1)
+}
+
+/// Rebuild sel4-logging lines after concurrent debug_print spliced one
+/// message inside another (chunked write callbacks).
+///
+/// `INFO  [net_server] virtio-nINFO  [blk_server] …\net: MAC …` becomes
+/// a haystack that contains `virtio-net: MAC`.
+fn collapse_interleaved_sel4_logs(haystack: &str) -> String {
+    let bytes = haystack.as_bytes();
+    let mut starts = Vec::new();
+    let mut i = 0;
+    while i < haystack.len() {
+        if let Some(len) = sel4_log_prefix_len(&haystack[i..]) {
+            starts.push((i, len));
+            i += len;
+            continue;
+        }
+        i += match haystack[i..].chars().next() {
+            Some(c) => c.len_utf8(),
+            None => break,
+        };
+    }
+    if starts.is_empty() {
+        return haystack.to_string();
+    }
+
+    let mut parts: Vec<(String, String)> = Vec::new();
+    if starts[0].0 > 0 {
+        parts.push((
+            String::new(),
+            String::from_utf8_lossy(&bytes[..starts[0].0]).into_owned(),
+        ));
+    }
+    for (idx, &(off, plen)) in starts.iter().enumerate() {
+        let body_start = off + plen;
+        let body_end = starts
+            .get(idx + 1)
+            .map(|(n, _)| *n)
+            .unwrap_or(haystack.len());
+        parts.push((
+            String::from_utf8_lossy(&bytes[off..off + plen]).into_owned(),
+            String::from_utf8_lossy(&bytes[body_start..body_end]).into_owned(),
+        ));
+    }
+
+    let mut leftovers = Vec::new();
+    for (_prefix, body) in &mut parts {
+        if let Some((head, tail)) = body.split_once('\n') {
+            if !tail.is_empty() {
+                leftovers.push(tail.to_string());
+            }
+            *body = format!("{head}\n");
+        }
+    }
+    let mut li = 0;
+    for (_prefix, body) in &mut parts {
+        if !body.ends_with('\n') && li < leftovers.len() {
+            body.push_str(&leftovers[li]);
+            li += 1;
+        }
+    }
+
+    let mut out = String::with_capacity(haystack.len());
+    for (prefix, body) in parts {
+        out.push_str(&prefix);
+        out.push_str(&body);
+    }
+    out
+}
+
+/// Substring match that also accepts tokens split by concurrent sel4-logging.
+pub(crate) fn capture_contains(haystack: &str, pattern: &str) -> bool {
+    haystack.contains(pattern) || collapse_interleaved_sel4_logs(haystack).contains(pattern)
 }
 
 fn curl_check(url: &str, expect_substr: &str, timeout_secs: u64) -> Result<()> {
@@ -438,4 +535,39 @@ pub fn run_board_test_with_mode(
         let _ = child.kill();
     }
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Exact splice from the 2026-08-16 ipc-composed CI serial capture.
+    const IPC_COMPOSED_CI_SNIP: &str = "\
+INFO  [net_server] virtio-nINFO  [blk_server] virtio-blk: 8192 blocks x 512 bytes
+et: MAC 52:54:00:12:34:56
+";
+
+    #[test]
+    fn capture_contains_recovers_virtio_net_mac_from_ci_interleave() {
+        assert!(
+            !IPC_COMPOSED_CI_SNIP.contains("virtio-net: MAC"),
+            "fixture must reproduce the raw split"
+        );
+        assert!(capture_contains(IPC_COMPOSED_CI_SNIP, "virtio-net: MAC"));
+        assert!(capture_contains(
+            IPC_COMPOSED_CI_SNIP,
+            "virtio-blk: 8192 blocks"
+        ));
+    }
+
+    #[test]
+    fn capture_contains_keeps_intact_lines() {
+        let intact = "INFO  [net_server] virtio-net: MAC 52:54:00:12:34:56\n";
+        assert!(capture_contains(intact, "virtio-net: MAC"));
+    }
+
+    #[test]
+    fn capture_contains_rejects_missing_token() {
+        assert!(!capture_contains(IPC_COMPOSED_CI_SNIP, "lerux-net: ready"));
+    }
 }

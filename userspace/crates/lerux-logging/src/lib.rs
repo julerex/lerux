@@ -8,6 +8,8 @@ use log::Metadata;
 pub use log::{self, LevelFilter};
 pub use sel4_logging::{Logger, LoggerBuilder};
 
+mod linebuf;
+
 #[cfg(feature = "serial")]
 pub mod serial;
 

@@ -18,7 +18,7 @@ use lerux_interface_types::{
 };
 use lerux_ipc::call;
 
-use crate::default_filter;
+use crate::{default_filter, linebuf::StaticLineBuf};
 
 /// Accept debug+ so log.level policy can filter at the log-server.
 const LOG_LEVEL: LevelFilter = LevelFilter::Debug;
@@ -26,20 +26,15 @@ const LOG_LEVEL: LevelFilter = LevelFilter::Debug;
 struct LogServerSlot(UnsafeCell<Option<Channel>>);
 struct TagSlot(UnsafeCell<[u8; MAX_LOG_TAG]>);
 struct TagLenSlot(UnsafeCell<u8>);
-struct LineBuf(UnsafeCell<[u8; MAX_LOG_MSG]>);
-struct LineLen(UnsafeCell<usize>);
 
 unsafe impl Sync for LogServerSlot {}
 unsafe impl Sync for TagSlot {}
 unsafe impl Sync for TagLenSlot {}
-unsafe impl Sync for LineBuf {}
-unsafe impl Sync for LineLen {}
 
 static LOG_SERVER: LogServerSlot = LogServerSlot(UnsafeCell::new(None));
 static PD_TAG: TagSlot = TagSlot(UnsafeCell::new([0u8; MAX_LOG_TAG]));
 static PD_TAG_LEN: TagLenSlot = TagLenSlot(UnsafeCell::new(0));
-static LINE_BUF: LineBuf = LineBuf(UnsafeCell::new([0u8; MAX_LOG_MSG]));
-static LINE_LEN: LineLen = LineLen(UnsafeCell::new(0));
+static LINE: StaticLineBuf<{ MAX_LOG_MSG }> = StaticLineBuf::new();
 
 /// Infer level from sel4-logging's formatted prefix (`ERROR`/`WARN`/`INFO`/`DEBUG`).
 fn level_from_formatted(s: &str) -> u8 {
@@ -59,45 +54,25 @@ fn level_from_formatted(s: &str) -> u8 {
     }
 }
 
-fn flush_line() {
-    // SAFETY: single-threaded PD.
+fn send_line(s: &str) {
+    // SAFETY: single-threaded PD; slots are set once in init.
     unsafe {
-        let n = *LINE_LEN.0.get();
-        if n == 0 {
+        let Some(ch) = *LOG_SERVER.0.get() else {
             return;
-        }
-        let buf = *LINE_BUF.0.get();
-        let s = core::str::from_utf8(&buf[..n]).unwrap_or("");
-        if let Some(ch) = *LOG_SERVER.0.get() {
-            let tag_len = *PD_TAG_LEN.0.get();
-            let tag = *PD_TAG.0.get();
-            let tag_slice = &tag[..tag_len as usize];
-            let level = level_from_formatted(s);
-            let req = LogRequest::append_tagged(level, tag_slice, s.as_bytes());
-            let _ = call::<LogRequest, LogResponse>(ch, req);
-        }
-        *LINE_LEN.0.get() = 0;
+        };
+        let tag_len = *PD_TAG_LEN.0.get();
+        let tag = *PD_TAG.0.get();
+        let tag_slice = &tag[..tag_len as usize];
+        let level = level_from_formatted(s);
+        let req = LogRequest::append_tagged(level, tag_slice, s.as_bytes());
+        let _ = call::<LogRequest, LogResponse>(ch, req);
     }
 }
 
 fn log_server_write(s: &str) {
     // SAFETY: single-threaded PD.
     unsafe {
-        for &b in s.as_bytes() {
-            if b == b'\n' || b == b'\r' {
-                flush_line();
-                continue;
-            }
-            let n = *LINE_LEN.0.get();
-            if n < MAX_LOG_MSG {
-                (*LINE_BUF.0.get())[n] = b;
-                *LINE_LEN.0.get() = n + 1;
-            }
-            // If full without newline, flush as one entry.
-            if *LINE_LEN.0.get() == MAX_LOG_MSG {
-                flush_line();
-            }
-        }
+        LINE.push(s, send_line);
     }
 }
 
@@ -125,7 +100,6 @@ pub fn init_with_tag(channel: Channel, tag: &[u8]) -> Result<(), SetLoggerError>
         t[..n].copy_from_slice(&tag[..n]);
         *PD_TAG.0.get() = t;
         *PD_TAG_LEN.0.get() = n as u8;
-        *LINE_LEN.0.get() = 0;
     }
     LOGGER.set()
 }

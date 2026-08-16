@@ -8,7 +8,7 @@ use sel4_logging::{LevelFilter, Logger, LoggerBuilder};
 use sel4_microkit::Channel;
 use sel4_microkit_driver_adapters::serial::client::Client as SerialClient;
 
-use crate::default_filter;
+use crate::{default_filter, linebuf::StaticLineBuf};
 
 const LOG_LEVEL: LevelFilter = LevelFilter::Info;
 
@@ -18,15 +18,20 @@ struct SerialSlot(UnsafeCell<Option<SerialClient>>);
 unsafe impl Sync for SerialSlot {}
 
 static SERIAL: SerialSlot = SerialSlot(UnsafeCell::new(None));
+static LINE: StaticLineBuf = StaticLineBuf::new();
 
 fn serial_write(s: &str) {
     // SAFETY: Microkit PDs are single-threaded; init() runs before any log call.
     unsafe {
-        if let Some(client) = &mut *SERIAL.0.get() {
-            for b in s.bytes() {
+        let Some(client) = &mut *SERIAL.0.get() else {
+            return;
+        };
+        LINE.push(s, |line| {
+            for b in line.bytes() {
                 let _ = client.write(b);
             }
-        }
+            let _ = client.write(b'\n');
+        });
     }
 }
 

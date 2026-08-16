@@ -4,7 +4,7 @@
 extern crate alloc;
 
 use lerux_interface_types::{
-    NetRequest, NetResponse, TlsRequest, TlsResponse, MAX_NET_TCP_PAYLOAD,
+    NetRequest, NetResponse, TlsRequest, TlsResponse, MAX_NET_TCP_PAYLOAD, MAX_TLS_NAME,
 };
 use lerux_ipc::{recv, send, send_unspecified_error, NetClient};
 use lerux_logging::{debug, log};
@@ -54,18 +54,26 @@ impl HandlerImpl {
                 name_len,
                 name,
                 port,
-            } => match connect_tls(&name[..name_len as usize], port) {
-                Ok(session) => {
-                    self.session = Some(session);
-                    TlsResponse::Ok
+            } => {
+                self.close_session();
+                let name_len = (name_len as usize).min(MAX_TLS_NAME);
+                match connect_tls(&name[..name_len], port) {
+                    Ok(session) => {
+                        self.session = Some(session);
+                        TlsResponse::Ok
+                    }
+                    Err(()) => TlsResponse::Error,
                 }
-                Err(()) => TlsResponse::Error,
-            },
+            }
             TlsRequest::Send {
                 payload_len,
                 payload,
             } => match self.session.as_mut() {
-                Some(session) => send_plain(session, &payload[..payload_len as usize]),
+                Some(session) => {
+                    let payload_len =
+                        (payload_len as usize).min(MAX_NET_TCP_PAYLOAD);
+                    send_plain(session, &payload[..payload_len])
+                }
                 None => TlsResponse::Error,
             },
             TlsRequest::Recv => match self.session.as_mut() {
@@ -73,12 +81,16 @@ impl HandlerImpl {
                 None => TlsResponse::Error,
             },
             TlsRequest::Close => {
-                self.session = None;
-                let _ = NET_SERVER.call(NetRequest::TcpClose);
+                self.close_session();
                 TlsResponse::Ok
             }
             TlsRequest::Poll => TlsResponse::Pending,
         }
+    }
+
+    fn close_session(&mut self) {
+        self.session = None;
+        let _ = NET_SERVER.call(NetRequest::TcpClose);
     }
 }
 
@@ -91,23 +103,27 @@ fn connect_tls(name: &[u8], port: u16) -> Result<ClientSession, ()> {
         NetResponse::Ok => {}
         _ => return Err(()),
     }
-    let name = core::str::from_utf8(name).map_err(|_| ())?;
-    let mut session = ClientSession::new(name).map_err(|_| ())?;
+    let name = core::str::from_utf8(name).map_err(|_| close_tcp())?;
+    let mut session = ClientSession::new(name).map_err(|_| close_tcp())?;
     for _ in 0..MAX_STEPS {
-        match session.drive().map_err(|_| ())? {
-            Status::WantSend => tcp_send_all(&session.take_outgoing())?,
+        match session.drive().map_err(|_| close_tcp())? {
+            Status::WantSend => tcp_send_all(&session.take_outgoing()).map_err(|_| close_tcp())?,
             Status::WantRecv => {
-                let chunk = tcp_recv_one()?;
+                let chunk = tcp_recv_one().map_err(|_| close_tcp())?;
                 session.feed_incoming(&chunk);
             }
             Status::Connected => {
                 log::info!("lerux-tls: handshake ok");
                 return Ok(session);
             }
-            Status::Closed => return Err(()),
+            Status::Closed => return Err(close_tcp()),
         }
     }
-    Err(())
+    Err(close_tcp())
+}
+
+fn close_tcp() -> () {
+    let _ = NET_SERVER.call(NetRequest::TcpClose);
 }
 
 fn send_plain(session: &mut ClientSession, data: &[u8]) -> TlsResponse {

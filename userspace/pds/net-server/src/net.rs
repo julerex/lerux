@@ -74,6 +74,8 @@ struct SocketArena {
     dns_queries: [Option<dns::DnsQuery>; 1],
     udp_handle: Option<SocketHandle>,
     tcp_client_handle: Option<SocketHandle>,
+    /// Client socket dropped from `queue_tcp_connect` before the next poll.
+    pending_tcp_client_drop: Option<SocketHandle>,
     tcp_listen_handle: Option<SocketHandle>,
     dhcp_handle: Option<SocketHandle>,
     dns_handle: Option<SocketHandle>,
@@ -95,6 +97,7 @@ impl SocketArena {
             dns_queries: [None],
             udp_handle: None,
             tcp_client_handle: None,
+            pending_tcp_client_drop: None,
             tcp_listen_handle: None,
             dhcp_handle: None,
             dns_handle: None,
@@ -373,7 +376,11 @@ impl NetStack {
         self.tcp_role = TcpRole::Client;
         self.completed = None;
         let arena = unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_ARENA) };
-        arena.tcp_client_handle = None;
+        // Clearing tcp_client_handle without removing the socket orphans a slot in the
+        // fixed-size arena and panics once SOCK_SLOTS is exhausted.
+        if let Some(h) = arena.tcp_client_handle.take() {
+            arena.pending_tcp_client_drop = Some(h);
+        }
     }
 
     pub fn queue_tcp_listen(&mut self, port: u16) {
@@ -1000,6 +1007,9 @@ impl NetStack {
         self.device.poll();
         let arena = unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_ARENA) };
         let mut sockets = SocketSet::new(&mut arena.storage[..]);
+        if let Some(h) = arena.pending_tcp_client_drop.take() {
+            sockets.remove(h);
+        }
         self.ensure_core_sockets(&mut sockets);
         self.iface.poll(now, &mut self.device, &mut sockets);
         self.process_dhcp(&mut sockets);

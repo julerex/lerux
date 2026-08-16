@@ -70,8 +70,7 @@ impl HandlerImpl {
                 payload,
             } => match self.session.as_mut() {
                 Some(session) => {
-                    let payload_len =
-                        (payload_len as usize).min(MAX_NET_TCP_PAYLOAD);
+                    let payload_len = (payload_len as usize).min(MAX_NET_TCP_PAYLOAD);
                     send_plain(session, &payload[..payload_len])
                 }
                 None => TlsResponse::Error,

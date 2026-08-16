@@ -102,26 +102,40 @@ fn connect_tls(name: &[u8], port: u16) -> Result<ClientSession, ()> {
         NetResponse::Ok => {}
         _ => return Err(()),
     }
-    let name = core::str::from_utf8(name).map_err(|_| close_tcp())?;
-    let mut session = ClientSession::new(name).map_err(|_| close_tcp())?;
+    let name = core::str::from_utf8(name).map_err(|_| {
+        close_tcp();
+    })?;
+    let mut session = ClientSession::new(name).map_err(|_| {
+        close_tcp();
+    })?;
     for _ in 0..MAX_STEPS {
-        match session.drive().map_err(|_| close_tcp())? {
-            Status::WantSend => tcp_send_all(&session.take_outgoing()).map_err(|_| close_tcp())?,
+        match session.drive().map_err(|_| {
+            close_tcp();
+        })? {
+            Status::WantSend => tcp_send_all(&session.take_outgoing()).map_err(|_| {
+                close_tcp();
+            })?,
             Status::WantRecv => {
-                let chunk = tcp_recv_one().map_err(|_| close_tcp())?;
+                let chunk = tcp_recv_one().map_err(|_| {
+                    close_tcp();
+                })?;
                 session.feed_incoming(&chunk);
             }
             Status::Connected => {
                 log::info!("lerux-tls: handshake ok");
                 return Ok(session);
             }
-            Status::Closed => return Err(close_tcp()),
+            Status::Closed => {
+                close_tcp();
+                return Err(());
+            }
         }
     }
-    Err(close_tcp())
+    close_tcp();
+    Err(())
 }
 
-fn close_tcp() -> () {
+fn close_tcp() {
     let _ = NET_SERVER.call(NetRequest::TcpClose);
 }
 

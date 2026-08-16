@@ -14,6 +14,7 @@ use sel4_microkit_driver_adapters::net::client::Client as NetClient;
 
 mod config;
 mod net;
+mod queue;
 
 // Channel IDs must match support/profiles + system templates (Phase 41/43).
 // Sole L2 client of virtio-net / genet / virtio-pci driver PDs.
@@ -28,10 +29,7 @@ const HTTP_FS_CLIENT: Channel = Channel::new(7);
 
 struct HandlerImpl {
     net: net::NetStack,
-    /// Response waiting for the owning client to Poll.
-    completed: Option<NetResponse>,
-    /// Client that owns the in-flight async operation (or pending completion).
-    active_client: Option<Channel>,
+    clients: queue::ClientQueue,
 }
 
 #[protection_domain(heap_size = 512 * 1024)]
@@ -60,67 +58,127 @@ fn init() -> HandlerImpl {
     log::info!("lerux-net: ready");
     HandlerImpl {
         net: net_stack,
-        completed: None,
-        active_client: None,
+        clients: queue::ClientQueue::new(),
     }
 }
 
 impl HandlerImpl {
-    /// Reserve this client for an async op. Returns false when another client owns the stack
-    /// or this client still has an undelivered completion.
+    fn client_idx(channel: Channel) -> usize {
+        channel.index()
+    }
+
     fn begin_async(&mut self, channel: Channel) -> bool {
-        if self.completed.is_some() {
-            return false;
-        }
-        if self.net.is_busy() && self.active_client != Some(channel) {
-            return false;
-        }
-        self.active_client = Some(channel);
-        true
+        self.clients.begin(Self::client_idx(channel))
     }
 
-    fn finish_async(&mut self) {
-        self.active_client = None;
-    }
-
-    fn abort_async(&mut self, channel: Channel) {
-        if self.active_client == Some(channel) {
-            self.net.cancel_async();
-            self.completed = None;
-            self.finish_async();
-        }
-    }
-
-    fn handle_poll(&mut self, channel: Channel) -> NetResponse {
-        if self.active_client != Some(channel) {
+    fn start_or_queue(&mut self, channel: Channel, req: NetRequest) -> NetResponse {
+        if !self.begin_async(channel) {
             return NetResponse::Pending;
         }
-        if let Some(resp) = self.completed.take() {
-            self.finish_async();
-            return resp;
+        let idx = Self::client_idx(channel);
+        if self.net.is_busy() && self.clients.current != Some(idx) {
+            self.clients.queue_request(idx, req);
+            log::info!("lerux-net: queued");
+            return NetResponse::Pending;
         }
-        if let Some(resp) = self.net.take_completed() {
-            self.finish_async();
-            return resp;
-        }
-        NET_DRIVER.notify();
-        self.net.poll();
-        if let Some(resp) = self.net.take_completed() {
-            self.finish_async();
+        self.dispatch(channel, req);
+        if let Some(resp) = self.clients.take_completed(idx) {
+            self.clients.finish(idx);
+            self.pump_queue();
             return resp;
         }
         NetResponse::Pending
     }
 
+    fn dispatch(&mut self, channel: Channel, req: NetRequest) {
+        let idx = Self::client_idx(channel);
+        if self.clients.current.is_some() && self.clients.current != Some(idx) && self.net.is_busy()
+        {
+            self.clients.queue_request(idx, req);
+            return;
+        }
+        if self.clients.current.is_some() && self.clients.current != Some(idx) {
+            log::info!("lerux-net: multi-client ok");
+        }
+        self.clients.current = Some(idx);
+        match req {
+            NetRequest::UdpTx {
+                payload_len,
+                payload,
+            } => self.net.queue_udp_tx(payload_len, payload),
+            NetRequest::UdpRecv => self.net.queue_udp_recv(),
+            NetRequest::DnsResolve { name_len, name } => self.net.queue_dns_resolve(name_len, name),
+            NetRequest::TcpConnect { addr, port } => self.net.queue_tcp_connect(addr, port),
+            NetRequest::TcpListen { port } => self.net.queue_tcp_listen(port),
+            NetRequest::TcpSend {
+                payload_len,
+                payload,
+            } => self.net.queue_tcp_send(payload_len, payload),
+            NetRequest::TcpRecv => self.net.queue_tcp_recv(),
+            NetRequest::TcpClose => self.net.queue_tcp_close(),
+            NetRequest::Abort
+            | NetRequest::Poll
+            | NetRequest::GetIface
+            | NetRequest::ApplyIface { .. } => {}
+        }
+        if let Some(resp) = self.net.take_completed() {
+            self.clients.stash(idx, resp);
+            self.clients.current = None;
+            self.pump_queue();
+        }
+    }
+
+    fn pump_queue(&mut self) {
+        while !self.net.is_busy() {
+            let Some(idx) = self.clients.next_queued() else {
+                break;
+            };
+            let Some(req) = self.clients.take_queued(idx) else {
+                break;
+            };
+            log::info!("lerux-net: multi-client ok");
+            let ch = Channel::new(idx);
+            self.dispatch(ch, req);
+        }
+    }
+
+    fn abort_async(&mut self, channel: Channel) {
+        let idx = Self::client_idx(channel);
+        if self.clients.current == Some(idx) {
+            self.net.cancel_async();
+        }
+        self.clients.abort(idx);
+        self.pump_queue();
+    }
+
+    fn handle_poll(&mut self, channel: Channel) -> NetResponse {
+        let idx = Self::client_idx(channel);
+        if let Some(resp) = self.clients.take_completed(idx) {
+            self.clients.finish(idx);
+            self.pump_queue();
+            return resp;
+        }
+        if self.clients.current == Some(idx) {
+            NET_DRIVER.notify();
+            self.net.poll();
+            if let Some(resp) = self.net.take_completed() {
+                self.clients.finish(idx);
+                self.pump_queue();
+                return resp;
+            }
+        }
+        self.pump_queue();
+        NetResponse::Pending
+    }
+
     fn handle_net_driver(&mut self) {
         self.net.poll();
-        // Only stash completions for the owning client. Background work (e.g.
-        // auto re-listen after TcpClose) can finish with no active_client; an
-        // orphan completion blocks begin_async() for every client forever.
-        if self.active_client.is_some()
+        if let Some(idx) = self.clients.current
             && let Some(resp) = self.net.take_completed()
         {
-            self.completed = Some(resp);
+            self.clients.stash(idx, resp);
+            self.clients.current = None;
+            self.pump_queue();
         }
         #[cfg(feature = "workstation")]
         if self.net.listen_activity {
@@ -152,36 +210,6 @@ impl Handler for HandlerImpl {
 
         Ok(match recv::<NetRequest>(msg_info) {
             Ok(req) => match req {
-                NetRequest::UdpTx {
-                    payload_len,
-                    payload,
-                } => {
-                    if !self.begin_async(channel) {
-                        return Ok(send(NetResponse::Pending));
-                    }
-                    self.net.queue_udp_tx(payload_len, payload);
-                    send(NetResponse::Pending)
-                }
-                NetRequest::UdpRecv => {
-                    if !self.begin_async(channel) {
-                        return Ok(send(NetResponse::Pending));
-                    }
-                    self.net.queue_udp_recv();
-                    send(NetResponse::Pending)
-                }
-                NetRequest::DnsResolve { name_len, name } => {
-                    // Static aliases complete immediately; real DNS is async (Phase 51).
-                    if !self.begin_async(channel) {
-                        return Ok(send(NetResponse::Pending));
-                    }
-                    self.net.queue_dns_resolve(name_len, name);
-                    if let Some(resp) = self.net.take_completed() {
-                        self.finish_async();
-                        send(resp)
-                    } else {
-                        send(NetResponse::Pending)
-                    }
-                }
                 NetRequest::GetIface => send(self.net.iface_response()),
                 NetRequest::ApplyIface {
                     dhcp,
@@ -190,49 +218,12 @@ impl Handler for HandlerImpl {
                     gateway,
                     dns,
                 } => send(self.net.apply_iface(dhcp, addr, prefix, gateway, dns)),
-                NetRequest::TcpConnect { addr, port } => {
-                    if !self.begin_async(channel) {
-                        return Ok(send(NetResponse::Pending));
-                    }
-                    self.net.queue_tcp_connect(addr, port);
-                    send(NetResponse::Pending)
-                }
-                NetRequest::TcpListen { port } => {
-                    if !self.begin_async(channel) {
-                        return Ok(send(NetResponse::Pending));
-                    }
-                    self.net.queue_tcp_listen(port);
-                    send(NetResponse::Pending)
-                }
-                NetRequest::TcpSend {
-                    payload_len,
-                    payload,
-                } => {
-                    if !self.begin_async(channel) {
-                        return Ok(send(NetResponse::Pending));
-                    }
-                    self.net.queue_tcp_send(payload_len, payload);
-                    send(NetResponse::Pending)
-                }
-                NetRequest::TcpRecv => {
-                    if !self.begin_async(channel) {
-                        return Ok(send(NetResponse::Pending));
-                    }
-                    self.net.queue_tcp_recv();
-                    send(NetResponse::Pending)
-                }
-                NetRequest::TcpClose => {
-                    if !self.begin_async(channel) {
-                        return Ok(send(NetResponse::Pending));
-                    }
-                    self.net.queue_tcp_close();
-                    send(NetResponse::Pending)
-                }
                 NetRequest::Abort => {
                     self.abort_async(channel);
                     send(NetResponse::Ok)
                 }
                 NetRequest::Poll => send(self.handle_poll(channel)),
+                other => send(self.start_or_queue(channel, other)),
             },
             Err(_) => send_unspecified_error(),
         })

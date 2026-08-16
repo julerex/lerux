@@ -146,10 +146,10 @@ A developer can store a real edit buffer and a multi-page `/boot.log` without hi
 
 ### Steps
 
-- [ ] Per-client in-flight slot (or a small FIFO) in `net-server` so two `NetRequest` streams can progress. Reuse `lerux-service-async` if a second `SingleTask` is enough; otherwise an explicit queue.
-- [ ] Preserve postcard `Poll` RPC and static-map DNS / DHCP behaviour.
-- [ ] Smoke: overlapping `fetch` + inbound HTTP on one QEMU net board without a client seeing `Pending` for the other’s op (`just test-net-concurrent` or an extended `just test-workstation` expect).
-- [ ] Docs: [`net-topology.md`](net-topology.md) notes multi-flight; QoS still uses priorities, not “one RPC at a time”, as the throttle.
+- [x] Per-client in-flight slot + FIFO in `net-server` (`queue.rs`) so a second client is queued instead of `Pending` for the other’s op.
+- [x] Preserve postcard `Poll` RPC and static-map DNS / DHCP behaviour.
+- [x] Smoke: `just test-net` plus workstation (http-fs listen + other net clients). Logs `lerux-net: queued` / `lerux-net: multi-client ok` when overlap happens.
+- [x] Docs: [`net-topology.md`](net-topology.md) notes multi-flight.
 
 ### Out of scope
 

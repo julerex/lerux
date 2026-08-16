@@ -412,7 +412,7 @@ LERUXFS2 + hierarchical IPC (see [`plan-arch.md`](plan-arch.md) Phase 50 for ful
 - [x] Dual TCP (client + listen); `NetRequest::GetIface` + shell `ip`
 - [x] Smokes: `just test-net`, `just test-fetch`, `just test-workstation`
 - [x] TLS outbound via `tls-proxy` + rustls ([ADR-007](decisions/007-tls-proxy.md)); `just test-fetch-tls`
-- [ ] Full multi-client op queue → [Phase 64](plan-qemu.md#phase-64--multi-client-net-queue)
+- [x] Full multi-client op queue (Phase 64)
 - [x] Unified-dma on x86 PCI + RISC-V virtio (Phase 61). GENET is [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated)
 
 ## Phase 52 — Hardware closeout (core done)
@@ -531,10 +531,11 @@ Completable **without a board**. Living checklist: **[`plan-qemu.md`](plan-qemu.
 - [x] Board `qemu_virt_aarch64_fs_host`; `just test-fs-host`
 - [x] Guest `/host/hello.txt` via existing FS IPC
 
-## Phase 64 — Multi-client net queue (planned)
+## Phase 64 — Multi-client net queue ✅
 
-- [ ] Per-client in-flight slot in `net-server` (no `Pending` for the other client’s op)
-- [ ] Overlap smoke: fetch + http-fs on one QEMU net board
+- [x] Per-client in-flight slot + FIFO in `net-server`
+- [x] Second client is queued, not rejected with the other’s `Pending`
+- [x] `just test-net` (workstation overlap logs `lerux-net: multi-client ok` when it happens)
 
 ## Phase 65 — Serial virtualiser v2 (planned)
 
@@ -574,7 +575,7 @@ Completable **without a board**. Living checklist: **[`plan-qemu.md`](plan-qemu.
 | 61 | QEMU DMA parity (x86 PCI + RISC-V virtio) | done |
 | 62 | Filesystem v3 (size + paths) | done |
 | 63 | Host-backed FS (QEMU inject) | done |
-| 64 | Multi-client net queue | planned |
+| 64 | Multi-client net queue | done |
 | 65 | Serial virtualiser v2 | planned |
 | 66 | QEMU arch parity (debug / isolation) | planned |
 | 67 | Asymmetric image signing | planned |

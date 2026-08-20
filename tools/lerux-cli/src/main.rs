@@ -206,7 +206,7 @@ enum Commands {
     Deploy {
         #[arg(long, default_value = "rpi4b_4gb_workstation")]
         board: String,
-        /// Mounted FAT boot directory (must exist).
+        /// Absolute path to a mounted FAT boot directory (must exist; no `..` segments).
         #[arg(long, short = 'd')]
         dest: PathBuf,
         #[arg(long, default_value = "build")]

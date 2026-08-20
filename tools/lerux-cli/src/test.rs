@@ -1,4 +1,5 @@
 use std::{
+    collections::VecDeque,
     fs::OpenOptions,
     io::{BufRead, BufReader, Read, Write},
     process::{Command, Stdio},
@@ -324,6 +325,10 @@ pub fn run_hw_serial_smoke(test: &SmokeTest) -> Result<()> {
 }
 
 /// sel4-logging line prefix: `{level:<5} [{target}] `.
+///
+/// `target` is `[A-Za-z0-9_:]+` so a split prefix like
+/// `INFO  [virtio_drivers::device::net::dev_INFO  [virtio_drivers::device::blk]`
+/// is not treated as one prefix (the inner `[blk]` `]` would otherwise match).
 fn sel4_log_prefix_len(s: &str) -> Option<usize> {
     let level = ["ERROR", "WARN", "INFO", "DEBUG", "TRACE"]
         .iter()
@@ -336,6 +341,14 @@ fn sel4_log_prefix_len(s: &str) -> Option<usize> {
     let after_spaces = &after_level[spaces..];
     let rest = after_spaces.strip_prefix('[')?;
     let close = rest.find(']')?;
+    let target = &rest[..close];
+    if target.is_empty()
+        || !target
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b':')
+    {
+        return None;
+    }
     let after_brack = &rest[close + 1..];
     if !after_brack.starts_with(' ') {
         return None;
@@ -343,72 +356,60 @@ fn sel4_log_prefix_len(s: &str) -> Option<usize> {
     Some(level.len() + spaces + 1 + close + 1 + 1)
 }
 
-/// Rebuild sel4-logging lines after concurrent debug_print spliced one
-/// message inside another (chunked write callbacks).
+/// Rebuild sel4-logging lines after concurrent `debug_putchar` spliced one
+/// message inside another.
 ///
-/// `INFO  [net_server] virtio-nINFO  [blk_server] …\net: MAC …` becomes
-/// a haystack that contains `virtio-net: MAC`.
+/// Incomplete lines are a FIFO: a new `LEVEL [target] ` starts a line; a
+/// newline completes the current line; leftover text that is not a prefix
+/// continues the oldest unfinished line. That recovers both simple splices
+/// (`virtio-` / `net: MAC`) and nested ones (`lerux-edit: ` / `lerux-` /
+/// complete backup line / later `ready` then `chat: ready`).
 fn collapse_interleaved_sel4_logs(haystack: &str) -> String {
-    let bytes = haystack.as_bytes();
-    let mut starts = Vec::new();
+    let mut completed = String::with_capacity(haystack.len());
+    let mut incomplete: VecDeque<String> = VecDeque::new();
+    let mut current: Option<String> = None;
     let mut i = 0;
     while i < haystack.len() {
-        if let Some(len) = sel4_log_prefix_len(&haystack[i..]) {
-            starts.push((i, len));
-            i += len;
+        if let Some(plen) = sel4_log_prefix_len(&haystack[i..]) {
+            if let Some(cur) = current.take() {
+                incomplete.push_back(cur);
+            }
+            current = Some(haystack[i..i + plen].to_string());
+            i += plen;
             continue;
         }
-        i += match haystack[i..].chars().next() {
-            Some(c) => c.len_utf8(),
+        let ch = match haystack[i..].chars().next() {
+            Some(c) => c,
             None => break,
         };
-    }
-    if starts.is_empty() {
-        return haystack.to_string();
-    }
-
-    let mut parts: Vec<(String, String)> = Vec::new();
-    if starts[0].0 > 0 {
-        parts.push((
-            String::new(),
-            String::from_utf8_lossy(&bytes[..starts[0].0]).into_owned(),
-        ));
-    }
-    for (idx, &(off, plen)) in starts.iter().enumerate() {
-        let body_start = off + plen;
-        let body_end = starts
-            .get(idx + 1)
-            .map(|(n, _)| *n)
-            .unwrap_or(haystack.len());
-        parts.push((
-            String::from_utf8_lossy(&bytes[off..off + plen]).into_owned(),
-            String::from_utf8_lossy(&bytes[body_start..body_end]).into_owned(),
-        ));
-    }
-
-    let mut leftovers = Vec::new();
-    for (_prefix, body) in &mut parts {
-        if let Some((head, tail)) = body.split_once('\n') {
-            if !tail.is_empty() {
-                leftovers.push(tail.to_string());
+        i += ch.len_utf8();
+        if let Some(cur) = current.as_mut() {
+            cur.push(ch);
+            if ch == '\n'
+                && let Some(done) = current.take()
+            {
+                completed.push_str(&done);
             }
-            *body = format!("{head}\n");
+        } else if incomplete.front().is_some() {
+            if let Some(front) = incomplete.front_mut() {
+                front.push(ch);
+            }
+            if ch == '\n'
+                && let Some(done) = incomplete.pop_front()
+            {
+                completed.push_str(&done);
+            }
+        } else {
+            completed.push(ch);
         }
     }
-    let mut li = 0;
-    for (_prefix, body) in &mut parts {
-        if !body.ends_with('\n') && li < leftovers.len() {
-            body.push_str(&leftovers[li]);
-            li += 1;
-        }
+    if let Some(cur) = current {
+        incomplete.push_back(cur);
     }
-
-    let mut out = String::with_capacity(haystack.len());
-    for (prefix, body) in parts {
-        out.push_str(&prefix);
-        out.push_str(&body);
+    for s in incomplete {
+        completed.push_str(&s);
     }
-    out
+    completed
 }
 
 /// Substring match that also accepts tokens split by concurrent sel4-logging.
@@ -547,6 +548,30 @@ INFO  [net_server] virtio-nINFO  [blk_server] virtio-blk: 8192 blocks x 512 byte
 et: MAC 52:54:00:12:34:56
 ";
 
+    /// 2026-08-20 ipc-composed CI: earlier split prefix must not steal the
+    /// `net: MAC` leftover from `virtio-`.
+    const IPC_COMPOSED_CI_SNIP_2026_08_20: &str = "\
+INFO  [virtio_net_driver] virtio-net: unified-dma (no client_dma map)
+INFO  [virtio_drivers::device::net::dev_INFO  [virtio_drivers::device::blk] found a block device of size 4096KB
+raw] negotiated_features Features(MAC | STATUS | RING_INDIRECT_DESC | RING_EVENT_IDX)
+INFO  [virtio_blk_driver] virtio-blk driver ready
+INFO  [virtio_net_driver] virtio-net driver ready
+INFO  [net_server] virtio-INFO  [blk_server] virtio-blk: 8192 blocks x 512 bytes
+net: MAC 52:54:00:12:34:56
+INFO  [blk_server] lerux-blk: ready
+INFO  [net_server] lerux-net: ready
+";
+
+    /// 2026-08-20 workstation CI: three PDs splice, remnants arrive after
+    /// unrelated complete lines.
+    const WORKSTATION_CI_SNIP: &str = "\
+INFO  [edit] lerux-edit: INFO  [chat_client] lerux-INFO  [backup] lerux-backup: ready
+INFO  [http_file_browser] lerux-http-fs: listening
+INFO  [http_file_browser] lerux-http-fs: ready (v2 mime/put)
+ready
+chat: ready rooms=lobby
+";
+
     #[test]
     fn capture_contains_recovers_virtio_net_mac_from_ci_interleave() {
         assert!(
@@ -558,6 +583,38 @@ et: MAC 52:54:00:12:34:56
             IPC_COMPOSED_CI_SNIP,
             "virtio-blk: 8192 blocks"
         ));
+    }
+
+    #[test]
+    fn capture_contains_recovers_mac_when_earlier_prefix_also_splits() {
+        assert!(
+            !IPC_COMPOSED_CI_SNIP_2026_08_20.contains("virtio-net: MAC"),
+            "fixture must reproduce the raw split"
+        );
+        assert!(capture_contains(
+            IPC_COMPOSED_CI_SNIP_2026_08_20,
+            "virtio-net: MAC"
+        ));
+        assert!(capture_contains(
+            IPC_COMPOSED_CI_SNIP_2026_08_20,
+            "lerux-net: ready"
+        ));
+    }
+
+    #[test]
+    fn capture_contains_recovers_nested_edit_and_chat_ready() {
+        assert!(
+            !WORKSTATION_CI_SNIP.contains("lerux-edit: ready"),
+            "fixture must reproduce the raw split"
+        );
+        assert!(
+            !WORKSTATION_CI_SNIP.contains("lerux-chat: ready"),
+            "fixture must reproduce the raw split"
+        );
+        assert!(capture_contains(WORKSTATION_CI_SNIP, "lerux-edit: ready"));
+        assert!(capture_contains(WORKSTATION_CI_SNIP, "lerux-chat: ready"));
+        assert!(capture_contains(WORKSTATION_CI_SNIP, "lerux-backup: ready"));
+        assert!(capture_contains(WORKSTATION_CI_SNIP, "v2 mime"));
     }
 
     #[test]

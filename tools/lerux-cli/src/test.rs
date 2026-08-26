@@ -324,15 +324,24 @@ pub fn run_hw_serial_smoke(test: &SmokeTest) -> Result<()> {
     Ok(())
 }
 
+const SEL4_LOG_LEVELS: [&str; 5] = ["ERROR", "WARN", "INFO", "DEBUG", "TRACE"];
+
+fn starts_with_sel4_log_level(s: &str) -> bool {
+    SEL4_LOG_LEVELS.iter().any(|l| s.starts_with(*l))
+}
+
 /// sel4-logging line prefix: `{level:<5} [{target}] `.
 ///
 /// `target` is `[A-Za-z0-9_:]+` so a split prefix like
 /// `INFO  [virtio_drivers::device::net::dev_INFO  [virtio_drivers::device::blk]`
 /// is not treated as one prefix (the inner `[blk]` `]` would otherwise match).
+///
+/// A trailing space after `]` is the usual terminator. Concurrent
+/// `debug_putchar` may splice the next prefix immediately (`]INFO`), or the
+/// capture may end mid-prefix; those still count so the outer line stays in
+/// the unfinished FIFO.
 fn sel4_log_prefix_len(s: &str) -> Option<usize> {
-    let level = ["ERROR", "WARN", "INFO", "DEBUG", "TRACE"]
-        .iter()
-        .find(|l| s.starts_with(*l))?;
+    let level = SEL4_LOG_LEVELS.iter().find(|l| s.starts_with(*l))?;
     let after_level = &s[level.len()..];
     let spaces = after_level.bytes().take_while(|&b| b == b' ').count();
     if spaces == 0 {
@@ -350,10 +359,41 @@ fn sel4_log_prefix_len(s: &str) -> Option<usize> {
         return None;
     }
     let after_brack = &rest[close + 1..];
-    if !after_brack.starts_with(' ') {
+    let without_space = level.len() + spaces + 1 + close + 1;
+    if after_brack.starts_with(' ') {
+        Some(without_space + 1)
+    } else if after_brack.is_empty() || starts_with_sel4_log_level(after_brack) {
+        Some(without_space)
+    } else {
+        None
+    }
+}
+
+fn is_prefix_only(s: &str) -> bool {
+    sel4_log_prefix_len(s).is_some_and(|n| n == s.len())
+}
+
+/// When an outer prefix was preempted before any payload, the first newline
+/// often belongs to that outer line (`serial driver: PL011`) even though the
+/// inner line is still current (`lerux-debug:`). Split the inner payload at
+/// the first space so the tail completes the oldest prefix-only line.
+fn steal_preempted_outer_payload(current: &str, oldest: Option<&str>) -> Option<(String, String)> {
+    let oldest = oldest?;
+    if !is_prefix_only(oldest) {
         return None;
     }
-    Some(level.len() + spaces + 1 + close + 1 + 1)
+    let plen = sel4_log_prefix_len(current)?;
+    let payload = &current[plen..];
+    let sp = payload.find(' ')?;
+    if sp == 0 {
+        return None;
+    }
+    let tail = &payload[sp + 1..];
+    if tail.is_empty() {
+        return None;
+    }
+    let inner = format!("{}{}", &current[..plen], &payload[..sp]);
+    Some((inner, tail.to_string()))
 }
 
 /// Rebuild sel4-logging lines after concurrent `debug_putchar` spliced one
@@ -364,6 +404,10 @@ fn sel4_log_prefix_len(s: &str) -> Option<usize> {
 /// continues the oldest unfinished line. That recovers both simple splices
 /// (`virtio-` / `net: MAC`) and nested ones (`lerux-edit: ` / `lerux-` /
 /// complete backup line / later `ready` then `chat: ready`).
+///
+/// If the oldest unfinished line is still prefix-only, the first newline on
+/// the inner line is treated as the outer resuming (`]INFO` then
+/// `lerux-debug: serial driver: PL011` / ` ready`).
 fn collapse_interleaved_sel4_logs(haystack: &str) -> String {
     let mut completed = String::with_capacity(haystack.len());
     let mut incomplete: VecDeque<String> = VecDeque::new();
@@ -383,12 +427,29 @@ fn collapse_interleaved_sel4_logs(haystack: &str) -> String {
             None => break,
         };
         i += ch.len_utf8();
-        if let Some(cur) = current.as_mut() {
-            cur.push(ch);
-            if ch == '\n'
-                && let Some(done) = current.take()
-            {
-                completed.push_str(&done);
+        if let Some(mut cur) = current.take() {
+            if ch == '\n' {
+                if let Some((inner, outer_tail)) =
+                    steal_preempted_outer_payload(&cur, incomplete.front().map(String::as_str))
+                {
+                    if let Some(front) = incomplete.front_mut() {
+                        if !front.ends_with(' ') && !outer_tail.starts_with(' ') {
+                            front.push(' ');
+                        }
+                        front.push_str(&outer_tail);
+                        front.push('\n');
+                    }
+                    if let Some(done) = incomplete.pop_front() {
+                        completed.push_str(&done);
+                    }
+                    current = Some(inner);
+                } else {
+                    completed.push_str(&cur);
+                    completed.push('\n');
+                }
+            } else {
+                cur.push(ch);
+                current = Some(cur);
             }
         } else if incomplete.front().is_some() {
             if let Some(front) = incomplete.front_mut() {
@@ -572,6 +633,16 @@ ready
 chat: ready rooms=lobby
 ";
 
+    /// 2026-08-20 isolation CI: `INFO  [serial_driver]` splices onto
+    /// `debug_handler` with no space after `]`, and serial's payload plus
+    /// newline arrive while the debug line is still open.
+    const ISOLATION_CI_SNIP: &str = "\
+INFO  [serial_driver]INFO  [debug_handler] lerux-debug: serial driver: PL011
+ ready (parent fault handler)
+INFO  [crash_demo] crash-demo: startiINFO  [fs_client] lerux-isolation: waiting for untrung
+INFO  [crash_demo] crash-demo: about to fault
+";
+
     #[test]
     fn capture_contains_recovers_virtio_net_mac_from_ci_interleave() {
         assert!(
@@ -615,6 +686,19 @@ chat: ready rooms=lobby
         assert!(capture_contains(WORKSTATION_CI_SNIP, "lerux-chat: ready"));
         assert!(capture_contains(WORKSTATION_CI_SNIP, "lerux-backup: ready"));
         assert!(capture_contains(WORKSTATION_CI_SNIP, "v2 mime"));
+    }
+
+    #[test]
+    fn capture_contains_recovers_debug_ready_when_serial_prefix_splices() {
+        assert!(
+            !ISOLATION_CI_SNIP.contains("lerux-debug: ready"),
+            "fixture must reproduce the raw split"
+        );
+        assert!(capture_contains(ISOLATION_CI_SNIP, "lerux-debug: ready"));
+        assert!(capture_contains(
+            ISOLATION_CI_SNIP,
+            "crash-demo: about to fault"
+        ));
     }
 
     #[test]

@@ -571,6 +571,15 @@ impl FatFormat {
         self.fs_job = job;
     }
 
+    fn abort_on_io_error(&mut self) -> Option<FsResponse> {
+        if self.io.take_io_error() {
+            self.fs_job = FsJob::None;
+            Some(FsResponse::Error)
+        } else {
+            None
+        }
+    }
+
     fn advance_fs_job(&mut self) -> Option<FsResponse> {
         match core::mem::replace(&mut self.fs_job, FsJob::None) {
             FsJob::None => None,
@@ -2083,6 +2092,9 @@ impl FsFormat for FatFormat {
     }
 
     fn advance(&mut self) -> Option<FsResponse> {
+        if let Some(resp) = self.abort_on_io_error() {
+            return Some(resp);
+        }
         self.advance_fs_job()
     }
 

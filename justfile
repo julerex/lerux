@@ -91,6 +91,10 @@ test-virtio:
 test-echo:
     BOARD=qemu_virt_aarch64_echo just test
 
+# Phase 72: QEMU ramfb + display-server + shared bitmap (display-demo)
+test-display:
+    BOARD=qemu_virt_aarch64_display just test
+
 # Echo IPC smoke test on x86_64 generic PC
 test-x86-echo:
     BOARD=x86_64_generic_echo just test

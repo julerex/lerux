@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-09-05 (phases 71–80 interactive surface)
+Last updated: 2026-09-05 (Phase 72 display + ramfb)
 
 ## Phase 1 — Bring-up
 
@@ -508,7 +508,7 @@ Stretch order and exit criteria: **[`plan-arch.md` § Phase 60 stretch sequence]
 | 59 | Multi-arch workstation profiles | core done |
 | 60 | Security posture | core + stretch A–D done (MCS / asymmetric signing deferred) |
 | 61–70 | QEMU-only workstation deepening | done — [`plan-qemu.md`](plan-qemu.md) |
-| 71–80 | Interactive surface (browser + agent) | planned — [`plan-interactive.md`](plan-interactive.md); Phase 71 done |
+| 71–80 | Interactive surface (browser + agent) | planned — [`plan-interactive.md`](plan-interactive.md); Phases 71–72 done |
 
 ## Phases 61–70 — QEMU-only workstation deepening ✅
 
@@ -586,9 +586,9 @@ Completable **without a board**. Living checklist: **[`plan-qemu.md`](plan-qemu.
 | 69 | Batch runner (on-disk shell scripts) | done |
 | 70 | QEMU developer loop | done |
 
-Near-term priority for 61–70 was **61 → 62 → 64** (done). Next: **72 → 73** ([`plan-interactive.md` § Near-term priority](plan-interactive.md#near-term-priority)). On-device work is [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated) and does not block that list.
+Near-term priority for 61–70 was **61 → 62 → 64** (done). Next: **73** ([`plan-interactive.md` § Near-term priority](plan-interactive.md#near-term-priority)). On-device work is [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated) and does not block that list.
 
-## Phases 71–80 — Interactive surface (planned)
+## Phases 71–80 — Interactive surface (planned; 71–72 done)
 
 QEMU-only **browser + agent** program. Steal Ladybird process topology and Grok Build’s tool loop; do not port C++/std binaries. Living checklist: **[`plan-interactive.md`](plan-interactive.md)**. ADR: **[ADR-009](decisions/009-interactive-surface.md)**.
 
@@ -598,11 +598,11 @@ QEMU-only **browser + agent** program. Steal Ladybird process topology and Grok 
 - [x] Glossary in [`context.md`](context.md)
 - [x] Remaining ceilings listed in [`plan-interactive.md`](plan-interactive.md)
 
-## Phase 72 — Display + input (QEMU ramfb)
+## Phase 72 — Display + input (QEMU ramfb) ✅
 
-- [ ] `display-server` owns ramfb; apps present via shared bitmap MR (no display MMIO)
-- [ ] `DisplayRequest` + serial `InputEvent` v1
-- [ ] `just test-display` (`lerux-display: pattern ok`)
+- [x] `display-server` owns ramfb; apps present via shared bitmap MR (no display MMIO)
+- [x] `DisplayRequest` + serial `InputEvent` v1
+- [x] `just test-display` (`lerux-display: pattern ok`)
 
 ## Phase 73 — Request-server PD
 
@@ -652,7 +652,7 @@ QEMU-only **browser + agent** program. Steal Ladybird process topology and Grok 
 | Phase | Theme | Status |
 |-------|--------|--------|
 | 71 | ADR + domain language | done — [ADR-009](decisions/009-interactive-surface.md) |
-| 72 | Display + input (QEMU ramfb) | planned |
+| 72 | Display + input (QEMU ramfb) | done — `just test-display` |
 | 73 | Request-server PD | planned |
 | 74 | HTML + DOM (`lerux-html`) | planned |
 | 75 | CSS subset + layout + paint | planned |
@@ -662,7 +662,7 @@ QEMU-only **browser + agent** program. Steal Ladybird process topology and Grok 
 | 79 | Agent tools (fs / shell / fetch) | planned |
 | 80 | Joint `workstation-interactive` | planned |
 
-Near-term priority: **72 → 73**, then 74–76 in parallel with 77–79, then 80 ([`plan-interactive.md` § Near-term priority](plan-interactive.md#near-term-priority)). JS, GPU, extra tabs, and live xAI stay off this list.
+Near-term priority: **73**, then 74–76 in parallel with 77–79, then 80 ([`plan-interactive.md` § Near-term priority](plan-interactive.md#near-term-priority)). JS, GPU, extra tabs, and live xAI stay off this list.
 
 ## Physical RPi4 lab (hardware-gated)
 

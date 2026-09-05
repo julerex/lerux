@@ -30,6 +30,9 @@ pub struct QemuContext {
     pub gdb: bool,
     /// Phase 70: QEMU `-snapshot` overlay (also `LERUX_QEMU_SNAPSHOT=1`).
     pub snapshot: bool,
+    /// Phase 72: `lerux run` may open a GTK window when ramfb is on.
+    /// Smokes keep this false so CI stays headless (`-nographic`).
+    pub graphic: bool,
 }
 
 const HOSTFWD: &str = "user,id=netdev0,hostfwd=tcp::18080-:8080";
@@ -57,7 +60,7 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
     }
 
     let mut cmd = match ctx.board.arch.as_str() {
-        "aarch64" => aarch64_command(qemu, &loader, &disk),
+        "aarch64" => aarch64_command(qemu, &loader, &disk, ctx.graphic),
         "riscv64" => riscv64_command(qemu, &loader, &disk),
         "x86_64" => x86_command(ctx, qemu, &loader, &disk)?,
         other => bail!("unsupported arch {other}"),
@@ -110,7 +113,18 @@ fn blockdev_arg(disk: DiskMode, disk_path: &Path) -> Option<String> {
     ))
 }
 
-fn aarch64_command(qemu: &QemuConfig, loader: &Path, disk: &Path) -> Command {
+fn want_graphic_window(qemu: &QemuConfig, graphic: bool) -> bool {
+    if !graphic || !qemu.ramfb {
+        return false;
+    }
+    match std::env::var("LERUX_QEMU_GRAPHIC").as_deref() {
+        Ok("0") | Ok("false") | Ok("no") => false,
+        Ok("1") | Ok("true") | Ok("yes") => true,
+        _ => std::env::var("DISPLAY").is_ok() || std::env::var("WAYLAND_DISPLAY").is_ok(),
+    }
+}
+
+fn aarch64_command(qemu: &QemuConfig, loader: &Path, disk: &Path, graphic: bool) -> Command {
     let mut c = Command::new("qemu-system-aarch64");
     c.args([
         "-machine",
@@ -121,7 +135,17 @@ fn aarch64_command(qemu: &QemuConfig, loader: &Path, disk: &Path) -> Command {
         "size=2G",
         "-serial",
         "mon:stdio",
-        "-nographic",
+    ]);
+    if want_graphic_window(qemu, graphic) {
+        // Human `lerux run`: GTK window + ramfb. Smokes stay on `-nographic`.
+        c.args(["-display", "gtk"]);
+    } else {
+        c.arg("-nographic");
+    }
+    if qemu.ramfb {
+        c.args(["-device", "ramfb"]);
+    }
+    c.args([
         "-device",
         &format!("loader,file={},addr=0x70000000,cpu-num=0", path_str(loader)),
     ]);
@@ -298,6 +322,7 @@ pub fn load_qemu_context(
         config: config.to_string(),
         gdb: false,
         snapshot: false,
+        graphic: false,
     })
 }
 

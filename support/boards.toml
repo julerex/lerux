@@ -4,7 +4,8 @@
 #   arch / microkit_board / target  build inputs (target json = support/targets/<target>.json)
 #   template / pds / system_vars    system generation inputs
 #   qemu                            QEMU launch: disk = "none"|"ro"|"rw", net = "none"|"user"|"hostfwd",
-#                                   sp804 (patched QEMU), tcp_echo / http_one / https_one (host smoke helpers).
+#                                   sp804 (patched QEMU), ramfb (QEMU ram framebuffer),
+#                                   tcp_echo / http_one / https_one (host smoke helpers).
 #                                   Omit `qemu` entirely for hardware-only boards.
 #   ci                              board runs in `lerux test-all` (and CI smoke)
 #   curl_expect                     smoke curls http://127.0.0.1:18080/ for this substring
@@ -124,6 +125,17 @@ pds = ["echo-client", "echo-server", "serial-driver", "serial-virt"]
 qemu = {}
 ci = true
 system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33 }
+
+# Phase 72: ramfb + display-server + display-demo (shared bitmap MR).
+[qemu_virt_aarch64_display]
+arch = "aarch64"
+microkit_board = "qemu_virt_aarch64"
+target = "aarch64-sel4-microkit"
+template = "display.system.template"
+pds = ["display-demo", "display-server", "serial-driver", "serial-virt"]
+qemu = { ramfb = true }
+ci = true
+system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, fw_cfg_mmio_phys_addr = "0x9020000" }
 
 # Phase 49: same layouts as echo/blk/net with guest microbench instrumentation.
 [qemu_virt_aarch64_bench_echo]

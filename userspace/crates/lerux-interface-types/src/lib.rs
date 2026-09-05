@@ -44,6 +44,70 @@ impl EchoResponse {
     }
 }
 
+/// DRM fourcc `XR24` (XRGB8888). Stored little-endian in the bitmap as `0x00RRGGBB`.
+pub const DISPLAY_FORMAT_XRGB8888: u32 = 0x3432_5258;
+
+/// QEMU ramfb mode for phases 72–80 (ADR-009).
+pub const DISPLAY_WIDTH: u32 = 800;
+/// QEMU ramfb mode for phases 72–80 (ADR-009).
+pub const DISPLAY_HEIGHT: u32 = 600;
+/// Bytes per pixel for [`DISPLAY_FORMAT_XRGB8888`].
+pub const DISPLAY_BYTES_PER_PIXEL: u32 = 4;
+/// Row stride in bytes (`width * bpp`).
+pub const DISPLAY_STRIDE: u32 = DISPLAY_WIDTH * DISPLAY_BYTES_PER_PIXEL;
+/// Visible framebuffer bytes (800×600×4). The backing MR is 2 MiB.
+pub const DISPLAY_VISIBLE_BYTES: usize = DISPLAY_STRIDE as usize * DISPLAY_HEIGHT as usize;
+/// Shared bitmap / ramfb backing MR size (one 2 MiB page).
+pub const DISPLAY_FB_MR_BYTES: usize = 0x200_000;
+
+const _: () = assert!(DISPLAY_VISIBLE_BYTES < DISPLAY_FB_MR_BYTES);
+
+/// Horizontal colour-bar test pattern (XRGB8888 native-endian).
+///
+/// Thirds of the height are red, green, and blue. `x` is reserved so later
+/// phases can add a spatial signature without changing the helper shape.
+pub fn display_test_pixel(_x: u32, y: u32) -> u32 {
+    if y < DISPLAY_HEIGHT / 3 {
+        0x00FF_0000
+    } else if y < 2 * (DISPLAY_HEIGHT / 3) {
+        0x0000_FF00
+    } else {
+        0x0000_00FF
+    }
+}
+
+/// Display service requests (Phase 72). Pixels live in the shared bitmap MR.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DisplayRequest {
+    GetMode,
+    /// Blit the shared bitmap into the device framebuffer.
+    Present,
+    /// Drain one serial key as [`InputEvent`] (v1: not virtio-input).
+    PollInput,
+}
+
+/// Display service responses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DisplayResponse {
+    Ok,
+    Mode {
+        width: u32,
+        height: u32,
+        stride: u32,
+        /// DRM fourcc (see [`DISPLAY_FORMAT_XRGB8888`]).
+        format: u32,
+    },
+    Input(InputEvent),
+    Error,
+}
+
+/// Input v1: serial bytes as keys. No pointer, no virtio-input.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InputEvent {
+    None,
+    Key { code: u8, pressed: bool },
+}
+
 /// Sector size for [`BlockResponse::Sector`].
 pub const SECTOR_SIZE: usize = 512;
 
@@ -1306,6 +1370,35 @@ mod tests {
             },
         };
         assert_eq!(round_trip(resp).as_echo_slice(), Some(&b"hello"[..]));
+    }
+
+    #[test]
+    fn display_round_trip() {
+        assert_eq!(round_trip(DisplayRequest::GetMode), DisplayRequest::GetMode);
+        assert_eq!(round_trip(DisplayRequest::Present), DisplayRequest::Present);
+        assert_eq!(
+            round_trip(DisplayRequest::PollInput),
+            DisplayRequest::PollInput
+        );
+        let mode = DisplayResponse::Mode {
+            width: DISPLAY_WIDTH,
+            height: DISPLAY_HEIGHT,
+            stride: DISPLAY_STRIDE,
+            format: DISPLAY_FORMAT_XRGB8888,
+        };
+        assert_eq!(round_trip(mode), mode);
+        let key = DisplayResponse::Input(InputEvent::Key {
+            code: b'a',
+            pressed: true,
+        });
+        assert_eq!(round_trip(key), key);
+        assert_eq!(
+            round_trip(DisplayResponse::Input(InputEvent::None)),
+            DisplayResponse::Input(InputEvent::None)
+        );
+        assert_eq!(display_test_pixel(0, 0), 0x00FF_0000);
+        assert_eq!(display_test_pixel(0, DISPLAY_HEIGHT / 3), 0x0000_FF00);
+        assert_eq!(display_test_pixel(0, 2 * (DISPLAY_HEIGHT / 3)), 0x0000_00FF);
     }
 
     #[test]

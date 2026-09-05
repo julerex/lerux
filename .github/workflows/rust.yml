@@ -280,6 +280,9 @@ jobs:
           - id: echo
             board: qemu_virt_aarch64_echo
             command: just test-echo
+          - id: display
+            board: qemu_virt_aarch64_display
+            command: just test-display
           - id: x86-echo
             board: x86_64_generic_echo
             command: just test-x86-echo

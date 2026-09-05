@@ -134,6 +134,8 @@ pub fn run(root: &Path, board: &str, build_dir: &str, config: &str) -> Result<()
         crate::qemu::cleanup_http_conflicts();
         crate::qemu::print_http_hint(&ctx);
     }
+    let mut ctx = ctx;
+    ctx.graphic = true;
     let helper = crate::qemu::setup_test_helpers(&ctx)?;
     let mut cmd = crate::qemu::qemu_command(&ctx)?;
     let status = cmd.status().context("qemu run")?;

@@ -48,6 +48,9 @@ pub struct QemuConfig {
     /// Start the host one-shot HTTPS origin on :8443 (fetch-tls smoke).
     #[serde(default)]
     pub https_one: bool,
+    /// Attach QEMU `-device ramfb` (Phase 72 software framebuffer).
+    #[serde(default)]
+    pub ramfb: bool,
 }
 
 /// One entry of `support/boards.toml` — the single source of truth for the
@@ -144,4 +147,31 @@ pub fn crate_has_board_feature(root: &Path, crate_name: &str, board: &str) -> bo
         .get("features")
         .and_then(|f| f.as_table())
         .is_some_and(|features| features.contains_key(&format!("board-{board}")))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ramfb_defaults_off() {
+        let q: QemuConfig = toml::from_str("").unwrap();
+        assert!(!q.ramfb);
+    }
+
+    #[test]
+    fn ramfb_parses() {
+        let q: QemuConfig = toml::from_str("ramfb = true").unwrap();
+        assert!(q.ramfb);
+    }
+
+    #[test]
+    fn display_board_has_ramfb() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let boards = load_boards(&root).unwrap();
+        let board = boards.get("qemu_virt_aarch64_display").unwrap();
+        assert!(board.qemu().unwrap().ramfb);
+        assert!(board.ci);
+        assert!(board.pds.iter().any(|p| p == "display-server"));
+    }
 }

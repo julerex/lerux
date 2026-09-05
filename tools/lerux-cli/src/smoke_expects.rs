@@ -139,6 +139,14 @@ mod tests {
     }
 
     #[test]
+    fn loads_display_board() {
+        let root = repo_root();
+        let t = smoke_test_for_board(&root, "qemu_virt_aarch64_display").unwrap();
+        assert!(t.expects.iter().any(|e| e.contains("pattern ok")));
+        assert!(t.expects.iter().any(|e| e.contains("ramfb ok")));
+    }
+
+    #[test]
     fn missing_board_errors() {
         let root = repo_root();
         let err = smoke_test_for_board(&root, "no_such_board_xyz").unwrap_err();

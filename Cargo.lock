@@ -586,6 +586,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "display-demo"
+version = "0.1.0"
+dependencies = [
+ "lerux-interface-types",
+ "lerux-ipc",
+ "lerux-logging",
+ "sel4-microkit",
+]
+
+[[package]]
+name = "display-server"
+version = "0.1.0"
+dependencies = [
+ "lerux-driver-protocols",
+ "lerux-interface-types",
+ "lerux-ipc",
+ "lerux-logging",
+ "sel4-microkit",
+]
+
+[[package]]
 name = "dlmalloc"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"

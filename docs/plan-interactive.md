@@ -1,6 +1,6 @@
 # PLAN — Interactive surface (phases 71–80)
 
-Last updated: 2026-09-05 (phases 71–80; Phase 71 done with ADR-009)
+Last updated: 2026-09-05 (phases 71–80; Phase 72 display + ramfb)
 
 Related: [`plan.md`](plan.md) (roadmap 1–80), [`plan-qemu.md`](plan-qemu.md) (phases 61–70, done), [`plan-arch.md`](plan-arch.md) (phases 50–60 + Physical RPi4 lab), [`plan-au-ts.md`](plan-au-ts.md) (sDDF inspiration), [`context.md`](context.md), [ADR-009](decisions/009-interactive-surface.md).
 
@@ -53,8 +53,8 @@ Work in **vertical QEMU slices**, each ending in a `just test-*` (or host CLI) g
 ```
 Platform                         Browser (Ladybird-shaped)              Agent (Grok-shaped)
 ────────                         ─────────────────────────              ───────────────────
-71 ADR + domain language
-72 display + input (QEMU ramfb)
+71 ADR + domain language ✅
+72 display + input (QEMU ramfb) ✅
                                  73 request-server PD
                                  74 HTML/DOM (`lerux-html`)
                                  75 CSS + layout + paint
@@ -133,18 +133,18 @@ A future agent can implement Phase 72 without re-litigating “are we allowed to
 
 ---
 
-## Phase 72 — Display + input (QEMU)
+## Phase 72 — Display + input (QEMU) ✅
 
 **Why:** Ladybird WebContent paints to a shared bitmap; something must present it. The agent TUI can stay serial; the browser cannot.
 
 ### Steps
 
-- [ ] QEMU **ramfb** (simplest; virtio-gpu 2D is stretch if ramfb is painful on the virt machine).
-- [ ] `display-server` PD owns the framebuffer device. Apps never map display MMIO (ADR-003 shape).
-- [ ] Shared bitmap MR: producer (`display-demo` this phase; `web-content` later) → `display-server`.
-- [ ] Postcard `DisplayRequest` / `DisplayResponse` (present / get-mode) in `lerux-interface-types`.
-- [ ] Input v1: serial keys as `InputEvent`, not virtio-input yet.
-- [ ] Board `qemu_virt_aarch64_display`. Smoke `just test-display`: fill a known pattern; expect `lerux-display: pattern ok`; optional PPM dump on the host.
+- [x] QEMU **ramfb** (`-device ramfb`, configured through fw_cfg DMA). virtio-gpu 2D not needed.
+- [x] `display-server` PD owns fw_cfg + the ramfb backing MR. Apps never map display MMIO (ADR-003 shape).
+- [x] Shared bitmap MR: producer (`display-demo` this phase; `web-content` later) → `display-server` blit.
+- [x] Postcard `DisplayRequest` / `DisplayResponse` (`GetMode` / `Present` / `PollInput`) in `lerux-interface-types`.
+- [x] Input v1: serial keys as `InputEvent` via `PollInput` (not virtio-input).
+- [x] Board `qemu_virt_aarch64_display`. Smoke `just test-display`: colour-bar pattern; expect `lerux-display: pattern ok`. `lerux run` opens a GTK window when `DISPLAY` is set (`LERUX_QEMU_GRAPHIC=0` forces headless). Host PPM dump is still optional (QEMU `screendump`).
 
 ### Out of scope
 
@@ -153,7 +153,7 @@ A future agent can implement Phase 72 without re-litigating “are we allowed to
 
 ### Exit
 
-QEMU window shows a non-serial pixel buffer produced by a PD.
+QEMU window shows a non-serial pixel buffer produced by a PD (`just run` with a display). CI checks the log line. **Met.**
 
 ---
 
@@ -348,7 +348,7 @@ Hardware truth remains [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardwa
 
 If capacity is limited, do **not** start with 76–80 first:
 
-1. **Phase 72** — ramfb + `display-server` (unblocks paint).
+1. **Phase 72** — ramfb + `display-server` (done; unblocks paint).
 2. **Phase 73** — `request-server` (unblocks browser load **and** agent HTTPS).
 3. Then **74–76** (browser) and **77–79** (agent) in parallel.
 4. **Phase 80** last.

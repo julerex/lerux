@@ -33,6 +33,14 @@ expects = [
   "lerux-echo: lerux",
 ]
 
+[boards.qemu_virt_aarch64_display]
+expects = [
+  "lerux-display: ramfb ok",
+  "lerux-display: mode 800x600",
+  "lerux-display: pattern ok",
+  "lerux-display: input idle",
+]
+
 [boards.qemu_virt_aarch64_bench_echo]
 timeout_secs = 90
 expects = [

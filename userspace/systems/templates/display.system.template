@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Phase 72: display-server owns QEMU ramfb (fw_cfg MMIO + RAM framebuffer).
+  display-demo writes the shared bitmap MR and PPCs Present. Apps never map
+  fw_cfg or the device framebuffer (ADR-003/009 shape).
+-->
+<system>
+    <memory_region name="serial_mmio" size="0x1_000" phys_addr="{serial_mmio_phys_addr}" />
+    <memory_region name="fw_cfg_mmio" size="0x1_000" phys_addr="{fw_cfg_mmio_phys_addr}" />
+    <memory_region name="fw_cfg_dma" size="0x1_000" />
+    <memory_region name="framebuffer" size="0x200_000" page_size="0x200_000" />
+    <memory_region name="bitmap" size="0x200_000" page_size="0x200_000" />
+
+    <protection_domain name="serial_driver" priority="4" stack_size="0x10_000">
+        <program_image path="serial-driver.elf" />
+        <map mr="serial_mmio" vaddr="0x2_000_000" perms="rw" setvar_vaddr="serial_register_block" />
+        <irq irq="{serial_irq}" id="0" />
+    </protection_domain>
+
+    <protection_domain name="serial_virt" priority="3" stack_size="0x10_000">
+        <program_image path="serial-virt.elf" />
+    </protection_domain>
+
+    <protection_domain name="display_server" priority="2" stack_size="0x10_000">
+        <program_image path="display-server.elf" />
+        <map mr="fw_cfg_mmio" vaddr="0x3_000_000" perms="rw" cached="false" setvar_vaddr="fw_cfg_mmio_vaddr" />
+        <map mr="fw_cfg_dma" vaddr="0x4_000_000" perms="rw" cached="true" setvar_vaddr="fw_cfg_dma_vaddr" />
+        <setvar symbol="fw_cfg_dma_paddr" region_paddr="fw_cfg_dma" />
+        <map mr="framebuffer" vaddr="0x20_000_000" perms="rw" cached="true" setvar_vaddr="framebuffer_vaddr" />
+        <setvar symbol="framebuffer_paddr" region_paddr="framebuffer" />
+        <map mr="bitmap" vaddr="0x22_000_000" perms="rw" cached="true" setvar_vaddr="bitmap_vaddr" />
+    </protection_domain>
+
+    <protection_domain name="display_demo" priority="1" stack_size="0x10_000">
+        <program_image path="display-demo.elf" />
+        <map mr="bitmap" vaddr="0x20_000_000" perms="rw" cached="true" setvar_vaddr="bitmap_vaddr" />
+    </protection_domain>
+
+    <channel>
+        <end pd="serial_driver" id="1" />
+        <end pd="serial_virt" id="0" pp="true" />
+    </channel>
+
+    <channel>
+        <end pd="serial_virt" id="1" />
+        <end pd="display_demo" id="0" pp="true" />
+    </channel>
+
+    <channel>
+        <end pd="serial_virt" id="2" />
+        <end pd="display_server" id="0" pp="true" />
+    </channel>
+
+    <channel>
+        <end pd="display_server" id="1" />
+        <end pd="display_demo" id="1" pp="true" />
+    </channel>
+</system>

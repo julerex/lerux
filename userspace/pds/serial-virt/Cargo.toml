@@ -12,6 +12,7 @@ workspace = true
 multi-client-2 = []
 multi-client-3 = []
 board-qemu_virt_aarch64_echo = ["multi-client-2"]
+board-qemu_virt_aarch64_display = ["multi-client-2"]
 board-qemu_virt_aarch64_bench_echo = ["multi-client-2"]
 board-qemu_virt_riscv64_echo = ["multi-client-2"]
 board-qemu_virt_aarch64_workstation = ["multi-client-3"]

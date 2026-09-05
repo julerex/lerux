@@ -8,7 +8,7 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 |-----|---------|
 | [../AGENTS.md](../AGENTS.md) | LLM agent instructions for idiomatic Rust in this repo |
 | [context.md](context.md) | Domain language and architectural decisions |
-| [plan.md](plan.md) | Roadmap and cross-arch smoke parity (phases 1–80; 50–70 done; 71–80 planned, Phase 71 done); [Physical RPi4 lab](plan.md#physical-rpi4-lab-hardware-gated) |
+| [plan.md](plan.md) | Roadmap and cross-arch smoke parity (phases 1–80; 50–70 done; 71–80 planned, Phases 71–72 done); [Physical RPi4 lab](plan.md#physical-rpi4-lab-hardware-gated) |
 | [plan-arch.md](plan-arch.md) | Phases 50–60 living checklist; [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated) (hardware-gated) |
 | [plan-qemu.md](plan-qemu.md) | Phases 61–70 living checklist (QEMU-only workstation deepening; done) |
 | [plan-interactive.md](plan-interactive.md) | Phases 71–80 living checklist (QEMU interactive surface: Ladybird-shaped browser + Grok-shaped agent) |

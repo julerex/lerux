@@ -34,7 +34,8 @@ This document is the Phase 60 threat model and trust map. It does not claim form
 │  Untrusted / interactive apps                                   │
 │  shell, edit, chat-client, http-file-browser, backup,           │
 │  fetch-client, crash-demo (isolation smoke)                     │
-│  Planned: web-content, browser-ui, agent (phases 72–80)         │
+│  display-demo (Phase 72); planned: web-content, browser-ui,     │
+│  agent (phases 73–80)                                           │
 │  Maps: **no** virtio/net/blk/display DMA; channels only         │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -62,11 +63,11 @@ Channel numbers come from profile `[[channel]]` manifests; PPC callees outrank c
 
 ### Planned trust map (phases 72–80)
 
-Not composed yet. When [`plan-interactive.md`](plan-interactive.md) lands PDs, extend the table rather than giving `web-content` a `NetClient`. Full rewrite of this section happens with the code.
+Phase 72 composed `display-server` + `display-demo` on `qemu_virt_aarch64_display`. Later rows land with their phases. Do not give `web-content` a `NetClient`.
 
 | PD | Trust class | MMIO / IRQ | DMA | Clients may call | Must not map |
 |----|-------------|------------|-----|------------------|--------------|
-| `display-server` | service | framebuffer (ramfb) | no app DMA | `browser-ui`, `display-demo` | NIC / blk DMA |
+| `display-server` | service | fw_cfg + ramfb backing | no app DMA | `display-demo` (later `browser-ui`) | NIC / blk DMA |
 | `request-server` | service | no | no | `web-content`, `agent` | NIC / blk / display MMIO (uses `tls-proxy` / `net-server`) |
 | `browser-ui` | untrusted | no | **none** | `web-content`, `display-server` | any DMA / MMIO |
 | `web-content` | untrusted | no | bitmap MR only | `request-server` | NIC / blk / display MMIO, FS |

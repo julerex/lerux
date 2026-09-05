@@ -1,16 +1,16 @@
 # PLAN — QEMU-only workstation deepening (phases 61–70)
 
-Last updated: 2026-08-16
+Last updated: 2026-09-05 (program done; next is [`plan-interactive.md`](plan-interactive.md))
 
-Related: [`plan.md`](plan.md) (roadmap 1–70), [`plan-arch.md`](plan-arch.md) (phases 50–60 + Physical RPi4 lab), [`plan-au-ts.md`](plan-au-ts.md) (sDDF inspiration), [`context.md`](context.md).
+Related: [`plan.md`](plan.md) (roadmap 1–80), [`plan-arch.md`](plan-arch.md) (phases 50–60 + Physical RPi4 lab), [`plan-interactive.md`](plan-interactive.md) (phases 71–80), [`plan-au-ts.md`](plan-au-ts.md) (sDDF inspiration), [`context.md`](context.md).
 
 ## Context
 
 Phases 1–60 delivered an Arch-like **workflow** on QEMU: supervisor, hierarchical FS, DHCP/DNS/TLS fetch, shell, profiles/packages, serial/net virtualisers, QoS, debug, benches, and a three-arch workstation. Remaining hardware work lives only in [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated) and **does not block this program**.
 
-This plan is the next ten phases. Every deliverable is **completable on QEMU virt** (aarch64, and riscv/x86 where the phase says so). No board on the desk, no GENET, no eMMC, no JTAG.
+This plan was the next ten phases after 50–60; **all ten are done**. Every deliverable is **completable on QEMU virt** (aarch64, and riscv/x86 where the phase says so). No board on the desk, no GENET, no eMMC, no JTAG. Next program: [phases 71–80 interactive surface](plan-interactive.md).
 
-**What still feels toy on QEMU today**
+**What still felt toy on QEMU at the start of this program** (all closed; leftover interactive-surface gaps are in [`plan-interactive.md`](plan-interactive.md))
 
 | Gap | Today | Why it blocks daily QEMU use |
 |-----|-------|------------------------------|
@@ -29,7 +29,7 @@ This plan is the next ten phases. Every deliverable is **completable on QEMU vir
 
 - No Linux/POSIX ABI, musl, `fork`/`exec`, unmodified third-party binaries
 - Microkit **static** PD set — install still means pin + rebuild `loader.img`
-- No desktop / GPU, no libvmm / guest Linux (needs a dedicated ADR)
+- No desktop / GPU compositor, no libvmm / guest Linux. QEMU software framebuffer is [ADR-009](decisions/009-interactive-surface.md) / [`plan-interactive.md`](plan-interactive.md), not this program.
 - No MCS budgets (ADR-006 still defers them)
 - No measured boot / TPM / fuse (needs hardware; signing stays host-side)
 - GENET / eMMC / on-device REPL stay in the RPi4 lab, not here
@@ -323,15 +323,7 @@ Hardware truth remains [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardwa
 
 ## Near-term priority
 
-If capacity is limited, do **not** start with 68–70 first:
-
-1. **Phase 61** — x86 unified-dma (documented leftover; unblocks the trust map).
-2. **Phase 62** — FS v3 (unblocks 63 and 69).
-3. **Phase 64** — net queue (unblocks realistic workstation overlap).
-
-63, 65, 66, 67 can proceed in parallel after 61 once the DMA templates are stable. 68 needs 66’s entropy if rustls is starved. 69 needs 62. 70 last.
-
-RPi4 lab work never blocks this list.
+This program is **done**. Next capacity goes to [phases 71–80](plan-interactive.md) (start 72 display, then 73 request-server). RPi4 lab work never blocks that list.
 
 ---
 
@@ -362,7 +354,7 @@ Each phase adds or extends **one** QEMU smoke (or one host CLI gate for 67) rath
 Same as [`plan-arch.md`](plan-arch.md) and [`context.md`](context.md), plus:
 
 - Any work that **requires** a physical board to close
-- MCS, graphics, POSIX, libvmm, in-guest GDB RSP, formal verification of lerux PDs
+- MCS, GPU/Wayland, POSIX, libvmm, in-guest GDB RSP, formal verification of lerux PDs (QEMU software framebuffer is [`plan-interactive.md`](plan-interactive.md))
 - Replacing LERUXFS2 with a Linux filesystem as the default root
 
 ---

@@ -1,8 +1,8 @@
 # PLAN — Arch-level functionality (phases 50–60)
 
-Last updated: 2026-08-16 (phases 61–70 QEMU-only plan)
+Last updated: 2026-09-05 (phases 71–80 interactive surface)
 
-Related: [`plan.md`](plan.md) (completed phases 1–49), [`plan-qemu.md`](plan-qemu.md) (phases 61–70, QEMU-only), [`plan-au-ts.md`](plan-au-ts.md) (sDDF/LionsOS inspiration track), [`context.md`](context.md) (domain language).
+Related: [`plan.md`](plan.md) (roadmap 1–80), [`plan-qemu.md`](plan-qemu.md) (phases 61–70, done), [`plan-interactive.md`](plan-interactive.md) (phases 71–80), [`plan-au-ts.md`](plan-au-ts.md) (sDDF/LionsOS inspiration track), [`context.md`](context.md) (domain language).
 
 ## Context
 
@@ -35,7 +35,7 @@ This plan maps **Arch Linux workflow and capability surface** onto that constrai
 
 - No Linux/POSIX ABI, musl, `fork`/`exec`, unmodified third-party binaries
 - Microkit **static** PD set at image build time — “install package” = pin + rebuild `loader.img`, not runtime ELF load
-- No full desktop (Wayland/X) or browser-class stack unless a future ADR opens guest VMM / large runtimes
+- No full desktop (Wayland/X) or guest VMM unless a future ADR opens them. QEMU software framebuffer + a from-scratch HTML/CSS subset is [ADR-009](decisions/009-interactive-surface.md) / [`plan-interactive.md`](plan-interactive.md), not a Linux GUI stack.
 
 ---
 
@@ -56,14 +56,15 @@ Foundation gaps          Daily-driver UX           Ecosystem
               60 Security posture (optional stretch)
 ```
 
-Graphics, POSIX layers, and guest Linux (libvmm) stay **explicit non-goals** unless product requirements change (would need ADRs).
+POSIX layers and guest Linux (libvmm) stay **explicit non-goals** unless product requirements change (would need ADRs). QEMU software pixels + subset HTML/CSS are in [ADR-009](decisions/009-interactive-surface.md), not a Wayland/GPU desktop.
 
 ### Reuse map
 
 | Area | Paths |
 |------|--------|
 | Domain language / Arch definition | `docs/context.md` |
-| Completed roadmap | `docs/plan.md`, `docs/plan-au-ts.md` |
+| Completed roadmap | `docs/plan.md`, `docs/plan-au-ts.md`, `docs/plan-qemu.md` |
+| Interactive surface (71–80) | `docs/plan-interactive.md`, [ADR-009](decisions/009-interactive-surface.md) |
 | IPC contracts | `userspace/crates/lerux-interface-types/src/lib.rs` |
 | FS formats | `userspace/crates/lerux-fs/`, `userspace/crates/lerux-fat/` |
 | FS/net/services | `userspace/pds/fs-server/`, `net-server/`, `supervisor/`, `shell/`, `config-server/`, `log-server/` |
@@ -243,7 +244,7 @@ Each row = interface types + PD + package fragment + smoke.
 
 Packages installable via Phase 55: **edit**, **chat-client**, **http-file-browser**, **backup**, **fetch-client** (≥5).
 
-Defer heavy GUI browsers and language ecosystems until/unless a runtime PD proves viable.
+Heavy GUI browsers and language ecosystems were deferred here. Phases 71–80 start a **subset** HTML/CSS engine and a Grok-shaped agent as PDs ([`plan-interactive.md`](plan-interactive.md)); JS/Wasm still need their own ADR.
 
 ### Exit
 
@@ -287,7 +288,7 @@ Documented trust map + one automated isolation test (e.g. crash in app PD does n
 
 ### Stretch sequence (2026-07-21)
 
-Do **not** start MCS, graphics, or POSIX. Order by leverage and dependence:
+Do **not** start MCS, GPU/Wayland, or POSIX. (QEMU software framebuffer is [ADR-009](decisions/009-interactive-surface.md), not this stretch list.) Order by leverage and dependence:
 
 | Order | Track | Deliverable | Depends on |
 |-------|-------|-------------|------------|
@@ -310,7 +311,7 @@ Do **not** start MCS, graphics, or POSIX. Order by leverage and dependence:
 
 Work that **cannot close on QEMU**. Phases 37, 39, 47, and 52 shipped the profiles, native drivers, deploy path, first-boot seed, and `just test-hw` harness. This section is the remaining on-device gate.
 
-It does **not** block [QEMU-only phases 61–70](plan-qemu.md) (including x86 unified-dma).
+It does **not** block [QEMU-only phases 61–70](plan-qemu.md) (done) or [interactive surface 71–80](plan-interactive.md).
 
 Procedure and empty result grid: [`boards.md` — RPi4 workstation install path](boards.md#rpi4-workstation-install-path-phase-52).
 
@@ -348,6 +349,7 @@ Fold in as capacity allows; see also [`plan-au-ts.md`](plan-au-ts.md) and ADRs:
 - In-guest GDB RSP (needs fork or upstream APIs; QEMU gdbstub parity is [Phase 66](plan-qemu.md#phase-66--qemu-arch-parity-debug-isolation-serial-virt))
 - libvmm / guest Linux — **only with dedicated ADR** (explicit non-goal today)
 - Formal verification of lerux PDs
+- JS / Wasm engines — **only with dedicated ADR** (71–80 is HTML/CSS subset + pixels; [ADR-009](decisions/009-interactive-surface.md))
 
 ---
 
@@ -369,10 +371,12 @@ That is Arch’s **workflow and completeness**, reimplemented as static Microkit
 
 ## Near-term priority
 
-If capacity is limited, do **not** start with graphics or language VMs:
+If capacity is limited:
 
-1. **[QEMU-only phases 61–70](plan-qemu.md)** — start 61 (x86 unified-dma), then 62 (FS size), then 64 (net queue).
+1. **[Interactive surface 71–80](plan-interactive.md)** — start 72 (display), then 73 (request-server). [ADR-009](decisions/009-interactive-surface.md) already closed Phase 71.
 2. **[Physical RPi4 lab](#physical-rpi4-lab-hardware-gated)** — when a board is on the desk. Does not block (1).
+
+Do **not** start JS, GPU compositors, or libvmm without a new ADR. QEMU software framebuffer is in scope for (1).
 
 ---
 
@@ -398,7 +402,7 @@ Each phase should add or extend **one** profile board smoke rather than only uni
 
 - Unmodified Arch/Linux binaries, pacman on-device, glibc/musl userspace
 - Full POSIX VFS / Linux rootfs mount as primary UX
-- Desktop environment / GPU stack (unless future product ADR)
+- Desktop environment / GPU / Wayland stack (QEMU software framebuffer is [ADR-009](decisions/009-interactive-surface.md), not a Linux GUI)
 - Replacing seL4 or forking Microkit by default
 - Vendoring sDDF/LionsOS C trees (`plan-au-ts` principles)
 
@@ -406,4 +410,4 @@ Each phase should add or extend **one** profile board smoke rather than only uni
 
 ## Summary
 
-Phases **1–60** built the **kernel of an Arch-like workflow** (profiles, init, shell, FS/net, packages, multi-arch workstation, hardening). The next QEMU-only program is **[phases 61–70](plan-qemu.md)**. On-device truth is a separate track: [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated). All of it as **ported Rust PDs and host tooling**, never as a Linux compatibility layer.
+Phases **1–60** built the **kernel of an Arch-like workflow** (profiles, init, shell, FS/net, packages, multi-arch workstation, hardening). Phases **61–70** deepened QEMU ([`plan-qemu.md`](plan-qemu.md), done). The next QEMU-only program is **[phases 71–80](plan-interactive.md)** (interactive surface). On-device truth is a separate track: [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated). All of it as **ported Rust PDs and host tooling**, never as a Linux compatibility layer.

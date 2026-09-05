@@ -34,11 +34,14 @@ This document is the Phase 60 threat model and trust map. It does not claim form
 │  Untrusted / interactive apps                                   │
 │  shell, edit, chat-client, http-file-browser, backup,           │
 │  fetch-client, crash-demo (isolation smoke)                     │
-│  Maps: **no** virtio/net/blk DMA; channels only                 │
+│  Planned: web-content, browser-ui, agent (phases 72–80)         │
+│  Maps: **no** virtio/net/blk/display DMA; channels only         │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 **Rule (ADR-003, workstation):** untrusted apps never map NIC or block DMA. They speak `NetRequest` / `FsRequest` (and similar) only.
+
+**Rule (ADR-009, planned):** untrusted apps never map display MMIO either. `web-content` and `agent` fetch only through `request-server`; they present pixels only through a shared bitmap MR owned with `display-server`.
 
 ## Trust map (workstation-shaped)
 
@@ -56,6 +59,20 @@ This document is the Phase 60 threat model and trust map. It does not claim form
 | `debug-handler` | debug-only | no | no | hierarchy parent | production workstation default |
 
 Channel numbers come from profile `[[channel]]` manifests; PPC callees outrank callers ([`qos.md`](qos.md), ADR-006).
+
+### Planned trust map (phases 72–80)
+
+Not composed yet. When [`plan-interactive.md`](plan-interactive.md) lands PDs, extend the table rather than giving `web-content` a `NetClient`. Full rewrite of this section happens with the code.
+
+| PD | Trust class | MMIO / IRQ | DMA | Clients may call | Must not map |
+|----|-------------|------------|-----|------------------|--------------|
+| `display-server` | service | framebuffer (ramfb) | no app DMA | `browser-ui`, `display-demo` | NIC / blk DMA |
+| `request-server` | service | no | no | `web-content`, `agent` | NIC / blk / display MMIO (uses `tls-proxy` / `net-server`) |
+| `browser-ui` | untrusted | no | **none** | `web-content`, `display-server` | any DMA / MMIO |
+| `web-content` | untrusted | no | bitmap MR only | `request-server` | NIC / blk / display MMIO, FS |
+| `agent` | untrusted | no | **none** | `request-server`, `fs-server`, shell `run` | NIC / display MMIO |
+
+Isolation residual to keep: existing `just test-isolation` stays green; a later smoke should crash `web-content` and still complete an FS or HTTP round-trip from another PD.
 
 ## Threats and mitigations
 

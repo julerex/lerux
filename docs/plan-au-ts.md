@@ -3,7 +3,7 @@
 Last updated: 2026-07-12 (Phase 43 net topology + ADR-003)
 
 Upstream mirror: [`/home/julian/repos/github_orgs/au-ts`](https://github.com/au-ts) (Trustworthy Systems).  
-Related: [`plan.md`](plan.md) (main roadmap), [`context.md`](context.md) (domain language).
+Related: [`plan.md`](plan.md) (main roadmap), [`plan-interactive.md`](plan-interactive.md) (same “steal the idea, not the code” rule for Ladybird / Grok Build), [`context.md`](context.md) (domain language).
 
 This plan turns the highest-leverage ideas from the au-ts ecosystem into lerux work **without** adopting C sDDF/LionsOS as userspace or abandoning the Rust-only, typed postcard RPC, non-POSIX direction.
 

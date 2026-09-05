@@ -8,9 +8,10 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 |-----|---------|
 | [../AGENTS.md](../AGENTS.md) | LLM agent instructions for idiomatic Rust in this repo |
 | [context.md](context.md) | Domain language and architectural decisions |
-| [plan.md](plan.md) | Roadmap and cross-arch smoke parity (phases 1–70; 50–60 core done; 61–70 planned); [Physical RPi4 lab](plan.md#physical-rpi4-lab-hardware-gated) |
+| [plan.md](plan.md) | Roadmap and cross-arch smoke parity (phases 1–80; 50–70 done; 71–80 planned, Phase 71 done); [Physical RPi4 lab](plan.md#physical-rpi4-lab-hardware-gated) |
 | [plan-arch.md](plan-arch.md) | Phases 50–60 living checklist; [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated) (hardware-gated) |
-| [plan-qemu.md](plan-qemu.md) | Phases 61–70 living checklist (QEMU-only workstation deepening) |
+| [plan-qemu.md](plan-qemu.md) | Phases 61–70 living checklist (QEMU-only workstation deepening; done) |
+| [plan-interactive.md](plan-interactive.md) | Phases 71–80 living checklist (QEMU interactive surface: Ladybird-shaped browser + Grok-shaped agent) |
 | [config.md](config.md) | Phase 54: config key schema, secrets, boot policy |
 | [packages.md](packages.md) | Phase 55: package CLI, pins, profile recipes, out-of-tree “AUR” |
 | [plan-au-ts.md](plan-au-ts.md) | Phases 41–49: sDDF/LionsOS/sdfgen-inspired work |
@@ -20,6 +21,7 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [decisions/003-net-virtualiser.md](decisions/003-net-virtualiser.md) | ADR-003: net trust map; unified-dma on aarch64 virtio |
 | [decisions/007-tls-proxy.md](decisions/007-tls-proxy.md) | ADR-007: tls-proxy PD; rustls + smoke CA |
 | [decisions/008-host-backed-fs.md](decisions/008-host-backed-fs.md) | ADR-008: QEMU host FS inject (`/host`) |
+| [decisions/009-interactive-surface.md](decisions/009-interactive-surface.md) | ADR-009: QEMU software framebuffer; static Ladybird PDs; Grok-shaped agent |
 | [decisions/004-service-async.md](decisions/004-service-async.md) | ADR-004: stackless coop async in service PDs |
 | [decisions/005-debug-pd.md](decisions/005-debug-pd.md) | ADR-005: fault parent + QEMU GDB (not libgdb fork) |
 | [debug.md](debug.md) | Phase 46: `test-debug` + gdb-multiarch workflow |
@@ -43,3 +45,5 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 - [rust-sel4 crates](https://github.com/seL4/rust-sel4)
 - [rust-microkit-demo](https://github.com/seL4/rust-microkit-demo) — multi-PD IPC example
 - [au-ts org](https://github.com/au-ts) — upstream Microkit / sDDF / LionsOS / rust-sel4 ecosystem (see [plan-au-ts.md](plan-au-ts.md))
+- [Ladybird](https://github.com/LadybirdBrowser/ladybird) — process topology inspiration for phases 71–80 (see [plan-interactive.md](plan-interactive.md)); not vendored
+- [Grok Build](https://github.com/xai-org/grok-build) — agent-loop / tool-taxonomy inspiration for phases 71–80; not vendored

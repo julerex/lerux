@@ -31,6 +31,8 @@ lerux builds **Rust-only userspace** on the formally verified [seL4](https://sel
 | First platform | aarch64 QEMU virt; x86_64 parameterized for follow-up |
 | Dependency fetch | `lerux fetch` git clones (pinned tags) |
 
+**Interactive surface (2026-09, ADR-009):** QEMU software framebuffer is in scope; GPU/Wayland/libvmm/JS are not. Browser and agent are new PDs, not ports of Ladybird or `grok`. See [`plan-interactive.md`](plan-interactive.md).
+
 ## Platform parity
 
 Echo IPC and virtio smoke tests run on aarch64, RISC-V virt, and x86 (PCI virtio on q35). Block IPC (read + write) and net IPC (UDP TX) run on all three arches. RTC/timer init runs on all three: aarch64 PL031/SP804, RISC-V Goldfish RTC + `rdtime`, x86 CMOS RTC + TSC (Phase 56).
@@ -41,7 +43,7 @@ The composed board (`qemu_virt_aarch64_composed`) runs `supervisor` (historicall
 
 lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection domains that speak **typed postcard RPC** (`lerux-interface-types`) over Microkit channels — not file descriptors, `errno`, or `fork`/`exec`.
 
-“Arch-like” means **workflow**, not binary compatibility: rolling PD artifact pins, named system profiles, init ordering, shell + core utilities — each implemented as PDs you port deliberately. Unmodified Arch packages (`bash`, `pacman`, `firefox`, etc.) are out of scope. Gap plan for Arch-level capability (phases 50–60): [`plan-arch.md`](plan-arch.md). Next program is **QEMU-only deepening** (phases 61–70): [`plan-qemu.md`](plan-qemu.md).
+“Arch-like” means **workflow**, not binary compatibility: rolling PD artifact pins, named system profiles, init ordering, shell + core utilities — each implemented as PDs you port deliberately. Unmodified Arch packages (`bash`, `pacman`, `firefox`, etc.) are out of scope. Gap plan for Arch-level capability (phases 50–60): [`plan-arch.md`](plan-arch.md). QEMU-only deepening (phases 61–70): [`plan-qemu.md`](plan-qemu.md). Next program is **interactive surface** (phases 71–80): [`plan-interactive.md`](plan-interactive.md), [ADR-009](decisions/009-interactive-surface.md).
 
 ## System profiles and packages
 
@@ -107,8 +109,33 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 4. Add `board-<profile>` features in PD `Cargo.toml` files
 5. Register board in `support/boards.toml`, smoke expects in `lerux-cli`, CI job if needed
 
+**Interactive surface (Phase 71 / ADR-009)**
+: QEMU software framebuffer + Ladybird-shaped browser PDs + Grok-shaped agent PDs. Living checklist: [`plan-interactive.md`](plan-interactive.md).
+
+**display-server**
+: Trusted PD that owns the QEMU framebuffer device (ramfb first). Apps never map display MMIO. They present a **shared bitmap memory region** via postcard `DisplayRequest` (same trust shape as ADR-003 for NIC DMA).
+
+**framebuffer MR**
+: Shared memory region holding RGB pixels. Producers (`display-demo`, later `web-content`) write; `display-server` blits to the device.
+
+**browser-ui**
+: Ladybird Browser analogue. Owns chrome (serial `open <url>` in v1) and the channel to `web-content`. Does not parse HTML.
+
+**web-content**
+: Ladybird WebContent analogue. One static PD (Microkit cannot spawn tabs). Hosts `lerux-html` + CSS/layout/paint. Speaks only `HttpRequest` to `request-server` plus the bitmap MR. **No** `NetClient`, `TlsClient`, or `FsClient`. No JS in phases 71–80.
+
+**request-server**
+: Ladybird RequestServer analogue. Sole HTTP client of `tls-proxy` / `net-server` on interactive boards. Untrusted `web-content` and `agent` fetch through it.
+
+**agent**
+: Grok Build analogue as a PD: prompt → tool-calls → tools → model. Tools are Read/Edit/Write/ListDir/Search/Execute/WebFetch over existing IPC (FS, shell `run`, `request-server`). Serial ANSI TUI. Sandbox **is** the PD set, not Landlock. CI uses host `lerux grok-one`, not live xAI.
+
+**lerux-html**
+: From-scratch `#![no_std]`+`alloc` HTML subset tokenizer/tree builder. Not Ladybird’s `libweb_html_tokenizer`, not html5ever, not Servo.
+
 ## Boundaries
 
-- **In scope:** Rust PD crates, `.system` files, build/CI, docs, host profile tooling
-- **Out of scope:** POSIX/glibc/musl, Linux ABI emulation, seL4 kernel modifications, C userspace, vendored upstream trees, unmodified third-party Linux binaries
+- **In scope:** Rust PD crates, `.system` files, build/CI, docs, host profile tooling, QEMU software framebuffer (ADR-009)
+- **Out of scope:** POSIX/glibc/musl, Linux ABI emulation, seL4 kernel modifications, C userspace, vendored upstream trees, unmodified third-party binaries (including Ladybird and `grok`), JS/Wasm engines, GPU compositor / Wayland / libvmm
 - **Upstream SDK components:** Microkit monitor, loader, libmicrokit (C) — part of SDK, not lerux-owned
+- **Reference trees (read, do not vendor):** Ladybird, Grok Build — steal topology and tool loop only ([`plan-au-ts.md`](plan-au-ts.md) rule)

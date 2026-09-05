@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-08-16 (phases 61–70 QEMU-only plan)
+Last updated: 2026-09-05 (phases 71–80 interactive surface)
 
 ## Phase 1 — Bring-up
 
@@ -507,11 +507,12 @@ Stretch order and exit criteria: **[`plan-arch.md` § Phase 60 stretch sequence]
 | 58 | App catalog | core done |
 | 59 | Multi-arch workstation profiles | core done |
 | 60 | Security posture | core + stretch A–D done (MCS / asymmetric signing deferred) |
-| 61–70 | QEMU-only workstation deepening | planned — [`plan-qemu.md`](plan-qemu.md) |
+| 61–70 | QEMU-only workstation deepening | done — [`plan-qemu.md`](plan-qemu.md) |
+| 71–80 | Interactive surface (browser + agent) | planned — [`plan-interactive.md`](plan-interactive.md); Phase 71 done |
 
-## Phases 61–70 — QEMU-only workstation deepening (planned)
+## Phases 61–70 — QEMU-only workstation deepening ✅
 
-Completable **without a board**. Living checklist: **[`plan-qemu.md`](plan-qemu.md)**. Hardware stays in [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated).
+Completable **without a board**. Living checklist: **[`plan-qemu.md`](plan-qemu.md)**. Hardware stays in [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated). Next program: [phases 71–80](#phases-71-80--interactive-surface-planned).
 
 ## Phase 61 — QEMU DMA parity ✅
 
@@ -585,7 +586,83 @@ Completable **without a board**. Living checklist: **[`plan-qemu.md`](plan-qemu.
 | 69 | Batch runner (on-disk shell scripts) | done |
 | 70 | QEMU developer loop | done |
 
-Near-term priority: **61 → 62 → 64** ([`plan-qemu.md` § Near-term priority](plan-qemu.md#near-term-priority)). On-device work is [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated) and does not block that list.
+Near-term priority for 61–70 was **61 → 62 → 64** (done). Next: **72 → 73** ([`plan-interactive.md` § Near-term priority](plan-interactive.md#near-term-priority)). On-device work is [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated) and does not block that list.
+
+## Phases 71–80 — Interactive surface (planned)
+
+QEMU-only **browser + agent** program. Steal Ladybird process topology and Grok Build’s tool loop; do not port C++/std binaries. Living checklist: **[`plan-interactive.md`](plan-interactive.md)**. ADR: **[ADR-009](decisions/009-interactive-surface.md)**.
+
+## Phase 71 — ADR + domain language ✅
+
+- [x] [ADR-009](decisions/009-interactive-surface.md): QEMU software framebuffer; static Ladybird PDs; Grok-shaped agent as PDs
+- [x] Glossary in [`context.md`](context.md)
+- [x] Remaining ceilings listed in [`plan-interactive.md`](plan-interactive.md)
+
+## Phase 72 — Display + input (QEMU ramfb)
+
+- [ ] `display-server` owns ramfb; apps present via shared bitmap MR (no display MMIO)
+- [ ] `DisplayRequest` + serial `InputEvent` v1
+- [ ] `just test-display` (`lerux-display: pattern ok`)
+
+## Phase 73 — Request-server PD
+
+- [ ] `request-server` is the only HTTP client of `tls-proxy` / `net-server` on new boards
+- [ ] `HttpRequest` / `HttpResponse`; `web-content` and `agent` get **no** `NetClient`
+- [ ] `just test-request` against `lerux https-one`
+
+## Phase 74 — HTML + DOM (`lerux-html`)
+
+- [ ] `no_std`+`alloc` subset tokenizer/tree builder
+- [ ] Fixtures under `support/browser/`
+- [ ] `just test-html` (`lerux-html: nodes=`)
+
+## Phase 75 — CSS subset + layout + paint
+
+- [ ] Block-flow layout; RGB888 into the bitmap MR
+- [ ] `just test-paint` (`lerux-web: paint ok`)
+
+## Phase 76 — `browser-ui` + one `web-content`
+
+- [ ] Serial `open <url>`; one tab; no JS
+- [ ] Profile `browser` / `just test-browser`
+
+## Phase 77 — Agent runtime + `grok-one` stub
+
+- [ ] Host `lerux grok-one` (scripted tool-calls; not live xAI)
+- [ ] `agent` PD tool-loop via `request-server`
+- [ ] `just test-agent-runtime`
+
+## Phase 78 — Agent serial TUI
+
+- [ ] Fullscreen ANSI; shell `grok` PPC
+- [ ] Scripted serial smoke
+
+## Phase 79 — Agent tools
+
+- [ ] Read / Write / Edit / ListDir / Search / Execute (shell `run`) / WebFetch
+- [ ] `just test-agent` (`lerux-agent: tools ok`)
+- [ ] No `fork`/`exec`, MCP, or Landlock
+
+## Phase 80 — Joint `workstation-interactive`
+
+- [ ] One profile: display + request-server + browser + agent
+- [ ] Agent `browse` → `web-content` (still no NIC map)
+- [ ] `just test-interactive`
+
+| Phase | Theme | Status |
+|-------|--------|--------|
+| 71 | ADR + domain language | done — [ADR-009](decisions/009-interactive-surface.md) |
+| 72 | Display + input (QEMU ramfb) | planned |
+| 73 | Request-server PD | planned |
+| 74 | HTML + DOM (`lerux-html`) | planned |
+| 75 | CSS subset + layout + paint | planned |
+| 76 | `browser-ui` + one `web-content` | planned |
+| 77 | Agent runtime + `grok-one` stub | planned |
+| 78 | Agent serial TUI | planned |
+| 79 | Agent tools (fs / shell / fetch) | planned |
+| 80 | Joint `workstation-interactive` | planned |
+
+Near-term priority: **72 → 73**, then 74–76 in parallel with 77–79, then 80 ([`plan-interactive.md` § Near-term priority](plan-interactive.md#near-term-priority)). JS, GPU, extra tabs, and live xAI stay off this list.
 
 ## Physical RPi4 lab (hardware-gated)
 

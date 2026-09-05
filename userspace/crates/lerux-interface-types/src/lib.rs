@@ -961,6 +961,290 @@ pub enum TlsResponse {
     },
 }
 
+/// Maximum URL bytes for [`HttpRequest::Start`] (`https://host:8443/path`).
+pub const MAX_HTTP_URL: usize = 128;
+/// Maximum path bytes after `HttpUrl` parse (includes leading `/`).
+pub const MAX_HTTP_PATH: usize = 96;
+/// Maximum request-header name bytes for [`HttpRequest::Header`].
+pub const MAX_HTTP_HEADER_NAME: usize = 24;
+/// Maximum request-header value bytes for [`HttpRequest::Header`].
+pub const MAX_HTTP_HEADER_VALUE: usize = 64;
+
+/// HTTP method on [`HttpRequest::Start`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum HttpMethod {
+    Get,
+    Head,
+    Post,
+}
+
+impl HttpMethod {
+    /// HTTP/1.1 method token.
+    pub const fn as_token(self) -> &'static [u8] {
+        match self {
+            Self::Get => b"GET",
+            Self::Head => b"HEAD",
+            Self::Post => b"POST",
+        }
+    }
+}
+
+/// Parsed [`HttpRequest`] URL. Host is also TLS SNI / DNS name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HttpUrl {
+    /// True for `https://` (v1 `request-server` only serves this).
+    pub https: bool,
+    host: [u8; MAX_TLS_NAME],
+    host_len: u8,
+    pub port: u16,
+    path: [u8; MAX_HTTP_PATH],
+    path_len: u8,
+}
+
+impl HttpUrl {
+    /// Parse `http://` / `https://` URLs with optional `:port` and path.
+    ///
+    /// Missing path becomes `/`. Default ports: 443 (https), 80 (http).
+    pub fn parse(url: &[u8]) -> Option<Self> {
+        if url.contains(&b' ') {
+            return None;
+        }
+        let (https, rest) = if let Some(rest) = url.strip_prefix(b"https://") {
+            (true, rest)
+        } else if let Some(rest) = url.strip_prefix(b"http://") {
+            (false, rest)
+        } else {
+            return None;
+        };
+        if rest.is_empty() {
+            return None;
+        }
+        let slash = rest.iter().position(|&b| b == b'/');
+        let authority = slash.map(|i| &rest[..i]).unwrap_or(rest);
+        let path_src = slash.map(|i| &rest[i..]).unwrap_or(b"/");
+        if authority.is_empty() {
+            return None;
+        }
+        let (host_src, port) = if let Some(colon) = authority.iter().position(|&b| b == b':') {
+            let host = &authority[..colon];
+            let port_bytes = &authority[colon + 1..];
+            if host.is_empty() || port_bytes.is_empty() {
+                return None;
+            }
+            let port = core::str::from_utf8(port_bytes).ok()?.parse::<u16>().ok()?;
+            if port == 0 {
+                return None;
+            }
+            (host, port)
+        } else {
+            let port = if https { 443 } else { 80 };
+            (authority, port)
+        };
+        if host_src.is_empty()
+            || host_src.len() > MAX_TLS_NAME
+            || path_src.is_empty()
+            || path_src.len() > MAX_HTTP_PATH
+        {
+            return None;
+        }
+        let mut host = [0u8; MAX_TLS_NAME];
+        host[..host_src.len()].copy_from_slice(host_src);
+        let mut path = [0u8; MAX_HTTP_PATH];
+        path[..path_src.len()].copy_from_slice(path_src);
+        Some(Self {
+            https,
+            host,
+            host_len: host_src.len() as u8,
+            port,
+            path,
+            path_len: path_src.len() as u8,
+        })
+    }
+
+    pub fn host(&self) -> &[u8] {
+        &self.host[..self.host_len as usize]
+    }
+
+    pub fn path(&self) -> &[u8] {
+        &self.path[..self.path_len as usize]
+    }
+}
+
+/// Split `buf` at the first `\r\n\r\n`. Returns `(head, body)` where `head`
+/// includes the blank line terminator.
+pub fn split_http_head(buf: &[u8]) -> Option<(&[u8], &[u8])> {
+    let pos = buf.windows(4).position(|w| w == b"\r\n\r\n")?;
+    let split = pos + 4;
+    Some((&buf[..split], &buf[split..]))
+}
+
+/// Status code from an HTTP/1.0 or HTTP/1.1 status line at the start of `head`.
+pub fn http_status_code(head: &[u8]) -> Option<u16> {
+    let line_end = head.iter().position(|&b| b == b'\n')?;
+    let line = head[..line_end]
+        .strip_suffix(b"\r")
+        .unwrap_or(&head[..line_end]);
+    let rest = line
+        .strip_prefix(b"HTTP/1.1 ")
+        .or_else(|| line.strip_prefix(b"HTTP/1.0 "))?;
+    let digits = rest.get(..3)?;
+    core::str::from_utf8(digits).ok()?.parse().ok()
+}
+
+/// First `Content-Length` header value in `head`, if present and valid.
+pub fn http_content_length(head: &[u8]) -> Option<usize> {
+    let value = http_header_value(head, b"content-length")?;
+    core::str::from_utf8(value).ok()?.parse().ok()
+}
+
+/// Header value for `name` (ASCII case-insensitive). Skips the status line.
+pub fn http_header_value<'a>(head: &'a [u8], name: &[u8]) -> Option<&'a [u8]> {
+    let mut first = true;
+    for line in head.split(|&b| b == b'\n') {
+        let line = line.strip_suffix(b"\r").unwrap_or(line);
+        if first {
+            first = false;
+            continue;
+        }
+        if line.is_empty() {
+            continue;
+        }
+        let Some(colon) = line.iter().position(|&b| b == b':') else {
+            continue;
+        };
+        let (hdr_name, rest) = line.split_at(colon);
+        if !eq_ignore_ascii_case(hdr_name, name) {
+            continue;
+        }
+        let value = rest.get(1..)?.trim_ascii_start();
+        return Some(value);
+    }
+    None
+}
+
+fn eq_ignore_ascii_case(a: &[u8], b: &[u8]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.eq_ignore_ascii_case(y))
+}
+
+/// HTTP requests to `request-server` (Phase 73 / ADR-009).
+///
+/// Untrusted PDs (`web-content`, `agent`, smoke `request-client`) speak this
+/// instead of [`NetRequest`] / [`TlsRequest`]. Body chunks reuse
+/// [`MAX_NET_TCP_PAYLOAD`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "Body carries inline payload for IPC"
+)]
+pub enum HttpRequest {
+    /// Begin a request. Does not hit the network until [`Self::Finish`].
+    Start {
+        method: HttpMethod,
+        url_len: u8,
+        #[serde(with = "bounded_bytes")]
+        url: [u8; MAX_HTTP_URL],
+    },
+    /// Optional request header (after Start, before Finish).
+    Header {
+        name_len: u8,
+        #[serde(with = "bounded_bytes")]
+        name: [u8; MAX_HTTP_HEADER_NAME],
+        value_len: u8,
+        #[serde(with = "bounded_bytes")]
+        value: [u8; MAX_HTTP_HEADER_VALUE],
+    },
+    /// Request body chunk. Ignored for GET in v1. `last` does not Finish.
+    Body {
+        payload_len: u16,
+        #[serde(with = "bounded_bytes")]
+        payload: [u8; MAX_NET_TCP_PAYLOAD],
+        last: bool,
+    },
+    /// Send the request and wait for [`HttpResponse::Status`].
+    Finish,
+    /// Next response body chunk after Status.
+    Recv,
+    Close,
+    Poll,
+}
+
+impl HttpRequest {
+    pub fn start(method: HttpMethod, url: &[u8]) -> Self {
+        let mut buf = [0u8; MAX_HTTP_URL];
+        let url_len = url.len().min(MAX_HTTP_URL) as u8;
+        buf[..url_len as usize].copy_from_slice(&url[..url_len as usize]);
+        Self::Start {
+            method,
+            url_len,
+            url: buf,
+        }
+    }
+
+    pub fn get(url: &[u8]) -> Self {
+        Self::start(HttpMethod::Get, url)
+    }
+
+    pub fn header(name: &[u8], value: &[u8]) -> Self {
+        let mut name_buf = [0u8; MAX_HTTP_HEADER_NAME];
+        let mut value_buf = [0u8; MAX_HTTP_HEADER_VALUE];
+        let name_len = name.len().min(MAX_HTTP_HEADER_NAME) as u8;
+        let value_len = value.len().min(MAX_HTTP_HEADER_VALUE) as u8;
+        name_buf[..name_len as usize].copy_from_slice(&name[..name_len as usize]);
+        value_buf[..value_len as usize].copy_from_slice(&value[..value_len as usize]);
+        Self::Header {
+            name_len,
+            name: name_buf,
+            value_len,
+            value: value_buf,
+        }
+    }
+
+    pub fn body(data: &[u8], last: bool) -> Self {
+        let mut payload = [0u8; MAX_NET_TCP_PAYLOAD];
+        let payload_len = data.len().min(MAX_NET_TCP_PAYLOAD) as u16;
+        payload[..payload_len as usize].copy_from_slice(&data[..payload_len as usize]);
+        Self::Body {
+            payload_len,
+            payload,
+            last,
+        }
+    }
+}
+
+/// HTTP responses from `request-server`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "Data carries inline payload for IPC"
+)]
+pub enum HttpResponse {
+    Pending,
+    Ok,
+    Error,
+    Status {
+        code: u16,
+    },
+    Data {
+        data_len: u16,
+        #[serde(with = "bounded_bytes")]
+        data: [u8; MAX_NET_TCP_PAYLOAD],
+        last: bool,
+    },
+}
+
+impl HttpResponse {
+    pub fn data(bytes: &[u8], last: bool) -> Self {
+        let mut data = [0u8; MAX_NET_TCP_PAYLOAD];
+        let data_len = bytes.len().min(MAX_NET_TCP_PAYLOAD) as u16;
+        data[..data_len as usize].copy_from_slice(&bytes[..data_len as usize]);
+        Self::Data {
+            data_len,
+            data,
+            last,
+        }
+    }
+}
+
 /// Chat client (Phase 40 / 58 multi-room).
 pub const MAX_CHAT_MSG: usize = 80;
 pub const MAX_CHAT_LINES: usize = 12;
@@ -1447,6 +1731,59 @@ mod tests {
         data[..3].copy_from_slice(b"200");
         let resp = TlsResponse::Data { data_len: 3, data };
         assert_eq!(round_trip(resp), resp);
+    }
+
+    #[test]
+    fn http_url_parse() {
+        let u = HttpUrl::parse(b"https://host:8443/fixture.html").unwrap();
+        assert!(u.https);
+        assert_eq!(u.host(), b"host");
+        assert_eq!(u.port, 8443);
+        assert_eq!(u.path(), b"/fixture.html");
+
+        let u = HttpUrl::parse(b"https://host").unwrap();
+        assert_eq!(u.port, 443);
+        assert_eq!(u.path(), b"/");
+
+        let u = HttpUrl::parse(b"http://host/foo").unwrap();
+        assert!(!u.https);
+        assert_eq!(u.port, 80);
+        assert_eq!(u.path(), b"/foo");
+
+        assert!(HttpUrl::parse(b"").is_none());
+        assert!(HttpUrl::parse(b"https://").is_none());
+        assert!(HttpUrl::parse(b"https://:8443/").is_none());
+        assert!(HttpUrl::parse(b"ftp://host/").is_none());
+        assert!(HttpUrl::parse(b"https://host:99999/").is_none());
+        assert!(HttpUrl::parse(b"https://host /x").is_none());
+    }
+
+    #[test]
+    fn http_head_helpers() {
+        let raw = b"HTTP/1.1 200 OK\r\nContent-Length: 4\r\nConnection: close\r\n\r\nbody";
+        let (head, body) = split_http_head(raw).unwrap();
+        assert_eq!(http_status_code(head), Some(200));
+        assert_eq!(http_content_length(head), Some(4));
+        assert_eq!(body, b"body");
+        assert_eq!(http_header_value(head, b"CONTENT-LENGTH"), Some(&b"4"[..]));
+        assert!(split_http_head(b"HTTP/1.1 200 OK\r\n").is_none());
+    }
+
+    #[test]
+    fn http_round_trip() {
+        let req = HttpRequest::get(b"https://host:8443/fixture.html");
+        assert_eq!(round_trip(req), req);
+        let req = HttpRequest::header(b"Accept", b"text/html");
+        assert_eq!(round_trip(req), req);
+        let req = HttpRequest::body(b"xyz", true);
+        assert_eq!(round_trip(req), req);
+        assert_eq!(
+            round_trip(HttpResponse::Status { code: 200 }),
+            HttpResponse::Status { code: 200 }
+        );
+        let resp = HttpResponse::data(b"lerux-http-fixture", true);
+        assert_eq!(round_trip(resp), resp);
+        assert_eq!(HttpMethod::Get.as_token(), b"GET");
     }
 
     #[test]

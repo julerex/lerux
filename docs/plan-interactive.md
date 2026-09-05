@@ -1,6 +1,6 @@
 # PLAN — Interactive surface (phases 71–80)
 
-Last updated: 2026-09-05 (phases 71–80; Phase 72 display + ramfb)
+Last updated: 2026-09-05 (phases 71–80; Phase 73 request-server)
 
 Related: [`plan.md`](plan.md) (roadmap 1–80), [`plan-qemu.md`](plan-qemu.md) (phases 61–70, done), [`plan-arch.md`](plan-arch.md) (phases 50–60 + Physical RPi4 lab), [`plan-au-ts.md`](plan-au-ts.md) (sDDF inspiration), [`context.md`](context.md), [ADR-009](decisions/009-interactive-surface.md).
 
@@ -55,7 +55,7 @@ Platform                         Browser (Ladybird-shaped)              Agent (G
 ────────                         ─────────────────────────              ───────────────────
 71 ADR + domain language ✅
 72 display + input (QEMU ramfb) ✅
-                                 73 request-server PD
+                                 73 request-server PD ✅
                                  74 HTML/DOM (`lerux-html`)
                                  75 CSS + layout + paint
                                  76 browser-ui + one web-content
@@ -157,16 +157,16 @@ QEMU window shows a non-serial pixel buffer produced by a PD (`just run` with a 
 
 ---
 
-## Phase 73 — Request-server PD
+## Phase 73 — Request-server PD ✅
 
 **Why:** Ladybird’s load-bearing isolation: WebContent never speaks TCP. lerux already has `tls-proxy` + `net-server`; untrusted browser/agent PDs still must not own that path.
 
 ### Steps
 
-- [ ] `request-server` is the only HTTP client of `tls-proxy` / `net-server` on the new boards.
-- [ ] `HttpRequest` / `HttpResponse` in `lerux-interface-types` (method, URL, headers, chunked body; reuse `MAX_NET_TCP_PAYLOAD` chunking).
-- [ ] `web-content` and `agent` may call `request-server`; they do **not** get `NetClient` / `TlsClient` channels.
-- [ ] Smoke `just test-request`: GET a fixture from `lerux https-one`; expect `lerux-http: fixture ok`.
+- [x] `request-server` is the only HTTP client of `tls-proxy` / `net-server` on the new boards.
+- [x] `HttpRequest` / `HttpResponse` in `lerux-interface-types` (method, URL, headers, chunked body; reuse `MAX_NET_TCP_PAYLOAD` chunking).
+- [x] Smoke client `request-client` calls `request-server`; it does **not** get `NetClient` / `TlsClient` channels (`web-content` / `agent` later).
+- [x] Smoke `just test-request`: GET `https://host:8443/fixture.html` from `lerux https-one`; expect `lerux-http: fixture ok`.
 
 ### Out of scope
 
@@ -175,7 +175,7 @@ QEMU window shows a non-serial pixel buffer produced by a PD (`just run` with a 
 
 ### Exit
 
-An untrusted PD can GET `https://host/…` without mapping NIC DMA or linking rustls.
+An untrusted PD can GET `https://host/…` without mapping NIC DMA or linking rustls. **Met.**
 
 ---
 
@@ -349,7 +349,7 @@ Hardware truth remains [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardwa
 If capacity is limited, do **not** start with 76–80 first:
 
 1. **Phase 72** — ramfb + `display-server` (done; unblocks paint).
-2. **Phase 73** — `request-server` (unblocks browser load **and** agent HTTPS).
+2. **Phase 73** — `request-server` (done; unblocks browser load **and** agent HTTPS).
 3. Then **74–76** (browser) and **77–79** (agent) in parallel.
 4. **Phase 80** last.
 

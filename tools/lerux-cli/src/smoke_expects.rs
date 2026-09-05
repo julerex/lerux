@@ -147,6 +147,14 @@ mod tests {
     }
 
     #[test]
+    fn loads_request_board() {
+        let root = repo_root();
+        let t = smoke_test_for_board(&root, "qemu_virt_aarch64_request").unwrap();
+        assert!(t.expects.iter().any(|e| e.contains("fixture ok")));
+        assert!(t.expects.iter().any(|e| e.contains("handshake ok")));
+    }
+
+    #[test]
     fn missing_board_errors() {
         let root = repo_root();
         let err = smoke_test_for_board(&root, "no_such_board_xyz").unwrap_err();

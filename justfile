@@ -167,6 +167,10 @@ test-fetch:
 test-fetch-tls:
     BOARD=qemu_virt_aarch64_fetch_tls just test
 
+# Phase 73: request-server GET fixture via tls-proxy (no NetClient on the app)
+test-request:
+    BOARD=qemu_virt_aarch64_request just test
+
 # Filesystem IPC smoke test (fs-server + fs-client on aarch64 virt)
 test-fs:
     BOARD=qemu_virt_aarch64_fs just test

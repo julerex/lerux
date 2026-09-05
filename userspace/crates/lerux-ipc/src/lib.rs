@@ -2,15 +2,16 @@
 //!
 //! Re-exports upstream [`sel4-microkit-simple-ipc`] for custom RPC between
 //! PDs, and provides typed service clients ([`FsClient`], [`NetClient`],
-//! [`BlkClient`]) that own the shared Pending → Poll completion loop.
+//! [`BlkClient`], [`TlsClient`], [`HttpClient`]) that own the shared
+//! Pending → Poll completion loop.
 
 #![no_std]
 
 mod client;
 
 pub use client::{
-    BlkClient, BlkProtocol, FsClient, FsProtocol, NetClient, NetProtocol, PollProtocol,
-    ServiceClient, TlsClient, TlsProtocol,
+    BlkClient, BlkProtocol, FsClient, FsProtocol, HttpClient, HttpProtocol, NetClient, NetProtocol,
+    PollProtocol, ServiceClient, TlsClient, TlsProtocol,
 };
 pub use sel4_microkit::Channel;
 pub use sel4_microkit_simple_ipc::{

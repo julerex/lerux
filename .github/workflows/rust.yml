@@ -340,6 +340,9 @@ jobs:
           - id: fetch-tls
             board: qemu_virt_aarch64_fetch_tls
             command: just test-fetch-tls
+          - id: request
+            board: qemu_virt_aarch64_request
+            command: just test-request
           - id: fs
             board: qemu_virt_aarch64_fs
             command: just disk-img && just test-fs

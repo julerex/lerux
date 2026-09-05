@@ -17,6 +17,8 @@ members = [
     "userspace/pds/net-client",
     "userspace/pds/fetch-client",
     "userspace/pds/tls-proxy",
+    "userspace/pds/request-server",
+    "userspace/pds/request-client",
     "userspace/crates/lerux-tls",
     "userspace/pds/supervisor",
     "userspace/pds/pl031-driver",

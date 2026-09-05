@@ -11,7 +11,7 @@ use lerux_logging::{debug, log};
 use lerux_tls::{ClientSession, Status};
 use sel4_microkit::{protection_domain, Channel, Handler, Infallible, MessageInfo};
 
-/// Channel IDs match `fetch-tls.system.template`.
+/// Channel IDs match `fetch-tls.system.template` / `request.system.template`.
 const NET_SERVER: NetClient = NetClient::new(Channel::new(1));
 const APP: Channel = Channel::new(2);
 

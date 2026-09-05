@@ -586,9 +586,9 @@ Completable **without a board**. Living checklist: **[`plan-qemu.md`](plan-qemu.
 | 69 | Batch runner (on-disk shell scripts) | done |
 | 70 | QEMU developer loop | done |
 
-Near-term priority for 61–70 was **61 → 62 → 64** (done). Next: **73** ([`plan-interactive.md` § Near-term priority](plan-interactive.md#near-term-priority)). On-device work is [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated) and does not block that list.
+Near-term priority for 61–70 was **61 → 62 → 64** (done). Next: **74** ([`plan-interactive.md` § Near-term priority](plan-interactive.md#near-term-priority)). On-device work is [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated) and does not block that list.
 
-## Phases 71–80 — Interactive surface (planned; 71–72 done)
+## Phases 71–80 — Interactive surface (planned; 71–73 done)
 
 QEMU-only **browser + agent** program. Steal Ladybird process topology and Grok Build’s tool loop; do not port C++/std binaries. Living checklist: **[`plan-interactive.md`](plan-interactive.md)**. ADR: **[ADR-009](decisions/009-interactive-surface.md)**.
 
@@ -604,11 +604,11 @@ QEMU-only **browser + agent** program. Steal Ladybird process topology and Grok 
 - [x] `DisplayRequest` + serial `InputEvent` v1
 - [x] `just test-display` (`lerux-display: pattern ok`)
 
-## Phase 73 — Request-server PD
+## Phase 73 — Request-server PD ✅
 
-- [ ] `request-server` is the only HTTP client of `tls-proxy` / `net-server` on new boards
-- [ ] `HttpRequest` / `HttpResponse`; `web-content` and `agent` get **no** `NetClient`
-- [ ] `just test-request` against `lerux https-one`
+- [x] `request-server` is the only HTTP client of `tls-proxy` / `net-server` on new boards
+- [x] `HttpRequest` / `HttpResponse`; smoke `request-client` (later `web-content` / `agent`) gets **no** `NetClient`
+- [x] `just test-request` against `lerux https-one` (`lerux-http: fixture ok`)
 
 ## Phase 74 — HTML + DOM (`lerux-html`)
 
@@ -653,7 +653,7 @@ QEMU-only **browser + agent** program. Steal Ladybird process topology and Grok 
 |-------|--------|--------|
 | 71 | ADR + domain language | done — [ADR-009](decisions/009-interactive-surface.md) |
 | 72 | Display + input (QEMU ramfb) | done — `just test-display` |
-| 73 | Request-server PD | planned |
+| 73 | Request-server PD | done — `just test-request` |
 | 74 | HTML + DOM (`lerux-html`) | planned |
 | 75 | CSS subset + layout + paint | planned |
 | 76 | `browser-ui` + one `web-content` | planned |
@@ -662,7 +662,7 @@ QEMU-only **browser + agent** program. Steal Ladybird process topology and Grok 
 | 79 | Agent tools (fs / shell / fetch) | planned |
 | 80 | Joint `workstation-interactive` | planned |
 
-Near-term priority: **73**, then 74–76 in parallel with 77–79, then 80 ([`plan-interactive.md` § Near-term priority](plan-interactive.md#near-term-priority)). JS, GPU, extra tabs, and live xAI stay off this list.
+Near-term priority: **74–76** in parallel with **77–79**, then 80 ([`plan-interactive.md` § Near-term priority](plan-interactive.md#near-term-priority)). JS, GPU, extra tabs, and live xAI stay off this list.
 
 ## Physical RPi4 lab (hardware-gated)
 

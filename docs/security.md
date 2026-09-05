@@ -34,8 +34,8 @@ This document is the Phase 60 threat model and trust map. It does not claim form
 │  Untrusted / interactive apps                                   │
 │  shell, edit, chat-client, http-file-browser, backup,           │
 │  fetch-client, crash-demo (isolation smoke)                     │
-│  display-demo (Phase 72); planned: web-content, browser-ui,     │
-│  agent (phases 73–80)                                           │
+│  display-demo (Phase 72), request-client (Phase 73); planned:   │
+│  web-content, browser-ui, agent (phases 74–80)                  │
 │  Maps: **no** virtio/net/blk/display DMA; channels only         │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -53,7 +53,7 @@ This document is the Phase 60 threat model and trust map. It does not claim form
 | `serial-virt` | service | no | no | apps (serial RPC) | UART MMIO |
 | `fs-server` | service | no | blk client DMA | shell, edit, backup, http-fs, config | NIC DMA |
 | `net-server` | service | no | net bounce (unified-dma) | shell, fetch, chat, http-fs, tls-proxy | blk DMA |
-| `tls-proxy` | service | no | no | fetch-client (TlsRequest) | NIC / blk DMA |
+| `tls-proxy` | service | no | no | fetch-client / request-server (TlsRequest) | NIC / blk DMA |
 | `config-server` / `log-server` | service | no | no | shell, supervisor | device DMA |
 | `supervisor` | control | no | no | shell (status/reboot/time) | device DMA |
 | shell / apps | untrusted | no | **none** | each other only via typed RPC | any DMA / MMIO |
@@ -63,7 +63,7 @@ Channel numbers come from profile `[[channel]]` manifests; PPC callees outrank c
 
 ### Planned trust map (phases 72–80)
 
-Phase 72 composed `display-server` + `display-demo` on `qemu_virt_aarch64_display`. Later rows land with their phases. Do not give `web-content` a `NetClient`.
+Phase 72 composed `display-server` + `display-demo` on `qemu_virt_aarch64_display`. Phase 73 composed `request-server` + `request-client` on `qemu_virt_aarch64_request`. Later rows land with their phases. Do not give `web-content` a `NetClient`.
 
 | PD | Trust class | MMIO / IRQ | DMA | Clients may call | Must not map |
 |----|-------------|------------|-----|------------------|--------------|

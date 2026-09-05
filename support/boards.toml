@@ -269,6 +269,18 @@ qemu = { net = "user", https_one = true }
 ci = true
 system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_net_irq = 79 }
 
+# Phase 73: request-server is the only HTTP client of tls-proxy; request-client
+# has no NetClient / TlsClient (Ladybird RequestServer isolation).
+[qemu_virt_aarch64_request]
+arch = "aarch64"
+microkit_board = "qemu_virt_aarch64"
+target = "aarch64-sel4-microkit"
+template = "request.system.template"
+pds = ["request-client", "request-server", "tls-proxy", "net-server", "serial-driver", "virtio-net-driver"]
+qemu = { net = "user", https_one = true }
+ci = true
+system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_net_irq = 79 }
+
 # aarch64 blk boards keep a user-net device: it occupies the first virtio-mmio
 # slot so blk stays at +0xc00 in the same page (see virtio-blk-driver).
 [qemu_virt_aarch64_blk]

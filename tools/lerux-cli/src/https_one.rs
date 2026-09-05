@@ -1,7 +1,9 @@
-//! One-shot HTTPS origin for the fetch-tls smoke (port 8443 by default).
+//! One-shot HTTPS origin for the fetch-tls and request-server smokes
+//! (port 8443 by default).
 //!
-//! Serves the same `200 OK` body as [`crate::http_one`], with the committed
-//! smoke server cert in `support/tls/`.
+//! `GET /` keeps the same `200 OK` body as [`crate::http_one`]. `GET /fixture.html`
+//! serves `support/browser/fixture.html` (Phase 73). Smoke server cert lives in
+//! `support/tls/`.
 
 use std::{
     io::{Read, Write},
@@ -21,6 +23,8 @@ use rustls::{
 };
 
 const RESPONSE: &[u8] = b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK";
+const NOT_FOUND: &[u8] =
+    b"HTTP/1.1 404 Not Found\r\nContent-Length: 9\r\nConnection: close\r\n\r\nnot found";
 
 pub fn https_one(port: u16) -> Result<()> {
     let config = server_config()?;
@@ -66,6 +70,7 @@ fn serve_one(config: &Arc<ServerConfig>, sock: &mut std::net::TcpStream) -> Resu
     sock.set_nodelay(true).ok();
     let mut conn = ServerConnection::new(Arc::clone(config)).context("ServerConnection")?;
     let mut raw = [0u8; 4096];
+    let mut request = Vec::new();
     let mut saw_http = false;
     for _ in 0..64 {
         if conn.wants_write() {
@@ -90,12 +95,20 @@ fn serve_one(config: &Arc<ServerConfig>, sock: &mut std::net::TcpStream) -> Resu
             let mut plain = [0u8; 512];
             match conn.reader().read(&mut plain) {
                 Ok(0) => {}
-                Ok(_) => {
-                    conn.writer().write_all(RESPONSE).context("http write")?;
-                    saw_http = true;
-                }
+                Ok(n) => request.extend_from_slice(&plain[..n]),
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
                 Err(e) => return Err(e).context("plain read"),
+            }
+            if request_headers_complete(&request) {
+                let path = path_from_http_request(&request);
+                let fixture = if path == b"/fixture.html" {
+                    load_fixture()?
+                } else {
+                    Vec::new()
+                };
+                let body = http_response_for_path(path, &fixture);
+                conn.writer().write_all(&body).context("http write")?;
+                saw_http = true;
             }
         }
         if saw_http && !conn.wants_write() {
@@ -103,6 +116,45 @@ fn serve_one(config: &Arc<ServerConfig>, sock: &mut std::net::TcpStream) -> Resu
         }
     }
     anyhow::bail!("https-one handshake/serve loop exhausted")
+}
+
+fn request_headers_complete(buf: &[u8]) -> bool {
+    buf.windows(4).any(|w| w == b"\r\n\r\n") || buf.windows(2).any(|w| w == b"\n\n")
+}
+
+fn path_from_http_request(buf: &[u8]) -> &[u8] {
+    let line_end = buf.iter().position(|&b| b == b'\n').unwrap_or(buf.len());
+    let line = buf[..line_end]
+        .strip_suffix(b"\r")
+        .unwrap_or(&buf[..line_end]);
+    let mut parts = line.split(|&b| b == b' ');
+    let _method = parts.next();
+    parts.next().unwrap_or(b"/")
+}
+
+fn http_response_for_path(path: &[u8], fixture: &[u8]) -> Vec<u8> {
+    if path == b"/" || path.is_empty() {
+        return RESPONSE.to_vec();
+    }
+    if path == b"/fixture.html" {
+        return length_prefixed(b"text/html; charset=utf-8", fixture);
+    }
+    NOT_FOUND.to_vec()
+}
+
+fn length_prefixed(content_type: &[u8], body: &[u8]) -> Vec<u8> {
+    let mut out = Vec::from(b"HTTP/1.1 200 OK\r\nContent-Type: ".as_slice());
+    out.extend_from_slice(content_type);
+    out.extend_from_slice(b"\r\nContent-Length: ");
+    out.extend_from_slice(body.len().to_string().as_bytes());
+    out.extend_from_slice(b"\r\nConnection: close\r\n\r\n");
+    out.extend_from_slice(body);
+    out
+}
+
+fn load_fixture() -> Result<Vec<u8>> {
+    let path = crate::process::repo_root()?.join("support/browser/fixture.html");
+    std::fs::read(&path).with_context(|| format!("read {}", path.display()))
 }
 
 fn server_config() -> Result<Arc<ServerConfig>> {
@@ -130,4 +182,39 @@ fn server_config() -> Result<Arc<ServerConfig>> {
         .with_single_cert(certs, key)
         .context("tls server config")?;
     Ok(Arc::new(cfg))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn path_from_get() {
+        assert_eq!(
+            path_from_http_request(b"GET /fixture.html HTTP/1.1\r\n\r\n"),
+            b"/fixture.html"
+        );
+        assert_eq!(path_from_http_request(b"GET / HTTP/1.1\r\n"), b"/");
+    }
+
+    #[test]
+    fn root_keeps_fetch_tls_body() {
+        let r = http_response_for_path(b"/", b"unused");
+        assert_eq!(r, RESPONSE);
+    }
+
+    #[test]
+    fn fixture_path_embeds_body() {
+        let r = http_response_for_path(b"/fixture.html", b"<p>lerux-http-fixture</p>");
+        assert!(r.starts_with(b"HTTP/1.1 200"));
+        assert!(r
+            .windows(b"lerux-http-fixture".len())
+            .any(|w| w == b"lerux-http-fixture"));
+    }
+
+    #[test]
+    fn unknown_path_is_404() {
+        let r = http_response_for_path(b"/nope", b"x");
+        assert!(r.starts_with(b"HTTP/1.1 404"));
+    }
 }

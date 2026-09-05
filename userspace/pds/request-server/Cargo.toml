@@ -1,21 +1,18 @@
 [package]
-name = "tls-proxy"
+name = "request-server"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
+description = "Trusted HTTP client of tls-proxy; untrusted PDs speak HttpRequest only"
 
 [lints]
 workspace = true
 
 [features]
-# Phase 68: public Web trust store for interactive QEMU; smokes stay on smoke CA.
-webpki-roots = ["lerux-tls/webpki-roots"]
-board-qemu_virt_aarch64_fetch_tls = []
 board-qemu_virt_aarch64_request = []
 
 [dependencies]
 lerux-interface-types = { path = "../../crates/lerux-interface-types" }
 lerux-ipc = { path = "../../crates/lerux-ipc" }
 lerux-logging = { path = "../../crates/lerux-logging" }
-lerux-tls = { path = "../../crates/lerux-tls" }
 sel4-microkit = { workspace = true, features = ["alloc"] }

@@ -125,7 +125,7 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 : Ladybird WebContent analogue. One static PD (Microkit cannot spawn tabs). Hosts `lerux-html` + CSS/layout/paint. Speaks only `HttpRequest` to `request-server` plus the bitmap MR. **No** `NetClient`, `TlsClient`, or `FsClient`. No JS in phases 71–80.
 
 **request-server**
-: Ladybird RequestServer analogue. Sole HTTP client of `tls-proxy` / `net-server` on interactive boards. Untrusted `web-content` and `agent` fetch through it.
+: Ladybird RequestServer analogue. Sole HTTP client of `tls-proxy` / `net-server` on interactive boards (Phase 73: `just test-request`). Untrusted `web-content` and `agent` fetch through it; they never hold `NetClient` / `TlsClient`.
 
 **agent**
 : Grok Build analogue as a PD: prompt → tool-calls → tools → model. Tools are Read/Edit/Write/ListDir/Search/Execute/WebFetch over existing IPC (FS, shell `run`, `request-server`). Serial ANSI TUI. Sandbox **is** the PD set, not Landlock. CI uses host `lerux grok-one`, not live xAI.

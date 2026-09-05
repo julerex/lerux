@@ -45,7 +45,7 @@ pub struct QemuConfig {
     /// Start the host one-shot HTTP origin on :8081 (fetch smoke).
     #[serde(default)]
     pub http_one: bool,
-    /// Start the host one-shot HTTPS origin on :8443 (fetch-tls smoke).
+    /// Start the host one-shot HTTPS origin on :8443 (fetch-tls / request smokes).
     #[serde(default)]
     pub https_one: bool,
     /// Attach QEMU `-device ramfb` (Phase 72 software framebuffer).
@@ -173,5 +173,17 @@ mod tests {
         assert!(board.qemu().unwrap().ramfb);
         assert!(board.ci);
         assert!(board.pds.iter().any(|p| p == "display-server"));
+    }
+
+    #[test]
+    fn request_board_has_https_one() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let boards = load_boards(&root).unwrap();
+        let board = boards.get("qemu_virt_aarch64_request").unwrap();
+        assert!(board.qemu().unwrap().https_one);
+        assert!(board.ci);
+        assert!(board.pds.iter().any(|p| p == "request-server"));
+        assert!(board.pds.iter().any(|p| p == "request-client"));
+        assert!(!board.pds.iter().any(|p| p == "fetch-client"));
     }
 }

@@ -19,6 +19,7 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `qemu_virt_aarch64_net` | aarch64 | `just test-net` | net client/server + serial + virtio-net |
 | `qemu_virt_aarch64_fetch` | aarch64 | `just test-fetch` | fetch-client + net-server + serial + virtio-net |
 | `qemu_virt_aarch64_fetch_tls` | aarch64 | `just test-fetch-tls` | fetch-client + tls-proxy + net-server + serial + virtio-net |
+| `qemu_virt_aarch64_request` | aarch64 | `just test-request` | Phase 73: request-client + request-server + tls-proxy + net-server |
 | `qemu_virt_aarch64_fs` | aarch64 | `just test-fs` | fs-client + fs-server (LERUXFS2) + serial + virtio-blk |
 | `qemu_virt_aarch64_fs_fat` | aarch64 | `just test-fs-fat` | same SDF; fs-server FAT16 backend |
 | `qemu_virt_aarch64_net_composed` | aarch64 | `just test-net-composed` | supervisor + init drivers + net IPC + virtio-net |
@@ -219,6 +220,8 @@ See [plan.md](plan.md) Phases 15 and 24.
 `qemu_virt_aarch64_net`, `qemu_virt_riscv64_net`, and `x86_64_generic_net` run `net-server` (virtio-net driver client) and `net-client` (UDP TX over IPC). Smoke expects `lerux-net: IPC ok` after `virtio-net: TX ok`. See [plan.md](plan.md) Phases 27–28.
 
 `qemu_virt_aarch64_fetch` runs `fetch-client` over extended net IPC (DNS resolve, TCP connect/send/recv) to perform `GET /` against a host HTTP server at `10.0.2.2:8081`. Smoke expects `lerux-fetch: 200`. See [plan.md](plan.md) Phase 31.
+
+`qemu_virt_aarch64_request` (Phase 73) runs untrusted `request-client` over `HttpRequest` to `request-server`, which is the sole `TlsClient` of `tls-proxy`. The app PD has no NIC map and does not link rustls. Smoke `GET https://host:8443/fixture.html` against `lerux https-one` expects `lerux-http: fixture ok`. See [plan-interactive.md](plan-interactive.md) and [ADR-009](decisions/009-interactive-surface.md).
 
 `qemu_virt_aarch64_fs` runs `fs-client` over filesystem IPC (`Create`/`Write`/`Read`/`Stat`/`ListDir`/`Mkdir`/`Unlink`/`Rename`) backed by `fs-server` on virtio-blk with **LERUXFS2** (hierarchical dirs, multi-sector files). Smoke expects `lerux-fs: ready (LERUXFS2)` and `lerux-fs: round-trip ok` (includes nested path + multi-sector). See [plan.md](plan.md) Phase 50.
 

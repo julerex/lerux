@@ -9,7 +9,8 @@ use alloc::vec::Vec;
 
 use lerux_interface_types::{
     http_content_length, http_status_code, split_http_head, HttpMethod, HttpRequest, HttpResponse,
-    HttpUrl, TlsRequest, TlsResponse, MAX_HTTP_URL, MAX_NET_TCP_PAYLOAD,
+    HttpUrl, TlsRequest, TlsResponse, MAX_HTTP_HEADER_NAME, MAX_HTTP_HEADER_VALUE, MAX_HTTP_URL,
+    MAX_NET_TCP_PAYLOAD,
 };
 use lerux_ipc::{recv, send, send_unspecified_error, TlsClient};
 use lerux_logging::{debug, log};
@@ -104,9 +105,11 @@ impl HandlerImpl {
                 if building.header_count >= MAX_EXTRA_HEADERS {
                     return HttpResponse::Error;
                 }
+                let name_len = (name_len as usize).min(MAX_HTTP_HEADER_NAME);
+                let value_len = (value_len as usize).min(MAX_HTTP_HEADER_VALUE);
                 building.headers[building.header_count] = Some(ExtraHeader::from_parts(
-                    &name[..name_len as usize],
-                    &value[..value_len as usize],
+                    &name[..name_len],
+                    &value[..value_len],
                 ));
                 building.header_count += 1;
                 HttpResponse::Ok

@@ -1135,6 +1135,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "html-demo"
+version = "0.1.0"
+dependencies = [
+ "lerux-html",
+ "lerux-logging",
+ "sel4-microkit",
+]
+
+[[package]]
 name = "http"
 version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1275,6 +1284,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "lerux-html"
+version = "0.1.0"
+
+[[package]]
 name = "lerux-interface-types"
 version = "0.1.0"
 dependencies = [
@@ -1343,6 +1356,13 @@ dependencies = [
  "lerux-virtio-hal",
  "sel4",
  "virtio-drivers",
+]
+
+[[package]]
+name = "lerux-web"
+version = "0.1.0"
+dependencies = [
+ "lerux-html",
 ]
 
 [[package]]
@@ -1607,6 +1627,17 @@ dependencies = [
  "elliptic-curve",
  "primeorder",
  "sha2",
+]
+
+[[package]]
+name = "paint-demo"
+version = "0.1.0"
+dependencies = [
+ "lerux-interface-types",
+ "lerux-ipc",
+ "lerux-logging",
+ "lerux-web",
+ "sel4-microkit",
 ]
 
 [[package]]

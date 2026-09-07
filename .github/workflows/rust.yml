@@ -343,6 +343,12 @@ jobs:
           - id: request
             board: qemu_virt_aarch64_request
             command: just test-request
+          - id: html
+            board: qemu_virt_aarch64_html
+            command: just test-html
+          - id: paint
+            board: qemu_virt_aarch64_paint
+            command: just test-paint
           - id: fs
             board: qemu_virt_aarch64_fs
             command: just disk-img && just test-fs

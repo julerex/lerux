@@ -20,8 +20,8 @@ default: build
 # Format, clippy, and host tests for host crates (no SDK required)
 check:
     cargo fmt --all --check
-    CARGO_TARGET_DIR={{root}}/build/host cargo clippy -p lerux-cli -p lerux-interface-types -p lerux-tls --all-targets -- -D warnings
-    CARGO_TARGET_DIR={{root}}/build/host cargo test -p lerux-interface-types -p lerux-tls -p lerux-cli
+    CARGO_TARGET_DIR={{root}}/build/host cargo clippy -p lerux-cli -p lerux-interface-types -p lerux-tls -p lerux-html -p lerux-web --all-targets -- -D warnings
+    CARGO_TARGET_DIR={{root}}/build/host cargo test -p lerux-interface-types -p lerux-tls -p lerux-html -p lerux-web -p lerux-cli
     # Phase 60 Track D: PPC priority + service-class band checks (host, no QEMU)
     {{lerux}} profile check-qos
 
@@ -170,6 +170,14 @@ test-fetch-tls:
 # Phase 73: request-server GET fixture via tls-proxy (no NetClient on the app)
 test-request:
     BOARD=qemu_virt_aarch64_request just test
+
+# Phase 74: subset HTML tokenizer + DOM dump
+test-html:
+    BOARD=qemu_virt_aarch64_html just test
+
+# Phase 75: CSS subset + block-flow layout + paint into ramfb
+test-paint:
+    BOARD=qemu_virt_aarch64_paint just test
 
 # Filesystem IPC smoke test (fs-server + fs-client on aarch64 virt)
 test-fs:

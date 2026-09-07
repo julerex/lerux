@@ -126,6 +126,28 @@ qemu = {}
 ci = true
 system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33 }
 
+# Phase 74: html-demo parses a baked-in HTML fixture (no NIC / FS).
+[qemu_virt_aarch64_html]
+arch = "aarch64"
+microkit_board = "qemu_virt_aarch64"
+target = "aarch64-sel4-microkit"
+template = "html.system.template"
+pds = ["html-demo", "serial-driver"]
+qemu = {}
+ci = true
+system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33 }
+
+# Phase 75: paint-demo lays out HTML+CSS and presents via display-server.
+[qemu_virt_aarch64_paint]
+arch = "aarch64"
+microkit_board = "qemu_virt_aarch64"
+target = "aarch64-sel4-microkit"
+template = "paint.system.template"
+pds = ["paint-demo", "display-server", "serial-driver", "serial-virt"]
+qemu = { ramfb = true }
+ci = true
+system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, fw_cfg_mmio_phys_addr = "0x9020000" }
+
 # Phase 72: ramfb + display-server + display-demo (shared bitmap MR).
 [qemu_virt_aarch64_display]
 arch = "aarch64"

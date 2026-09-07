@@ -116,13 +116,13 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 : Trusted PD that owns the QEMU framebuffer device (ramfb first). Apps never map display MMIO. They present a **shared bitmap memory region** via postcard `DisplayRequest` (same trust shape as ADR-003 for NIC DMA).
 
 **framebuffer MR**
-: Shared memory region holding RGB pixels. Producers (`display-demo`, later `web-content`) write; `display-server` blits to the device.
+: Shared memory region holding RGB pixels. Producers (`display-demo`, `paint-demo`, later `web-content`) write; `display-server` blits to the device.
 
 **browser-ui**
 : Ladybird Browser analogue. Owns chrome (serial `open <url>` in v1) and the channel to `web-content`. Does not parse HTML.
 
 **web-content**
-: Ladybird WebContent analogue. One static PD (Microkit cannot spawn tabs). Hosts `lerux-html` + CSS/layout/paint. Speaks only `HttpRequest` to `request-server` plus the bitmap MR. **No** `NetClient`, `TlsClient`, or `FsClient`. No JS in phases 71–80.
+: Ladybird WebContent analogue. One static PD (Microkit cannot spawn tabs). Hosts `lerux-html` + `lerux-web`. Speaks only `HttpRequest` to `request-server` plus the bitmap MR. **No** `NetClient`, `TlsClient`, or `FsClient`. No JS in phases 71–80.
 
 **request-server**
 : Ladybird RequestServer analogue. Sole HTTP client of `tls-proxy` / `net-server` on interactive boards (Phase 73: `just test-request`). Untrusted `web-content` and `agent` fetch through it; they never hold `NetClient` / `TlsClient`.
@@ -132,6 +132,9 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 
 **lerux-html**
 : From-scratch `#![no_std]`+`alloc` HTML subset tokenizer/tree builder. Not Ladybird’s `libweb_html_tokenizer`, not html5ever, not Servo.
+
+**lerux-web**
+: From-scratch `#![no_std]`+`alloc` CSS subset, block-flow layout, and RGB888 paint. Author `<style>` plus a tiny UA sheet. Hosts no JS. Used by `paint-demo` (Phase 75) and later `web-content`.
 
 ## Boundaries
 

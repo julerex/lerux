@@ -1,0 +1,9 @@
+[package]
+name = "lerux-html"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "no_std HTML subset tokenizer and tree builder for web-content"
+
+[lints]
+workspace = true

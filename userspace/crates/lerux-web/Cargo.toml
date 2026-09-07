@@ -1,0 +1,12 @@
+[package]
+name = "lerux-web"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "no_std CSS subset, block-flow layout, and RGB888 paint for web-content"
+
+[lints]
+workspace = true
+
+[dependencies]
+lerux-html = { path = "../lerux-html" }

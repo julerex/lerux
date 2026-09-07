@@ -1,6 +1,6 @@
 # PLAN — Interactive surface (phases 71–80)
 
-Last updated: 2026-09-05 (phases 71–80; Phase 73 request-server)
+Last updated: 2026-09-06 (phases 71–80; Phase 75 lerux-web)
 
 Related: [`plan.md`](plan.md) (roadmap 1–80), [`plan-qemu.md`](plan-qemu.md) (phases 61–70, done), [`plan-arch.md`](plan-arch.md) (phases 50–60 + Physical RPi4 lab), [`plan-au-ts.md`](plan-au-ts.md) (sDDF inspiration), [`context.md`](context.md), [ADR-009](decisions/009-interactive-surface.md).
 
@@ -56,8 +56,8 @@ Platform                         Browser (Ladybird-shaped)              Agent (G
 71 ADR + domain language ✅
 72 display + input (QEMU ramfb) ✅
                                  73 request-server PD ✅
-                                 74 HTML/DOM (`lerux-html`)
-                                 75 CSS + layout + paint
+                                 74 HTML/DOM (`lerux-html`) ✅
+                                 75 CSS + layout + paint ✅
                                  76 browser-ui + one web-content
                                                                     77 agent runtime + grok-one
                                                                     78 serial TUI
@@ -179,15 +179,15 @@ An untrusted PD can GET `https://host/…` without mapping NIC DMA or linking ru
 
 ---
 
-## Phase 74 — HTML + DOM (`lerux-html`)
+## Phase 74 — HTML + DOM (`lerux-html`) ✅
 
 **Why:** LibWeb’s pipeline starts at tokenize → tree builder. We need a `no_std`+`alloc` library, not html5ever/`std`, and not Ladybird’s `libweb_html_tokenizer` (cbindgen + `AK/Rust`).
 
 ### Steps
 
-- [ ] Shared crate `lerux-html`: tokenizer + tree builder for a **subset** (`html`, `head`, `body`, `title`, `p`, `h1`–`h3`, `a`, `div`, `span`, `ul`/`ol`/`li`, `pre`, `code`, `strong`, `em`, `img` stub, `style` as text).
-- [ ] Host unit tests on committed fixtures under `support/browser/`.
-- [ ] PD dump: `just test-html` logs `lerux-html: nodes=N` for a fixture (static `&[u8]` or Phase 63 `/host`).
+- [x] Shared crate `lerux-html`: tokenizer + tree builder for a **subset** (`html`, `head`, `body`, `title`, `p`, `h1`–`h3`, `a`, `div`, `span`, `ul`/`ol`/`li`, `pre`, `code`, `strong`, `em`, `img` stub, `style` as text).
+- [x] Host unit tests on committed fixtures under `support/browser/`.
+- [x] PD dump: `just test-html` logs `lerux-html: nodes=8` for the baked-in smoke fixture (`include_str`, not `/host`).
 
 ### Out of scope
 
@@ -196,20 +196,20 @@ An untrusted PD can GET `https://host/…` without mapping NIC DMA or linking ru
 
 ### Exit
 
-A fixture parses to a walkable DOM in a PD.
+A fixture parses to a walkable DOM in a PD. **Met.**
 
 ---
 
-## Phase 75 — CSS subset + layout + paint
+## Phase 75 — CSS subset + layout + paint ✅
 
 **Why:** Ladybird’s “loading to painting” after parse is CSS → cascade → layout → paint into a bitmap.
 
 ### Steps
 
-- [ ] CSS subset: `color`, `background-color`, `font-size`, `display: block|inline`, `margin`, `padding`, `width`. Author `<style>` + a tiny UA sheet.
-- [ ] Block-flow layout only (no flex, grid, floats, positioning).
-- [ ] Paint RGB888 into the shared bitmap MR.
-- [ ] Host: fixture → PPM. Guest: `just test-paint` expect `lerux-web: paint ok`.
+- [x] CSS subset: `color`, `background-color`, `font-size`, `display: block|inline`, `margin`, `padding`, `width`. Author `<style>` + a tiny UA sheet.
+- [x] Block-flow layout only (no flex, grid, floats, positioning).
+- [x] Paint RGB888 into the shared bitmap MR (`lerux-web` crate, `paint-demo` PD).
+- [x] Host: fixture → PPM (`Bitmap::encode_ppm`) + signature pixels. Guest: `just test-paint` expect `lerux-web: paint ok`.
 
 ### Out of scope
 
@@ -217,7 +217,7 @@ A fixture parses to a walkable DOM in a PD.
 
 ### Exit
 
-`display-server` presents pixels that correspond to the HTML+CSS fixture (human-checkable in QEMU; CI checks the log line + optional PPM hash).
+`display-server` presents pixels that correspond to the HTML+CSS fixture (human-checkable in QEMU; CI checks the log line + host signature/PPM). **Met.**
 
 ---
 
@@ -350,7 +350,7 @@ If capacity is limited, do **not** start with 76–80 first:
 
 1. **Phase 72** — ramfb + `display-server` (done; unblocks paint).
 2. **Phase 73** — `request-server` (done; unblocks browser load **and** agent HTTPS).
-3. Then **74–76** (browser) and **77–79** (agent) in parallel.
+3. **Phase 74–75** — `lerux-html` + `lerux-web` (done). Then **76** (browser) and **77–79** (agent) in parallel.
 4. **Phase 80** last.
 
 RPi4 lab work never blocks this list. JS, GPU, and extra tabs stay off the list until a new ADR.
@@ -365,7 +365,7 @@ RPi4 lab work never blocks this list. JS, GPU, and extra tabs stay off the list 
 | PD lint | `just check-pd` (once PDs exist) |
 | Display | `just test-display` (`lerux-display: pattern ok`) |
 | Request-server | `just test-request` (`lerux-http: fixture ok`) |
-| HTML | `just test-html` (`lerux-html: nodes=`) |
+| HTML | `just test-html` (`lerux-html: nodes=8`) |
 | Paint | `just test-paint` (`lerux-web: paint ok`) |
 | Browser | `just test-browser` |
 | Agent runtime | `just test-agent-runtime` |

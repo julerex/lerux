@@ -1,0 +1,17 @@
+[package]
+name = "html-demo"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Parse a baked-in HTML fixture and dump node count (Phase 74)"
+
+[lints]
+workspace = true
+
+[features]
+board-qemu_virt_aarch64_html = []
+
+[dependencies]
+lerux-html = { path = "../../crates/lerux-html" }
+lerux-logging = { path = "../../crates/lerux-logging", features = ["serial"] }
+sel4-microkit = { workspace = true, features = ["alloc"] }

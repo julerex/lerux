@@ -31,6 +31,8 @@ const SHARED_CRATES: &[&str] = &[
     "lerux-fat",
     "lerux-driver-protocols",
     "lerux-tls",
+    "lerux-html",
+    "lerux-web",
 ];
 
 struct ClippyEntry {

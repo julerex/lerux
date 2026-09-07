@@ -13,6 +13,8 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `qemu_virt_aarch64_isolation` | aarch64 | `just test-isolation` | Phase 60: crash-demo fault then fs-client vs live fs-server |
 | `qemu_virt_aarch64_echo` | aarch64 | `just test-echo` | echo client/server + serial |
 | `qemu_virt_aarch64_display` | aarch64 | `just test-display` | Phase 72: ramfb + display-server + display-demo |
+| `qemu_virt_aarch64_html` | aarch64 | `just test-html` | Phase 74: html-demo + lerux-html (baked-in fixture) |
+| `qemu_virt_aarch64_paint` | aarch64 | `just test-paint` | Phase 75: paint-demo + display-server (HTML+CSS → ramfb) |
 | `qemu_virt_aarch64_virtio` | aarch64 | `just test-virtio` | hello + serial + virtio blk/net |
 | `qemu_virt_aarch64_blk` | aarch64 | `just test-blk` | blk client/server + serial + virtio-blk |
 | `qemu_virt_aarch64_blk_composed` | aarch64 | `just test-blk-composed` | supervisor + init drivers + blk IPC + virtio-blk |
@@ -222,6 +224,10 @@ See [plan.md](plan.md) Phases 15 and 24.
 `qemu_virt_aarch64_fetch` runs `fetch-client` over extended net IPC (DNS resolve, TCP connect/send/recv) to perform `GET /` against a host HTTP server at `10.0.2.2:8081`. Smoke expects `lerux-fetch: 200`. See [plan.md](plan.md) Phase 31.
 
 `qemu_virt_aarch64_request` (Phase 73) runs untrusted `request-client` over `HttpRequest` to `request-server`, which is the sole `TlsClient` of `tls-proxy`. The app PD has no NIC map and does not link rustls. Smoke `GET https://host:8443/fixture.html` against `lerux https-one` expects `lerux-http: fixture ok`. See [plan-interactive.md](plan-interactive.md) and [ADR-009](decisions/009-interactive-surface.md).
+
+`qemu_virt_aarch64_html` (Phase 74) runs `html-demo`, which parses the baked-in `support/browser/fixture.html` with `lerux-html` and logs `lerux-html: nodes=8`. No NIC or filesystem.
+
+`qemu_virt_aarch64_paint` (Phase 75) runs `paint-demo`, which lays out `support/browser/paint.html` with `lerux-web` into the shared bitmap MR and PPCs `display-server`. Smoke expects `lerux-display: ramfb ok` then `lerux-web: paint ok`. The app does not map fw_cfg or the ramfb backing.
 
 `qemu_virt_aarch64_fs` runs `fs-client` over filesystem IPC (`Create`/`Write`/`Read`/`Stat`/`ListDir`/`Mkdir`/`Unlink`/`Rename`) backed by `fs-server` on virtio-blk with **LERUXFS2** (hierarchical dirs, multi-sector files). Smoke expects `lerux-fs: ready (LERUXFS2)` and `lerux-fs: round-trip ok` (includes nested path + multi-sector). See [plan.md](plan.md) Phase 50.
 

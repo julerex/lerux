@@ -176,6 +176,28 @@ mod tests {
     }
 
     #[test]
+    fn html_board_has_html_demo() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let boards = load_boards(&root).unwrap();
+        let board = boards.get("qemu_virt_aarch64_html").unwrap();
+        assert!(board.ci);
+        assert!(board.pds.iter().any(|p| p == "html-demo"));
+        assert!(!board.pds.iter().any(|p| p == "request-server"));
+    }
+
+    #[test]
+    fn paint_board_has_ramfb_and_paint_demo() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let boards = load_boards(&root).unwrap();
+        let board = boards.get("qemu_virt_aarch64_paint").unwrap();
+        assert!(board.qemu().unwrap().ramfb);
+        assert!(board.ci);
+        assert!(board.pds.iter().any(|p| p == "paint-demo"));
+        assert!(board.pds.iter().any(|p| p == "display-server"));
+        assert!(!board.pds.iter().any(|p| p == "request-server"));
+    }
+
+    #[test]
     fn request_board_has_https_one() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let boards = load_boards(&root).unwrap();

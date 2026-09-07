@@ -17,7 +17,7 @@ use sel4_microkit::{protection_domain, Channel, Handler, Infallible, MessageInfo
 
 use crate::http::{build_request, ExtraHeader, MAX_EXTRA_HEADERS};
 
-/// Channel IDs match `request.system.template`.
+/// Channel IDs match `request.system.template` / `agent-runtime.system.template`.
 const TLS_PROXY: TlsClient = TlsClient::new(Channel::new(1));
 const APP: Channel = Channel::new(2);
 
@@ -30,6 +30,7 @@ struct Building {
     url: HttpUrl,
     headers: [Option<ExtraHeader>; MAX_EXTRA_HEADERS],
     header_count: usize,
+    body: Vec<u8>,
 }
 
 struct Exchange {
@@ -89,6 +90,7 @@ impl HandlerImpl {
                     url: parsed,
                     headers: core::array::from_fn(|_| None),
                     header_count: 0,
+                    body: Vec::new(),
                 });
                 HttpResponse::Ok
             }
@@ -111,12 +113,22 @@ impl HandlerImpl {
                 building.header_count += 1;
                 HttpResponse::Ok
             }
-            HttpRequest::Body { .. } => {
-                if self.building.is_some() {
-                    HttpResponse::Ok
-                } else {
-                    HttpResponse::Error
+            HttpRequest::Body {
+                payload_len,
+                payload,
+                ..
+            } => {
+                let Some(building) = self.building.as_mut() else {
+                    return HttpResponse::Error;
+                };
+                let add = payload_len as usize;
+                if building.body.len().saturating_add(add) > MAX_HTTP_BODY {
+                    return HttpResponse::Error;
                 }
+                building
+                    .body
+                    .extend_from_slice(&payload[..add.min(payload.len())]);
+                HttpResponse::Ok
             }
             HttpRequest::Finish => self.finish(),
             HttpRequest::Recv => self.recv_body(),
@@ -132,17 +144,22 @@ impl HandlerImpl {
         let Some(building) = self.building.take() else {
             return HttpResponse::Error;
         };
-        if !building.url.https || building.method != HttpMethod::Get {
+        if !building.url.https || !matches!(building.method, HttpMethod::Get | HttpMethod::Post) {
             close_tls();
             return HttpResponse::Error;
         }
-        match https_get(&building.url, &building.headers) {
+        match https_exchange(
+            building.method,
+            &building.url,
+            &building.headers,
+            &building.body,
+        ) {
             Ok((code, body)) => {
                 self.exchange = Some(Exchange { body, offset: 0 });
                 HttpResponse::Status { code }
             }
             Err(()) => {
-                log::info!("lerux-http: get failed");
+                log::info!("lerux-http: exchange failed");
                 HttpResponse::Error
             }
         }
@@ -168,7 +185,12 @@ impl HandlerImpl {
     }
 }
 
-fn https_get(url: &HttpUrl, extra: &[Option<ExtraHeader>]) -> Result<(u16, Vec<u8>), ()> {
+fn https_exchange(
+    method: HttpMethod,
+    url: &HttpUrl,
+    extra: &[Option<ExtraHeader>],
+    body: &[u8],
+) -> Result<(u16, Vec<u8>), ()> {
     match TLS_PROXY.call(TlsRequest::connect(url.host(), url.port)) {
         TlsResponse::Ok => {}
         _ => {
@@ -176,7 +198,7 @@ fn https_get(url: &HttpUrl, extra: &[Option<ExtraHeader>]) -> Result<(u16, Vec<u
             return Err(());
         }
     }
-    let req = build_request(HttpMethod::Get, url, extra);
+    let req = build_request(method, url, extra, body);
     for chunk in req.chunks(MAX_NET_TCP_PAYLOAD) {
         match TLS_PROXY.call(TlsRequest::send(chunk)) {
             TlsResponse::Ok => {}

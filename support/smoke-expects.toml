@@ -244,6 +244,14 @@ expects = ["lerux-net: ready", "virtio-net: MAC", "lerux-tls: handshake ok", "le
 [boards.qemu_virt_aarch64_request]
 expects = ["lerux-net: ready", "virtio-net: MAC", "lerux-tls: handshake ok", "lerux-http: fixture ok"]
 
+[boards.qemu_virt_aarch64_agent_runtime]
+expects = [
+  "lerux-net: ready",
+  "virtio-net: MAC",
+  "lerux-tls: handshake ok",
+  "lerux-agent: runtime ok",
+]
+
 [boards.qemu_virt_aarch64_fs]
 expects = [
   "lerux-fs: ready",

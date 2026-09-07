@@ -170,6 +170,17 @@ mod tests {
     }
 
     #[test]
+    fn loads_agent_runtime_board() {
+        let root = repo_root();
+        let t = smoke_test_for_board(&root, "qemu_virt_aarch64_agent_runtime").unwrap();
+        assert!(t
+            .expects
+            .iter()
+            .any(|e| e.contains("lerux-agent: runtime ok")));
+        assert!(t.expects.iter().any(|e| e.contains("handshake ok")));
+    }
+
+    #[test]
     fn loads_browser_board() {
         let root = repo_root();
         let t = smoke_test_for_board(&root, "qemu_virt_aarch64_browser").unwrap();

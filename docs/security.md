@@ -35,8 +35,8 @@ This document is the Phase 60 threat model and trust map. It does not claim form
 │  shell, edit, chat-client, http-file-browser, backup,           │
 │  fetch-client, crash-demo (isolation smoke)                     │
 │  display-demo (Phase 72), request-client (Phase 73),            │
-│  paint-demo (Phase 75), web-content / browser-ui (Phase 76);    │
-│  planned: agent (phases 77–80)                                  │
+│  paint-demo (Phase 75), web-content / browser-ui (Phase 76),    │
+│  agent (Phase 77); planned: agent TUI/tools (78–79)             │
 │  Maps: **no** virtio/net/blk/display DMA; channels only         │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -64,7 +64,7 @@ Channel numbers come from profile `[[channel]]` manifests; PPC callees outrank c
 
 ### Planned trust map (phases 72–80)
 
-Phase 72 composed `display-server` + `display-demo` on `qemu_virt_aarch64_display`. Phase 73 composed `request-server` + `request-client` on `qemu_virt_aarch64_request`. Phase 75 composed `display-server` + `paint-demo` on `qemu_virt_aarch64_paint`. Phase 76 composed `browser-ui` + `web-content` + `request-server` + `display-server` on `qemu_virt_aarch64_browser` (profile `browser`). Do not give `web-content` a `NetClient`.
+Phase 72 composed `display-server` + `display-demo` on `qemu_virt_aarch64_display`. Phase 73 composed `request-server` + `request-client` on `qemu_virt_aarch64_request`. Phase 75 composed `display-server` + `paint-demo` on `qemu_virt_aarch64_paint`. Phase 76 composed `browser-ui` + `web-content` + `request-server` + `display-server` on `qemu_virt_aarch64_browser` (profile `browser`). Phase 77 composed `agent` + `request-server` on `qemu_virt_aarch64_agent_runtime` (profile `agent-runtime`). Do not give `web-content` or `agent` a `NetClient`.
 
 | PD | Trust class | MMIO / IRQ | DMA | Clients may call | Must not map |
 |----|-------------|------------|-----|------------------|--------------|

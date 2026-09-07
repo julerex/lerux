@@ -302,6 +302,17 @@ qemu = { net = "user", https_one = true }
 ci = true
 system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_net_irq = 79 }
 
+# Phase 77: agent runtime against lerux grok-one (scripted tool-loop, no live xAI).
+[qemu_virt_aarch64_agent_runtime]
+arch = "aarch64"
+microkit_board = "qemu_virt_aarch64"
+target = "aarch64-sel4-microkit"
+template = "agent-runtime.system.template"
+pds = ["agent", "request-server", "tls-proxy", "net-server", "serial-driver", "virtio-net-driver"]
+qemu = { net = "user", grok_one = true }
+ci = true
+system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_net_irq = 79 }
+
 # Phase 73: request-server is the only HTTP client of tls-proxy; request-client
 # has no NetClient / TlsClient (Ladybird RequestServer isolation).
 [qemu_virt_aarch64_request]

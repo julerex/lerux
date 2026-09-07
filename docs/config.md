@@ -28,6 +28,8 @@ Keys must be printable ASCII without `/` or NUL. Max lengths: key 32, value 64 (
 | `log.rotate` | `0` \| `1` | `1` | When `1`, rename `/boot.log` → `/boot.log.1` before rewrite |
 | `boot.seeded` | `1` | set after first successful seed | Prevents overwriting operator edits on reboot |
 | `secret.*` | opaque | (none) | Stored under `/config/secrets/`; listed as keys only |
+| `secret.grok.api_key` | opaque | (none) | Phase 77: reserved for live xAI; **unused in CI** (`lerux grok-one`) |
+| `secret.grok.endpoint` | opaque | (none) | Phase 77: reserved completions URL; unused in CI |
 | `cert.*` | opaque | (none) | Phase 68: trust-anchor labels under `/config/certs/`; shell `cert list\|show\|trust` |
 
 Constants live in `lerux-interface-types` (`CFG_*`).

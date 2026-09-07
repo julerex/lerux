@@ -1,0 +1,49 @@
+# Phase 77: Grok-shaped agent runtime against lerux grok-one (not live xAI).
+
+template = "agent-runtime.system.template"
+pds = [
+  "agent",
+  "request-server",
+  "tls-proxy",
+  "net-server",
+  "serial-driver",
+  "virtio-net-driver",
+]
+description = "Phase 77: agent PD tool-loop via request-server to grok-one"
+default_board = "qemu_virt_aarch64_agent_runtime"
+trust_class = "appliance"
+
+[[channel]]
+name = "agent_serial"
+ends = [
+  { pd = "serial_driver", id = 1 },
+  { pd = "agent", id = 0, pp = true },
+]
+
+[[channel]]
+name = "net_driver"
+ends = [
+  { pd = "virtio_net_driver", id = 1 },
+  { pd = "net_server", id = 1, pp = true },
+]
+
+[[channel]]
+name = "tls_net"
+ends = [
+  { pd = "net_server", id = 2 },
+  { pd = "tls_proxy", id = 1, pp = true },
+]
+
+[[channel]]
+name = "request_tls"
+ends = [
+  { pd = "tls_proxy", id = 2 },
+  { pd = "request_server", id = 1, pp = true },
+]
+
+[[channel]]
+name = "agent_http"
+ends = [
+  { pd = "request_server", id = 2 },
+  { pd = "agent", id = 1, pp = true },
+]

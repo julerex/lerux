@@ -44,6 +44,8 @@ Well-known keys:
   log.rotate        0 | 1  (rotate /boot.log → /boot.log.1)
   boot.seeded       1 after first seed (do not clear unless wiping)
   secret.<name>     secret material (value hidden in config list)
+  secret.grok.api_key / secret.grok.endpoint
+                    reserved for live xAI (Phase 77; unused in CI; smokes use grok-one)
 
 Shell:
   config list | get <k> | set <k> <v> | del <k>

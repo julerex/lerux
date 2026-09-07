@@ -228,6 +228,7 @@ fn const_name_to_peer_sdf(name: &str) -> Option<String> {
         "WEB_CONTENT" => "web_content",
         "BROWSER_UI" => "browser_ui",
         "TLS_PROXY" => "tls_proxy",
+        "AGENT" => "agent",
         "CLIENT" | "DEVICE" | "APP" | "CLIENTS" => return None,
         _ => return None,
     };

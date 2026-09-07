@@ -279,6 +279,22 @@ mod tests {
     }
 
     #[test]
+    fn agent_runtime_keeps_agent_off_nic() {
+        let root = repo_root();
+        let body = render_system_body(&root, "qemu_virt_aarch64_agent_runtime").unwrap();
+        assert_eq!(body.matches("<channel>").count(), 0);
+        let sdf = render_system(&root, "qemu_virt_aarch64_agent_runtime").unwrap();
+        assert_eq!(sdf.matches("<channel>").count(), 5);
+        let start = sdf.find("<protection_domain name=\"agent\"").unwrap();
+        let rest = &sdf[start..];
+        let end = rest.find("</protection_domain>").unwrap();
+        let agent = &rest[..end];
+        assert!(!agent.contains("virtio"), "agent must not map NIC DMA/MMIO");
+        assert!(!agent.contains("fw_cfg"));
+        assert!(sdf.contains("request_server"));
+    }
+
+    #[test]
     fn qemu_net_boards_have_no_distinct_client_dma_mr() {
         let root = repo_root();
         for board in [

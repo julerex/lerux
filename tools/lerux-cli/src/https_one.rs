@@ -165,7 +165,7 @@ fn load_browser_file(name: &str) -> Result<Vec<u8>> {
     std::fs::read(&path).with_context(|| format!("read {}", path.display()))
 }
 
-fn server_config() -> Result<Arc<ServerConfig>> {
+pub(crate) fn server_config() -> Result<Arc<ServerConfig>> {
     let root = crate::process::repo_root()?;
     let cert_path = root.join("support/tls/lerux-smoke-server.pem");
     let key_path = root.join("support/tls/lerux-smoke-server.key");

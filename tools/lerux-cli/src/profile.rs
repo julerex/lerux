@@ -309,7 +309,7 @@ pub fn pd_trust_domain(pd: &str) -> &'static str {
         "shell" | "edit" | "chat-client" | "http-file-browser" | "backup" | "fetch-client"
         | "crash-demo" | "hello" | "echo-client" | "echo-server" | "http-server" | "fs-client"
         | "net-client" | "blk-client" | "display-demo" | "paint-demo" | "request-client"
-        | "html-demo" | "browser-ui" | "web-content" => "untrusted",
+        | "html-demo" | "browser-ui" | "web-content" | "agent" => "untrusted",
         _ => "unknown",
     }
 }
@@ -657,6 +657,7 @@ mod tests {
         assert_eq!(pd_trust_domain("shell"), "untrusted");
         assert_eq!(pd_trust_domain("web-content"), "untrusted");
         assert_eq!(pd_trust_domain("browser-ui"), "untrusted");
+        assert_eq!(pd_trust_domain("agent"), "untrusted");
         assert_eq!(pd_trust_domain("debug-handler"), "debug");
     }
 }

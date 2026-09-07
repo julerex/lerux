@@ -7,7 +7,7 @@ GitHub Actions workflow: [`.github/workflows/rust.yml`](../.github/workflows/rus
 1. **check** — `just check` (`cargo fmt --all --check` + clippy on host crates; no SDK).
 2. **sdk** — Docker image, fetch sources, build Microkit SDK (cached), **prebuild patched SP804 QEMU** (cached), upload SDK artifact.
 3. **check-pd** — `just check-pd` (cross-target clippy on PD + shared userspace crates; needs SDK artifact).
-4. **smoke** — 38 parallel matrix jobs; each restores SDK artifact, per-job `build/` cache, and SP804 QEMU (init/composed/blk-composed/http-composed/net-composed/ipc-composed/workstation only; init-riscv/init-x86 use stock QEMU). Serial captures land in `build/smoke-logs/` and upload as `smoke-serial-<id>` (Phase 57).
+4. **smoke** — 39 parallel matrix jobs; each restores SDK artifact, per-job `build/` cache, and SP804 QEMU (init/composed/blk-composed/http-composed/net-composed/ipc-composed/workstation only; init-riscv/init-x86 use stock QEMU). Serial captures land in `build/smoke-logs/` and upload as `smoke-serial-<id>` (Phase 57).
 5. **package** — Phase 40: build `edit` / `chat-client` / `http-file-browser` ELFs for workstation, pin sha256, upload artifacts.
 
 ```mermaid
@@ -15,7 +15,7 @@ flowchart LR
   check[check job]
   sdk[sdk job]
   checkPd[check-pd job]
-  smoke[smoke matrix x38]
+  smoke[smoke matrix x39]
   package[package ELF artifacts]
   sdk --> checkPd
   sdk --> smoke
@@ -61,6 +61,7 @@ Local mirror: `just check` (format + clippy for `lerux-cli` and `lerux-interface
 | `html` | `just test-html` | Phase 74: lerux-html subset parser (`lerux-html: nodes=8`) |
 | `paint` | `just test-paint` | Phase 75: CSS + layout + ramfb paint (`lerux-web: paint ok`) |
 | `browser` | `just test-browser` | Phase 76: browser-ui + web-content via request-server (`lerux-browser: paint ok`) |
+| `agent-runtime` | `just test-agent-runtime` | Phase 77: agent tool-loop vs `lerux grok-one` (`lerux-agent: runtime ok`) |
 | `riscv-net` | `just test-riscv-net` | RISC-V net IPC |
 | `x86-net` | `just test-x86-net` | x86 PCI virtio-net net IPC |
 | `net-composed` | `just test-net-composed` | init + net IPC; patched QEMU |

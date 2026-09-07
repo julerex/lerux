@@ -56,6 +56,7 @@ Default: `qemu_virt_aarch64` (QEMU ARM virt). Override with `BOARD=... just run`
 | HTML subset parse | `qemu_virt_aarch64_html` | `just test-html` |
 | HTML+CSS paint | `qemu_virt_aarch64_paint` | `just test-paint` |
 | Browser (one tab) | `qemu_virt_aarch64_browser` | `just test-browser` |
+| Agent runtime | `qemu_virt_aarch64_agent_runtime` | `just test-agent-runtime` |
 | Virtio blk/net | `qemu_virt_aarch64_virtio` | `just disk-img && just test-virtio` |
 | RTC + timer (all arches) | `*_init` | `just test-init` / `test-init-riscv` / `test-init-x86` |
 | Init + virtio | `qemu_virt_aarch64_composed` | `just disk-img && just test-composed` |

@@ -666,6 +666,10 @@ pub const CFG_LOG_ROTATE: &[u8] = b"log.rotate";
 
 /// Prefix for secret keys (`secret.token` → file under `/config/secrets/`).
 pub const CFG_SECRET_PREFIX: &[u8] = b"secret.";
+/// Phase 77: reserved for live xAI (unused in CI; smokes use `lerux grok-one`).
+pub const CFG_SECRET_GROK_API_KEY: &[u8] = b"secret.grok.api_key";
+/// Phase 77: reserved completions URL (unused in CI).
+pub const CFG_SECRET_GROK_ENDPOINT: &[u8] = b"secret.grok.endpoint";
 /// Phase 68: trust anchors (`cert.smoke` → `/config/certs/smoke`).
 pub const CFG_CERT_PREFIX: &[u8] = b"cert.";
 
@@ -1184,6 +1188,10 @@ impl HttpRequest {
         Self::start(HttpMethod::Get, url)
     }
 
+    pub fn post(url: &[u8]) -> Self {
+        Self::start(HttpMethod::Post, url)
+    }
+
     pub fn header(name: &[u8], value: &[u8]) -> Self {
         let mut name_buf = [0u8; MAX_HTTP_HEADER_NAME];
         let mut value_buf = [0u8; MAX_HTTP_HEADER_VALUE];
@@ -1269,6 +1277,185 @@ impl WebContentRequest {
     pub fn url(&self) -> &[u8] {
         match self {
             Self::Navigate { url_len, url } => &url[..*url_len as usize],
+        }
+    }
+}
+
+/// Maximum prompt bytes for [`AgentRequest::Prompt`].
+pub const MAX_AGENT_PROMPT: usize = 128;
+/// Maximum text bytes for [`AgentResponse::Text`].
+pub const MAX_AGENT_TEXT: usize = 128;
+/// Maximum tool-arg bytes (path, URL, …) on [`AgentResponse::ToolCall`].
+pub const MAX_AGENT_ARG: usize = 96;
+
+/// Smoke prompt for `just test-agent-runtime` (Phase 77).
+pub const AGENT_SMOKE_PROMPT: &[u8] = b"read /hello.txt";
+/// Baked-in Read path for the Phase 77 runtime smoke (full FS tools are Phase 79).
+pub const AGENT_SMOKE_PATH: &[u8] = b"/hello.txt";
+/// Baked-in file body the stub Read returns.
+pub const AGENT_SMOKE_BODY: &[u8] = b"hello";
+/// Completions URL on `lerux grok-one` (smoke CA, QEMU user-net `host`).
+pub const AGENT_GROK_ONE_URL: &[u8] = b"https://host:8444/complete";
+
+/// Core Grok Build tool kinds (Phase 77 names the loop; Phase 79 fills them).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AgentToolKind {
+    Read,
+    Write,
+    Edit,
+    ListDir,
+    Search,
+    Execute,
+    WebFetch,
+}
+
+impl AgentToolKind {
+    pub const fn as_bytes(self) -> &'static [u8] {
+        match self {
+            Self::Read => b"Read",
+            Self::Write => b"Write",
+            Self::Edit => b"Edit",
+            Self::ListDir => b"ListDir",
+            Self::Search => b"Search",
+            Self::Execute => b"Execute",
+            Self::WebFetch => b"WebFetch",
+        }
+    }
+
+    pub fn from_bytes(name: &[u8]) -> Option<Self> {
+        match name {
+            b"Read" => Some(Self::Read),
+            b"Write" => Some(Self::Write),
+            b"Edit" => Some(Self::Edit),
+            b"ListDir" => Some(Self::ListDir),
+            b"Search" => Some(Self::Search),
+            b"Execute" => Some(Self::Execute),
+            b"WebFetch" => Some(Self::WebFetch),
+            _ => None,
+        }
+    }
+}
+
+/// Line-oriented stub protocol between `agent` and `lerux grok-one` (Phase 77).
+pub const GROK_STUB_PROMPT: &[u8] = b"PROMPT ";
+/// Model → agent: run this tool.
+pub const GROK_STUB_TOOL_CALL: &[u8] = b"TOOL_CALL ";
+/// Agent → model: tool output (following a PROMPT).
+pub const GROK_STUB_TOOL_RESULT: &[u8] = b"TOOL_RESULT ";
+/// Model → agent: final text.
+pub const GROK_STUB_TEXT: &[u8] = b"TEXT ";
+
+/// Parsed `grok-one` response line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GrokStubReply {
+    ToolCall {
+        kind: AgentToolKind,
+        arg_len: u8,
+        arg: [u8; MAX_AGENT_ARG],
+    },
+    Text {
+        text_len: u8,
+        text: [u8; MAX_AGENT_TEXT],
+    },
+}
+
+impl GrokStubReply {
+    pub fn parse(body: &[u8]) -> Option<Self> {
+        let line = body.split(|&b| b == b'\n').next().unwrap_or(body);
+        let line = line.strip_suffix(b"\r").unwrap_or(line);
+        if let Some(rest) = line.strip_prefix(GROK_STUB_TOOL_CALL) {
+            let rest = rest.trim_ascii();
+            let mut parts = rest.splitn(2, |&b| b == b' ');
+            let kind = AgentToolKind::from_bytes(parts.next()?)?;
+            let arg_src = parts.next().unwrap_or(b"").trim_ascii();
+            let mut arg = [0u8; MAX_AGENT_ARG];
+            let arg_len = arg_src.len().min(MAX_AGENT_ARG) as u8;
+            arg[..arg_len as usize].copy_from_slice(&arg_src[..arg_len as usize]);
+            return Some(Self::ToolCall { kind, arg_len, arg });
+        }
+        if let Some(rest) = line.strip_prefix(GROK_STUB_TEXT) {
+            let rest = rest.trim_ascii();
+            let mut text = [0u8; MAX_AGENT_TEXT];
+            let text_len = rest.len().min(MAX_AGENT_TEXT) as u8;
+            text[..text_len as usize].copy_from_slice(&rest[..text_len as usize]);
+            return Some(Self::Text { text_len, text });
+        }
+        None
+    }
+
+    pub fn arg(&self) -> &[u8] {
+        match self {
+            Self::ToolCall { arg_len, arg, .. } => &arg[..*arg_len as usize],
+            Self::Text { .. } => b"",
+        }
+    }
+
+    pub fn text(&self) -> &[u8] {
+        match self {
+            Self::Text { text_len, text } => &text[..*text_len as usize],
+            Self::ToolCall { .. } => b"",
+        }
+    }
+}
+
+/// Requests from a client (Phase 78 shell `grok`) to the `agent` PD.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AgentRequest {
+    Prompt {
+        text_len: u8,
+        #[serde(with = "bounded_bytes")]
+        text: [u8; MAX_AGENT_PROMPT],
+    },
+}
+
+impl AgentRequest {
+    pub fn prompt(text: &[u8]) -> Self {
+        let mut buf = [0u8; MAX_AGENT_PROMPT];
+        let text_len = text.len().min(MAX_AGENT_PROMPT) as u8;
+        buf[..text_len as usize].copy_from_slice(&text[..text_len as usize]);
+        Self::Prompt {
+            text_len,
+            text: buf,
+        }
+    }
+
+    pub fn text(&self) -> &[u8] {
+        match self {
+            Self::Prompt { text_len, text } => &text[..*text_len as usize],
+        }
+    }
+}
+
+/// Responses from `agent`. `Prompt` is a blocking tool-loop; v1 returns final [`Self::Text`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AgentResponse {
+    Text {
+        text_len: u8,
+        #[serde(with = "bounded_bytes")]
+        text: [u8; MAX_AGENT_TEXT],
+    },
+    ToolCall {
+        kind: AgentToolKind,
+        arg_len: u8,
+        #[serde(with = "bounded_bytes")]
+        arg: [u8; MAX_AGENT_ARG],
+    },
+    Done,
+    Error,
+}
+
+impl AgentResponse {
+    pub fn text(bytes: &[u8]) -> Self {
+        let mut text = [0u8; MAX_AGENT_TEXT];
+        let text_len = bytes.len().min(MAX_AGENT_TEXT) as u8;
+        text[..text_len as usize].copy_from_slice(&bytes[..text_len as usize]);
+        Self::Text { text_len, text }
+    }
+
+    pub fn as_text(&self) -> Option<&[u8]> {
+        match self {
+            Self::Text { text_len, text } => Some(&text[..*text_len as usize]),
+            _ => None,
         }
     }
 }
@@ -1844,6 +2031,41 @@ mod tests {
             round_trip(WebContentResponse::Error),
             WebContentResponse::Error
         );
+    }
+
+    #[test]
+    fn agent_round_trip_and_stub_parse() {
+        let req = AgentRequest::prompt(AGENT_SMOKE_PROMPT);
+        assert_eq!(req.text(), AGENT_SMOKE_PROMPT);
+        assert_eq!(round_trip(req), req);
+        let resp = AgentResponse::text(AGENT_SMOKE_BODY);
+        assert_eq!(resp.as_text(), Some(AGENT_SMOKE_BODY));
+        assert_eq!(round_trip(resp), resp);
+        assert_eq!(round_trip(AgentResponse::Error), AgentResponse::Error);
+
+        let call = GrokStubReply::parse(b"TOOL_CALL Read /hello.txt\n").unwrap();
+        assert!(matches!(
+            call,
+            GrokStubReply::ToolCall {
+                kind: AgentToolKind::Read,
+                ..
+            }
+        ));
+        assert_eq!(call.arg(), AGENT_SMOKE_PATH);
+        let text = GrokStubReply::parse(b"TEXT hello\r\n").unwrap();
+        assert_eq!(text.text(), AGENT_SMOKE_BODY);
+        assert!(GrokStubReply::parse(b"NOPE").is_none());
+        assert_eq!(AgentToolKind::Read.as_bytes(), b"Read");
+        assert!(CFG_SECRET_GROK_API_KEY.len() <= MAX_CONFIG_KEY_LEN);
+        assert!(CFG_SECRET_GROK_ENDPOINT.len() <= MAX_CONFIG_KEY_LEN);
+        match HttpRequest::post(AGENT_GROK_ONE_URL) {
+            HttpRequest::Start {
+                method: HttpMethod::Post,
+                url_len,
+                ..
+            } => assert_eq!(url_len as usize, AGENT_GROK_ONE_URL.len()),
+            _ => panic!("expected Post start"),
+        }
     }
 
     #[test]

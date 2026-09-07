@@ -183,6 +183,10 @@ test-paint:
 test-browser:
     BOARD=qemu_virt_aarch64_browser just test
 
+# Phase 77: agent tool-loop against lerux grok-one (not live xAI)
+test-agent-runtime:
+    BOARD=qemu_virt_aarch64_agent_runtime just test
+
 # Filesystem IPC smoke test (fs-server + fs-client on aarch64 virt)
 test-fs:
     BOARD=qemu_virt_aarch64_fs just test

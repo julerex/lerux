@@ -38,6 +38,7 @@ Install checks `fragment.requires` against the profile’s current PD set, merge
 | `server` | appliance | Echo IPC demo |
 | `net-appliance` | appliance | HTTP server over virtio-net |
 | `browser` | appliance | Phase 76: browser-ui + one web-content |
+| `agent-runtime` | appliance | Phase 77: agent PD vs grok-one stub |
 | `dev-workstation` | admin-core | Workstation **core** without bulk apps — use `package install` |
 | `workstation` | admin | Full apps pre-wired (edit/chat/http-fs/backup) |
 | `workstation-riscv` / `-x86` / `-rpi4` | admin | Arch / hardware variants of full workstation |

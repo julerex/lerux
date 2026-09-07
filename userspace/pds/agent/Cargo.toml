@@ -1,20 +1,18 @@
 [package]
-name = "request-server"
+name = "agent"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-description = "Trusted HTTP client of tls-proxy; untrusted PDs speak HttpRequest only"
+description = "Grok-shaped agent runtime PD (Phase 77): prompt → grok-one → tools"
 
 [lints]
 workspace = true
 
 [features]
-board-qemu_virt_aarch64_request = []
-board-qemu_virt_aarch64_browser = []
 board-qemu_virt_aarch64_agent_runtime = []
 
 [dependencies]
 lerux-interface-types = { path = "../../crates/lerux-interface-types" }
 lerux-ipc = { path = "../../crates/lerux-ipc" }
-lerux-logging = { path = "../../crates/lerux-logging" }
+lerux-logging = { path = "../../crates/lerux-logging", features = ["serial"] }
 sel4-microkit = { workspace = true, features = ["alloc"] }

@@ -1,7 +1,7 @@
 //! QEMU launch derived from `support/boards.toml` (`[board].qemu` table).
 //!
 //! The board entry is the whole interface: arch picks the base machine,
-//! `disk`/`net`/`sp804`/`tcp_echo`/`http_one`/`https_one` pick devices and host helpers.
+//! `disk`/`net`/`sp804`/`tcp_echo`/`http_one`/`https_one`/`grok_one` pick devices and host helpers.
 
 use std::{
     path::{Path, PathBuf},
@@ -276,6 +276,9 @@ pub fn setup_test_helpers(ctx: &QemuContext) -> Result<Option<std::process::Chil
     }
     if qemu.https_one {
         return Ok(Some(crate::https_one::start_https_one_background(8443)?));
+    }
+    if qemu.grok_one {
+        return Ok(Some(crate::grok_one::start_grok_one_background(8444)?));
     }
     if qemu.tcp_echo {
         return Ok(Some(start_tcp_echo_background(18080)?));

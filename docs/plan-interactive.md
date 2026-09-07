@@ -1,6 +1,6 @@
 # PLAN — Interactive surface (phases 71–80)
 
-Last updated: 2026-09-07 (phases 71–80; Phase 76 browser-ui + web-content)
+Last updated: 2026-09-07 (phases 71–80; Phase 77 agent runtime + grok-one)
 
 Related: [`plan.md`](plan.md) (roadmap 1–80), [`plan-qemu.md`](plan-qemu.md) (phases 61–70, done), [`plan-arch.md`](plan-arch.md) (phases 50–60 + Physical RPi4 lab), [`plan-au-ts.md`](plan-au-ts.md) (sDDF inspiration), [`context.md`](context.md), [ADR-009](decisions/009-interactive-surface.md).
 
@@ -59,7 +59,7 @@ Platform                         Browser (Ladybird-shaped)              Agent (G
                                  74 HTML/DOM (`lerux-html`) ✅
                                  75 CSS + layout + paint ✅
                                  76 browser-ui + one web-content ✅
-                                                                    77 agent runtime + grok-one
+                                                                    77 agent runtime + grok-one ✅
                                                                     78 serial TUI
                                                                     79 tools (fs / shell / fetch)
 80 joint profile: workstation-interactive
@@ -243,16 +243,16 @@ A fixture parses to a walkable DOM in a PD. **Met.**
 
 ---
 
-## Phase 77 — Agent runtime + `grok-one` stub
+## Phase 77 — Agent runtime + `grok-one` stub ✅
 
 **Why:** Grok Build’s host is `xai-grok-agent`: tools + system prompt + model config. CI cannot hit live xAI (same reason `https-one` exists).
 
 ### Steps
 
-- [ ] Host `lerux grok-one`: HTTP server that returns scripted tool-calls / final text for a tiny prompt set.
-- [ ] `agent` PD: `AgentRequest::Prompt` / `AgentResponse::{Text, ToolCall, Done, Error}`. Completions via `request-server` → `grok-one`.
-- [ ] Smoke CA path only. Reserve `secret.grok.*` in the config schema; unused in CI.
-- [ ] `just test-agent-runtime`: prompt “read /hello.txt” → stub emits Read → agent returns file body.
+- [x] Host `lerux grok-one`: HTTP server that returns scripted tool-calls / final text for a tiny prompt set.
+- [x] `agent` PD: `AgentRequest::Prompt` / `AgentResponse::{Text, ToolCall, Done, Error}`. Completions via `request-server` → `grok-one`.
+- [x] Smoke CA path only. Reserve `secret.grok.*` in the config schema; unused in CI.
+- [x] `just test-agent-runtime`: prompt “read /hello.txt” → stub emits Read → agent returns file body (baked-in `/hello.txt` until Phase 79 FS tools).
 
 ### Out of scope
 
@@ -260,7 +260,7 @@ A fixture parses to a walkable DOM in a PD. **Met.**
 
 ### Exit
 
-One tool-loop round-trip in QEMU against a stub.
+One tool-loop round-trip in QEMU against a stub. **Met.**
 
 ---
 
@@ -346,11 +346,11 @@ Hardware truth remains [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardwa
 
 ## Near-term priority
 
-If capacity is limited, do **not** start with 77–80 first:
+If capacity is limited, do **not** start with 78–80 first:
 
 1. **Phase 72** — ramfb + `display-server` (done; unblocks paint).
 2. **Phase 73** — `request-server` (done; unblocks browser load **and** agent HTTPS).
-3. **Phase 74–75** — `lerux-html` + `lerux-web` (done). **76** (browser) done. Then **77–79** (agent).
+3. **Phase 74–75** — `lerux-html` + `lerux-web` (done). **76** (browser) done. **77** (agent runtime) done. Then **78–79** (TUI + tools).
 4. **Phase 80** last.
 
 RPi4 lab work never blocks this list. JS, GPU, and extra tabs stay off the list until a new ADR.
@@ -368,7 +368,7 @@ RPi4 lab work never blocks this list. JS, GPU, and extra tabs stay off the list 
 | HTML | `just test-html` (`lerux-html: nodes=8`) |
 | Paint | `just test-paint` (`lerux-web: paint ok`) |
 | Browser | `just test-browser` (`lerux-browser: paint ok`) |
-| Agent runtime | `just test-agent-runtime` |
+| Agent runtime | `just test-agent-runtime` (`lerux-agent: runtime ok`) |
 | Agent tools | `just test-agent` (`lerux-agent: tools ok`) |
 | Joint | `just test-interactive` |
 | Isolation residual | existing `just test-isolation` still green |

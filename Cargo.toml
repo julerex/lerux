@@ -23,6 +23,7 @@ members = [
     "userspace/pds/paint-demo",
     "userspace/pds/browser-ui",
     "userspace/pds/web-content",
+    "userspace/pds/agent",
     "userspace/crates/lerux-html",
     "userspace/crates/lerux-web",
     "userspace/crates/lerux-tls",

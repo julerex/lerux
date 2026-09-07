@@ -16,6 +16,7 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `qemu_virt_aarch64_html` | aarch64 | `just test-html` | Phase 74: html-demo + lerux-html (baked-in fixture) |
 | `qemu_virt_aarch64_paint` | aarch64 | `just test-paint` | Phase 75: paint-demo + display-server (HTML+CSS → ramfb) |
 | `qemu_virt_aarch64_browser` | aarch64 | `just test-browser` | Phase 76: browser-ui + web-content via request-server + ramfb |
+| `qemu_virt_aarch64_agent_runtime` | aarch64 | `just test-agent-runtime` | Phase 77: agent PD + request-server + grok-one stub |
 | `qemu_virt_aarch64_virtio` | aarch64 | `just test-virtio` | hello + serial + virtio blk/net |
 | `qemu_virt_aarch64_blk` | aarch64 | `just test-blk` | blk client/server + serial + virtio-blk |
 | `qemu_virt_aarch64_blk_composed` | aarch64 | `just test-blk-composed` | supervisor + init drivers + blk IPC + virtio-blk |
@@ -231,6 +232,8 @@ See [plan.md](plan.md) Phases 15 and 24.
 `qemu_virt_aarch64_paint` (Phase 75) runs `paint-demo`, which lays out `support/browser/paint.html` with `lerux-web` into the shared bitmap MR and PPCs `display-server`. Smoke expects `lerux-display: ramfb ok` then `lerux-web: paint ok`. The app does not map fw_cfg or the ramfb backing.
 
 `qemu_virt_aarch64_browser` (Phase 76, profile `browser`) splits Ladybird’s Browser / WebContent: `browser-ui` issues serial `open <url>` (smoke auto-opens `https://host:8443/paint.html`) and PPCs Present; `web-content` fetches via `request-server` and paints the bitmap MR. `web-content` has no `NetClient` / `TlsClient` / `FsClient` and does not map NIC DMA or display MMIO. Smoke expects `lerux-web: paint ok` then `lerux-browser: paint ok`.
+
+`qemu_virt_aarch64_agent_runtime` (Phase 77, profile `agent-runtime`) runs untrusted `agent` over `HttpRequest` POST to `request-server`, which is the sole `TlsClient` of `tls-proxy`. Completions hit host `lerux grok-one` on `:8444` (smoke CA; not live xAI). Smoke prompt `read /hello.txt` → stub `TOOL_CALL Read` → baked-in file body `hello` → `lerux-agent: runtime ok`. Full FS tools are Phase 79. The agent has no NIC map.
 
 `qemu_virt_aarch64_fs` runs `fs-client` over filesystem IPC (`Create`/`Write`/`Read`/`Stat`/`ListDir`/`Mkdir`/`Unlink`/`Rename`) backed by `fs-server` on virtio-blk with **LERUXFS2** (hierarchical dirs, multi-sector files). Smoke expects `lerux-fs: ready (LERUXFS2)` and `lerux-fs: round-trip ok` (includes nested path + multi-sector). See [plan.md](plan.md) Phase 50.
 

@@ -38,7 +38,12 @@ impl ExtraHeader {
     }
 }
 
-pub fn build_request(method: HttpMethod, url: &HttpUrl, extra: &[Option<ExtraHeader>]) -> Vec<u8> {
+pub fn build_request(
+    method: HttpMethod,
+    url: &HttpUrl,
+    extra: &[Option<ExtraHeader>],
+    body: &[u8],
+) -> Vec<u8> {
     let mut out = Vec::new();
     out.extend_from_slice(method.as_token());
     out.push(b' ');
@@ -52,6 +57,27 @@ pub fn build_request(method: HttpMethod, url: &HttpUrl, extra: &[Option<ExtraHea
         out.extend_from_slice(h.value());
         out.extend_from_slice(b"\r\n");
     }
+    if method == HttpMethod::Post {
+        out.extend_from_slice(b"Content-Length: ");
+        push_decimal(&mut out, body.len());
+        out.extend_from_slice(b"\r\n");
+    }
     out.extend_from_slice(b"\r\n");
+    out.extend_from_slice(body);
     out
+}
+
+fn push_decimal(out: &mut Vec<u8>, mut n: usize) {
+    if n == 0 {
+        out.push(b'0');
+        return;
+    }
+    let mut tmp = [0u8; 20];
+    let mut i = 20;
+    while n > 0 {
+        i -= 1;
+        tmp[i] = b'0' + (n % 10) as u8;
+        n /= 10;
+    }
+    out.extend_from_slice(&tmp[i..]);
 }

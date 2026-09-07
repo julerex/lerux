@@ -352,6 +352,9 @@ jobs:
           - id: browser
             board: qemu_virt_aarch64_browser
             command: just test-browser
+          - id: agent-runtime
+            board: qemu_virt_aarch64_agent_runtime
+            command: just test-agent-runtime
           - id: fs
             board: qemu_virt_aarch64_fs
             command: just disk-img && just test-fs

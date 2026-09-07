@@ -248,6 +248,7 @@ expects = ["lerux-net: ready", "virtio-net: MAC", "lerux-tls: handshake ok", "le
 expects = [
   "lerux-net: ready",
   "virtio-net: MAC",
+  "lerux-agent: chrome ok",
   "lerux-tls: handshake ok",
   "lerux-agent: runtime ok",
 ]

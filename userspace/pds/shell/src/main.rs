@@ -8,11 +8,12 @@ use embedded_hal_nb::{
     serial::{Read as _, Write as _},
 };
 use lerux_interface_types::{
-    is_net_config_key, parse_net_policy, BackupRequest, BackupResponse, ChatRequest, ChatResponse,
-    ConfigRequest, ConfigResponse, EditRequest, EditResponse, FsRequest, FsResponse, LogRequest,
-    LogResponse, NetPolicy, NetRequest, NetResponse, SupervisorRequest, SupervisorResponse,
-    CFG_HOSTNAME, CFG_NET_DNS, CFG_NET_GATEWAY, CFG_NET_IP, CFG_NET_MODE, CFG_NET_PREFIX,
-    CFG_SECRET_PREFIX, MAX_CHAT_MSG, MAX_CONFIG_VAL_LEN, MAX_SERVICE_NAME,
+    is_net_config_key, parse_net_policy, AgentRequest, AgentResponse, BackupRequest,
+    BackupResponse, ChatRequest, ChatResponse, ConfigRequest, ConfigResponse, EditRequest,
+    EditResponse, FsRequest, FsResponse, LogRequest, LogResponse, NetPolicy, NetRequest,
+    NetResponse, SupervisorRequest, SupervisorResponse, CFG_HOSTNAME, CFG_NET_DNS, CFG_NET_GATEWAY,
+    CFG_NET_IP, CFG_NET_MODE, CFG_NET_PREFIX, CFG_SECRET_PREFIX, MAX_CHAT_MSG, MAX_CONFIG_VAL_LEN,
+    MAX_SERVICE_NAME,
 };
 use lerux_ipc::{call, FsClient, NetClient};
 use lerux_logging::{log, server};
@@ -28,6 +29,8 @@ const CONFIG_SERVER: Channel = Channel::new(5);
 const EDIT: Channel = Channel::new(6);
 const CHAT: Channel = Channel::new(7);
 const BACKUP: Channel = Channel::new(8);
+/// Phase 78: shell `grok` → agent. Unwired on workstation until Phase 80.
+const AGENT: Channel = Channel::new(9);
 
 const INPUT_BUF_CAP: usize = 128;
 const CWD_CAP: usize = lerux_interface_types::MAX_FS_PATH;
@@ -42,7 +45,7 @@ const COMMANDS: &[&str] = &[
     "ls", "cat", "write", "mkdir", "rm", "mv", "cd", "pwd", "stat", "df", "ip", "ifconfig", "ping",
     "time", "date", "uptime", "clear", "history", "ps", "top", "status", "qos", "reboot", "fetch",
     "dmesg", "edit", "chat", "backup", "calc", "echo", "config", "cert", "source", "run", "get",
-    "set", "list", "hostname", "help",
+    "set", "list", "hostname", "help", "grok",
 ];
 
 struct HandlerImpl {
@@ -51,6 +54,7 @@ struct HandlerImpl {
     input_len: usize,
     in_edit: bool,
     in_chat: bool,
+    in_grok: bool,
     /// Shell-local cwd (Phase 50); server paths are absolute after resolve.
     cwd: [u8; CWD_CAP],
     cwd_len: u8,
@@ -162,6 +166,41 @@ fn chat_call(req: ChatRequest) -> ChatResponse {
     match call::<ChatRequest, ChatResponse>(CHAT, req) {
         Ok(other) => other,
         Err(_) => ChatResponse::Error,
+    }
+}
+
+fn grok_call(req: AgentRequest) -> AgentResponse {
+    match call::<AgentRequest, AgentResponse>(AGENT, req) {
+        Ok(other) => other,
+        Err(_) => AgentResponse::Error,
+    }
+}
+
+fn grok_draw(console: &mut SerialClient, user: &[u8], reply: &[u8], status: &[u8]) {
+    write_bytes(console, b"\x1b[2J\x1b[H");
+    write_bytes(console, b"\x1b[7m grok \x1b[0m ");
+    write_bytes(console, status);
+    write_bytes(console, b"  (Ctrl-Q quit)\r\n");
+    write_bytes(console, b"--------------------------------\r\n");
+    if !user.is_empty() {
+        write_bytes(console, b"> ");
+        write_bytes(console, user);
+        write_bytes(console, b"\r\n");
+    }
+    if !reply.is_empty() {
+        write_bytes(console, reply);
+        write_bytes(console, b"\r\n");
+    }
+    write_bytes(console, b"--------------------------------\r\n> ");
+}
+
+fn grok_oneshot(console: &mut SerialClient, prompt: &[u8]) {
+    grok_draw(console, prompt, b"", b"thinking");
+    match grok_call(AgentRequest::prompt(prompt)) {
+        AgentResponse::Text { text_len, text } => {
+            grok_draw(console, prompt, &text[..text_len as usize], b"stub");
+        }
+        _ => grok_draw(console, prompt, b"(unavailable)", b"error"),
     }
 }
 
@@ -605,7 +644,10 @@ fn help_cmd(console: &mut SerialClient, arg: Option<&[u8]>) {
                 console,
                 "config: config get|set|list|del  hostname  (net.* applies live)",
             );
-            println(console, "apps:   edit chat backup calc fetch echo help");
+            println(
+                console,
+                "apps:   edit chat backup calc fetch echo grok help",
+            );
         }
         Some(other) => {
             print(console, "help: unknown topic ");
@@ -1486,6 +1528,15 @@ fn process_command(h: &mut HandlerImpl, line: &[u8]) {
                 chat_view_to_display(&mut h.console, &r);
             }
         }
+        b"grok" => {
+            let prompt = line.strip_prefix(b"grok").unwrap_or(b"").trim_ascii();
+            if prompt.is_empty() {
+                h.in_grok = true;
+                grok_draw(&mut h.console, b"", b"", b"stub");
+            } else {
+                grok_oneshot(&mut h.console, prompt);
+            }
+        }
         _ => {
             print(&mut h.console, "unknown command: ");
             write_bytes(&mut h.console, cmd);
@@ -1532,6 +1583,7 @@ fn init() -> HandlerImpl {
         input_len: 0,
         in_edit: false,
         in_chat: false,
+        in_grok: false,
         cwd,
         cwd_len: 1,
         history: [[0; HISTORY_LINE]; HISTORY_CAP],
@@ -1552,6 +1604,39 @@ fn init() -> HandlerImpl {
 
 impl HandlerImpl {
     fn handle_byte(&mut self, b: u8) {
+        if self.in_grok {
+            if b == 0x11 {
+                self.in_grok = false;
+                self.input_len = 0;
+                write_bytes(&mut self.console, b"\r\n[quit grok]\r\n");
+                print_prompt(&mut self.console);
+                return;
+            }
+            if b == b'\r' || b == b'\n' {
+                write_bytes(&mut self.console, b"\r\n");
+                let n = self.input_len;
+                self.input_len = 0;
+                if n > 0 {
+                    let mut prompt = [0u8; INPUT_BUF_CAP];
+                    prompt[..n].copy_from_slice(&self.input_buf[..n]);
+                    grok_oneshot(&mut self.console, &prompt[..n]);
+                }
+                return;
+            }
+            if b == 0x08 || b == 0x7f {
+                if self.input_len > 0 {
+                    self.input_len -= 1;
+                    write_bytes(&mut self.console, b"\x08 \x08");
+                }
+                return;
+            }
+            if (32..127).contains(&b) && self.input_len < INPUT_BUF_CAP {
+                self.input_buf[self.input_len] = b;
+                self.input_len += 1;
+                write_bytes(&mut self.console, &[b]);
+            }
+            return;
+        }
         if self.in_chat {
             if b == 0x11 {
                 let _ = chat_call(ChatRequest::Quit);
@@ -1609,7 +1694,7 @@ impl HandlerImpl {
             line[..n].copy_from_slice(&self.input_buf[..n]);
             self.input_len = 0;
             process_command(self, &line[..n]);
-            if !self.in_edit && !self.in_chat {
+            if !self.in_edit && !self.in_chat && !self.in_grok {
                 print_prompt(&mut self.console);
             }
             return;

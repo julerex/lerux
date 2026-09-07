@@ -61,7 +61,7 @@ Local mirror: `just check` (format + clippy for `lerux-cli` and `lerux-interface
 | `html` | `just test-html` | Phase 74: lerux-html subset parser (`lerux-html: nodes=8`) |
 | `paint` | `just test-paint` | Phase 75: CSS + layout + ramfb paint (`lerux-web: paint ok`) |
 | `browser` | `just test-browser` | Phase 76: browser-ui + web-content via request-server (`lerux-browser: paint ok`) |
-| `agent-runtime` | `just test-agent-runtime` | Phase 77: agent tool-loop vs `lerux grok-one` (`lerux-agent: runtime ok`) |
+| `agent-runtime` | `just test-agent-runtime` | Phase 77–78: agent TUI + grok-one tool-loop (`lerux-agent: chrome ok`) |
 | `riscv-net` | `just test-riscv-net` | RISC-V net IPC |
 | `x86-net` | `just test-x86-net` | x86 PCI virtio-net net IPC |
 | `net-composed` | `just test-net-composed` | init + net IPC; patched QEMU |

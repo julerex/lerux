@@ -177,6 +177,7 @@ mod tests {
             .expects
             .iter()
             .any(|e| e.contains("lerux-agent: runtime ok")));
+        assert!(t.expects.iter().any(|e| e.contains("chrome ok")));
         assert!(t.expects.iter().any(|e| e.contains("handshake ok")));
     }
 

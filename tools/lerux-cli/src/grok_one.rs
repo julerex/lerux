@@ -2,18 +2,14 @@
 //! (port 8444 by default). Not live xAI.
 //!
 //! Speaks the line protocol in `lerux-interface-types` (`PROMPT` / `TOOL_CALL` /
-//! `TOOL_RESULT` / `TEXT`) over the smoke CA. Serves two connections then
-//! exits (prompt → tool-call, then tool-result → final text).
+//! `TOOL_RESULT` / `TEXT`) over the smoke CA. Serves several connections then
+//! exits (each prompt is two TLS sessions: tool-call, then final text).
 
 use std::{
     io::{Read, Write},
     net::{SocketAddr, TcpListener},
-    sync::{
-        atomic::{AtomicUsize, Ordering},
-        Arc,
-    },
-    thread,
-    time::Duration,
+    sync::Arc,
+    time::{Duration, Instant},
 };
 
 use anyhow::{Context, Result};
@@ -25,43 +21,41 @@ use rustls::ServerConnection;
 
 use crate::https_one::server_config;
 
-const TURNS: usize = 2;
+/// Each agent prompt uses two TLS connections. Eight covers the smoke plus a
+/// few interactive follow-ups during `lerux run`.
+const TURNS: usize = 8;
 
 pub fn grok_one(port: u16) -> Result<()> {
     let config = server_config()?;
     let listener = TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], port)))
         .with_context(|| format!("bind 127.0.0.1:{port}"))?;
+    listener
+        .set_nonblocking(true)
+        .context("grok-one nonblocking accept")?;
     eprintln!("grok-one-server: listening on 127.0.0.1:{port}");
 
-    let done = Arc::new(AtomicUsize::new(0));
-    let done_thread = Arc::clone(&done);
-    let handle = thread::spawn(move || {
-        for _ in 0..TURNS {
-            match listener.accept() {
-                Ok((mut sock, peer)) => {
-                    eprintln!("grok-one-server: accepted {peer}");
-                    if let Err(e) = serve_one(&config, &mut sock) {
-                        eprintln!("grok-one-server: {e:#}");
-                    }
-                    let _ = sock.shutdown(std::net::Shutdown::Write);
-                    done_thread.fetch_add(1, Ordering::SeqCst);
+    let deadline = Instant::now() + Duration::from_secs(60);
+    let mut served = 0usize;
+    while served < TURNS && Instant::now() < deadline {
+        match listener.accept() {
+            Ok((mut sock, peer)) => {
+                eprintln!("grok-one-server: accepted {peer}");
+                sock.set_nonblocking(false).ok();
+                if let Err(e) = serve_one(&config, &mut sock) {
+                    eprintln!("grok-one-server: {e:#}");
                 }
-                Err(e) => {
-                    eprintln!("grok-one-server: accept {e}");
-                    break;
-                }
+                let _ = sock.shutdown(std::net::Shutdown::Write);
+                served += 1;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            Err(e) => {
+                eprintln!("grok-one-server: accept {e}");
+                break;
             }
         }
-    });
-
-    let deadline = std::time::Instant::now() + Duration::from_secs(60);
-    while done.load(Ordering::SeqCst) < TURNS {
-        if std::time::Instant::now() >= deadline {
-            break;
-        }
-        thread::sleep(Duration::from_millis(50));
     }
-    let _ = handle.join();
     Ok(())
 }
 

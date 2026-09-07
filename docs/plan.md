@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-09-07 (Phase 77 agent runtime + grok-one)
+Last updated: 2026-09-07 (Phase 78 agent serial TUI)
 
 ## Phase 1 — Bring-up
 
@@ -508,7 +508,7 @@ Stretch order and exit criteria: **[`plan-arch.md` § Phase 60 stretch sequence]
 | 59 | Multi-arch workstation profiles | core done |
 | 60 | Security posture | core + stretch A–D done (MCS / asymmetric signing deferred) |
 | 61–70 | QEMU-only workstation deepening | done — [`plan-qemu.md`](plan-qemu.md) |
-| 71–80 | Interactive surface (browser + agent) | planned — [`plan-interactive.md`](plan-interactive.md); Phases 71–77 done |
+| 71–80 | Interactive surface (browser + agent) | planned — [`plan-interactive.md`](plan-interactive.md); Phases 71–78 done |
 
 ## Phases 61–70 — QEMU-only workstation deepening ✅
 
@@ -586,9 +586,9 @@ Completable **without a board**. Living checklist: **[`plan-qemu.md`](plan-qemu.
 | 69 | Batch runner (on-disk shell scripts) | done |
 | 70 | QEMU developer loop | done |
 
-Near-term priority for 61–70 was **61 → 62 → 64** (done). Next: **78** ([`plan-interactive.md` § Near-term priority](plan-interactive.md#near-term-priority)). On-device work is [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated) and does not block that list.
+Near-term priority for 61–70 was **61 → 62 → 64** (done). Next: **79** ([`plan-interactive.md` § Near-term priority](plan-interactive.md#near-term-priority)). On-device work is [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated) and does not block that list.
 
-## Phases 71–80 — Interactive surface (planned; 71–77 done)
+## Phases 71–80 — Interactive surface (planned; 71–78 done)
 
 QEMU-only **browser + agent** program. Steal Ladybird process topology and Grok Build’s tool loop; do not port C++/std binaries. Living checklist: **[`plan-interactive.md`](plan-interactive.md)**. ADR: **[ADR-009](decisions/009-interactive-surface.md)**.
 
@@ -634,10 +634,10 @@ QEMU-only **browser + agent** program. Steal Ladybird process topology and Grok 
 - [x] `agent` PD tool-loop via `request-server`
 - [x] `just test-agent-runtime` (`lerux-agent: runtime ok`)
 
-## Phase 78 — Agent serial TUI
+## Phase 78 — Agent serial TUI ✅
 
-- [ ] Fullscreen ANSI; shell `grok` PPC
-- [ ] Scripted serial smoke
+- [x] Fullscreen ANSI; shell `grok` PPC
+- [x] Scripted serial smoke (`lerux-agent: chrome ok`)
 
 ## Phase 79 — Agent tools
 
@@ -660,11 +660,11 @@ QEMU-only **browser + agent** program. Steal Ladybird process topology and Grok 
 | 75 | CSS subset + layout + paint | done — `just test-paint` |
 | 76 | `browser-ui` + one `web-content` | done — `just test-browser` |
 | 77 | Agent runtime + `grok-one` stub | done — `just test-agent-runtime` |
-| 78 | Agent serial TUI | planned |
+| 78 | Agent serial TUI | done — `just test-agent-runtime` |
 | 79 | Agent tools (fs / shell / fetch) | planned |
 | 80 | Joint `workstation-interactive` | planned |
 
-Near-term priority: **78–79** (agent TUI + tools), then 80 ([`plan-interactive.md` § Near-term priority](plan-interactive.md#near-term-priority)). JS, GPU, extra tabs, and live xAI stay off this list.
+Near-term priority: **79** (agent tools), then 80 ([`plan-interactive.md` § Near-term priority](plan-interactive.md#near-term-priority)). JS, GPU, extra tabs, and live xAI stay off this list.
 
 ## Physical RPi4 lab (hardware-gated)
 

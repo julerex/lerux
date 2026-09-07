@@ -47,10 +47,12 @@ dependencies = [
 name = "agent"
 version = "0.1.0"
 dependencies = [
+ "embedded-hal-nb",
  "lerux-interface-types",
  "lerux-ipc",
  "lerux-logging",
  "sel4-microkit",
+ "sel4-microkit-driver-adapters",
 ]
 
 [[package]]

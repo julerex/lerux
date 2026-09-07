@@ -3,7 +3,7 @@ name = "agent"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-description = "Grok-shaped agent runtime PD (Phase 77): prompt → grok-one → tools"
+description = "Grok-shaped agent runtime + serial TUI (Phase 77–78)"
 
 [lints]
 workspace = true
@@ -16,3 +16,5 @@ lerux-interface-types = { path = "../../crates/lerux-interface-types" }
 lerux-ipc = { path = "../../crates/lerux-ipc" }
 lerux-logging = { path = "../../crates/lerux-logging", features = ["serial"] }
 sel4-microkit = { workspace = true, features = ["alloc"] }
+sel4-microkit-driver-adapters = { workspace = true }
+embedded-hal-nb = { workspace = true }

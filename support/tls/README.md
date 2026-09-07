@@ -1,6 +1,6 @@
 # Smoke TLS credentials (Phase 51)
 
-Test-only CA and server cert for `just test-fetch-tls` and `just test-request`. **Not a production PKI.**
+Test-only CA and server cert for `just test-fetch-tls`, `just test-request`, and `just test-browser`. **Not a production PKI.**
 
 | File | Use |
 |------|-----|

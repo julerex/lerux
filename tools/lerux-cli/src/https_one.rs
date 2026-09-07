@@ -1,8 +1,9 @@
-//! One-shot HTTPS origin for the fetch-tls and request-server smokes
+//! One-shot HTTPS origin for the fetch-tls, request-server, and browser smokes
 //! (port 8443 by default).
 //!
 //! `GET /` keeps the same `200 OK` body as [`crate::http_one`]. `GET /fixture.html`
-//! serves `support/browser/fixture.html` (Phase 73). Smoke server cert lives in
+//! serves `support/browser/fixture.html` (Phase 73). `GET /paint.html` serves
+//! `support/browser/paint.html` (Phase 76). Smoke server cert lives in
 //! `support/tls/`.
 
 use std::{
@@ -101,12 +102,8 @@ fn serve_one(config: &Arc<ServerConfig>, sock: &mut std::net::TcpStream) -> Resu
             }
             if request_headers_complete(&request) {
                 let path = path_from_http_request(&request);
-                let fixture = if path == b"/fixture.html" {
-                    load_fixture()?
-                } else {
-                    Vec::new()
-                };
-                let body = http_response_for_path(path, &fixture);
+                let file_body = load_browser_path(path)?;
+                let body = http_response_for_path(path, &file_body);
                 conn.writer().write_all(&body).context("http write")?;
                 saw_http = true;
             }
@@ -132,12 +129,12 @@ fn path_from_http_request(buf: &[u8]) -> &[u8] {
     parts.next().unwrap_or(b"/")
 }
 
-fn http_response_for_path(path: &[u8], fixture: &[u8]) -> Vec<u8> {
+fn http_response_for_path(path: &[u8], file_body: &[u8]) -> Vec<u8> {
     if path == b"/" || path.is_empty() {
         return RESPONSE.to_vec();
     }
-    if path == b"/fixture.html" {
-        return length_prefixed(b"text/html; charset=utf-8", fixture);
+    if path == b"/fixture.html" || path == b"/paint.html" {
+        return length_prefixed(b"text/html; charset=utf-8", file_body);
     }
     NOT_FOUND.to_vec()
 }
@@ -152,8 +149,19 @@ fn length_prefixed(content_type: &[u8], body: &[u8]) -> Vec<u8> {
     out
 }
 
-fn load_fixture() -> Result<Vec<u8>> {
-    let path = crate::process::repo_root()?.join("support/browser/fixture.html");
+fn load_browser_path(url_path: &[u8]) -> Result<Vec<u8>> {
+    let name = match url_path {
+        b"/fixture.html" => "fixture.html",
+        b"/paint.html" => "paint.html",
+        _ => return Ok(Vec::new()),
+    };
+    load_browser_file(name)
+}
+
+fn load_browser_file(name: &str) -> Result<Vec<u8>> {
+    let path = crate::process::repo_root()?
+        .join("support/browser")
+        .join(name);
     std::fs::read(&path).with_context(|| format!("read {}", path.display()))
 }
 
@@ -210,6 +218,15 @@ mod tests {
         assert!(r
             .windows(b"lerux-http-fixture".len())
             .any(|w| w == b"lerux-http-fixture"));
+    }
+
+    #[test]
+    fn paint_path_embeds_body() {
+        let r = http_response_for_path(b"/paint.html", b"<h1>lerux</h1>");
+        assert!(r.starts_with(b"HTTP/1.1 200"));
+        assert!(r
+            .windows(b"<h1>lerux</h1>".len())
+            .any(|w| w == b"<h1>lerux</h1>"));
     }
 
     #[test]

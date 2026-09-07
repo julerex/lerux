@@ -148,6 +148,17 @@ qemu = { ramfb = true }
 ci = true
 system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, fw_cfg_mmio_phys_addr = "0x9020000" }
 
+# Phase 76: browser-ui + web-content via request-server; paint through ramfb.
+[qemu_virt_aarch64_browser]
+arch = "aarch64"
+microkit_board = "qemu_virt_aarch64"
+target = "aarch64-sel4-microkit"
+template = "browser.system.template"
+pds = ["browser-ui", "web-content", "display-server", "request-server", "tls-proxy", "net-server", "serial-driver", "serial-virt", "virtio-net-driver"]
+qemu = { ramfb = true, net = "user", https_one = true }
+ci = true
+system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, fw_cfg_mmio_phys_addr = "0x9020000", virtio_mmio_phys_addr = "0xa003000", virtio_net_irq = 79 }
+
 # Phase 72: ramfb + display-server + display-demo (shared bitmap MR).
 [qemu_virt_aarch64_display]
 arch = "aarch64"

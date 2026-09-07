@@ -116,7 +116,7 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 : Trusted PD that owns the QEMU framebuffer device (ramfb first). Apps never map display MMIO. They present a **shared bitmap memory region** via postcard `DisplayRequest` (same trust shape as ADR-003 for NIC DMA).
 
 **framebuffer MR**
-: Shared memory region holding RGB pixels. Producers (`display-demo`, `paint-demo`, later `web-content`) write; `display-server` blits to the device.
+: Shared memory region holding RGB pixels. Producers (`display-demo`, `paint-demo`, `web-content`) write; `display-server` blits to the device.
 
 **browser-ui**
 : Ladybird Browser analogue. Owns chrome (serial `open <url>` in v1) and the channel to `web-content`. Does not parse HTML.
@@ -134,7 +134,7 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 : From-scratch `#![no_std]`+`alloc` HTML subset tokenizer/tree builder. Not Ladybird’s `libweb_html_tokenizer`, not html5ever, not Servo.
 
 **lerux-web**
-: From-scratch `#![no_std]`+`alloc` CSS subset, block-flow layout, and RGB888 paint. Author `<style>` plus a tiny UA sheet. Hosts no JS. Used by `paint-demo` (Phase 75) and later `web-content`.
+: From-scratch `#![no_std]`+`alloc` CSS subset, block-flow layout, and RGB888 paint. Author `<style>` plus a tiny UA sheet. Hosts no JS. Used by `paint-demo` (Phase 75) and `web-content` (Phase 76).
 
 ## Boundaries
 

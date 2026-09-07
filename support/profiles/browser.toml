@@ -1,0 +1,88 @@
+# Phase 76: Ladybird-shaped browser on QEMU ramfb.
+# Untrusted web-content speaks HttpRequest only; browser-ui presents pixels.
+
+template = "browser.system.template"
+pds = [
+  "browser-ui",
+  "web-content",
+  "display-server",
+  "request-server",
+  "tls-proxy",
+  "net-server",
+  "serial-driver",
+  "serial-virt",
+  "virtio-net-driver",
+]
+description = "Phase 76: browser-ui + one web-content via request-server and ramfb"
+default_board = "qemu_virt_aarch64_browser"
+trust_class = "appliance"
+
+[[channel]]
+name = "driver_virt"
+ends = [
+  { pd = "serial_driver", id = 1 },
+  { pd = "serial_virt", id = 0, pp = true },
+]
+
+[[channel]]
+name = "browser_ui_serial"
+ends = [
+  { pd = "serial_virt", id = 1 },
+  { pd = "browser_ui", id = 0, pp = true },
+]
+
+[[channel]]
+name = "display_serial"
+ends = [
+  { pd = "serial_virt", id = 2 },
+  { pd = "display_server", id = 0, pp = true },
+]
+
+[[channel]]
+name = "web_content_serial"
+ends = [
+  { pd = "serial_virt", id = 3 },
+  { pd = "web_content", id = 0, pp = true },
+]
+
+[[channel]]
+name = "net_driver"
+ends = [
+  { pd = "virtio_net_driver", id = 1 },
+  { pd = "net_server", id = 1, pp = true },
+]
+
+[[channel]]
+name = "tls_net"
+ends = [
+  { pd = "net_server", id = 2 },
+  { pd = "tls_proxy", id = 1, pp = true },
+]
+
+[[channel]]
+name = "request_tls"
+ends = [
+  { pd = "tls_proxy", id = 2 },
+  { pd = "request_server", id = 1, pp = true },
+]
+
+[[channel]]
+name = "web_http"
+ends = [
+  { pd = "request_server", id = 2 },
+  { pd = "web_content", id = 1, pp = true },
+]
+
+[[channel]]
+name = "browser_tab"
+ends = [
+  { pd = "web_content", id = 2 },
+  { pd = "browser_ui", id = 1, pp = true },
+]
+
+[[channel]]
+name = "browser_present"
+ends = [
+  { pd = "display_server", id = 1 },
+  { pd = "browser_ui", id = 2, pp = true },
+]

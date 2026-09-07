@@ -179,6 +179,10 @@ test-html:
 test-paint:
     BOARD=qemu_virt_aarch64_paint just test
 
+# Phase 76: browser-ui + web-content via request-server (fixture through ramfb)
+test-browser:
+    BOARD=qemu_virt_aarch64_browser just test
+
 # Filesystem IPC smoke test (fs-server + fs-client on aarch64 virt)
 test-fs:
     BOARD=qemu_virt_aarch64_fs just test

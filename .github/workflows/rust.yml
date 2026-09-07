@@ -349,6 +349,9 @@ jobs:
           - id: paint
             board: qemu_virt_aarch64_paint
             command: just test-paint
+          - id: browser
+            board: qemu_virt_aarch64_browser
+            command: just test-browser
           - id: fs
             board: qemu_virt_aarch64_fs
             command: just disk-img && just test-fs

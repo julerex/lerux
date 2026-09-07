@@ -303,12 +303,13 @@ pub fn pd_trust_domain(pd: &str) -> &'static str {
         | "cmos-rtc-driver"
         | "tsc-timer-driver" => "platform",
         "fs-server" | "net-server" | "serial-virt" | "config-server" | "log-server"
-        | "blk-server" => "service",
+        | "blk-server" | "tls-proxy" | "request-server" | "display-server" => "service",
         "supervisor" => "control",
         "debug-handler" => "debug",
         "shell" | "edit" | "chat-client" | "http-file-browser" | "backup" | "fetch-client"
         | "crash-demo" | "hello" | "echo-client" | "echo-server" | "http-server" | "fs-client"
-        | "net-client" | "blk-client" => "untrusted",
+        | "net-client" | "blk-client" | "display-demo" | "paint-demo" | "request-client"
+        | "html-demo" | "browser-ui" | "web-content" => "untrusted",
         _ => "unknown",
     }
 }
@@ -649,8 +650,13 @@ mod tests {
     fn pd_trust_domain_map() {
         assert_eq!(pd_trust_domain("serial-driver"), "platform");
         assert_eq!(pd_trust_domain("fs-server"), "service");
+        assert_eq!(pd_trust_domain("request-server"), "service");
+        assert_eq!(pd_trust_domain("display-server"), "service");
+        assert_eq!(pd_trust_domain("tls-proxy"), "service");
         assert_eq!(pd_trust_domain("supervisor"), "control");
         assert_eq!(pd_trust_domain("shell"), "untrusted");
+        assert_eq!(pd_trust_domain("web-content"), "untrusted");
+        assert_eq!(pd_trust_domain("browser-ui"), "untrusted");
         assert_eq!(pd_trust_domain("debug-handler"), "debug");
     }
 }

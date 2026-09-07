@@ -50,6 +50,16 @@ expects = [
   "lerux-web: paint ok",
 ]
 
+[boards.qemu_virt_aarch64_browser]
+expects = [
+  "lerux-net: ready",
+  "virtio-net: MAC",
+  "lerux-display: ramfb ok",
+  "lerux-tls: handshake ok",
+  "lerux-web: paint ok",
+  "lerux-browser: paint ok",
+]
+
 [boards.qemu_virt_aarch64_bench_echo]
 timeout_secs = 90
 expects = [

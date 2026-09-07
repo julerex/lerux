@@ -1,6 +1,6 @@
 # PLAN — Interactive surface (phases 71–80)
 
-Last updated: 2026-09-06 (phases 71–80; Phase 75 lerux-web)
+Last updated: 2026-09-07 (phases 71–80; Phase 76 browser-ui + web-content)
 
 Related: [`plan.md`](plan.md) (roadmap 1–80), [`plan-qemu.md`](plan-qemu.md) (phases 61–70, done), [`plan-arch.md`](plan-arch.md) (phases 50–60 + Physical RPi4 lab), [`plan-au-ts.md`](plan-au-ts.md) (sDDF inspiration), [`context.md`](context.md), [ADR-009](decisions/009-interactive-surface.md).
 
@@ -58,7 +58,7 @@ Platform                         Browser (Ladybird-shaped)              Agent (G
                                  73 request-server PD ✅
                                  74 HTML/DOM (`lerux-html`) ✅
                                  75 CSS + layout + paint ✅
-                                 76 browser-ui + one web-content
+                                 76 browser-ui + one web-content ✅
                                                                     77 agent runtime + grok-one
                                                                     78 serial TUI
                                                                     79 tools (fs / shell / fetch)
@@ -149,7 +149,7 @@ A future agent can implement Phase 72 without re-litigating “are we allowed to
 ### Out of scope
 
 - GPU, vsync, cursor sprite, virtio-tablet, RPi4 HDMI.
-- Putting chrome on the framebuffer (serial is enough until Phase 76).
+- Putting chrome on the framebuffer (serial chrome in Phase 76 is enough).
 
 ### Exit
 
@@ -221,16 +221,16 @@ A fixture parses to a walkable DOM in a PD. **Met.**
 
 ---
 
-## Phase 76 — `browser-ui` + one `web-content`
+## Phase 76 — `browser-ui` + one `web-content` ✅
 
 **Why:** Ladybird’s Browser process owns chrome and input; WebContent owns the engine. Keep that split even with one tab.
 
 ### Steps
 
-- [ ] `browser-ui`: URL line (serial `open <url>` v1), owns the channel to `web-content`, forwards present to `display-server`.
-- [ ] `web-content`: parse/layout/paint; **only** `HttpRequest` to `request-server` + bitmap MR. No FS, no NIC.
-- [ ] Navigate a baked-in fixture **or** `https://host/` via `request-server` (smoke CA).
-- [ ] Profile `browser` / board `qemu_virt_aarch64_browser`. `just test-browser`.
+- [x] `browser-ui`: URL line (serial `open <url>` v1), owns the channel to `web-content`, forwards present to `display-server`.
+- [x] `web-content`: parse/layout/paint; **only** `HttpRequest` to `request-server` + bitmap MR. No FS, no NIC.
+- [x] Navigate `https://host:8443/paint.html` via `request-server` (smoke CA). First load is implicit; serial `open <url>` remains available.
+- [x] Profile `browser` / board `qemu_virt_aarch64_browser`. `just test-browser`.
 
 ### Out of scope
 
@@ -239,7 +239,7 @@ A fixture parses to a walkable DOM in a PD. **Met.**
 
 ### Exit
 
-`just test-browser` loads the fixture through `request-server` and paints it.
+`just test-browser` loads the fixture through `request-server` and paints it. **Met.**
 
 ---
 
@@ -346,11 +346,11 @@ Hardware truth remains [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardwa
 
 ## Near-term priority
 
-If capacity is limited, do **not** start with 76–80 first:
+If capacity is limited, do **not** start with 77–80 first:
 
 1. **Phase 72** — ramfb + `display-server` (done; unblocks paint).
 2. **Phase 73** — `request-server` (done; unblocks browser load **and** agent HTTPS).
-3. **Phase 74–75** — `lerux-html` + `lerux-web` (done). Then **76** (browser) and **77–79** (agent) in parallel.
+3. **Phase 74–75** — `lerux-html` + `lerux-web` (done). **76** (browser) done. Then **77–79** (agent).
 4. **Phase 80** last.
 
 RPi4 lab work never blocks this list. JS, GPU, and extra tabs stay off the list until a new ADR.
@@ -367,7 +367,7 @@ RPi4 lab work never blocks this list. JS, GPU, and extra tabs stay off the list 
 | Request-server | `just test-request` (`lerux-http: fixture ok`) |
 | HTML | `just test-html` (`lerux-html: nodes=8`) |
 | Paint | `just test-paint` (`lerux-web: paint ok`) |
-| Browser | `just test-browser` |
+| Browser | `just test-browser` (`lerux-browser: paint ok`) |
 | Agent runtime | `just test-agent-runtime` |
 | Agent tools | `just test-agent` (`lerux-agent: tools ok`) |
 | Joint | `just test-interactive` |

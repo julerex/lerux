@@ -1245,6 +1245,45 @@ impl HttpResponse {
     }
 }
 
+/// Requests from `browser-ui` to `web-content` (Phase 76 / ADR-009).
+///
+/// `Navigate` is a blocking PPC: fetch via `request-server`, parse/layout/paint
+/// the shared bitmap MR, then return. `browser-ui` forwards [`DisplayRequest::Present`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WebContentRequest {
+    Navigate {
+        url_len: u8,
+        #[serde(with = "bounded_bytes")]
+        url: [u8; MAX_HTTP_URL],
+    },
+}
+
+impl WebContentRequest {
+    pub fn navigate(url: &[u8]) -> Self {
+        let mut buf = [0u8; MAX_HTTP_URL];
+        let url_len = url.len().min(MAX_HTTP_URL) as u8;
+        buf[..url_len as usize].copy_from_slice(&url[..url_len as usize]);
+        Self::Navigate { url_len, url: buf }
+    }
+
+    pub fn url(&self) -> &[u8] {
+        match self {
+            Self::Navigate { url_len, url } => &url[..*url_len as usize],
+        }
+    }
+}
+
+/// Responses from `web-content` to `browser-ui`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum WebContentResponse {
+    /// Fetch + paint succeeded. `signatures` is the Phase 75 paint-fixture check.
+    Painted {
+        status: u16,
+        signatures: bool,
+    },
+    Error,
+}
+
 /// Chat client (Phase 40 / 58 multi-room).
 pub const MAX_CHAT_MSG: usize = 80;
 pub const MAX_CHAT_LINES: usize = 12;
@@ -1784,6 +1823,27 @@ mod tests {
         let resp = HttpResponse::data(b"lerux-http-fixture", true);
         assert_eq!(round_trip(resp), resp);
         assert_eq!(HttpMethod::Get.as_token(), b"GET");
+    }
+
+    #[test]
+    fn web_content_round_trip() {
+        let req = WebContentRequest::navigate(b"https://host:8443/paint.html");
+        assert_eq!(req.url(), b"https://host:8443/paint.html");
+        assert_eq!(round_trip(req), req);
+        assert_eq!(
+            round_trip(WebContentResponse::Painted {
+                status: 200,
+                signatures: true
+            }),
+            WebContentResponse::Painted {
+                status: 200,
+                signatures: true
+            }
+        );
+        assert_eq!(
+            round_trip(WebContentResponse::Error),
+            WebContentResponse::Error
+        );
     }
 
     #[test]

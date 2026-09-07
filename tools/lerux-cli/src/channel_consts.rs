@@ -223,6 +223,11 @@ fn const_name_to_peer_sdf(name: &str) -> Option<String> {
         "VIRTIO_NET_DRIVER" | "NET_DRIVER" => "virtio_net_driver",
         "GENET_DRIVER" => "genet_driver",
         "EMMC2_DRIVER" => "emmc2_driver",
+        "DISPLAY_SERVER" => "display_server",
+        "REQUEST_SERVER" => "request_server",
+        "WEB_CONTENT" => "web_content",
+        "BROWSER_UI" => "browser_ui",
+        "TLS_PROXY" => "tls_proxy",
         "CLIENT" | "DEVICE" | "APP" | "CLIENTS" => return None,
         _ => return None,
     };

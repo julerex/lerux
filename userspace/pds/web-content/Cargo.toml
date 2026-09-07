@@ -1,22 +1,19 @@
 [package]
-name = "tls-proxy"
+name = "web-content"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
+description = "Untrusted WebContent analogue: HttpRequest + bitmap paint (Phase 76)"
 
 [lints]
 workspace = true
 
 [features]
-# Phase 68: public Web trust store for interactive QEMU; smokes stay on smoke CA.
-webpki-roots = ["lerux-tls/webpki-roots"]
-board-qemu_virt_aarch64_fetch_tls = []
-board-qemu_virt_aarch64_request = []
 board-qemu_virt_aarch64_browser = []
 
 [dependencies]
 lerux-interface-types = { path = "../../crates/lerux-interface-types" }
 lerux-ipc = { path = "../../crates/lerux-ipc" }
-lerux-logging = { path = "../../crates/lerux-logging" }
-lerux-tls = { path = "../../crates/lerux-tls" }
+lerux-logging = { path = "../../crates/lerux-logging", features = ["serial"] }
+lerux-web = { path = "../../crates/lerux-web" }
 sel4-microkit = { workspace = true, features = ["alloc"] }

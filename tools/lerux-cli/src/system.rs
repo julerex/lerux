@@ -229,6 +229,56 @@ mod tests {
     }
 
     #[test]
+    fn browser_template_is_channel_free_and_isolates_untrusted_pds() {
+        let root = repo_root();
+        let body = render_system_body(&root, "qemu_virt_aarch64_browser").unwrap();
+        assert_eq!(
+            body.matches("<channel>").count(),
+            0,
+            "browser template must not dual-maintain channels"
+        );
+        let sdf = render_system(&root, "qemu_virt_aarch64_browser").unwrap();
+        assert_eq!(sdf.matches("<channel>").count(), 10);
+        assert!(sdf.contains("web_content"));
+        assert!(sdf.contains("browser_ui"));
+        assert!(!sdf.contains("name=\"virtio_net_client_dma\""));
+
+        let web = pd_block(&sdf, "web_content");
+        assert!(web.contains("bitmap"), "web-content must map the bitmap MR");
+        assert!(
+            !web.contains("fw_cfg"),
+            "web-content must not map display MMIO"
+        );
+        assert!(
+            !web.contains("virtio"),
+            "web-content must not map NIC DMA/MMIO"
+        );
+
+        let ui = pd_block(&sdf, "browser_ui");
+        assert!(!ui.contains("bitmap"), "browser-ui must not map the bitmap");
+        assert!(
+            !ui.contains("fw_cfg"),
+            "browser-ui must not map display MMIO"
+        );
+        assert!(
+            !ui.contains("virtio"),
+            "browser-ui must not map NIC DMA/MMIO"
+        );
+    }
+
+    fn pd_block<'a>(sdf: &'a str, name: &str) -> &'a str {
+        let start_tag = format!("<protection_domain name=\"{name}\"");
+        let start = sdf
+            .find(&start_tag)
+            .unwrap_or_else(|| panic!("missing PD {name}"));
+        let rest = &sdf[start..];
+        let end = rest
+            .find("</protection_domain>")
+            .unwrap_or_else(|| panic!("unclosed PD {name}"));
+        &rest[..end]
+    }
+
+    #[test]
     fn qemu_net_boards_have_no_distinct_client_dma_mr() {
         let root = repo_root();
         for board in [

@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-09-07 (Phase 78 agent serial TUI)
+Last updated: 2026-09-07 (Phase 79 agent tools)
 
 ## Phase 1 — Bring-up
 
@@ -639,11 +639,11 @@ QEMU-only **browser + agent** program. Steal Ladybird process topology and Grok 
 - [x] Fullscreen ANSI; shell `grok` PPC
 - [x] Scripted serial smoke (`lerux-agent: chrome ok`)
 
-## Phase 79 — Agent tools
+## Phase 79 — Agent tools ✅
 
-- [ ] Read / Write / Edit / ListDir / Search / Execute (shell `run`) / WebFetch
-- [ ] `just test-agent` (`lerux-agent: tools ok`)
-- [ ] No `fork`/`exec`, MCP, or Landlock
+- [x] Read / Write / Edit / ListDir / Search / Execute (on-disk `echo` batch) / WebFetch
+- [x] `just test-agent` (`lerux-agent: tools ok`)
+- [x] No `fork`/`exec`, MCP, or Landlock
 
 ## Phase 80 — Joint `workstation-interactive`
 
@@ -661,10 +661,10 @@ QEMU-only **browser + agent** program. Steal Ladybird process topology and Grok 
 | 76 | `browser-ui` + one `web-content` | done — `just test-browser` |
 | 77 | Agent runtime + `grok-one` stub | done — `just test-agent-runtime` |
 | 78 | Agent serial TUI | done — `just test-agent-runtime` |
-| 79 | Agent tools (fs / shell / fetch) | planned |
+| 79 | Agent tools (fs / shell / fetch) | done — `just test-agent` |
 | 80 | Joint `workstation-interactive` | planned |
 
-Near-term priority: **79** (agent tools), then 80 ([`plan-interactive.md` § Near-term priority](plan-interactive.md#near-term-priority)). JS, GPU, extra tabs, and live xAI stay off this list.
+Near-term priority: **80** ([`plan-interactive.md` § Near-term priority](plan-interactive.md#near-term-priority)). JS, GPU, extra tabs, and live xAI stay off this list.
 
 ## Physical RPi4 lab (hardware-gated)
 

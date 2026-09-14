@@ -12,6 +12,7 @@ workspace = true
 board-qemu_virt_aarch64_request = []
 board-qemu_virt_aarch64_browser = []
 board-qemu_virt_aarch64_agent_runtime = []
+board-qemu_virt_aarch64_agent = []
 
 [dependencies]
 lerux-interface-types = { path = "../../crates/lerux-interface-types" }

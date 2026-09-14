@@ -253,6 +253,18 @@ expects = [
   "lerux-agent: runtime ok",
 ]
 
+[boards.qemu_virt_aarch64_agent]
+timeout_secs = 90
+expects = [
+  "lerux-net: ready",
+  "virtio-net: MAC",
+  "lerux-fs: ready",
+  "lerux-agent: chrome ok",
+  "lerux-agent: workspace ok",
+  "lerux-tls: handshake ok",
+  "lerux-agent: tools ok",
+]
+
 [boards.qemu_virt_aarch64_fs]
 expects = [
   "lerux-fs: ready",

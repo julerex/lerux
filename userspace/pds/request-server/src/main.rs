@@ -17,7 +17,7 @@ use sel4_microkit::{protection_domain, Channel, Handler, Infallible, MessageInfo
 
 use crate::http::{build_request, ExtraHeader, MAX_EXTRA_HEADERS};
 
-/// Channel IDs match `request.system.template` / `agent-runtime.system.template`.
+/// Channel IDs match `request.system.template` / `agent-runtime` / `agent` templates.
 const TLS_PROXY: TlsClient = TlsClient::new(Channel::new(1));
 const APP: Channel = Channel::new(2);
 

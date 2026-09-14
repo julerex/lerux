@@ -1,9 +1,9 @@
-//! Scripted HTTPS completions stub for the Phase 77 agent runtime smoke
+//! Scripted HTTPS completions stub for the Phase 77–79 agent smokes
 //! (port 8444 by default). Not live xAI.
 //!
 //! Speaks the line protocol in `lerux-interface-types` (`PROMPT` / `TOOL_CALL` /
-//! `TOOL_RESULT` / `TEXT`) over the smoke CA. Serves several connections then
-//! exits (each prompt is two TLS sessions: tool-call, then final text).
+//! `TOOL_RESULT` / `TEXT`) over the smoke CA. Also serves `GET /fixture.html`
+//! for WebFetch. Serves several connections then exits.
 
 use std::{
     io::{Read, Write},
@@ -14,16 +14,17 @@ use std::{
 
 use anyhow::{Context, Result};
 use lerux_interface_types::{
-    AGENT_SMOKE_BODY, AGENT_SMOKE_PATH, AGENT_SMOKE_PROMPT, GROK_STUB_TEXT, GROK_STUB_TOOL_CALL,
-    GROK_STUB_TOOL_RESULT,
+    AGENT_EDIT_FROM, AGENT_EDIT_TO, AGENT_SMOKE_BODY, AGENT_SMOKE_PATH, AGENT_SMOKE_PROMPT,
+    AGENT_TOOLS_OK, AGENT_TOOLS_PROMPT, AGENT_WEBFETCH_URL, AGENT_WORK_HELLO, GROK_STUB_TEXT,
+    GROK_STUB_TOOL_CALL, GROK_STUB_TOOL_RESULT,
 };
 use rustls::ServerConnection;
 
 use crate::https_one::server_config;
 
-/// Each agent prompt uses two TLS connections. Eight covers the smoke plus a
-/// few interactive follow-ups during `lerux run`.
-const TURNS: usize = 8;
+/// Runtime smoke: two POSTs. Tools smoke: four POSTs + one GET. A few extra
+/// slots cover interactive follow-ups during `lerux run`.
+const TURNS: usize = 12;
 
 pub fn grok_one(port: u16) -> Result<()> {
     let config = server_config()?;
@@ -34,13 +35,12 @@ pub fn grok_one(port: u16) -> Result<()> {
         .context("grok-one nonblocking accept")?;
     eprintln!("grok-one-server: listening on 127.0.0.1:{port}");
 
-    let deadline = Instant::now() + Duration::from_secs(60);
+    let deadline = Instant::now() + Duration::from_secs(90);
     let mut served = 0usize;
     while served < TURNS && Instant::now() < deadline {
         match listener.accept() {
             Ok((mut sock, peer)) => {
                 eprintln!("grok-one-server: accepted {peer}");
-                sock.set_nonblocking(false).ok();
                 if let Err(e) = serve_one(&config, &mut sock) {
                     eprintln!("grok-one-server: {e:#}");
                 }
@@ -83,6 +83,11 @@ fn serve_one(config: &Arc<rustls::ServerConfig>, sock: &mut std::net::TcpStream)
                 sock.write_all(&out).context("sock write")?;
             }
         }
+        // Return as soon as the response is on the wire. Waiting for TLS
+        // close_notify / peer close is what blocked accept() on turn 3.
+        if saw_http && !conn.wants_write() {
+            return Ok(());
+        }
         if conn.wants_read() {
             match sock.read(&mut raw) {
                 Ok(0) => anyhow::bail!("peer closed"),
@@ -103,15 +108,10 @@ fn serve_one(config: &Arc<rustls::ServerConfig>, sock: &mut std::net::TcpStream)
                 Err(e) => return Err(e).context("plain read"),
             }
             if http_message_ready(&request) {
-                let body = http_body(&request);
-                let reply = stub_reply(body);
-                let resp = length_prefixed(b"text/plain; charset=utf-8", &reply);
-                conn.writer().write_all(&resp).context("http write")?;
+                let reply = http_reply(&request);
+                conn.writer().write_all(&reply).context("http write")?;
                 saw_http = true;
             }
-        }
-        if saw_http && !conn.wants_write() {
-            return Ok(());
         }
     }
     anyhow::bail!("grok-one handshake/serve loop exhausted")
@@ -163,8 +163,36 @@ fn length_prefixed(content_type: &[u8], body: &[u8]) -> Vec<u8> {
     out
 }
 
-/// Scripted two-turn conversation for the runtime smoke.
+fn http_reply(request: &[u8]) -> Vec<u8> {
+    let (method, path) = request_line(request);
+    if method == b"GET" {
+        if path == b"/fixture.html" {
+            return length_prefixed(b"text/plain; charset=utf-8", b"lerux-agent-fetch\n");
+        }
+        return b"HTTP/1.1 404 Not Found\r\nContent-Length: 9\r\nConnection: close\r\n\r\nnot found"
+            .to_vec();
+    }
+    length_prefixed(
+        b"text/plain; charset=utf-8",
+        &stub_reply(http_body(request)),
+    )
+}
+
+fn request_line(buf: &[u8]) -> (&[u8], &[u8]) {
+    let line_end = buf.iter().position(|&b| b == b'\n').unwrap_or(buf.len());
+    let line = buf[..line_end]
+        .strip_suffix(b"\r")
+        .unwrap_or(&buf[..line_end]);
+    let mut parts = line.split(|&b| b == b' ');
+    (parts.next().unwrap_or(b""), parts.next().unwrap_or(b"/"))
+}
+
+/// Scripted completions: runtime smoke (Read /hello.txt) or tools smoke
+/// (Read → Edit → WebFetch).
 pub fn stub_reply(body: &[u8]) -> Vec<u8> {
+    if contains(body, AGENT_TOOLS_PROMPT) || contains(body, AGENT_WORK_HELLO) {
+        return tools_script(body);
+    }
     if contains(body, GROK_STUB_TOOL_RESULT) {
         let mut out = Vec::from(GROK_STUB_TEXT);
         out.extend_from_slice(AGENT_SMOKE_BODY);
@@ -180,6 +208,38 @@ pub fn stub_reply(body: &[u8]) -> Vec<u8> {
     }
     let mut out = Vec::from(GROK_STUB_TEXT);
     out.extend_from_slice(b"(unscripted)\n");
+    out
+}
+
+fn tools_script(body: &[u8]) -> Vec<u8> {
+    if contains(body, b"WebFetch") && contains(body, GROK_STUB_TOOL_RESULT) {
+        let mut out = Vec::from(GROK_STUB_TEXT);
+        out.extend_from_slice(AGENT_TOOLS_OK);
+        out.push(b'\n');
+        return out;
+    }
+    if contains(body, b"Edit") && contains(body, GROK_STUB_TOOL_RESULT) {
+        let mut out = Vec::from(GROK_STUB_TOOL_CALL);
+        out.extend_from_slice(b"WebFetch ");
+        out.extend_from_slice(AGENT_WEBFETCH_URL);
+        out.push(b'\n');
+        return out;
+    }
+    if contains(body, b"Read") && contains(body, GROK_STUB_TOOL_RESULT) {
+        let mut out = Vec::from(GROK_STUB_TOOL_CALL);
+        out.extend_from_slice(b"Edit ");
+        out.extend_from_slice(AGENT_WORK_HELLO);
+        out.push(b'|');
+        out.extend_from_slice(AGENT_EDIT_FROM);
+        out.push(b'|');
+        out.extend_from_slice(AGENT_EDIT_TO);
+        out.push(b'\n');
+        return out;
+    }
+    let mut out = Vec::from(GROK_STUB_TOOL_CALL);
+    out.extend_from_slice(b"Read ");
+    out.extend_from_slice(AGENT_WORK_HELLO);
+    out.push(b'\n');
     out
 }
 
@@ -215,5 +275,53 @@ mod tests {
         let r = stub_reply(&body);
         assert!(r.starts_with(GROK_STUB_TEXT));
         assert!(contains(&r, AGENT_SMOKE_BODY));
+    }
+
+    #[test]
+    fn tools_prompt_emits_workspace_read() {
+        let mut body = Vec::from(GROK_STUB_PROMPT);
+        body.extend_from_slice(AGENT_TOOLS_PROMPT);
+        let r = stub_reply(&body);
+        assert!(contains(&r, AGENT_WORK_HELLO));
+        assert!(r.starts_with(GROK_STUB_TOOL_CALL));
+    }
+
+    #[test]
+    fn tools_script_ends_with_ok() {
+        let mut body = Vec::from(GROK_STUB_PROMPT);
+        body.extend_from_slice(AGENT_TOOLS_PROMPT);
+        body.extend_from_slice(b"\n");
+        body.extend_from_slice(GROK_STUB_TOOL_RESULT);
+        body.extend_from_slice(b"WebFetch ");
+        body.extend_from_slice(AGENT_WEBFETCH_URL);
+        let r = stub_reply(&body);
+        assert!(contains(&r, AGENT_TOOLS_OK));
+    }
+
+    #[test]
+    fn tools_script_edit_then_webfetch() {
+        let mut body = Vec::from(GROK_STUB_PROMPT);
+        body.extend_from_slice(AGENT_TOOLS_PROMPT);
+        body.extend_from_slice(b"\n");
+        body.extend_from_slice(GROK_STUB_TOOL_RESULT);
+        body.extend_from_slice(b"Read ");
+        body.extend_from_slice(AGENT_WORK_HELLO);
+        let r = stub_reply(&body);
+        assert!(r.starts_with(GROK_STUB_TOOL_CALL));
+        assert!(contains(&r, b"Edit "));
+        body.extend_from_slice(b"\n");
+        body.extend_from_slice(GROK_STUB_TOOL_RESULT);
+        body.extend_from_slice(b"Edit ");
+        body.extend_from_slice(AGENT_WORK_HELLO);
+        let r = stub_reply(&body);
+        assert!(contains(&r, AGENT_WEBFETCH_URL));
+    }
+
+    #[test]
+    fn get_fixture_returns_fetch_mark() {
+        let r = http_reply(b"GET /fixture.html HTTP/1.1\r\nHost: host\r\n\r\n");
+        assert!(contains(&r, b"lerux-agent-fetch"));
+        let miss = http_reply(b"GET /nope HTTP/1.1\r\n\r\n");
+        assert!(contains(&miss, b"not found"));
     }
 }

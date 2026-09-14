@@ -48,7 +48,7 @@ pub struct QemuConfig {
     /// Start the host one-shot HTTPS origin on :8443 (fetch-tls / request / browser smokes).
     #[serde(default)]
     pub https_one: bool,
-    /// Start the host scripted completions stub on :8444 (Phase 77 agent runtime).
+    /// Start the host scripted completions stub on :8444 (Phase 77–79 agent).
     #[serde(default)]
     pub grok_one: bool,
     /// Attach QEMU `-device ramfb` (Phase 72 software framebuffer).
@@ -229,6 +229,20 @@ mod tests {
         assert!(board.pds.iter().any(|p| p == "request-server"));
         assert!(!board.pds.iter().any(|p| p == "net-client"));
         assert!(!board.pds.iter().any(|p| p == "fs-server"));
+    }
+
+    #[test]
+    fn agent_board_has_fs_and_grok_one() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let boards = load_boards(&root).unwrap();
+        let board = boards.get("qemu_virt_aarch64_agent").unwrap();
+        assert!(board.qemu().unwrap().grok_one);
+        assert_eq!(board.qemu().unwrap().disk, DiskMode::Rw);
+        assert!(board.ci);
+        assert!(board.pds.iter().any(|p| p == "agent"));
+        assert!(board.pds.iter().any(|p| p == "fs-server"));
+        assert!(board.pds.iter().any(|p| p == "request-server"));
+        assert!(!board.pds.iter().any(|p| p == "net-client"));
     }
 
     #[test]

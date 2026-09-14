@@ -30,7 +30,7 @@ just test-all
 
 ## CI
 
-GitHub Actions runs on every push to `main`: **check** (`just check`), one **sdk** job (SDK + patched SP804 QEMU), **check-pd** (cross-target clippy on userspace crates), then **33 smoke** matrix jobs (`just test-all` runs **35** boards — includes `debug` and `fs_fat`, which are not in CI). Local lint: `just check` (host crates) or `just check-all` (host + PD, needs SDK). Details: [`docs/ci.md`](docs/ci.md).
+GitHub Actions runs on every push to `main`: **check** (`just check`), one **sdk** job (SDK + patched SP804 QEMU), **check-pd** (cross-target clippy on userspace crates), then **40 smoke** matrix jobs (`just test-all` runs every `ci = true` board). Local lint: `just check` (host crates) or `just check-all` (host + PD, needs SDK). Details: [`docs/ci.md`](docs/ci.md).
 
 ## Architecture
 
@@ -57,6 +57,7 @@ Default: `qemu_virt_aarch64` (QEMU ARM virt). Override with `BOARD=... just run`
 | HTML+CSS paint | `qemu_virt_aarch64_paint` | `just test-paint` |
 | Browser (one tab) | `qemu_virt_aarch64_browser` | `just test-browser` |
 | Agent runtime | `qemu_virt_aarch64_agent_runtime` | `just test-agent-runtime` |
+| Agent tools | `qemu_virt_aarch64_agent` | `just test-agent` |
 | Virtio blk/net | `qemu_virt_aarch64_virtio` | `just disk-img && just test-virtio` |
 | RTC + timer (all arches) | `*_init` | `just test-init` / `test-init-riscv` / `test-init-x86` |
 | Init + virtio | `qemu_virt_aarch64_composed` | `just disk-img && just test-composed` |

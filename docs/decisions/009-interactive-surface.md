@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (Phase 71; phases 72–78 done, 79–80 planned)
+Accepted (Phase 71; phases 72–79 done, 80 planned)
 
 ## Date
 

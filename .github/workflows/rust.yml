@@ -355,6 +355,9 @@ jobs:
           - id: agent-runtime
             board: qemu_virt_aarch64_agent_runtime
             command: just test-agent-runtime
+          - id: agent
+            board: qemu_virt_aarch64_agent
+            command: just test-agent
           - id: fs
             board: qemu_virt_aarch64_fs
             command: just disk-img && just test-fs

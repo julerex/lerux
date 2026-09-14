@@ -1290,14 +1290,28 @@ pub const MAX_AGENT_ARG: usize = 96;
 
 /// Smoke prompt for `just test-agent-runtime` (Phase 77).
 pub const AGENT_SMOKE_PROMPT: &[u8] = b"read /hello.txt";
-/// Baked-in Read path for the Phase 77 runtime smoke (full FS tools are Phase 79).
+/// Baked-in Read path for the Phase 77 runtime smoke (no FS).
 pub const AGENT_SMOKE_PATH: &[u8] = b"/hello.txt";
 /// Baked-in file body the stub Read returns.
 pub const AGENT_SMOKE_BODY: &[u8] = b"hello";
 /// Completions URL on `lerux grok-one` (smoke CA, QEMU user-net `host`).
 pub const AGENT_GROK_ONE_URL: &[u8] = b"https://host:8444/complete";
+/// Workspace directory for Phase 79 tools (LERUXFS2).
+pub const AGENT_WORK_DIR: &[u8] = b"/work";
+/// Seeded workspace file for the tools smoke.
+pub const AGENT_WORK_HELLO: &[u8] = b"/work/hello.txt";
+/// Prompt that drives Read → Edit → WebFetch (`just test-agent`).
+pub const AGENT_TOOLS_PROMPT: &[u8] = b"edit and fetch";
+/// WebFetch URL on grok-one (same smoke CA as completions).
+pub const AGENT_WEBFETCH_URL: &[u8] = b"https://host:8444/fixture.html";
+/// Edit replacement (old → new) for the tools smoke.
+pub const AGENT_EDIT_FROM: &[u8] = b"hello";
+/// See [`AGENT_EDIT_FROM`].
+pub const AGENT_EDIT_TO: &[u8] = b"hello-edited";
+/// Final stub text for the tools smoke.
+pub const AGENT_TOOLS_OK: &[u8] = b"tools ok";
 
-/// Core Grok Build tool kinds (Phase 77 names the loop; Phase 79 fills them).
+/// Core Grok Build tool kinds (Phase 79 implements them over FsRequest / HttpRequest).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AgentToolKind {
     Read,

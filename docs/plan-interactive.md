@@ -1,6 +1,6 @@
 # PLAN — Interactive surface (phases 71–80)
 
-Last updated: 2026-09-07 (phases 71–80; Phase 78 agent serial TUI)
+Last updated: 2026-09-07 (phases 71–80; Phase 79 agent tools)
 
 Related: [`plan.md`](plan.md) (roadmap 1–80), [`plan-qemu.md`](plan-qemu.md) (phases 61–70, done), [`plan-arch.md`](plan-arch.md) (phases 50–60 + Physical RPi4 lab), [`plan-au-ts.md`](plan-au-ts.md) (sDDF inspiration), [`context.md`](context.md), [ADR-009](decisions/009-interactive-surface.md).
 
@@ -61,7 +61,7 @@ Platform                         Browser (Ladybird-shaped)              Agent (G
                                  76 browser-ui + one web-content ✅
                                                                     77 agent runtime + grok-one ✅
                                                                     78 serial TUI ✅
-                                                                    79 tools (fs / shell / fetch)
+                                                                    79 tools (fs / shell / fetch) ✅
 80 joint profile: workstation-interactive
 ```
 
@@ -285,25 +285,26 @@ A human can type a prompt on the workstation serial and see the stub’s reply i
 
 ---
 
-## Phase 79 — Agent tools
+## Phase 79 — Agent tools ✅
 
 **Why:** Grok Build’s useful core is tools, not the TUI. Map taxonomy onto existing IPC.
 
 ### Steps
 
-- [ ] Read / Write / Edit / ListDir / Search (linear scan; not ripgrep) via `FsRequest`.
-- [ ] Execute: run an on-disk batch through shell `run` (Phase 69). **No** `fork`/`exec`.
-- [ ] WebFetch via `request-server` (not `NetClient`).
-- [ ] Workspace = a directory on LERUXFS2 (seeded `/host` or `/work`). File cap remains 256 KiB; tools chunk.
-- [ ] `just test-agent`: stub drives Read + Edit + WebFetch; expect `lerux-agent: tools ok`.
+- [x] Read / Write / Edit / ListDir / Search (linear scan; not ripgrep) via `FsRequest`.
+- [x] Execute: on-disk batch of `echo` lines inside the agent PD (same idea as shell `run`; **no** `fork`/`exec`). The agent cannot PPC the shell (shell is priority 1; ADR-006).
+- [x] WebFetch via `request-server` (not `NetClient`).
+- [x] Workspace = LERUXFS2 `/work` (seeded `hello.txt`). File cap remains 256 KiB; tools chunk.
+- [x] `just test-agent`: stub drives Read + Edit + WebFetch; expect `lerux-agent: tools ok`.
 
 ### Out of scope
 
 - MCP, LSP, image/video gen, scheduler, `bash` pipelines, Landlock.
+- Adding agent / tls-proxy / request-server to the full workstation (Phase 80).
 
 ### Exit
 
-The agent can change a file and fetch a URL in a QEMU smoke without a POSIX process.
+The agent can change a file and fetch a URL in a QEMU smoke without a POSIX process. **Met** on `qemu_virt_aarch64_agent`.
 
 ---
 
@@ -350,7 +351,7 @@ If capacity is limited, do **not** start with 79–80 first:
 
 1. **Phase 72** — ramfb + `display-server` (done; unblocks paint).
 2. **Phase 73** — `request-server` (done; unblocks browser load **and** agent HTTPS).
-3. **Phase 74–75** — `lerux-html` + `lerux-web` (done). **76–78** (browser + agent runtime/TUI) done. Then **79** (tools).
+3. **Phase 74–75** — `lerux-html` + `lerux-web` (done). **76–79** (browser + agent runtime/TUI/tools) done.
 4. **Phase 80** last.
 
 RPi4 lab work never blocks this list. JS, GPU, and extra tabs stay off the list until a new ADR.

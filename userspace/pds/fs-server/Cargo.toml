@@ -12,6 +12,7 @@ default = []
 # Phase 44: alternate on-disk format behind the same FsRequest IPC.
 backend-lerux = []
 backend-fat = ["dep:lerux-fat"]
+board-qemu_virt_aarch64_agent = ["backend-lerux"]
 board-qemu_virt_aarch64_fs = ["backend-lerux"]
 board-qemu_virt_aarch64_fs_fat = ["backend-fat"]
 board-qemu_virt_aarch64_fs_host = ["backend-lerux"]

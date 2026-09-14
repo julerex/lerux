@@ -1,0 +1,66 @@
+# Phase 79: Grok-shaped agent tools (FsRequest + WebFetch) against grok-one.
+
+template = "agent.system.template"
+pds = [
+  "agent",
+  "request-server",
+  "tls-proxy",
+  "net-server",
+  "fs-server",
+  "serial-driver",
+  "virtio-net-driver",
+  "virtio-blk-driver",
+]
+description = "Phase 79: agent PD tools via fs-server and request-server to grok-one"
+default_board = "qemu_virt_aarch64_agent"
+trust_class = "appliance"
+
+[[channel]]
+name = "agent_serial"
+ends = [
+  { pd = "serial_driver", id = 1 },
+  { pd = "agent", id = 0, pp = true },
+]
+
+[[channel]]
+name = "net_driver"
+ends = [
+  { pd = "virtio_net_driver", id = 1 },
+  { pd = "net_server", id = 1, pp = true },
+]
+
+[[channel]]
+name = "tls_net"
+ends = [
+  { pd = "net_server", id = 2 },
+  { pd = "tls_proxy", id = 1, pp = true },
+]
+
+[[channel]]
+name = "request_tls"
+ends = [
+  { pd = "tls_proxy", id = 2 },
+  { pd = "request_server", id = 1, pp = true },
+]
+
+[[channel]]
+name = "agent_http"
+ends = [
+  { pd = "request_server", id = 2 },
+  { pd = "agent", id = 1, pp = true },
+]
+
+[[channel]]
+name = "fs_blk_driver"
+ends = [
+  { pd = "virtio_blk_driver", id = 1 },
+  { pd = "fs_server", id = 1, pp = true },
+]
+
+# fs-server CLIENTS includes channel 2 (SUPERVISOR slot on workstation).
+[[channel]]
+name = "agent_fs"
+ends = [
+  { pd = "fs_server", id = 2 },
+  { pd = "agent", id = 3, pp = true },
+]

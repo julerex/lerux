@@ -187,6 +187,11 @@ test-browser:
 test-agent-runtime:
     BOARD=qemu_virt_aarch64_agent_runtime just test
 
+# Phase 79: agent Read/Edit/WebFetch against LERUXFS2 + grok-one
+test-agent:
+    just disk-img
+    BOARD=qemu_virt_aarch64_agent just test
+
 # Filesystem IPC smoke test (fs-server + fs-client on aarch64 virt)
 test-fs:
     BOARD=qemu_virt_aarch64_fs just test

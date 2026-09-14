@@ -46,6 +46,9 @@ const STATIC_PREFIX: u8 = 24;
 
 const LOCAL_UDP_PORT: u16 = 4242;
 const REMOTE_UDP_PORT: u16 = 12345;
+/// First ephemeral source port for TCP client connects. Incremented per
+/// connect so QEMU user-net does not see a reused 4-tuple while grok-one is
+/// still draining the previous connection.
 const TCP_LOCAL_PORT: u16 = 49152;
 
 /// Fake-time step per poll (ms). DHCP/DNS retries need advancing Instant.
@@ -205,6 +208,8 @@ pub struct NetStack {
     static_policy: StaticPolicy,
     /// When false, try_tcp_listen succeeds silently (background re-listen).
     listen_notify_client: bool,
+    /// Ephemeral source port for the next client connect (avoids 4-tuple reuse).
+    tcp_local_port: u16,
 }
 
 fn create_dma_region() -> SharedMemoryRef<'static, [u8]> {
@@ -330,6 +335,7 @@ impl NetStack {
             dhcp_deadline_ms: DHCP_GIVE_UP_MS,
             static_policy: StaticPolicy::compile_time(),
             listen_notify_client: true,
+            tcp_local_port: TCP_LOCAL_PORT,
         }
     }
 
@@ -669,10 +675,15 @@ impl NetStack {
             IpAddress::Ipv4(Ipv4Address::new(addr[0], addr[1], addr[2], addr[3])),
             port,
         );
-        let local = IpListenEndpoint::from((IpAddress::Ipv4(self.guest_ip()), TCP_LOCAL_PORT));
+        let local = IpListenEndpoint::from((IpAddress::Ipv4(self.guest_ip()), self.tcp_local_port));
         let tcp = sockets.get_mut::<TcpSocket>(tcp_handle);
         if tcp.state() == smoltcp::socket::tcp::State::Closed {
-            let _ = tcp.connect(self.iface.context(), remote, local);
+            if tcp.connect(self.iface.context(), remote, local).is_ok() {
+                self.tcp_local_port = match self.tcp_local_port.checked_add(1) {
+                    Some(p) if p >= TCP_LOCAL_PORT => p,
+                    _ => TCP_LOCAL_PORT,
+                };
+            }
         }
         if tcp.is_active() {
             self.tcp_client_active = true;

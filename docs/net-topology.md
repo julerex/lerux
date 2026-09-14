@@ -55,6 +55,7 @@ Serial needed a virt because the UART driver multi-cliented apps. Net multi-clie
 | `just test-request` | HTTPS via request-server → tls-proxy (ADR-009) |
 | `just test-browser` | HTTPS fixture via request-server into web-content (Phase 76) |
 | `just test-agent-runtime` | HTTPS POST completions via request-server to grok-one (Phase 77) |
+| `just test-agent` | HTTPS POST completions + GET fixture via request-server (Phase 79) |
 | `just test-http` | inbound HTTP |
 | `just test-workstation` | multi-client net-server + http-fs (Phase 64 queue) |
 

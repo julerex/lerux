@@ -66,6 +66,20 @@ image: build
 run: image
     {{lerux}} run --board {{board}} --build-dir {{build_dir}} --config {{config}}
 
+# Live workstation in QEMU for manual testing (serial shell at lerux>; quit with Ctrl-A x)
+qemu: disk-img
+    BOARD=qemu_virt_aarch64_workstation just run
+
+# Same as `qemu`, on the x86-64 (q35) workstation board
+qemu-x86-64: disk-img
+    BOARD=x86_64_generic_workstation just run
+
+alias qemu-x86 := qemu-x86-64
+
+# Interactive workstation in a QEMU GTK window (ramfb; serial is View → serial0 / Ctrl-Alt-2)
+qemu-interactive: disk-img
+    BOARD=qemu_virt_aarch64_interactive just run
+
 # Serial smoke test (QEMU or hw-serial when LERUX_HW_SERIAL is set on hardware boards)
 test: image
     {{lerux}} test --board {{board}} --build-dir {{build_dir}} --config {{config}}

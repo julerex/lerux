@@ -1,5 +1,7 @@
 # lerux
 
+**Try it in QEMU:** `just qemu` (ARM virt) or `just qemu-x86-64` (x86-64 q35) boots the workstation with a serial shell at `lerux>`. Quit with `Ctrl-A x`. `just qemu-interactive` opens the interactive workstation in a QEMU window (close the window to quit).
+
 Rust userspace on the [seL4](https://sel4.systems/) microkernel, using [seL4 Microkit](https://github.com/seL4/microkit) for static system layout and [rust-sel4](https://github.com/seL4/rust-sel4) for userspace APIs.
 
 The seL4 kernel is **not vendored** — it is cloned into `deps/workspace/` and built from source via the Microkit SDK. All lerux-owned code is Rust protection domains and build orchestration.
@@ -12,7 +14,10 @@ The seL4 kernel is **not vendored** — it is cloned into `deps/workspace/` and 
 just fetch          # clone seL4 15.0.0 + microkit 2.2.0
 just build-sdk      # build Microkit SDK from source (auto-downloads ARM toolchain if needed)
 # or: just fetch-sdk   # download prebuilt SDK 2.2.0 (no compile step)
-just run            # build hello PD, assemble loader.img, boot QEMU
+just qemu           # aarch64 workstation in QEMU (serial shell; Ctrl-A x to quit)
+just qemu-x86-64    # x86-64 workstation in QEMU (same; alias: just qemu-x86)
+just qemu-interactive  # interactive workstation in a QEMU window (close window to quit)
+just run            # hello PD only (override with BOARD=… just run)
 ```
 
 Smoke test:

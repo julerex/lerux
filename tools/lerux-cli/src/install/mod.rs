@@ -254,17 +254,26 @@ pub fn system_libclang_present() -> bool {
         .unwrap_or(false)
 }
 
-pub fn install_sp804_qemu(root: &Path) -> Result<PathBuf> {
+pub fn install_sp804_qemu(root: &Path, need_gtk: bool) -> Result<PathBuf> {
     let toolchains = toolchains_dir(root);
     let install_prefix = toolchains.join("qemu-sp804");
     let qemu_bin = install_prefix.join("bin/qemu-system-aarch64");
 
-    if qemu_bin.is_file() {
+    if qemu_bin.is_file() && (!need_gtk || qemu_has_gtk(&qemu_bin)) {
         eprintln!(
             "==> SP804 QEMU already installed at {}",
             install_prefix.display()
         );
         return Ok(install_prefix.join("bin"));
+    }
+
+    if need_gtk && !gtk_dev_available() {
+        bail!(
+            "graphic QEMU needs GTK (apt install libgtk-3-dev), then retry `just qemu-interactive`"
+        );
+    }
+    if need_gtk && qemu_bin.is_file() {
+        eprintln!("==> Rebuilding SP804 QEMU with GTK for graphic windows (one-time)");
     }
 
     for tool in ["curl", "patch", "make"] {
@@ -316,32 +325,37 @@ pub fn install_sp804_qemu(root: &Path) -> Result<PathBuf> {
     }
 
     let config_status = src_dir.join("build/config.status");
-    if !config_status.is_file() {
+    // After the early return, `need_gtk` means the installed binary cannot
+    // open a GTK window — reconfigure even if a headless build tree exists.
+    let need_reconfigure = need_gtk || !config_status.is_file();
+    if need_reconfigure {
         eprintln!("==> Configuring SP804 QEMU (aarch64-softmmu only)");
         let build_dir = src_dir.join("build");
         if build_dir.exists() {
             std::fs::remove_dir_all(&build_dir)?;
         }
-        let status = std::process::Command::new("./configure")
-            .current_dir(&src_dir)
-            .args([
-                &format!("--prefix={}", install_prefix.display()),
-                "--target-list=aarch64-softmmu",
-                "--disable-werror",
-                "--disable-docs",
-                "--disable-gtk",
-                "--disable-sdl",
-                "--disable-vnc",
-                "--disable-curses",
-                "--audio-drv-list=",
-                "--disable-capstone",
-                "--disable-libusb",
-                "--disable-usb-redir",
-                "--disable-vhost-user",
-                "--disable-vhost-vdpa",
-            ])
-            .status()
-            .context("configure SP804 QEMU")?;
+        let mut configure = std::process::Command::new("./configure");
+        configure.current_dir(&src_dir).args([
+            &format!("--prefix={}", install_prefix.display()),
+            "--target-list=aarch64-softmmu",
+            "--disable-werror",
+            "--disable-docs",
+            "--disable-sdl",
+            "--disable-vnc",
+            "--disable-curses",
+            "--audio-drv-list=",
+            "--disable-capstone",
+            "--disable-libusb",
+            "--disable-usb-redir",
+            "--disable-vhost-user",
+            "--disable-vhost-vdpa",
+        ]);
+        if need_gtk {
+            configure.arg("--enable-gtk");
+        } else {
+            configure.arg("--disable-gtk");
+        }
+        let status = configure.status().context("configure SP804 QEMU")?;
         if !status.success() {
             bail!("SP804 QEMU configure failed");
         }
@@ -367,6 +381,31 @@ pub fn install_sp804_qemu(root: &Path) -> Result<PathBuf> {
     }
     eprintln!("==> SP804 QEMU installed at {}", install_prefix.display());
     Ok(install_prefix.join("bin"))
+}
+
+fn gtk_dev_available() -> bool {
+    run_checked("pkg-config", &["--exists", "gtk+-3.0"]).is_ok()
+}
+
+fn qemu_has_gtk(qemu_bin: &Path) -> bool {
+    let Ok(output) = std::process::Command::new(qemu_bin)
+        .args(["-display", "help"])
+        .output()
+    else {
+        return false;
+    };
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    display_help_has_gtk(&text)
+}
+
+fn display_help_has_gtk(text: &str) -> bool {
+    text.to_ascii_lowercase()
+        .lines()
+        .any(|line| line.split_whitespace().any(|w| w == "gtk"))
 }
 
 fn find_dir(parent: &Path, pattern: &str) -> Option<PathBuf> {
@@ -400,12 +439,29 @@ pub fn install_tool(root: &Path, tool: InstallTool) -> Result<PathBuf> {
         InstallTool::RiscvToolchain => install_riscv_toolchain(root),
         InstallTool::Qemu => install_qemu_aarch64(root),
         InstallTool::QemuRiscv => install_qemu_riscv64(root),
-        InstallTool::Sp804Qemu => install_sp804_qemu(root),
+        InstallTool::Sp804Qemu => install_sp804_qemu(root, false),
         InstallTool::Dtc => install_dtc(root),
         InstallTool::Xmllint => install_xmllint(root),
         InstallTool::Libclang => {
             install_libclang(root)?;
             Ok(toolchains_dir(root).join("libclang/usr/bin"))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn display_help_has_gtk_should_match_gtk_backend_line() {
+        let help = "none                 none display\ngtk                  GTK display\n";
+        assert!(display_help_has_gtk(help));
+    }
+
+    #[test]
+    fn display_help_has_gtk_should_reject_headless_help() {
+        let help = "none                 none display\ncurses               curses display\n";
+        assert!(!display_help_has_gtk(help));
     }
 }

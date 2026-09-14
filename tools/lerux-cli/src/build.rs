@@ -136,6 +136,7 @@ pub fn run(root: &Path, board: &str, build_dir: &str, config: &str) -> Result<()
     }
     let mut ctx = ctx;
     ctx.graphic = true;
+    crate::qemu::print_graphic_hint(&ctx);
     let helpers = crate::qemu::setup_test_helpers(&ctx)?;
     let mut cmd = crate::qemu::qemu_command(&ctx)?;
     let status = cmd.status().context("qemu run")?;

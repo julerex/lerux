@@ -49,9 +49,10 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
         );
     };
 
+    let window = want_graphic_window(qemu, ctx.graphic);
     let mut path = host_path(&ctx.root);
     if qemu.sp804 {
-        let sp804 = install_sp804_qemu(&ctx.root)?;
+        let sp804 = install_sp804_qemu(&ctx.root, window)?;
         path = format!("{}:{}", sp804.display(), path);
     }
 
@@ -60,7 +61,7 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
     }
 
     let mut cmd = match ctx.board.arch.as_str() {
-        "aarch64" => aarch64_command(qemu, &loader, &disk, ctx.graphic),
+        "aarch64" => aarch64_command(qemu, &loader, &disk, window),
         "riscv64" => riscv64_command(qemu, &loader, &disk),
         "x86_64" => x86_command(ctx, qemu, &loader, &disk)?,
         other => bail!("unsupported arch {other}"),
@@ -124,7 +125,7 @@ fn want_graphic_window(qemu: &QemuConfig, graphic: bool) -> bool {
     }
 }
 
-fn aarch64_command(qemu: &QemuConfig, loader: &Path, disk: &Path, graphic: bool) -> Command {
+fn aarch64_command(qemu: &QemuConfig, loader: &Path, disk: &Path, window: bool) -> Command {
     let mut c = Command::new("qemu-system-aarch64");
     c.args([
         "-machine",
@@ -133,14 +134,13 @@ fn aarch64_command(qemu: &QemuConfig, loader: &Path, disk: &Path, graphic: bool)
         "cortex-a53",
         "-m",
         "size=2G",
-        "-serial",
-        "mon:stdio",
     ]);
-    if want_graphic_window(qemu, graphic) {
-        // Human `lerux run`: GTK window + ramfb. Smokes stay on `-nographic`.
-        c.args(["-display", "gtk"]);
+    if window {
+        // Human `lerux run`: GTK window + ramfb. Serial is a QEMU console
+        // (View → serial0 / Ctrl-Alt-2), not the calling terminal.
+        c.args(["-display", "gtk", "-serial", "vc"]);
     } else {
-        c.arg("-nographic");
+        c.args(["-serial", "mon:stdio", "-nographic"]);
     }
     if qemu.ramfb {
         c.args(["-device", "ramfb"]);
@@ -337,6 +337,17 @@ pub fn print_http_hint(ctx: &QemuContext) {
     }
 }
 
+pub fn print_graphic_hint(ctx: &QemuContext) {
+    let Some(qemu) = ctx.board.qemu() else {
+        return;
+    };
+    if !want_graphic_window(qemu, ctx.graphic) {
+        return;
+    }
+    eprintln!("QEMU opens a GTK window (ramfb). Close the window to quit.");
+    eprintln!("Serial shell is in the QEMU window: View → serial0, or Ctrl-Alt-2.");
+}
+
 pub fn ensure_qemu_binary(root: &Path, board: &Board) -> Result<()> {
     let binary = format!("qemu-system-{}", board.arch);
     let path = host_path(root);
@@ -353,4 +364,51 @@ pub fn ensure_qemu_binary(root: &Path, board: &Board) -> Result<()> {
 #[allow(dead_code)]
 pub fn probe_tcp_echo(port: u16) -> bool {
     port_is_listening(port)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn render_aarch64(qemu_toml: &str, window: bool) -> String {
+        let qemu: QemuConfig = toml::from_str(qemu_toml).unwrap();
+        let cmd = aarch64_command(
+            &qemu,
+            Path::new("loader.img"),
+            Path::new("disk.img"),
+            window,
+        );
+        format!("{cmd:?}")
+    }
+
+    #[test]
+    fn graphic_ramfb_should_not_attach_serial_to_stdio() {
+        let line = render_aarch64("ramfb = true", true);
+        assert!(
+            !line.contains("mon:stdio"),
+            "graphic ramfb must not wire serial through the calling terminal: {line}"
+        );
+    }
+
+    #[test]
+    fn graphic_ramfb_should_put_serial_on_qemu_vc() {
+        let line = render_aarch64("ramfb = true", true);
+        assert!(
+            line.contains("\"-serial\" \"vc\""),
+            "graphic ramfb serial should live in the QEMU window: {line}"
+        );
+    }
+
+    #[test]
+    fn headless_ramfb_should_keep_stdio_serial() {
+        let line = render_aarch64("ramfb = true", false);
+        assert!(
+            line.contains("\"-serial\" \"mon:stdio\""),
+            "smokes must keep serial on the calling terminal: {line}"
+        );
+        assert!(
+            line.contains("\"-nographic\""),
+            "smokes must stay headless: {line}"
+        );
+    }
 }

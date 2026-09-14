@@ -17,9 +17,11 @@ use sel4_microkit::{protection_domain, Channel, Handler, Infallible, MessageInfo
 
 use crate::http::{build_request, ExtraHeader, MAX_EXTRA_HEADERS};
 
-/// Channel IDs match `request.system.template` / `agent-runtime` / `agent` templates.
+/// Channel IDs match request / agent / browser / interactive templates.
 const TLS_PROXY: TlsClient = TlsClient::new(Channel::new(1));
 const APP: Channel = Channel::new(2);
+/// Second untrusted HTTP client (agent on the joint profile; unwired elsewhere).
+const APP2: Channel = Channel::new(3);
 
 const MAX_STEPS: usize = 64;
 const MAX_HTTP_RAW: usize = 8192;
@@ -61,7 +63,7 @@ impl Handler for HandlerImpl {
         channel: Channel,
         msg_info: MessageInfo,
     ) -> Result<MessageInfo, Self::Error> {
-        if channel != APP {
+        if channel != APP && channel != APP2 {
             unreachable!();
         }
 

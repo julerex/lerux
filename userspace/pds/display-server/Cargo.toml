@@ -9,9 +9,11 @@ description = "Trusted display PD: owns QEMU ramfb; apps present via a shared bi
 workspace = true
 
 [features]
+interactive = []
 board-qemu_virt_aarch64_display = []
 board-qemu_virt_aarch64_paint = []
 board-qemu_virt_aarch64_browser = []
+board-qemu_virt_aarch64_interactive = ["interactive"]
 
 [dependencies]
 lerux-driver-protocols = { path = "../../crates/lerux-driver-protocols" }

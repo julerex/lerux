@@ -1,0 +1,88 @@
+# Phase 80: workstation + display-server + request-server + one web-content + agent.
+# Untrusted PDs (web-content, agent, browser-ui) have no NetClient / TlsClient.
+# Default workstation is unchanged.
+
+extends = "workstation"
+template = "workstation-interactive.system.template"
+description = "Phase 80: joint workstation-interactive (browser + agent via request-server)"
+default_board = "qemu_virt_aarch64_interactive"
+trust_class = "admin"
+
+pds = [
+  "display-server",
+  "request-server",
+  "tls-proxy",
+  "web-content",
+  "browser-ui",
+  "agent",
+]
+
+[[channel]]
+name = "tls_net"
+ends = [
+  { pd = "net_server", id = 8 },
+  { pd = "tls_proxy", id = 1, pp = true },
+]
+
+[[channel]]
+name = "request_tls"
+ends = [
+  { pd = "tls_proxy", id = 2 },
+  { pd = "request_server", id = 1, pp = true },
+]
+
+[[channel]]
+name = "web_http"
+ends = [
+  { pd = "request_server", id = 2 },
+  { pd = "web_content", id = 1, pp = true },
+]
+
+[[channel]]
+name = "agent_http"
+ends = [
+  { pd = "request_server", id = 3 },
+  { pd = "agent", id = 1, pp = true },
+]
+
+[[channel]]
+name = "agent_fs"
+ends = [
+  { pd = "fs_server", id = 9 },
+  { pd = "agent", id = 3, pp = true },
+]
+
+[[channel]]
+name = "shell_grok"
+ends = [
+  { pd = "agent", id = 2 },
+  { pd = "shell", id = 9, pp = true },
+]
+
+[[channel]]
+name = "browser_tab"
+ends = [
+  { pd = "web_content", id = 2 },
+  { pd = "browser_ui", id = 1, pp = true },
+]
+
+[[channel]]
+name = "agent_browse"
+ends = [
+  { pd = "web_content", id = 3 },
+  { pd = "agent", id = 4, pp = true },
+]
+
+[[channel]]
+name = "browser_present"
+ends = [
+  { pd = "display_server", id = 1 },
+  { pd = "browser_ui", id = 2, pp = true },
+]
+
+[[channel]]
+name = "web_present"
+ends = [
+  { pd = "display_server", id = 2 },
+  { pd = "web_content", id = 4, pp = true },
+]

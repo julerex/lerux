@@ -232,6 +232,31 @@ mod tests {
     }
 
     #[test]
+    fn interactive_board_has_ramfb_https_grok_and_split_pds() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let boards = load_boards(&root).unwrap();
+        let board = boards.get("qemu_virt_aarch64_interactive").unwrap();
+        let qemu = board.qemu().unwrap();
+        assert!(qemu.ramfb);
+        assert!(qemu.https_one);
+        assert!(qemu.grok_one);
+        assert!(qemu.sp804);
+        assert_eq!(qemu.disk, DiskMode::Rw);
+        assert!(board.ci);
+        for pd in [
+            "agent",
+            "web-content",
+            "browser-ui",
+            "request-server",
+            "display-server",
+            "shell",
+        ] {
+            assert!(board.pds.iter().any(|p| p == pd), "missing {pd}");
+        }
+        assert!(!board.pds.iter().any(|p| p == "net-client"));
+    }
+
+    #[test]
     fn agent_board_has_fs_and_grok_one() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let boards = load_boards(&root).unwrap();

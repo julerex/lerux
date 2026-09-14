@@ -5,24 +5,41 @@ extern crate alloc;
 
 use alloc::vec::Vec;
 
+#[cfg(feature = "interactive")]
+use lerux_interface_types::{DisplayRequest, DisplayResponse};
 use lerux_interface_types::{
     HttpRequest, HttpResponse, WebContentRequest, WebContentResponse, DISPLAY_HEIGHT,
     DISPLAY_STRIDE, DISPLAY_VISIBLE_BYTES, DISPLAY_WIDTH,
 };
+#[cfg(feature = "interactive")]
+use lerux_ipc::call;
 use lerux_ipc::{recv, send, send_unspecified_error, HttpClient};
-use lerux_logging::{log, serial};
-use lerux_web::{fixture_signatures_ok, render, Bitmap};
+#[cfg(feature = "interactive")]
+use lerux_logging::debug;
+use lerux_logging::log;
+#[cfg(not(feature = "interactive"))]
+use lerux_logging::serial;
+use lerux_web::{fixture_signatures_ok, render, visible_text, Bitmap};
 use sel4_microkit::{protection_domain, var, Channel, Handler, Infallible, MessageInfo};
 
 /// Channel 0: serial-virt (`<end pd="web_content" id="0" pp="true" />`).
+#[cfg(not(feature = "interactive"))]
 const SERIAL_DRIVER: Channel = Channel::new(0);
 /// Channel 1: request-server (`<end pd="web_content" id="1" pp="true" />`).
 const REQUEST_SERVER: Channel = Channel::new(1);
 /// Channel 2: browser-ui (`<end pd="web_content" id="2" />`).
 const BROWSER_UI: Channel = Channel::new(2);
+/// Channel 3: agent Browse on the joint profile (unwired elsewhere).
+const AGENT: Channel = Channel::new(3);
+/// Channel 4: display-server Present on the joint profile.
+#[cfg(feature = "interactive")]
+const DISPLAY_SERVER: Channel = Channel::new(4);
 
 #[protection_domain(heap_size = 128 * 1024)]
 fn init() -> HandlerImpl {
+    #[cfg(feature = "interactive")]
+    debug::init().unwrap();
+    #[cfg(not(feature = "interactive"))]
     serial::init(SERIAL_DRIVER).unwrap();
 
     let bitmap = *var!(bitmap_vaddr: usize = 0) as *mut u8;
@@ -68,7 +85,12 @@ impl HandlerImpl {
         } else {
             log::info!("lerux-web: paint mismatch");
         }
-        WebContentResponse::Painted { status, signatures }
+        #[cfg(feature = "interactive")]
+        {
+            let _ =
+                call::<DisplayRequest, DisplayResponse>(DISPLAY_SERVER, DisplayRequest::Present);
+        }
+        WebContentResponse::painted(status, signatures, visible_text(html).as_bytes())
     }
 }
 
@@ -116,7 +138,7 @@ impl Handler for HandlerImpl {
         channel: Channel,
         msg_info: MessageInfo,
     ) -> Result<MessageInfo, Self::Error> {
-        if channel != BROWSER_UI {
+        if channel != BROWSER_UI && channel != AGENT {
             unreachable!();
         }
         Ok(match recv::<WebContentRequest>(msg_info) {

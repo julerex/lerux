@@ -2,7 +2,7 @@
 
 use lerux_interface_types::{NetRequest, NetResponse};
 
-pub const MAX_NET_CLIENTS: usize = 8;
+pub const MAX_NET_CLIENTS: usize = 16;
 
 #[derive(Clone, Copy)]
 pub struct ClientSlot {

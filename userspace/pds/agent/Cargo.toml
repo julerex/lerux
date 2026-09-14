@@ -13,6 +13,9 @@ board-qemu_virt_aarch64_agent_runtime = []
 # Phase 79: FsRequest + WebFetch GET (no fork/exec).
 tools = []
 board-qemu_virt_aarch64_agent = ["tools"]
+# Phase 80: tools + Browse (PPC web-content); debug log, no serial TUI.
+browse = []
+board-qemu_virt_aarch64_interactive = ["tools", "browse"]
 
 [dependencies]
 lerux-interface-types = { path = "../../crates/lerux-interface-types" }

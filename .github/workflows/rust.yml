@@ -358,6 +358,9 @@ jobs:
           - id: agent
             board: qemu_virt_aarch64_agent
             command: just test-agent
+          - id: interactive
+            board: qemu_virt_aarch64_interactive
+            command: just disk-img && just test-interactive
           - id: fs
             board: qemu_virt_aarch64_fs
             command: just disk-img && just test-fs
@@ -434,7 +437,7 @@ jobs:
             board-${{ matrix.id }}-
 
       - name: Restore SP804 QEMU cache
-        if: matrix.id == 'init' || matrix.id == 'composed' || matrix.id == 'blk-composed' || matrix.id == 'http-composed' || matrix.id == 'net-composed' || matrix.id == 'ipc-composed' || matrix.id == 'workstation'
+        if: matrix.id == 'init' || matrix.id == 'composed' || matrix.id == 'blk-composed' || matrix.id == 'http-composed' || matrix.id == 'net-composed' || matrix.id == 'ipc-composed' || matrix.id == 'workstation' || matrix.id == 'interactive'
         uses: actions/cache/restore@v4
         with:
           path: |
@@ -446,7 +449,7 @@ jobs:
             qemu-sp804-
 
       - name: Ensure SP804 QEMU executable
-        if: matrix.id == 'init' || matrix.id == 'composed' || matrix.id == 'blk-composed' || matrix.id == 'http-composed' || matrix.id == 'net-composed' || matrix.id == 'ipc-composed' || matrix.id == 'workstation'
+        if: matrix.id == 'init' || matrix.id == 'composed' || matrix.id == 'blk-composed' || matrix.id == 'http-composed' || matrix.id == 'net-composed' || matrix.id == 'ipc-composed' || matrix.id == 'workstation' || matrix.id == 'interactive'
         run: |
           set -euo pipefail
           qemu="deps/toolchains/qemu-sp804/bin/qemu-system-aarch64"

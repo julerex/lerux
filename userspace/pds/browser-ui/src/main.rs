@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 
+#[cfg(not(feature = "interactive"))]
 use lerux_driver_protocols::serial::{
     NonBlocking, Request as SerialRequest, Response as SerialResponse, SuccessResponse,
 };
@@ -8,10 +9,15 @@ use lerux_interface_types::{
     DisplayRequest, DisplayResponse, WebContentRequest, WebContentResponse,
 };
 use lerux_ipc::call;
-use lerux_logging::{log, serial};
+#[cfg(feature = "interactive")]
+use lerux_logging::debug;
+use lerux_logging::log;
+#[cfg(not(feature = "interactive"))]
+use lerux_logging::serial;
 use sel4_microkit::{protection_domain, Channel, ChannelSet, Handler, Infallible};
 
 /// Channel 0: serial-virt (`<end pd="browser_ui" id="0" pp="true" />`).
+#[cfg(not(feature = "interactive"))]
 const SERIAL_DRIVER: Channel = Channel::new(0);
 /// Channel 1: web-content (`<end pd="browser_ui" id="1" pp="true" />`).
 const WEB_CONTENT: Channel = Channel::new(1);
@@ -23,6 +29,9 @@ const LINE_CAP: usize = 160;
 
 #[protection_domain]
 fn init() -> HandlerImpl {
+    #[cfg(feature = "interactive")]
+    debug::init().unwrap();
+    #[cfg(not(feature = "interactive"))]
     serial::init(SERIAL_DRIVER).unwrap();
     log::info!("lerux-browser: ready");
 
@@ -35,7 +44,15 @@ fn init() -> HandlerImpl {
 }
 
 struct HandlerImpl {
+    #[cfg_attr(
+        feature = "interactive",
+        expect(dead_code, reason = "serial open line is unused without serial-virt")
+    )]
     line: [u8; LINE_CAP],
+    #[cfg_attr(
+        feature = "interactive",
+        expect(dead_code, reason = "serial open line is unused without serial-virt")
+    )]
     line_len: usize,
 }
 
@@ -67,6 +84,7 @@ impl HandlerImpl {
         }
     }
 
+    #[cfg(not(feature = "interactive"))]
     fn push_byte(&mut self, b: u8) {
         if b == b'\r' {
             return;
@@ -82,6 +100,7 @@ impl HandlerImpl {
         }
     }
 
+    #[cfg(not(feature = "interactive"))]
     fn handle_line(&mut self) {
         let line = self.line[..self.line_len].trim_ascii();
         let Some(url) = line.strip_prefix(b"open ") else {
@@ -93,6 +112,7 @@ impl HandlerImpl {
         }
     }
 
+    #[cfg(not(feature = "interactive"))]
     fn drain_serial(&mut self) {
         while let Ok(Ok(SuccessResponse::Read(NonBlocking::Ready(b)))) =
             call::<SerialRequest, SerialResponse>(SERIAL_DRIVER, SerialRequest::Read)
@@ -106,6 +126,7 @@ impl Handler for HandlerImpl {
     type Error = Infallible;
 
     fn notified(&mut self, _channels: ChannelSet) -> Result<(), Self::Error> {
+        #[cfg(not(feature = "interactive"))]
         self.drain_serial();
         Ok(())
     }

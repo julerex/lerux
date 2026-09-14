@@ -583,7 +583,7 @@ pub fn run_board_test_with_mode(
         }
     }
 
-    let helper = crate::qemu::setup_test_helpers(&ctx)?;
+    let helpers = crate::qemu::setup_test_helpers(&ctx)?;
     let cmd = crate::qemu::qemu_command(&ctx)?;
     let test = crate::smoke_expects::smoke_test_for_board(root, board)?;
 
@@ -593,7 +593,7 @@ pub fn run_board_test_with_mode(
         .join("smoke-logs")
         .join(format!("{board}.serial.log"));
     let result = run_smoke_with_capture(cmd, &test, Some(&log_path));
-    if let Some(mut child) = helper {
+    for mut child in helpers {
         let _ = child.kill();
     }
     result

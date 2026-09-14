@@ -14,7 +14,8 @@ use std::{
 
 use anyhow::{Context, Result};
 use lerux_interface_types::{
-    AGENT_EDIT_FROM, AGENT_EDIT_TO, AGENT_SMOKE_BODY, AGENT_SMOKE_PATH, AGENT_SMOKE_PROMPT,
+    AGENT_BROWSE_URL, AGENT_EDIT_FROM, AGENT_EDIT_TO, AGENT_INTERACTIVE_OK,
+    AGENT_INTERACTIVE_PROMPT, AGENT_SMOKE_BODY, AGENT_SMOKE_PATH, AGENT_SMOKE_PROMPT,
     AGENT_TOOLS_OK, AGENT_TOOLS_PROMPT, AGENT_WEBFETCH_URL, AGENT_WORK_HELLO, GROK_STUB_TEXT,
     GROK_STUB_TOOL_CALL, GROK_STUB_TOOL_RESULT,
 };
@@ -187,9 +188,12 @@ fn request_line(buf: &[u8]) -> (&[u8], &[u8]) {
     (parts.next().unwrap_or(b""), parts.next().unwrap_or(b"/"))
 }
 
-/// Scripted completions: runtime smoke (Read /hello.txt) or tools smoke
-/// (Read → Edit → WebFetch).
+/// Scripted completions: runtime smoke (Read /hello.txt), tools smoke
+/// (Read → Edit → WebFetch), or joint Browse.
 pub fn stub_reply(body: &[u8]) -> Vec<u8> {
+    if contains(body, AGENT_INTERACTIVE_PROMPT) {
+        return interactive_script(body);
+    }
     if contains(body, AGENT_TOOLS_PROMPT) || contains(body, AGENT_WORK_HELLO) {
         return tools_script(body);
     }
@@ -208,6 +212,20 @@ pub fn stub_reply(body: &[u8]) -> Vec<u8> {
     }
     let mut out = Vec::from(GROK_STUB_TEXT);
     out.extend_from_slice(b"(unscripted)\n");
+    out
+}
+
+fn interactive_script(body: &[u8]) -> Vec<u8> {
+    if contains(body, b"Browse") && contains(body, GROK_STUB_TOOL_RESULT) {
+        let mut out = Vec::from(GROK_STUB_TEXT);
+        out.extend_from_slice(AGENT_INTERACTIVE_OK);
+        out.push(b'\n');
+        return out;
+    }
+    let mut out = Vec::from(GROK_STUB_TOOL_CALL);
+    out.extend_from_slice(b"Browse ");
+    out.extend_from_slice(AGENT_BROWSE_URL);
+    out.push(b'\n');
     out
 }
 
@@ -315,6 +333,27 @@ mod tests {
         body.extend_from_slice(AGENT_WORK_HELLO);
         let r = stub_reply(&body);
         assert!(contains(&r, AGENT_WEBFETCH_URL));
+    }
+
+    #[test]
+    fn interactive_prompt_emits_browse() {
+        let mut body = Vec::from(GROK_STUB_PROMPT);
+        body.extend_from_slice(AGENT_INTERACTIVE_PROMPT);
+        let r = stub_reply(&body);
+        assert!(r.starts_with(GROK_STUB_TOOL_CALL));
+        assert!(contains(&r, AGENT_BROWSE_URL));
+    }
+
+    #[test]
+    fn interactive_script_ends_with_ok() {
+        let mut body = Vec::from(GROK_STUB_PROMPT);
+        body.extend_from_slice(AGENT_INTERACTIVE_PROMPT);
+        body.extend_from_slice(b"\n");
+        body.extend_from_slice(GROK_STUB_TOOL_RESULT);
+        body.extend_from_slice(b"Browse ");
+        body.extend_from_slice(AGENT_BROWSE_URL);
+        let r = stub_reply(&body);
+        assert!(contains(&r, AGENT_INTERACTIVE_OK));
     }
 
     #[test]

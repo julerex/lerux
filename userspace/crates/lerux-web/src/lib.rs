@@ -31,6 +31,43 @@ pub fn render(html: &str, bitmap: &mut Bitmap<'_>) {
     paint_tree(&tree, bitmap);
 }
 
+/// Visible body text with whitespace collapsed (agent `Browse` result).
+pub fn visible_text(html: &str) -> alloc::string::String {
+    let doc = lerux_html::parse(html);
+    let Some(body) = doc.first_element(lerux_html::TagName::Body) else {
+        return collapse_ws(&doc.text_content(doc.root()));
+    };
+    let mut out = alloc::string::String::new();
+    for child in &doc.get(body).children {
+        let piece = collapse_ws(&doc.text_content(*child));
+        if piece.is_empty() {
+            continue;
+        }
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        out.push_str(&piece);
+    }
+    out
+}
+
+fn collapse_ws(s: &str) -> alloc::string::String {
+    let mut out = alloc::string::String::new();
+    let mut space = false;
+    for c in s.chars() {
+        if c.is_whitespace() {
+            if !space && !out.is_empty() {
+                out.push(' ');
+                space = true;
+            }
+        } else {
+            space = false;
+            out.push(c);
+        }
+    }
+    out
+}
+
 /// True when [`PAINT_FIXTURE`] produced the expected signature pixels.
 ///
 /// Layout: 32px red `h1`, then a 200px-content yellow `p` with 8px padding
@@ -77,6 +114,11 @@ mod tests {
     fn contains(data: &[u8], color: u32) -> bool {
         data.chunks_exact(4)
             .any(|c| u32::from_le_bytes(c.try_into().unwrap()) == color)
+    }
+
+    #[test]
+    fn visible_text_should_join_paint_fixture_blocks() {
+        assert_eq!(visible_text(PAINT_FIXTURE), "lerux ok in");
     }
 
     #[test]

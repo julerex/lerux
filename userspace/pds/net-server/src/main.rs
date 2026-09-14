@@ -192,6 +192,7 @@ impl HandlerImpl {
             || channel == Channel::new(5)
             || channel == Channel::new(6)
             || channel == Channel::new(7)
+            || channel == Channel::new(8)
     }
 }
 
@@ -204,7 +205,7 @@ impl Handler for HandlerImpl {
         msg_info: MessageInfo,
     ) -> Result<MessageInfo, Self::Error> {
         if !Self::is_client(channel) {
-            // 2=sup, 3=shell, 5=config, 6=chat, 7=http-file-browser (workstation)
+            // 2=sup, 3=shell, 5=config, 6=chat, 7=http-file-browser, 8=tls-proxy
             unreachable!("unexpected net client");
         }
 

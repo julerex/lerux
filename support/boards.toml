@@ -443,6 +443,17 @@ ci = true
 curl_expect = "boot.log"
 system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, pl031_mmio_phys_addr = "0x9010000", pl031_irq = 34, sp804_mmio_phys_addr = "0x90d0000", sp804_irq = 43, virtio_mmio_phys_addr = "0xa003000", virtio_blk_irq = 78, virtio_net_irq = 79 }
 
+# Phase 80: workstation + ramfb + request-server + browser + agent.
+[qemu_virt_aarch64_interactive]
+arch = "aarch64"
+microkit_board = "qemu_virt_aarch64"
+target = "aarch64-sel4-microkit"
+template = "workstation-interactive.system.template"
+pds = ["supervisor", "shell", "edit", "chat-client", "http-file-browser", "backup", "fs-server", "net-server", "log-server", "config-server", "serial-driver", "serial-virt", "pl031-driver", "sp804-driver", "virtio-blk-driver", "virtio-net-driver", "display-server", "request-server", "tls-proxy", "web-content", "browser-ui", "agent"]
+qemu = { disk = "rw", net = "user", ramfb = true, sp804 = true, https_one = true, grok_one = true }
+ci = true
+system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, pl031_mmio_phys_addr = "0x9010000", pl031_irq = 34, sp804_mmio_phys_addr = "0x90d0000", sp804_irq = 43, virtio_mmio_phys_addr = "0xa003000", virtio_blk_irq = 78, virtio_net_irq = 79, fw_cfg_mmio_phys_addr = "0x9020000" }
+
 # Phase 59: RISC-V virt full workstation (MMIO virtio + Goldfish/rdtime).
 [qemu_virt_riscv64_workstation]
 arch = "riscv64"

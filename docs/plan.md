@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-09-07 (Phase 79 agent tools)
+Last updated: 2026-09-14 (Phase 80 joint workstation-interactive)
 
 ## Phase 1 — Bring-up
 
@@ -645,11 +645,11 @@ QEMU-only **browser + agent** program. Steal Ladybird process topology and Grok 
 - [x] `just test-agent` (`lerux-agent: tools ok`)
 - [x] No `fork`/`exec`, MCP, or Landlock
 
-## Phase 80 — Joint `workstation-interactive`
+## Phase 80 — Joint `workstation-interactive` ✅
 
-- [ ] One profile: display + request-server + browser + agent
-- [ ] Agent `browse` → `web-content` (still no NIC map)
-- [ ] `just test-interactive`
+- [x] One profile: display + request-server + browser + agent
+- [x] Agent `browse` → `web-content` (still no NIC map)
+- [x] `just test-interactive` (`lerux-agent: interactive ok`)
 
 | Phase | Theme | Status |
 |-------|--------|--------|
@@ -662,9 +662,9 @@ QEMU-only **browser + agent** program. Steal Ladybird process topology and Grok 
 | 77 | Agent runtime + `grok-one` stub | done — `just test-agent-runtime` |
 | 78 | Agent serial TUI | done — `just test-agent-runtime` |
 | 79 | Agent tools (fs / shell / fetch) | done — `just test-agent` |
-| 80 | Joint `workstation-interactive` | planned |
+| 80 | Joint `workstation-interactive` | done — `just test-interactive` |
 
-Near-term priority: **80** ([`plan-interactive.md` § Near-term priority](plan-interactive.md#near-term-priority)). JS, GPU, extra tabs, and live xAI stay off this list.
+Interactive-surface program (71–80) is complete. JS, GPU, extra tabs, and live xAI stay off this list.
 
 ## Physical RPi4 lab (hardware-gated)
 

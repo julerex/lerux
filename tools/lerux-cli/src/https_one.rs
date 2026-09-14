@@ -9,10 +9,7 @@
 use std::{
     io::{Read, Write},
     net::{SocketAddr, TcpListener},
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
-    },
+    sync::Arc,
     thread,
     time::Duration,
 };
@@ -27,33 +24,39 @@ const RESPONSE: &[u8] = b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: cl
 const NOT_FOUND: &[u8] =
     b"HTTP/1.1 404 Not Found\r\nContent-Length: 9\r\nConnection: close\r\n\r\nnot found";
 
+/// Joint interactive smoke may GET twice (retries). One-shot boards still work.
+const TURNS: usize = 8;
+
 pub fn https_one(port: u16) -> Result<()> {
     let config = server_config()?;
     let listener = TcpListener::bind(SocketAddr::from(([127, 0, 0, 1], port)))
         .with_context(|| format!("bind 127.0.0.1:{port}"))?;
+    listener
+        .set_nonblocking(true)
+        .context("https-one nonblocking accept")?;
     eprintln!("https-one-server: listening on 127.0.0.1:{port}");
 
-    let done = Arc::new(AtomicBool::new(false));
-    let done_thread = Arc::clone(&done);
-    let handle = thread::spawn(move || {
-        if let Ok((mut sock, peer)) = listener.accept() {
-            eprintln!("https-one-server: accepted {peer}");
-            if let Err(e) = serve_one(&config, &mut sock) {
-                eprintln!("https-one-server: {e:#}");
+    let deadline = std::time::Instant::now() + Duration::from_secs(90);
+    let mut served = 0usize;
+    while served < TURNS && std::time::Instant::now() < deadline {
+        match listener.accept() {
+            Ok((mut sock, peer)) => {
+                eprintln!("https-one-server: accepted {peer}");
+                if let Err(e) = serve_one(&config, &mut sock) {
+                    eprintln!("https-one-server: {e:#}");
+                }
+                let _ = sock.shutdown(std::net::Shutdown::Write);
+                served += 1;
             }
-            let _ = sock.shutdown(std::net::Shutdown::Write);
-            done_thread.store(true, Ordering::SeqCst);
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
+                thread::sleep(Duration::from_millis(50));
+            }
+            Err(e) => {
+                eprintln!("https-one-server: accept {e}");
+                break;
+            }
         }
-    });
-
-    let deadline = std::time::Instant::now() + Duration::from_secs(60);
-    while !done.load(Ordering::SeqCst) {
-        if std::time::Instant::now() >= deadline {
-            break;
-        }
-        thread::sleep(Duration::from_millis(50));
     }
-    let _ = handle.join();
     Ok(())
 }
 
@@ -81,6 +84,9 @@ fn serve_one(config: &Arc<ServerConfig>, sock: &mut std::net::TcpStream) -> Resu
                 sock.write_all(&out).context("sock write")?;
             }
         }
+        if saw_http && !conn.wants_write() {
+            return Ok(());
+        }
         if conn.wants_read() {
             match sock.read(&mut raw) {
                 Ok(0) => anyhow::bail!("peer closed"),
@@ -107,9 +113,6 @@ fn serve_one(config: &Arc<ServerConfig>, sock: &mut std::net::TcpStream) -> Resu
                 conn.writer().write_all(&body).context("http write")?;
                 saw_http = true;
             }
-        }
-        if saw_http && !conn.wants_write() {
-            return Ok(());
         }
     }
     anyhow::bail!("https-one handshake/serve loop exhausted")

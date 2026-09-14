@@ -9,7 +9,9 @@ description = "Untrusted Browser UI analogue: serial open + Present (Phase 76)"
 workspace = true
 
 [features]
+interactive = []
 board-qemu_virt_aarch64_browser = []
+board-qemu_virt_aarch64_interactive = ["interactive"]
 
 [dependencies]
 lerux-driver-protocols = { path = "../../crates/lerux-driver-protocols" }

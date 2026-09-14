@@ -213,9 +213,20 @@ fn check_workstation_bands(prio: &BTreeMap<String, u32>, report: &mut QosReport)
     // Control / bulk / interactive
     require_min(report, "config_server", 3);
     require_min(report, "supervisor", 2);
-    for name in ["edit", "chat_client", "http_file_browser", "backup"] {
+    for name in [
+        "edit",
+        "chat_client",
+        "http_file_browser",
+        "backup",
+        "agent",
+        "browser_ui",
+    ] {
         require_min(report, name, 2);
     }
+    require_min(report, "web_content", 2);
+    require_min(report, "request_server", 3);
+    require_min(report, "tls_proxy", 4);
+    require_min(report, "display_server", 4);
     // Shell must stay lowest among PPC clients (priority 1 on workstation).
     require_exact(report, "shell", 1);
 

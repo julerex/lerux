@@ -295,6 +295,34 @@ mod tests {
     }
 
     #[test]
+    fn interactive_isolates_untrusted_pds() {
+        let root = repo_root();
+        let body = render_system_body(&root, "qemu_virt_aarch64_interactive").unwrap();
+        assert_eq!(body.matches("<channel>").count(), 0);
+        let sdf = render_system(&root, "qemu_virt_aarch64_interactive").unwrap();
+        assert!(sdf.contains("web_content"));
+        assert!(sdf.contains("browser_ui"));
+        assert!(sdf.contains("agent"));
+        assert!(sdf.contains("request_server"));
+        assert!(sdf.contains("display_server"));
+        for name in ["web_content", "browser_ui", "agent"] {
+            let block = pd_block(&sdf, name);
+            assert!(
+                !block.contains("virtio"),
+                "{name} must not map NIC/blk DMA/MMIO"
+            );
+            assert!(
+                !block.contains("fw_cfg"),
+                "{name} must not map display MMIO"
+            );
+        }
+        let web = pd_block(&sdf, "web_content");
+        assert!(web.contains("bitmap"), "web-content must map the bitmap MR");
+        let agent = pd_block(&sdf, "agent");
+        assert!(!agent.contains("bitmap"), "agent must not map the bitmap");
+    }
+
+    #[test]
     fn agent_keeps_agent_off_nic() {
         let root = repo_root();
         let body = render_system_body(&root, "qemu_virt_aarch64_agent").unwrap();

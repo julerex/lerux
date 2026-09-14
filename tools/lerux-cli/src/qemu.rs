@@ -267,23 +267,24 @@ fn ensure_disk(disk: &Path) -> Result<()> {
     bail!("missing {}; run `lerux disk-img`", disk.display());
 }
 
-pub fn setup_test_helpers(ctx: &QemuContext) -> Result<Option<std::process::Child>> {
+pub fn setup_test_helpers(ctx: &QemuContext) -> Result<Vec<std::process::Child>> {
+    let mut helpers = Vec::new();
     let Some(qemu) = ctx.board.qemu() else {
-        return Ok(None);
+        return Ok(helpers);
     };
     if qemu.http_one {
-        return Ok(Some(crate::http_one::start_http_one_background(8081)?));
+        helpers.push(crate::http_one::start_http_one_background(8081)?);
     }
     if qemu.https_one {
-        return Ok(Some(crate::https_one::start_https_one_background(8443)?));
+        helpers.push(crate::https_one::start_https_one_background(8443)?);
     }
     if qemu.grok_one {
-        return Ok(Some(crate::grok_one::start_grok_one_background(8444)?));
+        helpers.push(crate::grok_one::start_grok_one_background(8444)?);
     }
     if qemu.tcp_echo {
-        return Ok(Some(start_tcp_echo_background(18080)?));
+        helpers.push(start_tcp_echo_background(18080)?);
     }
-    Ok(None)
+    Ok(helpers)
 }
 
 pub fn cleanup_http_conflicts() {

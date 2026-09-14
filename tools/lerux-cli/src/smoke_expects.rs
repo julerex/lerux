@@ -182,6 +182,20 @@ mod tests {
     }
 
     #[test]
+    fn loads_interactive_board() {
+        let root = repo_root();
+        let t = smoke_test_for_board(&root, "qemu_virt_aarch64_interactive").unwrap();
+        assert!(t.unordered);
+        assert_eq!(t.timeout_secs, 120);
+        assert!(t
+            .expects
+            .iter()
+            .any(|e| e.contains("lerux-agent: interactive ok")));
+        assert!(t.expects.iter().any(|e| e.contains("lerux-web: paint ok")));
+        assert!(t.expects.iter().any(|e| e.contains("ramfb ok")));
+    }
+
+    #[test]
     fn loads_agent_board() {
         let root = repo_root();
         let t = smoke_test_for_board(&root, "qemu_virt_aarch64_agent").unwrap();

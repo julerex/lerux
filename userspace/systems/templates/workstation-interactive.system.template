@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Phase 80: workstation + ramfb + request-server + one web-content + agent.
+  Channels come from support/profiles/workstation-interactive.toml.
+  HTTP stack is stacked above bulk so agent Browse can PPC web-content
+  (ADR-006): log 7 > net 6 > tls 5 > request 4 > web_content 3 > agent 2
+  > shell 1. Untrusted PDs never map NIC/blk/display MMIO.
+-->
+<system>
+    <memory_region name="serial_mmio" size="0x1_000" phys_addr="{serial_mmio_phys_addr}" />
+    <memory_region name="pl031_mmio" size="0x1000" phys_addr="{pl031_mmio_phys_addr}" />
+    <memory_region name="sp804_mmio" size="0x1000" phys_addr="{sp804_mmio_phys_addr}" />
+    <memory_region name="virtio_mmio" size="0x1000" phys_addr="{virtio_mmio_phys_addr}" />
+    <memory_region name="fw_cfg_mmio" size="0x1_000" phys_addr="{fw_cfg_mmio_phys_addr}" />
+    <memory_region name="fw_cfg_dma" size="0x1_000" />
+    <memory_region name="framebuffer" size="0x200_000" page_size="0x200_000" />
+    <memory_region name="bitmap" size="0x200_000" page_size="0x200_000" />
+
+    <memory_region name="virtio_net_driver_dma" size="0x200_000" page_size="0x200_000" />
+    <memory_region name="virtio_net_rx_free" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="virtio_net_rx_used" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="virtio_net_tx_free" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="virtio_net_tx_used" size="0x200_000" page_size="0x200_000"/>
+
+    <memory_region name="virtio_blk_driver_dma" size="0x200_000" page_size="0x200_000" />
+    <memory_region name="virtio_blk_client_dma" size="0x200_000" page_size="0x200_000" />
+    <memory_region name="virtio_blk_free" size="0x200_000" page_size="0x200_000"/>
+    <memory_region name="virtio_blk_used" size="0x200_000" page_size="0x200_000"/>
+
+    <protection_domain name="serial_driver" priority="10" stack_size="0x10_000">
+        <program_image path="serial-driver.elf" />
+        <map mr="serial_mmio" vaddr="0x2_000_000" perms="rw" setvar_vaddr="serial_register_block" />
+        <irq irq="{serial_irq}" id="0" />
+    </protection_domain>
+
+    <protection_domain name="serial_virt" priority="9" stack_size="0x10_000">
+        <program_image path="serial-virt.elf" />
+    </protection_domain>
+
+    <protection_domain name="pl031_driver" priority="7" stack_size="0x10_000">
+        <program_image path="pl031-driver.elf" />
+        <map mr="pl031_mmio" vaddr="0x5_000_000_000" perms="rw" cached="false" setvar_vaddr="pl031_mmio_vaddr" />
+        <irq irq="{pl031_irq}" id="0" />
+    </protection_domain>
+
+    <protection_domain name="virtio_blk_driver" priority="9" stack_size="0x10_000">
+        <program_image path="virtio-blk-driver.elf" />
+        <map mr="virtio_mmio" vaddr="0x6_000_000_000" perms="rw" cached="false" setvar_vaddr="virtio_blk_mmio_vaddr" />
+        <map mr="virtio_blk_driver_dma" vaddr="0x8_000_000_000" perms="rw" cached="true" setvar_vaddr="virtio_blk_driver_dma_vaddr" />
+        <setvar symbol="virtio_blk_driver_dma_paddr" region_paddr="virtio_blk_driver_dma" />
+        <map mr="virtio_blk_client_dma" vaddr="0x3_000_000_000" perms="rw" cached="true" setvar_vaddr="virtio_blk_client_dma_vaddr" />
+        <map mr="virtio_blk_free" vaddr="0x4_000_000_000" perms="rw" cached="true" setvar_vaddr="virtio_blk_free" />
+        <map mr="virtio_blk_used" vaddr="0x4_001_000_000" perms="rw" cached="true" setvar_vaddr="virtio_blk_used" />
+        <irq irq="{virtio_blk_irq}" id="0" />
+    </protection_domain>
+
+    <protection_domain name="virtio_net_driver" priority="8" stack_size="0x10_000">
+        <program_image path="virtio-net-driver.elf" />
+        <map mr="virtio_mmio" vaddr="0x6_000_000_000" perms="rw" cached="false" setvar_vaddr="virtio_net_mmio_vaddr" />
+        <map mr="virtio_net_driver_dma" vaddr="0x7_000_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_driver_dma_vaddr" />
+        <setvar symbol="virtio_net_driver_dma_paddr" region_paddr="virtio_net_driver_dma" />
+        <map mr="virtio_net_rx_free" vaddr="0x2_000_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_rx_free" />
+        <map mr="virtio_net_rx_used" vaddr="0x2_001_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_rx_used" />
+        <map mr="virtio_net_tx_free" vaddr="0x2_002_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_tx_free" />
+        <map mr="virtio_net_tx_used" vaddr="0x2_003_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_tx_used" />
+        <irq irq="{virtio_net_irq}" id="0" />
+    </protection_domain>
+
+    <protection_domain name="sp804_driver" priority="6" stack_size="0x10_000">
+        <program_image path="sp804-driver.elf" />
+        <map mr="sp804_mmio" vaddr="0x5_001_000_000" perms="rw" cached="false" setvar_vaddr="sp804_mmio_vaddr" />
+        <irq irq="{sp804_irq}" id="0" />
+    </protection_domain>
+
+    <protection_domain name="shell" priority="1" stack_size="0x10_000">
+        <program_image path="shell.elf" />
+    </protection_domain>
+
+    <protection_domain name="log_server" priority="7" stack_size="0x10_000">
+        <program_image path="log-server.elf" />
+    </protection_domain>
+
+    <protection_domain name="config_server" priority="3" stack_size="0x10_000">
+        <program_image path="config-server.elf" />
+    </protection_domain>
+
+    <protection_domain name="edit" priority="2" stack_size="0x10_000">
+        <program_image path="edit.elf" />
+    </protection_domain>
+
+    <protection_domain name="chat_client" priority="2" stack_size="0x10_000">
+        <program_image path="chat-client.elf" />
+    </protection_domain>
+
+    <protection_domain name="http_file_browser" priority="2" stack_size="0x10_000">
+        <program_image path="http-file-browser.elf" />
+    </protection_domain>
+
+    <protection_domain name="backup" priority="2" stack_size="0x10_000">
+        <program_image path="backup.elf" />
+    </protection_domain>
+
+    <protection_domain name="supervisor" priority="2" stack_size="0x10_000">
+        <program_image path="supervisor.elf" />
+    </protection_domain>
+
+    <protection_domain name="fs_server" priority="4" stack_size="0x10_000">
+        <program_image path="fs-server.elf" />
+        <map mr="virtio_blk_client_dma" vaddr="0x3_000_000_000" perms="rw" cached="true" setvar_vaddr="virtio_blk_client_dma_vaddr" />
+        <map mr="virtio_blk_free" vaddr="0x4_000_000_000" perms="rw" cached="true" setvar_vaddr="virtio_blk_free" />
+        <map mr="virtio_blk_used" vaddr="0x4_001_000_000" perms="rw" cached="true" setvar_vaddr="virtio_blk_used" />
+    </protection_domain>
+
+    <protection_domain name="net_server" priority="6" stack_size="0x10_000">
+        <program_image path="net-server.elf" />
+        <map mr="virtio_net_driver_dma" vaddr="0x1_000_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_client_dma_vaddr" />
+        <map mr="virtio_net_rx_free" vaddr="0x2_000_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_rx_free" />
+        <map mr="virtio_net_rx_used" vaddr="0x2_001_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_rx_used" />
+        <map mr="virtio_net_tx_free" vaddr="0x2_002_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_tx_free" />
+        <map mr="virtio_net_tx_used" vaddr="0x2_003_000_000" perms="rw" cached="true" setvar_vaddr="virtio_net_tx_used" />
+    </protection_domain>
+
+    <protection_domain name="tls_proxy" priority="5" stack_size="0x40_000">
+        <program_image path="tls-proxy.elf" />
+    </protection_domain>
+
+    <protection_domain name="request_server" priority="4" stack_size="0x40_000">
+        <program_image path="request-server.elf" />
+    </protection_domain>
+
+    <protection_domain name="display_server" priority="4" stack_size="0x10_000">
+        <program_image path="display-server.elf" />
+        <map mr="fw_cfg_mmio" vaddr="0x3_000_000" perms="rw" cached="false" setvar_vaddr="fw_cfg_mmio_vaddr" />
+        <map mr="fw_cfg_dma" vaddr="0x4_000_000" perms="rw" cached="true" setvar_vaddr="fw_cfg_dma_vaddr" />
+        <setvar symbol="fw_cfg_dma_paddr" region_paddr="fw_cfg_dma" />
+        <map mr="framebuffer" vaddr="0x20_000_000" perms="rw" cached="true" setvar_vaddr="framebuffer_vaddr" />
+        <setvar symbol="framebuffer_paddr" region_paddr="framebuffer" />
+        <map mr="bitmap" vaddr="0x22_000_000" perms="rw" cached="true" setvar_vaddr="bitmap_vaddr" />
+    </protection_domain>
+
+    <protection_domain name="web_content" priority="3" stack_size="0x20_000">
+        <program_image path="web-content.elf" />
+        <map mr="bitmap" vaddr="0x20_000_000" perms="rw" cached="true" setvar_vaddr="bitmap_vaddr" />
+    </protection_domain>
+
+    <protection_domain name="browser_ui" priority="2" stack_size="0x10_000">
+        <program_image path="browser-ui.elf" />
+    </protection_domain>
+
+    <protection_domain name="agent" priority="2" stack_size="0x20_000">
+        <program_image path="agent.elf" />
+    </protection_domain>
+</system>

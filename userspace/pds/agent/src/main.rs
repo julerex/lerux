@@ -9,17 +9,23 @@ use embedded_hal_nb::{
     nb,
     serial::{Read as _, Write as _},
 };
-#[cfg(feature = "tools")]
+#[cfg(feature = "browse")]
+use lerux_interface_types::AGENT_INTERACTIVE_PROMPT;
+#[cfg(all(feature = "tools", not(feature = "browse")))]
 use lerux_interface_types::AGENT_TOOLS_PROMPT;
 use lerux_interface_types::{
     AgentRequest, AgentResponse, AgentToolKind, GrokStubReply, HttpRequest, HttpResponse,
-    AGENT_GROK_ONE_URL, AGENT_SMOKE_BODY, AGENT_TOOLS_OK, GROK_STUB_PROMPT, GROK_STUB_TOOL_RESULT,
-    MAX_AGENT_PROMPT, MAX_AGENT_TEXT, MAX_NET_TCP_PAYLOAD,
+    AGENT_GROK_ONE_URL, AGENT_INTERACTIVE_OK, AGENT_SMOKE_BODY, AGENT_TOOLS_OK, GROK_STUB_PROMPT,
+    GROK_STUB_TOOL_RESULT, MAX_AGENT_PROMPT, MAX_AGENT_TEXT, MAX_NET_TCP_PAYLOAD,
 };
 #[cfg(not(feature = "tools"))]
 use lerux_interface_types::{AGENT_SMOKE_PATH, AGENT_SMOKE_PROMPT};
 use lerux_ipc::{recv, send, send_unspecified_error, HttpClient};
-use lerux_logging::{log, serial};
+#[cfg(feature = "browse")]
+use lerux_logging::debug;
+use lerux_logging::log;
+#[cfg(not(feature = "browse"))]
+use lerux_logging::serial;
 use sel4_microkit::{protection_domain, Channel, ChannelSet, Handler, Infallible, MessageInfo};
 use sel4_microkit_driver_adapters::serial::client::Client as SerialClient;
 
@@ -35,14 +41,24 @@ const CLIENT: Channel = Channel::new(2);
 /// Channel 3: fs-server (`<end pd="agent" id="3" pp="true" />`).
 #[cfg(feature = "tools")]
 pub(crate) const FS_SERVER: Channel = Channel::new(3);
+/// Channel 4: web-content Browse (`<end pd="agent" id="4" pp="true" />`).
+#[cfg(feature = "browse")]
+pub(crate) const WEB_CONTENT: Channel = Channel::new(4);
 
 const LINE_CAP: usize = MAX_AGENT_PROMPT;
 
 #[protection_domain(heap_size = 64 * 1024)]
 fn init() -> HandlerImpl {
+    #[cfg(feature = "browse")]
+    debug::init().unwrap();
+    #[cfg(not(feature = "browse"))]
     serial::init(SERIAL_DRIVER).unwrap();
     log::info!("lerux-agent: ready");
 
+    #[cfg_attr(
+        feature = "browse",
+        expect(unused_mut, reason = "joint profile skips the serial TUI")
+    )]
     let mut h = HandlerImpl {
         console: SerialClient::new(SERIAL_DRIVER),
         line: [0u8; LINE_CAP],
@@ -52,8 +68,11 @@ fn init() -> HandlerImpl {
         last_reply: [0u8; MAX_AGENT_TEXT],
         last_reply_len: 0,
     };
-    h.draw(b"stub");
-    log::info!("lerux-agent: chrome ok");
+    #[cfg(not(feature = "browse"))]
+    {
+        h.draw(b"stub");
+        log::info!("lerux-agent: chrome ok");
+    }
 
     #[cfg(feature = "tools")]
     tools::seed_workspace();
@@ -61,8 +80,13 @@ fn init() -> HandlerImpl {
     let prompt = smoke_prompt();
     match handle_prompt(prompt) {
         AgentResponse::Text { text_len, text } => {
-            h.set_exchange(prompt, &text[..text_len as usize]);
-            h.draw(b"stub");
+            #[cfg(not(feature = "browse"))]
+            {
+                h.set_exchange(prompt, &text[..text_len as usize]);
+                h.draw(b"stub");
+            }
+            #[cfg(feature = "browse")]
+            let _ = (text_len, text);
         }
         _ => panic!("agent smoke prompt"),
     }
@@ -146,7 +170,11 @@ fn draw_grok_tui(console: &mut SerialClient, status: &[u8], user: &[u8], reply: 
 }
 
 fn smoke_prompt() -> &'static [u8] {
-    #[cfg(feature = "tools")]
+    #[cfg(feature = "browse")]
+    {
+        AGENT_INTERACTIVE_PROMPT
+    }
+    #[cfg(all(feature = "tools", not(feature = "browse")))]
     {
         AGENT_TOOLS_PROMPT
     }
@@ -208,6 +236,9 @@ fn final_text(reply: &GrokStubReply) -> AgentResponse {
     }
     if text == AGENT_TOOLS_OK {
         log::info!("lerux-agent: tools ok");
+    }
+    if text == AGENT_INTERACTIVE_OK {
+        log::info!("lerux-agent: interactive ok");
     }
     AgentResponse::text(text)
 }

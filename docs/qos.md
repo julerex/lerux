@@ -116,6 +116,22 @@ That proves shell initialization completed while platform/service/bulk PDs also 
 
 If measured starvation appears (busy higher-prio PD), next steps: MCS budgets or convert shell→app launch off PPC — not priority inversion against the PPC rule.
 
+## Joint interactive profile (Phase 80)
+
+`workstation-interactive` keeps shell at 1 and bulk apps at 2. The HTTPS path needs extra room so `agent` (2) can PPC `web-content` (3):
+
+| PD | Priority | Why |
+|----|----------|-----|
+| `log_server` | 7 | net/fs still PPC log |
+| `net_server` | 6 | tls-proxy client sits below |
+| `tls_proxy` | 5 | PPCs net |
+| `request_server` / `fs_server` / `display_server` | 4 | services |
+| `web_content` | 3 | untrusted PPC server for Browse / Navigate |
+| `agent` / `browser_ui` / edit/chat/… | 2 | bulk |
+| `shell` | 1 | still lowest PPC client |
+
+Default `workstation` priorities are unchanged.
+
 ## Changing priorities
 
 1. Sketch caller→callee edges from `support/profiles/workstation.toml` (`pp = true` = caller)

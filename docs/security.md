@@ -64,7 +64,7 @@ Channel numbers come from profile `[[channel]]` manifests; PPC callees outrank c
 
 ### Planned trust map (phases 72–80)
 
-Phase 72 composed `display-server` + `display-demo` on `qemu_virt_aarch64_display`. Phase 73 composed `request-server` + `request-client` on `qemu_virt_aarch64_request`. Phase 75 composed `display-server` + `paint-demo` on `qemu_virt_aarch64_paint`. Phase 76 composed `browser-ui` + `web-content` + `request-server` + `display-server` on `qemu_virt_aarch64_browser` (profile `browser`). Phase 77 composed `agent` + `request-server` on `qemu_virt_aarch64_agent_runtime` (profile `agent-runtime`). Phase 79 composed `agent` + `fs-server` + `request-server` on `qemu_virt_aarch64_agent` (profile `agent`). Do not give `web-content` or `agent` a `NetClient`.
+Phase 72 composed `display-server` + `display-demo` on `qemu_virt_aarch64_display`. Phase 73 composed `request-server` + `request-client` on `qemu_virt_aarch64_request`. Phase 75 composed `display-server` + `paint-demo` on `qemu_virt_aarch64_paint`. Phase 76 composed `browser-ui` + `web-content` + `request-server` + `display-server` on `qemu_virt_aarch64_browser` (profile `browser`). Phase 77 composed `agent` + `request-server` on `qemu_virt_aarch64_agent_runtime` (profile `agent-runtime`). Phase 79 composed `agent` + `fs-server` + `request-server` on `qemu_virt_aarch64_agent` (profile `agent`). Phase 80 composes them with workstation on `qemu_virt_aarch64_interactive` (profile `workstation-interactive`). Do not give `web-content` or `agent` a `NetClient`.
 
 | PD | Trust class | MMIO / IRQ | DMA | Clients may call | Must not map |
 |----|-------------|------------|-----|------------------|--------------|
@@ -72,7 +72,7 @@ Phase 72 composed `display-server` + `display-demo` on `qemu_virt_aarch64_displa
 | `request-server` | service | no | no | `web-content`, `agent` | NIC / blk / display MMIO (uses `tls-proxy` / `net-server`) |
 | `browser-ui` | untrusted | no | **none** | `web-content`, `display-server` | any DMA / MMIO |
 | `web-content` | untrusted | no | bitmap MR only | `request-server` | NIC / blk / display MMIO, FS |
-| `agent` | untrusted | no | **none** | `request-server`, `fs-server`, shell `run` | NIC / display MMIO |
+| `agent` | untrusted | no | **none** | `request-server`, `fs-server`, `web-content` (Browse), shell `grok` | NIC / display MMIO |
 
 Isolation residual to keep: existing `just test-isolation` stays green; a later smoke should crash `web-content` and still complete an FS or HTTP round-trip from another PD.
 

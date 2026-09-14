@@ -3,6 +3,7 @@
 
 mod fwcfg;
 
+#[cfg(not(feature = "interactive"))]
 use lerux_driver_protocols::serial::{
     NonBlocking, Request as SerialRequest, Response as SerialResponse, SuccessResponse,
 };
@@ -10,17 +11,28 @@ use lerux_interface_types::{
     DisplayRequest, DisplayResponse, InputEvent, DISPLAY_BYTES_PER_PIXEL, DISPLAY_FORMAT_XRGB8888,
     DISPLAY_HEIGHT, DISPLAY_STRIDE, DISPLAY_VISIBLE_BYTES, DISPLAY_WIDTH,
 };
-use lerux_ipc::{call, recv, send, send_unspecified_error};
-use lerux_logging::{log, serial};
+#[cfg(not(feature = "interactive"))]
+use lerux_ipc::call;
+use lerux_ipc::{recv, send, send_unspecified_error};
+#[cfg(feature = "interactive")]
+use lerux_logging::debug;
+use lerux_logging::log;
+#[cfg(not(feature = "interactive"))]
+use lerux_logging::serial;
 use sel4_microkit::{protection_domain, var, Channel, Handler, Infallible, MessageInfo};
 
 /// Channel 0: serial-virt (`<end pd="display_server" id="0" pp="true" />`).
 const SERIAL_DRIVER: Channel = Channel::new(0);
-/// Channel 1: display-demo (`<end pd="display_server" id="1" />`).
+/// Channel 1: display-demo / browser-ui (`<end pd="display_server" id="1" />`).
 const CLIENT: Channel = Channel::new(1);
+/// Channel 2: web-content Present on the joint profile (unwired elsewhere).
+const CLIENT2: Channel = Channel::new(2);
 
 #[protection_domain]
 fn init() -> HandlerImpl {
+    #[cfg(feature = "interactive")]
+    debug::init().unwrap();
+    #[cfg(not(feature = "interactive"))]
     serial::init(SERIAL_DRIVER).unwrap();
 
     let mmio = *var!(fw_cfg_mmio_vaddr: usize = 0) as *mut u8;
@@ -67,6 +79,12 @@ impl HandlerImpl {
     }
 
     fn poll_key(&self) -> InputEvent {
+        #[cfg(feature = "interactive")]
+        {
+            let _ = SERIAL_DRIVER;
+            InputEvent::None
+        }
+        #[cfg(not(feature = "interactive"))]
         match call::<SerialRequest, SerialResponse>(SERIAL_DRIVER, SerialRequest::Read) {
             Ok(Ok(SuccessResponse::Read(NonBlocking::Ready(code)))) => InputEvent::Key {
                 code,
@@ -101,7 +119,7 @@ impl Handler for HandlerImpl {
         channel: Channel,
         msg_info: MessageInfo,
     ) -> Result<MessageInfo, Self::Error> {
-        if channel != CLIENT {
+        if channel != CLIENT && channel != CLIENT2 {
             unreachable!();
         }
         Ok(match recv::<DisplayRequest>(msg_info) {

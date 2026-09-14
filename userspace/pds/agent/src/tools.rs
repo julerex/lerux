@@ -10,6 +10,10 @@ use lerux_interface_types::{
     AgentToolKind, FsRequest, FsResponse, HttpRequest, HttpResponse, AGENT_WORK_DIR,
     AGENT_WORK_HELLO, MAX_FS_DATA, MAX_FS_PATH, SECTOR_SIZE,
 };
+#[cfg(feature = "browse")]
+use lerux_interface_types::{WebContentRequest, WebContentResponse};
+#[cfg(feature = "browse")]
+use lerux_ipc::call;
 use lerux_ipc::{FsClient, HttpClient};
 use lerux_logging::log;
 
@@ -36,6 +40,7 @@ pub fn run_tool(kind: AgentToolKind, arg: &[u8]) -> Result<Vec<u8>, ()> {
         AgentToolKind::Search => search(arg)?,
         AgentToolKind::Execute => execute(arg)?,
         AgentToolKind::WebFetch => web_fetch(arg)?,
+        AgentToolKind::Browse => browse(arg)?,
     };
     Ok(truncate(out))
 }
@@ -148,6 +153,34 @@ fn execute(path: &[u8]) -> Result<Vec<u8>, ()> {
         }
     }
     Ok(out)
+}
+
+fn browse(url: &[u8]) -> Result<Vec<u8>, ()> {
+    #[cfg(feature = "browse")]
+    {
+        match call::<WebContentRequest, WebContentResponse>(
+            crate::WEB_CONTENT,
+            WebContentRequest::navigate(url),
+        ) {
+            Ok(WebContentResponse::Painted {
+                signatures,
+                text_len,
+                text,
+                ..
+            }) => {
+                if signatures {
+                    log::info!("lerux-agent: browse paint ok");
+                }
+                Ok(text[..text_len as usize].to_vec())
+            }
+            _ => Err(()),
+        }
+    }
+    #[cfg(not(feature = "browse"))]
+    {
+        let _ = url;
+        Err(())
+    }
 }
 
 fn web_fetch(url: &[u8]) -> Result<Vec<u8>, ()> {

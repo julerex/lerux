@@ -192,6 +192,11 @@ test-agent:
     just disk-img
     BOARD=qemu_virt_aarch64_agent just test
 
+# Phase 80: joint workstation + browser + agent (Browse via web-content)
+test-interactive:
+    just disk-img
+    BOARD=qemu_virt_aarch64_interactive just test
+
 # Filesystem IPC smoke test (fs-server + fs-client on aarch64 virt)
 test-fs:
     BOARD=qemu_virt_aarch64_fs just test

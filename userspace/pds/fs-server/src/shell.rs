@@ -19,14 +19,17 @@ pub const CONFIG_SERVER: Channel = Channel::new(5);
 pub const EDIT: Channel = Channel::new(6);
 pub const HTTP_FILE_BROWSER: Channel = Channel::new(7);
 pub const BACKUP: Channel = Channel::new(8);
+/// Agent tools on the joint profile (unwired on default workstation).
+pub const AGENT: Channel = Channel::new(9);
 
-const CLIENTS: [Channel; 6] = [
+const CLIENTS: [Channel; 7] = [
     SUPERVISOR,
     SHELL,
     CONFIG_SERVER,
     EDIT,
     HTTP_FILE_BROWSER,
     BACKUP,
+    AGENT,
 ];
 
 /// Seam between the server shell and a filesystem format implementation.

@@ -1310,6 +1310,14 @@ pub const AGENT_EDIT_FROM: &[u8] = b"hello";
 pub const AGENT_EDIT_TO: &[u8] = b"hello-edited";
 /// Final stub text for the tools smoke.
 pub const AGENT_TOOLS_OK: &[u8] = b"tools ok";
+/// Prompt that drives Browse of the paint fixture (`just test-interactive`).
+pub const AGENT_INTERACTIVE_PROMPT: &[u8] = b"browse paint";
+/// Browse URL on `lerux https-one` (smoke CA).
+pub const AGENT_BROWSE_URL: &[u8] = b"https://host:8443/paint.html";
+/// Final stub text for the joint-profile smoke.
+pub const AGENT_INTERACTIVE_OK: &[u8] = b"interactive ok";
+/// Extracted visible text returned with [`WebContentResponse::Painted`].
+pub const MAX_WEB_TEXT: usize = 64;
 
 /// Core Grok Build tool kinds (Phase 79 implements them over FsRequest / HttpRequest).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -1321,6 +1329,8 @@ pub enum AgentToolKind {
     Search,
     Execute,
     WebFetch,
+    /// Phase 80: PPC `web-content` to load a URL (no NIC on the agent).
+    Browse,
 }
 
 impl AgentToolKind {
@@ -1333,6 +1343,7 @@ impl AgentToolKind {
             Self::Search => b"Search",
             Self::Execute => b"Execute",
             Self::WebFetch => b"WebFetch",
+            Self::Browse => b"Browse",
         }
     }
 
@@ -1345,6 +1356,7 @@ impl AgentToolKind {
             b"Search" => Some(Self::Search),
             b"Execute" => Some(Self::Execute),
             b"WebFetch" => Some(Self::WebFetch),
+            b"Browse" => Some(Self::Browse),
             _ => None,
         }
     }
@@ -1474,15 +1486,39 @@ impl AgentResponse {
     }
 }
 
-/// Responses from `web-content` to `browser-ui`.
+/// Responses from `web-content` to `browser-ui` / agent `Browse`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum WebContentResponse {
     /// Fetch + paint succeeded. `signatures` is the Phase 75 paint-fixture check.
     Painted {
         status: u16,
         signatures: bool,
+        text_len: u8,
+        #[serde(with = "bounded_bytes")]
+        text: [u8; MAX_WEB_TEXT],
     },
     Error,
+}
+
+impl WebContentResponse {
+    pub fn painted(status: u16, signatures: bool, text: &[u8]) -> Self {
+        let mut buf = [0u8; MAX_WEB_TEXT];
+        let text_len = text.len().min(MAX_WEB_TEXT) as u8;
+        buf[..text_len as usize].copy_from_slice(&text[..text_len as usize]);
+        Self::Painted {
+            status,
+            signatures,
+            text_len,
+            text: buf,
+        }
+    }
+
+    pub fn text(&self) -> &[u8] {
+        match self {
+            Self::Painted { text_len, text, .. } => &text[..*text_len as usize],
+            Self::Error => b"",
+        }
+    }
 }
 
 /// Chat client (Phase 40 / 58 multi-room).
@@ -2032,14 +2068,12 @@ mod tests {
         assert_eq!(req.url(), b"https://host:8443/paint.html");
         assert_eq!(round_trip(req), req);
         assert_eq!(
-            round_trip(WebContentResponse::Painted {
-                status: 200,
-                signatures: true
-            }),
-            WebContentResponse::Painted {
-                status: 200,
-                signatures: true
-            }
+            round_trip(WebContentResponse::painted(200, true, b"lerux ok in")),
+            WebContentResponse::painted(200, true, b"lerux ok in")
+        );
+        assert_eq!(
+            WebContentResponse::painted(200, true, b"lerux ok in").text(),
+            b"lerux ok in"
         );
         assert_eq!(
             round_trip(WebContentResponse::Error),

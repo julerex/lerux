@@ -381,6 +381,18 @@ expects = [
   "lerux-http: listening",
 ]
 
+[boards.qemu_virt_aarch64_interactive]
+unordered = true
+timeout_secs = 120
+expects = [
+  "lerux-net: ready",
+  "lerux-fs: ready",
+  "lerux-display: ramfb ok",
+  "lerux-web: paint ok",
+  "lerux-agent: interactive ok",
+  "lerux-shell: ready",
+]
+
 [boards.qemu_virt_aarch64_workstation]
 unordered = true
 timeout_secs = 60

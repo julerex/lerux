@@ -1,6 +1,6 @@
 # PLAN — Interactive surface (phases 71–80)
 
-Last updated: 2026-09-07 (phases 71–80; Phase 79 agent tools)
+Last updated: 2026-09-14 (phases 71–80; Phase 80 joint profile)
 
 Related: [`plan.md`](plan.md) (roadmap 1–80), [`plan-qemu.md`](plan-qemu.md) (phases 61–70, done), [`plan-arch.md`](plan-arch.md) (phases 50–60 + Physical RPi4 lab), [`plan-au-ts.md`](plan-au-ts.md) (sDDF inspiration), [`context.md`](context.md), [ADR-009](decisions/009-interactive-surface.md).
 
@@ -62,7 +62,7 @@ Platform                         Browser (Ladybird-shaped)              Agent (G
                                                                     77 agent runtime + grok-one ✅
                                                                     78 serial TUI ✅
                                                                     79 tools (fs / shell / fetch) ✅
-80 joint profile: workstation-interactive
+80 joint profile: workstation-interactive ✅
 ```
 
 ### Ladybird → lerux PD map
@@ -308,17 +308,17 @@ The agent can change a file and fetch a URL in a QEMU smoke without a POSIX proc
 
 ---
 
-## Phase 80 — Joint `workstation-interactive`
+## Phase 80 — Joint `workstation-interactive` ✅
 
 **Why:** The two products share `request-server` + display. Prove they compose, then stop.
 
 ### Steps
 
-- [ ] Profile `workstation-interactive`: workstation + `display-server` + `request-server` + `web-content` + `browser-ui` + `agent`.
-- [ ] Agent tool `browse`: ask `web-content` to load a URL; return extracted text (and optionally “paint ok”).
-- [ ] Trust map in [`security.md`](security.md): `web-content` and `agent` are untrusted; `request-server` / `display-server` / fs / net stay trusted.
-- [ ] `just test-interactive`. QoS: new PDs in the bulk band; PPC callees outrank callers (ADR-006).
-- [ ] Update [`packages.md`](packages.md) / [`boards.md`](boards.md) when boards exist.
+- [x] Profile `workstation-interactive`: workstation + `display-server` + `request-server` + `web-content` + `browser-ui` + `agent`.
+- [x] Agent tool `browse`: ask `web-content` to load a URL; return extracted text (and optionally “paint ok”).
+- [x] Trust map in [`security.md`](security.md): `web-content` and `agent` are untrusted; `request-server` / `display-server` / fs / net stay trusted.
+- [x] `just test-interactive`. QoS: new PDs in the bulk band; PPC callees outrank callers (ADR-006). HTTP stack is raised (`log` 7 > `net` 6 > `tls` 5 > `request` 4 > `web-content` 3 > `agent` 2) so Browse can PPC.
+- [x] Update [`packages.md`](packages.md) / [`boards.md`](boards.md) when boards exist.
 
 ### Out of scope
 
@@ -327,7 +327,7 @@ The agent can change a file and fetch a URL in a QEMU smoke without a POSIX proc
 
 ### Exit
 
-One QEMU profile where the agent fetches a local page that the browser also paints.
+One QEMU profile where the agent fetches a local page that the browser also paints. **Met** on `qemu_virt_aarch64_interactive`.
 
 ---
 
@@ -351,8 +351,7 @@ If capacity is limited, do **not** start with 79–80 first:
 
 1. **Phase 72** — ramfb + `display-server` (done; unblocks paint).
 2. **Phase 73** — `request-server` (done; unblocks browser load **and** agent HTTPS).
-3. **Phase 74–75** — `lerux-html` + `lerux-web` (done). **76–79** (browser + agent runtime/TUI/tools) done.
-4. **Phase 80** last.
+3. **Phase 74–75** — `lerux-html` + `lerux-web` (done). **76–80** (browser + agent + joint profile) done.
 
 RPi4 lab work never blocks this list. JS, GPU, and extra tabs stay off the list until a new ADR.
 
@@ -371,7 +370,7 @@ RPi4 lab work never blocks this list. JS, GPU, and extra tabs stay off the list 
 | Browser | `just test-browser` (`lerux-browser: paint ok`) |
 | Agent runtime | `just test-agent-runtime` (`lerux-agent: chrome ok`, `runtime ok`) |
 | Agent tools | `just test-agent` (`lerux-agent: tools ok`) |
-| Joint | `just test-interactive` |
+| Joint | `just test-interactive` (`lerux-agent: interactive ok`, `lerux-web: paint ok`) |
 | Isolation residual | existing `just test-isolation` still green |
 
 Smokes stay on the smoke CA + `https-one` / `grok-one`. Do not add a CI job that hits the public Web or live xAI.

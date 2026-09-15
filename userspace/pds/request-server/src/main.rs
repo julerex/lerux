@@ -9,7 +9,8 @@ use alloc::vec::Vec;
 
 use lerux_interface_types::{
     http_content_length, http_status_code, split_http_head, HttpMethod, HttpRequest, HttpResponse,
-    HttpUrl, TlsRequest, TlsResponse, MAX_HTTP_URL, MAX_NET_TCP_PAYLOAD,
+    HttpUrl, TlsRequest, TlsResponse, MAX_HTTP_HEADER_NAME, MAX_HTTP_HEADER_VALUE, MAX_HTTP_URL,
+    MAX_NET_TCP_PAYLOAD,
 };
 use lerux_ipc::{recv, send, send_unspecified_error, TlsClient};
 use lerux_logging::{debug, log};
@@ -40,9 +41,26 @@ struct Exchange {
     offset: usize,
 }
 
-struct HandlerImpl {
+/// Per-client HTTP session state. Phase 80 wires web-content and agent to the
+/// same request-server; shared state would let one client reset or steal the
+/// other's in-flight request or response body.
+struct ClientSession {
     building: Option<Building>,
     exchange: Option<Exchange>,
+}
+
+impl ClientSession {
+    const fn new() -> Self {
+        Self {
+            building: None,
+            exchange: None,
+        }
+    }
+}
+
+struct HandlerImpl {
+    app: ClientSession,
+    app2: ClientSession,
 }
 
 #[protection_domain(heap_size = 64 * 1024)]
@@ -50,8 +68,8 @@ fn init() -> HandlerImpl {
     debug::init().unwrap();
     log::info!("lerux-http: ready");
     HandlerImpl {
-        building: None,
-        exchange: None,
+        app: ClientSession::new(),
+        app2: ClientSession::new(),
     }
 }
 
@@ -63,123 +81,127 @@ impl Handler for HandlerImpl {
         channel: Channel,
         msg_info: MessageInfo,
     ) -> Result<MessageInfo, Self::Error> {
-        if channel != APP && channel != APP2 {
-            unreachable!();
-        }
+        let session = match channel {
+            APP => &mut self.app,
+            APP2 => &mut self.app2,
+            _ => unreachable!(),
+        };
 
         Ok(match recv::<HttpRequest>(msg_info) {
-            Ok(req) => send(self.handle_req(req)),
+            Ok(req) => send(handle_req(session, req)),
             Err(_) => send_unspecified_error(),
         })
     }
 }
 
-impl HandlerImpl {
-    fn handle_req(&mut self, req: HttpRequest) -> HttpResponse {
-        match req {
-            HttpRequest::Start {
+fn handle_req(session: &mut ClientSession, req: HttpRequest) -> HttpResponse {
+    match req {
+        HttpRequest::Start {
+            method,
+            url_len,
+            url,
+        } => {
+            session.reset();
+            let url_len = (url_len as usize).min(MAX_HTTP_URL);
+            let Some(parsed) = HttpUrl::parse(&url[..url_len]) else {
+                return HttpResponse::Error;
+            };
+            session.building = Some(Building {
                 method,
-                url_len,
-                url,
-            } => {
-                self.reset();
-                let url_len = (url_len as usize).min(MAX_HTTP_URL);
-                let Some(parsed) = HttpUrl::parse(&url[..url_len]) else {
-                    return HttpResponse::Error;
-                };
-                self.building = Some(Building {
-                    method,
-                    url: parsed,
-                    headers: core::array::from_fn(|_| None),
-                    header_count: 0,
-                    body: Vec::new(),
-                });
-                HttpResponse::Ok
+                url: parsed,
+                headers: core::array::from_fn(|_| None),
+                header_count: 0,
+                body: Vec::new(),
+            });
+            HttpResponse::Ok
+        }
+        HttpRequest::Header {
+            name_len,
+            name,
+            value_len,
+            value,
+        } => {
+            let Some(building) = session.building.as_mut() else {
+                return HttpResponse::Error;
+            };
+            if building.header_count >= MAX_EXTRA_HEADERS {
+                return HttpResponse::Error;
             }
-            HttpRequest::Header {
-                name_len,
-                name,
-                value_len,
-                value,
-            } => {
-                let Some(building) = self.building.as_mut() else {
-                    return HttpResponse::Error;
-                };
-                if building.header_count >= MAX_EXTRA_HEADERS {
-                    return HttpResponse::Error;
-                }
-                building.headers[building.header_count] = Some(ExtraHeader::from_parts(
-                    &name[..name_len as usize],
-                    &value[..value_len as usize],
-                ));
-                building.header_count += 1;
-                HttpResponse::Ok
+            let name_len = (name_len as usize).min(MAX_HTTP_HEADER_NAME);
+            let value_len = (value_len as usize).min(MAX_HTTP_HEADER_VALUE);
+            building.headers[building.header_count] = Some(ExtraHeader::from_parts(
+                &name[..name_len],
+                &value[..value_len],
+            ));
+            building.header_count += 1;
+            HttpResponse::Ok
+        }
+        HttpRequest::Body {
+            payload_len,
+            payload,
+            ..
+        } => {
+            let Some(building) = session.building.as_mut() else {
+                return HttpResponse::Error;
+            };
+            let add = payload_len as usize;
+            if building.body.len().saturating_add(add) > MAX_HTTP_BODY {
+                return HttpResponse::Error;
             }
-            HttpRequest::Body {
-                payload_len,
-                payload,
-                ..
-            } => {
-                let Some(building) = self.building.as_mut() else {
-                    return HttpResponse::Error;
-                };
-                let add = payload_len as usize;
-                if building.body.len().saturating_add(add) > MAX_HTTP_BODY {
-                    return HttpResponse::Error;
-                }
-                building
-                    .body
-                    .extend_from_slice(&payload[..add.min(payload.len())]);
-                HttpResponse::Ok
-            }
-            HttpRequest::Finish => self.finish(),
-            HttpRequest::Recv => self.recv_body(),
-            HttpRequest::Close => {
-                self.reset();
-                HttpResponse::Ok
-            }
-            HttpRequest::Poll => HttpResponse::Pending,
+            building
+                .body
+                .extend_from_slice(&payload[..add.min(payload.len())]);
+            HttpResponse::Ok
+        }
+        HttpRequest::Finish => finish(session),
+        HttpRequest::Recv => recv_body(session),
+        HttpRequest::Close => {
+            session.reset();
+            HttpResponse::Ok
+        }
+        HttpRequest::Poll => HttpResponse::Pending,
+    }
+}
+
+fn finish(session: &mut ClientSession) -> HttpResponse {
+    let Some(building) = session.building.take() else {
+        return HttpResponse::Error;
+    };
+    if !building.url.https || !matches!(building.method, HttpMethod::Get | HttpMethod::Post) {
+        close_tls();
+        return HttpResponse::Error;
+    }
+    match https_exchange(
+        building.method,
+        &building.url,
+        &building.headers,
+        &building.body,
+    ) {
+        Ok((code, body)) => {
+            session.exchange = Some(Exchange { body, offset: 0 });
+            HttpResponse::Status { code }
+        }
+        Err(()) => {
+            log::info!("lerux-http: exchange failed");
+            HttpResponse::Error
         }
     }
+}
 
-    fn finish(&mut self) -> HttpResponse {
-        let Some(building) = self.building.take() else {
-            return HttpResponse::Error;
-        };
-        if !building.url.https || !matches!(building.method, HttpMethod::Get | HttpMethod::Post) {
-            close_tls();
-            return HttpResponse::Error;
-        }
-        match https_exchange(
-            building.method,
-            &building.url,
-            &building.headers,
-            &building.body,
-        ) {
-            Ok((code, body)) => {
-                self.exchange = Some(Exchange { body, offset: 0 });
-                HttpResponse::Status { code }
-            }
-            Err(()) => {
-                log::info!("lerux-http: exchange failed");
-                HttpResponse::Error
-            }
-        }
+fn recv_body(session: &mut ClientSession) -> HttpResponse {
+    let Some(ex) = session.exchange.as_mut() else {
+        return HttpResponse::Error;
+    };
+    if ex.offset >= ex.body.len() {
+        return HttpResponse::data(&[], true);
     }
+    let end = (ex.offset + MAX_NET_TCP_PAYLOAD).min(ex.body.len());
+    let chunk = &ex.body[ex.offset..end];
+    ex.offset = end;
+    HttpResponse::data(chunk, ex.offset >= ex.body.len())
+}
 
-    fn recv_body(&mut self) -> HttpResponse {
-        let Some(ex) = self.exchange.as_mut() else {
-            return HttpResponse::Error;
-        };
-        if ex.offset >= ex.body.len() {
-            return HttpResponse::data(&[], true);
-        }
-        let end = (ex.offset + MAX_NET_TCP_PAYLOAD).min(ex.body.len());
-        let chunk = &ex.body[ex.offset..end];
-        ex.offset = end;
-        HttpResponse::data(chunk, ex.offset >= ex.body.len())
-    }
-
+impl ClientSession {
     fn reset(&mut self) {
         self.building = None;
         self.exchange = None;

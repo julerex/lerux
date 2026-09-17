@@ -246,6 +246,15 @@ impl LeruxFsFormat {
         self.fs_job = job;
     }
 
+    fn abort_on_io_error(&mut self) -> Option<FsResponse> {
+        if self.io.borrow_mut().take_io_error() {
+            self.fs_job = FsJob::None;
+            Some(FsResponse::Error)
+        } else {
+            None
+        }
+    }
+
     fn advance_fs_job(&mut self) -> Option<FsResponse> {
         match core::mem::replace(&mut self.fs_job, FsJob::None) {
             FsJob::None => None,
@@ -2279,6 +2288,9 @@ impl FsFormat for LeruxFsFormat {
     }
 
     fn advance(&mut self) -> Option<FsResponse> {
+        if let Some(resp) = self.abort_on_io_error() {
+            return Some(resp);
+        }
         // Resume a pending freemap flush (step 31 carries the finished response).
         if let FsJob::Path {
             step: 31,
@@ -2306,6 +2318,9 @@ impl FsFormat for LeruxFsFormat {
     }
 
     fn poll_progress(&mut self) -> Option<FsResponse> {
+        if let Some(resp) = self.abort_on_io_error() {
+            return Some(resp);
+        }
         // Opportunistically drain blk completions even if the driver notify was
         // coalesced while we were only handling PPC Poll (busy-wait clients).
         if self.io.borrow().io_busy() {

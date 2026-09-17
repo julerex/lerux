@@ -188,6 +188,8 @@ impl SectorIo {
         // Keep pending_read_lba set so poll_fn observes completed_sector.
         if let Some(data) = advance_read(&mut self.io_state, &mut self.blk_io) {
             self.completed_sector = Some(data);
+        } else {
+            self.record_read_failure_if_idle();
         }
     }
 
@@ -202,6 +204,8 @@ impl SectorIo {
         // Same sync-completion race as start_read; keep pending_write_lba set.
         if advance_write(&mut self.io_state, &mut self.blk_io) {
             self.completed_ok = true;
+        } else {
+            self.record_write_failure_if_idle();
         }
     }
 
@@ -215,6 +219,7 @@ impl SectorIo {
                 self.pending_read_lba = None;
                 return Some(data);
             }
+            self.record_read_failure_if_idle();
             return None;
         }
         if self.pending_read_lba.is_none() && matches!(self.io_state, IoState::Idle) {
@@ -234,6 +239,7 @@ impl SectorIo {
                 self.pending_write_lba = None;
                 return true;
             }
+            self.record_write_failure_if_idle();
             return false;
         }
         if self.pending_write_lba.is_none() && matches!(self.io_state, IoState::Idle) {
@@ -285,6 +291,30 @@ impl SectorIo {
             self.io_state,
             IoState::Reading { .. } | IoState::Writing { .. }
         )
+    }
+
+    /// True after a sector I/O error; clears the latch.
+    pub fn take_io_error(&mut self) -> bool {
+        let failed = self.read_failed || self.write_failed;
+        self.read_failed = false;
+        self.write_failed = false;
+        failed
+    }
+
+    fn record_read_failure_if_idle(&mut self) {
+        if self.pending_read_lba.is_some() && matches!(self.io_state, IoState::Idle) {
+            self.pending_read_lba = None;
+            self.read_failed = true;
+            self.wake.wake();
+        }
+    }
+
+    fn record_write_failure_if_idle(&mut self) {
+        if self.pending_write_lba.is_some() && matches!(self.io_state, IoState::Idle) {
+            self.pending_write_lba = None;
+            self.write_failed = true;
+            self.wake.wake();
+        }
     }
 
     fn try_advance_read(&mut self) -> Option<[u8; SECTOR_SIZE]> {

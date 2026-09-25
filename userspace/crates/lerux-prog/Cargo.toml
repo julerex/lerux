@@ -1,0 +1,15 @@
+[package]
+name = "lerux-prog"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "LRW1 wrapper and closed Wasm subset interpreter for program-runtime"
+
+[lints]
+workspace = true
+
+[dependencies]
+ed25519-dalek = { version = "2", default-features = false }
+
+[dev-dependencies]
+ed25519-dalek = { version = "2", features = ["rand_core"] }

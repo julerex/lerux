@@ -12,6 +12,7 @@ workspace = true
 webpki-roots = ["lerux-tls/webpki-roots"]
 board-qemu_virt_aarch64_fetch_tls = []
 board-qemu_virt_aarch64_request = []
+board-qemu_virt_aarch64_program = []
 board-qemu_virt_aarch64_browser = []
 board-qemu_virt_aarch64_agent_runtime = []
 board-qemu_virt_aarch64_agent = []

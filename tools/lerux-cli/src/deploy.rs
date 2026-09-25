@@ -1,5 +1,8 @@
-//! Phase 52: one-command host deploy of `loader.img` onto a mounted SD boot partition.
-//! Phase 60 Track C: optional SHA-256 sidecar verify before copy.
+//! Phase 52: one-command host deploy of boot images onto mounted FAT media.
+//!
+//! ARM/RISC-V hardware (RPi4): copy `loader.img` and write U-Boot helpers.
+//! x86-64 hardware (PC99 / Z97): also copy `sel4_32.elf` and write Multiboot 2
+//! Limine/GRUB snippets. Phase 60 Track C: optional SHA-256 sidecar verify.
 
 use std::{
     fs,
@@ -50,21 +53,16 @@ pub fn deploy_loader(
     }
 
     let dest_loader = dest.join("loader.img");
-    fs::copy(&loader, &dest_loader)
-        .with_context(|| format!("copy {} → {}", loader.display(), dest_loader.display()))?;
+    copy_file_and_sidecar(&loader, &dest_loader)?;
 
-    let side = crate::image_digest::sidecar_path(&loader);
-    if side.is_file() {
-        let dest_side = crate::image_digest::sidecar_path(&dest_loader);
-        fs::copy(&side, &dest_side)
-            .with_context(|| format!("copy {} → {}", side.display(), dest_side.display()))?;
-        println!("==> Copied integrity sidecar → {}", dest_side.display());
+    let kernel = board_build.join("sel4_32.elf");
+    let x86 = kernel.is_file();
+    if x86 {
+        if verify {
+            crate::image_digest::verify_sidecar(&kernel)?;
+        }
+        copy_file_and_sidecar(&kernel, &dest.join("sel4_32.elf"))?;
     }
-
-    // Sidecar with U-Boot commands for operators (and optional paste into uEnv).
-    let uboot_txt = dest.join("lerux-uboot.txt");
-    let body = uboot_commands(board);
-    fs::write(&uboot_txt, body).with_context(|| format!("write {}", uboot_txt.display()))?;
 
     // Best-effort sync so unplug is safer.
     let _ = Command::new("sync").status();
@@ -75,10 +73,42 @@ pub fn deploy_loader(
         size,
         dest_loader.display()
     );
-    println!("==> Wrote U-Boot helper → {}", uboot_txt.display());
-    println!();
-    print_post_deploy_instructions(board, &dest_loader);
+
+    if x86 {
+        let limine_txt = dest.join("lerux-limine.conf");
+        fs::write(&limine_txt, limine_commands(board))
+            .with_context(|| format!("write {}", limine_txt.display()))?;
+        let grub_txt = dest.join("lerux-grub.cfg");
+        fs::write(&grub_txt, grub_commands(board))
+            .with_context(|| format!("write {}", grub_txt.display()))?;
+        println!(
+            "==> Wrote Multiboot 2 helpers → {} and {}",
+            limine_txt.display(),
+            grub_txt.display()
+        );
+        println!();
+        print_x86_post_deploy_instructions(board, &dest_loader);
+    } else {
+        let uboot_txt = dest.join("lerux-uboot.txt");
+        fs::write(&uboot_txt, uboot_commands(board))
+            .with_context(|| format!("write {}", uboot_txt.display()))?;
+        println!("==> Wrote U-Boot helper → {}", uboot_txt.display());
+        println!();
+        print_post_deploy_instructions(board, &dest_loader);
+    }
     Ok(dest_loader)
+}
+
+fn copy_file_and_sidecar(src: &Path, dest: &Path) -> Result<()> {
+    fs::copy(src, dest).with_context(|| format!("copy {} → {}", src.display(), dest.display()))?;
+    let side = crate::image_digest::sidecar_path(src);
+    if side.is_file() {
+        let dest_side = crate::image_digest::sidecar_path(dest);
+        fs::copy(&side, &dest_side)
+            .with_context(|| format!("copy {} → {}", side.display(), dest_side.display()))?;
+        println!("==> Copied integrity sidecar → {}", dest_side.display());
+    }
+    Ok(())
 }
 
 fn uboot_commands(board: &str) -> String {
@@ -92,6 +122,55 @@ fn uboot_commands(board: &str) -> String {
          #   LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD={board} just test-hw\n\
          # REPL gate: docs/boards.md (RPi4 workstation install path)\n"
     )
+}
+
+fn limine_commands(board: &str) -> String {
+    format!(
+        "# lerux Limine stanza for {board} (Multiboot 2).\n\
+         # Paste into limine.conf. Do not replace an existing OS menu.\n\
+         # USB FAT: sel4_32.elf and loader.img at the volume root.\n\
+         #\n\
+         # Host golden path after boot (serial on a second machine):\n\
+         #   LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD={board} just test-hw\n\
+         #\n\
+         /lerux ({board})\n\
+         \x20   comment: seL4 Microkit\n\
+         \x20   protocol: multiboot2\n\
+         \x20   path: boot():/sel4_32.elf\n\
+         \x20   module_path: boot():/loader.img\n"
+    )
+}
+
+fn grub_commands(board: &str) -> String {
+    format!(
+        "# lerux GRUB2 menuentry for {board} (Multiboot 2).\n\
+         # Paste into a custom file (e.g. /etc/grub.d/40_custom) or a USB grub.cfg.\n\
+         # Do not overwrite the Ubuntu /boot/grub/grub.cfg on sda.\n\
+         #\n\
+         menuentry \"lerux {board}\" {{\n\
+         \x20   insmod fat\n\
+         \x20   insmod multiboot2\n\
+         \x20   search --file --set=root /sel4_32.elf\n\
+         \x20   multiboot2 /sel4_32.elf\n\
+         \x20   module2 /loader.img\n\
+         }}\n"
+    )
+}
+
+fn print_x86_post_deploy_instructions(board: &str, dest_loader: &Path) {
+    println!("Next steps:");
+    println!("  1. Keep Ubuntu on sda. Boot this USB/ESP entry only from the firmware boot menu.");
+    println!(
+        "  2. Serial: 115200 8N1 on the board COMA header (no rear DB9) via a laptop USB-serial."
+    );
+    println!("  3. Bootloader: Limine (lerux-limine.conf) or GRUB2 (lerux-grub.cfg) Multiboot 2.");
+    println!("       kernel  /sel4_32.elf");
+    println!("       module  /loader.img");
+    println!("  4. Boot smoke (laptop, serial not held by screen):");
+    println!("       LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD={board} just test-hw");
+    println!();
+    println!("Image on media: {}", dest_loader.display());
+    println!("Full procedure: docs/boards.md#gigabyte-z97-d3h-install-path");
 }
 
 fn print_post_deploy_instructions(board: &str, dest_loader: &Path) {
@@ -349,5 +428,66 @@ mod tests {
         .to_string();
         assert!(err.contains("single path segment"), "{err}");
         assert!(!dest.join("loader.img").exists());
+    }
+
+    fn setup_x86_image(tmp: &Path, loader: &[u8], kernel: &[u8]) -> PathBuf {
+        let dest = setup_loader(tmp, loader);
+        let kernel_path = tmp.join("build/fake_board/sel4_32.elf");
+        fs::write(&kernel_path, kernel).unwrap();
+        crate::image_digest::write_sidecar(&kernel_path).unwrap();
+        dest
+    }
+
+    #[test]
+    fn deploy_copies_x86_kernel_and_multiboot_helpers() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dest = setup_x86_image(tmp.path(), b"fake-loader", b"fake-kernel");
+        let dest_canon = dest.canonicalize().unwrap();
+
+        deploy_loader(
+            tmp.path(),
+            "fake_board",
+            "build",
+            "debug",
+            &dest,
+            false,
+            true,
+        )
+        .unwrap();
+
+        assert_eq!(
+            fs::read(dest_canon.join("sel4_32.elf")).unwrap(),
+            b"fake-kernel"
+        );
+        assert!(dest_canon.join("sel4_32.elf.sha256").is_file());
+        let limine = fs::read_to_string(dest_canon.join("lerux-limine.conf")).unwrap();
+        assert!(limine.contains("multiboot2"), "{limine}");
+        assert!(limine.contains("sel4_32.elf"), "{limine}");
+        assert!(limine.contains("loader.img"), "{limine}");
+        let grub = fs::read_to_string(dest_canon.join("lerux-grub.cfg")).unwrap();
+        assert!(grub.contains("multiboot2"), "{grub}");
+        assert!(grub.contains("sel4_32.elf"), "{grub}");
+        assert!(grub.contains("module2"), "{grub}");
+        assert!(!dest_canon.join("lerux-uboot.txt").is_file());
+    }
+
+    #[test]
+    fn deploy_refuses_tampered_x86_kernel() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dest = setup_x86_image(tmp.path(), b"good-loader", b"good-kernel");
+        fs::write(tmp.path().join("build/fake_board/sel4_32.elf"), b"evil").unwrap();
+        let err = deploy_loader(
+            tmp.path(),
+            "fake_board",
+            "build",
+            "debug",
+            &dest,
+            false,
+            true,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(err.contains("integrity check failed"), "{err}");
+        assert!(!dest.join("sel4_32.elf").exists());
     }
 }

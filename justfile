@@ -20,8 +20,8 @@ default: build
 # Format, clippy, and host tests for host crates (no SDK required)
 check:
     cargo fmt --all --check
-    CARGO_TARGET_DIR={{root}}/build/host cargo clippy -p lerux-cli -p lerux-interface-types -p lerux-tls -p lerux-html -p lerux-web --all-targets -- -D warnings
-    CARGO_TARGET_DIR={{root}}/build/host cargo test -p lerux-interface-types -p lerux-tls -p lerux-html -p lerux-web -p lerux-cli
+    CARGO_TARGET_DIR={{root}}/build/host cargo clippy -p lerux-cli -p lerux-interface-types -p lerux-tls -p lerux-html -p lerux-web -p lerux-prog --all-targets -- -D warnings
+    CARGO_TARGET_DIR={{root}}/build/host cargo test -p lerux-interface-types -p lerux-tls -p lerux-html -p lerux-web -p lerux-prog -p lerux-cli
     # Phase 60 Track D: PPC priority + service-class band checks (host, no QEMU)
     {{lerux}} profile check-qos
 
@@ -185,6 +185,10 @@ test-fetch-tls:
 test-request:
     BOARD=qemu_virt_aarch64_request just test
 
+# ADR-010: fetch a signed Wasm module and run it inside program-runtime
+test-program:
+    BOARD=qemu_virt_aarch64_program just test
+
 # Phase 74: subset HTML tokenizer + DOM dump
 test-html:
     BOARD=qemu_virt_aarch64_html just test
@@ -293,6 +297,15 @@ test-rpi4-workstation:
 # Builds the image if missing. Writes lerux-uboot.txt beside loader.img.
 deploy-rpi4 DEST:
     {{lerux}} deploy --board rpi4b_4gb_workstation --dest {{DEST}}
+
+# Gigabyte Z97-D3H hello slice: Multiboot 2 `sel4_32.elf` + `loader.img` onto USB/ESP FAT.
+# Example: DEST=/media/$USER/boot just deploy-pc
+# Docs: docs/boards.md#gigabyte-z97-d3h-install-path
+hardware-pc:
+    BOARD=pc_z97_d3h just image
+
+deploy-pc DEST:
+    {{lerux}} deploy --board pc_z97_d3h --dest {{DEST}}
 
 # HTTP smoke: GET / on virtio-net (host port 18080 -> guest :8080)
 test-http:

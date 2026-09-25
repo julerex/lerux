@@ -103,4 +103,4 @@ Breaking `interface_types` majors requires rebuilding all PDs that speak that IP
 
 ## Not in scope
 
-Runtime dynamic loading of ELFs into a live Microkit image. That would need a different system model (ADR).
+Runtime loading of native ELFs into a live Microkit image. A signed Wasm subset inside `program-runtime` is [ADR-010](decisions/010-program-runtime.md).

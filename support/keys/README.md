@@ -1,6 +1,6 @@
 # Image signing keys (Phase 67)
 
-`smoke.ed25519` is a **dev/CI-only** ed25519 secret. Do not use it for release images.
+`smoke.ed25519` is a **dev/CI-only** ed25519 secret. Do not use it for release images. The same key signs `loader.img` and ADR-010 `LRW1` modules (`lerux prog pack`).
 
 ```bash
 lerux keygen --out support/keys/smoke.ed25519

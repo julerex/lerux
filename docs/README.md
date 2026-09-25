@@ -22,6 +22,7 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [decisions/007-tls-proxy.md](decisions/007-tls-proxy.md) | ADR-007: tls-proxy PD; rustls + smoke CA |
 | [decisions/008-host-backed-fs.md](decisions/008-host-backed-fs.md) | ADR-008: QEMU host FS inject (`/host`) |
 | [decisions/009-interactive-surface.md](decisions/009-interactive-surface.md) | ADR-009: QEMU software framebuffer; static Ladybird PDs; Grok-shaped agent |
+| [decisions/010-program-runtime.md](decisions/010-program-runtime.md) | ADR-010: signed Wasm subset in `program-runtime` |
 | [decisions/004-service-async.md](decisions/004-service-async.md) | ADR-004: stackless coop async in service PDs |
 | [decisions/005-debug-pd.md](decisions/005-debug-pd.md) | ADR-005: fault parent + QEMU GDB (not libgdb fork) |
 | [debug.md](debug.md) | Phase 46: `test-debug` + gdb-multiarch workflow |
@@ -33,7 +34,7 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [platforms.md](platforms.md) | Platform notes and hardware bring-up |
 | [bench-results.latest.md](bench-results.latest.md) | Latest `just bench` snapshot (regenerated) |
 | [net-topology.md](net-topology.md) | NIC / net-server / app channel map |
-| [boards.md](boards.md) | Board names, PDs, QEMU profiles; [RPi4 install path (Phase 52)](boards.md#rpi4-workstation-install-path-phase-52) |
+| [boards.md](boards.md) | Board names, PDs, QEMU profiles; [RPi4 install path](boards.md#rpi4-workstation-install-path-phase-52); [Z97-D3H install path](boards.md#gigabyte-z97-d3h-install-path) |
 | [ci.md](ci.md) | GitHub Actions pipeline, caches, troubleshooting |
 | [seL4-whitepaper.pdf](seL4-whitepaper.pdf) | seL4 high-level overview (reference) |
 

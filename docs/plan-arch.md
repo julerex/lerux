@@ -325,6 +325,7 @@ Procedure and empty result grid: [`boards.md` — RPi4 workstation install path]
 ### Follow-on (after the RPi4 gate)
 
 - [ ] Optional second aarch64 SBC only after RPi4 is reliable.
+- [ ] **Gigabyte Z97-D3H metal** (`pc_z97_d3h`): hello + COM1 deploy is in-tree ([`boards.md`](boards.md#gigabyte-z97-d3h-install-path)). Native e1000e / AHCI workstation remains a later hardware track.
 
 ### Already shipped (no Pi required)
 
@@ -349,7 +350,7 @@ Fold in as capacity allows; see also [`plan-au-ts.md`](plan-au-ts.md) and ADRs:
 - In-guest GDB RSP (needs fork or upstream APIs; QEMU gdbstub parity is [Phase 66](plan-qemu.md#phase-66--qemu-arch-parity-debug-isolation-serial-virt))
 - libvmm / guest Linux — **only with dedicated ADR** (explicit non-goal today)
 - Formal verification of lerux PDs
-- JS / Wasm engines — **only with dedicated ADR** (71–80 is HTML/CSS subset + pixels; [ADR-009](decisions/009-interactive-surface.md))
+- JS engines and general-purpose Wasm runtimes stay out. The closed subset in `program-runtime` is [ADR-010](decisions/010-program-runtime.md)
 
 ---
 

@@ -58,6 +58,7 @@ Local mirror: `just check` (format + clippy for `lerux-cli` and `lerux-interface
 | `fetch` | `just test-fetch` | aarch64 HTTP fetch over net IPC (TCP + DNS) |
 | `fetch-tls` | `just test-fetch-tls` | aarch64 HTTPS fetch via tls-proxy (rustls + smoke CA) |
 | `request` | `just test-request` | Phase 73: request-server GET fixture via tls-proxy (no NetClient on the app) |
+| `program` | `just test-program` | ADR-010: signed Wasm module via request-server (`lerux-prog: ran`) |
 | `html` | `just test-html` | Phase 74: lerux-html subset parser (`lerux-html: nodes=8`) |
 | `paint` | `just test-paint` | Phase 75: CSS + layout + ramfb paint (`lerux-web: paint ok`) |
 | `browser` | `just test-browser` | Phase 76: browser-ui + web-content via request-server (`lerux-browser: paint ok`) |

@@ -23,6 +23,7 @@ mod package;
 mod path;
 mod process;
 mod profile;
+mod prog;
 mod qemu;
 mod qos_check;
 mod smoke_expects;
@@ -199,16 +200,23 @@ enum Commands {
         #[command(subcommand)]
         command: ProfileCommands,
     },
+    /// ADR-010: compile `support/prog/smoke.rs` and write a signed LRW1 blob.
+    Prog {
+        #[command(subcommand)]
+        command: ProgCommands,
+    },
     /// Package commands (PD + interface-types pin + optional profile fragment).
     Package {
         #[command(subcommand)]
         command: PackageCommands,
     },
-    /// Phase 52: copy board `loader.img` onto a mounted SD boot partition.
+    /// Copy board boot images onto a mounted FAT boot directory.
+    ///
+    /// RPi4: `loader.img` + U-Boot helper. x86 PC: also `sel4_32.elf` + Multiboot 2 snippets.
     ///
     /// Example: `lerux deploy --board rpi4b_4gb_workstation --dest /media/$USER/boot`
     ///
-    /// Phase 60 Track C: verifies `loader.img.sha256` before copy unless `--no-verify`.
+    /// Phase 60 Track C: verifies SHA-256 sidecars before copy unless `--no-verify`.
     Deploy {
         #[arg(long, default_value = "rpi4b_4gb_workstation")]
         board: String,
@@ -372,6 +380,22 @@ enum ProfileCommands {
     CheckQos {
         /// Profile name; omit to check all profiles with a default_board.
         name: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum ProgCommands {
+    /// Compile the smoke Rust program and sign the Wasm payload.
+    Pack {
+        /// Ed25519 secret (32 raw bytes). Relative paths are repo-rooted.
+        #[arg(long)]
+        key: PathBuf,
+        /// Output `LRW1` blob. Relative paths are repo-rooted.
+        #[arg(long, short = 'o')]
+        out: PathBuf,
+        /// Rust source. Default: `support/prog/smoke.rs`.
+        #[arg(long)]
+        src: Option<PathBuf>,
     },
 }
 
@@ -693,6 +717,11 @@ fn main() -> Result<()> {
                 }
             }
         }
+        Commands::Prog { command } => match command {
+            ProgCommands::Pack { key, out, src } => {
+                prog::pack_cli(&key, &out, src.as_deref())?;
+            }
+        },
         Commands::Package { command } => {
             let packages = crate::package::load_packages(&root)?;
             match command {

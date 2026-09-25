@@ -281,4 +281,20 @@ mod tests {
         assert!(board.pds.iter().any(|p| p == "request-client"));
         assert!(!board.pds.iter().any(|p| p == "fetch-client"));
     }
+
+    #[test]
+    fn z97_hello_board_is_hardware_x86() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let boards = load_boards(&root).unwrap();
+        let board = boards.get("pc_z97_d3h").unwrap();
+        assert_eq!(board.arch, "x86_64");
+        assert_eq!(board.microkit_board, "x86_64_generic");
+        assert!(board.qemu.is_none());
+        assert!(!board.ci);
+        assert_eq!(board.pds, ["hello", "serial-driver"]);
+        assert_eq!(
+            crate::board::format_system_var(&board.system_vars["serial_ioport_addr"]),
+            "0x3f8"
+        );
+    }
 }

@@ -337,6 +337,17 @@ qemu = { net = "user", https_one = true }
 ci = true
 system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_net_irq = 79 }
 
+# ADR-010: program-runtime fetches a signed Wasm module. No NetClient on the app.
+[qemu_virt_aarch64_program]
+arch = "aarch64"
+microkit_board = "qemu_virt_aarch64"
+target = "aarch64-sel4-microkit"
+template = "program.system.template"
+pds = ["program-runtime", "request-server", "tls-proxy", "net-server", "serial-driver", "virtio-net-driver"]
+qemu = { net = "user", https_one = true }
+ci = true
+system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_net_irq = 79 }
+
 # aarch64 blk boards keep a user-net device: it occupies the first virtio-mmio
 # slot so blk stays at +0xc00 in the same page (see virtio-blk-driver).
 [qemu_virt_aarch64_blk]
@@ -576,3 +587,13 @@ target = "aarch64-sel4-microkit"
 template = "blk-emmc-rpi.system.template"
 pds = ["blk-client", "blk-server", "serial-driver", "emmc2-driver"]
 system_vars = { serial_mmio_phys_addr = "0xfe201000", serial_irq = 121, emmc2_mmio_phys_addr = "0x7e340000", emmc2_irq = 126 }
+
+# Gigabyte Z97-D3H (Haswell desktop). Hardware only: Multiboot 2 `sel4_32.elf` + `loader.img`.
+# COM1 0x3f8 IRQ4 via the board COMA header (no rear DB9). Do not overwrite the Ubuntu SSD.
+[pc_z97_d3h]
+arch = "x86_64"
+microkit_board = "x86_64_generic"
+target = "x86_64-sel4-microkit"
+template = "serial-hello-x86.system.template"
+pds = ["hello", "serial-driver"]
+system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48 }

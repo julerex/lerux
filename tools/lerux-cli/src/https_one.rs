@@ -3,8 +3,8 @@
 //!
 //! `GET /` keeps the same `200 OK` body as [`crate::http_one`]. `GET /fixture.html`
 //! serves `support/browser/fixture.html` (Phase 73). `GET /paint.html` serves
-//! `support/browser/paint.html` (Phase 76). Smoke server cert lives in
-//! `support/tls/`.
+//! `support/browser/paint.html` (Phase 76). `GET /smoke.lrw` serves
+//! `support/prog/smoke.lrw` (ADR-010). Smoke server cert lives in `support/tls/`.
 
 use std::{
     io::{Read, Write},
@@ -139,6 +139,9 @@ fn http_response_for_path(path: &[u8], file_body: &[u8]) -> Vec<u8> {
     if path == b"/fixture.html" || path == b"/paint.html" {
         return length_prefixed(b"text/html; charset=utf-8", file_body);
     }
+    if path == b"/smoke.lrw" {
+        return length_prefixed(b"application/octet-stream", file_body);
+    }
     NOT_FOUND.to_vec()
 }
 
@@ -153,17 +156,19 @@ fn length_prefixed(content_type: &[u8], body: &[u8]) -> Vec<u8> {
 }
 
 fn load_browser_path(url_path: &[u8]) -> Result<Vec<u8>> {
-    let name = match url_path {
-        b"/fixture.html" => "fixture.html",
-        b"/paint.html" => "paint.html",
+    let (dir, name) = match url_path {
+        b"/fixture.html" => ("browser", "fixture.html"),
+        b"/paint.html" => ("browser", "paint.html"),
+        b"/smoke.lrw" => ("prog", "smoke.lrw"),
         _ => return Ok(Vec::new()),
     };
-    load_browser_file(name)
+    load_support_file(dir, name)
 }
 
-fn load_browser_file(name: &str) -> Result<Vec<u8>> {
+fn load_support_file(dir: &str, name: &str) -> Result<Vec<u8>> {
     let path = crate::process::repo_root()?
-        .join("support/browser")
+        .join("support")
+        .join(dir)
         .join(name);
     std::fs::read(&path).with_context(|| format!("read {}", path.display()))
 }
@@ -221,6 +226,17 @@ mod tests {
         assert!(r
             .windows(b"lerux-http-fixture".len())
             .any(|w| w == b"lerux-http-fixture"));
+    }
+
+    #[test]
+    fn smoke_lrw_embeds_body_and_length() {
+        let body = b"LRW1-test";
+        let r = http_response_for_path(b"/smoke.lrw", body);
+        assert!(r.starts_with(b"HTTP/1.1 200"));
+        assert!(r
+            .windows(b"Content-Length: 9".len())
+            .any(|w| w == b"Content-Length: 9"));
+        assert!(r.ends_with(body));
     }
 
     #[test]

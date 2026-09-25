@@ -131,6 +131,22 @@ mod tests {
     }
 
     #[test]
+    fn loads_z97_hello_board() {
+        let root = repo_root();
+        let t = smoke_test_for_board(&root, "pc_z97_d3h").unwrap();
+        assert!(t.unordered);
+        assert_eq!(t.timeout_secs, 120);
+        assert!(
+            t.expects
+                .iter()
+                .any(|e| e.contains("Hello from Rust on seL4 Microkit")),
+            "{:?}",
+            t.expects
+        );
+        assert!(t.script.is_empty());
+    }
+
+    #[test]
     fn loads_debug_board() {
         let root = repo_root();
         let t = smoke_test_for_board(&root, "qemu_virt_aarch64_debug").unwrap();

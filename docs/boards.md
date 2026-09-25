@@ -26,6 +26,7 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `qemu_virt_aarch64_fetch` | aarch64 | `just test-fetch` | fetch-client + net-server + serial + virtio-net |
 | `qemu_virt_aarch64_fetch_tls` | aarch64 | `just test-fetch-tls` | fetch-client + tls-proxy + net-server + serial + virtio-net |
 | `qemu_virt_aarch64_request` | aarch64 | `just test-request` | Phase 73: request-client + request-server + tls-proxy + net-server |
+| `qemu_virt_aarch64_program` | aarch64 | `just test-program` | ADR-010: program-runtime fetches a signed Wasm module |
 | `qemu_virt_aarch64_fs` | aarch64 | `just test-fs` | fs-client + fs-server (LERUXFS2) + serial + virtio-blk |
 | `qemu_virt_aarch64_fs_fat` | aarch64 | `just test-fs-fat` | same SDF; fs-server FAT16 backend |
 | `qemu_virt_aarch64_net_composed` | aarch64 | `just test-net-composed` | supervisor + init drivers + net IPC + virtio-net |
@@ -58,6 +59,7 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `rpi4b_4gb_workstation` | aarch64 | `just test-rpi4-workstation` | workstation over native genet + emmc2 (hardware only) |
 | `rpi4b_4gb_net` | aarch64 | `BOARD=rpi4b_4gb_net just image` | net slice on hardware |
 | `rpi4b_4gb_blk` | aarch64 | `BOARD=rpi4b_4gb_blk just image` | blk slice on hardware |
+| `pc_z97_d3h` | x86_64 | `BOARD=pc_z97_d3h just image` | hello + COM1 (hardware only; Gigabyte Z97-D3H) |
 
 ## SDK boards
 
@@ -73,12 +75,13 @@ CI sets this via `MICROKIT_BOARDS` in the workflow env.
 
 ## Hardware boards (Phase 37+)
 
-Real (non-QEMU) boards have no `qemu` field and produce `loader.img` only.
+Real (non-QEMU) boards have no `qemu` field. ARM/RISC-V produce `loader.img`; x86 also stages `sel4_32.elf` beside it for Multiboot 2.
 Use `lerux image --board <name>` (or `BOARD=<name> just image`).
 
 - `rpi4b_4gb`: Raspberry Pi 4 Model B (4 GB). Requires U-Boot on SD card. See seL4 docs for initial bring-up and `fatload` / `go`.
 - Serial: PL011 at 0xfe201000 (GPIO 14/15). Update IRQ in `boards.toml` if the platform IRQ mapping differs.
 - Full workstation (FS + net) on hardware requires native (non-virtio) block and network drivers; see `support/profiles/hardware-rpi4.toml`.
+- `pc_z97_d3h`: Gigabyte GA-Z97-D3H (Haswell). Microkit still uses `x86_64_generic`; deploy copies **`sel4_32.elf` + `loader.img`** for Multiboot 2. See [Gigabyte Z97-D3H install path](#gigabyte-z97-d3h-install-path).
 
 `just run` on hardware boards builds the image then prints deployment instructions (no QEMU).
 
@@ -175,6 +178,57 @@ Living work list (what still needs a Pi): [`plan-arch.md` — Physical RPi4 lab]
 
 **Self-hosted CI:** optional workflow [`.github/workflows/hw-serial.yml`](../.github/workflows/hw-serial.yml); see [`ci.md`](ci.md#hardware-serial-smoke-phase-47).
 
+### Gigabyte Z97-D3H install path
+
+Board `pc_z97_d3h` is the **hello + COM1** slice on this Haswell desktop. It reuses Microkit `x86_64_generic` (same kernel as QEMU x86) and `serial-hello-x86.system.template` (COM1 `0x3f8`, IOAPIC pin 4). There is no QEMU profile: virtio-pci workstation images will **not** boot this motherboard.
+
+This machine is also the Ubuntu build host. Booting lerux **reboots Linux**. Keep Ubuntu as the default EFI entry. Do **not** format or overwrite `sda`.
+
+**One-command deploy** (after mounting a USB FAT volume, not the Ubuntu ESP unless you know what you are doing):
+
+```bash
+DEST=/media/$USER/boot just deploy-pc
+# equivalent: cargo run -p lerux-cli -- deploy --board pc_z97_d3h --dest /media/$USER/boot
+```
+
+That copies `sel4_32.elf` + `loader.img` (and SHA-256 sidecars) and writes `lerux-limine.conf` / `lerux-grub.cfg` snippets. Paste a snippet into the USB bootloader; do not replace the Ubuntu GRUB menu on `sda`.
+
+**Full path**
+
+| Step | Command / action |
+|------|------------------|
+| 1. SDK | `MICROKIT_BOARDS=…,x86_64_generic just build-sdk` or `just fetch-sdk` (already required for QEMU x86) |
+| 2. Serial hardware | Gigabyte **COMA** 9-pin header → DB9 cable → laptop USB-serial at **115200 8N1**. There is no rear DB9. Prove the link from Linux (`/dev/ttyS0` is `0x3F8` IRQ 4) before seL4. |
+| 3. Image | `BOARD=pc_z97_d3h just image` (or deploy builds it) |
+| 4. Media | `DEST=/path/to/usb-fat just deploy-pc` |
+| 5. Boot | Firmware boot menu → USB. Limine or GRUB2 **Multiboot 2**: kernel `/sel4_32.elf`, module `/loader.img`. |
+| 6. Host smoke | From the **laptop**: `LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD=pc_z97_d3h just test-hw` |
+| 7. Back to Ubuntu | Reboot and pick the default Ubuntu EFI entry. |
+
+**Prerequisites**
+
+- Gigabyte GA-Z97-D3H, i5-4690K (or another PC99 box with the same COM1 + CPU flags: `pat`, `xsave`, `fpu`, `sse`, `pdpe1gb`, `fsgsbase`)
+- Second computer as serial console
+- USB stick (or a unused FAT partition). Not the Ubuntu root disk.
+
+**Pass criteria (hello slice)**
+
+| Check | Pass |
+|-------|------|
+| Serial | Kernel + `serial driver: NS16550 COM1` + `lerux: Hello from Rust on seL4 Microkit!` |
+| Ubuntu | `sda` still boots after the experiment |
+
+**Likely failure modes**
+
+| Symptom | Likely cause |
+|---------|----------------|
+| Firmware black screen, no serial | UEFI GRUB rejected the 32-bit kernel ELF — try Limine Multiboot 2 |
+| Kernel on serial, no hello | COM1 IRQ pin/polarity; try `trigger="edge"` on the serial irq in the SDF |
+| Silent serial | Cable on COMA header (TX/RX swapped); 115200 8N1; seL4 debug UART vs PD |
+| Ubuntu gone | You deployed onto `sda` — don't. Use USB. |
+
+Native `e1000e` / AHCI workstation drivers are **not** in this board. QEMU `workstation-x86` is virtio-pci only.
+
 ## QEMU profiles
 
 | `qemu` field | Used by | Extra QEMU args |
@@ -228,6 +282,8 @@ See [plan.md](plan.md) Phases 15 and 24.
 `qemu_virt_aarch64_fetch` runs `fetch-client` over extended net IPC (DNS resolve, TCP connect/send/recv) to perform `GET /` against a host HTTP server at `10.0.2.2:8081`. Smoke expects `lerux-fetch: 200`. See [plan.md](plan.md) Phase 31.
 
 `qemu_virt_aarch64_request` (Phase 73) runs untrusted `request-client` over `HttpRequest` to `request-server`, which is the sole `TlsClient` of `tls-proxy`. The app PD has no NIC map and does not link rustls. Smoke `GET https://host:8443/fixture.html` against `lerux https-one` expects `lerux-http: fixture ok`. See [plan-interactive.md](plan-interactive.md) and [ADR-009](decisions/009-interactive-surface.md).
+
+`qemu_virt_aarch64_program` (ADR-010) runs untrusted `program-runtime` on the same HTTP path. It GETs `https://host:8443/smoke.lrw`, checks the ed25519 signature, and interprets the Wasm subset. The app has no `NetClient`. Smoke expects `lerux-prog: ran`. See [ADR-010](decisions/010-program-runtime.md).
 
 `qemu_virt_aarch64_html` (Phase 74) runs `html-demo`, which parses the baked-in `support/browser/fixture.html` with `lerux-html` and logs `lerux-html: nodes=8`. No NIC or filesystem.
 

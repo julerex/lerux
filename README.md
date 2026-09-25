@@ -76,12 +76,14 @@ Default: `qemu_virt_aarch64` (QEMU ARM virt). Override with `BOARD=... just run`
 | HTTP fetch over net IPC | `qemu_virt_aarch64_fetch` | `just test-fetch` |
 | HTTPS fetch over tls-proxy | `qemu_virt_aarch64_fetch_tls` | `just test-fetch-tls` |
 | HTTPS via request-server | `qemu_virt_aarch64_request` | `just test-request` |
+| Signed Wasm program | `qemu_virt_aarch64_program` | `just test-program` |
 | Init + net IPC | `qemu_virt_aarch64_net_composed` | `just test-net-composed` |
 | Init + blk/net IPC | `qemu_virt_aarch64_ipc_composed` | `just test-ipc-composed` |
 | RISC-V serial / echo / virtio / HTTP | `qemu_virt_riscv64` variants | `just test-riscv` / `just test-riscv-echo` / `just test-riscv-virtio` / `just test-riscv-http` |
 | System profiles (workstation etc) | `lerux profile` | `cargo run -p lerux-cli -- profile list` / `profile build workstation` |
 | Real hardware (RPi4 serial slice) | `rpi4b_4gb` | `BOARD=rpi4b_4gb just image` (or `just test` for build verification; see docs for U-Boot deploy) |
 | Real hardware (RPi4 workstation) | `rpi4b_4gb_workstation` | `just deploy-rpi4` / `just test-hw` — [install path](docs/boards.md#rpi4-workstation-install-path-phase-52) |
+| Real hardware (Gigabyte Z97-D3H hello) | `pc_z97_d3h` | `just deploy-pc` / `just test-hw` — [install path](docs/boards.md#gigabyte-z97-d3h-install-path) |
 
 Full board reference: [`docs/boards.md`](docs/boards.md).
 

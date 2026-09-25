@@ -125,7 +125,10 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 : Ladybird WebContent analogue. One static PD (Microkit cannot spawn tabs). Hosts `lerux-html` + `lerux-web`. Speaks only `HttpRequest` to `request-server` plus the bitmap MR. **No** `NetClient`, `TlsClient`, or `FsClient`. No JS in phases 71–80.
 
 **request-server**
-: Ladybird RequestServer analogue. Sole HTTP client of `tls-proxy` / `net-server` on interactive boards (Phase 73: `just test-request`). Untrusted `web-content` and `agent` fetch through it; they never hold `NetClient` / `TlsClient`.
+: Ladybird RequestServer analogue. Sole HTTP client of `tls-proxy` / `net-server` on interactive boards (Phase 73: `just test-request`). Untrusted `web-content`, `agent`, and `program-runtime` fetch through it; they never hold `NetClient` / `TlsClient`.
+
+**program-runtime**
+: Untrusted protection domain that fetches a signed Wasm module (`LRW1`) over `HttpRequest` and runs it ([ADR-010](decisions/010-program-runtime.md)). The module is a closed subset of what host `rustc` emits for `no_std` Rust (`support/prog/smoke.rs`), not a Microkit ELF. Its only import is `lerux.log`. A later on-guest compiler is meant to emit the same subset; this domain does not compile.
 
 **agent**
 : Grok Build analogue as a PD: prompt → tool-calls → tools → model. Runtime talks to host `lerux grok-one` through `request-server` (smoke CA; not live xAI). Serial ANSI TUI (Phase 78); shell `grok` PPCs the agent. Tools are Read/Edit/Write/ListDir/Search/Execute/WebFetch/Browse over existing IPC (FS in Phase 79, `web-content` in Phase 80, `request-server`). Sandbox **is** the PD set, not Landlock.
@@ -138,7 +141,7 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 
 ## Boundaries
 
-- **In scope:** Rust PD crates, `.system` files, build/CI, docs, host profile tooling, QEMU software framebuffer (ADR-009)
-- **Out of scope:** POSIX/glibc/musl, Linux ABI emulation, seL4 kernel modifications, C userspace, vendored upstream trees, unmodified third-party binaries (including Ladybird and `grok`), JS/Wasm engines, GPU compositor / Wayland / libvmm
+- **In scope:** Rust PD crates, `.system` files, build/CI, docs, host profile tooling, QEMU software framebuffer (ADR-009), a closed Wasm subset inside `program-runtime` (ADR-010)
+- **Out of scope:** POSIX/glibc/musl, Linux ABI emulation, seL4 kernel modifications, C userspace, vendored upstream trees, unmodified third-party binaries (including Ladybird and `grok`), JS engines and general-purpose Wasm runtimes (`wasmi`, `wasmtime`), GPU compositor / Wayland / libvmm
 - **Upstream SDK components:** Microkit monitor, loader, libmicrokit (C) — part of SDK, not lerux-owned
 - **Reference trees (read, do not vendor):** Ladybird, Grok Build — steal topology and tool loop only ([`plan-au-ts.md`](plan-au-ts.md) rule)

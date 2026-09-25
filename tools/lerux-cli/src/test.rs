@@ -553,9 +553,9 @@ pub fn run_board_test_with_mode(
         println!(
             "==> Hardware board {board:?}: image built successfully.\n\
              \x20   No QEMU profile.\n\
-             \x20   Deploy: just deploy-rpi4 DEST=/path/to/sd-boot\n\
+             \x20   Deploy: lerux deploy --board {board} --dest /abs/path/to/boot\n\
              \x20   Golden path: LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD={board} just test-hw\n\
-             \x20   Install path: docs/boards.md#rpi4-workstation-install-path-phase-52"
+             \x20   Install path: docs/boards.md"
         );
         return Ok(());
     }

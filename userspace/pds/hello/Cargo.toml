@@ -17,6 +17,7 @@ board-qemu_virt_riscv64 = ["serial-ipc"]
 board-qemu_virt_riscv64_virtio = ["serial-ipc", "virtio", "unified-dma"]
 board-x86_64_generic = ["serial-ipc"]
 board-x86_64_generic_virtio = ["serial-ipc", "virtio", "unified-dma"]
+board-pc_z97_d3h = ["serial-ipc"]
 board-rpi4b_4gb = ["serial-ipc"]
 serial-ipc = ["lerux-logging/serial"]
 virtio = [

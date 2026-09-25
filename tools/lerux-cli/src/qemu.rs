@@ -37,6 +37,15 @@ pub struct QemuContext {
 
 const HOSTFWD: &str = "user,id=netdev0,hostfwd=tcp::18080-:8080";
 
+/// Microkit `x86_64_generic` 32-bit kernel ELF (Multiboot / QEMU `-kernel`).
+pub fn sel4_32_elf(sdk: impl AsRef<Path>, microkit_board: &str, config: &str) -> PathBuf {
+    sdk.as_ref()
+        .join("board")
+        .join(microkit_board)
+        .join(config)
+        .join("elf/sel4_32.elf")
+}
+
 pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
     let board_build = board_build_dir(&ctx.root, &ctx.board_name, &ctx.build_dir);
     let loader = board_build.join("loader.img");
@@ -44,7 +53,7 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
 
     let Some(qemu) = ctx.board.qemu() else {
         bail!(
-            "board {:?} is hardware-only (no QEMU profile); run `lerux image --board {}` then deploy loader.img manually (e.g. via U-Boot)",
+            "board {:?} is hardware-only (no QEMU profile); run `lerux image --board {}` then `lerux deploy --dest …`",
             ctx.board_name, ctx.board_name
         );
     };
@@ -210,11 +219,7 @@ fn x86_command(
     disk: &Path,
 ) -> Result<Command> {
     let sdk = sdk_path(&ctx.root)?;
-    let kernel = PathBuf::from(&sdk)
-        .join("board")
-        .join(&ctx.board.microkit_board)
-        .join(&ctx.config)
-        .join("elf/sel4_32.elf");
+    let kernel = sel4_32_elf(&sdk, &ctx.board.microkit_board, &ctx.config);
     if !kernel.is_file() {
         bail!(
             "missing {}; run MICROKIT_BOARDS={} lerux build-sdk",

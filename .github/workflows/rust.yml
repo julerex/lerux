@@ -30,6 +30,7 @@ jobs:
         with:
           toolchain: nightly-2026-03-18
           components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
 
       - name: Install just
         uses: extractions/setup-just@v2
@@ -343,6 +344,9 @@ jobs:
           - id: request
             board: qemu_virt_aarch64_request
             command: just test-request
+          - id: program
+            board: qemu_virt_aarch64_program
+            command: just test-program
           - id: html
             board: qemu_virt_aarch64_html
             command: just test-html

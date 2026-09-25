@@ -1,4 +1,8 @@
-use std::{path::Path, process::Command};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 use anyhow::{bail, Context, Result};
 
@@ -115,19 +119,41 @@ pub fn image(root: &Path, board: &str, build_dir: &str, config: &str) -> Result<
     )?;
     // Phase 60 Track C: host-side integrity sidecar next to loader.img.
     crate::image_digest::write_sidecar(&loader)?;
+    if board_cfg.arch == "x86_64" {
+        stage_x86_kernel(&sdk, &board_cfg.microkit_board, config, &board_build)?;
+    }
     Ok(())
+}
+
+/// Copy the SDK 32-bit kernel next to `loader.img` so `lerux deploy` can put
+/// both Multiboot 2 files on USB/ESP media.
+pub fn stage_x86_kernel(
+    sdk: &str,
+    microkit_board: &str,
+    config: &str,
+    dest_dir: &Path,
+) -> Result<PathBuf> {
+    let src = crate::qemu::sel4_32_elf(sdk, microkit_board, config);
+    if !src.is_file() {
+        bail!(
+            "missing {}; run MICROKIT_BOARDS={} lerux build-sdk",
+            src.display(),
+            microkit_board
+        );
+    }
+    fs::create_dir_all(dest_dir).with_context(|| format!("create {}", dest_dir.display()))?;
+    let dest = dest_dir.join("sel4_32.elf");
+    fs::copy(&src, &dest)
+        .with_context(|| format!("copy {} → {}", src.display(), dest.display()))?;
+    crate::image_digest::write_sidecar(&dest)?;
+    Ok(dest)
 }
 
 pub fn run(root: &Path, board: &str, build_dir: &str, config: &str) -> Result<()> {
     image(root, board, build_dir, config)?;
     let ctx = crate::qemu::load_qemu_context(root, board, build_dir, config)?;
     if crate::qemu::is_hardware_board(&ctx) {
-        println!(
-            "==> Hardware board {board:?}: image ready.\n\
-             \x20   Deploy: just deploy-rpi4 DEST=/path/to/sd-boot   # or: lerux deploy --dest …\n\
-             \x20   Boot smoke: LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD={board} just test-hw\n\
-             \x20   Docs: docs/boards.md#rpi4-workstation-install-path-phase-52"
-        );
+        println!("{}", hardware_ready_message(board, &ctx.board.arch));
         return Ok(());
     }
     if crate::qemu::is_http_board(&ctx.board) {
@@ -166,4 +192,48 @@ pub fn test_all(root: &Path, build_dir: &str, config: &str) -> Result<()> {
         crate::test::run_board_test(root, board, build_dir, config)?;
     }
     Ok(())
+}
+
+fn hardware_ready_message(board: &str, arch: &str) -> String {
+    let docs = if arch == "x86_64" {
+        "docs/boards.md#gigabyte-z97-d3h-install-path"
+    } else {
+        "docs/boards.md#rpi4-workstation-install-path-phase-52"
+    };
+    format!(
+        "==> Hardware board {board:?}: image ready.\n\
+         \x20   Deploy: lerux deploy --board {board} --dest /abs/path/to/boot\n\
+         \x20   Boot smoke: LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD={board} just test-hw\n\
+         \x20   Docs: {docs}"
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stage_x86_kernel_copies_sdk_elf_and_sidecar() {
+        let tmp = tempfile::tempdir().unwrap();
+        let sdk = tmp.path().join("sdk");
+        let elf_dir = sdk.join("board/x86_64_generic/debug/elf");
+        fs::create_dir_all(&elf_dir).unwrap();
+        fs::write(elf_dir.join("sel4_32.elf"), b"kernel-bytes").unwrap();
+        let dest_dir = tmp.path().join("build/pc_z97_d3h");
+
+        let dest =
+            stage_x86_kernel(sdk.to_str().unwrap(), "x86_64_generic", "debug", &dest_dir).unwrap();
+
+        assert_eq!(dest, dest_dir.join("sel4_32.elf"));
+        assert_eq!(fs::read(&dest).unwrap(), b"kernel-bytes");
+        assert!(crate::image_digest::sidecar_path(&dest).is_file());
+    }
+
+    #[test]
+    fn hardware_ready_message_points_at_z97_docs() {
+        let msg = hardware_ready_message("pc_z97_d3h", "x86_64");
+        assert!(msg.contains("lerux deploy --board pc_z97_d3h"), "{msg}");
+        assert!(msg.contains("gigabyte-z97-d3h-install-path"), "{msg}");
+        assert!(!msg.contains("deploy-rpi4"), "{msg}");
+    }
 }

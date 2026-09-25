@@ -22,6 +22,11 @@ expects = ["lerux: Hello from Rust on seL4 Microkit!"]
 [boards.x86_64_generic]
 expects = ["lerux: Hello from Rust on seL4 Microkit!"]
 
+[boards.pc_z97_d3h]
+expects = ["lerux: Hello from Rust on seL4 Microkit!"]
+timeout_secs = 120
+unordered = true
+
 [boards.rpi4b_4gb]
 expects = ["lerux: Hello from Rust on seL4 Microkit!"]
 
@@ -243,6 +248,9 @@ expects = ["lerux-net: ready", "virtio-net: MAC", "lerux-tls: handshake ok", "le
 
 [boards.qemu_virt_aarch64_request]
 expects = ["lerux-net: ready", "virtio-net: MAC", "lerux-tls: handshake ok", "lerux-http: fixture ok"]
+
+[boards.qemu_virt_aarch64_program]
+expects = ["lerux-net: ready", "virtio-net: MAC", "lerux-tls: handshake ok", "lerux-prog: ran"]
 
 [boards.qemu_virt_aarch64_agent_runtime]
 expects = [

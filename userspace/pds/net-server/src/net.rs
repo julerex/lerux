@@ -677,13 +677,13 @@ impl NetStack {
         );
         let local = IpListenEndpoint::from((IpAddress::Ipv4(self.guest_ip()), self.tcp_local_port));
         let tcp = sockets.get_mut::<TcpSocket>(tcp_handle);
-        if tcp.state() == smoltcp::socket::tcp::State::Closed {
-            if tcp.connect(self.iface.context(), remote, local).is_ok() {
-                self.tcp_local_port = match self.tcp_local_port.checked_add(1) {
-                    Some(p) if p >= TCP_LOCAL_PORT => p,
-                    _ => TCP_LOCAL_PORT,
-                };
-            }
+        if tcp.state() == smoltcp::socket::tcp::State::Closed
+            && tcp.connect(self.iface.context(), remote, local).is_ok()
+        {
+            self.tcp_local_port = match self.tcp_local_port.checked_add(1) {
+                Some(p) if p >= TCP_LOCAL_PORT => p,
+                _ => TCP_LOCAL_PORT,
+            };
         }
         if tcp.is_active() {
             self.tcp_client_active = true;

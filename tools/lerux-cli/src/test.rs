@@ -396,6 +396,95 @@ fn steal_preempted_outer_payload(current: &str, oldest: Option<&str>) -> Option<
     Some((inner, tail.to_string()))
 }
 
+/// Text of the next physical line, not including its newline.
+fn rest_of_line(s: &str) -> &str {
+    match s.find('\n') {
+        Some(n) => &s[..n],
+        None => s,
+    }
+}
+
+fn trailing_alnum_len(s: &str) -> usize {
+    s.bytes()
+        .rev()
+        .take_while(|b| b.is_ascii_alphanumeric())
+        .count()
+}
+
+fn leading_alnum_len(s: &str) -> usize {
+    s.bytes().take_while(|b| b.is_ascii_alphanumeric()).count()
+}
+
+fn mid_word_join(left: &str, right: &str) -> bool {
+    matches!(
+        (left.as_bytes().last(), right.as_bytes().first()),
+        (Some(l), Some(r)) if l.is_ascii_alphanumeric() && r.is_ascii_alphanumeric()
+    )
+}
+
+/// Outer line resumed inside the inner line and hit its newline before the
+/// inner line finished. `current` then holds `inner head + outer tail`, and
+/// `after` (the next physical line) is the inner tail.
+///
+/// Splits inside one alphanumeric run tie on healed length (`bloc|irtio`
+/// versus `blocir|tio`). Emit every max-scoring split so the real cut, which
+/// rebuilds `blocks` and `virtio-net`, is one of them.
+fn resumed_outer_lines(oldest: &str, current: &str, after: &str) -> Vec<String> {
+    let Some(old_pre) = sel4_log_prefix_len(oldest) else {
+        return Vec::new();
+    };
+    let Some(cur_pre) = sel4_log_prefix_len(current) else {
+        return Vec::new();
+    };
+    if sel4_log_prefix_len(after).is_some() {
+        return Vec::new();
+    }
+    let old_pay = &oldest[old_pre..];
+    let cur_pay = &current[cur_pre..];
+    if old_pay.is_empty() || cur_pay.is_empty() || after.is_empty() {
+        return Vec::new();
+    }
+    let mut best = 0usize;
+    let mut splits = Vec::new();
+    for s in 1..cur_pay.len() {
+        if !cur_pay.is_char_boundary(s) {
+            continue;
+        }
+        let b1 = &cur_pay[..s];
+        let a2 = &cur_pay[s..];
+        if !mid_word_join(old_pay, a2) || !mid_word_join(b1, after) {
+            continue;
+        }
+        let score = trailing_alnum_len(old_pay)
+            + leading_alnum_len(a2)
+            + trailing_alnum_len(b1)
+            + leading_alnum_len(after);
+        if score > best {
+            best = score;
+            splits.clear();
+            splits.push(s);
+        } else if score == best {
+            splits.push(s);
+        }
+    }
+    let mut lines = Vec::with_capacity(splits.len().saturating_mul(2));
+    for s in splits {
+        let mut outer = String::with_capacity(oldest.len() + cur_pay.len());
+        outer.push_str(&oldest[..old_pre]);
+        outer.push_str(old_pay);
+        outer.push_str(&cur_pay[s..]);
+        outer.push('\n');
+        let mut inner = String::with_capacity(current.len() + after.len());
+        inner.push_str(&current[..cur_pre]);
+        inner.push_str(&cur_pay[..s]);
+        inner.push_str(after);
+        inner.push('\n');
+        lines.push(outer);
+        lines.push(inner);
+    }
+    lines
+}
+
 /// Rebuild sel4-logging lines after concurrent `debug_putchar` spliced one
 /// message inside another.
 ///
@@ -408,6 +497,10 @@ fn steal_preempted_outer_payload(current: &str, oldest: Option<&str>) -> Option<
 /// If the oldest unfinished line is still prefix-only, the first newline on
 /// the inner line is treated as the outer resuming (`]INFO` then
 /// `lerux-debug: serial driver: PL011` / ` ready`).
+///
+/// If the outer line reaches its newline while the inner line is still open
+/// (`v` / `bloc` / `irtio-net: MAC` / `ks x 512 bytes`), every max-scoring
+/// mid-word split of that shape is kept as well.
 fn collapse_interleaved_sel4_logs(haystack: &str) -> String {
     let mut completed = String::with_capacity(haystack.len());
     let mut incomplete: VecDeque<String> = VecDeque::new();
@@ -429,6 +522,11 @@ fn collapse_interleaved_sel4_logs(haystack: &str) -> String {
         i += ch.len_utf8();
         if let Some(mut cur) = current.take() {
             if ch == '\n' {
+                if let Some(oldest) = incomplete.back() {
+                    for line in resumed_outer_lines(oldest, &cur, rest_of_line(&haystack[i..])) {
+                        completed.push_str(&line);
+                    }
+                }
                 if let Some((inner, outer_tail)) =
                     steal_preempted_outer_payload(&cur, incomplete.front().map(String::as_str))
                 {
@@ -609,6 +707,14 @@ INFO  [net_server] virtio-nINFO  [blk_server] virtio-blk: 8192 blocks x 512 byte
 et: MAC 52:54:00:12:34:56
 ";
 
+    /// 2026-09-25 ipc-composed CI: the outer MAC line reaches its newline
+    /// before blk-server finishes, so `v` / `irtio-net` and `bloc` / `ks`
+    /// are not in FIFO order.
+    const IPC_COMPOSED_CI_SNIP_2026_09_25: &str = "\
+INFO  [net_server] vINFO  [blk_server] virtio-blk: 8192 blocirtio-net: MAC 52:54:00:12:34:56
+ks x 512 bytes
+";
+
     /// 2026-08-20 ipc-composed CI: earlier split prefix must not steal the
     /// `net: MAC` leftover from `virtio-`.
     const IPC_COMPOSED_CI_SNIP_2026_08_20: &str = "\
@@ -652,6 +758,26 @@ INFO  [crash_demo] crash-demo: about to fault
         assert!(capture_contains(IPC_COMPOSED_CI_SNIP, "virtio-net: MAC"));
         assert!(capture_contains(
             IPC_COMPOSED_CI_SNIP,
+            "virtio-blk: 8192 blocks"
+        ));
+    }
+
+    #[test]
+    fn capture_contains_recovers_mac_when_outer_newline_arrives_first() {
+        assert!(
+            !IPC_COMPOSED_CI_SNIP_2026_09_25.contains("virtio-net: MAC"),
+            "fixture must reproduce the raw split"
+        );
+        assert!(
+            !IPC_COMPOSED_CI_SNIP_2026_09_25.contains("8192 blocks"),
+            "fixture must reproduce the raw split"
+        );
+        assert!(capture_contains(
+            IPC_COMPOSED_CI_SNIP_2026_09_25,
+            "virtio-net: MAC"
+        ));
+        assert!(capture_contains(
+            IPC_COMPOSED_CI_SNIP_2026_09_25,
             "virtio-blk: 8192 blocks"
         ));
     }

@@ -26,7 +26,7 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `qemu_virt_aarch64_fetch` | aarch64 | `just test-fetch` | fetch-client + net-server + serial + virtio-net |
 | `qemu_virt_aarch64_fetch_tls` | aarch64 | `just test-fetch-tls` | fetch-client + tls-proxy + net-server + serial + virtio-net |
 | `qemu_virt_aarch64_request` | aarch64 | `just test-request` | Phase 73: request-client + request-server + tls-proxy + net-server |
-| `qemu_virt_aarch64_program` | aarch64 | `just test-program` | ADR-010: program-runtime fetches a signed Wasm module |
+| `qemu_virt_aarch64_program` | aarch64 | `just test-program` | Phase 81: program-runtime fetches a signed Wasm module |
 | `qemu_virt_aarch64_fs` | aarch64 | `just test-fs` | fs-client + fs-server (LERUXFS2) + serial + virtio-blk |
 | `qemu_virt_aarch64_fs_fat` | aarch64 | `just test-fs-fat` | same SDF; fs-server FAT16 backend |
 | `qemu_virt_aarch64_net_composed` | aarch64 | `just test-net-composed` | supervisor + init drivers + net IPC + virtio-net |
@@ -49,7 +49,7 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `qemu_virt_riscv64_net` | riscv64 | `just test-riscv-net` | net client/server + serial + virtio-net |
 | `qemu_virt_riscv64_http` | riscv64 | `just test-riscv-http` | serial + virtio-net + http-server |
 | `x86_64_generic` | x86_64 | `BOARD=x86_64_generic just test` | hello + serial (COM1) |
-| `x86_64_generic_console` | x86_64 | `just test-x86-console` | VGA text shell; QMP types `echo hi` |
+| `x86_64_generic_console` | x86_64 | `just test-x86-console` | Phase 82: VGA text shell; QMP types `echo hi` |
 | `x86_64_generic_echo` | x86_64 | `just test-x86-echo` | echo + serial |
 | `x86_64_generic_init` | x86_64 | `just test-init-x86` | supervisor + CMOS RTC + TSC timer + serial |
 | `x86_64_generic_virtio` | x86_64 | `just test-x86-virtio` | hello + serial + virtio-pci blk/net |
@@ -60,7 +60,7 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `rpi4b_4gb_workstation` | aarch64 | `just test-rpi4-workstation` | workstation over native genet + emmc2 (hardware only) |
 | `rpi4b_4gb_net` | aarch64 | `BOARD=rpi4b_4gb_net just image` | net slice on hardware |
 | `rpi4b_4gb_blk` | aarch64 | `BOARD=rpi4b_4gb_blk just image` | blk slice on hardware |
-| `pc_z97_d3h` | x86_64 | `BOARD=pc_z97_d3h just image` | VGA text shell + COM1 (hardware only; Gigabyte Z97-D3H) |
+| `pc_z97_d3h` | x86_64 | `BOARD=pc_z97_d3h just image` | Phase 82: VGA text shell + COM1 (hardware only; Gigabyte Z97-D3H) |
 
 ## SDK boards
 
@@ -181,7 +181,7 @@ Living work list (what still needs a Pi): [`plan-arch.md` — Physical RPi4 lab]
 
 ### Gigabyte Z97-D3H install path
 
-Board `pc_z97_d3h` is the **on-screen shell** on this Haswell desktop. It reuses Microkit `x86_64_generic` (same kernel as QEMU x86) and `console-pc.system.template` (COM1 `0x3f8`, IOAPIC pin 4, the VGA text page at `0xb8000`, and the PS/2 keyboard). QEMU coverage of that same image is `x86_64_generic_console` (`just test-x86-console`). virtio-pci workstation images will **not** boot this motherboard.
+Board `pc_z97_d3h` is the **on-screen shell** (Phase 82) on this Haswell desktop. It reuses Microkit `x86_64_generic` (same kernel as QEMU x86) and `console-pc.system.template` (COM1 `0x3f8`, IOAPIC pin 4, the VGA text page at `0xb8000`, and the PS/2 keyboard). QEMU coverage of that same image is `x86_64_generic_console` (`just test-x86-console`). virtio-pci workstation images will **not** boot this motherboard.
 
 This machine is also the Ubuntu build host. Booting lerux **reboots Linux**. Keep Ubuntu as the default EFI entry. Do **not** format or overwrite `sda`.
 
@@ -301,7 +301,7 @@ See [plan.md](plan.md) Phases 15 and 24.
 
 `qemu_virt_aarch64_request` (Phase 73) runs untrusted `request-client` over `HttpRequest` to `request-server`, which is the sole `TlsClient` of `tls-proxy`. The app PD has no NIC map and does not link rustls. Smoke `GET https://host:8443/fixture.html` against `lerux https-one` expects `lerux-http: fixture ok`. See [plan-interactive.md](plan-interactive.md) and [ADR-009](decisions/009-interactive-surface.md).
 
-`qemu_virt_aarch64_program` (ADR-010) runs untrusted `program-runtime` on the same HTTP path. It GETs `https://host:8443/smoke.lrw`, checks the ed25519 signature, and interprets the Wasm subset. The app has no `NetClient`. Smoke expects `lerux-prog: ran`. See [ADR-010](decisions/010-program-runtime.md).
+`qemu_virt_aarch64_program` (Phase 81, ADR-010) runs untrusted `program-runtime` on the same HTTP path. It GETs `https://host:8443/smoke.lrw`, checks the ed25519 signature, and interprets the Wasm subset. The app has no `NetClient`. Smoke expects `lerux-prog: ran`. See [ADR-010](decisions/010-program-runtime.md).
 
 `qemu_virt_aarch64_html` (Phase 74) runs `html-demo`, which parses the baked-in `support/browser/fixture.html` with `lerux-html` and logs `lerux-html: nodes=8`. No NIC or filesystem.
 

@@ -9,7 +9,7 @@
 | **1** | aarch64 QEMU virt; RPi4 | `workstation` → `qemu_virt_aarch64_workstation`; `workstation-rpi4` | CI: `workstation`; HW optional |
 | **2** | RISC-V virt; x86_64 q35 | `workstation-riscv`, `workstation-x86` | CI: `workstation-riscv`, `workstation-x86` |
 | **3** | Other Microkit boards | Bring-up boards only (serial/echo/virtio slices) | Per-board |
-| **HW x86** | Gigabyte Z97-D3H (this desktop) | `pc_z97_d3h` VGA shell + PS/2 + COM1; native e1000e/AHCI not yet | Optional `test-hw` |
+| **HW x86** | Gigabyte Z97-D3H (this desktop) | Phase 82: `pc_z97_d3h` VGA shell + PS/2 + COM1; native e1000e/AHCI not yet | Optional `test-hw` |
 
 ## Arch drivers
 

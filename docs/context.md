@@ -43,7 +43,7 @@ The composed board (`qemu_virt_aarch64_composed`) runs `supervisor` (historicall
 
 lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection domains that speak **typed postcard RPC** (`lerux-interface-types`) over Microkit channels — not file descriptors, `errno`, or `fork`/`exec`.
 
-“Arch-like” means **workflow**, not binary compatibility: rolling PD artifact pins, named system profiles, init ordering, shell + core utilities — each implemented as PDs you port deliberately. Unmodified Arch packages (`bash`, `pacman`, `firefox`, etc.) are out of scope. Gap plan for Arch-level capability (phases 50–60): [`plan-arch.md`](plan-arch.md). QEMU-only deepening (phases 61–70): [`plan-qemu.md`](plan-qemu.md). Next program is **interactive surface** (phases 71–80): [`plan-interactive.md`](plan-interactive.md), [ADR-009](decisions/009-interactive-surface.md).
+“Arch-like” means **workflow**, not binary compatibility: rolling PD artifact pins, named system profiles, init ordering, shell + core utilities — each implemented as PDs you port deliberately. Unmodified Arch packages (`bash`, `pacman`, `firefox`, etc.) are out of scope. Numbered plans through phase 82 are done: Arch-level capability (phases 50–60, [`plan-arch.md`](plan-arch.md)), QEMU deepening (phases 61–70, [`plan-qemu.md`](plan-qemu.md)), the interactive surface (phases 71–80, [`plan-interactive.md`](plan-interactive.md), [ADR-009](decisions/009-interactive-surface.md)), the signed Wasm runtime (phase 81, [ADR-010](decisions/010-program-runtime.md)), and the Z97 on-screen shell (phase 82). Remaining on-device work is the physical lab in [`plan-arch.md`](plan-arch.md).
 
 ## System profiles and packages
 
@@ -128,7 +128,7 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 : Ladybird RequestServer analogue. Sole HTTP client of `tls-proxy` / `net-server` on interactive boards (Phase 73: `just test-request`). Untrusted `web-content`, `agent`, and `program-runtime` fetch through it; they never hold `NetClient` / `TlsClient`.
 
 **program-runtime**
-: Untrusted protection domain that fetches a signed Wasm module (`LRW1`) over `HttpRequest` and runs it ([ADR-010](decisions/010-program-runtime.md)). The module is a closed subset of what host `rustc` emits for `no_std` Rust (`support/prog/smoke.rs`), not a Microkit ELF. Its only import is `lerux.log`. A later on-guest compiler is meant to emit the same subset; this domain does not compile.
+: Untrusted protection domain that fetches a signed Wasm module (`LRW1`) over `HttpRequest` and runs it (Phase 81, [ADR-010](decisions/010-program-runtime.md)). The module is a closed subset of what host `rustc` emits for `no_std` Rust (`support/prog/smoke.rs`), not a Microkit ELF. Its only import is `lerux.log`. A later on-guest compiler is meant to emit the same subset; this domain does not compile.
 
 **agent**
 : Grok Build analogue as a PD: prompt → tool-calls → tools → model. Runtime talks to host `lerux grok-one` through `request-server` (smoke CA; not live xAI). Serial ANSI TUI (Phase 78); shell `grok` PPCs the agent. Tools are Read/Edit/Write/ListDir/Search/Execute/WebFetch/Browse over existing IPC (FS in Phase 79, `web-content` in Phase 80, `request-server`). Sandbox **is** the PD set, not Landlock.

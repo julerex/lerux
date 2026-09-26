@@ -50,6 +50,7 @@ A toy bytecode cannot be a Rust compilation target. A full engine is larger than
 
 ## Consequences
 
+- Recorded as [Phase 81](../plan.md#phase-81--signed-wasm-runtime) in [`plan.md`](../plan.md).
 - `just test-program` on `qemu_virt_aarch64_program` fetches the signed smoke module and logs `lerux-prog: ran`.
 - `support/prog/smoke.lrw` is produced by `lerux prog pack` and served by `https-one`. Regenerating it is required when `smoke.rs` or the pinned nightly changes the Wasm bytes.
 - `rust-toolchain.toml` includes the `wasm32-unknown-unknown` target so host tests can compile the smoke crate.

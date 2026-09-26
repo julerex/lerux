@@ -1,8 +1,8 @@
 # PLAN — Arch-level functionality (phases 50–60)
 
-Last updated: 2026-09-05 (phases 71–80 interactive surface)
+Last updated: 2026-09-26 (phases 81–82 recorded in plan.md; AHCI / e1000e still open)
 
-Related: [`plan.md`](plan.md) (roadmap 1–80), [`plan-qemu.md`](plan-qemu.md) (phases 61–70, done), [`plan-interactive.md`](plan-interactive.md) (phases 71–80), [`plan-au-ts.md`](plan-au-ts.md) (sDDF/LionsOS inspiration track), [`context.md`](context.md) (domain language).
+Related: [`plan.md`](plan.md) (roadmap 1–82), [`plan-qemu.md`](plan-qemu.md) (phases 61–70, done), [`plan-interactive.md`](plan-interactive.md) (phases 71–80), [`plan-au-ts.md`](plan-au-ts.md) (sDDF/LionsOS inspiration track), [`context.md`](context.md) (domain language).
 
 ## Context
 
@@ -65,6 +65,7 @@ POSIX layers and guest Linux (libvmm) stay **explicit non-goals** unless product
 | Domain language / Arch definition | `docs/context.md` |
 | Completed roadmap | `docs/plan.md`, `docs/plan-au-ts.md`, `docs/plan-qemu.md` |
 | Interactive surface (71–80) | `docs/plan-interactive.md`, [ADR-009](decisions/009-interactive-surface.md) |
+| Signed Wasm runtime (81) and Z97 shell (82) | [`plan.md`](plan.md#phases-81-82--follow-ons), [ADR-010](decisions/010-program-runtime.md) |
 | IPC contracts | `userspace/crates/lerux-interface-types/src/lib.rs` |
 | FS formats | `userspace/crates/lerux-fs/`, `userspace/crates/lerux-fat/` |
 | FS/net/services | `userspace/pds/fs-server/`, `net-server/`, `supervisor/`, `shell/`, `config-server/`, `log-server/` |
@@ -85,13 +86,13 @@ POSIX layers and guest Linux (libvmm) stay **explicit non-goals** unless product
 - [x] **LERUXFS2**: multi-sector contiguous files (≤32 sectors / 16 KiB), directory sectors, free-map bitmap; magic `LERUXFS2`; LERUXFS1 superblocks reformat on mount.
 - [x] FAT **multi-cluster** files (chain walk/extend; ≤32 clusters / 16 KiB).
 - [x] FAT subdirs / LFN (cluster directories + VFAT names); optional workstation FAT demo still open.
-- [ ] Optional **NFS** or host-backed FS for QEMU user-net → [Phase 63](plan-qemu.md#phase-63--host-backed-fs-qemu-virtfs--9p).
+- [x] Host-backed FS via disk inject ([Phase 63](plan-qemu.md#phase-63--host-backed-fs-qemu-virtfs--9p), [ADR-008](decisions/008-host-backed-fs.md)). NFS and virtio-9p stay deferred.
 - [x] Shell: `mkdir`, `rm`, `mv`, `cd`/`pwd` (shell-local cwd); larger `cat`/`write` via chunked IPC.
 - [x] Smokes: `just test-fs` (hierarchy + multi-sector), `just test-fs-fat` (hierarchy + LFN + multi-cluster), workstation boots.
 
 ### Exit
 
-Files large enough for configs, logs, and edit buffers without artificial 512 B caps; hierarchical layout usable from shell. **Met for LERUXFS2 and FAT**; NFS / host-backed FS is [Phase 63](plan-qemu.md#phase-63--host-backed-fs-qemu-virtfs--9p). File size > 16 KiB is [Phase 62](plan-qemu.md#phase-62--filesystem-v3-usable-size).
+Files large enough for configs, logs, and edit buffers without artificial 512 B caps; hierarchical layout usable from shell. **Met for LERUXFS2, FAT, and the Phase 63 disk inject.** NFS and virtio-9p stay deferred ([ADR-008](decisions/008-host-backed-fs.md)). File size past 16 KiB shipped in [Phase 62](plan-qemu.md#phase-62--filesystem-v3-usable-size).
 
 ---
 
@@ -106,11 +107,11 @@ Files large enough for configs, logs, and edit buffers without artificial 512 B 
 - [x] **Dual TCP** sockets (client + listen) so outbound connect and inbound listen can coexist; exclusive async client lock remains for mid-op serialization.
 - [x] **TLS** for outbound fetch: dedicated `tls-proxy` PD (`rustls` + rustls-rustcrypto; smoke CA). Apps stay on cleartext `TlsRequest`. `just test-fetch-tls`. [ADR-007](decisions/007-tls-proxy.md). `webpki-roots` remains an optional crate feature.
 - [x] Unified-dma / trust map on x86 PCI + RISC-V virtio ([Phase 61](plan-qemu.md#phase-61--qemu-dma-parity-x86-pci--risc-v-virtio)). GENET unified-dma is [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated).
-- [ ] Full multi-client queue → [Phase 64](plan-qemu.md#phase-64--multi-client-net-queue).
+- [x] Full multi-client queue ([Phase 64](plan-qemu.md#phase-64--multi-client-net-queue)).
 
 ### Exit
 
-`fetch https://…` (or TLS-terminated `fetch`) works on QEMU; smokes stay deterministic (local `https-one` + smoke CA). **Met** for QEMU TLS fetch; multi-client queue is [Phase 64](plan-qemu.md#phase-64--multi-client-net-queue); `webpki-roots` is [Phase 68](plan-qemu.md#phase-68--tls-roots-and-cert-tool). RPi4 GENET path is hardware-gated.
+`fetch https://…` (or TLS-terminated `fetch`) works on QEMU; smokes stay deterministic (local `https-one` + smoke CA). **Met** for QEMU TLS fetch, the [Phase 64](plan-qemu.md#phase-64--multi-client-net-queue) multi-client queue, and [Phase 68](plan-qemu.md#phase-68--tls-roots-and-cert-tool) `webpki-roots`. RPi4 GENET path is hardware-gated.
 
 ---
 
@@ -244,7 +245,7 @@ Each row = interface types + PD + package fragment + smoke.
 
 Packages installable via Phase 55: **edit**, **chat-client**, **http-file-browser**, **backup**, **fetch-client** (≥5).
 
-Heavy GUI browsers and language ecosystems were deferred here. Phases 71–80 start a **subset** HTML/CSS engine and a Grok-shaped agent as PDs ([`plan-interactive.md`](plan-interactive.md)); JS/Wasm still need their own ADR.
+Heavy GUI browsers and language ecosystems were deferred here. Phases 71–80 shipped a subset HTML/CSS engine and a Grok-shaped agent as PDs ([`plan-interactive.md`](plan-interactive.md)). JS stays out. The closed Wasm subset in `program-runtime` is [Phase 81](plan.md#phase-81--signed-wasm-runtime) ([ADR-010](decisions/010-program-runtime.md)).
 
 ### Exit
 
@@ -311,7 +312,7 @@ Do **not** start MCS, GPU/Wayland, or POSIX. (QEMU software framebuffer is [ADR-
 
 Work that **cannot close on QEMU**. Phases 37, 39, 47, and 52 shipped the profiles, native drivers, deploy path, first-boot seed, and `just test-hw` harness. This section is the remaining on-device gate.
 
-It does **not** block [QEMU-only phases 61–70](plan-qemu.md) (done) or [interactive surface 71–80](plan-interactive.md).
+QEMU phases [61–70](plan-qemu.md), [71–80](plan-interactive.md), and [81](plan.md#phase-81--signed-wasm-runtime) are done. [Phase 82](plan.md#phase-82--z97-on-screen-shell) shipped the Z97 VGA shell. This lab is the remaining on-device gate.
 
 Procedure and empty result grid: [`boards.md` — RPi4 workstation install path](boards.md#rpi4-workstation-install-path-phase-52).
 
@@ -325,7 +326,7 @@ Procedure and empty result grid: [`boards.md` — RPi4 workstation install path]
 ### Follow-on (after the RPi4 gate)
 
 - [ ] Optional second aarch64 SBC only after RPi4 is reliable.
-- [ ] **Gigabyte Z97-D3H metal** (`pc_z97_d3h`): VGA text shell (`lerux>`) + PS/2 keyboard + COM1 log is in-tree ([`boards.md`](boards.md#gigabyte-z97-d3h-install-path)). `ls` / `fetch` stay unavailable until native AHCI / e1000e.
+- [ ] **Gigabyte Z97-D3H disk and net** (after [Phase 82](plan.md#phase-82--z97-on-screen-shell)): native AHCI and e1000e so `ls` / `fetch` work on `pc_z97_d3h`. The VGA shell, PS/2 keyboard, COM1 log, and Limine ISO are Phase 82 ([`boards.md`](boards.md#gigabyte-z97-d3h-install-path)).
 
 ### Already shipped (no Pi required)
 
@@ -345,12 +346,12 @@ Documented “install media → boot → shell works” on a real Pi, with the c
 
 Fold in as capacity allows; see also [`plan-au-ts.md`](plan-au-ts.md) and ADRs:
 
-- Per-client serial queues / separate TX+RX virt PDs → [Phase 65](plan-qemu.md#phase-65--serial-virtualiser-v2)
+- Per-client serial TX queues shipped in [Phase 65](plan-qemu.md#phase-65--serial-virtualiser-v2). Separate TX+RX virt PDs stay deferred.
 - Full sDDF net copy-PD swarm (still deferred after Phase 64’s RPC queue)
 - In-guest GDB RSP (needs fork or upstream APIs; QEMU gdbstub parity is [Phase 66](plan-qemu.md#phase-66--qemu-arch-parity-debug-isolation-serial-virt))
 - libvmm / guest Linux — **only with dedicated ADR** (explicit non-goal today)
 - Formal verification of lerux PDs
-- JS engines and general-purpose Wasm runtimes stay out. The closed subset in `program-runtime` is [ADR-010](decisions/010-program-runtime.md)
+- JS engines and general-purpose Wasm runtimes stay out. The closed subset in `program-runtime` is [Phase 81](plan.md#phase-81--signed-wasm-runtime) ([ADR-010](decisions/010-program-runtime.md))
 
 ---
 
@@ -372,12 +373,9 @@ That is Arch’s **workflow and completeness**, reimplemented as static Microkit
 
 ## Near-term priority
 
-If capacity is limited:
+Numbered phases 1–82 are done. Remaining work is [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated) when a board is on the desk, and native AHCI / e1000e after [Phase 82](plan.md#phase-82--z97-on-screen-shell). The QEMU software framebuffer shipped in [phases 71–80](plan-interactive.md).
 
-1. **[Interactive surface 71–80](plan-interactive.md)** — start 72 (display), then 73 (request-server). [ADR-009](decisions/009-interactive-surface.md) already closed Phase 71.
-2. **[Physical RPi4 lab](#physical-rpi4-lab-hardware-gated)** — when a board is on the desk. Does not block (1).
-
-Do **not** start JS, GPU compositors, or libvmm without a new ADR. QEMU software framebuffer is in scope for (1).
+JS, GPU compositors, and libvmm still need a new ADR.
 
 ---
 
@@ -411,4 +409,4 @@ Each phase should add or extend **one** profile board smoke rather than only uni
 
 ## Summary
 
-Phases **1–60** built the **kernel of an Arch-like workflow** (profiles, init, shell, FS/net, packages, multi-arch workstation, hardening). Phases **61–70** deepened QEMU ([`plan-qemu.md`](plan-qemu.md), done). The next QEMU-only program is **[phases 71–80](plan-interactive.md)** (interactive surface). On-device truth is a separate track: [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated). All of it as **ported Rust PDs and host tooling**, never as a Linux compatibility layer.
+Phases **1–60** built the **kernel of an Arch-like workflow** (profiles, init, shell, FS/net, packages, multi-arch workstation, hardening). Phases **61–70** deepened QEMU ([`plan-qemu.md`](plan-qemu.md), done). Phases **71–80** shipped the interactive surface ([`plan-interactive.md`](plan-interactive.md), done). [Phase 81](plan.md#phase-81--signed-wasm-runtime) shipped signed Wasm execution ([ADR-010](decisions/010-program-runtime.md)). [Phase 82](plan.md#phase-82--z97-on-screen-shell) shipped the Z97 VGA shell. On-device truth is [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated), including AHCI / e1000e after Phase 82. All of it as **ported Rust PDs and host tooling**, never as a Linux compatibility layer.

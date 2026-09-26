@@ -1,8 +1,8 @@
 # PLAN — Interactive surface (phases 71–80)
 
-Last updated: 2026-09-14 (phases 71–80; Phase 80 joint profile)
+Last updated: 2026-09-26 (phases 71–80 done)
 
-Related: [`plan.md`](plan.md) (roadmap 1–80), [`plan-qemu.md`](plan-qemu.md) (phases 61–70, done), [`plan-arch.md`](plan-arch.md) (phases 50–60 + Physical RPi4 lab), [`plan-au-ts.md`](plan-au-ts.md) (sDDF inspiration), [`context.md`](context.md), [ADR-009](decisions/009-interactive-surface.md).
+Related: [`plan.md`](plan.md) (roadmap 1–82), [`plan-qemu.md`](plan-qemu.md) (phases 61–70, done), [`plan-arch.md`](plan-arch.md) (phases 50–60 + Physical RPi4 lab), [`plan-au-ts.md`](plan-au-ts.md) (sDDF inspiration), [`context.md`](context.md), [ADR-009](decisions/009-interactive-surface.md).
 
 ## Context
 
@@ -76,7 +76,7 @@ From Ladybird `Documentation/ProcessArchitecture.md` and `Services/`:
 | RequestServer | HTTP(S)/WS/DNS; WebContent has no NIC | `request-server` in front of `tls-proxy` / `net-server` |
 | ImageDecoder | decode one image in a fresh process | deferred |
 | Compositor | GPU/OpenGL present | skip; `display-server` software blit |
-| WasmCompiler / WebWorker | later | out of 71–80 |
+| WasmCompiler / WebWorker | later | out of 71–80. The executor landed as [Phase 81](plan.md#phase-81--signed-wasm-runtime); the on-guest compiler and WebWorker stay later |
 
 `web-content` **cannot** use the network or filesystem except through `request-server`. That is ADR-003/007 with a Ladybird name.
 
@@ -347,13 +347,9 @@ Hardware truth remains [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardwa
 
 ## Near-term priority
 
-If capacity is limited, do **not** start with 79–80 first:
+This program is done. The build order was 72 (display), then 73 (request-server), then 74–80 (HTML, paint, browser, agent, joint profile).
 
-1. **Phase 72** — ramfb + `display-server` (done; unblocks paint).
-2. **Phase 73** — `request-server` (done; unblocks browser load **and** agent HTTPS).
-3. **Phase 74–75** — `lerux-html` + `lerux-web` (done). **76–80** (browser + agent + joint profile) done.
-
-RPi4 lab work never blocks this list. JS, GPU, and extra tabs stay off the list until a new ADR.
+Further work on this list waits on a new ADR. JS, GPU, and extra tabs stay off the list. [Phase 81](plan.md#phase-81--signed-wasm-runtime) and [Phase 82](plan.md#phase-82--z97-on-screen-shell) landed after this program. On-device work that is still open is the [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated).
 
 ---
 

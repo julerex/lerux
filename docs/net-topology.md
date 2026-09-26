@@ -53,7 +53,7 @@ Serial needed a virt because the UART driver multi-cliented apps. Net multi-clie
 | `just test-fetch` | TCP fetch |
 | `just test-fetch-tls` | HTTPS via tls-proxy (ADR-007) |
 | `just test-request` | HTTPS via request-server → tls-proxy (ADR-009) |
-| `just test-program` | HTTPS GET of a signed Wasm module via request-server (ADR-010) |
+| `just test-program` | Phase 81: HTTPS GET of a signed Wasm module via request-server (ADR-010) |
 | `just test-browser` | HTTPS fixture via request-server into web-content (Phase 76) |
 | `just test-agent-runtime` | HTTPS POST completions via request-server to grok-one (Phase 77) |
 | `just test-agent` | HTTPS POST completions + GET fixture via request-server (Phase 79) |

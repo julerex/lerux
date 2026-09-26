@@ -1,16 +1,16 @@
 # PLAN — QEMU-only workstation deepening (phases 61–70)
 
-Last updated: 2026-09-05 (program done; next is [`plan-interactive.md`](plan-interactive.md))
+Last updated: 2026-09-26 (program done; phases 71–82 also done)
 
-Related: [`plan.md`](plan.md) (roadmap 1–80), [`plan-arch.md`](plan-arch.md) (phases 50–60 + Physical RPi4 lab), [`plan-interactive.md`](plan-interactive.md) (phases 71–80), [`plan-au-ts.md`](plan-au-ts.md) (sDDF inspiration), [`context.md`](context.md).
+Related: [`plan.md`](plan.md) (roadmap 1–82), [`plan-arch.md`](plan-arch.md) (phases 50–60 + Physical RPi4 lab), [`plan-interactive.md`](plan-interactive.md) (phases 71–80), [`plan-au-ts.md`](plan-au-ts.md) (sDDF inspiration), [`context.md`](context.md).
 
 ## Context
 
 Phases 1–60 delivered an Arch-like **workflow** on QEMU: supervisor, hierarchical FS, DHCP/DNS/TLS fetch, shell, profiles/packages, serial/net virtualisers, QoS, debug, benches, and a three-arch workstation. Remaining hardware work lives only in [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated) and **does not block this program**.
 
-This plan was the next ten phases after 50–60; **all ten are done**. Every deliverable is **completable on QEMU virt** (aarch64, and riscv/x86 where the phase says so). No board on the desk, no GENET, no eMMC, no JTAG. Next program: [phases 71–80 interactive surface](plan-interactive.md).
+This plan was the next ten phases after 50–60; **all ten are done**. Every deliverable is **completable on QEMU virt** (aarch64, and riscv/x86 where the phase says so). No board on the desk, no GENET, no eMMC, no JTAG. The following program, [phases 71–80](plan-interactive.md), is also done.
 
-**What still felt toy on QEMU at the start of this program** (all closed; leftover interactive-surface gaps are in [`plan-interactive.md`](plan-interactive.md))
+**What still felt toy on QEMU at the start of this program** (all closed; the interactive-surface program is done in [`plan-interactive.md`](plan-interactive.md))
 
 | Gap | Today | Why it blocks daily QEMU use |
 |-----|-------|------------------------------|
@@ -136,7 +136,7 @@ A developer can store a real edit buffer and a multi-page `/boot.log` without hi
 
 ### Exit
 
-`just test-fs-host` proves host → guest file visibility through existing FS IPC. Workstation may keep LERUXFS2 as root; 9p is the QEMU dev convenience board (optional workstation wire is Phase 70).
+`just test-fs-host` proves host → guest file visibility through existing FS IPC. The working path is disk inject into `/host`. virtio-9p and NFS stay deferred ([ADR-008](decisions/008-host-backed-fs.md)).
 
 ---
 
@@ -206,7 +206,7 @@ Workstation serial mux is per-client on TX. At least one smaller QEMU board uses
 
 ### Exit
 
-`just test-debug{,-riscv,-x86}` and isolation smokes exist for all three QEMU arches. [`debug.md`](debug.md) documents the gdbstub flags per arch.
+`just test-debug{,-riscv,-x86}` covers all three QEMU arches. Isolation covers aarch64 and RISC-V. x86 filesystem isolation stays deferred. [`debug.md`](debug.md) documents the gdbstub flags per arch.
 
 ---
 
@@ -308,10 +308,10 @@ Treat 61–70 as done when a developer with **no hardware** can:
 
 1. Trust the same DMA map on aarch64, RISC-V, and x86 QEMU net boards.
 2. Store files larger than 16 KiB and paths deeper than 48 bytes.
-3. Edit a file on the host and read it in the guest (9p/virtfs).
+3. Edit a file on the host and read it in the guest (`/host` via disk inject).
 4. Run overlapping net clients without `Pending`.
 5. Use per-client serial virt on workstation (and at least one smaller QEMU board).
-6. Hit debug + isolation smokes on all three QEMU arches.
+6. Hit debug smokes on all three QEMU arches, and isolation on aarch64 and RISC-V.
 7. Sign and verify `loader.img` with ed25519 before a QEMU boot.
 8. Inspect a TLS trust store; keep CI on the smoke CA.
 9. Run an on-disk batch of shell commands in a smoke.
@@ -323,7 +323,7 @@ Hardware truth remains [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardwa
 
 ## Near-term priority
 
-This program is **done**. Next capacity goes to [phases 71–80](plan-interactive.md) (start 72 display, then 73 request-server). RPi4 lab work never blocks that list.
+This program is **done**. [Phases 71–82](plan.md) are done too. Remaining capacity is the [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated) and native AHCI / e1000e after [Phase 82](plan.md#phase-82--z97-on-screen-shell).
 
 ---
 

@@ -36,14 +36,14 @@ This document is the Phase 60 threat model and trust map. It does not claim form
 │  fetch-client, crash-demo (isolation smoke)                     │
 │  display-demo (Phase 72), request-client (Phase 73),            │
 │  paint-demo (Phase 75), web-content / browser-ui (Phase 76),    │
-│  agent (Phase 77); planned: agent TUI/tools (78–79)             │
+│  agent (phases 77–80), program-runtime (Phase 81, ADR-010)      │
 │  Maps: **no** virtio/net/blk/display DMA; channels only         │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 **Rule (ADR-003, workstation):** untrusted apps never map NIC or block DMA. They speak `NetRequest` / `FsRequest` (and similar) only.
 
-**Rule (ADR-009, planned):** untrusted apps never map display MMIO either. `web-content` and `agent` fetch only through `request-server`; they present pixels only through a shared bitmap MR owned with `display-server`.
+**Rule (ADR-009):** untrusted apps never map display MMIO either. `web-content` and `agent` fetch only through `request-server`; they present pixels only through a shared bitmap MR owned with `display-server`.
 
 ## Trust map (workstation-shaped)
 
@@ -58,19 +58,19 @@ This document is the Phase 60 threat model and trust map. It does not claim form
 | `config-server` / `log-server` | service | no | no | shell, supervisor | device DMA |
 | `supervisor` | control | no | no | shell (status/reboot/time) | device DMA |
 | shell / apps | untrusted | no | **none** | each other only via typed RPC | any DMA / MMIO |
-| `program-runtime` | untrusted | no | **none** | `request-server`, serial | any DMA / MMIO; the Wasm module's only import is `lerux.log` (ADR-010) |
+| `program-runtime` | untrusted | no | **none** | `request-server`, serial | any DMA / MMIO; the Wasm module's only import is `lerux.log` (Phase 81, ADR-010) |
 | `debug-handler` | debug-only | no | no | hierarchy parent | production workstation default |
 
 Channel numbers come from profile `[[channel]]` manifests; PPC callees outrank callers ([`qos.md`](qos.md), ADR-006).
 
-### Planned trust map (phases 72–80)
+### Interactive trust map (phases 72–80)
 
-Phase 72 composed `display-server` + `display-demo` on `qemu_virt_aarch64_display`. Phase 73 composed `request-server` + `request-client` on `qemu_virt_aarch64_request`. Phase 75 composed `display-server` + `paint-demo` on `qemu_virt_aarch64_paint`. Phase 76 composed `browser-ui` + `web-content` + `request-server` + `display-server` on `qemu_virt_aarch64_browser` (profile `browser`). Phase 77 composed `agent` + `request-server` on `qemu_virt_aarch64_agent_runtime` (profile `agent-runtime`). Phase 79 composed `agent` + `fs-server` + `request-server` on `qemu_virt_aarch64_agent` (profile `agent`). Phase 80 composes them with workstation on `qemu_virt_aarch64_interactive` (profile `workstation-interactive`). Do not give `web-content` or `agent` a `NetClient`.
+Phase 72 composed `display-server` + `display-demo` on `qemu_virt_aarch64_display`. Phase 73 composed `request-server` + `request-client` on `qemu_virt_aarch64_request`. Phase 75 composed `display-server` + `paint-demo` on `qemu_virt_aarch64_paint`. Phase 76 composed `browser-ui` + `web-content` + `request-server` + `display-server` on `qemu_virt_aarch64_browser` (profile `browser`). Phase 77 composed `agent` + `request-server` on `qemu_virt_aarch64_agent_runtime` (profile `agent-runtime`). Phase 79 composed `agent` + `fs-server` + `request-server` on `qemu_virt_aarch64_agent` (profile `agent`). Phase 80 composed them with workstation on `qemu_virt_aarch64_interactive` (profile `workstation-interactive`). `web-content`, `agent`, and `program-runtime` have no `NetClient`.
 
 | PD | Trust class | MMIO / IRQ | DMA | Clients may call | Must not map |
 |----|-------------|------------|-----|------------------|--------------|
 | `display-server` | service | fw_cfg + ramfb backing | no app DMA | `display-demo`, `paint-demo`, `browser-ui` | NIC / blk DMA |
-| `request-server` | service | no | no | `web-content`, `agent` | NIC / blk / display MMIO (uses `tls-proxy` / `net-server`) |
+| `request-server` | service | no | no | `web-content`, `agent`, `program-runtime` | NIC / blk / display MMIO (uses `tls-proxy` / `net-server`) |
 | `browser-ui` | untrusted | no | **none** | `web-content`, `display-server` | any DMA / MMIO |
 | `web-content` | untrusted | no | bitmap MR only | `request-server` | NIC / blk / display MMIO, FS |
 | `agent` | untrusted | no | **none** | `request-server`, `fs-server`, `web-content` (Browse), shell `grok` | NIC / display MMIO |

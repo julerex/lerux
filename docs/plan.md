@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-09-14 (Phase 80 joint workstation-interactive)
+Last updated: 2026-09-26 (Phase 81 signed Wasm runtime; Phase 82 Z97 VGA shell)
 
 ## Phase 1 — Bring-up
 
@@ -405,7 +405,7 @@ LERUXFS2 + hierarchical IPC (see [`plan-arch.md`](plan-arch.md) Phase 50 for ful
 - [x] Smokes: `just test-fs` (hierarchy + multi-sector), `just test-fs-fat` (hierarchy + LFN + multi-cluster), `just test-workstation`
 - [x] FAT stretch: multi-cluster files (≤16 KiB / 32 clusters; `just test-fs-fat`)
 - [x] FAT subdirs / LFN (cluster directories + VFAT names)
-- [ ] Optional NFS / host-backed FS → [Phase 63](plan-qemu.md#phase-63--host-backed-fs-qemu-virtfs--9p)
+- [x] Host-backed FS via disk inject ([Phase 63](plan-qemu.md#phase-63--host-backed-fs-qemu-virtfs--9p), [ADR-008](decisions/008-host-backed-fs.md)). NFS and virtio-9p stay deferred.
 
 ## Phase 51 — Network stack v2 (core done)
 
@@ -481,7 +481,7 @@ On-device sign-off is [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardwar
 - [x] CI smokes `workstation-riscv` / `workstation-x86`
 - [x] Docs: [`platforms.md`](platforms.md) tiers
 
-## Phase 60 — Security posture (core done; stretch open)
+## Phase 60 — Security posture (core + stretch A–D done)
 
 Threat model + automated isolation smoke. Full checklist: **[`plan-arch.md`](plan-arch.md)**, doc: **[`security.md`](security.md)**.
 
@@ -496,8 +496,8 @@ Stretch order and exit criteria: **[`plan-arch.md` § Phase 60 stretch sequence]
 
 | Phase | Theme | Status |
 |-------|--------|--------|
-| 50 | Filesystem v2 (multi-sector, dirs, unlink/rename) | core done (FAT hierarchy/LFN done; NFS stretch open) |
-| 51 | Network stack v2 (DHCP, DNS, multi-conn, TLS) | core done (TLS fetch smoke done; multi-client queue stretch) |
+| 50 | Filesystem v2 (multi-sector, dirs, unlink/rename) | core done (FAT hierarchy/LFN done; host inject in Phase 63; NFS and 9p deferred) |
+| 51 | Network stack v2 (DHCP, DNS, multi-conn, TLS) | core done (multi-client queue done in Phase 64; GENET stays in the physical lab) |
 | 52 | Hardware closeout (RPi4 deploy + seed + harness) | core done (on-device gate → [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated)) |
 | 53 | Shell + core utilities | core done |
 | 54 | Config, secrets, boot policy | core done (net hot-apply done) |
@@ -506,13 +506,15 @@ Stretch order and exit criteria: **[`plan-arch.md` § Phase 60 stretch sequence]
 | 57 | Observability and ops | core done |
 | 58 | App catalog | core done |
 | 59 | Multi-arch workstation profiles | core done |
-| 60 | Security posture | core + stretch A–D done (MCS / asymmetric signing deferred) |
+| 60 | Security posture | core + stretch A–D done (MCS deferred; image signing shipped in Phase 67) |
 | 61–70 | QEMU-only workstation deepening | done — [`plan-qemu.md`](plan-qemu.md) |
-| 71–80 | Interactive surface (browser + agent) | planned — [`plan-interactive.md`](plan-interactive.md); Phases 71–78 done |
+| 71–80 | Interactive surface (browser + agent) | done — [`plan-interactive.md`](plan-interactive.md) |
+| 81 | Signed Wasm runtime | done — [ADR-010](decisions/010-program-runtime.md); `just test-program` |
+| 82 | Z97 on-screen shell | done — `just test-x86-console`; `just iso` |
 
 ## Phases 61–70 — QEMU-only workstation deepening ✅
 
-Completable **without a board**. Living checklist: **[`plan-qemu.md`](plan-qemu.md)**. Hardware stays in [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated). Next program: [phases 71–80](#phases-71-80--interactive-surface-planned).
+Completable **without a board**. Living checklist: **[`plan-qemu.md`](plan-qemu.md)**. Hardware stays in [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated). The following program, [phases 71–80](#phases-71-80--interactive-surface), is done.
 
 ## Phase 61 — QEMU DMA parity ✅
 
@@ -586,9 +588,9 @@ Completable **without a board**. Living checklist: **[`plan-qemu.md`](plan-qemu.
 | 69 | Batch runner (on-disk shell scripts) | done |
 | 70 | QEMU developer loop | done |
 
-Near-term priority for 61–70 was **61 → 62 → 64** (done). Next: **79** ([`plan-interactive.md` § Near-term priority](plan-interactive.md#near-term-priority)). On-device work is [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated) and does not block that list.
+Near-term priority for 61–70 was **61 → 62 → 64**. That program, [phases 71–80](#phases-71-80--interactive-surface), and [phases 81–82](#phases-81-82--follow-ons) are done. What remains is on-device: [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated).
 
-## Phases 71–80 — Interactive surface (planned; 71–78 done)
+## Phases 71–80 — Interactive surface ✅
 
 QEMU-only **browser + agent** program. Steal Ladybird process topology and Grok Build’s tool loop; do not port C++/std binaries. Living checklist: **[`plan-interactive.md`](plan-interactive.md)**. ADR: **[ADR-009](decisions/009-interactive-surface.md)**.
 
@@ -666,6 +668,41 @@ QEMU-only **browser + agent** program. Steal Ladybird process topology and Grok 
 
 Interactive-surface program (71–80) is complete. JS, GPU, extra tabs, and live xAI stay off this list.
 
+## Phases 81–82 — Follow-ons ✅
+
+These two landed after phase 80 and are recorded here. The on-guest compiler, and native AHCI / e1000e, are still ahead of this list.
+
+## Phase 81 — Signed Wasm runtime ✅
+
+2026-09-25. A static Microkit image cannot install a new native ELF after boot. [ADR-010](decisions/010-program-runtime.md) fixes the module format and the executor so a later on-guest compiler has a target.
+
+- [x] `LRW1`: magic, version 1, a Wasm payload of at most 4096 bytes, and an ed25519 signature over the header and payload. The smoke key is `support/keys/smoke.ed25519.pub`. Unsigned bytes are not instantiated.
+- [x] `lerux-prog` interprets the closed subset host `rustc` emits for `support/prog/smoke.rs` (`wasm32-unknown-unknown`). Sections and opcodes outside that subset fail before `start`. The only import is `lerux.log`; the runtime calls export `start`.
+- [x] `program-runtime` is untrusted. It GETs `https://host:8443/smoke.lrw` from `lerux https-one` through `request-server`. It holds no `NetClient` or `TlsClient` and maps no DMA or MMIO. One runtime domain is reserved in the image.
+- [x] Host `lerux prog pack` writes `support/prog/smoke.lrw`.
+- [x] Board `qemu_virt_aarch64_program`. `just test-program` expects `lerux-prog: ran`.
+
+The on-guest compiler (a protection domain that reads a small Rust subset and emits this Wasm) is still ahead. `wasmi`, `wasmtime`, and a second runtime domain stay out. `pc_z97_d3h` has no NIC, so this fetch stays on QEMU.
+
+## Phase 82 — Z97 on-screen shell ✅
+
+2026-09-26. The Gigabyte Z97-D3H image shows a shell on the monitor. COM1 remains the log. Install path: [`boards.md`](boards.md#gigabyte-z97-d3h-install-path).
+
+- [x] `console-driver` owns the VGA text page at `0xb8000` (blue field, `hello lerux` on the first line) and the PS/2 keyboard (data `0x60`, command `0x64`, IRQ1). CRTC ports `0x3d4`/`0x3d5` place a block cursor on the shell line.
+- [x] The shell’s channel 0 speaks the serial byte protocol to `console-driver`. `log-server` still forwards the log to COM1 (`0x3f8`).
+- [x] Profile `pc-console`. Template `console-pc.system.template`. PDs: `shell`, `log-server`, `serial-driver`, `console-driver`.
+- [x] Board `pc_z97_d3h` is the metal image. Board `x86_64_generic_console` is the same image under QEMU q35 with `qemu.qmp`.
+- [x] Local commands on that image: `echo`, `help`, `pwd`, `clear`, `history`, `calc`, `qos`. A command that needs fs, net, or the supervisor prints `unavailable`.
+- [x] `just test-x86-console` injects PS/2 qcodes for `echo hi` and expects `lerux-shell: prompt` then `lerux-shell: cmd=echo hi`. Metal serial smoke expects `lerux-shell: prompt`.
+- [x] `just iso` writes the hybrid Limine ISO `build/pc_z97_d3h/lerux.iso` and does not write a disk. Legacy USB boot loads Multiboot 2 `/boot/sel4_32.elf` plus `/boot/loader.img`. `just test-iso` boots that file in QEMU under SeaBIOS (local check, not CI).
+
+Native AHCI and e1000e stay in the [physical-lab follow-on](#physical-rpi4-lab-hardware-gated), so `ls` and `fetch` stay unavailable on this image. The UEFI USB entry stays out: `sel4_32.elf` is linked at 1MB.
+
+| Phase | Theme | Status |
+|-------|--------|--------|
+| 81 | Signed Wasm runtime (`program-runtime`) | done — [ADR-010](decisions/010-program-runtime.md); `just test-program` |
+| 82 | Z97 VGA shell + PS/2 + Limine ISO | done — `just test-x86-console`; `just iso` |
+
 ## Physical RPi4 lab (hardware-gated)
 
 On-device work extracted from Phases 39, 51, and 52. Software for those phases is done. Canonical checklist: **[`plan-arch.md` § Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated)**.
@@ -675,6 +712,7 @@ On-device work extracted from Phases 39, 51, and 52. Software for those phases i
 - [ ] GENET: TCP + DNS + DHCP (`fetch` is UDP-demo-only on HW)
 - [ ] Unified-dma on `genet-driver`
 - [ ] Optional second SBC after RPi4 is reliable
+- [ ] **Gigabyte Z97-D3H disk and net** (after [Phase 82](#phase-82--z97-on-screen-shell)): native AHCI and e1000e so `ls` / `fetch` work on `pc_z97_d3h`. The VGA shell, PS/2 keyboard, COM1 log, and Limine ISO are Phase 82.
 
 ## Version alignment
 

@@ -39,7 +39,7 @@ Local mirror: `just check` (format + clippy for `lerux-cli` and `lerux-interface
 | `echo` | `just test-echo` | aarch64 echo IPC |
 | `display` | `just test-display` | Phase 72 ramfb + display-server (headless `-nographic`) |
 | `x86-echo` | `just test-x86-echo` | x86 echo IPC |
-| `x86-console` | `just test-x86-console` | VGA text shell; QMP injects `echo hi` |
+| `x86-console` | `just test-x86-console` | Phase 82: VGA text shell; QMP injects `echo hi` |
 | `riscv-echo` | `just test-riscv-echo` | RISC-V echo IPC |
 | `riscv-virtio` | `just disk-img && just test-riscv-virtio` | RISC-V virtio |
 | `init` | `just test-init` | PL031 + SP804; patched QEMU |
@@ -59,7 +59,7 @@ Local mirror: `just check` (format + clippy for `lerux-cli` and `lerux-interface
 | `fetch` | `just test-fetch` | aarch64 HTTP fetch over net IPC (TCP + DNS) |
 | `fetch-tls` | `just test-fetch-tls` | aarch64 HTTPS fetch via tls-proxy (rustls + smoke CA) |
 | `request` | `just test-request` | Phase 73: request-server GET fixture via tls-proxy (no NetClient on the app) |
-| `program` | `just test-program` | ADR-010: signed Wasm module via request-server (`lerux-prog: ran`) |
+| `program` | `just test-program` | Phase 81: signed Wasm module via request-server (`lerux-prog: ran`) |
 | `html` | `just test-html` | Phase 74: lerux-html subset parser (`lerux-html: nodes=8`) |
 | `paint` | `just test-paint` | Phase 75: CSS + layout + ramfb paint (`lerux-web: paint ok`) |
 | `browser` | `just test-browser` | Phase 76: browser-ui + web-content via request-server (`lerux-browser: paint ok`) |

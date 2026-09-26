@@ -1,6 +1,6 @@
 # PLAN — au-ts inspiration
 
-Last updated: 2026-07-12 (Phase 43 net topology + ADR-003)
+Last updated: 2026-09-26 (closed pointers to finished phases 63, 65, and 70)
 
 Upstream mirror: [`/home/julian/repos/github_orgs/au-ts`](https://github.com/au-ts) (Trustworthy Systems).  
 Related: [`plan.md`](plan.md) (main roadmap), [`plan-interactive.md`](plan-interactive.md) (same “steal the idea, not the code” rule for Ladybird / Grok Build), [`context.md`](context.md) (domain language).
@@ -114,13 +114,13 @@ sDDF serial: driver ↔ Tx/Rx virtualisers ↔ clients; SPSC queues; power-of-tw
 - [x] Split on workstation: `serial-driver` `device-only` + `serial-virt` multi-client postcard RPC (clients unchanged wire format)
 - [x] Shell / supervisor / log-server → `serial_virt`; driver ↔ virt notify + shared TX/RX queues
 - [x] Non-workstation boards keep combined multi-client driver (migration later)
-- [ ] Full QEMU workstation smoke regression (run in CI / local `just test-workstation` when convenient)
+- [x] Full QEMU workstation smoke regression (`just test-workstation` in CI, plus RISC-V and x86)
 
 ### Out of scope
 
 - Porting C sDDF serial components
 - Changing postcard `LogRequest` / shell line protocol
-- Per-client shared queues / separate TX+RX virt PDs → [Phase 65](plan-qemu.md#phase-65--serial-virtualiser-v2)
+- Per-client TX queues shipped in [Phase 65](plan-qemu.md#phase-65--serial-virtualiser-v2). Separate TX+RX virt PDs stay deferred.
 
 ### Exit
 
@@ -173,7 +173,7 @@ LionsOS `components/fs/fat`, `components/fs/nfs`, `examples/fileio`.
 
 - [x] Keep LERUXFS as the default smoke FS (`just test-fs`; Phase 50 → **LERUXFS2**)
 - [x] FAT16 backend behind `fs-server` (`lerux-fat` + `backend-fat`) matching `Open`/`Create`/`Read`/`Write`/`Stat`/`ListDir`/`Poll` on virtio-blk
-- [ ] Optional NFS client PD or `fs-server` backend for QEMU user-net → [Phase 63](plan-qemu.md#phase-63--host-backed-fs-qemu-virtfs--9p)
+- [ ] Optional NFS client PD. Host-backed files shipped as disk inject in [Phase 63](plan-qemu.md#phase-63--host-backed-fs-qemu-virtfs--9p); NFS and virtio-9p stay deferred ([ADR-008](decisions/008-host-backed-fs.md)).
 - [x] Board/feature selection: `qemu_virt_aarch64_fs` (LERUXFS2) vs `qemu_virt_aarch64_fs_fat` (FAT16); Cargo features `backend-lerux` / `backend-fat`
 - [x] Shell / edit unchanged at IPC boundary
 - [x] Smoke: `just test-fs-fat`; format choice in `docs/context.md`
@@ -182,12 +182,12 @@ LionsOS `components/fs/fat`, `components/fs/nfs`, `examples/fileio`.
 
 - Mounting Linux rootfs or glibc apps
 - Full POSIX VFS
-- NFS client / host-backed FS → [Phase 63](plan-qemu.md#phase-63--host-backed-fs-qemu-virtfs--9p) (FAT now has multi-cluster files, LFN, and subdirectories)
+- NFS client and virtio-9p stay deferred. Host-backed files are the Phase 63 disk inject. FAT has multi-cluster files, LFN, and subdirectories.
 
 ### Exit
 
 - [x] One alternate FS backend selectable by board/feature; `just test-fs` and `just test-fs-fat` green
-- [ ] Workstation optional FAT demo → [Phase 70](plan-qemu.md#phase-70--qemu-developer-loop) (FAT hierarchy/LFN is in `just test-fs-fat`)
+- [ ] Workstation optional FAT demo. [Phase 70](plan-qemu.md#phase-70--qemu-developer-loop) left FAT on `just test-fs-fat`.
 
 ---
 
@@ -234,12 +234,12 @@ LionsOS `components/fs/fat`, `components/fs/nfs`, `examples/fileio`.
 - [x] Minimal path: Microkit hierarchy `debug-handler` (parent `fault`) + `crash-demo` (child VM fault) on `qemu_virt_aarch64_debug`
 - [x] Board + smoke `just test-debug` (fault log strings)
 - [x] Doc: QEMU gdbstub + `gdb-multiarch` — [`docs/debug.md`](debug.md)
+- [x] x86 and RISC-V debug ([Phase 66](plan-qemu.md#phase-66--qemu-arch-parity-debug-isolation-serial-virt): `just test-debug-x86`, `just test-debug-riscv`)
 - [ ] Optional: in-guest GDB RSP / TCP (deferred until upstream APIs or explicit fork)
 
 ### Out of scope
 
 - Shipping a permanent debugger in production workstation images
-- x86/RISC-V debug until aarch64 works
 - libgdb + forked kernel as default
 
 ### Exit

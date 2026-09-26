@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  On-screen shell for a PC: VGA text + PS/2 keyboard, COM1 for the log.
+  The shell's channel 0 speaks the serial byte protocol to console_driver.
+  Hardware boards use the channel block below. The QEMU board's profile
+  replaces it with the same three ends.
+-->
+<system>
+    <memory_region name="vga_text" size="0x1_000" phys_addr="0xb8000" />
+
+    <protection_domain name="serial_driver" priority="10" stack_size="0x10_000">
+        <program_image path="serial-driver.elf" />
+        <ioport id="0" addr="{serial_ioport_addr}" size="8" setvar_id="com1_ioport_id" setvar_addr="com1_ioport_addr" />
+        <irq pin="{serial_ioapic_pin}" vector="{serial_ioapic_vector}" id="0" trigger="level" polarity="high" />
+    </protection_domain>
+
+    <protection_domain name="log_server" priority="5" stack_size="0x10_000">
+        <program_image path="log-server.elf" />
+    </protection_domain>
+
+    <!-- Above the shell so the shell may PPC it. Not a platform-band driver. -->
+    <protection_domain name="console_driver" priority="2" stack_size="0x10_000">
+        <program_image path="console-driver.elf" />
+        <map mr="vga_text" vaddr="0xb8000" perms="rw" cached="false" setvar_vaddr="vga_text_vaddr" />
+        <ioport id="0" addr="0x3d4" size="2" setvar_id="crtc_ioport_id" setvar_addr="crtc_ioport_addr" />
+        <ioport id="1" addr="0x60" size="1" setvar_id="kbd_data_ioport_id" setvar_addr="kbd_data_ioport_addr" />
+        <ioport id="2" addr="0x64" size="1" setvar_id="kbd_cmd_ioport_id" setvar_addr="kbd_cmd_ioport_addr" />
+        <!-- ISA IRQ1, edge. COM1 keeps pin 4 / vector 48. -->
+        <irq pin="1" vector="49" id="0" trigger="edge" polarity="high" />
+    </protection_domain>
+
+    <protection_domain name="shell" priority="1" stack_size="0x10_000">
+        <program_image path="shell.elf" />
+    </protection_domain>
+
+    <channel>
+        <end pd="console_driver" id="1" />
+        <end pd="shell" id="0" pp="true" />
+    </channel>
+
+    <channel>
+        <end pd="log_server" id="1" />
+        <end pd="shell" id="4" pp="true" />
+    </channel>
+
+    <channel>
+        <end pd="serial_driver" id="1" />
+        <end pd="log_server" id="0" pp="true" />
+    </channel>
+</system>

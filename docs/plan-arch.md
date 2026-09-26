@@ -325,7 +325,7 @@ Procedure and empty result grid: [`boards.md` — RPi4 workstation install path]
 ### Follow-on (after the RPi4 gate)
 
 - [ ] Optional second aarch64 SBC only after RPi4 is reliable.
-- [ ] **Gigabyte Z97-D3H metal** (`pc_z97_d3h`): hello + COM1 deploy is in-tree ([`boards.md`](boards.md#gigabyte-z97-d3h-install-path)). Native e1000e / AHCI workstation remains a later hardware track.
+- [ ] **Gigabyte Z97-D3H metal** (`pc_z97_d3h`): VGA text shell (`lerux>`) + PS/2 keyboard + COM1 log is in-tree ([`boards.md`](boards.md#gigabyte-z97-d3h-install-path)). `ls` / `fetch` stay unavailable until native AHCI / e1000e.
 
 ### Already shipped (no Pi required)
 

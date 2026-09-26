@@ -35,6 +35,7 @@ members = [
     "userspace/pds/goldfish-rtc-driver",
     "userspace/pds/rdtime-timer-driver",
     "userspace/pds/cmos-rtc-driver",
+    "userspace/pds/console-driver",
     "userspace/pds/tsc-timer-driver",
     "userspace/pds/virtio-blk-driver",
     "userspace/pds/virtio-net-driver",

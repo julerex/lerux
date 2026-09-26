@@ -1,0 +1,29 @@
+# On-screen PC shell. Same byte protocol as serial-virt, painted on VGA text.
+# Channel ids match userspace/systems/templates/console-pc.system.template.
+
+template = "console-pc.system.template"
+description = "VGA text shell and PS/2 keyboard, with COM1 for the log"
+default_board = "x86_64_generic_console"
+
+pds = ["shell", "log-server", "serial-driver", "console-driver"]
+
+[[channel]]
+name = "shell_console"
+ends = [
+  { pd = "console_driver", id = 1 },
+  { pd = "shell", id = 0, pp = true },
+]
+
+[[channel]]
+name = "shell_log"
+ends = [
+  { pd = "log_server", id = 1 },
+  { pd = "shell", id = 4, pp = true },
+]
+
+[[channel]]
+name = "log_serial"
+ends = [
+  { pd = "serial_driver", id = 1 },
+  { pd = "log_server", id = 0, pp = true },
+]

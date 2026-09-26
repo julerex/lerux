@@ -499,6 +499,17 @@ qemu = {}
 ci = true
 system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48 }
 
+# Same console image as pc_z97_d3h, booted under QEMU q35 so CI can inject PS/2 keys.
+[x86_64_generic_console]
+arch = "x86_64"
+microkit_board = "x86_64_generic"
+target = "x86_64-sel4-microkit"
+template = "console-pc.system.template"
+pds = ["shell", "log-server", "serial-driver", "console-driver"]
+qemu = { qmp = true }
+ci = true
+system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48 }
+
 [x86_64_generic_echo]
 arch = "x86_64"
 microkit_board = "x86_64_generic"
@@ -589,11 +600,12 @@ pds = ["blk-client", "blk-server", "serial-driver", "emmc2-driver"]
 system_vars = { serial_mmio_phys_addr = "0xfe201000", serial_irq = 121, emmc2_mmio_phys_addr = "0x7e340000", emmc2_irq = 126 }
 
 # Gigabyte Z97-D3H (Haswell desktop). Hardware only: Multiboot 2 `sel4_32.elf` + `loader.img`.
-# COM1 0x3f8 IRQ4 via the board COMA header (no rear DB9). Do not overwrite the Ubuntu SSD.
+# COM1 0x3f8 IRQ4 via the board COMA header (no rear DB9). The console PD paints
+# the VGA text page at 0xb8000 and reads the PS/2 keyboard. Do not overwrite the Ubuntu SSD.
 [pc_z97_d3h]
 arch = "x86_64"
 microkit_board = "x86_64_generic"
 target = "x86_64-sel4-microkit"
-template = "serial-hello-x86.system.template"
-pds = ["hello", "serial-driver"]
+template = "console-pc.system.template"
+pds = ["shell", "log-server", "serial-driver", "console-driver"]
 system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48 }

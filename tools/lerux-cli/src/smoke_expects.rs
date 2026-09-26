@@ -45,6 +45,11 @@ struct BoardSpec {
     script: Vec<ScriptStepToml>,
     #[serde(default)]
     script_timeout_secs: Option<u64>,
+    /// QEMU `send-key` qcodes, after boot expects. The board must set `qemu.qmp`.
+    #[serde(default)]
+    qmp_keys: Vec<String>,
+    #[serde(default)]
+    qmp_expect: Option<String>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -96,6 +101,8 @@ pub fn smoke_test_for_board(root: &Path, board: &str) -> Result<SmokeTest> {
             .script_timeout_secs
             .unwrap_or(file.defaults.script_timeout_secs)
             .max(1),
+        qmp_keys: spec.qmp_keys.clone(),
+        qmp_expect: spec.qmp_expect.clone(),
     })
 }
 
@@ -137,13 +144,22 @@ mod tests {
         assert!(t.unordered);
         assert_eq!(t.timeout_secs, 120);
         assert!(
-            t.expects
-                .iter()
-                .any(|e| e.contains("Hello from Rust on seL4 Microkit")),
+            t.expects.iter().any(|e| e.contains("lerux-shell: prompt")),
             "{:?}",
             t.expects
         );
         assert!(t.script.is_empty());
+        assert!(t.qmp_keys.is_empty());
+    }
+
+    #[test]
+    fn loads_x86_console_key_smoke() {
+        let root = repo_root();
+        let t = smoke_test_for_board(&root, "x86_64_generic_console").unwrap();
+        assert_eq!(t.timeout_secs, 120);
+        assert!(t.expects.iter().any(|e| e == "lerux-shell: prompt"));
+        assert_eq!(t.qmp_keys, ["e", "c", "h", "o", "spc", "h", "i", "ret"]);
+        assert_eq!(t.qmp_expect.as_deref(), Some("lerux-shell: cmd=echo hi"));
     }
 
     #[test]

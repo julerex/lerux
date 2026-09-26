@@ -1,12 +1,35 @@
 # lerux
 
+## Quickstart
+
+Boot this Gigabyte Z97-D3H from a USB flash drive:
+
+```bash
+just iso  # build build/pc_z97_d3h/lerux.iso
+lsblk  # list disks; the USB stick is sdc on this machine (not sda or sdb)
+udisksctl unmount -b /dev/sdc3  # unmount the ISO filesystem Ubuntu mounted from the stick
+sudo dd if=build/pc_z97_d3h/lerux.iso of=/dev/sdc bs=4M status=progress conv=fsync  # write that ISO onto the whole stick; bs=4M is the chunk size, status=progress prints bytes written, conv=fsync waits until they are on the device
+```
+
+Check `lsblk` before the `dd`. Do not write `sda` (Ubuntu SSD) or `sdb` (data disk). Reboot and open the firmware boot menu (F12 on this board). Choose the USB entry that does not say UEFI. If the stick is missing, enable CSM in setup. The Limine menu counts down, then the screen is blue with `hello lerux` on the first line and `lerux>` under it. A PS/2 keyboard in the rear combo port types at that prompt (`echo`, `help`, `pwd`, `clear`; other commands print `unavailable` until a disk driver exists). COM1 at 115200 8N1 (the COMA header; there is no rear DB9) prints `lerux-shell: prompt`. The UEFI entry stops in Limine: this kernel is linked at 1MB. Reboot and choose Ubuntu to return.
+
+Reboot once into the stick from Ubuntu, without the F12 menu. The stick has to be plugged in so the entry exists:
+
+```bash
+efibootmgr  # list EFI entries; Boot0018 is Ubuntu (SHIMX64.EFI, the default), Boot0022 is the legacy USB stick
+sudo efibootmgr -n 0022  # set BootNext to that legacy entry for one boot; BootOrder is unchanged, so the boot after that is Ubuntu again
+sudo systemctl reboot  # reboot now into BootNext
+```
+
+`Boot0022` is the `Generic Flash Disk` line with no `UEFI:` prefix. `Boot0021` (`UEFI: Generic Flash Disk`) stops in Limine. If the numbers move, match the label from `efibootmgr` before using `-n`.
+
 **Try it in QEMU:** `just qemu` (ARM virt) or `just qemu-x86-64` (x86-64 q35) boots the workstation with a serial shell at `lerux>`. Quit with `Ctrl-A x`. `just qemu-interactive` opens the interactive workstation in a QEMU window (close the window to quit).
 
 Rust userspace on the [seL4](https://sel4.systems/) microkernel, using [seL4 Microkit](https://github.com/seL4/microkit) for static system layout and [rust-sel4](https://github.com/seL4/rust-sel4) for userspace APIs.
 
 The seL4 kernel is **not vendored** — it is cloned into `deps/workspace/` and built from source via the Microkit SDK. All lerux-owned code is Rust protection domains and build orchestration.
 
-## Quick start
+## Quick start (QEMU)
 
 **Prerequisites:** Linux, `git`, `just`, `rustup`, `cmake`, `ninja`, `qemu-system-aarch64`, `libclang-dev` (for `bindgen` when building PDs), and optionally the [ARM GNU bare-metal toolchain](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads) (`aarch64-none-elf-gcc`, 12.2.Rel1) for `just build-sdk`. Python 3 is only required for `just build-sdk` (upstream Microkit `build_sdk.py`).
 
@@ -35,7 +58,7 @@ just test-all
 
 ## CI
 
-GitHub Actions runs on every push to `main`: **check** (`just check`), one **sdk** job (SDK + patched SP804 QEMU), **check-pd** (cross-target clippy on userspace crates), then **42 smoke** matrix jobs (`just test-all` runs every `ci = true` board). Local lint: `just check` (host crates) or `just check-all` (host + PD, needs SDK). Details: [`docs/ci.md`](docs/ci.md).
+GitHub Actions runs on every push to `main`: **check** (`just check`), one **sdk** job (SDK + patched SP804 QEMU), **check-pd** (cross-target clippy on userspace crates), then **43 smoke** matrix jobs (`just test-all` runs every `ci = true` board). Local lint: `just check` (host crates) or `just check-all` (host + PD, needs SDK). Details: [`docs/ci.md`](docs/ci.md).
 
 ## Architecture
 
@@ -83,7 +106,9 @@ Default: `qemu_virt_aarch64` (QEMU ARM virt). Override with `BOARD=... just run`
 | System profiles (workstation etc) | `lerux profile` | `cargo run -p lerux-cli -- profile list` / `profile build workstation` |
 | Real hardware (RPi4 serial slice) | `rpi4b_4gb` | `BOARD=rpi4b_4gb just image` (or `just test` for build verification; see docs for U-Boot deploy) |
 | Real hardware (RPi4 workstation) | `rpi4b_4gb_workstation` | `just deploy-rpi4` / `just test-hw` — [install path](docs/boards.md#rpi4-workstation-install-path-phase-52) |
-| Real hardware (Gigabyte Z97-D3H hello) | `pc_z97_d3h` | `just deploy-pc` / `just test-hw` — [install path](docs/boards.md#gigabyte-z97-d3h-install-path) |
+| USB ISO (Gigabyte Z97-D3H shell) | `pc_z97_d3h` | `just iso` — [install path](docs/boards.md#gigabyte-z97-d3h-install-path) |
+| Real hardware (Gigabyte Z97-D3H shell) | `pc_z97_d3h` | `just deploy-pc` / `just test-hw` — [install path](docs/boards.md#gigabyte-z97-d3h-install-path) |
+| x86 on-screen shell (QEMU) | `x86_64_generic_console` | `just test-x86-console` |
 
 Full board reference: [`docs/boards.md`](docs/boards.md).
 

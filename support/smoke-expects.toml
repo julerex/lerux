@@ -23,9 +23,15 @@ expects = ["lerux: Hello from Rust on seL4 Microkit!"]
 expects = ["lerux: Hello from Rust on seL4 Microkit!"]
 
 [boards.pc_z97_d3h]
-expects = ["lerux: Hello from Rust on seL4 Microkit!"]
+expects = ["lerux-shell: prompt"]
 timeout_secs = 120
 unordered = true
+
+[boards.x86_64_generic_console]
+expects = ["lerux-shell: prompt"]
+timeout_secs = 120
+qmp_keys = ["e", "c", "h", "o", "spc", "h", "i", "ret"]
+qmp_expect = "lerux-shell: cmd=echo hi"
 
 [boards.rpi4b_4gb]
 expects = ["lerux: Hello from Rust on seL4 Microkit!"]

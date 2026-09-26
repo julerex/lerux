@@ -245,6 +245,9 @@ fn peer_aliases(actual: &str, expected: &str) -> bool {
             // Phase 42: clients still name SERIAL_DRIVER but peer is serial_virt.
             | ("serial_virt", "serial_driver")
             | ("serial_driver", "serial_virt")
+            // PC console speaks the same byte protocol on the shell's SERIAL_DRIVER end.
+            | ("console_driver", "serial_driver")
+            | ("serial_driver", "console_driver")
     )
 }
 

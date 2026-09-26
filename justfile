@@ -113,6 +113,10 @@ test-display:
 test-x86-echo:
     BOARD=x86_64_generic_echo just test
 
+# On-screen shell: VGA text + PS/2 keys injected over QMP
+test-x86-console:
+    BOARD=x86_64_generic_console just test
+
 # Virtio smoke test on x86_64 q35 (PCI virtio-blk + virtio-net)
 test-x86-virtio:
     BOARD=x86_64_generic_virtio just test
@@ -306,6 +310,16 @@ hardware-pc:
 
 deploy-pc DEST:
     {{lerux}} deploy --board pc_z97_d3h --dest {{DEST}}
+
+# Hybrid BIOS+UEFI Limine ISO for the Z97-D3H hello image.
+# Writes build/pc_z97_d3h/lerux.iso. Does not write a disk.
+# Docs: docs/boards.md#gigabyte-z97-d3h-install-path
+iso:
+    {{lerux}} iso --board pc_z97_d3h --build-dir {{build_dir}} --config {{config}}
+
+# Boot that ISO in QEMU as a raw disk (SeaBIOS). Local check, not a CI job.
+test-iso:
+    {{lerux}} iso --board pc_z97_d3h --build-dir {{build_dir}} --config {{config}} --boot-test
 
 # HTTP smoke: GET / on virtio-net (host port 18080 -> guest :8080)
 test-http:

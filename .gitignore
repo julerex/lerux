@@ -17,6 +17,7 @@
 # External dependency checkouts (fetched, not vendored)
 /deps/workspace/
 /deps/toolchains/
+/deps/limine/
 /deps/microkit-sdk/
 /deps/sdk-cache/
 /deps/.sdk-path

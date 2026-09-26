@@ -18,6 +18,7 @@ mod hw_lock;
 mod image_digest;
 mod image_sign;
 mod install;
+mod iso;
 mod libclang;
 mod package;
 mod path;
@@ -239,6 +240,37 @@ enum Commands {
         /// Skip integrity check (not recommended for field media).
         #[arg(long, default_value_t = false)]
         no_verify: bool,
+    },
+    /// Build a hybrid BIOS+UEFI ISO that Multiboot 2-boots an x86 board.
+    ///
+    /// Default board is `pc_z97_d3h` (Gigabyte Z97-D3H VGA shell + COM1).
+    /// Writes `build/<board>/lerux.iso`. Does not write a disk.
+    Iso {
+        #[arg(long, default_value = "pc_z97_d3h")]
+        board: String,
+        #[arg(long, default_value = "build")]
+        build_dir: String,
+        #[arg(long, default_value = "debug")]
+        config: String,
+        /// ISO path. Default: `build/<board>/lerux.iso`.
+        /// Relative paths stay under the build directory. Absolute paths must not contain `..`.
+        #[arg(long)]
+        output: Option<PathBuf>,
+        /// Build the image if `loader.img` or `sel4_32.elf` is missing.
+        #[arg(long, default_value_t = true)]
+        build: bool,
+        /// Skip building even if the boot files are missing (error instead).
+        #[arg(long, default_value_t = false)]
+        no_build: bool,
+        /// Verify SHA-256 sidecars before packing (default: true).
+        #[arg(long, default_value_t = true)]
+        verify: bool,
+        /// Skip integrity check (not recommended for field media).
+        #[arg(long, default_value_t = false)]
+        no_verify: bool,
+        /// After writing the ISO, boot it in QEMU as a raw disk under SeaBIOS.
+        #[arg(long, default_value_t = false)]
+        boot_test: bool,
     },
     /// Phase 60 Track C: write `loader.img.sha256` next to an image.
     ///
@@ -623,6 +655,8 @@ fn main() -> Result<()> {
                 timeout_secs: timeout,
                 script: Vec::new(),
                 script_timeout_secs: 30,
+                qmp_keys: Vec::new(),
+                qmp_expect: None,
             };
             test::run_smoke(command, &smoke)?;
         }
@@ -840,6 +874,32 @@ fn main() -> Result<()> {
                 build_if_missing,
                 do_verify,
             )?;
+        }
+        Commands::Iso {
+            board,
+            build_dir,
+            config,
+            output,
+            build,
+            no_build,
+            verify,
+            no_verify,
+            boot_test,
+        } => {
+            let build_if_missing = build && !no_build;
+            let do_verify = verify && !no_verify;
+            let iso = crate::iso::build_iso(
+                &root,
+                &board,
+                &build_dir,
+                &config,
+                output.as_deref(),
+                build_if_missing,
+                do_verify,
+            )?;
+            if boot_test {
+                crate::iso::boot_test(&root, &iso, &board, &build_dir)?;
+            }
         }
         Commands::Digest {
             board,

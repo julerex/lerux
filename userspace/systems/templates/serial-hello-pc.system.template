@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<system>
+    <!-- Limine's legacy entry leaves color text mode at this page. Uncached so
+         stores reach the VGA aperture on real hardware. -->
+    <memory_region name="vga_text" size="0x1_000" phys_addr="0xb8000" />
+
+    <protection_domain name="serial_driver" priority="2" stack_size="0x10_000">
+        <program_image path="serial-driver.elf" />
+        <ioport id="0" addr="{serial_ioport_addr}" size="8" setvar_id="com1_ioport_id" setvar_addr="com1_ioport_addr" />
+        <irq pin="{serial_ioapic_pin}" vector="{serial_ioapic_vector}" id="0" trigger="level" polarity="high" />
+    </protection_domain>
+
+    <protection_domain name="hello" priority="1" stack_size="0x10_000">
+        <program_image path="hello.elf" />
+        <map mr="vga_text" vaddr="0xb8000" perms="rw" cached="false" setvar_vaddr="vga_text_vaddr" />
+        <!-- CRTC index/data, used to switch off the hardware cursor. -->
+        <ioport id="0" addr="0x3d4" size="2" setvar_id="vga_ioport_id" setvar_addr="vga_ioport_addr" />
+    </protection_domain>
+
+    <channel>
+        <end pd="serial_driver" id="1" />
+        <end pd="hello" id="0" pp="true" />
+    </channel>
+</system>

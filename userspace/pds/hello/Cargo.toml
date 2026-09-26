@@ -17,9 +17,10 @@ board-qemu_virt_riscv64 = ["serial-ipc"]
 board-qemu_virt_riscv64_virtio = ["serial-ipc", "virtio", "unified-dma"]
 board-x86_64_generic = ["serial-ipc"]
 board-x86_64_generic_virtio = ["serial-ipc", "virtio", "unified-dma"]
-board-pc_z97_d3h = ["serial-ipc"]
+board-pc_z97_d3h = ["serial-ipc", "vga-text"]
 board-rpi4b_4gb = ["serial-ipc"]
 serial-ipc = ["lerux-logging/serial"]
+vga-text = ["dep:sel4"]
 virtio = [
     "dep:async-unsync",
     "dep:sel4-driver-interfaces",
@@ -37,6 +38,7 @@ virtio = [
 
 [dependencies]
 async-unsync = { version = "0.3.0", default-features = false, optional = true }
+sel4 = { workspace = true, optional = true }
 sel4-microkit = { workspace = true }
 sel4-driver-interfaces = { workspace = true, optional = true }
 sel4-microkit-driver-adapters = { workspace = true, optional = true }

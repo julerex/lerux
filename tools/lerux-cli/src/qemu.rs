@@ -8,7 +8,7 @@ use std::{
     process::Command,
 };
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 
 use crate::{
     board::{get_board, load_boards, Board, DiskMode, NetMode, QemuConfig},
@@ -76,10 +76,25 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
         other => bail!("unsupported arch {other}"),
     };
 
+    if qemu.qmp {
+        let sock = qmp_socket(ctx);
+        if let Some(parent) = sock.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("mkdir {}", parent.display()))?;
+        }
+        let _ = std::fs::remove_file(&sock);
+        cmd.args(["-qmp", &format!("unix:{},server,nowait", path_str(&sock))]);
+    }
+
     apply_dev_flags(&mut cmd, ctx);
     cmd.env("PATH", path);
     cmd.stdin(std::process::Stdio::inherit());
     Ok(cmd)
+}
+
+/// QMP socket for [`QemuConfig::qmp`]. The smoke test connects here to send keys.
+pub fn qmp_socket(ctx: &QemuContext) -> PathBuf {
+    board_build_dir(&ctx.root, &ctx.board_name, &ctx.build_dir).join("console.qmp")
 }
 
 fn env_flag(name: &str) -> bool {

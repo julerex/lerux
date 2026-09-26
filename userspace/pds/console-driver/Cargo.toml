@@ -1,0 +1,32 @@
+[package]
+name = "console-driver"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "VGA text console and PS/2 keyboard for the PC shell"
+
+[lints]
+workspace = true
+
+[features]
+# Host `cargo test` stays on the pure modules. Board builds enable the seL4 deps.
+hardware = [
+    "dep:heapless",
+    "dep:lerux-driver-protocols",
+    "dep:lerux-logging",
+    "dep:log",
+    "dep:sel4",
+    "dep:sel4-microkit",
+    "dep:sel4-microkit-simple-ipc",
+]
+board-pc_z97_d3h = ["hardware"]
+board-x86_64_generic_console = ["hardware"]
+
+[dependencies]
+heapless = { workspace = true, optional = true }
+lerux-driver-protocols = { path = "../../crates/lerux-driver-protocols", optional = true }
+lerux-logging = { path = "../../crates/lerux-logging", optional = true }
+log = { workspace = true, optional = true }
+sel4 = { workspace = true, optional = true }
+sel4-microkit = { workspace = true, optional = true }
+sel4-microkit-simple-ipc = { workspace = true, optional = true }

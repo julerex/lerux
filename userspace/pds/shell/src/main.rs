@@ -1248,6 +1248,23 @@ fn dmesg_bytes<'a>(console: &mut SerialClient, args: impl Iterator<Item = &'a [u
     }
 }
 
+/// Commands that do not call another protection domain.
+#[cfg(feature = "pc-console")]
+fn pc_console_local(cmd: &[u8]) -> bool {
+    matches!(
+        cmd,
+        b"echo" | b"help" | b"pwd" | b"clear" | b"history" | b"calc" | b"qos"
+    )
+}
+
+/// Serial proof that a keyboard line reached the shell. Kept short for the log ring.
+#[cfg(feature = "pc-console")]
+fn log_console_cmd(line: &[u8]) {
+    let n = line.len().min(40);
+    let text = core::str::from_utf8(&line[..n]).unwrap_or("?");
+    log::info!("lerux-shell: cmd={text}");
+}
+
 fn process_command(h: &mut HandlerImpl, line: &[u8]) {
     let line = if let Some(p) = line.iter().position(|&b| b == b'\r' || b == b'\n') {
         &line[..p]
@@ -1262,6 +1279,15 @@ fn process_command(h: &mut HandlerImpl, line: &[u8]) {
     }
     let mut parts = line.split(|&b| b == b' ');
     let cmd = parts.next().unwrap_or(b"");
+    #[cfg(feature = "pc-console")]
+    {
+        // This image has no fs, net, or supervisor end. A protected call would fault.
+        log_console_cmd(line);
+        if !pc_console_local(cmd) {
+            println(&mut h.console, "unavailable");
+            return;
+        }
+    }
     // Copy cwd so path helpers do not borrow `h` across `cd` / `history`.
     let mut cwd_copy = [0u8; CWD_CAP];
     let cwd_len = h.cwd_len as usize;
@@ -1550,33 +1576,45 @@ fn init() -> HandlerImpl {
     server::init_with_tag(LOG_SERVER, b"shell").unwrap();
     let _console = SerialClient::new(SERIAL_DRIVER);
     log::info!("lerux-shell: ready");
-    // Phase 60 Track D: guest signal that interactive shell came up while
-    // higher-priority services/bulk apps initialized (concurrent boot smoke).
-    log::info!("lerux-shell: qos ok (policy=phase48 single-flight fs/net)");
-    // Machine-readable command discovery for smokes (Phase 53).
-    // Keep under MAX_LOG_MSG (~80) by logging a short marker + count.
-    log::info!("lerux-shell: cmds={} (help -l)", COMMANDS.len());
+    #[cfg(not(feature = "pc-console"))]
+    {
+        // Phase 60 Track D: guest signal that interactive shell came up while
+        // higher-priority services/bulk apps initialized (concurrent boot smoke).
+        log::info!("lerux-shell: qos ok (policy=phase48 single-flight fs/net)");
+        // Machine-readable command discovery for smokes (Phase 53).
+        // Keep under MAX_LOG_MSG (~80) by logging a short marker + count.
+        log::info!("lerux-shell: cmds={} (help -l)", COMMANDS.len());
 
-    if let FsResponse::DirList { count, .. } = fs_call(FsRequest::list_root()) {
-        log::info!("lerux-shell: ls count={}", count);
+        if let FsResponse::DirList { count, .. } = fs_call(FsRequest::list_root()) {
+            log::info!("lerux-shell: ls count={}", count);
+        }
+        if let Ok(SupervisorResponse::Time { year, month, day }) =
+            call::<SupervisorRequest, SupervisorResponse>(SUPERVISOR, SupervisorRequest::GetTime)
+        {
+            log::info!("lerux-shell: time {}-{:02}-{:02}", year, month, day);
+        }
+        // Exercise top/ps service list for smoke.
+        if let Ok(SupervisorResponse::ServiceList { count, .. }) =
+            call::<SupervisorRequest, SupervisorResponse>(
+                SUPERVISOR,
+                SupervisorRequest::ListServices,
+            )
+        {
+            log::info!("lerux-shell: top count={}", count);
+        }
     }
-    if let Ok(SupervisorResponse::Time { year, month, day }) =
-        call::<SupervisorRequest, SupervisorResponse>(SUPERVISOR, SupervisorRequest::GetTime)
-    {
-        log::info!("lerux-shell: time {}-{:02}-{:02}", year, month, day);
-    }
-    // Exercise top/ps service list for smoke.
-    if let Ok(SupervisorResponse::ServiceList { count, .. }) =
-        call::<SupervisorRequest, SupervisorResponse>(SUPERVISOR, SupervisorRequest::ListServices)
-    {
-        log::info!("lerux-shell: top count={}", count);
-    }
+    // The PC console smoke waits for this line, then injects PS/2 keys.
+    #[cfg(feature = "pc-console")]
+    log::info!("lerux-shell: prompt");
 
     let mut c = SerialClient::new(SERIAL_DRIVER);
     print_prompt(&mut c);
 
     let mut cwd = [0u8; CWD_CAP];
     cwd[0] = b'/';
+    // `run_file` mutates the handler on workstation images. The PC console
+    // image returns it unchanged, so that build does not use the binding.
+    #[cfg_attr(feature = "pc-console", allow(unused_mut))]
     let mut h = HandlerImpl {
         console: SerialClient::new(SERIAL_DRIVER),
         input_buf: [0; INPUT_BUF_CAP],
@@ -1591,14 +1629,17 @@ fn init() -> HandlerImpl {
         history_len: 0,
         history_next: 0,
     };
-    let _ = fs_call(FsRequest::mkdir(b"/batch"));
-    write_file(
-        &mut h.console,
-        b"/",
-        b"/batch/smoke.lerux",
-        b"echo batch-line\n",
-    );
-    run_file(&mut h, b"/batch/smoke.lerux", false);
+    #[cfg(not(feature = "pc-console"))]
+    {
+        let _ = fs_call(FsRequest::mkdir(b"/batch"));
+        write_file(
+            &mut h.console,
+            b"/",
+            b"/batch/smoke.lerux",
+            b"echo batch-line\n",
+        );
+        run_file(&mut h, b"/batch/smoke.lerux", false);
+    }
     h
 }
 

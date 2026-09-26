@@ -39,6 +39,7 @@ Local mirror: `just check` (format + clippy for `lerux-cli` and `lerux-interface
 | `echo` | `just test-echo` | aarch64 echo IPC |
 | `display` | `just test-display` | Phase 72 ramfb + display-server (headless `-nographic`) |
 | `x86-echo` | `just test-x86-echo` | x86 echo IPC |
+| `x86-console` | `just test-x86-console` | VGA text shell; QMP injects `echo hi` |
 | `riscv-echo` | `just test-riscv-echo` | RISC-V echo IPC |
 | `riscv-virtio` | `just disk-img && just test-riscv-virtio` | RISC-V virtio |
 | `init` | `just test-init` | PL031 + SP804; patched QEMU |

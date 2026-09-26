@@ -9,11 +9,15 @@ workspace = true
 
 [features]
 workstation = []
+# On-screen PC console: prompt without fs/net/supervisor callees.
+pc-console = []
 board-qemu_virt_aarch64_workstation = ["workstation"]
 board-qemu_virt_aarch64_interactive = ["workstation"]
 board-qemu_virt_riscv64_workstation = ["workstation"]
 board-x86_64_generic_workstation = ["workstation"]
 board-rpi4b_4gb_workstation = ["workstation"]
+board-pc_z97_d3h = ["pc-console"]
+board-x86_64_generic_console = ["pc-console"]
 
 [dependencies]
 heapless = { workspace = true }

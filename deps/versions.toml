@@ -13,3 +13,9 @@ rust_sel4 = { remote = "https://github.com/seL4/rust-sel4.git", tag = "v4.0.0" }
 [boards]
 default = "qemu_virt_aarch64"
 config = "debug"
+
+# Host tool + boot files for the Z97 USB ISO (`lerux iso`). Not a seL4 checkout.
+[limine]
+version = "12.9.0"
+url = "https://github.com/Limine-Bootloader/Limine/releases/download/v12.9.0/limine-binary.tar.xz"
+sha256 = "9a738586bff5790bd8bfef4a4868a2939cba3f81f22f121306d668c97f1c85d8"

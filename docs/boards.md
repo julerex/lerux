@@ -49,6 +49,7 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `qemu_virt_riscv64_net` | riscv64 | `just test-riscv-net` | net client/server + serial + virtio-net |
 | `qemu_virt_riscv64_http` | riscv64 | `just test-riscv-http` | serial + virtio-net + http-server |
 | `x86_64_generic` | x86_64 | `BOARD=x86_64_generic just test` | hello + serial (COM1) |
+| `x86_64_generic_console` | x86_64 | `just test-x86-console` | VGA text shell; QMP types `echo hi` |
 | `x86_64_generic_echo` | x86_64 | `just test-x86-echo` | echo + serial |
 | `x86_64_generic_init` | x86_64 | `just test-init-x86` | supervisor + CMOS RTC + TSC timer + serial |
 | `x86_64_generic_virtio` | x86_64 | `just test-x86-virtio` | hello + serial + virtio-pci blk/net |
@@ -59,7 +60,7 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `rpi4b_4gb_workstation` | aarch64 | `just test-rpi4-workstation` | workstation over native genet + emmc2 (hardware only) |
 | `rpi4b_4gb_net` | aarch64 | `BOARD=rpi4b_4gb_net just image` | net slice on hardware |
 | `rpi4b_4gb_blk` | aarch64 | `BOARD=rpi4b_4gb_blk just image` | blk slice on hardware |
-| `pc_z97_d3h` | x86_64 | `BOARD=pc_z97_d3h just image` | hello + COM1 (hardware only; Gigabyte Z97-D3H) |
+| `pc_z97_d3h` | x86_64 | `BOARD=pc_z97_d3h just image` | VGA text shell + COM1 (hardware only; Gigabyte Z97-D3H) |
 
 ## SDK boards
 
@@ -81,7 +82,7 @@ Use `lerux image --board <name>` (or `BOARD=<name> just image`).
 - `rpi4b_4gb`: Raspberry Pi 4 Model B (4 GB). Requires U-Boot on SD card. See seL4 docs for initial bring-up and `fatload` / `go`.
 - Serial: PL011 at 0xfe201000 (GPIO 14/15). Update IRQ in `boards.toml` if the platform IRQ mapping differs.
 - Full workstation (FS + net) on hardware requires native (non-virtio) block and network drivers; see `support/profiles/hardware-rpi4.toml`.
-- `pc_z97_d3h`: Gigabyte GA-Z97-D3H (Haswell). Microkit still uses `x86_64_generic`; deploy copies **`sel4_32.elf` + `loader.img`** for Multiboot 2. See [Gigabyte Z97-D3H install path](#gigabyte-z97-d3h-install-path).
+- `pc_z97_d3h`: Gigabyte GA-Z97-D3H (Haswell). Microkit still uses `x86_64_generic`; deploy copies **`sel4_32.elf` + `loader.img`** for Multiboot 2. The monitor shows the shell prompt. See [Gigabyte Z97-D3H install path](#gigabyte-z97-d3h-install-path).
 
 `just run` on hardware boards builds the image then prints deployment instructions (no QEMU).
 
@@ -180,18 +181,30 @@ Living work list (what still needs a Pi): [`plan-arch.md` — Physical RPi4 lab]
 
 ### Gigabyte Z97-D3H install path
 
-Board `pc_z97_d3h` is the **hello + COM1** slice on this Haswell desktop. It reuses Microkit `x86_64_generic` (same kernel as QEMU x86) and `serial-hello-x86.system.template` (COM1 `0x3f8`, IOAPIC pin 4). There is no QEMU profile: virtio-pci workstation images will **not** boot this motherboard.
+Board `pc_z97_d3h` is the **on-screen shell** on this Haswell desktop. It reuses Microkit `x86_64_generic` (same kernel as QEMU x86) and `console-pc.system.template` (COM1 `0x3f8`, IOAPIC pin 4, the VGA text page at `0xb8000`, and the PS/2 keyboard). QEMU coverage of that same image is `x86_64_generic_console` (`just test-x86-console`). virtio-pci workstation images will **not** boot this motherboard.
 
 This machine is also the Ubuntu build host. Booting lerux **reboots Linux**. Keep Ubuntu as the default EFI entry. Do **not** format or overwrite `sda`.
 
-**One-command deploy** (after mounting a USB FAT volume, not the Ubuntu ESP unless you know what you are doing):
+**USB ISO** (writes `build/pc_z97_d3h/lerux.iso` and does not touch a disk):
+
+```bash
+just iso
+lsblk
+sudo dd if=build/pc_z97_d3h/lerux.iso of=/dev/sdX bs=4M status=progress conv=fsync
+```
+
+Replace `sdX` with the flash drive from `lsblk`. Do not use `sda` (Ubuntu SSD) or `sdb` (data disk). Reboot and open the firmware boot menu (F12). Choose the USB entry that does not say UEFI. If the stick is missing, enable CSM in setup. The Limine menu counts down, then the screen is blue with `hello lerux` on the first line and `lerux>` under it. Plug a PS/2 keyboard into the rear combo port. `echo`, `help`, `pwd`, `history`, `calc`, `qos`, and `clear` work. `ls`, `fetch`, and `edit` print `unavailable` (this image has no disk or network driver). A USB keyboard works only while the firmware is still translating it into the PS/2 ports. The serial console is still COM1 at 115200 8N1 on the COMA header, and `lerux-shell: prompt` there means the shell reached the prompt. Reboot and choose Ubuntu to return.
+
+The ISO is a hybrid image. Limine loads Multiboot 2 `/boot/sel4_32.elf` with module `/boot/loader.img` from the legacy entry. `just test-iso` boots that file in QEMU as a raw disk under SeaBIOS (local check, not CI). The UEFI entry stops in Limine: `sel4_32.elf` is linked at 1MB, and UEFI does not leave that range free.
+
+**FAT volume that already has a bootloader** (after mounting it; not the Ubuntu ESP):
 
 ```bash
 DEST=/media/$USER/boot just deploy-pc
 # equivalent: cargo run -p lerux-cli -- deploy --board pc_z97_d3h --dest /media/$USER/boot
 ```
 
-That copies `sel4_32.elf` + `loader.img` (and SHA-256 sidecars) and writes `lerux-limine.conf` / `lerux-grub.cfg` snippets. Paste a snippet into the USB bootloader; do not replace the Ubuntu GRUB menu on `sda`.
+That copies `sel4_32.elf` + `loader.img` (and SHA-256 sidecars) and writes `lerux-limine.conf` / `lerux-grub.cfg` snippets. Paste a snippet into that volume's bootloader. Do not replace the Ubuntu GRUB menu on `sda`.
 
 **Full path**
 
@@ -200,30 +213,35 @@ That copies `sel4_32.elf` + `loader.img` (and SHA-256 sidecars) and writes `leru
 | 1. SDK | `MICROKIT_BOARDS=…,x86_64_generic just build-sdk` or `just fetch-sdk` (already required for QEMU x86) |
 | 2. Serial hardware | Gigabyte **COMA** 9-pin header → DB9 cable → laptop USB-serial at **115200 8N1**. There is no rear DB9. Prove the link from Linux (`/dev/ttyS0` is `0x3F8` IRQ 4) before seL4. |
 | 3. Image | `BOARD=pc_z97_d3h just image` (or deploy builds it) |
-| 4. Media | `DEST=/path/to/usb-fat just deploy-pc` |
-| 5. Boot | Firmware boot menu → USB. Limine or GRUB2 **Multiboot 2**: kernel `/sel4_32.elf`, module `/loader.img`. |
+| 4. Media | `just iso`, then `dd` the ISO onto the flash drive (not `sda` or `sdb`). Or `DEST=/path/to/usb-fat just deploy-pc` when that volume already has a bootloader. |
+| 5. Boot | Firmware boot menu (F12) → the USB entry that does not say UEFI. Limine is Multiboot 2: kernel `/boot/sel4_32.elf`, module `/boot/loader.img`. Enable CSM if that entry is missing. |
 | 6. Host smoke | From the **laptop**: `LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD=pc_z97_d3h just test-hw` |
 | 7. Back to Ubuntu | Reboot and pick the default Ubuntu EFI entry. |
 
 **Prerequisites**
 
 - Gigabyte GA-Z97-D3H, i5-4690K (or another PC99 box with the same COM1 + CPU flags: `pat`, `xsave`, `fpu`, `sse`, `pdpe1gb`, `fsgsbase`)
-- Second computer as serial console
+- PS/2 keyboard in the rear combo port
 - USB stick (or a unused FAT partition). Not the Ubuntu root disk.
+- Optional: second computer as serial console, to see `lerux-shell: prompt` on COM1
 
-**Pass criteria (hello slice)**
+**Pass criteria**
 
 | Check | Pass |
 |-------|------|
-| Serial | Kernel + `serial driver: NS16550 COM1` + `lerux: Hello from Rust on seL4 Microkit!` |
+| Screen | Blue background, `hello lerux` on the first line, `lerux>` on the second |
+| Keyboard | `echo hi` then Enter prints `hi` on the next line |
+| Serial | Kernel + `serial driver: NS16550 COM1` + `lerux-shell: prompt` |
 | Ubuntu | `sda` still boots after the experiment |
 
 **Likely failure modes**
 
 | Symptom | Likely cause |
 |---------|----------------|
-| Firmware black screen, no serial | UEFI GRUB rejected the 32-bit kernel ELF — try Limine Multiboot 2 |
-| Kernel on serial, no hello | COM1 IRQ pin/polarity; try `trigger="edge"` on the serial irq in the SDF |
+| Limine menu, then a flashing cursor and no blue screen | The console PD did not run. Kernel output is still COM1 (COMA header, 115200 8N1). |
+| Prompt is visible, keys do nothing | The keyboard is USB and firmware legacy emulation is off. Use the PS/2 combo port. |
+| Limine says it could not find a load address | The UEFI entry. Choose the legacy USB entry, or enable CSM. |
+| Kernel on serial, no prompt | COM1 IRQ pin/polarity; try `trigger="edge"` on the serial irq in the SDF |
 | Silent serial | Cable on COMA header (TX/RX swapped); 115200 8N1; seL4 debug UART vs PD |
 | Ubuntu gone | You deployed onto `sda` — don't. Use USB. |
 

@@ -2,6 +2,7 @@ use std::{
     collections::VecDeque,
     fs::OpenOptions,
     io::{BufRead, BufReader, Read, Write},
+    path::Path,
     process::{Command, Stdio},
     time::{Duration, Instant},
 };
@@ -24,6 +25,10 @@ pub struct SmokeTest {
     /// After boot expects, optional write/expect pairs (hw-serial only).
     pub script: Vec<ScriptStep>,
     pub script_timeout_secs: u64,
+    /// QEMU `send-key` qcodes, injected after boot expects when the board opens QMP.
+    pub qmp_keys: Vec<String>,
+    /// Substring expected on the serial log after [`Self::qmp_keys`].
+    pub qmp_expect: Option<String>,
 }
 
 impl Default for SmokeTest {
@@ -35,6 +40,8 @@ impl Default for SmokeTest {
             timeout_secs: 60,
             script: Vec::new(),
             script_timeout_secs: 30,
+            qmp_keys: Vec::new(),
+            qmp_expect: None,
         }
     }
 }
@@ -48,9 +55,28 @@ pub fn run_smoke(cmd: Command, test: &SmokeTest) -> Result<()> {
 /// Phase 57: default failure path writes `build/smoke-logs/<board>.serial.log` when
 /// `save_log` is `Some`.
 pub fn run_smoke_with_capture(
-    mut cmd: Command,
+    cmd: Command,
     test: &SmokeTest,
     save_log: Option<&std::path::Path>,
+) -> Result<()> {
+    run_smoke_inner(cmd, test, save_log, None)
+}
+
+/// Same as [`run_smoke_with_capture`], then inject PS/2 keys over QMP.
+pub fn run_smoke_with_qmp(
+    cmd: Command,
+    test: &SmokeTest,
+    save_log: Option<&Path>,
+    qmp_socket: &Path,
+) -> Result<()> {
+    run_smoke_inner(cmd, test, save_log, Some(qmp_socket))
+}
+
+fn run_smoke_inner(
+    mut cmd: Command,
+    test: &SmokeTest,
+    save_log: Option<&Path>,
+    qmp_socket: Option<&Path>,
 ) -> Result<()> {
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
@@ -80,6 +106,21 @@ pub fn run_smoke_with_capture(
         }
         for (url, expect) in &test.curls {
             curl_check(url, expect, 30)?;
+        }
+        if !test.qmp_keys.is_empty() {
+            let socket = qmp_socket.context("qmp_keys set but this run has no QMP socket")?;
+            let expect = test
+                .qmp_expect
+                .as_deref()
+                .context("qmp_keys set without qmp_expect")?;
+            println!("==> injecting {} PS/2 key(s) via QMP…", test.qmp_keys.len());
+            send_qmp_keys(socket, &test.qmp_keys)?;
+            expect_ordered(
+                &output,
+                &[expect.to_string()],
+                test.script_timeout_secs.max(30),
+            )?;
+            println!("==> PS/2 line matched");
         }
         println!("\n==> smoke test passed");
         Ok(())
@@ -141,6 +182,77 @@ fn pump_reader<R: Read>(mut reader: BufReader<R>, sink: std::sync::Arc<std::sync
             Err(_) => break,
         }
     }
+}
+
+/// QEMU qcodes are a closed token set. Reject anything that would break the JSON.
+fn qmp_key_ok(key: &str) -> bool {
+    !key.is_empty()
+        && key
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+}
+
+fn send_qmp_keys(socket: &Path, keys: &[String]) -> Result<()> {
+    use std::os::unix::net::UnixStream;
+
+    let started = Instant::now();
+    let mut stream = loop {
+        match UnixStream::connect(socket) {
+            Ok(stream) => break stream,
+            Err(err) => {
+                if started.elapsed() >= Duration::from_secs(5) {
+                    return Err(err).with_context(|| format!("connect QMP {}", socket.display()));
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+        }
+    };
+    // The shell logs the prompt before its handler is running. Give init time
+    // to return so the keyboard notification is not dropped on the floor.
+    std::thread::sleep(Duration::from_millis(200));
+
+    let cloned = stream.try_clone().context("clone QMP socket")?;
+    cloned
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .context("qmp read timeout")?;
+    let mut reader = BufReader::new(cloned);
+    let mut line = String::new();
+    reader.read_line(&mut line).context("QMP greeting")?;
+    qmp_exec(
+        &mut stream,
+        &mut reader,
+        &mut line,
+        "{\"execute\":\"qmp_capabilities\"}",
+    )?;
+    for key in keys {
+        if !qmp_key_ok(key) {
+            bail!("refusing QMP key {key:?}");
+        }
+        let cmd = format!(
+            "{{\"execute\":\"send-key\",\"arguments\":{{\"keys\":[{{\"type\":\"qcode\",\"data\":\"{key}\"}}]}}}}"
+        );
+        qmp_exec(&mut stream, &mut reader, &mut line, &cmd)
+            .with_context(|| format!("QMP send-key {key}"))?;
+        std::thread::sleep(Duration::from_millis(40));
+    }
+    Ok(())
+}
+
+fn qmp_exec(
+    stream: &mut impl Write,
+    reader: &mut impl BufRead,
+    line: &mut String,
+    cmd: &str,
+) -> Result<()> {
+    stream.write_all(cmd.as_bytes()).context("write QMP")?;
+    stream.write_all(b"\n").context("write QMP newline")?;
+    stream.flush().context("flush QMP")?;
+    line.clear();
+    reader.read_line(line).context("read QMP reply")?;
+    if line.contains("\"error\"") {
+        bail!("QMP error: {line}");
+    }
+    Ok(())
 }
 
 fn expect_ordered(
@@ -648,8 +760,14 @@ pub fn run_board_test_with_mode(
         if mode == TestMode::HwSerial {
             // unreachable: use_hw true
         }
+        let iso_line = if ctx.board.arch == "x86_64" {
+            "   ISO: just iso\n"
+        } else {
+            ""
+        };
         println!(
             "==> Hardware board {board:?}: image built successfully.\n\
+             {iso_line}\
              \x20   No QEMU profile.\n\
              \x20   Deploy: lerux deploy --board {board} --dest /abs/path/to/boot\n\
              \x20   Golden path: LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD={board} just test-hw\n\
@@ -690,7 +808,16 @@ pub fn run_board_test_with_mode(
         .join(build_dir)
         .join("smoke-logs")
         .join(format!("{board}.serial.log"));
-    let result = run_smoke_with_capture(cmd, &test, Some(&log_path));
+    let result = if test.qmp_keys.is_empty() {
+        run_smoke_with_capture(cmd, &test, Some(&log_path))
+    } else {
+        let qemu = ctx.board.qemu().context("qmp_keys require a QEMU board")?;
+        if !qemu.qmp {
+            bail!("board {board:?} smoke sets qmp_keys but qemu.qmp is false");
+        }
+        let socket = crate::qemu::qmp_socket(&ctx);
+        run_smoke_with_qmp(cmd, &test, Some(&log_path), &socket)
+    };
     for mut child in helpers {
         let _ = child.kill();
     }
@@ -714,6 +841,15 @@ et: MAC 52:54:00:12:34:56
 INFO  [net_server] vINFO  [blk_server] virtio-blk: 8192 blocirtio-net: MAC 52:54:00:12:34:56
 ks x 512 bytes
 ";
+
+    #[test]
+    fn qmp_keys_reject_json_breakers() {
+        assert!(qmp_key_ok("ret"));
+        assert!(qmp_key_ok("spc"));
+        assert!(!qmp_key_ok(""));
+        assert!(!qmp_key_ok("a\"b"));
+        assert!(!qmp_key_ok("a b"));
+    }
 
     /// 2026-08-20 ipc-composed CI: earlier split prefix must not steal the
     /// `net: MAC` leftover from `virtio-`.

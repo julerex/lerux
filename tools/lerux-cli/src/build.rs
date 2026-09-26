@@ -200,8 +200,13 @@ fn hardware_ready_message(board: &str, arch: &str) -> String {
     } else {
         "docs/boards.md#rpi4-workstation-install-path-phase-52"
     };
+    let iso = if arch == "x86_64" {
+        format!("\n   ISO: just iso  (build/{board}/lerux.iso)")
+    } else {
+        String::new()
+    };
     format!(
-        "==> Hardware board {board:?}: image ready.\n\
+        "==> Hardware board {board:?}: image ready.{iso}\n\
          \x20   Deploy: lerux deploy --board {board} --dest /abs/path/to/boot\n\
          \x20   Boot smoke: LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD={board} just test-hw\n\
          \x20   Docs: {docs}"
@@ -233,7 +238,10 @@ mod tests {
     fn hardware_ready_message_points_at_z97_docs() {
         let msg = hardware_ready_message("pc_z97_d3h", "x86_64");
         assert!(msg.contains("lerux deploy --board pc_z97_d3h"), "{msg}");
+        assert!(msg.contains("just iso"), "{msg}");
         assert!(msg.contains("gigabyte-z97-d3h-install-path"), "{msg}");
         assert!(!msg.contains("deploy-rpi4"), "{msg}");
+        let rpi = hardware_ready_message("rpi4b_4gb_workstation", "aarch64");
+        assert!(!rpi.contains("just iso"), "{rpi}");
     }
 }

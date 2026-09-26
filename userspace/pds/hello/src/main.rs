@@ -43,6 +43,8 @@ use sel4_shared_ring_buffer_block_io::OwnedSharedRingBufferBlockIO;
 mod config;
 #[cfg(feature = "virtio")]
 mod net;
+#[cfg(feature = "vga-text")]
+mod vga;
 
 #[cfg(all(feature = "serial-ipc", feature = "composed-sync"))]
 const SERIAL_DRIVER: Channel = Channel::new(3);
@@ -112,6 +114,8 @@ fn init_basic() -> HandlerImpl {
 #[cfg_attr(not(feature = "virtio"), protection_domain)]
 fn init() -> HandlerImpl {
     init_logging();
+    #[cfg(feature = "vga-text")]
+    vga::paint_hello();
     #[cfg(all(feature = "virtio", feature = "composed-sync"))]
     return init_composed_sync();
     #[cfg(all(feature = "virtio", not(feature = "composed-sync")))]

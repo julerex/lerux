@@ -54,6 +54,10 @@ pub struct QemuConfig {
     /// Attach QEMU `-device ramfb` (Phase 72 software framebuffer).
     #[serde(default)]
     pub ramfb: bool,
+    /// Open a QMP socket (`console.qmp` in the board build dir) so a smoke can
+    /// inject PS/2 keys with `send-key`.
+    #[serde(default)]
+    pub qmp: bool,
 }
 
 /// One entry of `support/boards.toml` — the single source of truth for the
@@ -283,7 +287,13 @@ mod tests {
     }
 
     #[test]
-    fn z97_hello_board_is_hardware_x86() {
+    fn qmp_flag_parses() {
+        let q: QemuConfig = toml::from_str("qmp = true").unwrap();
+        assert!(q.qmp);
+    }
+
+    #[test]
+    fn z97_console_board_is_hardware_x86() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let boards = load_boards(&root).unwrap();
         let board = boards.get("pc_z97_d3h").unwrap();
@@ -291,10 +301,25 @@ mod tests {
         assert_eq!(board.microkit_board, "x86_64_generic");
         assert!(board.qemu.is_none());
         assert!(!board.ci);
-        assert_eq!(board.pds, ["hello", "serial-driver"]);
+        assert_eq!(
+            board.pds,
+            ["shell", "log-server", "serial-driver", "console-driver"]
+        );
+        assert_eq!(board.template, "console-pc.system.template");
         assert_eq!(
             crate::board::format_system_var(&board.system_vars["serial_ioport_addr"]),
             "0x3f8"
         );
+    }
+
+    #[test]
+    fn x86_console_board_injects_keys_in_qemu() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let boards = load_boards(&root).unwrap();
+        let board = boards.get("x86_64_generic_console").unwrap();
+        assert!(board.ci);
+        assert!(board.qemu().unwrap().qmp);
+        assert_eq!(board.template, "console-pc.system.template");
+        assert_eq!(board.pds, boards.get("pc_z97_d3h").unwrap().pds);
     }
 }

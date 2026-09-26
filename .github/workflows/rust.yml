@@ -287,6 +287,9 @@ jobs:
           - id: x86-echo
             board: x86_64_generic_echo
             command: just test-x86-echo
+          - id: x86-console
+            board: x86_64_generic_console
+            command: just test-x86-console
           - id: riscv-echo
             board: qemu_virt_riscv64_echo
             command: just test-riscv-echo

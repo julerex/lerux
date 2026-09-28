@@ -23,6 +23,7 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [decisions/008-host-backed-fs.md](decisions/008-host-backed-fs.md) | ADR-008: QEMU host FS inject (`/host`) |
 | [decisions/009-interactive-surface.md](decisions/009-interactive-surface.md) | ADR-009: QEMU software framebuffer; static Ladybird PDs; Grok-shaped agent |
 | [decisions/010-program-runtime.md](decisions/010-program-runtime.md) | ADR-010 / Phase 81: signed Wasm subset in `program-runtime` |
+| [decisions/011-hd4600-scanout.md](decisions/011-hd4600-scanout.md) | ADR-011: Intel HD Graphics 4600 scanout domain on the console image |
 | [decisions/004-service-async.md](decisions/004-service-async.md) | ADR-004: stackless coop async in service PDs |
 | [decisions/005-debug-pd.md](decisions/005-debug-pd.md) | ADR-005: fault parent + QEMU GDB (not libgdb fork) |
 | [debug.md](debug.md) | Phase 46: `test-debug` + gdb-multiarch workflow |

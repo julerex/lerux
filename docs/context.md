@@ -81,7 +81,7 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 : `just bench` runs guest-timed echo RTT, blk read IOPS, and UDP TX PPS on QEMU aarch64 and writes markdown/JSON summaries. See [`bench.md`](bench.md).
 
 **Shell (Phase 53 / 57 / 58)**
-: Interactive REPL over serial with file/net/sys built-ins (`ls`…`df`, `ip`/`ping`, `uptime`/`history`/`clear`, apps). Long `cat`/`dmesg` use a space/`q` pager. `dmesg --pd` / `-l` filter the log ring; `ps`/`top`/`status` show service state; `calc`, `backup`, `fetch save`, `chat [#room]`. `help -l` and boot log `lerux-shell: cmds=` expose a machine-readable command list for smokes.
+: Interactive REPL over serial with file/net/sys built-ins (`ls`…`df`, `ip`/`ping`, `uptime`/`history`/`clear`, apps). That built-in list is the only command language. `agent` Execute runs one built-in and returns its output. There is no bash parser, no JavaScript runtime, and no history or version-control tool. Long `cat`/`dmesg` use a space/`q` pager. `dmesg --pd` / `-l` filter the log ring; `ps`/`top`/`status` show service state; `calc`, `backup`, `fetch save`, `chat [#room]`. `help -l` and boot log `lerux-shell: cmds=` expose a machine-readable command list for smokes.
 
 **App catalog (Phase 58)**
 : Installable PD packages under `support/packages/`: edit, chat-client, http-file-browser, backup, fetch-client (≥5). See [`packages.md`](packages.md).
@@ -131,7 +131,7 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 : Untrusted protection domain that fetches a signed Wasm module (`LRW1`) over `HttpRequest` and runs it (Phase 81, [ADR-010](decisions/010-program-runtime.md)). The module is a closed subset of what host `rustc` emits for `no_std` Rust (`support/prog/smoke.rs`), not a Microkit ELF. Its only import is `lerux.log`. A later on-guest compiler is meant to emit the same subset; this domain does not compile.
 
 **agent**
-: The in-guest Grok product. A person enters it with the shell command `grok`. It runs the prompt → tool-calls → tools → model loop. Linux Grok Build (`xai-grok-pager`) is a reference for that behavior, not a second product and not something the image contains. Runtime talks to host `lerux grok-one` through `request-server` (smoke CA; not live xAI). Serial ANSI TUI (Phase 78); shell `grok` PPCs the agent. Tools are Read/Edit/Write/ListDir/Search/Execute/WebFetch/Browse over existing IPC (FS in Phase 79, `web-content` in Phase 80, `request-server`). Sandbox **is** the PD set, not Landlock.
+: The in-guest Grok product. A person enters it with the shell command `grok`. It runs the prompt → tool-calls → tools → model loop. Linux Grok Build (`xai-grok-pager`) is a reference for that behavior, not a second product and not something the image contains. Runtime talks to host `lerux grok-one` through `request-server` (smoke CA; not live xAI). Serial ANSI TUI (Phase 78); shell `grok` PPCs the agent. Tools are Read/Edit/Write/ListDir/Search/Execute/WebFetch/Browse over existing IPC (FS in Phase 79, `web-content` in Phase 80, `request-server`). Execute is one shell built-in. Sandbox **is** the PD set, not Landlock.
 
 **lerux-html**
 : From-scratch `#![no_std]`+`alloc` HTML subset tokenizer/tree builder. Not Ladybird’s `libweb_html_tokenizer`, not html5ever, not Servo.

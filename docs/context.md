@@ -119,7 +119,7 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 : Protection domain that programs the Intel HD Graphics 4600 on the console image. It scans out the 800×600 bitmap `display-server` owns. It does not do 3D, video decode, or a second output. `display-server` is its only client. A discrete PCIe card is not this domain.
 
 **front client**
-: The one full-screen picture on the console image. At boot it is the shell transcript. `display-server` draws that transcript from the shell's byte stream. `console-driver` reads the PS/2 keyboard and does not paint. The shell command `open <url>` makes `web-content`'s page the front client, and `web-content` paints that page. Escape returns to the transcript. `display-server` presents that client. `hd4600-driver` scans it out. There is no window stack and no compositor.
+: The one full-screen picture on the console image. At boot it is the shell transcript. `display-server` draws that transcript from the shell's byte stream. It honors clear, cursor home, reverse video on and off, carriage return, and line feed. Any other escape sequence is ignored. The shell and `agent` keep writing the bytes they write today. `console-driver` reads the PS/2 keyboard and does not paint. The shell command `open <url>` makes `web-content`'s page the front client, and `web-content` paints that page. Escape returns to the transcript. `display-server` presents that client. `hd4600-driver` scans it out. There is no window stack and no compositor.
 
 **framebuffer MR**
 : Shared memory region holding RGB pixels. Producers (`display-demo`, `paint-demo`, `web-content`) write; `display-server` blits to the device.

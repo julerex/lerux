@@ -131,7 +131,7 @@ lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection
 : Untrusted protection domain that fetches a signed Wasm module (`LRW1`) over `HttpRequest` and runs it (Phase 81, [ADR-010](decisions/010-program-runtime.md)). The module is a closed subset of what host `rustc` emits for `no_std` Rust (`support/prog/smoke.rs`), not a Microkit ELF. Its only import is `lerux.log`. A later on-guest compiler is meant to emit the same subset; this domain does not compile.
 
 **agent**
-: Grok Build analogue as a PD: prompt → tool-calls → tools → model. Runtime talks to host `lerux grok-one` through `request-server` (smoke CA; not live xAI). Serial ANSI TUI (Phase 78); shell `grok` PPCs the agent. Tools are Read/Edit/Write/ListDir/Search/Execute/WebFetch/Browse over existing IPC (FS in Phase 79, `web-content` in Phase 80, `request-server`). Sandbox **is** the PD set, not Landlock.
+: The in-guest Grok product. A person enters it with the shell command `grok`. It runs the prompt → tool-calls → tools → model loop. Linux Grok Build (`xai-grok-pager`) is a reference for that behavior, not a second product and not something the image contains. Runtime talks to host `lerux grok-one` through `request-server` (smoke CA; not live xAI). Serial ANSI TUI (Phase 78); shell `grok` PPCs the agent. Tools are Read/Edit/Write/ListDir/Search/Execute/WebFetch/Browse over existing IPC (FS in Phase 79, `web-content` in Phase 80, `request-server`). Sandbox **is** the PD set, not Landlock.
 
 **lerux-html**
 : From-scratch `#![no_std]`+`alloc` HTML subset tokenizer/tree builder. Not Ladybird’s `libweb_html_tokenizer`, not html5ever, not Servo.

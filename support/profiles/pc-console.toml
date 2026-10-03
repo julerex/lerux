@@ -2,7 +2,7 @@
 # Channel ids match userspace/systems/templates/console-pc.system.template.
 
 template = "console-pc.system.template"
-description = "VGA text shell and PS/2 keyboard, with COM1 for the log"
+description = "VGA text shell, PS/2 or USB boot keyboard, with COM1 for the log"
 default_board = "x86_64_generic_console"
 
 pds = ["shell", "log-server", "serial-driver", "console-driver"]

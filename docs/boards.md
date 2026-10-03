@@ -49,7 +49,8 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `qemu_virt_riscv64_net` | riscv64 | `just test-riscv-net` | net client/server + serial + virtio-net |
 | `qemu_virt_riscv64_http` | riscv64 | `just test-riscv-http` | serial + virtio-net + http-server |
 | `x86_64_generic` | x86_64 | `BOARD=x86_64_generic just test` | hello + serial (COM1) |
-| `x86_64_generic_console` | x86_64 | `just test-x86-console` | Phase 82: VGA text shell; QMP types `echo hi` |
+| `x86_64_generic_console` | x86_64 | `just test-x86-console` | Phase 82: VGA text shell; QMP types `echo hi` on PS/2 |
+| `x86_64_generic_usb_kbd` | x86_64 | `just test-x86-usb-kbd` | Same shell; QMP types `echo hi` on a USB boot keyboard |
 | `x86_64_generic_echo` | x86_64 | `just test-x86-echo` | echo + serial |
 | `x86_64_generic_init` | x86_64 | `just test-init-x86` | supervisor + CMOS RTC + TSC timer + serial |
 | `x86_64_generic_virtio` | x86_64 | `just test-x86-virtio` | hello + serial + virtio-pci blk/net |
@@ -181,7 +182,7 @@ Living work list (what still needs a Pi): [`plan-arch.md` — Physical RPi4 lab]
 
 ### Gigabyte Z97-D3H install path
 
-Board `pc_z97_d3h` is the **on-screen shell** (Phase 82) on this Haswell desktop. It reuses Microkit `x86_64_generic` (same kernel as QEMU x86) and `console-pc.system.template` (COM1 `0x3f8`, IOAPIC pin 4, the VGA text page at `0xb8000`, and the PS/2 keyboard). QEMU coverage of that same image is `x86_64_generic_console` (`just test-x86-console`). virtio-pci workstation images will **not** boot this motherboard.
+Board `pc_z97_d3h` is the **on-screen shell** (Phase 82) on this Haswell desktop. It reuses Microkit `x86_64_generic` (same kernel as QEMU x86) and `console-pc.system.template` (COM1 `0x3f8`, IOAPIC pin 4, the VGA text page at `0xb8000`, a PS/2 keyboard, and a USB HID boot keyboard on the xHCI controller at PCI `00:14.0`). QEMU coverage of that image is `x86_64_generic_console` (`just test-x86-console`, PS/2) and `x86_64_generic_usb_kbd` (`just test-x86-usb-kbd`). virtio-pci workstation images will **not** boot this motherboard.
 
 This machine is also the Ubuntu build host. Booting lerux **reboots Linux**. Keep Ubuntu as the default EFI entry. Do **not** format or overwrite `sda`.
 
@@ -193,7 +194,7 @@ lsblk
 sudo dd if=build/pc_z97_d3h/lerux.iso of=/dev/sdX bs=4M status=progress conv=fsync
 ```
 
-Replace `sdX` with the flash drive from `lsblk`. Do not use `sda` (Ubuntu SSD) or `sdb` (data disk). Reboot and open the firmware boot menu (F12). Choose the USB entry that does not say UEFI. If the stick is missing, enable CSM in setup. The Limine menu counts down, then the screen is blue with `hello lerux` on the first line and `lerux>` under it. Plug a PS/2 keyboard into the rear combo port. `echo`, `help`, `pwd`, `history`, `calc`, `qos`, and `clear` work. `ls`, `fetch`, and `edit` print `unavailable` (this image has no disk or network driver). A USB keyboard works only while the firmware is still translating it into the PS/2 ports. The serial console is still COM1 at 115200 8N1 on the COMA header, and `lerux-shell: prompt` there means the shell reached the prompt. Reboot and choose Ubuntu to return.
+Replace `sdX` with the flash drive from `lsblk`. Do not use `sda` (Ubuntu SSD) or `sdb` (data disk). Reboot and open the firmware boot menu (F12). Choose the USB entry that does not say UEFI. If the stick is missing, enable CSM in setup. The Limine menu counts down, then the screen is blue with `hello lerux` on the first line and `lerux>` under it. Type with a PS/2 keyboard in the rear combo port, or a USB HID boot keyboard on a root xHCI port (the Microsoft Wireless Desktop 900 dongle on this machine is one). Keyboards behind a hub are not seen. `echo`, `help`, `pwd`, `history`, `calc`, `qos`, and `clear` work. `ls`, `fetch`, and `edit` print `unavailable` (this image has no disk or network driver). The serial console is still COM1 at 115200 8N1 on the COMA header. `lerux-shell: prompt` there means the shell reached the prompt, and `console-driver: usb keyboard` means the USB boot keyboard was armed. Reboot and choose Ubuntu to return.
 
 The ISO is a hybrid image. Limine loads Multiboot 2 `/boot/sel4_32.elf` with module `/boot/loader.img` from the legacy entry. `just test-iso` boots that file in QEMU as a raw disk under SeaBIOS (local check, not CI). The UEFI entry stops in Limine: `sel4_32.elf` is linked at 1MB, and UEFI does not leave that range free.
 
@@ -221,7 +222,7 @@ That copies `sel4_32.elf` + `loader.img` (and SHA-256 sidecars) and writes `leru
 **Prerequisites**
 
 - Gigabyte GA-Z97-D3H, i5-4690K (or another PC99 box with the same COM1 + CPU flags: `pat`, `xsave`, `fpu`, `sse`, `pdpe1gb`, `fsgsbase`)
-- PS/2 keyboard in the rear combo port
+- PS/2 keyboard in the rear combo port, or a USB HID boot keyboard on a root xHCI port
 - USB stick (or a unused FAT partition). Not the Ubuntu root disk.
 - Optional: second computer as serial console, to see `lerux-shell: prompt` on COM1
 
@@ -239,7 +240,7 @@ That copies `sel4_32.elf` + `loader.img` (and SHA-256 sidecars) and writes `leru
 | Symptom | Likely cause |
 |---------|----------------|
 | Limine menu, then a flashing cursor and no blue screen | The console PD did not run. Kernel output is still COM1 (COMA header, 115200 8N1). |
-| Prompt is visible, keys do nothing | The keyboard is USB and firmware legacy emulation is off. Use the PS/2 combo port. |
+| Prompt is visible, keys do nothing | Serial shows `xhci none` or `xhci no keyboard`, and the combo port has no PS/2 keyboard. A boot keyboard on a hub is not seen. If the log already says `usb keyboard`, the xHCI interrupt did not arrive. |
 | Limine says it could not find a load address | The UEFI entry. Choose the legacy USB entry, or enable CSM. |
 | Kernel on serial, no prompt | COM1 IRQ pin/polarity; try `trigger="edge"` on the serial irq in the SDF |
 | Silent serial | Cable on COMA header (TX/RX swapped); 115200 8N1; seL4 debug UART vs PD |

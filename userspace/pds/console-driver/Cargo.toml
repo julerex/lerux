@@ -3,7 +3,7 @@ name = "console-driver"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-description = "VGA text console and PS/2 keyboard for the PC shell"
+description = "VGA text console and PS/2 or USB boot keyboard for the PC shell"
 
 [lints]
 workspace = true
@@ -21,6 +21,7 @@ hardware = [
 ]
 board-pc_z97_d3h = ["hardware"]
 board-x86_64_generic_console = ["hardware"]
+board-x86_64_generic_usb_kbd = ["hardware"]
 
 [dependencies]
 heapless = { workspace = true, optional = true }

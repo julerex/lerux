@@ -698,6 +698,8 @@ The on-guest compiler (a protection domain that reads a small Rust subset and em
 
 Native AHCI and e1000e stay in the [physical-lab follow-on](#physical-rpi4-lab-hardware-gated), so `ls` and `fetch` stay unavailable on this image. The UEFI USB entry stays out: `sel4_32.elf` is linked at 1MB.
 
+The same image also arms one USB HID boot keyboard on the xHCI controller at PCI `00:14.0` (root ports, boot protocol). `just test-x86-usb-kbd` types `echo hi` through qemu-xhci. When that keyboard is armed, the shell reads it and leaves PS/2 bytes unread. With no USB boot keyboard, `just test-x86-console` is unchanged.
+
 | Phase | Theme | Status |
 |-------|--------|--------|
 | 81 | Signed Wasm runtime (`program-runtime`) | done — [ADR-010](decisions/010-program-runtime.md); `just test-program` |
@@ -712,7 +714,7 @@ On-device work extracted from Phases 39, 51, and 52. Software for those phases i
 - [ ] GENET: TCP + DNS + DHCP (`fetch` is UDP-demo-only on HW)
 - [ ] Unified-dma on `genet-driver`
 - [ ] Optional second SBC after RPi4 is reliable
-- [ ] **Gigabyte Z97-D3H disk and net** (after [Phase 82](#phase-82--z97-on-screen-shell)): native AHCI and e1000e so `ls` / `fetch` work on `pc_z97_d3h`. The VGA shell, PS/2 keyboard, COM1 log, and Limine ISO are Phase 82.
+- [ ] **Gigabyte Z97-D3H disk and net** (after [Phase 82](#phase-82--z97-on-screen-shell)): native AHCI and e1000e so `ls` / `fetch` work on `pc_z97_d3h`. The VGA shell, PS/2 keyboard, USB HID boot keyboard, COM1 log, and Limine ISO are in the image.
 
 ## Version alignment
 

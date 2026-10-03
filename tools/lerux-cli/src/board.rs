@@ -58,6 +58,9 @@ pub struct QemuConfig {
     /// inject PS/2 keys with `send-key`.
     #[serde(default)]
     pub qmp: bool,
+    /// `qemu-xhci` at PCI 00:14.0 plus a USB HID boot keyboard.
+    #[serde(default)]
+    pub usb_kbd: bool,
 }
 
 /// One entry of `support/boards.toml` — the single source of truth for the
@@ -319,6 +322,20 @@ mod tests {
         let board = boards.get("x86_64_generic_console").unwrap();
         assert!(board.ci);
         assert!(board.qemu().unwrap().qmp);
+        assert!(!board.qemu().unwrap().usb_kbd);
+        assert_eq!(board.template, "console-pc.system.template");
+        assert_eq!(board.pds, boards.get("pc_z97_d3h").unwrap().pds);
+    }
+
+    #[test]
+    fn x86_usb_kbd_board_uses_qemu_xhci() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let boards = load_boards(&root).unwrap();
+        let board = boards.get("x86_64_generic_usb_kbd").unwrap();
+        let qemu = board.qemu().unwrap();
+        assert!(board.ci);
+        assert!(qemu.qmp);
+        assert!(qemu.usb_kbd);
         assert_eq!(board.template, "console-pc.system.template");
         assert_eq!(board.pds, boards.get("pc_z97_d3h").unwrap().pds);
     }

@@ -290,6 +290,9 @@ jobs:
           - id: x86-console
             board: x86_64_generic_console
             command: just test-x86-console
+          - id: x86-usb-kbd
+            board: x86_64_generic_usb_kbd
+            command: just test-x86-usb-kbd
           - id: riscv-echo
             board: qemu_virt_riscv64_echo
             command: just test-riscv-echo

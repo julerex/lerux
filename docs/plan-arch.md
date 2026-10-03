@@ -326,7 +326,7 @@ Procedure and empty result grid: [`boards.md` — RPi4 workstation install path]
 ### Follow-on (after the RPi4 gate)
 
 - [ ] Optional second aarch64 SBC only after RPi4 is reliable.
-- [ ] **Gigabyte Z97-D3H disk and net** (after [Phase 82](plan.md#phase-82--z97-on-screen-shell)): native AHCI and e1000e so `ls` / `fetch` work on `pc_z97_d3h`. The VGA shell, PS/2 keyboard, COM1 log, and Limine ISO are Phase 82 ([`boards.md`](boards.md#gigabyte-z97-d3h-install-path)).
+- [ ] **Gigabyte Z97-D3H disk and net** (after [Phase 82](plan.md#phase-82--z97-on-screen-shell)): native AHCI and e1000e so `ls` / `fetch` work on `pc_z97_d3h`. The VGA shell, PS/2 keyboard, USB HID boot keyboard, COM1 log, and Limine ISO are in the image ([`boards.md`](boards.md#gigabyte-z97-d3h-install-path)).
 
 ### Already shipped (no Pi required)
 

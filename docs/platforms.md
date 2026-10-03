@@ -9,13 +9,13 @@
 | **1** | aarch64 QEMU virt; RPi4 | `workstation` → `qemu_virt_aarch64_workstation`; `workstation-rpi4` | CI: `workstation`; HW optional |
 | **2** | RISC-V virt; x86_64 q35 | `workstation-riscv`, `workstation-x86` | CI: `workstation-riscv`, `workstation-x86` |
 | **3** | Other Microkit boards | Bring-up boards only (serial/echo/virtio slices) | Per-board |
-| **HW x86** | Gigabyte Z97-D3H (this desktop) | Phase 82: `pc_z97_d3h` VGA shell + PS/2 + COM1; native e1000e/AHCI not yet | Optional `test-hw` |
+| **HW x86** | Gigabyte Z97-D3H (this desktop) | Phase 82: `pc_z97_d3h` VGA shell + PS/2 or USB boot keyboard + COM1; native e1000e/AHCI not yet | Optional `test-hw` |
 
 ## Arch drivers
 
 | Role | aarch64 virt | RISC-V virt | x86_64 q35 | Z97-D3H metal |
 |------|--------------|-------------|------------|----------------|
-| Serial | PL011 + serial-virt | NS16550 MMIO + serial-virt | COM1 ioport + serial-virt | COM1 log (`pc_z97_d3h`); VGA text shell on the monitor, PS/2 keyboard |
+| Serial | PL011 + serial-virt | NS16550 MMIO + serial-virt | COM1 ioport + serial-virt | COM1 log (`pc_z97_d3h`); VGA text shell on the monitor, PS/2 or USB boot keyboard |
 | Block | virtio-blk MMIO | virtio-blk MMIO | virtio-pci combo | *(AHCI later)* |
 | Net | virtio-net MMIO (unified-dma) | virtio-net MMIO (unified-dma) | virtio-pci combo (unified-dma) | *(e1000e later)* |
 | RTC | PL031 | Goldfish RTC | CMOS | CMOS (not in hello slice) |

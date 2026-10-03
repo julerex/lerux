@@ -15,27 +15,39 @@ use crate::{
     device::Device,
     scancode::{decode, KeyState},
     screen::{Damage, Screen},
+    xhci::UsbKbd,
 };
 
 pub struct HandlerImpl {
     device: Device,
     screen: Screen,
+    usb: UsbKbd,
     keys: KeyState,
     rx: Deque<u8, 64>,
-    irq: Channel,
+    ps2_irq: Channel,
+    usb_irq: Channel,
     client: Channel,
     /// Notify the shell on the next key only after it has drained the queue.
     notify: bool,
 }
 
 impl HandlerImpl {
-    pub fn new(device: Device, screen: Screen, irq: Channel, client: Channel) -> Self {
+    pub fn new(
+        device: Device,
+        screen: Screen,
+        usb: UsbKbd,
+        ps2_irq: Channel,
+        usb_irq: Channel,
+        client: Channel,
+    ) -> Self {
         Self {
             device,
             screen,
+            usb,
             keys: KeyState::default(),
             rx: Deque::new(),
-            irq,
+            ps2_irq,
+            usb_irq,
             client,
             notify: true,
         }
@@ -75,15 +87,34 @@ impl Handler for HandlerImpl {
     type Error = Infallible;
 
     fn notified(&mut self, channels: ChannelSet) -> Result<(), Self::Error> {
-        if !channels.contains(self.irq) {
+        let ps2 = channels.contains(self.ps2_irq);
+        let usb = channels.contains(self.usb_irq);
+        if !ps2 && !usb {
             unreachable!("unexpected notification");
         }
-        while let Some(code) = self.device.read_scancode() {
-            if let Some(byte) = decode(&mut self.keys, code) {
+        if usb {
+            // `poll` borrows the controller. Copy bytes out before the queue.
+            let mut buf = [0u8; 64];
+            let n = self.usb.poll(&mut buf);
+            for &byte in &buf[..n] {
                 let _ = self.rx.push_back(byte);
             }
+            self.usb.ack_irq();
+            self.usb_irq.irq_ack().expect("ack usb irq");
         }
-        self.irq.irq_ack().expect("ack keyboard irq");
+        if ps2 {
+            // A USB boot keyboard owns the shell. QEMU `send-key` hits PS/2 too.
+            if self.usb.ready() {
+                while self.device.read_scancode().is_some() {}
+            } else {
+                while let Some(code) = self.device.read_scancode() {
+                    if let Some(byte) = decode(&mut self.keys, code) {
+                        let _ = self.rx.push_back(byte);
+                    }
+                }
+            }
+            self.ps2_irq.irq_ack().expect("ack keyboard irq");
+        }
         if self.notify && !self.rx.is_empty() {
             self.client.notify();
             self.notify = false;

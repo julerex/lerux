@@ -7,7 +7,7 @@ GitHub Actions workflow: [`.github/workflows/rust.yml`](../.github/workflows/rus
 1. **check** — `just check` (`cargo fmt --all --check` + clippy on host crates; no SDK).
 2. **sdk** — Docker image, fetch sources, build Microkit SDK (cached), **prebuild patched SP804 QEMU** (cached), upload SDK artifact.
 3. **check-pd** — `just check-pd` (cross-target clippy on PD + shared userspace crates; needs SDK artifact).
-4. **smoke** — 42 parallel matrix jobs; each restores SDK artifact, per-job `build/` cache, and SP804 QEMU (init/composed/blk-composed/http-composed/net-composed/ipc-composed/workstation/interactive only; init-riscv/init-x86 use stock QEMU). Serial captures land in `build/smoke-logs/` and upload as `smoke-serial-<id>` (Phase 57).
+4. **smoke** — 44 parallel matrix jobs; each restores SDK artifact, per-job `build/` cache, and SP804 QEMU (init/composed/blk-composed/http-composed/net-composed/ipc-composed/workstation/interactive only; init-riscv/init-x86 use stock QEMU). Serial captures land in `build/smoke-logs/` and upload as `smoke-serial-<id>` (Phase 57).
 5. **package** — Phase 40: build `edit` / `chat-client` / `http-file-browser` ELFs for workstation, pin sha256, upload artifacts.
 
 ```mermaid
@@ -15,7 +15,7 @@ flowchart LR
   check[check job]
   sdk[sdk job]
   checkPd[check-pd job]
-  smoke[smoke matrix x42]
+  smoke[smoke matrix x44]
   package[package ELF artifacts]
   sdk --> checkPd
   sdk --> smoke
@@ -39,7 +39,8 @@ Local mirror: `just check` (format + clippy for `lerux-cli` and `lerux-interface
 | `echo` | `just test-echo` | aarch64 echo IPC |
 | `display` | `just test-display` | Phase 72 ramfb + display-server (headless `-nographic`) |
 | `x86-echo` | `just test-x86-echo` | x86 echo IPC |
-| `x86-console` | `just test-x86-console` | Phase 82: VGA text shell; QMP injects `echo hi` |
+| `x86-console` | `just test-x86-console` | Phase 82: VGA text shell; QMP injects `echo hi` on PS/2 |
+| `x86-usb-kbd` | `just test-x86-usb-kbd` | Same shell; QMP types `echo hi` on a USB boot keyboard |
 | `riscv-echo` | `just test-riscv-echo` | RISC-V echo IPC |
 | `riscv-virtio` | `just disk-img && just test-riscv-virtio` | RISC-V virtio |
 | `init` | `just test-init` | PL031 + SP804; patched QEMU |

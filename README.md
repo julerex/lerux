@@ -11,7 +11,7 @@ udisksctl unmount -b /dev/sdc3  # unmount the ISO filesystem Ubuntu mounted from
 sudo dd if=build/pc_z97_d3h/lerux.iso of=/dev/sdc bs=4M status=progress conv=fsync  # write that ISO onto the whole stick; bs=4M is the chunk size, status=progress prints bytes written, conv=fsync waits until they are on the device
 ```
 
-Check `lsblk` before the `dd`. Do not write `sda` (Ubuntu SSD) or `sdb` (data disk). Reboot and open the firmware boot menu (F12 on this board). Choose the USB entry that does not say UEFI. If the stick is missing, enable CSM in setup. The Limine menu counts down, then the screen is blue with `hello lerux` on the first line and `lerux>` under it. A PS/2 keyboard in the rear combo port types at that prompt (`echo`, `help`, `pwd`, `clear`; other commands print `unavailable` until a disk driver exists). COM1 at 115200 8N1 (the COMA header; there is no rear DB9) prints `lerux-shell: prompt`. The UEFI entry stops in Limine: this kernel is linked at 1MB. Reboot and choose Ubuntu to return.
+Check `lsblk` before the `dd`. Do not write `sda` (Ubuntu SSD) or `sdb` (data disk). Reboot and open the firmware boot menu (F12 on this board). Choose the USB entry that does not say UEFI. If the stick is missing, enable CSM in setup. The Limine menu counts down, then the screen is blue with `hello lerux` on the first line and `lerux>` under it. A PS/2 keyboard in the rear combo port, or a USB HID boot keyboard on a root xHCI port, types at that prompt (`echo`, `help`, `pwd`, `clear`; other commands print `unavailable` until a disk driver exists). COM1 at 115200 8N1 (the COMA header; there is no rear DB9) prints `lerux-shell: prompt`. The UEFI entry stops in Limine: this kernel is linked at 1MB. Reboot and choose Ubuntu to return.
 
 Reboot once into the stick from Ubuntu, without the F12 menu. The stick has to be plugged in so the entry exists:
 
@@ -108,7 +108,8 @@ Default: `qemu_virt_aarch64` (QEMU ARM virt). Override with `BOARD=... just run`
 | Real hardware (RPi4 workstation) | `rpi4b_4gb_workstation` | `just deploy-rpi4` / `just test-hw` — [install path](docs/boards.md#rpi4-workstation-install-path-phase-52) |
 | USB ISO (Gigabyte Z97-D3H shell) | `pc_z97_d3h` | `just iso` — [install path](docs/boards.md#gigabyte-z97-d3h-install-path) |
 | Real hardware (Gigabyte Z97-D3H shell) | `pc_z97_d3h` | `just deploy-pc` / `just test-hw` — [install path](docs/boards.md#gigabyte-z97-d3h-install-path) |
-| x86 on-screen shell (QEMU) | `x86_64_generic_console` | `just test-x86-console` |
+| x86 on-screen shell (QEMU, PS/2) | `x86_64_generic_console` | `just test-x86-console` |
+| x86 on-screen shell (QEMU, USB keyboard) | `x86_64_generic_usb_kbd` | `just test-x86-usb-kbd` |
 
 Full board reference: [`docs/boards.md`](docs/boards.md).
 

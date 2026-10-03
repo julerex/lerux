@@ -17,6 +17,7 @@ board-rpi4b_4gb_workstation = ["workstation"]
 board-rpi4b_4gb = []
 board-pc_z97_d3h = []
 board-x86_64_generic_console = []
+board-x86_64_generic_usb_kbd = []
 
 [dependencies]
 heapless = { workspace = true }

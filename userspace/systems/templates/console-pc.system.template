@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  On-screen shell for a PC: VGA text + PS/2 keyboard, COM1 for the log.
-  The shell's channel 0 speaks the serial byte protocol to console_driver.
-  Hardware boards use the channel block below. The QEMU board's profile
-  replaces it with the same three ends.
+  On-screen shell for a PC: VGA text, PS/2 or a USB HID boot keyboard, COM1
+  for the log. The shell's channel 0 speaks the serial byte protocol to
+  console_driver. xHCI registers sit at the Z97 BAR. The DMA window is RAM.
 -->
 <system>
     <memory_region name="vga_text" size="0x1_000" phys_addr="0xb8000" />
+    <memory_region name="xhci_regs" size="0x1_0000" phys_addr="0xf7e2_0000" />
+    <memory_region name="xhci_dma" size="0x4_0000" phys_addr="0x6200_0000" />
 
     <protection_domain name="serial_driver" priority="10" stack_size="0x10_000">
         <program_image path="serial-driver.elf" />
@@ -22,11 +23,16 @@
     <protection_domain name="console_driver" priority="2" stack_size="0x10_000">
         <program_image path="console-driver.elf" />
         <map mr="vga_text" vaddr="0xb8000" perms="rw" cached="false" setvar_vaddr="vga_text_vaddr" />
+        <map mr="xhci_regs" vaddr="0xf7e2_0000" perms="rw" cached="false" setvar_vaddr="xhci_regs_vaddr" />
+        <map mr="xhci_dma" vaddr="0x6200_0000" perms="rw" cached="false" setvar_vaddr="xhci_dma_vaddr" />
         <ioport id="0" addr="0x3d4" size="2" setvar_id="crtc_ioport_id" setvar_addr="crtc_ioport_addr" />
         <ioport id="1" addr="0x60" size="1" setvar_id="kbd_data_ioport_id" setvar_addr="kbd_data_ioport_addr" />
         <ioport id="2" addr="0x64" size="1" setvar_id="kbd_cmd_ioport_id" setvar_addr="kbd_cmd_ioport_addr" />
+        <ioport id="3" addr="0xcf8" size="8" setvar_id="pci_ioport_id" setvar_addr="pci_ioport_addr" />
         <!-- ISA IRQ1, edge. COM1 keeps pin 4 / vector 48. -->
         <irq pin="1" vector="49" id="0" trigger="edge" polarity="high" />
+        <!-- xHCI MSI. Userspace programs data vector 50 + IRQ_OFFSET (98). -->
+        <irq id="2" pcidev="00:14.0" handle="1" vector="50" />
     </protection_domain>
 
     <protection_domain name="shell" priority="1" stack_size="0x10_000">

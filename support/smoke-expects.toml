@@ -33,6 +33,12 @@ timeout_secs = 120
 qmp_keys = ["e", "c", "h", "o", "spc", "h", "i", "ret"]
 qmp_expect = "lerux-shell: cmd=echo hi"
 
+[boards.x86_64_generic_usb_kbd]
+expects = ["console-driver: usb keyboard", "lerux-shell: prompt"]
+timeout_secs = 120
+qmp_keys = ["e", "c", "h", "o", "spc", "h", "i", "ret"]
+qmp_expect = "lerux-shell: cmd=echo hi"
+
 [boards.rpi4b_4gb]
 expects = ["lerux: Hello from Rust on seL4 Microkit!"]
 

@@ -117,6 +117,10 @@ test-x86-echo:
 test-x86-console:
     BOARD=x86_64_generic_console just test
 
+# On-screen shell: USB HID boot keyboard on qemu-xhci (Z97 xHCI path)
+test-x86-usb-kbd:
+    BOARD=x86_64_generic_usb_kbd just test
+
 # Virtio smoke test on x86_64 q35 (PCI virtio-blk + virtio-net)
 test-x86-virtio:
     BOARD=x86_64_generic_virtio just test

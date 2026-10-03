@@ -277,7 +277,21 @@ fn x86_command(
             netdev,
         ]);
     }
+    append_usb_kbd(&mut c, qemu);
     Ok(c)
+}
+
+/// PCI 00:14.0 matches the Z97 xHCI and the system description's MSI route.
+fn append_usb_kbd(cmd: &mut Command, qemu: &QemuConfig) {
+    if !qemu.usb_kbd {
+        return;
+    }
+    cmd.args([
+        "-device",
+        "qemu-xhci,id=xhci,addr=0x14.0x0",
+        "-device",
+        "usb-kbd,bus=xhci.0",
+    ]);
 }
 
 fn ensure_disk(disk: &Path) -> Result<()> {
@@ -417,6 +431,24 @@ mod tests {
             line.contains("\"-serial\" \"vc\""),
             "graphic ramfb serial should live in the QEMU window: {line}"
         );
+    }
+
+    #[test]
+    fn usb_kbd_adds_qemu_xhci_with_msi() {
+        let qemu: QemuConfig = toml::from_str("usb_kbd = true").unwrap();
+        let mut cmd = Command::new("qemu-system-x86_64");
+        append_usb_kbd(&mut cmd, &qemu);
+        let line = format!("{cmd:?}");
+        assert!(line.contains("qemu-xhci,id=xhci,addr=0x14.0x0"), "{line}");
+        assert!(line.contains("usb-kbd,bus=xhci.0"), "{line}");
+    }
+
+    #[test]
+    fn ps2_console_does_not_add_xhci() {
+        let qemu: QemuConfig = toml::from_str("qmp = true").unwrap();
+        let mut cmd = Command::new("qemu-system-x86_64");
+        append_usb_kbd(&mut cmd, &qemu);
+        assert!(!format!("{cmd:?}").contains("qemu-xhci"));
     }
 
     #[test]

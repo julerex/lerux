@@ -696,7 +696,7 @@ The on-guest compiler (a protection domain that reads a small Rust subset and em
 - [x] `just test-x86-console` injects PS/2 qcodes for `echo hi` and expects `lerux-shell: prompt` then `lerux-shell: cmd=echo hi`. Metal serial smoke expects `lerux-shell: prompt`.
 - [x] `just iso` writes the hybrid Limine ISO `build/pc_z97_d3h/lerux.iso` and does not write a disk. Legacy USB boot loads Multiboot 2 `/boot/sel4_32.elf` plus `/boot/loader.img`. `just test-iso` boots that file in QEMU under SeaBIOS (local check, not CI).
 
-Native AHCI and e1000e stay in the [physical-lab follow-on](#physical-rpi4-lab-hardware-gated), so `ls` and `fetch` stay unavailable on this image. The UEFI USB entry stays out: `sel4_32.elf` is linked at 1MB.
+Native AHCI and e1000e stay in the [physical-lab follow-on](#physical-rpi4-lab-hardware-gated), so `ls` and `fetch` stay unavailable on this image. The UEFI USB entry stays out: `sel4_32.elf` is linked at 1MB. The monitor path is the VGA text page on the firmware boot VGA card (this desk: Sapphire RX 560 HDMI). There is no Polaris or `amdgpu` driver. See [boards.md](boards.md#vga-text-on-the-rx-560).
 
 The same image also arms one USB HID boot keyboard on the xHCI controller at PCI `00:14.0` (root ports, boot protocol). `just test-x86-usb-kbd` types `echo hi` through qemu-xhci. When that keyboard is armed, the shell reads it and leaves PS/2 bytes unread. With no USB boot keyboard, `just test-x86-console` is unchanged.
 

@@ -11,7 +11,7 @@ udisksctl unmount -b /dev/sdc3  # unmount the ISO filesystem Ubuntu mounted from
 sudo dd if=build/pc_z97_d3h/lerux.iso of=/dev/sdc bs=4M status=progress conv=fsync  # write that ISO onto the whole stick; bs=4M is the chunk size, status=progress prints bytes written, conv=fsync waits until they are on the device
 ```
 
-Check `lsblk` before the `dd`. Do not write `sda` (Ubuntu SSD) or `sdb` (data disk). Reboot and open the firmware boot menu (F12 on this board). Choose the USB entry that does not say UEFI. If the stick is missing, enable CSM in setup. The Limine menu counts down, then the screen is blue with `hello lerux` on the first line and `lerux>` under it. A PS/2 keyboard in the rear combo port, or a USB HID boot keyboard on a root xHCI port, types at that prompt (`echo`, `help`, `pwd`, `clear`; other commands print `unavailable` until a disk driver exists). COM1 at 115200 8N1 (the COMA header; there is no rear DB9) prints `lerux-shell: prompt`. The UEFI entry stops in Limine: this kernel is linked at 1MB. Reboot and choose Ubuntu to return.
+Check `lsblk` before the `dd`. Do not write `sda` (Ubuntu SSD) or `sdb` (data disk). Reboot and open the firmware boot menu (F12 on this board). Choose the USB entry that does not say UEFI. If the stick is missing, enable CSM in setup. The Limine menu counts down, then the screen is blue with `hello lerux` on the first line and `lerux>` under it. That picture is VGA text at `0xb8000` on the firmware boot VGA card. On this desk the cable is HDMI on the Sapphire RX 560 (`01:00.0`); lerux does not load a GPU driver. Details: [VGA text on the RX 560](docs/boards.md#vga-text-on-the-rx-560). A PS/2 keyboard in the rear combo port, or a USB HID boot keyboard on a root xHCI port, types at that prompt (`echo`, `help`, `pwd`, `clear`; other commands print `unavailable` until a disk driver exists). COM1 at 115200 8N1 (the COMA header; there is no rear DB9) prints `lerux-shell: prompt`. The UEFI entry stops in Limine: this kernel is linked at 1MB. Reboot and choose Ubuntu to return.
 
 Reboot once into the stick from Ubuntu, without the F12 menu. The stick has to be plugged in so the entry exists:
 
@@ -58,7 +58,7 @@ just test-all
 
 ## CI
 
-GitHub Actions runs on every push to `main`: **check** (`just check`), one **sdk** job (SDK + patched SP804 QEMU), **check-pd** (cross-target clippy on userspace crates), then **43 smoke** matrix jobs (`just test-all` runs every `ci = true` board). Local lint: `just check` (host crates) or `just check-all` (host + PD, needs SDK). Details: [`docs/ci.md`](docs/ci.md).
+GitHub Actions runs on every push to `main`: **check** (`just check`), one **sdk** job (SDK + patched SP804 QEMU), **check-pd** (cross-target clippy on userspace crates), then **44 smoke** matrix jobs (the workflow `include` list). `just test-all` runs every `ci = true` board, a wider set than that list. Local lint: `just check` (host crates) or `just check-all` (host + PD, needs SDK). Details: [`docs/ci.md`](docs/ci.md).
 
 ## Architecture
 

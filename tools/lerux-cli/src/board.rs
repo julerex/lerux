@@ -74,7 +74,8 @@ pub struct Board {
     pub pds: Vec<String>,
     #[serde(default)]
     pub qemu: Option<QemuConfig>,
-    /// Included in `lerux test-all` (and thus the CI smoke matrix).
+    /// Included in `lerux test-all`. The GitHub smoke matrix is the `include`
+    /// list in `.github/workflows/rust.yml`, not this flag.
     #[serde(default)]
     pub ci: bool,
     /// Expected substring for a host curl of http://127.0.0.1:18080/ after boot.

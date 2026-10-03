@@ -24,6 +24,8 @@ flowchart LR
 
 Local mirror: `just check` (format + clippy for `lerux-cli` and `lerux-interface-types`, plus `lerux profile check-qos`); `just check-pd` after `just build-sdk` (or `just check-all` for both).
 
+`just test-all` runs every board with `ci = true`. The jobs in the table below are the workflow `include` list. Nothing generates one list from the other, and nothing checks that the count on this page still matches that list. A new board name is compiled with `--features board-<name>` only when the PD crate declares that feature.
+
 **Security pin bumps** (seL4 / Microkit / rust-sel4): follow the Phase 60 Track B runbook in [`security.md`](security.md#dependency-pins-and-security-update-runbook-track-b) — pin edit → SDK refresh → check / check-pd → smoke matrix → rebuild images.
 
 **QoS (Track D):** `lerux profile check-qos` is part of `just check`. Guest concurrent-boot signal is `lerux-shell: qos ok` on workstation smokes ([`qos.md`](qos.md#abuse-tests-phase-60-track-d)).

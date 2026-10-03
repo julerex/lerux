@@ -15,7 +15,7 @@
 
 | Role | aarch64 virt | RISC-V virt | x86_64 q35 | Z97-D3H metal |
 |------|--------------|-------------|------------|----------------|
-| Serial | PL011 + serial-virt | NS16550 MMIO + serial-virt | COM1 ioport + serial-virt | COM1 log (`pc_z97_d3h`); VGA text shell on the monitor, PS/2 or USB boot keyboard |
+| Serial | PL011 + serial-virt | NS16550 MMIO + serial-virt | COM1 ioport + serial-virt | COM1 log (`pc_z97_d3h`); VGA text page `0xb8000` on the firmware boot VGA card (this desk: RX 560 HDMI). No GPU driver. PS/2 or USB boot keyboard. See [boards.md](boards.md#vga-text-on-the-rx-560). |
 | Block | virtio-blk MMIO | virtio-blk MMIO | virtio-pci combo | *(AHCI later)* |
 | Net | virtio-net MMIO (unified-dma) | virtio-net MMIO (unified-dma) | virtio-pci combo (unified-dma) | *(e1000e later)* |
 | RTC | PL031 | Goldfish RTC | CMOS | CMOS (not in hello slice) |

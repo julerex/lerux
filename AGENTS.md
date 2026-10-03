@@ -116,6 +116,14 @@ Workspace `[lints]` in the root `Cargo.toml` sets clippy defaults; each crate in
 
 CI runs `just check` before the SDK pipeline and `just check-pd` after the SDK artifact is ready (in parallel with smoke).
 
+A few results look like success and are not:
+
+- `lerux-cli` is a binary crate. Test it with `cargo test -p lerux-cli -- <filter>`. There is no `--lib` target. `--exact` needs the full path `module::tests::<name>`. A filter that matches nothing still exits 0; `running 0 tests` is the result.
+- Lint protection domains with `just check-pd`. That command sets up libclang. `cargo clippy` on a PD target without it panics inside bindgen.
+- `ci = true` in `support/boards.toml` is the set `just test-all` runs. GitHub smoke is the `include` list in `.github/workflows/rust.yml`. The job count in `docs/ci.md` and the README is written by hand. A new board name is passed as `--features board-<name>` only when that key exists in the PD `Cargo.toml`.
+- Take a QEMU `-device` property from that binary's `-device <name>,help`. The host kernel's interrupt mode is a different machine. `just test-x86-usb-kbd` covers qemu-xhci and QEMU's `usb-kbd`. The desk keyboard and the Intel xHCI path are the metal boot in `docs/boards.md`.
+- The exit status of a shell string is its last command. A redirected recipe that ends in `echo` reports that echo. Read the log for the recipe's own status line.
+
 ## What not to do
 
 - Do not introduce `std` into PD crates.

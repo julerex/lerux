@@ -613,7 +613,10 @@ system_vars = { serial_mmio_phys_addr = "0xfe201000", serial_irq = 121, emmc2_mm
 # Gigabyte Z97-D3H (Haswell desktop). Hardware only: Multiboot 2 `sel4_32.elf` + `loader.img`.
 # COM1 0x3f8 IRQ4 via the board COMA header (no rear DB9). The console PD paints
 # the VGA text page at 0xb8000 and reads a PS/2 keyboard or a USB HID boot
-# keyboard on the xHCI controller at 00:14.0. Do not overwrite the Ubuntu SSD.
+# keyboard on the xHCI controller at 00:14.0. The picture is that text page on
+# the firmware boot VGA card. On this desk that is the Sapphire RX 560 HDMI
+# (01:00.0, 1002:67ff). There is no amdgpu or Polaris driver. See
+# docs/boards.md. Do not overwrite the Ubuntu SSD.
 [pc_z97_d3h]
 arch = "x86_64"
 microkit_board = "x86_64_generic"

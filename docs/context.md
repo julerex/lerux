@@ -33,6 +33,8 @@ lerux builds **Rust-only userspace** on the formally verified [seL4](https://sel
 
 **Interactive surface (2026-09, ADR-009):** QEMU software framebuffer is in scope; GPU/Wayland/libvmm/JS are not. Browser and agent are new PDs, not ports of Ladybird or `grok`. See [`plan-interactive.md`](plan-interactive.md).
 
+**Z97 monitor (phase 82):** `pc_z97_d3h` paints VGA text at `0xb8000` through the firmware boot VGA card. On this desk that card is the Sapphire RX 560 on HDMI. lerux does not drive `amdgpu`, the Polaris display engine, or HDMI. See [`boards.md`](boards.md#vga-text-on-the-rx-560).
+
 ## Platform parity
 
 Echo IPC and virtio smoke tests run on aarch64, RISC-V virt, and x86 (PCI virtio on q35). Block IPC (read + write) and net IPC (UDP TX) run on all three arches. RTC/timer init runs on all three: aarch64 PL031/SP804, RISC-V Goldfish RTC + `rdtime`, x86 CMOS RTC + TSC (Phase 56).

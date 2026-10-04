@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-10-04. Numbered phases 1–82 below are done. The active rewrite is [plan-lionsos.md](plan-lionsos.md). Milestones 1, 2, and 3 of that plan are done. Milestone 4 is next.
+Last updated: 2026-10-05. Numbered phases 1–82 below are done. The active rewrite is [plan-lionsos.md](plan-lionsos.md). Milestones 1, 2, 3, and 4 of that plan are done. Milestone 5 is next.
 
 ## Phase 1 — Bring-up
 

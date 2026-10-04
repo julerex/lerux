@@ -4,6 +4,8 @@
 
 use core::sync::atomic::AtomicU64;
 
+use crate::region_resource_t;
+
 pub const FS_QUEUE_CAPACITY: usize = 511;
 pub const FS_MAX_NAME_LENGTH: usize = 255;
 pub const FS_MAX_PATH_LENGTH: usize = 4095;
@@ -311,4 +313,42 @@ pub struct fs_queue_t {
     pub tail: AtomicU64,
     pub padding: [u8; 48],
     pub buffer: [fs_msg_t; FS_QUEUE_CAPACITY],
+}
+
+pub const LIONS_FS_MAGIC_LEN: usize = 8;
+
+/// Header magic `LionsOS` followed by `0x01`.
+pub const LIONS_FS_MAGIC: [u8; LIONS_FS_MAGIC_LEN] =
+    [b'L', b'i', b'o', b'n', b's', b'O', b'S', 0x01];
+
+/// `fs_connection_resource_t` from `include/lions/fs/config.h`.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct fs_connection_resource_t {
+    pub command_queue: region_resource_t,
+    pub completion_queue: region_resource_t,
+    pub share: region_resource_t,
+    pub queue_len: u16,
+    pub id: u8,
+}
+
+/// `fs_server_config_t` from `include/lions/fs/config.h`.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct fs_server_config_t {
+    pub magic: [u8; LIONS_FS_MAGIC_LEN],
+    pub client: fs_connection_resource_t,
+}
+
+/// `fs_client_config_t` from `include/lions/fs/config.h`.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct fs_client_config_t {
+    pub magic: [u8; LIONS_FS_MAGIC_LEN],
+    pub server: fs_connection_resource_t,
+}
+
+/// True when `config` starts with [`LIONS_FS_MAGIC`].
+pub fn fs_config_check_magic(config: &[u8]) -> bool {
+    config.len() >= LIONS_FS_MAGIC_LEN && config[..LIONS_FS_MAGIC_LEN] == LIONS_FS_MAGIC
 }

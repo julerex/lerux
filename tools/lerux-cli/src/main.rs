@@ -11,6 +11,7 @@ mod deploy;
 mod disk_img;
 mod fetch;
 mod fs_host;
+mod fs_sddf;
 mod grok_one;
 mod http_one;
 mod https_one;

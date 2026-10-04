@@ -11,7 +11,10 @@
 )]
 
 pub mod blk;
+pub mod blk_image;
+pub mod blk_queue;
 pub mod fs;
+pub mod fs_image;
 pub mod fs_queue;
 pub mod net;
 pub mod serial;
@@ -19,6 +22,7 @@ pub mod serial_image;
 pub mod serial_queue;
 
 pub use blk::*;
+pub use blk_queue::*;
 pub use fs::*;
 pub use fs_queue::*;
 pub use net::*;

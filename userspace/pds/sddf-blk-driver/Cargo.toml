@@ -1,0 +1,18 @@
+[package]
+name = "sddf-blk-driver"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[lints]
+workspace = true
+
+[dependencies]
+lerux-logging = { path = "../../crates/lerux-logging" }
+lerux-sddf = { path = "../../crates/lerux-sddf" }
+sel4-microkit = { workspace = true }
+sel4-virtio-hal-impl = { workspace = true }
+virtio-drivers = { workspace = true }
+
+[build-dependencies]
+lerux-sddf = { path = "../../crates/lerux-sddf" }

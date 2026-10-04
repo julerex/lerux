@@ -32,9 +32,18 @@ pub struct serial_queue_handle_t {
 
 /// `region_resource_t` from `include/sddf/resources/common.h`.
 #[repr(C)]
+#[derive(Clone, Copy)]
 pub struct region_resource_t {
     pub vaddr: *mut u8,
     pub size: u64,
+}
+
+/// `device_region_resource_t` from `include/sddf/resources/device.h`.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct device_region_resource_t {
+    pub region: region_resource_t,
+    pub io_addr: usize,
 }
 
 #[repr(C)]

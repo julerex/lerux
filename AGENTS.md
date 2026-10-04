@@ -122,6 +122,19 @@ Read Milestone 3 in [docs/plan-lionsos.md](docs/plan-lionsos.md). New blocking i
 - The x86 context switch is Intel syntax. This rustc rejects `.intel_syntax` under `-D warnings`. RISC-V is not implemented.
 - `just test-cothread` expects `cothread waiting` and then `cothread resumed`. Keep `lerux shell ready` out of that protection domain.
 
+## Filesystem image (`qemu_virt_aarch64_fs_sddf`)
+
+Read Milestone 4 in [docs/plan-lionsos.md](docs/plan-lionsos.md). The postcard `fs-server`, `virtio-blk-driver`, and LERUXFS2 stay.
+
+- Protection domains are `blk_driver`, `blk_virt`, `fatfs`, and `fs_client`. Program names use hyphens (`sddf-blk-driver.elf`).
+- `io_or_offset` is a byte offset into the shared data region. `device_region_resource_t.io_addr` stays 0. Microkit 2.2.0 assigns RAM physical addresses at load time, and this driver does not program that field.
+- The QEMU user-net device has no driver. It occupies the first virtio-mmio slot so virtio-blk stays at `+0xc00` in the page at `0xa003000`, interrupt 78.
+- `blk_driver` and `fatfs` map the data region. `blk_virt` forwards one client's queue entries and does not copy bytes. The partition is 0.
+- Copy `blk_virt_config_t` once into a static. It is several kilobytes. Do not put it on the stack.
+- The File Allocation Table code lives in `sddf-fatfs`. Do not depend on `lerux-fat`. That crate depends on `lerux-interface-types`. The smoke file is one 8.3 name, one cluster, at most 512 bytes.
+- The client and the filesystem server block in a cothread. Assertions stay on the root. `just test-fs-sddf` expects `fs-sddf read ok`. Keep that substring out of `expect` and `assert` messages.
+- Block queue `head` and `tail` stay plain `u32`. The consumer acquire-loads the index the other side writes. The producer release-stores the index it owns. The flexible array starts at `size_of` of the fixed prefix.
+
 ## Host tooling (`tools/lerux-cli/**`)
 
 - Use `anyhow::Result` at the CLI boundary; add context with `.context("…")?`.

@@ -56,6 +56,9 @@ expects = ["cothread waiting", "cothread resumed"]
 [boards.qemu_virt_aarch64_serial_sddf]
 expects = ["lerux shell ready"]
 
+[boards.qemu_virt_aarch64_fs_sddf]
+expects = ["fs-sddf read ok"]
+
 [boards.qemu_virt_aarch64_html]
 expects = ["lerux-html: nodes=8"]
 

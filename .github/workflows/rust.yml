@@ -287,6 +287,9 @@ jobs:
           - id: cothread
             board: qemu_virt_aarch64_cothread
             command: just test-cothread
+          - id: fs-sddf
+            board: qemu_virt_aarch64_fs_sddf
+            command: just test-fs-sddf
           - id: display
             board: qemu_virt_aarch64_display
             command: just test-display

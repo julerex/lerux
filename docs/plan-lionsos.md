@@ -1,8 +1,8 @@
 # Lerux in Rust, on the LionsOS architecture
 
-Last updated: 2026-10-04
+Last updated: 2026-10-05
 
-**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is next. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
+**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is next. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
 
 **Goal:** Every lerux guest protection domain stays Rust, and the queues, configuration pages, filesystem messages, and component graph are the same ones LionsOS uses.
 
@@ -103,6 +103,18 @@ Landed:
 ## Milestone 4 — Block and the filesystem queue
 
 **Exit:** `just test-fs-sddf` has `blk_driver`, `blk_virt`, `fatfs`, and one client. The client blocks in a cothread on `FS_CMD_FILE_OPEN`, `FS_CMD_FILE_WRITE`, and `FS_CMD_FILE_READ`. The bytes read back match the bytes written. Messages are `fs_cmd_t` and `fs_cmpl_t`. The on-disk format is File Allocation Table. LERUXFS2 is not mounted by this image.
+
+Done.
+
+Landed:
+
+- Protection domains `sddf-blk-driver`, `sddf-blk-virt`, `sddf-fatfs`, and `sddf-fs-client`. The system names are `blk_driver`, `blk_virt`, `fatfs`, and `fs_client`.
+- `lerux_sddf::blk_image` and `lerux_sddf::fs_image` fill the block and filesystem configs. Each protection domain build script embeds those bytes. `tools/lerux-cli/src/fs_sddf.rs` writes the same bytes so a host test can compare them with the rendered system description.
+- Board `qemu_virt_aarch64_fs_sddf`, template `fs-sddf.system.template`, recipe `just test-fs-sddf`. The continuous integration job is `fs-sddf`.
+- The client blocks in a cothread, opens `SMOKE.TXT`, writes 15 bytes, reads them back, and logs `fs-sddf read ok`. The on-disk format is a 16-bit File Allocation Table in `sddf-fatfs`. One file, one cluster, at most 512 bytes.
+- The driver and the filesystem server share the data region. The block virtualiser forwards queue entries and does not copy bytes. `device_region_resource_t.io_addr` stays 0. A user-net device with no driver holds the first virtio-mmio slot so virtio-blk stays at `+0xc00`.
+- The postcard `fs-server`, `virtio-blk-driver`, and LERUXFS2 stay.
+- Checked on 2026-10-05: `just check` passed, `just check-pd` passed, and the `just test-fs-sddf` serial log printed `fs-sddf read ok`.
 
 ## Milestone 5 — File-descriptor library
 

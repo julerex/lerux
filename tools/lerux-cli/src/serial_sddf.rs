@@ -10,6 +10,19 @@ use lerux_sddf::serial_image::{
     client_config, driver_config, serial_config_to_bytes, virt_rx_config, virt_tx_config,
 };
 
+#[cfg(test)]
+pub(crate) fn hex_group(value: u64) -> String {
+    let hex = format!("{value:x}");
+    let mut grouped = String::new();
+    for (index, ch) in hex.chars().rev().enumerate() {
+        if index > 0 && index % 3 == 0 {
+            grouped.push('_');
+        }
+        grouped.push(ch);
+    }
+    format!("0x{}", grouped.chars().rev().collect::<String>())
+}
+
 pub fn write_configs(dir: &Path) -> Result<()> {
     fs::create_dir_all(dir).with_context(|| format!("mkdir {}", dir.display()))?;
     write_one(dir, "serial_driver_config.bin", &driver_config())?;
@@ -48,18 +61,6 @@ mod tests {
 
     fn repo_root() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
-    }
-
-    fn hex_group(value: u64) -> String {
-        let hex = format!("{value:x}");
-        let mut grouped = String::new();
-        for (index, ch) in hex.chars().rev().enumerate() {
-            if index > 0 && index % 3 == 0 {
-                grouped.push('_');
-            }
-            grouped.push(ch);
-        }
-        format!("0x{}", grouped.chars().rev().collect::<String>())
     }
 
     #[test]

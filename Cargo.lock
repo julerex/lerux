@@ -2220,6 +2220,46 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
+name = "sddf-blk-driver"
+version = "0.1.0"
+dependencies = [
+ "lerux-logging",
+ "lerux-sddf",
+ "sel4-microkit",
+ "sel4-virtio-hal-impl",
+ "virtio-drivers",
+]
+
+[[package]]
+name = "sddf-blk-virt"
+version = "0.1.0"
+dependencies = [
+ "lerux-logging",
+ "lerux-sddf",
+ "sel4-microkit",
+]
+
+[[package]]
+name = "sddf-fatfs"
+version = "0.1.0"
+dependencies = [
+ "lerux-cothread",
+ "lerux-logging",
+ "lerux-sddf",
+ "sel4-microkit",
+]
+
+[[package]]
+name = "sddf-fs-client"
+version = "0.1.0"
+dependencies = [
+ "lerux-cothread",
+ "lerux-logging",
+ "lerux-sddf",
+ "sel4-microkit",
+]
+
+[[package]]
 name = "sddf-serial-client"
 version = "0.1.0"
 dependencies = [

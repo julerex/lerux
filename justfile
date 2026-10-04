@@ -109,6 +109,10 @@ test-echo:
 test-serial-sddf:
     BOARD=qemu_virt_aarch64_serial_sddf just test
 
+# LionsOS block and filesystem roles: driver, virtualiser, FAT server, one client
+test-fs-sddf:
+    BOARD=qemu_virt_aarch64_fs_sddf just test
+
 # Milestone 3: cothread blocks on a channel until a Microkit notification
 test-cothread:
     BOARD=qemu_virt_aarch64_cothread just test

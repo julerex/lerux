@@ -90,13 +90,14 @@ Stricter than PDs.
 
 ## LionsOS queues (`lerux-sddf`)
 
-Read [docs/plan-lionsos.md](docs/plan-lionsos.md) and [ADR-011](docs/decisions/011-lionsos-structures.md). One milestone per pass. Leave a postcard protection domain in place until that milestone's exit says to delete it. The serial example is `qemu_virt_aarch64_serial_sddf`: `serial_driver`, `serial_virt_tx`, `serial_virt_rx`, and `serial_client`.
+Read [docs/plan-lionsos.md](docs/plan-lionsos.md) and [ADR-011](docs/decisions/011-lionsos-structures.md). One milestone per pass. Leave a postcard protection domain in place until that milestone's exit says to delete it. The serial example is `qemu_virt_aarch64_serial_sddf`: `serial_driver`, `serial_virt_tx`, `serial_virt_rx`, and `serial_client`. A missing header in the pinned LionsOS 0.4.0 checkout stops that milestone. Do not invent the struct.
 
 ### Config bytes
 
 - Fill a `#[repr(C)]` config by zeroing it, then assigning fields. A struct literal leaves padding uninitialized, so two fills of `serial_connection_resource_t` do not compare equal: the `u8` `id` is padded out to the next pointer. `serial_config_from_bytes` is `unsafe` because a `bool` other than 0 or 1 is undefined behavior. The generator writes 0 or 1.
 - The installed Microkit kit is 2.2.0 and cannot prefill a memory region. Do not objcopy a zero `#[link_section]` static. rustc places that static in `.bss`. Each protection domain `build.rs` writes `OUT_DIR/config.bin` from the `lerux-sddf::serial_image` constructors. The domain `include_bytes!` those bytes and copies them into an aligned value. `include_bytes!` has alignment 1. The host and the guest are both 64-bit little-endian, so the pointer-sized virtual addresses survive the copy.
 - The protection domain compiles under `just check-pd` without a board build. It must not read files that `lerux-cli` writes during `build()`. `tools/lerux-cli/src/serial_sddf.rs` writes the same bytes so a host test can compare them with the rendered system description.
+- Block and filesystem configs use that same path. The constructors are `lerux-sddf::blk_image` and `lerux-sddf::fs_image`. `tools/lerux-cli/src/fs_sddf.rs` writes the bytes the host test compares. `fatfs` writes `blk_client_config_t` and then `fs_server_config_t` into one `config.bin`. The other three protection domains on that image embed one config.
 - Template virtual addresses use the same digit grouping as the Rust constants (`0x2_000_000`). `0x2_000_000` and `0x2000000` are the same number and different spellings.
 - Copy a large config once during init. `serial_virt_tx_config_t` is several kilobytes, and the stack is `0x10_000`. Keep queue handles and channel ids in the handler.
 
@@ -132,8 +133,14 @@ Read Milestone 4 in [docs/plan-lionsos.md](docs/plan-lionsos.md). The postcard `
 - `blk_driver` and `fatfs` map the data region. `blk_virt` forwards one client's queue entries and does not copy bytes. The partition is 0.
 - Copy `blk_virt_config_t` once into a static. It is several kilobytes. Do not put it on the stack.
 - The File Allocation Table code lives in `sddf-fatfs`. Do not depend on `lerux-fat`. That crate depends on `lerux-interface-types`. The smoke file is one 8.3 name, one cluster, at most 512 bytes.
-- The client and the filesystem server block in a cothread. Assertions stay on the root. `just test-fs-sddf` expects `fs-sddf read ok`. Keep that substring out of `expect` and `assert` messages.
-- Block queue `head` and `tail` stay plain `u32`. The consumer acquire-loads the index the other side writes. The producer release-stores the index it owns. The flexible array starts at `size_of` of the fixed prefix.
+- The client and the filesystem server block in a cothread. Assertions stay on the root. `just test-fs-sddf` expects `fs-sddf read ok`. Keep that substring out of `expect` and `assert` messages. There is no serial protection domain on this image. The line comes from `lerux_logging::debug`.
+- Block queue `head` and `tail` stay plain `u32`. The consumer acquire-loads the index the other side writes. The producer release-stores the index it owns. The flexible array starts at `size_of` of the fixed prefix. Enqueue and dequeue do not read `plugged`. The field stays because the header has it. Capacity is 16, and the queue region is one page (`0x1000`). Enqueue returns -1 when the ring is full.
+- `fs_completion_enqueue` zeros the `fs_msg_t` slot before it writes `fs_cmpl_t`. The completion is smaller than the command. Writing the completion alone leaves the rest of the slot uninitialized.
+- `VirtIOBlk::capacity` counts 512-byte sectors. Transfer block N is virtio sector `N * 8`. Flush and barrier return success with `success_count` 0. They do not submit a virtio flush.
+- Priorities are `blk_driver` 4, `blk_virt` 3, `fatfs` 2, and `fs_client` 1. Notifying a higher-priority protection domain runs it before the caller reaches `wait_on_channel`. The channel semaphore sticks, so that signal is still there at the wait.
+- `lerux disk-img` writes a 4 MiB raw `support/disk.img` with `55 AA` at byte 510. The bytes-per-sector field is 0. The guest formats the volume when the signature is missing or the sector size is not 512. Do not treat that host image as a File Allocation Table.
+- `stage_zero` flushes the current transfer block, then zeros the next one. The second table header is written at byte 512 of transfer block 4, which is sector 33. The volume is 512-byte sectors, one sector per cluster, 8192 sectors, 1 reserved sector, 2 tables of 32 sectors, and 512 root entries. Sector 1 is the first table, 33 the second, 65 the root, and 97 the first data sector (cluster 2). Sector S sits in transfer block `S/8` at byte `(S % 8) * 512`. The 4096-byte transfer buffer is a static cell.
+- The server handles open, write, and read. Any other command returns `FS_STATUS_INVALID_COMMAND`. Open accepts create plus write-only, or read-only. A path is an 8.3 name of at most 11 bytes. A free root slot starts with `0x00` or `0xE5`. A write starts at offset 0 and is at most 512 bytes. One file is open, and its descriptor is 0.
 
 ## Host tooling (`tools/lerux-cli/**`)
 

@@ -116,6 +116,12 @@ Landed:
 - The postcard `fs-server`, `virtio-blk-driver`, and LERUXFS2 stay.
 - Checked on 2026-10-05: `just check` passed, `just check-pd` passed, and the `just test-fs-sddf` serial log printed `fs-sddf read ok`.
 
+The next milestone inherits these limits. The agent rules are in [AGENTS.md](../AGENTS.md#filesystem-image-qemu_virt_aarch64_fs_sddf).
+
+- `lerux disk-img` writes a 4 MiB raw image. The guest formats it because the bytes-per-sector field is 0.
+- Commands other than open, write, and read return `FS_STATUS_INVALID_COMMAND`.
+- Flush and barrier return success and do not submit a virtio flush.
+
 ## Milestone 5 — File-descriptor library
 
 **Exit:** `lerux-posix` on the host, with a fake filesystem queue, implements `open`, `read`, `write`, `mkdir`, `unlink`, `rename`, and `stat`. Status codes map to the `errno` values in the pinned `lib/libc/posix`. `MAX_FDS` defaults to 128. Descriptors 0, 1, and 2 are reserved. `cargo test -p lerux-posix` covers a successful read and `FS_STATUS_NO_FILE`.

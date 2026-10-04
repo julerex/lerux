@@ -20,8 +20,8 @@ default: build
 # Format, clippy, and host tests for host crates (no SDK required)
 check:
     cargo fmt --all --check
-    CARGO_TARGET_DIR={{root}}/build/host cargo clippy -p lerux-cli -p lerux-interface-types -p lerux-tls -p lerux-html -p lerux-web -p lerux-prog -p lerux-rtw8852be -p lerux-sddf --all-targets -- -D warnings
-    CARGO_TARGET_DIR={{root}}/build/host cargo test -p lerux-interface-types -p lerux-tls -p lerux-html -p lerux-web -p lerux-prog -p lerux-rtw8852be -p lerux-cli -p lerux-sddf
+    CARGO_TARGET_DIR={{root}}/build/host cargo clippy -p lerux-cli -p lerux-interface-types -p lerux-tls -p lerux-html -p lerux-web -p lerux-prog -p lerux-rtw8852be -p lerux-sddf -p lerux-cothread --all-targets -- -D warnings
+    CARGO_TARGET_DIR={{root}}/build/host cargo test -p lerux-interface-types -p lerux-tls -p lerux-html -p lerux-web -p lerux-prog -p lerux-rtw8852be -p lerux-cli -p lerux-sddf -p lerux-cothread
     # Phase 60 Track D: PPC priority + service-class band checks (host, no QEMU)
     {{lerux}} profile check-qos
 
@@ -108,6 +108,10 @@ test-echo:
 # LionsOS serial roles: driver, transmit virtualiser, receive virtualiser, one client
 test-serial-sddf:
     BOARD=qemu_virt_aarch64_serial_sddf just test
+
+# Milestone 3: cothread blocks on a channel until a Microkit notification
+test-cothread:
+    BOARD=qemu_virt_aarch64_cothread just test
 
 # Phase 72: QEMU ramfb + display-server + shared bitmap (display-demo)
 test-display:

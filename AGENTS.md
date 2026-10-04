@@ -110,6 +110,18 @@ Read [docs/plan-lionsos.md](docs/plan-lionsos.md) and [ADR-011](docs/decisions/0
 - Crate and program names use hyphens (`sddf-serial-driver.elf`). Microkit protection-domain names use underscores (`serial_driver`). A search for `serial-driver.elf` also matches `sddf-serial-driver.elf`.
 - `just test-serial-sddf` expects `lerux shell ready` from `serial_enqueue`. The client does not link `lerux-logging`. Keep that substring out of `expect` and `assert` messages.
 
+## Cothreads (`lerux-cothread`)
+
+Read Milestone 3 in [docs/plan-lionsos.md](docs/plan-lionsos.md). New blocking input and output uses `lerux-cothread`. Leave `lerux-service-async` in place for postcard servers.
+
+- The root cothread is the Microkit kernel thread. Only the root calls `microkit_cothread_recv_ntfn`, and it calls that from `Handler::notified`. A worker blocks in `microkit_cothread_wait_on_channel` or `semaphore_wait`. `semaphore_signal` and `recv_ntfn` switch to the waiter before they return.
+- Pass explicit stacks. The minimum is `MIN_STACK_SIZE` (`0x1000`). The smoke stacks are `0x4000`, 16-byte aligned, and live in static storage. There is no guard page.
+- A contract break panics: a second init, a bad handle, a wait on the root, `recv_ntfn` from a worker, or destroying a blocked cothread. Spawn of a full pool returns `NULL_HANDLE`.
+- Do not panic inside a cothread. Unwind across the context switch is unsafe. Put assertions on the root.
+- Host tests take a process lock before they use the runtime. The runtime itself does not lock. A lock held across the switch deadlocks.
+- The x86 context switch is Intel syntax. This rustc rejects `.intel_syntax` under `-D warnings`. RISC-V is not implemented.
+- `just test-cothread` expects `cothread waiting` and then `cothread resumed`. Keep `lerux shell ready` out of that protection domain.
+
 ## Host tooling (`tools/lerux-cli/**`)
 
 - Use `anyhow::Result` at the CLI boundary; add context with `.context("…")?`.

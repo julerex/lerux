@@ -2,7 +2,7 @@
 
 Last updated: 2026-10-04
 
-**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is next. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
+**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is next. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
 
 **Goal:** Every lerux guest protection domain stays Rust, and the queues, configuration pages, filesystem messages, and component graph are the same ones LionsOS uses.
 
@@ -88,6 +88,17 @@ Landed:
 ## Milestone 3 — Cothreads
 
 **Exit:** `cargo test -p lerux-cothread` spawns two cothreads, blocks one in `wait_on_channel`, runs the other, signals the channel, and observes the blocked thread resume. A protection-domain smoke on QEMU does the same wait against a Microkit notification. The operations match `microkit_cothread_init`, `spawn`, `yield`, `wait_on_channel`, `semaphore_wait`, and `semaphore_signal`. Stacks are explicit. This crate replaces `lerux-service-async` for new blocking input and output.
+
+Done.
+
+Landed:
+
+- `userspace/crates/lerux-cothread` implements `microkit_cothread_init`, `spawn`, `yield`, `wait_on_channel`, `semaphore_wait`, and `semaphore_signal`. Each worker gets a caller-provided stack. The pool holds 8 cothreads, including the root kernel thread. A contract break panics, which is where `libmicrokitco` faults the protection domain. A full pool returns `NULL_HANDLE`.
+- `cargo test -p lerux-cothread` spawns a waiter and a runner. The waiter blocks in `wait_on_channel`. The runner signals that channel. The waiter resumes. A second test covers `semaphore_signal`.
+- Board `qemu_virt_aarch64_cothread`, template `cothread.system.template`, protection domains `cothread_client`, `cothread_peer`, and the postcard `serial_driver`. Recipe `just test-cothread`. The continuous integration job is `cothread`.
+- The worker logs `cothread waiting`, notifies the peer, and blocks on that channel. The peer notifies back. The client's `notified` calls `microkit_cothread_recv_ntfn`, and the worker logs `cothread resumed`.
+- `lerux-service-async` stays for postcard servers that already poll one future. The postcard serial path stays.
+- Checked on 2026-10-04: `cargo test -p lerux-cothread` passed, `just check` passed, `just check-pd` passed, and `just test-cothread` printed `cothread waiting` and then `cothread resumed`.
 
 ## Milestone 4 — Block and the filesystem queue
 

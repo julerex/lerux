@@ -489,6 +489,22 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2459377285ad874054d797f3ccebf984978aa39129f6eafde5cdc8315b612f8"
 
 [[package]]
+name = "cothread-client"
+version = "0.1.0"
+dependencies = [
+ "lerux-cothread",
+ "lerux-logging",
+ "sel4-microkit",
+]
+
+[[package]]
+name = "cothread-peer"
+version = "0.1.0"
+dependencies = [
+ "sel4-microkit",
+]
+
+[[package]]
 name = "cpufeatures"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1296,6 +1312,10 @@ dependencies = [
  "which",
  "xz2",
 ]
+
+[[package]]
+name = "lerux-cothread"
+version = "0.1.0"
 
 [[package]]
 name = "lerux-driver-protocols"

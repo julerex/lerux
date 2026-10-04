@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Milestone 3: one worker cothread blocks in wait_on_channel until cothread_peer
+  notifies it. serial_driver is only the log path.
+-->
+<system>
+    <memory_region name="serial_mmio" size="0x1_000" phys_addr="{serial_mmio_phys_addr}" />
+
+    <protection_domain name="serial_driver" priority="2" stack_size="0x10_000">
+        <program_image path="serial-driver.elf" />
+        <map mr="serial_mmio" vaddr="0x2_000_000" perms="rw" setvar_vaddr="serial_register_block" />
+        <irq irq="{serial_irq}" id="0" />
+    </protection_domain>
+
+    <protection_domain name="cothread_client" priority="1" stack_size="0x20_000">
+        <program_image path="cothread-client.elf" />
+    </protection_domain>
+
+    <protection_domain name="cothread_peer" priority="1" stack_size="0x10_000">
+        <program_image path="cothread-peer.elf" />
+    </protection_domain>
+
+    <channel>
+        <end pd="serial_driver" id="1" />
+        <end pd="cothread_client" id="0" pp="true" />
+    </channel>
+
+    <channel>
+        <end pd="cothread_client" id="1" />
+        <end pd="cothread_peer" id="0" />
+    </channel>
+</system>

@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (Phase 45)
+Accepted (Phase 45) for postcard service protection domains. Milestone 3 sends new blocking input and output to `lerux-cothread`. This record still governs `lerux-service-async`.
 
 ## Date
 
@@ -55,6 +55,7 @@ Deferred: powerful, but pulls `futures`, thread-locals, and a larger dependency 
 
 ## Consequences
 
+- New blocking input and output uses `lerux-cothread`. That crate is a Rust implementation of the `libmicrokitco` operations, with caller-provided stacks. It does not link the C library. `lerux-service-async` remains the scheduler for postcard servers that already poll one future.
 - Service authors can write sequential `read_sector(…).await` / `write_sector(…).await` for long I/O chains.
 - Handler remains the root of the PD; the Microkit event loop is never blocked spinning on rings.
 - Clients still spin on `Poll` until the server finishes a job (same external latency model).

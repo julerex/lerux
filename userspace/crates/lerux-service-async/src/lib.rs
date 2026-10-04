@@ -1,10 +1,12 @@
-//! Stackless cooperative async for Microkit service PDs (Phase 45 / ADR-004).
+//! Stackless cooperative async for Microkit service protection domains (Phase 45 / ADR-004).
 //!
 //! Microkit runs a single kernel thread per protection domain and delivers work
 //! through [`Handler`](https://docs.rs/sel4-microkit) callbacks. This crate helps
-//! express **sequential device I/O** as futures that are polled until stalled,
-//! then resumed when a driver notification arrives — without stackful cothreads
-//! (libmicrokitco) or a multi-task executor.
+//! express sequential device I/O as futures that are polled until stalled,
+//! then resumed when a driver notification arrives. It is not a multi-task executor.
+//!
+//! New blocking input and output uses `lerux-cothread`. This crate stays for
+//! postcard servers that already poll one future.
 //!
 //! # Pattern
 //!

@@ -1,0 +1,17 @@
+[package]
+name = "cothread-client"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Cothread that blocks on a Microkit notification"
+
+[lints]
+workspace = true
+
+[features]
+board-qemu_virt_aarch64_cothread = []
+
+[dependencies]
+lerux-cothread = { path = "../../crates/lerux-cothread" }
+lerux-logging = { path = "../../crates/lerux-logging", features = ["serial"] }
+sel4-microkit = { workspace = true }

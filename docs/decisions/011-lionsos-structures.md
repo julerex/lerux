@@ -42,6 +42,6 @@ Rejected. That is the split ADR-002 and ADR-003 already chose. The shared struct
 - `userspace/crates/lerux-sddf` is the crate for these structures. New queue and filesystem code uses it.
 - `lerux fetch` clones LionsOS `0.4.0` and initialises the `dep/sddf` submodule so the layout test can include the headers.
 - Postcard protection domains stay until a later milestone replaces each one. This decision does not change the legacy image.
-- Later milestones add the transmit and receive virtualisers, the per-client network copier, the filesystem command queue, and a Rust cothread runtime. Milestone 2 added the serial roles. The rest are still later work.
+- Milestone 2 added the serial roles. Milestone 3 added the Rust cothread runtime in `lerux-cothread`. Later milestones add the network transmit and receive virtualisers, the per-client network copier, and the filesystem command queue.
 - The installed Microkit kit is 2.2.0 and cannot prefill a memory region. Each protection domain embeds its config bytes from a build script and copies them into an aligned value at start. See `lerux-sddf::serial_image`.
 - A config struct that contains padding is zeroed and then assigned. A struct literal leaves that padding uninitialized, so two fills do not compare equal.

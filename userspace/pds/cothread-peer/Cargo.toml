@@ -1,0 +1,15 @@
+[package]
+name = "cothread-peer"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Notifies the cothread client when asked"
+
+[lints]
+workspace = true
+
+[features]
+board-qemu_virt_aarch64_cothread = []
+
+[dependencies]
+sel4-microkit = { workspace = true }

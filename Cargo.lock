@@ -1365,6 +1365,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "lerux-rtw8852be"
+version = "0.1.0"
+
+[[package]]
 name = "lerux-serial-queue"
 version = "0.1.0"
 

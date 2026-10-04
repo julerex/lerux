@@ -34,6 +34,7 @@ const SHARED_CRATES: &[&str] = &[
     "lerux-html",
     "lerux-web",
     "lerux-prog",
+    "lerux-rtw8852be",
 ];
 
 struct ClippyEntry {

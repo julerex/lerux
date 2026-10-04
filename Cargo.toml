@@ -46,6 +46,7 @@ members = [
     "userspace/crates/lerux-logging",
     "userspace/crates/lerux-ipc",
     "userspace/crates/lerux-interface-types",
+    "userspace/crates/lerux-rtw8852be",
     "userspace/crates/lerux-fs",
     "userspace/crates/lerux-fat",
     "userspace/crates/lerux-service-async",

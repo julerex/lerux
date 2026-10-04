@@ -62,6 +62,7 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `rpi4b_4gb_net` | aarch64 | `BOARD=rpi4b_4gb_net just image` | net slice on hardware |
 | `rpi4b_4gb_blk` | aarch64 | `BOARD=rpi4b_4gb_blk just image` | blk slice on hardware |
 | `pc_z97_d3h` | x86_64 | `BOARD=pc_z97_d3h just image` | Phase 82: VGA text shell + COM1 (hardware only; Gigabyte Z97-D3H) |
+| `pc_z97_d3h_rtl8852be` | x86_64 | `BOARD=pc_z97_d3h_rtl8852be just image` | COM1 plus a config-space read of the RTL8852BE (hardware only; does not replace the shell) |
 
 ## SDK boards
 
@@ -84,6 +85,7 @@ Use `lerux image --board <name>` (or `BOARD=<name> just image`).
 - Serial: PL011 at 0xfe201000 (GPIO 14/15). Update IRQ in `boards.toml` if the platform IRQ mapping differs.
 - Full workstation (FS + net) on hardware requires native (non-virtio) block and network drivers; see `support/profiles/hardware-rpi4.toml`.
 - `pc_z97_d3h`: Gigabyte GA-Z97-D3H (Haswell). Microkit still uses `x86_64_generic`; deploy copies **`sel4_32.elf` + `loader.img`** for Multiboot 2. The monitor shows the shell as VGA text on the firmware boot VGA card (this desk: the RX 560 HDMI). See [Gigabyte Z97-D3H install path](#gigabyte-z97-d3h-install-path) and [VGA text on the RX 560](#vga-text-on-the-rx-560).
+- `pc_z97_d3h_rtl8852be`: same motherboard, COM1 only. The probe reads root port `00:1c.6`, takes that port's secondary bus, and logs the endpoint vendor, device, and assigned BAR. It does not map the BAR, and it is not the shell ISO.
 
 `just run` on hardware boards builds the image then prints deployment instructions (no QEMU).
 

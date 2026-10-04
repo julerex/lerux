@@ -1,0 +1,18 @@
+[package]
+name = "rtl8852be-probe"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Config-read the Z97 RTL8852BE through root port 00:1c.6. Does not map the BAR."
+
+[lints]
+workspace = true
+
+[features]
+board-pc_z97_d3h_rtl8852be = []
+
+[dependencies]
+lerux-logging = { path = "../../crates/lerux-logging", features = ["serial"] }
+lerux-rtw8852be = { path = "../../crates/lerux-rtw8852be" }
+sel4 = { workspace = true }
+sel4-microkit = { workspace = true }

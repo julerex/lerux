@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<system>
+    <protection_domain name="serial_driver" priority="2" stack_size="0x10_000">
+        <program_image path="serial-driver.elf" />
+        <ioport id="0" addr="{serial_ioport_addr}" size="8" setvar_id="com1_ioport_id" setvar_addr="com1_ioport_addr" />
+        <irq pin="{serial_ioapic_pin}" vector="{serial_ioapic_vector}" id="0" trigger="level" polarity="high" />
+    </protection_domain>
+
+    <protection_domain name="rtl8852be_probe" priority="1" stack_size="0x10_000">
+        <program_image path="rtl8852be-probe.elf" />
+        <ioport id="0" addr="0xcf8" size="8" setvar_id="pci_ioport_id" setvar_addr="pci_ioport_addr" />
+    </protection_domain>
+
+    <channel>
+        <end pd="serial_driver" id="1" />
+        <end pd="rtl8852be_probe" id="0" pp="true" />
+    </channel>
+</system>

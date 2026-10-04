@@ -2051,6 +2051,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rtl8852be-probe"
+version = "0.1.0"
+dependencies = [
+ "lerux-logging",
+ "lerux-rtw8852be",
+ "sel4",
+ "sel4-microkit",
+]
+
+[[package]]
 name = "rustc-hash"
 version = "2.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

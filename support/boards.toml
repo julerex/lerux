@@ -624,3 +624,14 @@ target = "x86_64-sel4-microkit"
 template = "console-pc.system.template"
 pds = ["shell", "log-server", "serial-driver", "console-driver"]
 system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48 }
+
+# Z97 RTL8852BE config-space probe. Hardware only. Reads root port 00:1c.6,
+# then the device on that port's secondary bus, and logs the id and BAR.
+# Does not map MMIO. Not the shell image. No QEMU model of the card, so no ci.
+[pc_z97_d3h_rtl8852be]
+arch = "x86_64"
+microkit_board = "x86_64_generic"
+target = "x86_64-sel4-microkit"
+template = "rtl8852be-probe.system.template"
+pds = ["rtl8852be-probe", "serial-driver"]
+system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48 }

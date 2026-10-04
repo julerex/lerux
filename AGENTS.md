@@ -64,6 +64,7 @@ Do not drive-by refactor existing `unwrap` sites unless the task requires it.
 - Use `lerux_ipc` and typed messages from `lerux_interface_types` (postcard + serde).
 - On decode failure, return `send_unspecified_error()` rather than panicking.
 - Example pattern: `userspace/pds/echo-server/src/main.rs`.
+- New queue and filesystem code uses `lerux-sddf` (`serial_queue_t`, `fs_cmd_t`, and the other headers named in ADR-011). Do not add a postcard message for a new device or filesystem connection. Postcard remains for protection domains that ADR-011 has not replaced yet.
 
 ### Logging
 

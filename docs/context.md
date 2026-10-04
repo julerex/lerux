@@ -28,6 +28,7 @@ lerux builds **Rust-only userspace** on the formally verified [seL4](https://sel
 | Kernel | Upstream seL4 15.0.0, built from source |
 | Userspace model | seL4 Microkit (static PD layout) |
 | Userspace language | Rust only (no musllibc/relibc in lerux code) |
+| New device and filesystem connections | LionsOS structures in Rust (`lerux-sddf`, [ADR-011](decisions/011-lionsos-structures.md)) |
 | First platform | aarch64 QEMU virt; x86_64 parameterized for follow-up |
 | Dependency fetch | `lerux fetch` git clones (pinned tags) |
 
@@ -41,9 +42,13 @@ Echo IPC and virtio smoke tests run on aarch64, RISC-V virt, and x86 (PCI virtio
 
 The composed board (`qemu_virt_aarch64_composed`) runs `supervisor` (historically `boot-init`) and `hello`+virtio in one system. Both PDs log via serial IPC (multi-client serial driver). `supervisor` notifies `hello` when init is complete before virtio starts (composed-sync). See [`boards.md`](boards.md) and [`plan.md`](plan.md).
 
+## LionsOS structures
+
+The guest remains Rust. New device and filesystem connections use the LionsOS and seL4 Device Driver Framework structures in [`lerux-sddf`](../userspace/crates/lerux-sddf), checked against the LionsOS 0.4.0 headers. Postcard messages remain on protection domains that have not moved yet. See [ADR-011](decisions/011-lionsos-structures.md) and the milestone list in [plan-lionsos.md](plan-lionsos.md).
+
 ## Non-POSIX direction
 
-lerux does **not** target a Linux or POSIX syscall ABI. Apps are Rust protection domains that speak **typed postcard RPC** (`lerux-interface-types`) over Microkit channels — not file descriptors, `errno`, or `fork`/`exec`.
+The legacy image does **not** target a Linux or POSIX syscall ABI. Its apps are Rust protection domains that speak **typed postcard RPC** (`lerux-interface-types`) over Microkit channels — not file descriptors, `errno`, or `fork`/`exec`. New filesystem connections use `fs_cmd_t` instead.
 
 “Arch-like” means **workflow**, not binary compatibility: rolling PD artifact pins, named system profiles, init ordering, shell + core utilities — each implemented as PDs you port deliberately. Unmodified Arch packages (`bash`, `pacman`, `firefox`, etc.) are out of scope. Numbered plans through phase 82 are done: Arch-level capability (phases 50–60, [`plan-arch.md`](plan-arch.md)), QEMU deepening (phases 61–70, [`plan-qemu.md`](plan-qemu.md)), the interactive surface (phases 71–80, [`plan-interactive.md`](plan-interactive.md), [ADR-009](decisions/009-interactive-surface.md)), the signed Wasm runtime (phase 81, [ADR-010](decisions/010-program-runtime.md)), and the Z97 on-screen shell (phase 82). Remaining on-device work is the physical lab in [`plan-arch.md`](plan-arch.md).
 

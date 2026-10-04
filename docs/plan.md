@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-09-26 (Phase 81 signed Wasm runtime; Phase 82 Z97 VGA shell)
+Last updated: 2026-10-04. Numbered phases 1–82 below are done. The active rewrite is [plan-lionsos.md](plan-lionsos.md). Milestone 1 of that plan is done. Milestone 2 is next.
 
 ## Phase 1 — Bring-up
 

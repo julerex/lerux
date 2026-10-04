@@ -20,8 +20,8 @@ default: build
 # Format, clippy, and host tests for host crates (no SDK required)
 check:
     cargo fmt --all --check
-    CARGO_TARGET_DIR={{root}}/build/host cargo clippy -p lerux-cli -p lerux-interface-types -p lerux-tls -p lerux-html -p lerux-web -p lerux-prog -p lerux-rtw8852be --all-targets -- -D warnings
-    CARGO_TARGET_DIR={{root}}/build/host cargo test -p lerux-interface-types -p lerux-tls -p lerux-html -p lerux-web -p lerux-prog -p lerux-rtw8852be -p lerux-cli
+    CARGO_TARGET_DIR={{root}}/build/host cargo clippy -p lerux-cli -p lerux-interface-types -p lerux-tls -p lerux-html -p lerux-web -p lerux-prog -p lerux-rtw8852be -p lerux-sddf --all-targets -- -D warnings
+    CARGO_TARGET_DIR={{root}}/build/host cargo test -p lerux-interface-types -p lerux-tls -p lerux-html -p lerux-web -p lerux-prog -p lerux-rtw8852be -p lerux-cli -p lerux-sddf
     # Phase 60 Track D: PPC priority + service-class band checks (host, no QEMU)
     {{lerux}} profile check-qos
 

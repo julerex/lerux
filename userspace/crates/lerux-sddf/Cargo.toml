@@ -1,0 +1,11 @@
+[package]
+name = "lerux-sddf"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Rust copies of the LionsOS and seL4 Device Driver Framework shared structures"
+
+[lints]
+workspace = true
+
+[dependencies]

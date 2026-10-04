@@ -27,6 +27,7 @@ const ARCH_PASSES: &[(&str, &str)] = &[
 /// Shared userspace library crates linted per-arch (no board features).
 const SHARED_CRATES: &[&str] = &[
     "lerux-serial-queue",
+    "lerux-sddf",
     "lerux-service-async",
     "lerux-fat",
     "lerux-driver-protocols",

@@ -9,6 +9,7 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [../AGENTS.md](../AGENTS.md) | LLM agent instructions for idiomatic Rust in this repo |
 | [context.md](context.md) | Domain language and architectural decisions |
 | [plan.md](plan.md) | Roadmap and cross-arch smoke parity (phases 1–82, done); [Physical RPi4 lab](plan.md#physical-rpi4-lab-hardware-gated) |
+| [plan-lionsos.md](plan-lionsos.md) | LionsOS structures in a Rust guest (milestone 1 done; milestone 2 is next) |
 | [plan-arch.md](plan-arch.md) | Phases 50–60 living checklist; [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated) (hardware-gated) |
 | [plan-qemu.md](plan-qemu.md) | Phases 61–70 living checklist (QEMU-only workstation deepening; done) |
 | [plan-interactive.md](plan-interactive.md) | Phases 71–80 living checklist (done): QEMU interactive surface, Ladybird-shaped browser + Grok-shaped agent |
@@ -23,6 +24,7 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [decisions/008-host-backed-fs.md](decisions/008-host-backed-fs.md) | ADR-008: QEMU host FS inject (`/host`) |
 | [decisions/009-interactive-surface.md](decisions/009-interactive-surface.md) | ADR-009: QEMU software framebuffer; static Ladybird PDs; Grok-shaped agent |
 | [decisions/010-program-runtime.md](decisions/010-program-runtime.md) | ADR-010 / Phase 81: signed Wasm subset in `program-runtime` |
+| [decisions/011-lionsos-structures.md](decisions/011-lionsos-structures.md) | ADR-011: LionsOS queue and filesystem structures in Rust |
 | [decisions/004-service-async.md](decisions/004-service-async.md) | ADR-004: stackless coop async in service PDs |
 | [decisions/005-debug-pd.md](decisions/005-debug-pd.md) | ADR-005: fault parent + QEMU GDB (not libgdb fork) |
 | [debug.md](debug.md) | Phase 46: `test-debug` + gdb-multiarch workflow |

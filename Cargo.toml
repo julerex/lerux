@@ -6,6 +6,7 @@ members = [
     "userspace/pds/serial-driver",
     "userspace/pds/serial-virt",
     "userspace/crates/lerux-serial-queue",
+    "userspace/crates/lerux-sddf",
     "userspace/crates/lerux-driver-protocols",
     "userspace/pds/echo-server",
     "userspace/pds/echo-client",

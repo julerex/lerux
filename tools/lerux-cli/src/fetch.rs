@@ -8,6 +8,7 @@ use crate::process::{ensure_dir, run_checked};
 #[derive(Debug, Deserialize)]
 struct Versions {
     repos: Repos,
+    lionsos: RepoPin,
 }
 
 #[derive(Debug, Deserialize)]
@@ -46,6 +47,28 @@ pub fn fetch(root: &Path) -> Result<()> {
         &versions.repos.microkit.remote,
         &versions.repos.microkit.tag,
     )?;
+    clone_or_checkout(
+        &workspace,
+        "lionsos",
+        &versions.lionsos.remote,
+        &versions.lionsos.tag,
+    )?;
+    // The queue and filesystem headers live in the LionsOS tree and its
+    // dep/sddf submodule. The other submodules are C components and language
+    // runtimes; this checkout does not build them.
+    let lionsos = workspace.join("lionsos");
+    run_checked(
+        "git",
+        &[
+            "-C",
+            &lionsos.to_string_lossy(),
+            "submodule",
+            "update",
+            "--init",
+            "dep/sddf",
+        ],
+    )
+    .context("initialise LionsOS dep/sddf")?;
 
     eprintln!("==> Dependencies ready under {}", workspace.display());
     Ok(())
@@ -127,4 +150,48 @@ pub fn fetch_sdk(root: &Path) -> Result<()> {
     crate::process::write_file(&sdk_path_file, &format!("{}\n", dest.display()))?;
     eprintln!("==> Microkit SDK: {}", dest.display());
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::load_versions;
+    use std::{
+        fs,
+        path::PathBuf,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    #[test]
+    fn parses_lionsos_pin() {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("lerux-versions-{nanos}"));
+        let deps = root.join("deps");
+        fs::create_dir_all(&deps).expect("temp deps");
+        let fixture: PathBuf = deps.join("versions.toml");
+        fs::write(
+            &fixture,
+            r#"
+[repos]
+sel4 = { remote = "https://example.com/seL4.git", tag = "15.0.0" }
+microkit = { remote = "https://example.com/microkit.git", tag = "2.2.0" }
+
+[lionsos]
+tag = "0.4.0"
+remote = "https://github.com/au-ts/lionsos.git"
+"#,
+        )
+        .expect("write fixture");
+
+        let versions = load_versions(&root).expect("parse fixture");
+        assert_eq!(versions.lionsos.tag, "0.4.0");
+        assert_eq!(
+            versions.lionsos.remote,
+            "https://github.com/au-ts/lionsos.git"
+        );
+
+        fs::remove_dir_all(&root).expect("remove temp");
+    }
 }

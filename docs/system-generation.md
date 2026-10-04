@@ -1,6 +1,6 @@
 # System generation (Phase 41) ✅
 
-Last updated: 2026-07-12
+Last updated: 2026-10-04
 
 Companion to [ADR-001](decisions/001-in-tree-system-generation.md) and [plan-au-ts.md](plan-au-ts.md) Phase 41.
 
@@ -51,6 +51,7 @@ Workstation and workstation-rpi4 templates are **channel-free**: channels exist 
 | `tools/lerux-cli/src/channel_consts.rs` | emit + check Rust constants |
 | `tools/lerux-cli/src/system.rs` | `render_system` / `render_profile_system` / SDF diff |
 | `tools/lerux-cli/src/profile.rs` | load profiles, `find_profile_for_board` |
+| `tools/lerux-cli/src/serial_sddf.rs` | write the serial-role config bytes and check them against the rendered system description |
 
 ## Template catalog (layout bodies)
 
@@ -62,6 +63,10 @@ Templates under `userspace/systems/templates/`. Most still embed hand channels f
 | Shared ring MR sizes/vaddrs | — | template layout |
 | Channel ends | — | profile `[[channel]]` |
 | App-only PDs | — | template PD stanza |
+
+## Serial role image
+
+`qemu_virt_aarch64_serial_sddf` has no profile. `serial-sddf.system.template` owns the memory regions and the channel ends. `lerux-sddf::serial_image` fills the config structs with those virtual addresses and channel ids. The command-line interface writes the same bytes during the board build. The Microkit kit cannot prefill a memory region, so each protection domain embeds the bytes in its build script and copies them at start. The host test checks that the rendered system description matches those addresses and channel ids. Agent rules for the padding, the copy, and the notify path are in [AGENTS.md](../AGENTS.md#lionsos-queues-lerux-sddf).
 
 ## Incremental history
 

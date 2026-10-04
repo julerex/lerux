@@ -23,7 +23,7 @@ Apply to all Rust code unless a context-specific section overrides.
 - Import order: `core`/`alloc` → external crates → workspace / `lerux-*` → `crate::` / `super::`.
 - Prefer `From` / `Into` / `TryFrom` over manual bit-twiddling conversions.
 - Use `#[expect(clippy::…)]` with a one-line rationale instead of blanket `#[allow]`.
-- **Channel numbers come from the profile manifest**, not freehand magic. Use named `const` `Channel` values that match `support/profiles/*.toml` `[[channel]]` ends (and the composed SDF). Run `lerux profile check-channels` after renumbering; see Phase 41 / ADR-001 / `docs/system-generation.md`.
+- **Channel numbers come from the profile manifest**, not freehand magic. Use named `const` `Channel` values that match `support/profiles/*.toml` `[[channel]]` ends (and the composed SDF). Run `lerux profile check-channels` after renumbering; see Phase 41 / ADR-001 / `docs/system-generation.md`. An sDDF image with no profile keeps the channel ids in the system template and copies them into the config struct. The protection domain reads that struct. See [LionsOS queues](#lionsos-queues-lerux-sddf).
 - Match existing naming: `HandlerImpl`, `SERIAL_DRIVER`, `*_DRIVER` channel constants.
 - Keep comments purposeful (`why`, invariants, safety); remove stale commentary.
 - Link TODOs to issues: `// TODO(#NNN): …`.
@@ -88,12 +88,34 @@ Stricter than PDs.
 - Restrict `unsafe` to MMIO/HAL boundaries with documented invariants (see `lerux-virtio-hal`).
 - Pin rust-sel4 via workspace git deps at `v4.0.0`; do not vendor copies.
 
+## LionsOS queues (`lerux-sddf`)
+
+Read [docs/plan-lionsos.md](docs/plan-lionsos.md) and [ADR-011](docs/decisions/011-lionsos-structures.md). One milestone per pass. Leave a postcard protection domain in place until that milestone's exit says to delete it. The serial example is `qemu_virt_aarch64_serial_sddf`: `serial_driver`, `serial_virt_tx`, `serial_virt_rx`, and `serial_client`.
+
+### Config bytes
+
+- Fill a `#[repr(C)]` config by zeroing it, then assigning fields. A struct literal leaves padding uninitialized, so two fills of `serial_connection_resource_t` do not compare equal: the `u8` `id` is padded out to the next pointer. `serial_config_from_bytes` is `unsafe` because a `bool` other than 0 or 1 is undefined behavior. The generator writes 0 or 1.
+- The installed Microkit kit is 2.2.0 and cannot prefill a memory region. Do not objcopy a zero `#[link_section]` static. rustc places that static in `.bss`. Each protection domain `build.rs` writes `OUT_DIR/config.bin` from the `lerux-sddf::serial_image` constructors. The domain `include_bytes!` those bytes and copies them into an aligned value. `include_bytes!` has alignment 1. The host and the guest are both 64-bit little-endian, so the pointer-sized virtual addresses survive the copy.
+- The protection domain compiles under `just check-pd` without a board build. It must not read files that `lerux-cli` writes during `build()`. `tools/lerux-cli/src/serial_sddf.rs` writes the same bytes so a host test can compare them with the rendered system description.
+- Template virtual addresses use the same digit grouping as the Rust constants (`0x2_000_000`). `0x2_000_000` and `0x2000000` are the same number and different spellings.
+- Copy a large config once during init. `serial_virt_tx_config_t` is several kilobytes, and the stack is `0x10_000`. Keep queue handles and channel ids in the handler.
+
+### Channels, queues, and the serial device
+
+- The device interrupt is not a field of `serial_driver_config_t`. The template `<irq id>` uses `DRIVER_IRQ_CHANNEL`.
+- Implement `Handler::notified` on every protection domain that can be notified. Implement `Handler::protected` before setting `pp="true"`. Both defaults panic.
+- Microkit zeroes shared pages, so `producer_signalled` starts at 0 and the consumer signals the producer. The client still implements `notified` when that signal only returns transmit space. After an enqueue, the producer notifies the consumer. The consumer notifies the producer only when the queue asks for that signal, then cancels it.
+- Queue indexes use an acquire load for the index the other side writes and a release store for the index this side owns.
+- The QEMU PL011 path reuses `sel4-pl011-driver`. Leave the baud alone. `Write::write` spins while the transmit FIFO is full, so the transmit drain does not arm a transmit interrupt. The C driver in `deps/workspace/lionsos/dep/sddf/drivers/serial/arm/uart.c` ORs `PL011_LCR_PARTY_EN` where a disable was intended. That OR enables parity. The Rust driver does not copy it.
+- Crate and program names use hyphens (`sddf-serial-driver.elf`). Microkit protection-domain names use underscores (`serial_driver`). A search for `serial-driver.elf` also matches `sddf-serial-driver.elf`.
+- `just test-serial-sddf` expects `lerux shell ready` from `serial_enqueue`. The client does not link `lerux-logging`. Keep that substring out of `expect` and `assert` messages.
+
 ## Host tooling (`tools/lerux-cli/**`)
 
 - Use `anyhow::Result` at the CLI boundary; add context with `.context("…")?`.
 - Use `clap` derive for subcommands.
 - No `unwrap()` or `expect()` in production paths — use `?` or `bail!`.
-- `std` only; do not depend on seL4 userspace crates.
+- `std` only; do not depend on seL4 userspace crates. `lerux-sddf` is allowed: it has no seL4 dependency and is the shared layout for the config bytes the command-line interface checks. Do not depend on a protection-domain crate.
 
 ## Quality gates
 
@@ -103,7 +125,7 @@ Run before finishing Rust changes:
 just check
 ```
 
-This runs `cargo fmt --all --check` and clippy on host crates (`lerux-cli`, `lerux-interface-types`). After PD or shared userspace crate changes, also run:
+This runs `cargo fmt --all --check`, clippy and tests for every crate named in the justfile `check` recipe (including `lerux-sddf`), and `lerux profile check-qos`. After protection-domain or shared userspace crate changes, also run:
 
 ```bash
 just check-pd
@@ -119,7 +141,9 @@ CI runs `just check` before the SDK pipeline and `just check-pd` after the SDK a
 
 A few results look like success and are not:
 
-- `lerux-cli` is a binary crate. Test it with `cargo test -p lerux-cli -- <filter>`. There is no `--lib` target. `--exact` needs the full path `module::tests::<name>`. A filter that matches nothing still exits 0; `running 0 tests` is the result.
+- `lerux-cli` is a binary crate. Test it with `cargo test -p lerux-cli -- <filter>`. There is no `--lib` target. `--exact` needs the full path `module::tests::<name>`. A filter matches test function names, not the integration-test file name. Run a file with `cargo test -p <crate> --test <file stem>`. A filter that matches nothing still exits 0; `running 0 tests` is the result.
+- Do not run `just check`, `just check-pd`, and `just test-*` together. `just check` uses `build/host`. `just check-pd` and a smoke share `build/target`, and both invoke `cargo run -p lerux-cli` in the default target directory.
+- Update the milestone status, the board row, and the smoke counts in `docs/ci.md` and the README only after `just check`, `just check-pd`, and that milestone's smokes have passed. The workflow `include` list and those hand-written counts move together. Leave the historical job counts inside `docs/plan.md` as they were.
 - Lint protection domains with `just check-pd`. That command sets up libclang. `cargo clippy` on a PD target without it panics inside bindgen.
 - `ci = true` in `support/boards.toml` is the set `just test-all` runs. GitHub smoke is the `include` list in `.github/workflows/rust.yml`. The job count in `docs/ci.md` and the README is written by hand. A new board name is passed as `--features board-<name>` only when that key exists in the PD `Cargo.toml`.
 - Take a QEMU `-device` property from that binary's `-device <name>,help`. The host kernel's interrupt mode is a different machine. `just test-x86-usb-kbd` covers qemu-xhci and QEMU's `usb-kbd`. The desk keyboard and the Intel xHCI path are the metal boot in `docs/boards.md`.

@@ -1,0 +1,16 @@
+[package]
+name = "sddf-serial-virt-rx"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[lints]
+workspace = true
+
+[dependencies]
+lerux-logging = { path = "../../crates/lerux-logging" }
+lerux-sddf = { path = "../../crates/lerux-sddf" }
+sel4-microkit = { workspace = true }
+
+[build-dependencies]
+lerux-sddf = { path = "../../crates/lerux-sddf" }

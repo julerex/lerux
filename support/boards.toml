@@ -126,6 +126,17 @@ qemu = {}
 ci = true
 system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33 }
 
+# Milestone 2: LionsOS serial roles. The postcard serial path stays on the echo image.
+[qemu_virt_aarch64_serial_sddf]
+arch = "aarch64"
+microkit_board = "qemu_virt_aarch64"
+target = "aarch64-sel4-microkit"
+template = "serial-sddf.system.template"
+pds = ["sddf-serial-driver", "sddf-serial-virt-tx", "sddf-serial-virt-rx", "sddf-serial-client"]
+qemu = {}
+ci = true
+system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33 }
+
 # Phase 74: html-demo parses a baked-in HTML fixture (no NIC / FS).
 [qemu_virt_aarch64_html]
 arch = "aarch64"

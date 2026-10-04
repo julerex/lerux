@@ -2,7 +2,7 @@
 
 Last updated: 2026-10-04
 
-**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is next. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
+**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is next. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
 
 **Goal:** Every lerux guest protection domain stays Rust, and the queues, configuration pages, filesystem messages, and component graph are the same ones LionsOS uses.
 
@@ -74,6 +74,16 @@ Landed:
 **Files:** `userspace/pds/sddf-serial-driver`, `userspace/pds/sddf-serial-virt-tx`, `userspace/pds/sddf-serial-virt-rx`, `userspace/pds/sddf-serial-client`, a system template, and a generator function that fills `serial_driver_config_t`, `serial_virt_tx_config_t`, and `serial_virt_rx_config_t`.
 
 The existing `serial-driver` and `serial-virt` postcard path stay until a later workstation milestone switches the shell and deletes them.
+
+Done.
+
+Landed:
+
+- Protection domains `sddf-serial-driver`, `sddf-serial-virt-tx`, `sddf-serial-virt-rx`, and `sddf-serial-client`. The system names are `serial_driver`, `serial_virt_tx`, `serial_virt_rx`, and `serial_client`. Only `serial_driver` maps the serial device.
+- `lerux_sddf::serial_image` fills `serial_driver_config_t`, `serial_virt_tx_config_t`, `serial_virt_rx_config_t`, and `serial_client_config_t`. Each protection domain build script embeds those bytes. The installed Microkit kit cannot prefill a memory region, so the bytes live in the program image and the protection domain copies them at start.
+- Board `qemu_virt_aarch64_serial_sddf`, template `serial-sddf.system.template`, recipe `just test-serial-sddf`. The continuous integration job is `serial-sddf`.
+- The client writes `lerux shell ready` with `serial_enqueue`.
+- Checked on 2026-10-04: `just check` passed, `just check-pd` passed, `just test-serial-sddf` printed `lerux shell ready`, and `just test-echo` passed.
 
 ## Milestone 3 — Cothreads
 

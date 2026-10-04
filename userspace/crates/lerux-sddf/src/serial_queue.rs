@@ -6,7 +6,7 @@
 
 use core::sync::atomic::{fence, AtomicU32, Ordering};
 
-use crate::serial::{serial_queue_handle_t, serial_queue_t};
+use crate::serial::{serial_connection_resource_t, serial_queue_handle_t, serial_queue_t};
 
 fn load_acquire(word: &AtomicU32) -> u32 {
     word.load(Ordering::Acquire)
@@ -30,6 +30,24 @@ pub unsafe fn serial_queue_init(
     queue_handle.queue = queue;
     queue_handle.capacity = capacity;
     queue_handle.data_region = data_region;
+}
+
+/// # Safety
+///
+/// Same pointer rules as [`serial_queue_init`]. The caller is the producer.
+pub unsafe fn serial_queue_length_producer(queue_handle: &serial_queue_handle_t) -> u32 {
+    unsafe {
+        let tail = (*queue_handle.queue).tail.load(Ordering::Relaxed);
+        let head = load_acquire(&(*queue_handle.queue).head);
+        tail.wrapping_sub(head)
+    }
+}
+
+/// # Safety
+///
+/// Same pointer rules as [`serial_queue_init`]. The caller is the producer.
+pub unsafe fn serial_queue_free(queue_handle: &serial_queue_handle_t) -> u32 {
+    unsafe { queue_handle.capacity - serial_queue_length_producer(queue_handle) }
 }
 
 /// # Safety
@@ -150,6 +168,38 @@ pub unsafe fn serial_cancel_consumer_signal(queue_handle: &serial_queue_handle_t
             .producer_signalled
             .store(1, Ordering::Relaxed);
     }
+}
+
+/// Build a handle for one connection in a serial configuration page.
+///
+/// `connection.data.size` is the queue capacity, matching `serial_queue_init`'s
+/// capacity argument in the transmit and receive virtualisers.
+///
+/// # Safety
+///
+/// `connection.queue.vaddr` and `connection.data.vaddr` must point at shared
+/// memory mapped in this protection domain. `connection.data.size` must be
+/// non-zero and fit in `u32`.
+pub unsafe fn serial_handle_from_connection(
+    connection: &serial_connection_resource_t,
+) -> serial_queue_handle_t {
+    let capacity = connection.data.size as u32;
+    debug_assert_eq!(u64::from(capacity), connection.data.size);
+    debug_assert_ne!(capacity, 0);
+    let mut handle = serial_queue_handle_t {
+        queue: core::ptr::null_mut(),
+        capacity: 0,
+        data_region: core::ptr::null_mut(),
+    };
+    unsafe {
+        serial_queue_init(
+            &mut handle,
+            connection.queue.vaddr.cast(),
+            capacity,
+            connection.data.vaddr,
+        );
+    }
+    handle
 }
 
 /// # Safety

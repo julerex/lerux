@@ -105,6 +105,10 @@ test-virtio:
 test-echo:
     BOARD=qemu_virt_aarch64_echo just test
 
+# LionsOS serial roles: driver, transmit virtualiser, receive virtualiser, one client
+test-serial-sddf:
+    BOARD=qemu_virt_aarch64_serial_sddf just test
+
 # Phase 72: QEMU ramfb + display-server + shared bitmap (display-demo)
 test-display:
     BOARD=qemu_virt_aarch64_display just test

@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<system>
+    <memory_region name="serial_mmio" size="0x1_000" phys_addr="{serial_mmio_phys_addr}" />
+    <memory_region name="serial_tx_driver_queue" size="0x1_000" />
+    <memory_region name="serial_tx_driver_data" size="0x1_000" />
+    <memory_region name="serial_rx_driver_queue" size="0x1_000" />
+    <memory_region name="serial_rx_driver_data" size="0x1_000" />
+    <memory_region name="serial_tx_client_queue" size="0x1_000" />
+    <memory_region name="serial_tx_client_data" size="0x1_000" />
+    <memory_region name="serial_rx_client_queue" size="0x1_000" />
+    <memory_region name="serial_rx_client_data" size="0x1_000" />
+
+    <protection_domain name="serial_driver" priority="4" stack_size="0x10_000">
+        <program_image path="sddf-serial-driver.elf" />
+        <map mr="serial_mmio" vaddr="0x2_000_000" perms="rw" setvar_vaddr="serial_register_block" />
+        <map mr="serial_tx_driver_queue" vaddr="0x3_000_000" perms="rw" cached="true" />
+        <map mr="serial_tx_driver_data" vaddr="0x3_001_000" perms="rw" cached="true" />
+        <map mr="serial_rx_driver_queue" vaddr="0x3_002_000" perms="rw" cached="true" />
+        <map mr="serial_rx_driver_data" vaddr="0x3_003_000" perms="rw" cached="true" />
+        <irq irq="{serial_irq}" id="0" />
+    </protection_domain>
+
+    <protection_domain name="serial_virt_tx" priority="3" stack_size="0x10_000">
+        <program_image path="sddf-serial-virt-tx.elf" />
+        <map mr="serial_tx_driver_queue" vaddr="0x3_000_000" perms="rw" cached="true" />
+        <map mr="serial_tx_driver_data" vaddr="0x3_001_000" perms="rw" cached="true" />
+        <map mr="serial_tx_client_queue" vaddr="0x3_004_000" perms="rw" cached="true" />
+        <map mr="serial_tx_client_data" vaddr="0x3_005_000" perms="rw" cached="true" />
+    </protection_domain>
+
+    <protection_domain name="serial_virt_rx" priority="3" stack_size="0x10_000">
+        <program_image path="sddf-serial-virt-rx.elf" />
+        <map mr="serial_rx_driver_queue" vaddr="0x3_002_000" perms="rw" cached="true" />
+        <map mr="serial_rx_driver_data" vaddr="0x3_003_000" perms="rw" cached="true" />
+        <map mr="serial_rx_client_queue" vaddr="0x3_006_000" perms="rw" cached="true" />
+        <map mr="serial_rx_client_data" vaddr="0x3_007_000" perms="rw" cached="true" />
+    </protection_domain>
+
+    <protection_domain name="serial_client" priority="1" stack_size="0x10_000">
+        <program_image path="sddf-serial-client.elf" />
+        <map mr="serial_tx_client_queue" vaddr="0x3_004_000" perms="rw" cached="true" />
+        <map mr="serial_tx_client_data" vaddr="0x3_005_000" perms="rw" cached="true" />
+        <map mr="serial_rx_client_queue" vaddr="0x3_006_000" perms="rw" cached="true" />
+        <map mr="serial_rx_client_data" vaddr="0x3_007_000" perms="rw" cached="true" />
+    </protection_domain>
+
+    <channel>
+        <end pd="serial_driver" id="1" />
+        <end pd="serial_virt_tx" id="0" />
+    </channel>
+    <channel>
+        <end pd="serial_driver" id="2" />
+        <end pd="serial_virt_rx" id="0" />
+    </channel>
+    <channel>
+        <end pd="serial_virt_tx" id="1" />
+        <end pd="serial_client" id="0" />
+    </channel>
+    <channel>
+        <end pd="serial_virt_rx" id="1" />
+        <end pd="serial_client" id="1" />
+    </channel>
+</system>

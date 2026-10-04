@@ -27,6 +27,7 @@ mod profile;
 mod prog;
 mod qemu;
 mod qos_check;
+mod serial_sddf;
 mod smoke_expects;
 mod system;
 mod tcp_echo;

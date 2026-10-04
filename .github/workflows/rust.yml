@@ -281,6 +281,9 @@ jobs:
           - id: echo
             board: qemu_virt_aarch64_echo
             command: just test-echo
+          - id: serial-sddf
+            board: qemu_virt_aarch64_serial_sddf
+            command: just test-serial-sddf
           - id: display
             board: qemu_virt_aarch64_display
             command: just test-display

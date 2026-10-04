@@ -1,0 +1,19 @@
+[package]
+name = "sddf-serial-driver"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[lints]
+workspace = true
+
+[dependencies]
+embedded-hal-nb = { workspace = true }
+lerux-logging = { path = "../../crates/lerux-logging" }
+lerux-sddf = { path = "../../crates/lerux-sddf" }
+sel4-driver-interfaces = { workspace = true }
+sel4-microkit = { workspace = true }
+sel4-pl011-driver = { workspace = true }
+
+[build-dependencies]
+lerux-sddf = { path = "../../crates/lerux-sddf" }

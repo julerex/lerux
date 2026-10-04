@@ -58,7 +58,7 @@ just test-all
 
 ## CI
 
-GitHub Actions runs on every push to `main`: **check** (`just check`), one **sdk** job (SDK + patched SP804 QEMU), **check-pd** (cross-target clippy on userspace crates), then **44 smoke** matrix jobs (the workflow `include` list). `just test-all` runs every `ci = true` board, a wider set than that list. Local lint: `just check` (host crates) or `just check-all` (host + PD, needs SDK). Details: [`docs/ci.md`](docs/ci.md).
+GitHub Actions runs on every push to `main`: **check** (`just check`), one **sdk** job (SDK + patched SP804 QEMU), **check-pd** (cross-target clippy on userspace crates), then **45 smoke** matrix jobs (the workflow `include` list). `just test-all` runs every `ci = true` board, a wider set than that list. Local lint: `just check` (host crates) or `just check-all` (host + PD, needs SDK). Details: [`docs/ci.md`](docs/ci.md).
 
 ## Architecture
 

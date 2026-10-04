@@ -7,8 +7,9 @@ use core::sync::atomic::{AtomicU32, Ordering};
 
 use lerux_sddf::{
     serial_cancel_consumer_signal, serial_dequeue, serial_enqueue, serial_enqueue_local,
-    serial_queue_handle_t, serial_queue_init, serial_queue_t, serial_request_consumer_signal,
-    serial_require_consumer_signal, serial_update_shared_head, serial_update_shared_tail,
+    serial_queue_free, serial_queue_handle_t, serial_queue_init, serial_queue_t,
+    serial_request_consumer_signal, serial_require_consumer_signal, serial_update_shared_head,
+    serial_update_shared_tail,
 };
 
 struct Harness {
@@ -53,6 +54,19 @@ fn dequeue(harness: &Harness) -> Result<u8, i32> {
     } else {
         Err(status)
     }
+}
+
+#[test]
+fn free_space_shrinks_on_enqueue_and_returns_on_dequeue() {
+    let harness = harness(4);
+    // SAFETY: the harness owns the queue and the data region.
+    assert_eq!(unsafe { serial_queue_free(&harness.handle) }, 4);
+    assert_eq!(enqueue(&harness, b'a'), 0);
+    // SAFETY: the harness owns the queue and the data region.
+    assert_eq!(unsafe { serial_queue_free(&harness.handle) }, 3);
+    assert_eq!(dequeue(&harness).unwrap(), b'a');
+    // SAFETY: the harness owns the queue and the data region.
+    assert_eq!(unsafe { serial_queue_free(&harness.handle) }, 4);
 }
 
 #[test]

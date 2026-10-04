@@ -1,0 +1,15 @@
+[package]
+name = "sddf-serial-client"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[lints]
+workspace = true
+
+[dependencies]
+lerux-sddf = { path = "../../crates/lerux-sddf" }
+sel4-microkit = { workspace = true }
+
+[build-dependencies]
+lerux-sddf = { path = "../../crates/lerux-sddf" }

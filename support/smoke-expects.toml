@@ -50,6 +50,9 @@ expects = [
   "lerux-echo: lerux",
 ]
 
+[boards.qemu_virt_aarch64_serial_sddf]
+expects = ["lerux shell ready"]
+
 [boards.qemu_virt_aarch64_html]
 expects = ["lerux-html: nodes=8"]
 

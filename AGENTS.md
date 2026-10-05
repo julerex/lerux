@@ -142,6 +142,16 @@ Read Milestone 4 in [docs/plan-lionsos.md](docs/plan-lionsos.md). The postcard `
 - `stage_zero` flushes the current transfer block, then zeros the next one. The second table header is written at byte 512 of transfer block 4, which is sector 33. The volume is 512-byte sectors, one sector per cluster, 8192 sectors, 1 reserved sector, 2 tables of 32 sectors, and 512 root entries. Sector 1 is the first table, 33 the second, 65 the root, and 97 the first data sector (cluster 2). Sector S sits in transfer block `S/8` at byte `(S % 8) * 512`. The 4096-byte transfer buffer is a static cell.
 - The server handles open, write, and read. Any other command returns `FS_STATUS_INVALID_COMMAND`. Open accepts create plus write-only, or read-only. A path is an 8.3 name of at most 11 bytes. A free root slot starts with `0x00` or `0xE5`. A write starts at offset 0 and is at most 512 bytes. One file is open, and its descriptor is 0.
 
+## File-descriptor library (`lerux-posix`)
+
+Read Milestone 5 in [docs/plan-lionsos.md](docs/plan-lionsos.md). The host library speaks the filesystem queue. The Milestone 4 protection domains stay as they are.
+
+- Paths are copied as given. Do not add a leading slash.
+- Descriptors 0, 1, and 2 are not stored. The first `open` returns 3.
+- A second call while a command is in flight returns errno 16.
+- `FS_STATUS_NO_FILE` maps to errno 2. `FILE_ERR` and `EPERM` are both 1.
+- `cargo test -p lerux-posix` is the host check. Keep `lerux shell ready` out of that crate.
+
 ## Host tooling (`tools/lerux-cli/**`)
 
 - Use `anyhow::Result` at the CLI boundary; add context with `.context("…")?`.

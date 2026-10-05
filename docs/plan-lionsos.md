@@ -2,7 +2,7 @@
 
 Last updated: 2026-10-05
 
-**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is next. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
+**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is done and is the file-descriptor library. Milestone 6 is next. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
 
 **Goal:** Every lerux guest protection domain stays Rust, and the queues, configuration pages, filesystem messages, and component graph are the same ones LionsOS uses.
 
@@ -125,6 +125,17 @@ The next milestone inherits these limits. The agent rules are in [AGENTS.md](../
 ## Milestone 5 — File-descriptor library
 
 **Exit:** `lerux-posix` on the host, with a fake filesystem queue, implements `open`, `read`, `write`, `mkdir`, `unlink`, `rename`, and `stat`. Status codes map to the `errno` values in the pinned `lib/libc/posix`. `MAX_FDS` defaults to 128. Descriptors 0, 1, and 2 are reserved. `cargo test -p lerux-posix` covers a successful read and `FS_STATUS_NO_FILE`.
+
+Done. No QEMU behavior change.
+
+Landed:
+
+- `userspace/crates/lerux-posix` implements `open`, `read`, `write`, `mkdir`, `unlink`, `rename`, `stat`, and `close` against a fake filesystem queue. The library is `no_std` and depends only on `lerux-sddf`.
+- `MAX_FDS` is 128. Descriptors 0, 1, and 2 are not in the table. The first `open` returns 3.
+- Paths are copied into the share as given. A length above 4095 returns errno 36 and sends no command.
+- Status codes use the mapping in the pinned `lib/libc/posix`. `FS_STATUS_NO_FILE` is errno 2. `FS_STATUS_ERROR` and `FS_STATUS_SERVER_WAS_DENIED` are both errno 1.
+- The host test drives real `fs_queue_t` rings. The Milestone 4 protection domains are unchanged.
+- Checked on 2026-10-05: `cargo test -p lerux-posix` passed, `just check` passed, and `just check-pd` passed.
 
 ## Milestone 6 — Shell file commands
 

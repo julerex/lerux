@@ -1,0 +1,12 @@
+[package]
+name = "lerux-posix"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "File-descriptor client for the LionsOS filesystem queue"
+
+[lints]
+workspace = true
+
+[dependencies]
+lerux-sddf = { path = "../lerux-sddf" }

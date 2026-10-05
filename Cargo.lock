@@ -1379,6 +1379,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "lerux-posix"
+version = "0.1.0"
+dependencies = [
+ "lerux-sddf",
+]
+
+[[package]]
 name = "lerux-prog"
 version = "0.1.0"
 dependencies = [

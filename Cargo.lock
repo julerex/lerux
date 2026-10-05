@@ -2305,6 +2305,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "sddf-shell"
+version = "0.1.0"
+dependencies = [
+ "lerux-cothread",
+ "lerux-posix",
+ "lerux-sddf",
+ "sel4-microkit",
+]
+
+[[package]]
 name = "sec1"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -8,11 +8,12 @@ use core::{mem::zeroed, ptr};
 use lerux_posix::{Errno, Files, Open};
 use lerux_sddf::{
     fs_buffer_t, fs_cmd_t, fs_cmpl_t, fs_completion_enqueue, fs_message_dequeue, fs_msg_t,
-    fs_queue_t, fs_stat_t, FS_CMD_DIR_CREATE, FS_CMD_FILE_CLOSE, FS_CMD_FILE_OPEN,
-    FS_CMD_FILE_READ, FS_CMD_FILE_REMOVE, FS_CMD_FILE_WRITE, FS_CMD_RENAME, FS_CMD_STAT,
-    FS_OPEN_FLAGS_CREATE, FS_STATUS_ALLOCATION_ERROR, FS_STATUS_ALREADY_EXISTS,
-    FS_STATUS_INVALID_BUFFER, FS_STATUS_INVALID_COMMAND, FS_STATUS_INVALID_FD,
-    FS_STATUS_INVALID_NAME, FS_STATUS_NOT_DIRECTORY, FS_STATUS_NO_FILE, FS_STATUS_SUCCESS,
+    fs_queue_t, fs_stat_t, FS_CMD_DIR_CLOSE, FS_CMD_DIR_CREATE, FS_CMD_DIR_OPEN, FS_CMD_DIR_READ,
+    FS_CMD_FILE_CLOSE, FS_CMD_FILE_OPEN, FS_CMD_FILE_READ, FS_CMD_FILE_REMOVE, FS_CMD_FILE_WRITE,
+    FS_CMD_RENAME, FS_CMD_STAT, FS_OPEN_FLAGS_CREATE, FS_STATUS_ALLOCATION_ERROR,
+    FS_STATUS_ALREADY_EXISTS, FS_STATUS_END_OF_DIRECTORY, FS_STATUS_INVALID_BUFFER,
+    FS_STATUS_INVALID_COMMAND, FS_STATUS_INVALID_FD, FS_STATUS_INVALID_NAME,
+    FS_STATUS_NOT_DIRECTORY, FS_STATUS_NO_FILE, FS_STATUS_SUCCESS, FS_STATUS_TOO_MANY_OPEN_FILES,
 };
 
 const SHARE: usize = 0x8000;
@@ -48,11 +49,19 @@ impl Entry {
     }
 }
 
+struct Listing {
+    server: u64,
+    next: usize,
+    /// The flat fake has no children under a named directory.
+    root: bool,
+}
+
 struct Fake {
     command: *mut fs_queue_t,
     completion: *mut fs_queue_t,
     share: *mut u8,
     files: [Option<Entry>; 4],
+    listing: Option<Listing>,
     next_server: u64,
     served: u64,
 }
@@ -76,6 +85,9 @@ impl Fake {
             FS_CMD_FILE_REMOVE => self.on_remove(cmd),
             FS_CMD_RENAME => self.on_rename(cmd),
             FS_CMD_STAT => self.on_stat(cmd),
+            FS_CMD_DIR_OPEN => self.on_dir_open(cmd),
+            FS_CMD_DIR_READ => self.on_dir_read(cmd),
+            FS_CMD_DIR_CLOSE => self.on_dir_close(cmd),
             _ => self.complete_none(cmd.id, FS_STATUS_INVALID_COMMAND),
         }
     }
@@ -262,6 +274,93 @@ impl Fake {
         self.complete_none(cmd.id, FS_STATUS_SUCCESS);
     }
 
+    fn on_dir_open(&mut self, cmd: fs_cmd_t) {
+        if self.listing.is_some() {
+            self.complete_none(cmd.id, FS_STATUS_TOO_MANY_OPEN_FILES);
+            return;
+        }
+        let path = unsafe { cmd.params.dir_open.path };
+        let Some(name) = self.copy_name(path) else {
+            self.complete_none(cmd.id, FS_STATUS_INVALID_NAME);
+            return;
+        };
+        let root = name.is_empty() || name == b"." || name == b"/";
+        if !root {
+            let Some(index) = self.find_name(&name) else {
+                self.complete_none(cmd.id, FS_STATUS_NO_FILE);
+                return;
+            };
+            if !self.files[index].as_ref().is_some_and(|entry| entry.dir) {
+                self.complete_none(cmd.id, FS_STATUS_NO_FILE);
+                return;
+            }
+        }
+        let server = self.alloc_server();
+        self.listing = Some(Listing {
+            server,
+            next: 0,
+            root,
+        });
+        self.complete_fd(cmd.id, server);
+    }
+
+    fn on_dir_read(&mut self, cmd: fs_cmd_t) {
+        let params = unsafe { cmd.params.dir_read };
+        let Some((server, start, root)) = self
+            .listing
+            .as_ref()
+            .map(|listing| (listing.server, listing.next, listing.root))
+        else {
+            self.complete_none(cmd.id, FS_STATUS_INVALID_FD);
+            return;
+        };
+        if server != params.fd {
+            self.complete_none(cmd.id, FS_STATUS_INVALID_FD);
+            return;
+        }
+        if !root {
+            self.complete_end(cmd.id);
+            return;
+        }
+        let found = self.files[start..]
+            .iter()
+            .position(|slot| slot.is_some())
+            .map(|offset| start + offset);
+        let Some(index) = found else {
+            if let Some(listing) = self.listing.as_mut() {
+                listing.next = self.files.len();
+            }
+            self.complete_end(cmd.id);
+            return;
+        };
+        let name = {
+            let entry = self.files[index].as_ref().expect("listed slot is occupied");
+            entry.name[..entry.name_len].to_vec()
+        };
+        if let Some(listing) = self.listing.as_mut() {
+            listing.next = index + 1;
+        }
+        if name.len() as u64 > params.buf.size || !self.write_share(params.buf, &name) {
+            self.complete_none(cmd.id, FS_STATUS_INVALID_BUFFER);
+            return;
+        }
+        self.complete_path(cmd.id, name.len() as u64);
+    }
+
+    fn on_dir_close(&mut self, cmd: fs_cmd_t) {
+        let fd = unsafe { cmd.params.dir_close.fd };
+        if self
+            .listing
+            .as_ref()
+            .is_some_and(|listing| listing.server == fd)
+        {
+            self.listing = None;
+            self.complete_none(cmd.id, FS_STATUS_SUCCESS);
+        } else {
+            self.complete_none(cmd.id, FS_STATUS_INVALID_FD);
+        }
+    }
+
     fn alloc_server(&mut self) -> u64 {
         let server = self.next_server;
         self.next_server += 1;
@@ -346,14 +445,26 @@ impl Fake {
         self.finish(id, status, Complete::None);
     }
 
+    fn complete_path(&mut self, id: u64, len: u64) {
+        self.finish(id, FS_STATUS_SUCCESS, Complete::Path(len));
+    }
+
+    fn complete_end(&mut self, id: u64) {
+        self.finish(id, FS_STATUS_END_OF_DIRECTORY, Complete::Path(0));
+    }
+
     fn finish(&mut self, id: u64, status: u64, data: Complete) {
         let mut cmpl: fs_cmpl_t = unsafe { zeroed() };
         cmpl.id = id;
         cmpl.status = status;
         match data {
-            Complete::Fd(fd) => cmpl.data.file_open.fd = fd,
+            Complete::Fd(fd) => {
+                cmpl.data.file_open.fd = fd;
+                cmpl.data.dir_open.fd = fd;
+            }
             Complete::Read(len) => cmpl.data.file_read.len_read = len,
             Complete::Write(len) => cmpl.data.file_write.len_written = len,
+            Complete::Path(len) => cmpl.data.dir_read.path_len = len,
             Complete::None => {}
         }
         let _ = unsafe { fs_completion_enqueue(self.completion, cmpl) };
@@ -364,6 +475,7 @@ enum Complete {
     Fd(u64),
     Read(u64),
     Write(u64),
+    Path(u64),
     None,
 }
 
@@ -413,6 +525,7 @@ impl Harness {
             completion: completion_ptr,
             share: share_ptr,
             files: [None, None, None, None],
+            listing: None,
             next_server: 1,
             served: 0,
         });
@@ -503,6 +616,27 @@ fn mkdir_then_stat() {
         harness.files.mkdir(b"box").unwrap_err(),
         Errno(Errno::EEXIST)
     );
+}
+
+#[test]
+fn directory_lists_created_names() {
+    let mut harness = Harness::new();
+    let files = &mut harness.files;
+    files.mkdir(b"SUB").expect("mkdir");
+    let created = files.open(b"NOTE.TXT", Open::CreateWrite).expect("create");
+    files.close(created).expect("close");
+    let dir = files.open_dir(b".").expect("open directory");
+    let mut names = Vec::new();
+    let mut buf = [0u8; 32];
+    loop {
+        match files.read_dir(dir, &mut buf).expect("read directory") {
+            None => break,
+            Some(len) => names.push(buf[..len].to_vec()),
+        }
+    }
+    files.close_dir(dir).expect("close directory");
+    assert!(names.iter().any(|name| name == b"SUB"));
+    assert!(names.iter().any(|name| name == b"NOTE.TXT"));
 }
 
 #[test]

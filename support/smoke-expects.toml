@@ -57,7 +57,20 @@ expects = ["cothread waiting", "cothread resumed"]
 expects = ["lerux shell ready"]
 
 [boards.qemu_virt_aarch64_fs_sddf]
-expects = ["fs-sddf read ok"]
+expects = ["lerux shell ready"]
+timeout_secs = 120
+script_timeout_secs = 30
+script = [
+  { send = "mkdir SUB\r", expect = "mkdir ok" },
+  { send = "write NOTE.TXT hello\r", expect = "write ok" },
+  { send = "cat NOTE.TXT\r", expect = "hello" },
+  { send = "ls\r", expect = "NOTE.TXT" },
+  { send = "ls SUB\r", expect = "ls ok" },
+  { send = "mv NOTE.TXT MOVED.TXT\r", expect = "mv ok" },
+  { send = "stat MOVED.TXT\r", expect = "size 5" },
+  { send = "rm MOVED.TXT\r", expect = "rm ok" },
+  { send = "stat SUB\r", expect = "stat dir" },
+]
 
 [boards.qemu_virt_aarch64_html]
 expects = ["lerux-html: nodes=8"]

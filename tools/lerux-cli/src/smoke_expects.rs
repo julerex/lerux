@@ -171,6 +171,21 @@ mod tests {
     }
 
     #[test]
+    fn loads_fs_sddf_script() {
+        let root = repo_root();
+        let t = smoke_test_for_board(&root, "qemu_virt_aarch64_fs_sddf").unwrap();
+        assert_eq!(t.timeout_secs, 120);
+        assert!(
+            t.expects
+                .iter()
+                .any(|expect| expect.contains("shell ready")),
+            "filesystem image boot line"
+        );
+        assert!(t.script.iter().any(|step| step.send.contains("mkdir")));
+        assert!(t.script.iter().any(|step| step.expect.contains("size 5")));
+    }
+
+    #[test]
     fn loads_display_board() {
         let root = repo_root();
         let t = smoke_test_for_board(&root, "qemu_virt_aarch64_display").unwrap();

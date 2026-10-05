@@ -22,7 +22,7 @@ pub struct SmokeTest {
     pub curls: Vec<(String, String)>,
     pub unordered: bool,
     pub timeout_secs: u64,
-    /// After boot expects, optional write/expect pairs (hw-serial only).
+    /// After boot expects, optional write/expect pairs on the guest serial.
     pub script: Vec<ScriptStep>,
     pub script_timeout_secs: u64,
     /// QEMU `send-key` qcodes, injected after boot expects when the board opens QMP.
@@ -80,7 +80,16 @@ fn run_smoke_inner(
 ) -> Result<()> {
     cmd.stdout(Stdio::piped());
     cmd.stderr(Stdio::piped());
+    // An empty script keeps the inherited stdin. Closing the pipe early makes QEMU see end of file.
+    if !test.script.is_empty() {
+        cmd.stdin(Stdio::piped());
+    }
     let mut child = cmd.spawn()?;
+    let mut script_in = if test.script.is_empty() {
+        None
+    } else {
+        Some(child.stdin.take().context("child stdin pipe")?)
+    };
 
     let stdout = child.stdout.take().context("child stdout pipe")?;
     let stderr = child.stderr.take().context("child stderr pipe")?;
@@ -122,11 +131,20 @@ fn run_smoke_inner(
             )?;
             println!("==> PS/2 line matched");
         }
+        if !test.script.is_empty() {
+            let stdin = script_in.as_mut().context("script stdin")?;
+            run_script_steps(&output, &test.script, test.script_timeout_secs, |bytes| {
+                stdin.write_all(bytes)?;
+                stdin.flush()?;
+                Ok(())
+            })?;
+        }
         println!("\n==> smoke test passed");
         Ok(())
     })();
 
     let _ = child.kill();
+    drop(script_in);
     let _ = child.wait();
     let _ = out_thread.join();
     let _ = err_thread.join();
@@ -392,47 +410,61 @@ pub fn run_hw_serial_smoke(test: &SmokeTest) -> Result<()> {
 
     // Scripted REPL (Phase 52): send commands, wait for substrings in the serial log.
     if !test.script.is_empty() {
-        println!("==> running {} scripted serial step(s)…", test.script.len());
-        for (i, step) in test.script.iter().enumerate() {
-            let mark = output.lock().map(|s| s.len()).unwrap_or(0);
-            print!(
-                "    [{}] send {:?} expect {:?}… ",
-                i + 1,
-                step.send.trim_end_matches(['\r', '\n']),
-                step.expect
-            );
-            let _ = std::io::Write::flush(&mut std::io::stdout());
+        run_script_steps(&output, &test.script, test.script_timeout_secs, |bytes| {
             writer
-                .write_all(step.send.as_bytes())
-                .with_context(|| format!("write serial step {}", i + 1))?;
+                .write_all(bytes)
+                .with_context(|| "write serial step")?;
             writer.flush().context("flush serial")?;
-            let step_deadline = Instant::now() + Duration::from_secs(test.script_timeout_secs);
-            loop {
-                let found = output
-                    .lock()
-                    .map(|s| s.len() > mark && capture_contains(&s[mark..], &step.expect))
-                    .unwrap_or(false);
-                if found {
-                    println!("ok");
-                    break;
-                }
-                if Instant::now() >= step_deadline {
-                    bail!(
-                        "script step {} timed out waiting for {:?} after send {:?}",
-                        i + 1,
-                        step.expect,
-                        step.send
-                    );
-                }
-                std::thread::sleep(Duration::from_millis(50));
-            }
-        }
-        println!("==> scripted REPL steps passed");
+            Ok(())
+        })?;
     }
 
     // Detach: reader may block on serial; we don't join forever.
     drop(reader_thread);
     println!("\n==> hardware serial smoke passed");
+    Ok(())
+}
+
+/// Write each script step and wait until the capture after the send contains `expect`.
+fn run_script_steps(
+    output: &std::sync::Arc<std::sync::Mutex<String>>,
+    script: &[ScriptStep],
+    timeout_secs: u64,
+    mut send: impl FnMut(&[u8]) -> Result<()>,
+) -> Result<()> {
+    println!("==> running {} scripted serial step(s)…", script.len());
+    for (i, step) in script.iter().enumerate() {
+        let mark = output.lock().map(|s| s.len()).unwrap_or(0);
+        print!(
+            "    [{}] send {:?} expect {:?}… ",
+            i + 1,
+            step.send.trim_end_matches(['\r', '\n']),
+            step.expect
+        );
+        let _ = std::io::Write::flush(&mut std::io::stdout());
+        send(step.send.as_bytes()).with_context(|| format!("write serial step {}", i + 1))?;
+        let step_deadline = Instant::now() + Duration::from_secs(timeout_secs);
+        loop {
+            let found = output
+                .lock()
+                .map(|s| s.len() > mark && capture_contains(&s[mark..], &step.expect))
+                .unwrap_or(false);
+            if found {
+                println!("ok");
+                break;
+            }
+            if Instant::now() >= step_deadline {
+                bail!(
+                    "script step {} timed out waiting for {:?} after send {:?}",
+                    i + 1,
+                    step.expect,
+                    step.send
+                );
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+    }
+    println!("==> scripted REPL steps passed");
     Ok(())
 }
 

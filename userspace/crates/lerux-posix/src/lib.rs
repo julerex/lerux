@@ -1,7 +1,8 @@
 //! File-descriptor client for the LionsOS filesystem queue.
 //!
 //! One [`Files`] value issues `open`, `read`, `write`, `mkdir`, `unlink`,
-//! `rename`, and `stat`. Paths and file bytes live in a share region. The
+//! `rename`, `stat`, `open_dir`, `read_dir`, and `close_dir`. Paths and file
+//! bytes live in a share region. The
 //! command ring and the completion ring are `fs_queue_t` values from
 //! `lerux-sddf`. The caller supplies a wake function. The host test serves
 //! the queue inside that function. A later guest notifies its server and
@@ -12,15 +13,17 @@
 use core::{mem::size_of, ptr};
 
 use lerux_sddf::{
-    fs_buffer_t, fs_cmd_params_dir_create_t, fs_cmd_params_file_close_t, fs_cmd_params_file_open_t,
+    fs_buffer_t, fs_cmd_params_dir_close_t, fs_cmd_params_dir_create_t, fs_cmd_params_dir_open_t,
+    fs_cmd_params_dir_read_t, fs_cmd_params_file_close_t, fs_cmd_params_file_open_t,
     fs_cmd_params_file_read_t, fs_cmd_params_file_remove_t, fs_cmd_params_file_write_t,
     fs_cmd_params_rename_t, fs_cmd_params_stat_t, fs_cmd_params_t, fs_cmd_t, fs_cmpl_t,
-    fs_command_enqueue, fs_message_dequeue, fs_msg_t, fs_queue_t, fs_stat_t, FS_CMD_DIR_CREATE,
-    FS_CMD_FILE_CLOSE, FS_CMD_FILE_OPEN, FS_CMD_FILE_READ, FS_CMD_FILE_REMOVE, FS_CMD_FILE_WRITE,
-    FS_CMD_RENAME, FS_CMD_STAT, FS_OPEN_FLAGS_CREATE, FS_OPEN_FLAGS_READ_ONLY,
-    FS_OPEN_FLAGS_READ_WRITE, FS_OPEN_FLAGS_WRITE_ONLY, FS_STATUS_ALLOCATION_ERROR,
-    FS_STATUS_ALREADY_EXISTS, FS_STATUS_DIRECTORY_IS_FULL, FS_STATUS_END_OF_DIRECTORY,
-    FS_STATUS_ERROR, FS_STATUS_INVALID_BUFFER, FS_STATUS_INVALID_COMMAND, FS_STATUS_INVALID_FD,
+    fs_command_enqueue, fs_message_dequeue, fs_msg_t, fs_queue_t, fs_stat_t, FS_CMD_DIR_CLOSE,
+    FS_CMD_DIR_CREATE, FS_CMD_DIR_OPEN, FS_CMD_DIR_READ, FS_CMD_FILE_CLOSE, FS_CMD_FILE_OPEN,
+    FS_CMD_FILE_READ, FS_CMD_FILE_REMOVE, FS_CMD_FILE_WRITE, FS_CMD_RENAME, FS_CMD_STAT,
+    FS_OPEN_FLAGS_CREATE, FS_OPEN_FLAGS_READ_ONLY, FS_OPEN_FLAGS_READ_WRITE,
+    FS_OPEN_FLAGS_WRITE_ONLY, FS_STATUS_ALLOCATION_ERROR, FS_STATUS_ALREADY_EXISTS,
+    FS_STATUS_DIRECTORY_IS_FULL, FS_STATUS_END_OF_DIRECTORY, FS_STATUS_ERROR,
+    FS_STATUS_INVALID_BUFFER, FS_STATUS_INVALID_COMMAND, FS_STATUS_INVALID_FD,
     FS_STATUS_INVALID_NAME, FS_STATUS_INVALID_PATH, FS_STATUS_INVALID_READ,
     FS_STATUS_INVALID_WRITE, FS_STATUS_NOT_DIRECTORY, FS_STATUS_NOT_EMPTY, FS_STATUS_NO_FILE,
     FS_STATUS_OUTSTANDING_OPERATIONS, FS_STATUS_SERVER_WAS_DENIED, FS_STATUS_SUCCESS,
@@ -156,10 +159,13 @@ impl Access {
 #[derive(Clone, Copy)]
 enum Slot {
     Empty,
-    Open {
+    File {
         server: u64,
         access: Access,
         cursor: u64,
+    },
+    Dir {
+        server: u64,
     },
 }
 
@@ -230,12 +236,58 @@ impl Files {
         let cmpl = self.exchange(open_command(path, wire_flags(how)))?;
         map_status(cmpl.status)?;
         let server = unsafe { cmpl.data.file_open.fd };
-        self.slots[index] = Slot::Open {
+        self.slots[index] = Slot::File {
             server,
             access: access_of(how),
             cursor: 0,
         };
         Ok(Fd((index + 3) as u8))
+    }
+
+    /// Send `FS_CMD_DIR_OPEN`. The first success returns descriptor 3.
+    pub fn open_dir(&mut self, path: &[u8]) -> Result<Fd, Errno> {
+        self.idle()?;
+        let index = self
+            .slots
+            .iter()
+            .position(|slot| matches!(slot, Slot::Empty))
+            .ok_or(Errno(Errno::EMFILE))?;
+        let path = self.place(path, PATH_A)?;
+        let cmpl = self.exchange(dir_open_command(path))?;
+        map_status(cmpl.status)?;
+        let server = unsafe { cmpl.data.dir_open.fd };
+        self.slots[index] = Slot::Dir { server };
+        Ok(Fd((index + 3) as u8))
+    }
+
+    /// Send `FS_CMD_DIR_READ` and copy one name out.
+    ///
+    /// `Ok(None)` is `FS_STATUS_END_OF_DIRECTORY`. That status is not errno 1
+    /// for a directory read.
+    pub fn read_dir(&mut self, fd: Fd, buf: &mut [u8]) -> Result<Option<usize>, Errno> {
+        self.idle()?;
+        let server = self.dir_live(fd)?;
+        if buf.is_empty() {
+            return Err(Errno(Errno::EINVAL));
+        }
+        let chunk = buf.len().min(DATA_LEN);
+        let buf_desc = fs_buffer_t {
+            offset: DATA_AT as u64,
+            size: chunk as u64,
+        };
+        let cmpl = self.exchange(dir_read_command(server, buf_desc))?;
+        if cmpl.status == FS_STATUS_END_OF_DIRECTORY {
+            return Ok(None);
+        }
+        map_status(cmpl.status)?;
+        let n = unsafe { cmpl.data.dir_read.path_len };
+        let Some(n) = completed_len(n, chunk) else {
+            return Err(Errno(Errno::FILE_ERR));
+        };
+        unsafe {
+            ptr::copy_nonoverlapping(self.share.add(DATA_AT), buf.as_mut_ptr(), n);
+        }
+        Ok(Some(n))
     }
 
     /// Send `FS_CMD_FILE_READ` at the cursor and copy the completed bytes out.
@@ -369,10 +421,23 @@ impl Files {
     /// completion leaves the slot open.
     pub fn close(&mut self, fd: Fd) -> Result<(), Errno> {
         self.idle()?;
-        let Slot::Open { server, .. } = self.slots[index(fd)] else {
+        let Slot::File { server, .. } = self.slots[index(fd)] else {
             return Err(Errno(Errno::EBADF));
         };
         let cmpl = self.exchange(close_command(server))?;
+        self.slots[index(fd)] = Slot::Empty;
+        map_status(cmpl.status)
+    }
+
+    /// Send `FS_CMD_DIR_CLOSE`.
+    ///
+    /// A completion frees the local slot even when the status is not success.
+    pub fn close_dir(&mut self, fd: Fd) -> Result<(), Errno> {
+        self.idle()?;
+        let Slot::Dir { server } = self.slots[index(fd)] else {
+            return Err(Errno(Errno::EBADF));
+        };
+        let cmpl = self.exchange(dir_close_command(server))?;
         self.slots[index(fd)] = Slot::Empty;
         map_status(cmpl.status)
     }
@@ -386,17 +451,24 @@ impl Files {
 
     fn live(&self, fd: Fd) -> Result<(u64, Access, u64), Errno> {
         match self.slots[index(fd)] {
-            Slot::Open {
+            Slot::File {
                 server,
                 access,
                 cursor,
             } => Ok((server, access, cursor)),
-            Slot::Empty => Err(Errno(Errno::EBADF)),
+            Slot::Empty | Slot::Dir { .. } => Err(Errno(Errno::EBADF)),
+        }
+    }
+
+    fn dir_live(&self, fd: Fd) -> Result<u64, Errno> {
+        match self.slots[index(fd)] {
+            Slot::Dir { server } => Ok(server),
+            Slot::Empty | Slot::File { .. } => Err(Errno(Errno::EBADF)),
         }
     }
 
     fn set_cursor(&mut self, fd: Fd, cursor: u64) {
-        if let Slot::Open {
+        if let Slot::File {
             cursor: slot_cursor,
             ..
         } = &mut self.slots[index(fd)]
@@ -559,6 +631,24 @@ fn close_command(fd: u64) -> fs_cmd_t {
 fn dir_create_command(path: fs_buffer_t) -> fs_cmd_t {
     with_params(FS_CMD_DIR_CREATE, |params| {
         params.dir_create = fs_cmd_params_dir_create_t { path };
+    })
+}
+
+fn dir_open_command(path: fs_buffer_t) -> fs_cmd_t {
+    with_params(FS_CMD_DIR_OPEN, |params| {
+        params.dir_open = fs_cmd_params_dir_open_t { path };
+    })
+}
+
+fn dir_read_command(fd: u64, buf: fs_buffer_t) -> fs_cmd_t {
+    with_params(FS_CMD_DIR_READ, |params| {
+        params.dir_read = fs_cmd_params_dir_read_t { fd, buf };
+    })
+}
+
+fn dir_close_command(fd: u64) -> fs_cmd_t {
+    with_params(FS_CMD_DIR_CLOSE, |params| {
+        params.dir_close = fs_cmd_params_dir_close_t { fd };
     })
 }
 

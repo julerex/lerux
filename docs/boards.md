@@ -14,7 +14,7 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `qemu_virt_aarch64_echo` | aarch64 | `just test-echo` | echo client/server + serial |
 | `qemu_virt_aarch64_serial_sddf` | aarch64 | `just test-serial-sddf` | `serial_driver`, `serial_virt_tx`, `serial_virt_rx`, `serial_client` |
 | `qemu_virt_aarch64_cothread` | aarch64 | `just test-cothread` | `cothread_client`, `cothread_peer`, postcard `serial_driver` |
-| `qemu_virt_aarch64_fs_sddf` | aarch64 | `just test-fs-sddf` | `blk_driver`, `blk_virt`, `fatfs`, `fs_client` |
+| `qemu_virt_aarch64_fs_sddf` | aarch64 | `just test-fs-sddf` | `blk_driver`, `serial_driver`, `blk_virt`, `serial_virt_tx`, `serial_virt_rx`, `fatfs`, `shell` |
 | `qemu_virt_aarch64_display` | aarch64 | `just test-display` | Phase 72: ramfb + display-server + display-demo |
 | `qemu_virt_aarch64_html` | aarch64 | `just test-html` | Phase 74: html-demo + lerux-html (baked-in fixture) |
 | `qemu_virt_aarch64_paint` | aarch64 | `just test-paint` | Phase 75: paint-demo + display-server (HTML+CSS → ramfb) |

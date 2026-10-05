@@ -13,6 +13,7 @@ members = [
     "userspace/pds/sddf-blk-virt",
     "userspace/pds/sddf-fatfs",
     "userspace/pds/sddf-fs-client",
+    "userspace/pds/sddf-shell",
     "userspace/pds/cothread-client",
     "userspace/pds/cothread-peer",
     "userspace/crates/lerux-serial-queue",

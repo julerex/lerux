@@ -12,15 +12,20 @@ use lerux_sddf::{
     blk_client_config_t, blk_dequeue_resp, blk_enqueue_req,
     blk_image::{self, BLK_CLIENT_VIRT_CHANNEL, BLK_DATA_VADDR},
     blk_queue_handle_t, blk_queue_init, blk_req_code_t, blk_resp_status_t, blk_storage_info_t,
-    blk_storage_is_ready, fs_cmd_params_file_open_t, fs_cmd_params_file_read_t,
-    fs_cmd_params_file_write_t, fs_cmpl_t, fs_completion_enqueue,
+    blk_storage_is_ready, fs_buffer_t, fs_cmd_params_dir_create_t, fs_cmd_params_dir_open_t,
+    fs_cmd_params_dir_read_t, fs_cmd_params_file_close_t, fs_cmd_params_file_open_t,
+    fs_cmd_params_file_read_t, fs_cmd_params_file_remove_t, fs_cmd_params_file_write_t,
+    fs_cmd_params_rename_t, fs_cmd_params_stat_t, fs_cmpl_t, fs_completion_enqueue,
     fs_image::{self, FS_REGION_SIZE, FS_SERVER_CLIENT_CHANNEL},
-    fs_message_dequeue, fs_msg_t, fs_queue_t, fs_server_config_t, FS_CMD_FILE_OPEN,
-    FS_CMD_FILE_READ, FS_CMD_FILE_WRITE, FS_OPEN_FLAGS_CREATE, FS_OPEN_FLAGS_READ_ONLY,
-    FS_OPEN_FLAGS_WRITE_ONLY, FS_STATUS_DIRECTORY_IS_FULL, FS_STATUS_ERROR,
-    FS_STATUS_INVALID_BUFFER, FS_STATUS_INVALID_COMMAND, FS_STATUS_INVALID_FD,
-    FS_STATUS_INVALID_NAME, FS_STATUS_INVALID_READ, FS_STATUS_INVALID_WRITE, FS_STATUS_NO_FILE,
-    FS_STATUS_SUCCESS, LIONS_FS_MAGIC, SDDF_BLK_MAGIC,
+    fs_message_dequeue, fs_msg_t, fs_queue_t, fs_server_config_t, fs_stat_t, FS_CMD_DIR_CLOSE,
+    FS_CMD_DIR_CREATE, FS_CMD_DIR_OPEN, FS_CMD_DIR_READ, FS_CMD_FILE_CLOSE, FS_CMD_FILE_OPEN,
+    FS_CMD_FILE_READ, FS_CMD_FILE_REMOVE, FS_CMD_FILE_WRITE, FS_CMD_RENAME, FS_CMD_STAT,
+    FS_OPEN_FLAGS_CREATE, FS_OPEN_FLAGS_READ_ONLY, FS_OPEN_FLAGS_WRITE_ONLY,
+    FS_STATUS_ALREADY_EXISTS, FS_STATUS_DIRECTORY_IS_FULL, FS_STATUS_END_OF_DIRECTORY,
+    FS_STATUS_ERROR, FS_STATUS_INVALID_BUFFER, FS_STATUS_INVALID_COMMAND, FS_STATUS_INVALID_FD,
+    FS_STATUS_INVALID_NAME, FS_STATUS_INVALID_READ, FS_STATUS_INVALID_WRITE, FS_STATUS_NOT_EMPTY,
+    FS_STATUS_NO_FILE, FS_STATUS_SUCCESS, FS_STATUS_TOO_MANY_OPEN_FILES, LIONS_FS_MAGIC,
+    SDDF_BLK_MAGIC,
 };
 use sel4_microkit::{protection_domain, Channel, ChannelSet, Handler, Infallible};
 
@@ -44,8 +49,15 @@ const ENTRIES_PER_SECTOR: u16 = 16;
 const DIR_ENTRY: usize = 32;
 const TRANSFER: usize = 4096;
 const SECTORS_PER_TRANSFER: u32 = 8;
-const FILE_CLUSTER: u16 = 2;
 const REQ_ID: u32 = 1;
+const ATTR_DIR: u8 = 0x10;
+const ATTR_ARCHIVE: u8 = 0x20;
+const FD_FILE: u64 = 0;
+const FD_DIR: u64 = 1;
+const CLUSTER_SCAN: u16 = 64;
+const S_IFDIR: u64 = 0o040000;
+const S_IFREG: u64 = 0o100000;
+const MODE_BITS: u64 = 0o777;
 
 #[repr(C, align(16))]
 struct Stack([u8; STACK_SIZE]);
@@ -63,8 +75,21 @@ static STACKS: Stacks = Stacks(UnsafeCell::new(
 struct OpenFile {
     cluster: u16,
     size: u32,
-    fresh: bool,
     dir_index: u16,
+}
+
+#[derive(Clone, Copy)]
+struct OpenDir {
+    cluster: u16,
+    index: u16,
+    limit: u16,
+}
+
+struct DirHit {
+    index: u16,
+    cluster: u16,
+    size: u32,
+    attr: u8,
 }
 
 struct State {
@@ -77,6 +102,7 @@ struct State {
     block_valid: bool,
     block_dirty: bool,
     file: Option<OpenFile>,
+    dir: Option<OpenDir>,
 }
 
 struct StateCell(UnsafeCell<State>);
@@ -98,6 +124,7 @@ static STATE: StateCell = StateCell(UnsafeCell::new(State {
     block_valid: false,
     block_dirty: false,
     file: None,
+    dir: None,
 }));
 
 struct Block([u8; TRANSFER]);
@@ -120,6 +147,7 @@ enum Completion {
     Fd(u64),
     Read(u64),
     Write(u64),
+    DirRead(u64),
 }
 
 fn state() -> *mut State {
@@ -231,8 +259,16 @@ fn serve_one() -> bool {
     let cmd = unsafe { msg.cmd };
     match cmd.r#type {
         FS_CMD_FILE_OPEN => handle_open(cmd.id, unsafe { cmd.params.file_open }),
+        FS_CMD_FILE_CLOSE => handle_close(cmd.id, unsafe { cmd.params.file_close }),
         FS_CMD_FILE_WRITE => handle_write(cmd.id, unsafe { cmd.params.file_write }),
         FS_CMD_FILE_READ => handle_read(cmd.id, unsafe { cmd.params.file_read }),
+        FS_CMD_STAT => handle_stat(cmd.id, unsafe { cmd.params.stat }),
+        FS_CMD_RENAME => handle_rename(cmd.id, unsafe { cmd.params.rename }),
+        FS_CMD_FILE_REMOVE => handle_remove(cmd.id, unsafe { cmd.params.file_remove }),
+        FS_CMD_DIR_CREATE => handle_mkdir(cmd.id, unsafe { cmd.params.dir_create }),
+        FS_CMD_DIR_OPEN => handle_dir_open(cmd.id, unsafe { cmd.params.dir_open }),
+        FS_CMD_DIR_READ => handle_dir_read(cmd.id, unsafe { cmd.params.dir_read }),
+        FS_CMD_DIR_CLOSE => handle_dir_close(cmd.id, unsafe { cmd.params.dir_close.fd }),
         _ => complete(cmd.id, FS_STATUS_INVALID_COMMAND, Completion::Empty),
     }
 }
@@ -260,7 +296,22 @@ fn handle_open(id: u64, params: fs_cmd_params_file_open_t) -> bool {
     }
 }
 
+fn file_busy() -> bool {
+    unsafe { (*state()).file.is_some() }
+}
+
 fn create_file(id: u64, name: &[u8; 11]) -> bool {
+    if file_busy() {
+        return complete(id, FS_STATUS_TOO_MANY_OPEN_FILES, Completion::Empty);
+    }
+    match find_name(name) {
+        Scan::Hit(_) => return complete(id, FS_STATUS_ALREADY_EXISTS, Completion::Empty),
+        Scan::Missing => {}
+        Scan::Failed => {
+            let _ = complete(id, FS_STATUS_ERROR, Completion::Empty);
+            return false;
+        }
+    }
     let slot = match find_free() {
         Scan::Hit(index) => index,
         Scan::Missing => {
@@ -271,36 +322,50 @@ fn create_file(id: u64, name: &[u8; 11]) -> bool {
             return false;
         }
     };
-    if !write_dir(slot, name, FILE_CLUSTER, 0) || !flush_block() {
+    let cluster = match alloc_cluster() {
+        Scan::Hit(cluster) => cluster,
+        Scan::Missing => {
+            return complete(id, FS_STATUS_DIRECTORY_IS_FULL, Completion::Empty);
+        }
+        Scan::Failed => {
+            let _ = complete(id, FS_STATUS_ERROR, Completion::Empty);
+            return false;
+        }
+    };
+    if !set_fat(cluster, 0xFFFF)
+        || !write_dir(slot, name, cluster, 0, ATTR_ARCHIVE)
+        || !flush_block()
+    {
         let _ = complete(id, FS_STATUS_ERROR, Completion::Empty);
         return false;
     }
     unsafe {
         (*state()).file = Some(OpenFile {
-            cluster: FILE_CLUSTER,
+            cluster,
             size: 0,
-            fresh: true,
             dir_index: slot,
         });
     }
-    complete(id, FS_STATUS_SUCCESS, Completion::Fd(0))
+    complete(id, FS_STATUS_SUCCESS, Completion::Fd(FD_FILE))
 }
 
 fn open_read(id: u64, name: &[u8; 11]) -> bool {
+    if file_busy() {
+        return complete(id, FS_STATUS_TOO_MANY_OPEN_FILES, Completion::Empty);
+    }
     match find_name(name) {
-        Scan::Hit((index, cluster, size)) => {
-            if cluster < 2 {
+        Scan::Hit(hit) => {
+            if hit.attr & ATTR_DIR != 0 || hit.cluster < 2 {
                 return complete(id, FS_STATUS_ERROR, Completion::Empty);
             }
             unsafe {
                 (*state()).file = Some(OpenFile {
-                    cluster,
-                    size,
-                    fresh: false,
-                    dir_index: index,
+                    cluster: hit.cluster,
+                    size: hit.size,
+                    dir_index: hit.index,
                 });
             }
-            complete(id, FS_STATUS_SUCCESS, Completion::Fd(0))
+            complete(id, FS_STATUS_SUCCESS, Completion::Fd(FD_FILE))
         }
         Scan::Missing => complete(id, FS_STATUS_NO_FILE, Completion::Empty),
         Scan::Failed => {
@@ -310,11 +375,21 @@ fn open_read(id: u64, name: &[u8; 11]) -> bool {
     }
 }
 
+fn handle_close(id: u64, params: fs_cmd_params_file_close_t) -> bool {
+    if params.fd != FD_FILE || unsafe { (*state()).file.is_none() } {
+        return complete(id, FS_STATUS_INVALID_FD, Completion::Empty);
+    }
+    unsafe {
+        (*state()).file = None;
+    }
+    complete(id, FS_STATUS_SUCCESS, Completion::Empty)
+}
+
 fn handle_write(id: u64, params: fs_cmd_params_file_write_t) -> bool {
     let Some(file) = (unsafe { (*state()).file }) else {
         return complete(id, FS_STATUS_INVALID_FD, Completion::Empty);
     };
-    if params.fd != 0 {
+    if params.fd != FD_FILE {
         return complete(id, FS_STATUS_INVALID_FD, Completion::Empty);
     }
     if params.offset != 0 || params.buf.size == 0 || params.buf.size > SECTOR_BYTES as u64 {
@@ -337,17 +412,13 @@ fn handle_write(id: u64, params: fs_cmd_params_file_write_t) -> bool {
     let Ok(size) = u32::try_from(len) else {
         return complete(id, FS_STATUS_INVALID_WRITE, Completion::Empty);
     };
-    if !update_size(file.dir_index, size)
-        || (file.fresh && !mark_fat(file.cluster))
-        || !flush_block()
-    {
+    if !update_size(file.dir_index, size) || !flush_block() {
         let _ = complete(id, FS_STATUS_ERROR, Completion::Empty);
         return false;
     }
     unsafe {
         if let Some(open) = (*state()).file.as_mut() {
             open.size = size;
-            open.fresh = false;
         }
     }
     complete(id, FS_STATUS_SUCCESS, Completion::Write(params.buf.size))
@@ -357,7 +428,7 @@ fn handle_read(id: u64, params: fs_cmd_params_file_read_t) -> bool {
     let Some(file) = (unsafe { (*state()).file }) else {
         return complete(id, FS_STATUS_INVALID_FD, Completion::Empty);
     };
-    if params.fd != 0 {
+    if params.fd != FD_FILE {
         return complete(id, FS_STATUS_INVALID_FD, Completion::Empty);
     }
     if params.offset != 0 {
@@ -405,7 +476,7 @@ fn handle_read(id: u64, params: fs_cmd_params_file_read_t) -> bool {
     complete(id, FS_STATUS_SUCCESS, Completion::Read(len_read))
 }
 
-fn find_name(name: &[u8; 11]) -> Scan<(u16, u16, u32)> {
+fn find_name(name: &[u8; 11]) -> Scan<DirHit> {
     for index in 0..ROOT_ENTRIES {
         let mut entry = [0u8; DIR_ENTRY];
         if !read_entry(index, &mut entry) {
@@ -418,12 +489,19 @@ fn find_name(name: &[u8; 11]) -> Scan<(u16, u16, u32)> {
             continue;
         }
         if entry[..11] == *name {
-            let cluster = u16::from_le_bytes([entry[26], entry[27]]);
-            let size = u32::from_le_bytes([entry[28], entry[29], entry[30], entry[31]]);
-            return Scan::Hit((index, cluster, size));
+            return Scan::Hit(hit_from(index, &entry));
         }
     }
     Scan::Missing
+}
+
+fn hit_from(index: u16, entry: &[u8; DIR_ENTRY]) -> DirHit {
+    DirHit {
+        index,
+        cluster: u16::from_le_bytes([entry[26], entry[27]]),
+        size: u32::from_le_bytes([entry[28], entry[29], entry[30], entry[31]]),
+        attr: entry[11],
+    }
 }
 
 fn find_free() -> Scan<u16> {
@@ -453,17 +531,20 @@ fn read_entry(index: u16, dest: &mut [u8; DIR_ENTRY]) -> bool {
     true
 }
 
-fn write_dir(index: u16, name: &[u8; 11], cluster: u16, size: u32) -> bool {
+fn write_dir(index: u16, name: &[u8; 11], cluster: u16, size: u32, attr: u8) -> bool {
     let lba = ROOT_LBA + u32::from(index / ENTRIES_PER_SECTOR);
     let off = usize::from(index % ENTRIES_PER_SECTOR) * DIR_ENTRY;
     edit_sector(lba, |sector| {
-        let entry = &mut sector[off..off + DIR_ENTRY];
-        entry.fill(0);
-        entry[..11].copy_from_slice(name);
-        entry[11] = 0x20;
-        entry[26..28].copy_from_slice(&cluster.to_le_bytes());
-        entry[28..32].copy_from_slice(&size.to_le_bytes());
+        put_entry(&mut sector[off..off + DIR_ENTRY], name, cluster, size, attr);
     })
+}
+
+fn put_entry(entry: &mut [u8], name: &[u8; 11], cluster: u16, size: u32, attr: u8) {
+    entry.fill(0);
+    entry[..11].copy_from_slice(name);
+    entry[11] = attr;
+    entry[26..28].copy_from_slice(&cluster.to_le_bytes());
+    entry[28..32].copy_from_slice(&size.to_le_bytes());
 }
 
 fn update_size(index: u16, size: u32) -> bool {
@@ -474,16 +555,468 @@ fn update_size(index: u16, size: u32) -> bool {
     })
 }
 
-fn mark_fat(cluster: u16) -> bool {
+fn set_fat(cluster: u16, value: u16) -> bool {
     let byte = usize::from(cluster) * 2;
     let sector_index = u32::try_from(byte / SECTOR_BYTES).unwrap_or(0);
     let within = byte % SECTOR_BYTES;
     for base in [FAT1_LBA, FAT2_LBA] {
         if !edit_sector(base + sector_index, |sector| {
-            sector[within..within + 2].copy_from_slice(&0xFFFFu16.to_le_bytes());
+            sector[within..within + 2].copy_from_slice(&value.to_le_bytes());
         }) {
             return false;
         }
+    }
+    true
+}
+
+fn read_fat(cluster: u16) -> Scan<u16> {
+    let byte = usize::from(cluster) * 2;
+    let sector_index = u32::try_from(byte / SECTOR_BYTES).unwrap_or(0);
+    let within = byte % SECTOR_BYTES;
+    let lba = FAT1_LBA + sector_index;
+    if !load_block(u64::from(lba / SECTORS_PER_TRANSFER)) {
+        return Scan::Failed;
+    }
+    let offset = ((lba % SECTORS_PER_TRANSFER) as usize) * SECTOR_BYTES + within;
+    // SAFETY: the File Allocation Table entry sits inside the loaded transfer block.
+    let bytes = unsafe { &*block() };
+    Scan::Hit(u16::from_le_bytes([bytes[offset], bytes[offset + 1]]))
+}
+
+fn alloc_cluster() -> Scan<u16> {
+    for cluster in 2..CLUSTER_SCAN {
+        match read_fat(cluster) {
+            Scan::Hit(0) => return Scan::Hit(cluster),
+            Scan::Hit(_) => {}
+            Scan::Missing => return Scan::Missing,
+            Scan::Failed => return Scan::Failed,
+        }
+    }
+    Scan::Missing
+}
+
+fn handle_stat(id: u64, params: fs_cmd_params_stat_t) -> bool {
+    if params.buf.size < core::mem::size_of::<fs_stat_t>() as u64 {
+        return complete(id, FS_STATUS_INVALID_BUFFER, Completion::Empty);
+    }
+    let mut raw = [0u8; 11];
+    let hit = if is_root_path_buf(params.path) {
+        None
+    } else {
+        let Some(name) = read_packed_name(params.path, &mut raw) else {
+            return complete(id, FS_STATUS_INVALID_NAME, Completion::Empty);
+        };
+        match find_name(&name) {
+            Scan::Hit(hit) => Some(hit),
+            Scan::Missing => return complete(id, FS_STATUS_NO_FILE, Completion::Empty),
+            Scan::Failed => {
+                let _ = complete(id, FS_STATUS_ERROR, Completion::Empty);
+                return false;
+            }
+        }
+    };
+    let mut stat: fs_stat_t = unsafe { core::mem::zeroed() };
+    stat.blksize = SECTOR_BYTES as u64;
+    match hit {
+        None => {
+            stat.mode = S_IFDIR | MODE_BITS;
+            stat.ino = 1;
+        }
+        Some(hit) => {
+            stat.size = u64::from(hit.size);
+            stat.ino = u64::from(hit.index) + 2;
+            stat.mode = if hit.attr & ATTR_DIR != 0 {
+                S_IFDIR | MODE_BITS
+            } else {
+                S_IFREG | MODE_BITS
+            };
+        }
+    }
+    if !write_share(params.buf, &stat) {
+        return complete(id, FS_STATUS_INVALID_BUFFER, Completion::Empty);
+    }
+    complete(id, FS_STATUS_SUCCESS, Completion::Empty)
+}
+
+fn handle_rename(id: u64, params: fs_cmd_params_rename_t) -> bool {
+    let mut old_raw = [0u8; 11];
+    let mut new_raw = [0u8; 11];
+    let Some(old) = read_packed_name(params.old_path, &mut old_raw) else {
+        return complete(id, FS_STATUS_INVALID_NAME, Completion::Empty);
+    };
+    let Some(new) = read_packed_name(params.new_path, &mut new_raw) else {
+        return complete(id, FS_STATUS_INVALID_NAME, Completion::Empty);
+    };
+    let hit = match find_name(&old) {
+        Scan::Hit(hit) => hit,
+        Scan::Missing => return complete(id, FS_STATUS_NO_FILE, Completion::Empty),
+        Scan::Failed => {
+            let _ = complete(id, FS_STATUS_ERROR, Completion::Empty);
+            return false;
+        }
+    };
+    if old != new {
+        match find_name(&new) {
+            Scan::Hit(_) => return complete(id, FS_STATUS_ALREADY_EXISTS, Completion::Empty),
+            Scan::Missing => {}
+            Scan::Failed => {
+                let _ = complete(id, FS_STATUS_ERROR, Completion::Empty);
+                return false;
+            }
+        }
+    }
+    if !rename_entry(hit.index, &new) || !flush_block() {
+        let _ = complete(id, FS_STATUS_ERROR, Completion::Empty);
+        return false;
+    }
+    complete(id, FS_STATUS_SUCCESS, Completion::Empty)
+}
+
+fn handle_remove(id: u64, params: fs_cmd_params_file_remove_t) -> bool {
+    let mut raw = [0u8; 11];
+    let Some(name) = read_packed_name(params.path, &mut raw) else {
+        return complete(id, FS_STATUS_INVALID_NAME, Completion::Empty);
+    };
+    let hit = match find_name(&name) {
+        Scan::Hit(hit) => hit,
+        Scan::Missing => return complete(id, FS_STATUS_NO_FILE, Completion::Empty),
+        Scan::Failed => {
+            let _ = complete(id, FS_STATUS_ERROR, Completion::Empty);
+            return false;
+        }
+    };
+    if hit.attr & ATTR_DIR != 0 {
+        match directory_empty(hit.cluster) {
+            Scan::Hit(true) => {}
+            Scan::Hit(false) => return complete(id, FS_STATUS_NOT_EMPTY, Completion::Empty),
+            Scan::Missing => return complete(id, FS_STATUS_ERROR, Completion::Empty),
+            Scan::Failed => {
+                let _ = complete(id, FS_STATUS_ERROR, Completion::Empty);
+                return false;
+            }
+        }
+    }
+    let free = if hit.cluster >= 2 {
+        set_fat(hit.cluster, 0)
+    } else {
+        true
+    };
+    if !free || !mark_deleted(hit.index) || !flush_block() {
+        let _ = complete(id, FS_STATUS_ERROR, Completion::Empty);
+        return false;
+    }
+    unsafe {
+        if (*state())
+            .file
+            .as_ref()
+            .is_some_and(|file| file.dir_index == hit.index)
+        {
+            (*state()).file = None;
+        }
+    }
+    complete(id, FS_STATUS_SUCCESS, Completion::Empty)
+}
+
+fn handle_mkdir(id: u64, params: fs_cmd_params_dir_create_t) -> bool {
+    let mut raw = [0u8; 11];
+    let Some(name) = read_packed_name(params.path, &mut raw) else {
+        return complete(id, FS_STATUS_INVALID_NAME, Completion::Empty);
+    };
+    match find_name(&name) {
+        Scan::Hit(_) => return complete(id, FS_STATUS_ALREADY_EXISTS, Completion::Empty),
+        Scan::Missing => {}
+        Scan::Failed => {
+            let _ = complete(id, FS_STATUS_ERROR, Completion::Empty);
+            return false;
+        }
+    }
+    let slot = match find_free() {
+        Scan::Hit(index) => index,
+        Scan::Missing => return complete(id, FS_STATUS_DIRECTORY_IS_FULL, Completion::Empty),
+        Scan::Failed => {
+            let _ = complete(id, FS_STATUS_ERROR, Completion::Empty);
+            return false;
+        }
+    };
+    let cluster = match alloc_cluster() {
+        Scan::Hit(cluster) => cluster,
+        Scan::Missing => return complete(id, FS_STATUS_DIRECTORY_IS_FULL, Completion::Empty),
+        Scan::Failed => {
+            let _ = complete(id, FS_STATUS_ERROR, Completion::Empty);
+            return false;
+        }
+    };
+    if !set_fat(cluster, 0xFFFF)
+        || !format_directory(cluster)
+        || !write_dir(slot, &name, cluster, 0, ATTR_DIR)
+        || !flush_block()
+    {
+        let _ = complete(id, FS_STATUS_ERROR, Completion::Empty);
+        return false;
+    }
+    complete(id, FS_STATUS_SUCCESS, Completion::Empty)
+}
+
+fn handle_dir_open(id: u64, params: fs_cmd_params_dir_open_t) -> bool {
+    if unsafe { (*state()).dir.is_some() } {
+        return complete(id, FS_STATUS_TOO_MANY_OPEN_FILES, Completion::Empty);
+    }
+    let opened = if is_root_path_buf(params.path) {
+        OpenDir {
+            cluster: 0,
+            index: 0,
+            limit: ROOT_ENTRIES,
+        }
+    } else {
+        let mut raw = [0u8; 11];
+        let Some(name) = read_packed_name(params.path, &mut raw) else {
+            return complete(id, FS_STATUS_INVALID_NAME, Completion::Empty);
+        };
+        match find_name(&name) {
+            Scan::Hit(hit) if hit.attr & ATTR_DIR != 0 && hit.cluster >= 2 => OpenDir {
+                cluster: hit.cluster,
+                index: 0,
+                limit: ENTRIES_PER_SECTOR,
+            },
+            Scan::Hit(_) | Scan::Missing => {
+                return complete(id, FS_STATUS_NO_FILE, Completion::Empty);
+            }
+            Scan::Failed => {
+                let _ = complete(id, FS_STATUS_ERROR, Completion::Empty);
+                return false;
+            }
+        }
+    };
+    unsafe {
+        (*state()).dir = Some(opened);
+    }
+    complete(id, FS_STATUS_SUCCESS, Completion::Fd(FD_DIR))
+}
+
+fn handle_dir_read(id: u64, params: fs_cmd_params_dir_read_t) -> bool {
+    let Some(dir) = (unsafe { (*state()).dir }) else {
+        return complete(id, FS_STATUS_INVALID_FD, Completion::Empty);
+    };
+    if params.fd != FD_DIR {
+        return complete(id, FS_STATUS_INVALID_FD, Completion::Empty);
+    }
+    let mut index = dir.index;
+    while index < dir.limit {
+        let mut entry = [0u8; DIR_ENTRY];
+        if !read_placed(dir.cluster, index, &mut entry) {
+            let _ = complete(id, FS_STATUS_ERROR, Completion::Empty);
+            return false;
+        }
+        index += 1;
+        if entry[0] == 0x00 {
+            unsafe {
+                if let Some(open) = (*state()).dir.as_mut() {
+                    open.index = index;
+                }
+            }
+            return complete(id, FS_STATUS_END_OF_DIRECTORY, Completion::DirRead(0));
+        }
+        if entry[0] == 0xE5 || is_dot(&entry) {
+            continue;
+        }
+        let (shown, len) = display_name(&entry);
+        if (len as u64) > params.buf.size {
+            return complete(id, FS_STATUS_INVALID_BUFFER, Completion::Empty);
+        }
+        if !copy_to_share(params.buf.offset, &shown[..len]) {
+            return complete(id, FS_STATUS_INVALID_BUFFER, Completion::Empty);
+        }
+        unsafe {
+            if let Some(open) = (*state()).dir.as_mut() {
+                open.index = index;
+            }
+        }
+        return complete(id, FS_STATUS_SUCCESS, Completion::DirRead(len as u64));
+    }
+    complete(id, FS_STATUS_END_OF_DIRECTORY, Completion::DirRead(0))
+}
+
+fn handle_dir_close(id: u64, fd: u64) -> bool {
+    if fd != FD_DIR || unsafe { (*state()).dir.is_none() } {
+        return complete(id, FS_STATUS_INVALID_FD, Completion::Empty);
+    }
+    unsafe {
+        (*state()).dir = None;
+    }
+    complete(id, FS_STATUS_SUCCESS, Completion::Empty)
+}
+
+fn is_root_path_buf(path: fs_buffer_t) -> bool {
+    if path.size == 0 {
+        return true;
+    }
+    if path.size > 11 {
+        return false;
+    }
+    let Ok(size) = usize::try_from(path.size) else {
+        return false;
+    };
+    let mut raw = [0u8; 11];
+    if !copy_share(path.offset, size, &mut raw[..size]) {
+        return false;
+    }
+    raw[..size] == *b"." || raw[..size] == *b"/"
+}
+
+fn read_packed_name(path: fs_buffer_t, raw: &mut [u8; 11]) -> Option<[u8; 11]> {
+    if path.size > 11 {
+        return None;
+    }
+    let size = usize::try_from(path.size).ok()?;
+    if !copy_share(path.offset, size, &mut raw[..size]) {
+        return None;
+    }
+    pack_name(&raw[..size])
+}
+
+fn read_placed(cluster: u16, index: u16, dest: &mut [u8; DIR_ENTRY]) -> bool {
+    if cluster == 0 {
+        return read_entry(index, dest);
+    }
+    let lba = DATA_LBA + u32::from(cluster - 2);
+    if !load_block(u64::from(lba / SECTORS_PER_TRANSFER)) {
+        return false;
+    }
+    let offset =
+        ((lba % SECTORS_PER_TRANSFER) as usize) * SECTOR_BYTES + usize::from(index) * DIR_ENTRY;
+    // SAFETY: one directory cluster is one sector, and the entry sits inside it.
+    unsafe {
+        dest.copy_from_slice(&(&*block())[offset..offset + DIR_ENTRY]);
+    }
+    true
+}
+
+fn directory_empty(cluster: u16) -> Scan<bool> {
+    if cluster < 2 {
+        return Scan::Missing;
+    }
+    for index in 0..ENTRIES_PER_SECTOR {
+        let mut entry = [0u8; DIR_ENTRY];
+        if !read_placed(cluster, index, &mut entry) {
+            return Scan::Failed;
+        }
+        if entry[0] == 0x00 {
+            return Scan::Hit(true);
+        }
+        if entry[0] == 0xE5 || is_dot(&entry) {
+            continue;
+        }
+        return Scan::Hit(false);
+    }
+    Scan::Hit(true)
+}
+
+fn format_directory(cluster: u16) -> bool {
+    let lba = DATA_LBA + u32::from(cluster - 2);
+    let dot = dot_name(1);
+    let dotdot = dot_name(2);
+    edit_sector(lba, |sector| {
+        sector.fill(0);
+        put_entry(&mut sector[..DIR_ENTRY], &dot, cluster, 0, ATTR_DIR);
+        put_entry(
+            &mut sector[DIR_ENTRY..DIR_ENTRY * 2],
+            &dotdot,
+            0,
+            0,
+            ATTR_DIR,
+        );
+    })
+}
+
+fn rename_entry(index: u16, name: &[u8; 11]) -> bool {
+    let lba = ROOT_LBA + u32::from(index / ENTRIES_PER_SECTOR);
+    let off = usize::from(index % ENTRIES_PER_SECTOR) * DIR_ENTRY;
+    edit_sector(lba, |sector| {
+        sector[off..off + 11].copy_from_slice(name);
+    })
+}
+
+fn mark_deleted(index: u16) -> bool {
+    let lba = ROOT_LBA + u32::from(index / ENTRIES_PER_SECTOR);
+    let off = usize::from(index % ENTRIES_PER_SECTOR) * DIR_ENTRY;
+    edit_sector(lba, |sector| {
+        sector[off] = 0xE5;
+    })
+}
+
+fn is_dot(entry: &[u8; DIR_ENTRY]) -> bool {
+    entry[0] == b'.' && (entry[1] == b' ' || entry[1] == b'.')
+}
+
+fn dot_name(dots: usize) -> [u8; 11] {
+    let mut name = [b' '; 11];
+    for byte in name.iter_mut().take(dots) {
+        *byte = b'.';
+    }
+    name
+}
+
+fn display_name(entry: &[u8; DIR_ENTRY]) -> ([u8; 12], usize) {
+    let mut shown = [0u8; 12];
+    let mut len = 0;
+    for &byte in &entry[..8] {
+        if byte == b' ' {
+            break;
+        }
+        shown[len] = byte;
+        len += 1;
+    }
+    if entry[8] != b' ' {
+        shown[len] = b'.';
+        len += 1;
+        for &byte in &entry[8..11] {
+            if byte == b' ' {
+                break;
+            }
+            shown[len] = byte;
+            len += 1;
+        }
+    }
+    (shown, len)
+}
+
+fn write_share<T: Copy>(buf: fs_buffer_t, value: &T) -> bool {
+    let size = core::mem::size_of::<T>();
+    if buf.size < size as u64 {
+        return false;
+    }
+    let Ok(offset) = usize::try_from(buf.offset) else {
+        return false;
+    };
+    let Ok(share_len) = usize::try_from(FS_REGION_SIZE) else {
+        return false;
+    };
+    if offset.checked_add(size).is_none_or(|end| end > share_len) {
+        return false;
+    }
+    // SAFETY: `offset` is inside the mapped share and holds one `T`.
+    unsafe {
+        core::ptr::write_unaligned((*state()).share.add(offset).cast::<T>(), *value);
+    }
+    true
+}
+
+fn copy_to_share(offset: u64, src: &[u8]) -> bool {
+    let Ok(offset) = usize::try_from(offset) else {
+        return false;
+    };
+    let Ok(share_len) = usize::try_from(FS_REGION_SIZE) else {
+        return false;
+    };
+    if offset
+        .checked_add(src.len())
+        .is_none_or(|end| end > share_len)
+    {
+        return false;
+    }
+    // SAFETY: the destination range is inside the mapped share.
+    unsafe {
+        core::ptr::copy_nonoverlapping(src.as_ptr(), (*state()).share.add(offset), src.len());
     }
     true
 }
@@ -548,7 +1081,9 @@ fn upper(byte: u8) -> u8 {
 }
 
 fn complete(id: u64, status: u64, data: Completion) -> bool {
-    if status != FS_STATUS_SUCCESS {
+    // End of directory is a normal directory read. Logging it writes the debug
+    // UART while the serial driver owns the device.
+    if status != FS_STATUS_SUCCESS && status != FS_STATUS_END_OF_DIRECTORY {
         log::info!("fatfs: status {status}");
     }
     let mut cmpl: fs_cmpl_t = unsafe { core::mem::zeroed() };
@@ -556,9 +1091,13 @@ fn complete(id: u64, status: u64, data: Completion) -> bool {
     cmpl.status = status;
     match data {
         Completion::Empty => {}
-        Completion::Fd(fd) => cmpl.data.file_open.fd = fd,
+        Completion::Fd(fd) => {
+            cmpl.data.file_open.fd = fd;
+            cmpl.data.dir_open.fd = fd;
+        }
         Completion::Read(len) => cmpl.data.file_read.len_read = len,
         Completion::Write(len) => cmpl.data.file_write.len_written = len,
+        Completion::DirRead(len) => cmpl.data.dir_read.path_len = len,
     }
     // SAFETY: this protection domain is the producer of the completion ring.
     if unsafe { fs_completion_enqueue((*state()).completions, cmpl) } != 0 {

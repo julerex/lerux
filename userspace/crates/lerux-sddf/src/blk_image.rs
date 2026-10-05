@@ -14,13 +14,14 @@ use crate::{
 
 pub const BLK_PAGE_SIZE: u64 = 0x1_000;
 
-pub const BLK_STORAGE_INFO_VADDR: u64 = 0x3_000_000;
+/// Block regions start at `0x4_000_000` so the serial queues can keep `0x3_000_000`.
+pub const BLK_STORAGE_INFO_VADDR: u64 = 0x4_000_000;
 pub const BLK_STORAGE_INFO_SIZE: u64 = 0x1_000;
-pub const BLK_DRIVER_REQ_QUEUE_VADDR: u64 = 0x3_001_000;
-pub const BLK_DRIVER_RESP_QUEUE_VADDR: u64 = 0x3_002_000;
-pub const BLK_CLIENT_REQ_QUEUE_VADDR: u64 = 0x3_003_000;
-pub const BLK_CLIENT_RESP_QUEUE_VADDR: u64 = 0x3_004_000;
-pub const BLK_DATA_VADDR: u64 = 0x3_010_000;
+pub const BLK_DRIVER_REQ_QUEUE_VADDR: u64 = 0x4_001_000;
+pub const BLK_DRIVER_RESP_QUEUE_VADDR: u64 = 0x4_002_000;
+pub const BLK_CLIENT_REQ_QUEUE_VADDR: u64 = 0x4_003_000;
+pub const BLK_CLIENT_RESP_QUEUE_VADDR: u64 = 0x4_004_000;
+pub const BLK_DATA_VADDR: u64 = 0x4_010_000;
 pub const BLK_DATA_SIZE: u64 = 0x10_000;
 
 pub const BLK_VIRTIO_MMIO_VADDR: u64 = 0x6_000_000_000;

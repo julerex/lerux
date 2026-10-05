@@ -41,7 +41,7 @@ Local mirror: `just check` (format + clippy for `lerux-cli` and `lerux-interface
 | `echo` | `just test-echo` | aarch64 echo IPC |
 | `serial-sddf` | `just test-serial-sddf` | aarch64 serial driver, transmit virtualiser, receive virtualiser, and one client |
 | `cothread` | `just test-cothread` | aarch64 worker blocks on a Microkit notification and resumes |
-| `fs-sddf` | `just test-fs-sddf` | aarch64 block driver, block virtualiser, File Allocation Table server, and one client |
+| `fs-sddf` | `just test-fs-sddf` | aarch64 block driver, serial driver, block and serial virtualisers, File Allocation Table server, and shell |
 | `display` | `just test-display` | Phase 72 ramfb + display-server (headless `-nographic`) |
 | `x86-echo` | `just test-x86-echo` | x86 echo IPC |
 | `x86-console` | `just test-x86-console` | Phase 82: VGA text shell; QMP injects `echo hi` on PS/2 |

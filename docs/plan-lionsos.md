@@ -2,7 +2,7 @@
 
 Last updated: 2026-10-05
 
-**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is done and is the file-descriptor library. Milestone 6 is next. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
+**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is done and is the file-descriptor library. Milestone 6 is done and is the shell on that filesystem image. Milestone 7 is next. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
 
 **Goal:** Every lerux guest protection domain stays Rust, and the queues, configuration pages, filesystem messages, and component graph are the same ones LionsOS uses.
 
@@ -116,10 +116,9 @@ Landed:
 - The postcard `fs-server`, `virtio-blk-driver`, and LERUXFS2 stay.
 - Checked on 2026-10-05: `just check` passed, `just check-pd` passed, and the `just test-fs-sddf` serial log printed `fs-sddf read ok`.
 
-The next milestone inherits these limits. The agent rules are in [AGENTS.md](../AGENTS.md#filesystem-image-qemu_virt_aarch64_fs_sddf).
+When this milestone landed, the server accepted open, write, and read. Any other command returned `FS_STATUS_INVALID_COMMAND`. Milestone 6 widened that command set. These image rules still hold. Current agent rules are in [AGENTS.md](../AGENTS.md#filesystem-image-qemu_virt_aarch64_fs_sddf).
 
 - `lerux disk-img` writes a 4 MiB raw image. The guest formats it because the bytes-per-sector field is 0.
-- Commands other than open, write, and read return `FS_STATUS_INVALID_COMMAND`.
 - Flush and barrier return success and do not submit a virtio flush.
 
 ## Milestone 5 — File-descriptor library
@@ -142,6 +141,19 @@ Landed:
 **Exit:** The scripted serial session on the Milestone 4 image runs `mkdir`, `write`, `cat`, `ls`, `mv`, `rm`, and `stat` through `lerux-posix`. Golden strings live in `support/smoke-expects.toml`. The shell protection domain does not depend on `lerux-interface-types`.
 
 Shell commands this plan keeps: `ls`, `cat`, `write`, `mkdir`, `rm`, `mv`, `cd`, `pwd`, `stat`, `df`, `echo`, `help`, `history`, `clear`, `date`, `uptime`, `ip`, `ping`, `fetch`, `config`, `hostname`, `cert`, `backup`, `calc`, `source`, `run`, `reboot`, `dmesg`, `ps`, `status`, `qos`.
+
+Done.
+
+Landed:
+
+- The filesystem image boots `blk_driver`, `serial_driver`, `blk_virt`, `serial_virt_tx`, `serial_virt_rx`, `fatfs`, and `shell`. The program name is `sddf-shell.elf`. The shell is the filesystem client. `sddf-fs-client` remains a workspace member. The image omits it because the shell already uses the one filesystem client queue.
+- Block and filesystem virtual addresses start at `0x4_000_000`. The serial queues stay at `0x3_000_000`.
+- The shell calls `lerux-posix`. Its dependencies are `lerux-cothread`, `lerux-posix`, `lerux-sddf`, and `sel4-microkit`. It writes `lerux shell ready` with `serial_enqueue`. Transmit is channel 0, receive is channel 1, and the filesystem server is channel 2.
+- `fatfs` handles open, close, write, read, stat, rename, remove, mkdir, directory open, directory read, and directory close. A path is one 8.3 component in the root. `.` names the root. One file and one directory can be open. A write starts at offset 0, uses one cluster, and is at most 512 bytes.
+- `support/smoke-expects.toml` scripts `mkdir`, `write`, `cat`, `ls`, `mv`, `rm`, and `stat`. The QEMU smoke writes each step to the guest serial after the boot line. The continuous integration job stays `fs-sddf`. The smoke count stays 47.
+- A finished directory read returns `FS_STATUS_END_OF_DIRECTORY`. `fatfs` leaves that status off the debug log. Logging it writes the debug UART while the serial driver owns the device.
+- The postcard `fs-server`, `virtio-blk-driver`, LERUXFS2, and the workstation shell stay.
+- Checked on 2026-10-05: `just check` passed, `just check-pd` passed, and `just test-fs-sddf` printed `lerux shell ready` and the nine scripted steps.
 
 ## Milestone 7 — Network roles
 

@@ -11,9 +11,10 @@ use crate::{
     region_resource_t,
 };
 
-pub const FS_COMMAND_QUEUE_VADDR: u64 = 0x3_020_000;
-pub const FS_COMPLETION_QUEUE_VADDR: u64 = 0x3_028_000;
-pub const FS_SHARE_VADDR: u64 = 0x3_030_000;
+/// Filesystem regions follow the block regions at `0x4_000_000`.
+pub const FS_COMMAND_QUEUE_VADDR: u64 = 0x4_020_000;
+pub const FS_COMPLETION_QUEUE_VADDR: u64 = 0x4_028_000;
+pub const FS_SHARE_VADDR: u64 = 0x4_030_000;
 pub const FS_REGION_SIZE: u64 = 0x8000;
 
 pub const FS_QUEUE_LEN: u16 = FS_QUEUE_CAPACITY as u16;
@@ -21,6 +22,8 @@ pub const FS_QUEUE_LEN: u16 = FS_QUEUE_CAPACITY as u16;
 /// Channel ids. Each value is the id on that protection domain.
 pub const FS_SERVER_CLIENT_CHANNEL: u8 = 1;
 pub const FS_CLIENT_SERVER_CHANNEL: u8 = 0;
+/// The shell also owns the serial client channels 0 and 1.
+pub const FS_SHELL_SERVER_CHANNEL: u8 = 2;
 
 fn region(vaddr: u64) -> region_resource_t {
     region_resource_t {
@@ -57,6 +60,14 @@ pub fn client_config() -> fs_client_config_t {
     let mut config: fs_client_config_t = zeroed_config();
     config.magic = LIONS_FS_MAGIC;
     config.server = connection(FS_CLIENT_SERVER_CHANNEL);
+    config
+}
+
+/// `fs_client_config_t` for the shell, whose serial channels already use 0 and 1.
+pub fn shell_client_config() -> fs_client_config_t {
+    let mut config: fs_client_config_t = zeroed_config();
+    config.magic = LIONS_FS_MAGIC;
+    config.server = connection(FS_SHELL_SERVER_CHANNEL);
     config
 }
 

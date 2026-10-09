@@ -21,6 +21,7 @@ mod image_sign;
 mod install;
 mod iso;
 mod libclang;
+mod net_sddf;
 mod package;
 mod path;
 mod process;

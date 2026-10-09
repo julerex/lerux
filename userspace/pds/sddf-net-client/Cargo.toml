@@ -1,0 +1,22 @@
+[package]
+name = "sddf-net-client"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[lints]
+workspace = true
+
+[dependencies]
+lerux-sddf = { path = "../../crates/lerux-sddf" }
+sel4-microkit = { workspace = true }
+smoltcp = { workspace = true, features = [
+    "medium-ethernet",
+    "proto-ipv4",
+    "proto-dhcpv4",
+    "socket-dhcpv4",
+    "socket-icmp",
+] }
+
+[build-dependencies]
+lerux-sddf = { path = "../../crates/lerux-sddf" }

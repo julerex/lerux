@@ -290,6 +290,9 @@ jobs:
           - id: fs-sddf
             board: qemu_virt_aarch64_fs_sddf
             command: just test-fs-sddf
+          - id: net-sddf
+            board: qemu_virt_aarch64_net_sddf
+            command: just test-net-sddf
           - id: display
             board: qemu_virt_aarch64_display
             command: just test-display

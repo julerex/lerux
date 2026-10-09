@@ -1,8 +1,8 @@
 # Lerux in Rust, on the LionsOS architecture
 
-Last updated: 2026-10-05
+Last updated: 2026-10-09
 
-**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is done and is the file-descriptor library. Milestone 6 is done and is the shell on that filesystem image. Milestone 7 is next. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
+**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is done and is the file-descriptor library. Milestone 6 is done and is the shell on that filesystem image. Milestone 7 is done and is the network-role image. Milestone 8 is next. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
 
 **Goal:** Every lerux guest protection domain stays Rust, and the queues, configuration pages, filesystem messages, and component graph are the same ones LionsOS uses.
 
@@ -158,6 +158,16 @@ Landed:
 ## Milestone 7 — Network roles
 
 **Exit:** The image adds `net_driver`, `net_virt_tx`, `net_virt_rx`, one copier, and a client that owns smoltcp. The client does not map the device queue. After Dynamic Host Configuration Protocol on QEMU user-net, `ip` prints an address and `ping` of the gateway gets a reply. There is no `net-server` in this image.
+
+Done.
+
+Landed:
+
+- The network image boots `net_driver`, `serial_driver`, `net_virt_tx`, `net_virt_rx`, `serial_virt_tx`, `serial_virt_rx`, `net_copy`, and `net_client`. Program names use hyphens (`sddf-net-driver.elf`, `sddf-net-client.elf`). The client owns smoltcp. This image has no `net-server`. The postcard `net-server` stays on the other boards.
+- Network queues start at `0x5_000_000`. The client maps its own queues and the transmit data region. It leaves the driver queues, the copier queues, the driver receive data region, and the device unmapped.
+- QEMU user-net answers Dynamic Host Configuration Protocol with `10.0.2.15`. The client prints that address and then `ping ok` after the gateway replies.
+- `support/smoke-expects.toml` expects those two strings. The continuous integration job is `net-sddf`. The smoke count is 48.
+- Checked on 2026-10-09: `just check` passed, `just check-pd` passed, and `just test-net-sddf` printed `ip 10.0.2.15` and `ping ok`.
 
 ## Milestone 8 — Sockets and fetch
 

@@ -161,6 +161,18 @@ qemu = { disk = "rw", net = "user" }
 ci = true
 system_vars = { virtio_mmio_phys_addr = "0xa003000", virtio_blk_irq = 78, serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33 }
 
+# Milestone 7: LionsOS network roles. The client owns smoltcp. There is no net-server.
+# Virtio-net is the only virtio device, so it occupies +0xe00 and interrupt 79.
+[qemu_virt_aarch64_net_sddf]
+arch = "aarch64"
+microkit_board = "qemu_virt_aarch64"
+target = "aarch64-sel4-microkit"
+template = "net-sddf.system.template"
+pds = ["sddf-net-driver", "sddf-net-virt-tx", "sddf-net-virt-rx", "sddf-net-copy", "sddf-serial-driver", "sddf-serial-virt-tx", "sddf-serial-virt-rx", "sddf-net-client"]
+qemu = { net = "user" }
+ci = true
+system_vars = { virtio_mmio_phys_addr = "0xa003000", virtio_net_irq = 79, serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33 }
+
 # Phase 74: html-demo parses a baked-in HTML fixture (no NIC / FS).
 [qemu_virt_aarch64_html]
 arch = "aarch64"

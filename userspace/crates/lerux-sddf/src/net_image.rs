@@ -255,3 +255,19 @@ pub unsafe fn net_config_from_bytes<T>(bytes: &[u8]) -> T {
         value.assume_init()
     }
 }
+
+/// Copy configuration bytes into `dst` without returning the value.
+///
+/// `net_virt_tx_config_t` is larger than a protection-domain stack. The domain
+/// copies into static storage and does not call [`net_config_from_bytes`].
+///
+/// # Safety
+///
+/// `dst` must be valid for a `T` and suitably aligned. `bytes` must be a valid
+/// representation of `T`. These configuration structs contain no `bool` fields.
+pub unsafe fn net_config_write_bytes<T>(bytes: &[u8], dst: *mut T) {
+    assert_eq!(bytes.len(), core::mem::size_of::<T>());
+    unsafe {
+        core::ptr::copy_nonoverlapping(bytes.as_ptr(), dst.cast::<u8>(), bytes.len());
+    }
+}

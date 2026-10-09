@@ -2267,6 +2267,53 @@ dependencies = [
 ]
 
 [[package]]
+name = "sddf-net-client"
+version = "0.1.0"
+dependencies = [
+ "lerux-sddf",
+ "sel4-microkit",
+ "smoltcp",
+]
+
+[[package]]
+name = "sddf-net-copy"
+version = "0.1.0"
+dependencies = [
+ "lerux-logging",
+ "lerux-sddf",
+ "sel4-microkit",
+]
+
+[[package]]
+name = "sddf-net-driver"
+version = "0.1.0"
+dependencies = [
+ "lerux-logging",
+ "lerux-sddf",
+ "sel4-microkit",
+ "sel4-virtio-hal-impl",
+ "virtio-drivers",
+]
+
+[[package]]
+name = "sddf-net-virt-rx"
+version = "0.1.0"
+dependencies = [
+ "lerux-logging",
+ "lerux-sddf",
+ "sel4-microkit",
+]
+
+[[package]]
+name = "sddf-net-virt-tx"
+version = "0.1.0"
+dependencies = [
+ "lerux-logging",
+ "lerux-sddf",
+ "sel4-microkit",
+]
+
+[[package]]
 name = "sddf-serial-client"
 version = "0.1.0"
 dependencies = [

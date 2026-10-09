@@ -53,6 +53,7 @@ Workstation and workstation-rpi4 templates are **channel-free**: channels exist 
 | `tools/lerux-cli/src/profile.rs` | load profiles, `find_profile_for_board` |
 | `tools/lerux-cli/src/serial_sddf.rs` | write the serial-role config bytes and check them against the rendered system description |
 | `tools/lerux-cli/src/fs_sddf.rs` | write the filesystem-image config bytes and check them against the rendered system description |
+| `tools/lerux-cli/src/net_sddf.rs` | write the network-image config bytes and check them against the rendered system description |
 
 ## Template catalog (layout bodies)
 
@@ -72,6 +73,10 @@ Templates under `userspace/systems/templates/`. Most still embed hand channels f
 ## Filesystem image
 
 `qemu_virt_aarch64_fs_sddf` has no profile. `fs-sddf.system.template` owns the memory regions and the channel ends. Serial roles share this image. Block and filesystem virtual addresses start at `0x4_000_000` so the serial queues keep `0x3_000_000`. `lerux-sddf::blk_image` and `lerux-sddf::fs_image` fill the config structs with those virtual addresses and channel ids. The command-line interface writes the same bytes during the board build. Each protection domain embeds the bytes in its build script and copies them at start. `fatfs` embeds the block client config and then the filesystem server config in one file. The shell embeds the serial client config and then `shell_client_config()` in one file. The host test checks that the rendered system description matches those addresses and channel ids. `lerux disk-img` writes a 4 MiB raw `support/disk.img` with `55 AA` at byte 510. The guest formats that image. Agent rules for the shared data region, the format order, and the completion-slot zeroing are in [AGENTS.md](../AGENTS.md#filesystem-image-qemu_virt_aarch64_fs_sddf).
+
+## Network image
+
+`qemu_virt_aarch64_net_sddf` has no profile. `net-sddf.system.template` owns the memory regions and the channel ends. Serial roles share this image. Network queues start at `0x5_000_000`. `lerux-sddf::net_image` fills the config structs with those virtual addresses and channel ids. The command-line interface writes the same bytes during the board build. Each protection domain embeds the bytes in its build script and copies them at start. The client embeds the serial client config and then the network client config in one file. The host test checks that the rendered system description matches those addresses and channel ids. Virtio-net is the only virtio device, so it occupies `+0xe00` and interrupt 79. Agent rules for the client mappings, the buffer ownership, and the address pacing are in [AGENTS.md](../AGENTS.md#network-image-qemu_virt_aarch64_net_sddf).
 
 ## Incremental history
 

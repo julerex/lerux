@@ -22,16 +22,20 @@ use lerux_sddf::{
     blk_resp_status_t::BLK_RESP_ERR_NO_DEVICE, blk_resp_t, blk_storage_info_t,
     blk_virt_config_client_t, blk_virt_config_driver_t, blk_virt_config_t,
     device_region_resource_t, fs_client_config_t, fs_cmd_t, fs_cmpl_t, fs_connection_resource_t,
-    fs_msg_t, fs_queue_t, fs_server_config_t, fs_stat_t, net_buff_desc_t, net_queue_handle_t,
-    net_queue_t, region_resource_t, serial_client_config_t, serial_connection_resource_t,
-    serial_driver_config_t, serial_queue_handle_t, serial_queue_t, serial_virt_rx_config_t,
-    serial_virt_tx_client_config_t, serial_virt_tx_config_t, BLK_MAX_SERIAL_NUMBER,
-    BLK_STORAGE_INFO_REGION_SIZE, BLK_TRANSFER_SIZE, FS_CMD_DIR_REWIND, FS_CMD_FILE_OPEN,
-    FS_CMD_INITIALISE, FS_NUM_COMMANDS, FS_OPEN_FLAGS_CREATE, FS_QUEUE_CAPACITY,
+    fs_msg_t, fs_queue_t, fs_server_config_t, fs_stat_t, mac_addr_t, net_buff_desc_t,
+    net_client_config_t, net_connection_resource_t, net_copy_config_t, net_driver_config_t,
+    net_queue_handle_t, net_queue_t, net_virt_rx_client_config_t, net_virt_rx_config_t,
+    net_virt_tx_client_config_t, net_virt_tx_config_t, net_virt_tx_data_region_t,
+    net_vswitch_config_t, net_vswitch_port_config_t, region_resource_t, serial_client_config_t,
+    serial_connection_resource_t, serial_driver_config_t, serial_queue_handle_t, serial_queue_t,
+    serial_virt_rx_config_t, serial_virt_tx_client_config_t, serial_virt_tx_config_t,
+    BLK_MAX_SERIAL_NUMBER, BLK_STORAGE_INFO_REGION_SIZE, BLK_TRANSFER_SIZE, FS_CMD_DIR_REWIND,
+    FS_CMD_FILE_OPEN, FS_CMD_INITIALISE, FS_NUM_COMMANDS, FS_OPEN_FLAGS_CREATE, FS_QUEUE_CAPACITY,
     FS_STATUS_NOT_EMPTY, FS_STATUS_NO_FILE, FS_STATUS_NUM_STATUSES, FS_STATUS_SUCCESS,
-    LIONS_FS_MAGIC, LIONS_FS_MAGIC_LEN, NET_BUFFER_SIZE, SDDF_BLK_MAGIC, SDDF_BLK_MAGIC_LEN,
-    SDDF_BLK_MAX_CLIENTS, SDDF_NAME_LENGTH, SDDF_SERIAL_BEGIN_STR_MAX_LEN, SDDF_SERIAL_MAGIC,
-    SDDF_SERIAL_MAGIC_LEN, SDDF_SERIAL_MAX_CLIENTS,
+    LIONS_FS_MAGIC, LIONS_FS_MAGIC_LEN, MAC802_BYTES, NET_BUFFER_SIZE, SDDF_BLK_MAGIC,
+    SDDF_BLK_MAGIC_LEN, SDDF_BLK_MAX_CLIENTS, SDDF_NAME_LENGTH, SDDF_NET_MAGIC, SDDF_NET_MAGIC_LEN,
+    SDDF_NET_MAX_CLIENTS, SDDF_SERIAL_BEGIN_STR_MAX_LEN, SDDF_SERIAL_MAGIC, SDDF_SERIAL_MAGIC_LEN,
+    SDDF_SERIAL_MAX_CLIENTS,
 };
 
 struct TempDir(PathBuf);
@@ -51,6 +55,7 @@ struct CReport {
     magic: Vec<u8>,
     blk_magic: Vec<u8>,
     fs_magic: Vec<u8>,
+    net_magic: Vec<u8>,
 }
 
 #[test]
@@ -141,6 +146,7 @@ fn parse_report(text: &str) -> CReport {
         magic: Vec::new(),
         blk_magic: Vec::new(),
         fs_magic: Vec::new(),
+        net_magic: Vec::new(),
     };
     for line in text.lines() {
         let mut parts = line.split_whitespace();
@@ -172,6 +178,7 @@ fn parse_report(text: &str) -> CReport {
             "magic" => report.magic = hex_bytes(parts, line),
             "blkmagic" => report.blk_magic = hex_bytes(parts, line),
             "fsmagic" => report.fs_magic = hex_bytes(parts, line),
+            "netmagic" => report.net_magic = hex_bytes(parts, line),
             other => panic!("unknown probe line kind {other} in {line}"),
         }
     }
@@ -310,6 +317,12 @@ fn check_magic(report: &CReport, errors: &mut Vec<String>) {
             report.fs_magic, LIONS_FS_MAGIC
         ));
     }
+    if report.net_magic != SDDF_NET_MAGIC {
+        errors.push(format!(
+            "SDDF_NET_MAGIC: C {:02x?}, Rust {:02x?}",
+            report.net_magic, SDDF_NET_MAGIC
+        ));
+    }
 }
 
 fn rust_types() -> Vec<(&'static str, usize, usize)> {
@@ -337,6 +350,18 @@ fn rust_types() -> Vec<(&'static str, usize, usize)> {
         net_buff_desc_t,
         net_queue_t,
         net_queue_handle_t,
+        mac_addr_t,
+        net_connection_resource_t,
+        net_driver_config_t,
+        net_virt_tx_data_region_t,
+        net_virt_tx_client_config_t,
+        net_virt_tx_config_t,
+        net_virt_rx_client_config_t,
+        net_virt_rx_config_t,
+        net_copy_config_t,
+        net_client_config_t,
+        net_vswitch_port_config_t,
+        net_vswitch_config_t,
         blk_req_t,
         blk_resp_t,
         blk_req_queue_t,
@@ -416,6 +441,52 @@ fn rust_fields() -> Vec<(&'static str, &'static str, usize)> {
         net_queue_handle_t, free;
         net_queue_handle_t, active;
         net_queue_handle_t, capacity;
+        mac_addr_t, addr;
+        net_connection_resource_t, free_queue;
+        net_connection_resource_t, active_queue;
+        net_connection_resource_t, num_buffers;
+        net_connection_resource_t, id;
+        net_driver_config_t, magic;
+        net_driver_config_t, virt_rx;
+        net_driver_config_t, virt_tx;
+        net_virt_tx_data_region_t, data;
+        net_virt_tx_data_region_t, num_buffers;
+        net_virt_tx_client_config_t, conn;
+        net_virt_tx_client_config_t, regions;
+        net_virt_tx_client_config_t, num_regions;
+        net_virt_tx_config_t, magic;
+        net_virt_tx_config_t, driver;
+        net_virt_tx_config_t, clients;
+        net_virt_tx_config_t, num_clients;
+        net_virt_rx_client_config_t, conn;
+        net_virt_rx_client_config_t, mac_addrs;
+        net_virt_rx_client_config_t, num_macs;
+        net_virt_rx_config_t, magic;
+        net_virt_rx_config_t, driver;
+        net_virt_rx_config_t, data;
+        net_virt_rx_config_t, buffer_metadata;
+        net_virt_rx_config_t, clients;
+        net_virt_rx_config_t, num_clients;
+        net_copy_config_t, magic;
+        net_copy_config_t, rx;
+        net_copy_config_t, rx_data;
+        net_copy_config_t, client;
+        net_copy_config_t, client_data;
+        net_client_config_t, magic;
+        net_client_config_t, rx;
+        net_client_config_t, rx_data;
+        net_client_config_t, tx;
+        net_client_config_t, tx_data;
+        net_client_config_t, mac_addr;
+        net_vswitch_port_config_t, rx;
+        net_vswitch_port_config_t, tx;
+        net_vswitch_port_config_t, tx_data;
+        net_vswitch_port_config_t, mac_addr;
+        net_vswitch_port_config_t, acl;
+        net_vswitch_config_t, magic;
+        net_vswitch_config_t, ports;
+        net_vswitch_config_t, num_ports;
+        net_vswitch_config_t, buffer_metadata;
         blk_req_t, code;
         blk_req_t, io_or_offset;
         blk_req_t, block_number;
@@ -504,6 +575,9 @@ fn rust_constants() -> Vec<(&'static str, u64)> {
         ("FS_OPEN_FLAGS_CREATE", FS_OPEN_FLAGS_CREATE),
         ("BLK_TRANSFER_SIZE", u64::from(BLK_TRANSFER_SIZE)),
         ("NET_BUFFER_SIZE", u64::from(NET_BUFFER_SIZE)),
+        ("SDDF_NET_MAX_CLIENTS", SDDF_NET_MAX_CLIENTS as u64),
+        ("SDDF_NET_MAGIC_LEN", SDDF_NET_MAGIC_LEN as u64),
+        ("MAC802_BYTES", MAC802_BYTES as u64),
         ("SDDF_SERIAL_MAX_CLIENTS", SDDF_SERIAL_MAX_CLIENTS as u64),
         ("SDDF_NAME_LENGTH", SDDF_NAME_LENGTH as u64),
         (
@@ -561,6 +635,7 @@ const LAYOUT_C: &str = r#"
 #include <sddf/blk/config.h>
 #include <sddf/blk/queue.h>
 #include <sddf/blk/storage_info.h>
+#include <sddf/network/config.h>
 #include <sddf/network/queue.h>
 #include <sddf/resources/device.h>
 #include <sddf/serial/config.h>
@@ -649,6 +724,64 @@ int main(void)
     REPORT_FIELD(net_queue_handle_t, free);
     REPORT_FIELD(net_queue_handle_t, active);
     REPORT_FIELD(net_queue_handle_t, capacity);
+    REPORT_TYPE(mac_addr_t);
+    REPORT_FIELD(mac_addr_t, addr);
+    REPORT_TYPE(net_connection_resource_t);
+    REPORT_FIELD(net_connection_resource_t, free_queue);
+    REPORT_FIELD(net_connection_resource_t, active_queue);
+    REPORT_FIELD(net_connection_resource_t, num_buffers);
+    REPORT_FIELD(net_connection_resource_t, id);
+    REPORT_TYPE(net_driver_config_t);
+    REPORT_FIELD(net_driver_config_t, magic);
+    REPORT_FIELD(net_driver_config_t, virt_rx);
+    REPORT_FIELD(net_driver_config_t, virt_tx);
+    REPORT_TYPE(net_virt_tx_data_region_t);
+    REPORT_FIELD(net_virt_tx_data_region_t, data);
+    REPORT_FIELD(net_virt_tx_data_region_t, num_buffers);
+    REPORT_TYPE(net_virt_tx_client_config_t);
+    REPORT_FIELD(net_virt_tx_client_config_t, conn);
+    REPORT_FIELD(net_virt_tx_client_config_t, regions);
+    REPORT_FIELD(net_virt_tx_client_config_t, num_regions);
+    REPORT_TYPE(net_virt_tx_config_t);
+    REPORT_FIELD(net_virt_tx_config_t, magic);
+    REPORT_FIELD(net_virt_tx_config_t, driver);
+    REPORT_FIELD(net_virt_tx_config_t, clients);
+    REPORT_FIELD(net_virt_tx_config_t, num_clients);
+    REPORT_TYPE(net_virt_rx_client_config_t);
+    REPORT_FIELD(net_virt_rx_client_config_t, conn);
+    REPORT_FIELD(net_virt_rx_client_config_t, mac_addrs);
+    REPORT_FIELD(net_virt_rx_client_config_t, num_macs);
+    REPORT_TYPE(net_virt_rx_config_t);
+    REPORT_FIELD(net_virt_rx_config_t, magic);
+    REPORT_FIELD(net_virt_rx_config_t, driver);
+    REPORT_FIELD(net_virt_rx_config_t, data);
+    REPORT_FIELD(net_virt_rx_config_t, buffer_metadata);
+    REPORT_FIELD(net_virt_rx_config_t, clients);
+    REPORT_FIELD(net_virt_rx_config_t, num_clients);
+    REPORT_TYPE(net_copy_config_t);
+    REPORT_FIELD(net_copy_config_t, magic);
+    REPORT_FIELD(net_copy_config_t, rx);
+    REPORT_FIELD(net_copy_config_t, rx_data);
+    REPORT_FIELD(net_copy_config_t, client);
+    REPORT_FIELD(net_copy_config_t, client_data);
+    REPORT_TYPE(net_client_config_t);
+    REPORT_FIELD(net_client_config_t, magic);
+    REPORT_FIELD(net_client_config_t, rx);
+    REPORT_FIELD(net_client_config_t, rx_data);
+    REPORT_FIELD(net_client_config_t, tx);
+    REPORT_FIELD(net_client_config_t, tx_data);
+    REPORT_FIELD(net_client_config_t, mac_addr);
+    REPORT_TYPE(net_vswitch_port_config_t);
+    REPORT_FIELD(net_vswitch_port_config_t, rx);
+    REPORT_FIELD(net_vswitch_port_config_t, tx);
+    REPORT_FIELD(net_vswitch_port_config_t, tx_data);
+    REPORT_FIELD(net_vswitch_port_config_t, mac_addr);
+    REPORT_FIELD(net_vswitch_port_config_t, acl);
+    REPORT_TYPE(net_vswitch_config_t);
+    REPORT_FIELD(net_vswitch_config_t, magic);
+    REPORT_FIELD(net_vswitch_config_t, ports);
+    REPORT_FIELD(net_vswitch_config_t, num_ports);
+    REPORT_FIELD(net_vswitch_config_t, buffer_metadata);
     REPORT_TYPE(blk_req_t);
     REPORT_FIELD(blk_req_t, code);
     REPORT_FIELD(blk_req_t, io_or_offset);
@@ -753,6 +886,9 @@ int main(void)
     printf("const FS_OPEN_FLAGS_CREATE %d\n", FS_OPEN_FLAGS_CREATE);
     printf("const BLK_TRANSFER_SIZE %d\n", BLK_TRANSFER_SIZE);
     printf("const NET_BUFFER_SIZE %d\n", NET_BUFFER_SIZE);
+    printf("const SDDF_NET_MAX_CLIENTS %d\n", SDDF_NET_MAX_CLIENTS);
+    printf("const SDDF_NET_MAGIC_LEN %d\n", SDDF_NET_MAGIC_LEN);
+    printf("const MAC802_BYTES %d\n", MAC802_BYTES);
     printf("const SDDF_SERIAL_MAX_CLIENTS %d\n", SDDF_SERIAL_MAX_CLIENTS);
     printf("const SDDF_NAME_LENGTH %d\n", SDDF_NAME_LENGTH);
     printf("const SDDF_SERIAL_BEGIN_STR_MAX_LEN %d\n", SDDF_SERIAL_BEGIN_STR_MAX_LEN);
@@ -781,6 +917,11 @@ int main(void)
     printf("fsmagic");
     for (i = 0; i < LIONS_FS_MAGIC_LEN; i++) {
         printf(" %02x", (unsigned char)LIONS_FS_MAGIC[i]);
+    }
+    printf("\n");
+    printf("netmagic");
+    for (i = 0; i < SDDF_NET_MAGIC_LEN; i++) {
+        printf(" %02x", (unsigned char)SDDF_NET_MAGIC[i]);
     }
     printf("\n");
     return 0;

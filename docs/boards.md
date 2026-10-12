@@ -19,6 +19,7 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `qemu_virt_aarch64_fetch_sddf` | aarch64 | `just test-fetch-sddf` | `blk_driver`, `net_driver`, `serial_driver`, `blk_virt`, `net_virt_tx`, `net_virt_rx`, `serial_virt_tx`, `serial_virt_rx`, `fatfs`, `net_copy`, `shell` |
 | `qemu_virt_aarch64_web_sddf` | aarch64 | `just test-web-sddf` | `blk_driver`, `net_driver`, `serial_driver`, `blk_virt`, `net_virt_tx`, `net_virt_rx`, `serial_virt_tx`, `serial_virt_rx`, `fatfs`, `net_copy`, `shell` |
 | `qemu_virt_aarch64_browser_sddf` | aarch64 | `just test-browser-sddf` | `blk_driver`, `net_driver`, `gpu_driver`, `serial_driver`, `blk_virt`, `net_virt_tx`, `net_virt_rx`, `serial_virt_tx`, `serial_virt_rx`, `gpu_virt`, `fatfs`, `net_copy`, `shell` |
+| `qemu_virt_aarch64_agent_sddf` | aarch64 | `just test-agent-sddf` | `blk_driver`, `net_driver`, `serial_driver`, `blk_virt`, `net_virt_tx`, `net_virt_rx`, `serial_virt_tx`, `serial_virt_rx`, `fatfs`, `net_copy`, shell running `sddf-grok.elf`, agent running `sddf-agent.elf` |
 | `qemu_virt_aarch64_display` | aarch64 | `just test-display` | Phase 72: ramfb + display-server + display-demo |
 | `qemu_virt_aarch64_html` | aarch64 | `just test-html` | Phase 74: html-demo + lerux-html (baked-in fixture) |
 | `qemu_virt_aarch64_paint` | aarch64 | `just test-paint` | Phase 75: paint-demo + display-server (HTML+CSS → ramfb) |

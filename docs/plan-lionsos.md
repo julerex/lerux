@@ -2,7 +2,7 @@
 
 Last updated: 2026-10-12
 
-**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is done and is the file-descriptor library. Milestone 6 is done and is the shell on that filesystem image. Milestone 7 is done and is the network-role image. Milestone 8 is done and is the socket and fetch image. Milestone 9 is done and is the timer and static status on the filesystem image. Milestone 10 is done and is the remaining shell commands on the fetch image. Milestone 11 is done and is the web image that serves the seeded hostname file. Milestone 12 is done and is the virtio graphics driver, virtualiser, and browser image. Milestone 13 is next. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
+**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is done and is the file-descriptor library. Milestone 6 is done and is the shell on that filesystem image. Milestone 7 is done and is the network-role image. Milestone 8 is done and is the socket and fetch image. Milestone 9 is done and is the timer and static status on the filesystem image. Milestone 10 is done and is the remaining shell commands on the fetch image. Milestone 11 is done and is the web image that serves the seeded hostname file. Milestone 12 is done and is the virtio graphics driver, virtualiser, and browser image. Milestone 13 is done and is the agent image. Milestone 14 is next. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
 
 **Goal:** Every lerux guest protection domain stays Rust, and the queues, configuration pages, filesystem messages, and component graph are the same ones LionsOS uses.
 
@@ -244,6 +244,16 @@ Landed:
 ## Milestone 13 — Agent
 
 **Exit:** `grok` notifies the agent protection domain. The agent uses `lerux-posix` for Read, Edit, Write, ListDir, and Search, the socket library for WebFetch, and one shared memory region plus a notification for Browse. The session expects `agent: tool write ok` and the written file bytes. Tool arguments are a `#[repr(C)]` struct in the agent header, not postcard.
+
+Done.
+
+Landed:
+
+- LionsOS 0.4.0 has no agent header. `lerux-sddf` defines `agent_tool_t` for this milestone. The shared page is `0xa_000_000`, one page, mapped read-write by `sddf-grok` and `sddf-agent`. Kinds are Read, Write, Edit, ListDir, Search, WebFetch, and Browse. States are idle, browse, browse done, ok, and err.
+- `qemu_virt_aarch64_agent_sddf` reuses the fetch roles. The shell program is `sddf-grok.elf` and is the serial client. The agent program is `sddf-agent.elf` and is the filesystem client and the network client. `sddf-shell` stays on the other images. The postcard `agent` protection domain stays.
+- The shell notifies the agent on the tool channel. The agent writes the file through `lerux-posix` and notifies the shell. Browse uses the same page and a second notification. The shell answers Browse on the root before it resumes the worker. WebFetch connects to `10.0.2.2` port 8443 through the socket library. The smoke does not call it.
+- `support/smoke-expects.toml` expects `lerux shell ready`, then `agent: tool write ok`, then `hello-agent`. The continuous integration job is `agent-sddf`. The smoke count is 52.
+- Checked on 2026-10-12: `just check` passed, `just check-pd` passed, and `just test-agent-sddf` printed `lerux shell ready`, `agent: tool write ok`, and `hello-agent`.
 
 ## Milestone 14 — WebAssembly role
 

@@ -36,6 +36,9 @@ pub fn build(root: &Path, board: &str, build_dir: &str, config: &str) -> Result<
     {
         crate::fetch_sddf::write_configs(&board_build_dir(root, board, build_dir))?;
     }
+    if board == "qemu_virt_aarch64_agent_sddf" {
+        crate::agent_sddf::write_configs(&board_build_dir(root, board, build_dir))?;
+    }
     let boards = load_boards(root)?;
     let board_cfg = get_board(&boards, board)?;
     for crate_name in &board_cfg.pds {

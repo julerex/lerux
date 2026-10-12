@@ -10,6 +10,7 @@
     reason = "type names match the LionsOS and driver-framework C headers"
 )]
 
+pub mod agent;
 pub mod blk;
 pub mod blk_image;
 pub mod blk_queue;
@@ -28,6 +29,7 @@ pub mod serial_image;
 pub mod serial_queue;
 pub mod timer;
 
+pub use agent::*;
 pub use blk::*;
 pub use blk_queue::*;
 pub use fs::*;

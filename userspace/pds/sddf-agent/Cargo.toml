@@ -1,0 +1,25 @@
+[package]
+name = "sddf-agent"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[lints]
+workspace = true
+
+[dependencies]
+lerux-cothread = { path = "../../crates/lerux-cothread" }
+lerux-posix = { path = "../../crates/lerux-posix" }
+lerux-sddf = { path = "../../crates/lerux-sddf" }
+lerux-tls = { path = "../../crates/lerux-tls" }
+sel4-microkit = { workspace = true }
+smoltcp = { workspace = true, features = [
+    "medium-ethernet",
+    "proto-ipv4",
+    "proto-dhcpv4",
+    "socket-dhcpv4",
+    "socket-tcp",
+] }
+
+[build-dependencies]
+lerux-sddf = { path = "../../crates/lerux-sddf" }

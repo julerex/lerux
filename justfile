@@ -129,6 +129,10 @@ test-web-sddf:
 test-browser-sddf:
     BOARD=qemu_virt_aarch64_browser_sddf just test
 
+# Milestone 13: grok notifies the agent, which writes through the filesystem queue
+test-agent-sddf:
+    BOARD=qemu_virt_aarch64_agent_sddf just test
+
 # Milestone 3: cothread blocks on a channel until a Microkit notification
 test-cothread:
     BOARD=qemu_virt_aarch64_cothread just test

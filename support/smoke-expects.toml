@@ -85,6 +85,15 @@ timeout_secs = 180
 expects = ["title lerux", "pixel 4c5258ff"]
 timeout_secs = 180
 
+[boards.qemu_virt_aarch64_agent_sddf]
+expects = ["lerux shell ready"]
+timeout_secs = 180
+script_timeout_secs = 120
+script = [
+  { send = "grok write AGENT.TXT hello-agent\r", expect = "agent: tool write ok" },
+  { send = "grok read AGENT.TXT\r", expect = "hello-agent" },
+]
+
 [boards.qemu_virt_aarch64_fs_sddf]
 expects = ["lerux shell ready"]
 timeout_secs = 120

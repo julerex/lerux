@@ -2227,6 +2227,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
+name = "sddf-agent"
+version = "0.1.0"
+dependencies = [
+ "lerux-cothread",
+ "lerux-posix",
+ "lerux-sddf",
+ "lerux-tls",
+ "sel4-microkit",
+ "smoltcp",
+]
+
+[[package]]
 name = "sddf-blk-driver"
 version = "0.1.0"
 dependencies = [
@@ -2282,6 +2294,15 @@ name = "sddf-gpu-virt"
 version = "0.1.0"
 dependencies = [
  "lerux-logging",
+ "lerux-sddf",
+ "sel4-microkit",
+]
+
+[[package]]
+name = "sddf-grok"
+version = "0.1.0"
+dependencies = [
+ "lerux-cothread",
  "lerux-sddf",
  "sel4-microkit",
 ]

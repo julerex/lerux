@@ -243,6 +243,25 @@ mod tests {
     }
 
     #[test]
+    fn loads_agent_sddf_board() {
+        let root = repo_root();
+        let t = smoke_test_for_board(&root, "qemu_virt_aarch64_agent_sddf").unwrap();
+        assert_eq!(t.timeout_secs, 180);
+        assert!(
+            t.expects
+                .iter()
+                .any(|expect| expect.contains("shell ready")),
+            "agent image boot line"
+        );
+        assert!(t.script.iter().any(|step| step.send.contains("grok write")));
+        assert!(t.script.iter().any(|step| step.expect.contains("write ok")));
+        assert!(t
+            .script
+            .iter()
+            .any(|step| step.expect.contains("hello-agent")));
+    }
+
+    #[test]
     fn loads_agent_board() {
         let root = repo_root();
         let t = smoke_test_for_board(&root, "qemu_virt_aarch64_agent").unwrap();

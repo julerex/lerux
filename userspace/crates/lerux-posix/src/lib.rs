@@ -7,6 +7,9 @@
 //! `lerux-sddf`. The caller supplies a wake function. The host test serves
 //! the queue inside that function. A later guest notifies its server and
 //! waits there. The file methods do not branch on which wake is bound.
+//!
+//! [`Sockets`] issues `socket`, `connect`, `send`, and `recv` on a caller-owned
+//! [`Tcp`] pipe. The pipe is not a filesystem queue.
 
 #![cfg_attr(not(test), no_std)]
 
@@ -46,6 +49,10 @@ const _: () = assert!(size_of::<fs_stat_t>() == 136);
 const _: () = assert!(STAT_AT + 136 <= DATA_AT);
 const _: () = assert!(DATA_AT + DATA_LEN == SHARE_MIN);
 
+mod socket;
+
+pub use socket::{SockFd, Sockets, Tcp};
+
 /// Pinned errno integer.
 ///
 /// `FILE_ERR` and `EPERM` are both 1. An enum of names cannot round-trip both.
@@ -57,6 +64,7 @@ impl Errno {
     pub const EPERM: i32 = 1;
     pub const ENOENT: i32 = 2;
     pub const EBADF: i32 = 9;
+    pub const EAGAIN: i32 = 11;
     pub const ENOMEM: i32 = 12;
     pub const EACCES: i32 = 13;
     pub const EBUSY: i32 = 16;
@@ -65,8 +73,13 @@ impl Errno {
     pub const EINVAL: i32 = 22;
     pub const EMFILE: i32 = 24;
     pub const ENOSPC: i32 = 28;
+    pub const EPIPE: i32 = 32;
     pub const ENAMETOOLONG: i32 = 36;
     pub const ENOTEMPTY: i32 = 39;
+    pub const EISCONN: i32 = 106;
+    pub const ENOTCONN: i32 = 107;
+    pub const ETIMEDOUT: i32 = 110;
+    pub const ECONNREFUSED: i32 = 111;
 }
 
 /// How `open` maps onto the filesystem open flags.

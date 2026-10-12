@@ -78,6 +78,10 @@ Templates under `userspace/systems/templates/`. Most still embed hand channels f
 
 `qemu_virt_aarch64_net_sddf` has no profile. `net-sddf.system.template` owns the memory regions and the channel ends. Serial roles share this image. Network queues start at `0x5_000_000`. `lerux-sddf::net_image` fills the config structs with those virtual addresses and channel ids. The command-line interface writes the same bytes during the board build. Each protection domain embeds the bytes in its build script and copies them at start. The client embeds the serial client config and then the network client config in one file. The host test checks that the rendered system description matches those addresses and channel ids. Virtio-net is the only virtio device, so it occupies `+0xe00` and interrupt 79. Agent rules for the client mappings, the buffer ownership, and the address pacing are in [AGENTS.md](../AGENTS.md#network-image-qemu_virt_aarch64_net_sddf).
 
+## Fetch image
+
+`qemu_virt_aarch64_fetch_sddf` has no profile. `fetch-sddf.system.template` owns the memory regions and the channel ends. It is the filesystem image plus the network roles. The shell is the one client of the serial queues, the filesystem queue, and the network queues. Its network channels are 3 and 4 because serial transmit, serial receive, and the filesystem server already use 0, 1, and 2. The shell embeds the serial client config, `fs_image::shell_client_config()`, and `net_image::shell_client_config()` in one file. Virtio-net is the first virtio device at `+0xe00` and interrupt 79. Virtio-blk stays at `+0xc00` and interrupt 78. Agent rules for the socket calls, the fixture fetch, and the transmit-buffer init are in [AGENTS.md](../AGENTS.md#fetch-image-qemu_virt_aarch64_fetch_sddf).
+
 ## Incremental history
 
 1. ✅ Structured `[[channel]]` + validation  

@@ -293,6 +293,9 @@ jobs:
           - id: net-sddf
             board: qemu_virt_aarch64_net_sddf
             command: just test-net-sddf
+          - id: fetch-sddf
+            board: qemu_virt_aarch64_fetch_sddf
+            command: just test-fetch-sddf
           - id: display
             board: qemu_virt_aarch64_display
             command: just test-display

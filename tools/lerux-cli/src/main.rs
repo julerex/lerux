@@ -10,6 +10,7 @@ mod config_cmd;
 mod deploy;
 mod disk_img;
 mod fetch;
+mod fetch_sddf;
 mod fs_host;
 mod fs_sddf;
 mod grok_one;

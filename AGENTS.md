@@ -97,7 +97,7 @@ Read [docs/plan-lionsos.md](docs/plan-lionsos.md) and [ADR-011](docs/decisions/0
 - Fill a `#[repr(C)]` config by zeroing it, then assigning fields. A struct literal leaves padding uninitialized, so two fills of `serial_connection_resource_t` do not compare equal: the `u8` `id` is padded out to the next pointer. `serial_config_from_bytes` is `unsafe` because a `bool` other than 0 or 1 is undefined behavior. The generator writes 0 or 1.
 - The installed Microkit kit is 2.2.0 and cannot prefill a memory region. Do not objcopy a zero `#[link_section]` static. rustc places that static in `.bss`. Each protection domain `build.rs` writes `OUT_DIR/config.bin` from the `lerux-sddf::serial_image` constructors. The domain `include_bytes!` those bytes and copies them into an aligned value. `include_bytes!` has alignment 1. The host and the guest are both 64-bit little-endian, so the pointer-sized virtual addresses survive the copy.
 - The protection domain compiles under `just check-pd` without a board build. It must not read files that `lerux-cli` writes during `build()`. `tools/lerux-cli/src/serial_sddf.rs` writes the same bytes so a host test can compare them with the rendered system description.
-- Block and filesystem configs use that same path. The constructors are `lerux-sddf::blk_image` and `lerux-sddf::fs_image`. `tools/lerux-cli/src/fs_sddf.rs` writes the bytes the host test compares. `fatfs` writes `blk_client_config_t` and then `fs_server_config_t` into one `config.bin`. The shell writes `serial_client_config_t` and then `fs_image::shell_client_config()` into one `config.bin`. Each serial role on that image embeds its own serial config. `sddf-fs-client` still embeds `client_config()` and stays off the image.
+- Block and filesystem configs use that same path. The constructors are `lerux-sddf::blk_image` and `lerux-sddf::fs_image`. `tools/lerux-cli/src/fs_sddf.rs` writes the bytes the host test compares. `fatfs` writes `blk_client_config_t` and then `fs_server_config_t` into one `config.bin`. The shell writes `serial_client_config_t` and then `fs_image::shell_client_config()` into one `config.bin`. On `qemu_virt_aarch64_fetch_sddf` that file continues with `net_image::shell_client_config()`. Each serial role on that image embeds its own serial config. `sddf-fs-client` still embeds `client_config()` and stays off the image.
 - Template virtual addresses use the same digit grouping as the Rust constants (`0x2_000_000`). `0x2_000_000` and `0x2000000` are the same number and different spellings.
 - Copy a large config once during init. `serial_virt_tx_config_t` is several kilobytes, and the stack is `0x10_000`. Keep queue handles and channel ids in the handler.
 
@@ -169,12 +169,27 @@ Read Milestone 7 in [docs/plan-lionsos.md](docs/plan-lionsos.md). The postcard `
 - Dynamic Host Configuration Protocol ignores the first `Deconfigured` event. QEMU user-net configures `10.0.2.15` with prefix 24. The gateway is `10.0.2.2` when the offer names no router. Virtual time advances one millisecond after `30_000` `spin_loop` iterations, then the interface polls once. The address and the ping each stop after `30_000` virtual milliseconds and print `ip err` or `ping err`. Virtual time keeps increasing from the address into the ping.
 - Queue capacity is 16. Each buffer is 2048 bytes. Clients store object index 0.
 
+## Fetch image (`qemu_virt_aarch64_fetch_sddf`)
+
+Read Milestone 8 in [docs/plan-lionsos.md](docs/plan-lionsos.md). This image is the filesystem image plus the network roles. The shell is the one serial client, the filesystem client, and the network client. Postcard `net-server`, `fs-server`, and `tls-proxy` stay on the other boards.
+
+- Protection domains are `blk_driver`, `net_driver`, `serial_driver`, `blk_virt`, `net_virt_tx`, `net_virt_rx`, `serial_virt_tx`, `serial_virt_rx`, `fatfs`, `net_copy`, and `shell`. The shell program is `sddf-shell.elf`.
+- Virtio-net is the first virtio device, at `+0xe00` in the page at `0xa003000`, interrupt 79. Virtio-blk stays at `+0xc00`, interrupt 78. Both drivers map that page at `0x6_000_000_000`. Each driver has its own direct-memory-access region, and both regions use virtual address `0x8_000_000_000`.
+- Shell channels are serial transmit 0, serial receive 1, filesystem server 2, network receive 3 (`SHELL_NET_RX_CHANNEL`), and network transmit 4 (`SHELL_NET_TX_CHANNEL`). The ping image keeps network receive 2 and network transmit 3.
+- The shell config is the serial client page, the filesystem shell page, then the network shell page. `net_buffers_init` runs once on the transmit free queue with base 0, during init on the root, before the worker starts. Leave the receive free queue alone. Do not initialise a queue twice.
+- The board feature `board-qemu_virt_aarch64_fetch_sddf` links smoltcp and `lerux-tls` into the shell. The filesystem-image build of `sddf-shell` does not. Do not add `lerux-logging` or `lerux-interface-types`. There is no `TlsRequest` or `HttpRequest`.
+- The worker stack is `0x1_0000` on this image. The Transport Layer Security buffer is 16640 bytes. The heap is 1 MiB. The protection-domain stack attribute stays `0x10_000`. Assertions stay on the root. Do not panic inside the cothread.
+- `fetch NAME` brings up Dynamic Host Configuration Protocol, connects to `10.0.2.2` port 8443, and writes the body of `GET /fixture.html`. The success line is `fetch ok`. `just test-fetch-sddf` then cats the file and expects `lerux-http-fixture`. Keep `lerux shell ready`, `fetch ok`, and `lerux-http-fixture` out of `expect` and `assert` messages.
+- One socket. A second `socket` returns errno 24. `drive` can report connected while ciphertext is still in the session. Send that ciphertext before waiting for the next record.
+- Priorities are the drivers at 4, the virtualisers at 3, `fatfs` and `net_copy` at 2, and `shell` at 1.
+- The one-shot ready lines print before `lerux shell ready`. Leave them.
+
 ## File-descriptor library (`lerux-posix`)
 
 Read Milestones 5 and 6 in [docs/plan-lionsos.md](docs/plan-lionsos.md). The library speaks the filesystem queue. The shell on `qemu_virt_aarch64_fs_sddf` is the guest caller.
 
 - Paths are copied as given. Do not add a leading slash.
-- Descriptors 0, 1, and 2 are not stored. The first `open` returns 3.
+- Descriptors 0, 1, and 2 are not stored. The first `open` returns 3. Sockets are a separate table. The first `socket` also returns 3. A second `socket` returns errno 24. `send` before `connect` returns errno 107. A second `connect` returns errno 106.
 - A second call while a command is in flight returns errno 16.
 - `FS_STATUS_NO_FILE` maps to errno 2. `FILE_ERR` and `EPERM` are both 1.
 - `open_dir`, `read_dir`, and `close_dir` use the directory commands. `read_dir` returns `Ok(None)` for `FS_STATUS_END_OF_DIRECTORY` before that status is mapped. The status map would turn it into errno 1.

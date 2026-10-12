@@ -7,11 +7,22 @@ license = "MIT"
 [lints]
 workspace = true
 
+[features]
+board-qemu_virt_aarch64_fetch_sddf = ["dep:lerux-tls", "dep:smoltcp"]
+
 [dependencies]
 lerux-cothread = { path = "../../crates/lerux-cothread" }
 lerux-posix = { path = "../../crates/lerux-posix" }
 lerux-sddf = { path = "../../crates/lerux-sddf" }
+lerux-tls = { path = "../../crates/lerux-tls", optional = true }
 sel4-microkit = { workspace = true }
+smoltcp = { workspace = true, optional = true, features = [
+    "medium-ethernet",
+    "proto-ipv4",
+    "proto-dhcpv4",
+    "socket-dhcpv4",
+    "socket-tcp",
+] }
 
 [build-dependencies]
 lerux-sddf = { path = "../../crates/lerux-sddf" }

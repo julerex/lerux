@@ -60,6 +60,15 @@ expects = ["lerux shell ready"]
 expects = ["ip 10.0.2.15", "ping ok"]
 timeout_secs = 120
 
+[boards.qemu_virt_aarch64_fetch_sddf]
+expects = ["lerux shell ready"]
+timeout_secs = 180
+script_timeout_secs = 120
+script = [
+  { send = "fetch FIX.TXT\r", expect = "fetch ok" },
+  { send = "cat FIX.TXT\r", expect = "lerux-http-fixture" },
+]
+
 [boards.qemu_virt_aarch64_fs_sddf]
 expects = ["lerux shell ready"]
 timeout_secs = 120

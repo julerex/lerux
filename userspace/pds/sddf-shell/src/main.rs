@@ -30,12 +30,20 @@ const CONFIG: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/config.bin"));
 const TX_CH: usize = CLIENT_TX_CHANNEL as usize;
 const RX_CH: usize = CLIENT_RX_CHANNEL as usize;
 const FS_CH: usize = FS_SHELL_SERVER_CHANNEL as usize;
+#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+const STACK_SIZE: usize = 0x1_0000;
+#[cfg(not(feature = "board-qemu_virt_aarch64_fetch_sddf"))]
 const STACK_SIZE: usize = 0x4000;
 const LINE_MAX: usize = 80;
 const NAME_MAX: usize = 12;
 const LIST_MAX: usize = 32;
 const S_IFMT: u64 = 0o170000;
 const S_IFDIR: u64 = 0o040000;
+
+#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+mod net;
+#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+mod net_device;
 
 #[repr(C, align(16))]
 struct Stack([u8; STACK_SIZE]);
@@ -187,8 +195,38 @@ fn dispatch(line: &[u8]) {
         b"mv" => cmd_mv(rest),
         b"rm" => cmd_rm(rest),
         b"stat" => cmd_stat(rest),
+        #[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+        b"fetch" => cmd_fetch(rest),
         _ => say(b"err\n"),
     }
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+fn cmd_fetch(rest: &[u8]) {
+    let Some(name) = one_name(rest) else {
+        say(b"fetch err\n");
+        return;
+    };
+    let mut body = [0u8; 512];
+    let Ok(n) = net::fetch_body(&mut body) else {
+        say(b"fetch err\n");
+        return;
+    };
+    if n == 0 {
+        say(b"fetch err\n");
+        return;
+    }
+    let fd = match files().open(name, Open::CreateWrite) {
+        Ok(fd) => fd,
+        Err(_) => {
+            say(b"fetch err\n");
+            return;
+        }
+    };
+    let wrote = files().write(fd, &body[..n]);
+    let _ = files().close(fd);
+    let ok = matches!(wrote, Ok(written) if written == n);
+    reply(ok, b"fetch ok\n", b"fetch err\n");
 }
 
 fn cmd_mkdir(rest: &[u8]) {
@@ -428,21 +466,32 @@ fn trim(line: &[u8]) -> &[u8] {
     &line[start..end]
 }
 
-#[protection_domain]
+#[cfg_attr(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    protection_domain(heap_size = 1024 * 1024)
+)]
+#[cfg_attr(not(feature = "board-qemu_virt_aarch64_fetch_sddf"), protection_domain)]
 fn init() -> HandlerImpl {
     let serial_len = size_of::<serial_client_config_t>();
     let fs_len = size_of::<fs_client_config_t>();
+    #[cfg(not(feature = "board-qemu_virt_aarch64_fetch_sddf"))]
     assert_eq!(CONFIG.len(), serial_len + fs_len);
     // SAFETY: the build script wrote a `serial_client_config_t` and then an `fs_client_config_t`.
     let serial = unsafe {
         serial_image::serial_config_from_bytes::<serial_client_config_t>(&CONFIG[..serial_len])
     };
-    let fs = unsafe { fs_image::fs_config_from_bytes::<fs_client_config_t>(&CONFIG[serial_len..]) };
+    let fs = unsafe {
+        fs_image::fs_config_from_bytes::<fs_client_config_t>(
+            &CONFIG[serial_len..serial_len + fs_len],
+        )
+    };
     assert_eq!(serial.magic, SDDF_SERIAL_MAGIC);
     assert_eq!(fs.magic, LIONS_FS_MAGIC);
     assert_eq!(serial.tx.id, CLIENT_TX_CHANNEL);
     assert_eq!(serial.rx.id, CLIENT_RX_CHANNEL);
     assert_eq!(fs.server.id, FS_SHELL_SERVER_CHANNEL);
+    #[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+    install_net(serial_len + fs_len);
     // SAFETY: the template maps this client's transmit and receive regions.
     let tx = unsafe { serial_handle_from_connection(&serial.tx) };
     let rx = unsafe { serial_handle_from_connection(&serial.rx) };
@@ -471,6 +520,26 @@ impl Handler for HandlerImpl {
         if channels.contains(Channel::new(FS_CH)) {
             microkit_cothread_recv_ntfn(FS_CH);
         }
+        #[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+        net::on_notify(channels);
         Ok(())
     }
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+fn install_net(at: usize) {
+    use lerux_sddf::{
+        net_client_config_t,
+        net_image::{self, SHELL_NET_RX_CHANNEL, SHELL_NET_TX_CHANNEL},
+        SDDF_NET_MAGIC,
+    };
+
+    let net_len = size_of::<net_client_config_t>();
+    assert_eq!(CONFIG.len(), at + net_len);
+    // SAFETY: the build script wrote the network client page after the filesystem page.
+    let net = unsafe { net_image::net_config_from_bytes::<net_client_config_t>(&CONFIG[at..]) };
+    assert_eq!(net.magic, SDDF_NET_MAGIC);
+    assert_eq!(net.rx.id, SHELL_NET_RX_CHANNEL);
+    assert_eq!(net.tx.id, SHELL_NET_TX_CHANNEL);
+    net::install(&net);
 }

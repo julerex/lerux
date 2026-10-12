@@ -72,6 +72,9 @@ pub const COPY_CLIENT_CHANNEL: u8 = 1;
 // The client keeps serial transmit on channel 0 and serial receive on channel 1.
 pub const CLIENT_NET_RX_CHANNEL: u8 = 2;
 pub const CLIENT_NET_TX_CHANNEL: u8 = 3;
+/// The shell already uses channel 2 for the filesystem server.
+pub const SHELL_NET_RX_CHANNEL: u8 = 3;
+pub const SHELL_NET_TX_CHANNEL: u8 = 4;
 
 /// QEMU's default virtio-net address for the first device.
 pub const CLIENT_MAC: mac_addr_t = mac_addr_t {
@@ -218,6 +221,15 @@ pub fn client_config() -> net_client_config_t {
     );
     config.tx_data = region(NET_TX_DATA_VADDR, NET_DATA_SIZE);
     config.mac_addr = CLIENT_MAC;
+    config
+}
+
+/// `net_client_config_t` for the shell, whose serial and filesystem channels
+/// already use 0, 1, and 2.
+pub fn shell_client_config() -> net_client_config_t {
+    let mut config = client_config();
+    config.rx.id = SHELL_NET_RX_CHANNEL;
+    config.tx.id = SHELL_NET_TX_CHANNEL;
     config
 }
 

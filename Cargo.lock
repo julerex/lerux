@@ -2358,7 +2358,9 @@ dependencies = [
  "lerux-cothread",
  "lerux-posix",
  "lerux-sddf",
+ "lerux-tls",
  "sel4-microkit",
+ "smoltcp",
 ]
 
 [[package]]

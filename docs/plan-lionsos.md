@@ -2,7 +2,7 @@
 
 Last updated: 2026-10-09
 
-**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is done and is the file-descriptor library. Milestone 6 is done and is the shell on that filesystem image. Milestone 7 is done and is the network-role image. Milestone 8 is next. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
+**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is done and is the file-descriptor library. Milestone 6 is done and is the shell on that filesystem image. Milestone 7 is done and is the network-role image. Milestone 8 is done and is the socket and fetch image. Milestone 9 is next. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
 
 **Goal:** Every lerux guest protection domain stays Rust, and the queues, configuration pages, filesystem messages, and component graph are the same ones LionsOS uses.
 
@@ -172,6 +172,15 @@ Landed:
 ## Milestone 8 — Sockets and fetch
 
 **Exit:** `lerux-posix` grows `socket`, `connect`, `send`, and `recv` on that client's smoltcp. `fetch` of the existing host `lerux https-one` fixture writes a file, and `cat` prints it. Transport Layer Security is a Rust library inside the client, or one protection domain in front of it, using those socket calls. There is no `TlsRequest` or `HttpRequest` type.
+
+Done.
+
+Landed:
+
+- `lerux-posix` adds `Sockets` and `Tcp`. The shell on `qemu_virt_aarch64_fetch_sddf` owns smoltcp and `lerux-tls`. `fetch FIX.TXT` writes the body of `GET /fixture.html`. `cat` prints that body. Transport Layer Security uses `socket`, `connect`, `send`, and `recv`. There is no `TlsRequest` or `HttpRequest`.
+- The image boots the filesystem roles and the network roles. The shell is the one client of each. Its network channels are 3 and 4. The ping image stays on channels 2 and 3.
+- `support/smoke-expects.toml` expects `fetch ok` and then `lerux-http-fixture`. The continuous integration job is `fetch-sddf`. The smoke count is 49.
+- Checked on 2026-10-12: `just check` passed, `just check-pd` passed, and `just test-fetch-sddf` printed `fetch ok` and `lerux-http-fixture`.
 
 ## Milestone 9 — Config, time, reboot, static status
 

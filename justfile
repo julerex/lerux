@@ -117,6 +117,10 @@ test-fs-sddf:
 test-net-sddf:
     BOARD=qemu_virt_aarch64_net_sddf just test
 
+# Milestone 8: shell fetches the https-one fixture over the client's smoltcp
+test-fetch-sddf:
+    BOARD=qemu_virt_aarch64_fetch_sddf just test
+
 # Milestone 3: cothread blocks on a channel until a Microkit notification
 test-cothread:
     BOARD=qemu_virt_aarch64_cothread just test

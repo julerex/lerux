@@ -2,7 +2,7 @@
 
 Last updated: 2026-10-12
 
-**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is done and is the file-descriptor library. Milestone 6 is done and is the shell on that filesystem image. Milestone 7 is done and is the network-role image. Milestone 8 is done and is the socket and fetch image. Milestone 9 is done and is the timer and static status on the filesystem image. Milestone 10 is next. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
+**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is done and is the file-descriptor library. Milestone 6 is done and is the shell on that filesystem image. Milestone 7 is done and is the network-role image. Milestone 8 is done and is the socket and fetch image. Milestone 9 is done and is the timer and static status on the filesystem image. Milestone 10 is done and is the remaining shell commands on the fetch image. Milestone 11 is next. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
 
 **Goal:** Every lerux guest protection domain stays Rust, and the queues, configuration pages, filesystem messages, and component graph are the same ones LionsOS uses.
 
@@ -202,6 +202,15 @@ Landed:
 ## Milestone 10 — Remaining shell programs
 
 **Exit:** Scripted smokes for `calc`, `backup`, `source`, `cert`, `edit`, and `chat`. `edit` and `backup` use `lerux-posix`. `chat` uses the socket calls. Each smoke has one expected serial string.
+
+Done.
+
+Landed:
+
+- The shell on `qemu_virt_aarch64_fetch_sddf` adds `calc`, `backup`, `source`, `cert`, `edit`, and `chat`. `backup` reads one file and writes another through `lerux-posix`. `edit` creates a file through `lerux-posix`. `source` reads a file and runs each line. `calc` prints `calc N`. `cert` loads the baked-in smoke certificate authority and prints `cert ok`.
+- `chat` calls `socket`, `connect`, `send`, and `recv`. It sends `chat` to `10.0.2.2` port 18080. The host echo writes those bytes back. `Sockets::close` returns the one socket to empty so `fetch` and `chat` can each connect in the same boot. A second `socket` while one is still open returns errno 24.
+- The board starts the host echo because `qemu.tcp_echo` is true. `support/smoke-expects.toml` expects `calc 9`, `backup ok`, `calc 4`, `cert ok`, `edit ok`, and `chat ok`. The continuous integration job stays `fetch-sddf`. The smoke count stays 49.
+- Checked on 2026-10-12: `just check` passed, `just check-pd` passed, and `just test-fetch-sddf` printed those six strings after `fetch ok`.
 
 ## Milestone 11 — File browser
 

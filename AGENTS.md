@@ -172,7 +172,7 @@ Read Milestone 7 in [docs/plan-lionsos.md](docs/plan-lionsos.md). The postcard `
 
 ## Fetch image (`qemu_virt_aarch64_fetch_sddf`)
 
-Read Milestone 8 in [docs/plan-lionsos.md](docs/plan-lionsos.md). This image is the filesystem image plus the network roles. The shell is the one serial client, the filesystem client, and the network client. Postcard `net-server`, `fs-server`, and `tls-proxy` stay on the other boards.
+Read Milestones 8 and 10 in [docs/plan-lionsos.md](docs/plan-lionsos.md). This image is the filesystem image plus the network roles. The shell is the one serial client, the filesystem client, and the network client. Postcard `net-server`, `fs-server`, and `tls-proxy` stay on the other boards.
 
 - Protection domains are `blk_driver`, `net_driver`, `serial_driver`, `blk_virt`, `net_virt_tx`, `net_virt_rx`, `serial_virt_tx`, `serial_virt_rx`, `fatfs`, `net_copy`, and `shell`. The shell program is `sddf-shell.elf`.
 - Virtio-net is the first virtio device, at `+0xe00` in the page at `0xa003000`, interrupt 79. Virtio-blk stays at `+0xc00`, interrupt 78. Both drivers map that page at `0x6_000_000_000`. Each driver has its own direct-memory-access region, and both regions use virtual address `0x8_000_000_000`.
@@ -181,7 +181,8 @@ Read Milestone 8 in [docs/plan-lionsos.md](docs/plan-lionsos.md). This image is 
 - The board feature `board-qemu_virt_aarch64_fetch_sddf` links smoltcp and `lerux-tls` into the shell. The filesystem-image build of `sddf-shell` does not. Do not add `lerux-logging` or `lerux-interface-types`. There is no `TlsRequest` or `HttpRequest`.
 - The worker stack is `0x1_0000` on this image. The Transport Layer Security buffer is 16640 bytes. The heap is 1 MiB. The protection-domain stack attribute stays `0x10_000`. Assertions stay on the root. Do not panic inside the cothread.
 - `fetch NAME` brings up Dynamic Host Configuration Protocol, connects to `10.0.2.2` port 8443, and writes the body of `GET /fixture.html`. The success line is `fetch ok`. `just test-fetch-sddf` then cats the file and expects `lerux-http-fixture`. Keep `lerux shell ready`, `fetch ok`, and `lerux-http-fixture` out of `expect` and `assert` messages.
-- One socket. A second `socket` returns errno 24. `drive` can report connected while ciphertext is still in the session. Send that ciphertext before waiting for the next record.
+- One socket. A second `socket` while that socket is open returns errno 24. `Sockets::close` aborts the connection and returns the table to empty, so `fetch` and `chat` can each connect in one boot. `drive` can report connected while ciphertext is still in the session. Send that ciphertext before waiting for the next record.
+- `calc` prints `calc N`. `backup SRC DST` reads `SRC` and creates `DST` through `lerux-posix`. `source NAME` runs each line of that file. A nested `source` prints `source err`. `cert` loads the baked-in smoke certificate authority and prints `cert ok`. `edit NAME TEXT` creates that file through `lerux-posix`. Create of an existing name is rejected. `chat` connects to `10.0.2.2` port 18080, sends `chat`, and prints `chat ok` when the host echo returns those bytes. The board sets `qemu.tcp_echo`. Keep `calc 9`, `backup ok`, `cert ok`, `edit ok`, and `chat ok` out of `expect` and `assert` messages.
 - Priorities are the drivers at 4, the virtualisers at 3, `fatfs` and `net_copy` at 2, and `shell` at 1.
 - The one-shot ready lines print before `lerux shell ready`. Leave them.
 
@@ -190,7 +191,7 @@ Read Milestone 8 in [docs/plan-lionsos.md](docs/plan-lionsos.md). This image is 
 Read Milestones 5 and 6 in [docs/plan-lionsos.md](docs/plan-lionsos.md). The library speaks the filesystem queue. The shell on `qemu_virt_aarch64_fs_sddf` is the guest caller.
 
 - Paths are copied as given. Do not add a leading slash.
-- Descriptors 0, 1, and 2 are not stored. The first `open` returns 3. Sockets are a separate table. The first `socket` also returns 3. A second `socket` returns errno 24. `send` before `connect` returns errno 107. A second `connect` returns errno 106.
+- Descriptors 0, 1, and 2 are not stored. The first `open` returns 3. Sockets are a separate table. The first `socket` also returns 3. A second `socket` while one is open returns errno 24. `close` returns that table to empty. `send` before `connect` returns errno 107. A second `connect` returns errno 106.
 - A second call while a command is in flight returns errno 16.
 - `FS_STATUS_NO_FILE` maps to errno 2. `FILE_ERR` and `EPERM` are both 1.
 - `open_dir`, `read_dir`, and `close_dir` use the directory commands. `read_dir` returns `Ok(None)` for `FS_STATUS_END_OF_DIRECTORY` before that status is mapped. The status map would turn it into errno 1.

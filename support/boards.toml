@@ -169,7 +169,7 @@ microkit_board = "qemu_virt_aarch64"
 target = "aarch64-sel4-microkit"
 template = "fetch-sddf.system.template"
 pds = ["sddf-blk-driver", "sddf-blk-virt", "sddf-fatfs", "sddf-net-driver", "sddf-net-virt-tx", "sddf-net-virt-rx", "sddf-net-copy", "sddf-serial-driver", "sddf-serial-virt-tx", "sddf-serial-virt-rx", "sddf-shell"]
-qemu = { disk = "rw", net = "user", https_one = true }
+qemu = { disk = "rw", net = "user", https_one = true, tcp_echo = true }
 ci = true
 system_vars = { virtio_mmio_phys_addr = "0xa003000", virtio_blk_irq = 78, virtio_net_irq = 79, serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33 }
 

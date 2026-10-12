@@ -108,6 +108,16 @@ fn socket_connect_send_recv_round_trip() {
 }
 
 #[test]
+fn close_lets_the_next_socket_connect() {
+    let mut sockets = Sockets::new(Pipe::open());
+    let fd = sockets.socket().expect("first socket");
+    sockets.connect(fd, HOST, PORT).expect("connect");
+    sockets.close(fd).expect("close");
+    let fd = sockets.socket().expect("socket after close");
+    sockets.connect(fd, HOST, PORT).expect("second connect");
+}
+
+#[test]
 fn second_socket_is_emfile() {
     let mut sockets = Sockets::new(Pipe::open());
     sockets.socket().expect("first socket");

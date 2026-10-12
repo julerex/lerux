@@ -1,8 +1,9 @@
 //! One Transmission Control Protocol socket.
 //!
 //! [`Sockets`] owns the call order. The caller owns the stack through [`Tcp`].
-//! A second `socket` returns errno 24. `send` and `recv` run only while the
-//! connection is open.
+//! A second `socket` returns errno 24 while one is still open. [`Sockets::close`]
+//! returns that table to empty. `send` and `recv` run only while the connection
+//! is open.
 
 use super::Errno;
 
@@ -30,6 +31,9 @@ pub trait Tcp {
     fn failed(&self) -> bool;
     fn send(&mut self, data: &[u8]) -> Result<usize, Errno>;
     fn recv(&mut self, buf: &mut [u8]) -> Result<usize, Errno>;
+
+    /// Drop the connection so a later [`Sockets::socket`] can use this pipe.
+    fn finish(&mut self) {}
 }
 
 enum Phase {
@@ -117,6 +121,17 @@ impl<T: Tcp> Sockets<T> {
             }
         }
         Ok(sent)
+    }
+
+    /// Drop `fd` and let the next [`Self::socket`] allocate again.
+    pub fn close(&mut self, fd: SockFd) -> Result<(), Errno> {
+        self.live(fd)?;
+        if matches!(self.phase, Phase::Empty) {
+            return Err(Errno(Errno::EBADF));
+        }
+        self.tcp.finish();
+        self.phase = Phase::Empty;
+        Ok(())
     }
 
     /// Receive at least one byte, or `Ok(0)` when the peer has closed.

@@ -63,10 +63,18 @@ timeout_secs = 120
 [boards.qemu_virt_aarch64_fetch_sddf]
 expects = ["lerux shell ready"]
 timeout_secs = 180
-script_timeout_secs = 120
+script_timeout_secs = 180
 script = [
   { send = "fetch FIX.TXT\r", expect = "fetch ok" },
   { send = "cat FIX.TXT\r", expect = "lerux-http-fixture" },
+  { send = "calc (1+2)*3\r", expect = "calc 9" },
+  { send = "write B.TXT hi\r", expect = "write ok" },
+  { send = "backup B.TXT B.BAK\r", expect = "backup ok" },
+  { send = "write C.TXT calc 2+2\r", expect = "write ok" },
+  { send = "source C.TXT\r", expect = "calc 4" },
+  { send = "cert\r", expect = "cert ok" },
+  { send = "edit E.TXT edited\r", expect = "edit ok" },
+  { send = "chat\r", expect = "chat ok" },
 ]
 
 [boards.qemu_virt_aarch64_fs_sddf]

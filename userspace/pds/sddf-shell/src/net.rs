@@ -39,6 +39,8 @@ const LIMIT_MS: u64 = 30_000;
 const LOCAL_PORT: u16 = 49152;
 const GATEWAY: Ipv4Address = Ipv4Address::new(10, 0, 2, 2);
 const FIXTURE_PORT: u16 = 8443;
+const ECHO_PORT: u16 = 18080;
+const CHAT_LINE: &[u8] = b"chat\n";
 const HTTP_GET: &[u8] = b"GET /fixture.html HTTP/1.1\r\nHost: host\r\nConnection: close\r\n\r\n";
 
 struct Map {
@@ -97,10 +99,34 @@ pub fn on_notify(channels: ChannelSet) {
 pub fn fetch_body(out: &mut [u8]) -> Result<usize, ()> {
     let sockets = sockets()?;
     let fd = sockets.socket().map_err(|_| ())?;
-    sockets
-        .connect(fd, GATEWAY.octets(), FIXTURE_PORT)
-        .map_err(|_| ())?;
-    http_body(sockets, fd, out)
+    let result = (|| {
+        sockets
+            .connect(fd, GATEWAY.octets(), FIXTURE_PORT)
+            .map_err(|_| ())?;
+        http_body(sockets, fd, out)
+    })();
+    let _ = sockets.close(fd);
+    result
+}
+
+/// The baked-in smoke certificate authority loads.
+pub fn cert_ready() -> bool {
+    ClientSession::new("host").is_ok()
+}
+
+/// Send one line to the host echo and return the bytes it wrote back.
+pub fn chat_echo(out: &mut [u8]) -> Result<usize, ()> {
+    let sockets = sockets()?;
+    let fd = sockets.socket().map_err(|_| ())?;
+    let result = (|| {
+        sockets
+            .connect(fd, GATEWAY.octets(), ECHO_PORT)
+            .map_err(|_| ())?;
+        sockets.send(fd, CHAT_LINE).map_err(|_| ())?;
+        sockets.recv(fd, out).map_err(|_| ())
+    })();
+    let _ = sockets.close(fd);
+    result
 }
 
 fn map() -> &'static Map {
@@ -156,6 +182,7 @@ struct Stack {
     tcp: SocketHandle,
     ms: u64,
     op_start: u64,
+    local_port: u16,
     local_ip: Ipv4Address,
     connecting: bool,
 }
@@ -196,6 +223,7 @@ impl Stack {
             tcp,
             ms: 0,
             op_start: 0,
+            local_port: LOCAL_PORT,
             local_ip: Ipv4Address::UNSPECIFIED,
             connecting: false,
         })
@@ -293,9 +321,11 @@ impl Tcp for Stack {
             IpAddress::Ipv4(Ipv4Address::new(addr[0], addr[1], addr[2], addr[3])),
             port,
         );
+        let port = self.local_port;
+        self.local_port = self.local_port.saturating_add(1);
         let local = IpListenEndpoint {
             addr: Some(IpAddress::Ipv4(self.local_ip)),
-            port: LOCAL_PORT,
+            port,
         };
         let handle = self.tcp;
         {
@@ -335,6 +365,15 @@ impl Tcp for Stack {
             return Err(Errno(Errno::EAGAIN));
         }
         Ok(0)
+    }
+
+    fn finish(&mut self) {
+        let tcp = self.sockets.get_mut::<tcp::Socket>(self.tcp);
+        if tcp.is_open() {
+            tcp.abort();
+        }
+        self.connecting = false;
+        self.poll_iface();
     }
 }
 

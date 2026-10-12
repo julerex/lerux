@@ -251,6 +251,18 @@ fn dispatch(line: &[u8]) {
         b"stat" => cmd_stat(rest),
         #[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
         b"fetch" => cmd_fetch(rest),
+        #[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+        b"calc" => cmd_calc(rest),
+        #[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+        b"backup" => cmd_backup(rest),
+        #[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+        b"source" => cmd_source(rest),
+        #[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+        b"cert" => cmd_cert(rest),
+        #[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+        b"edit" => cmd_edit(rest),
+        #[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+        b"chat" => cmd_chat(rest),
         #[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
         b"config" => cmd_config(rest),
         #[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
@@ -456,6 +468,323 @@ fn cmd_fetch(rest: &[u8]) {
     let _ = files().close(fd);
     let ok = matches!(wrote, Ok(written) if written == n);
     reply(ok, b"fetch ok\n", b"fetch err\n");
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+fn cmd_calc(rest: &[u8]) {
+    if rest.is_empty() {
+        say(b"calc err\n");
+        return;
+    }
+    match eval_expr(rest) {
+        Ok(value) => say_calc(value),
+        Err(()) => say(b"calc err\n"),
+    }
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+fn say_calc(value: i64) {
+    let mut line = [0u8; 32];
+    let prefix = b"calc ";
+    line[..prefix.len()].copy_from_slice(prefix);
+    let mut len = prefix.len();
+    len += write_i64(&mut line[len..], value);
+    line[len] = b'\n';
+    len += 1;
+    say(&line[..len]);
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+fn write_i64(buf: &mut [u8], value: i64) -> usize {
+    if value < 0 {
+        buf[0] = b'-';
+        return 1 + write_u64(&mut buf[1..], value.unsigned_abs());
+    }
+    write_u64(buf, u64::try_from(value).expect("non-negative"))
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+fn write_u64(buf: &mut [u8], mut value: u64) -> usize {
+    let mut tmp = [0u8; 20];
+    let mut index = tmp.len();
+    loop {
+        index -= 1;
+        tmp[index] = b'0' + (value % 10) as u8;
+        value /= 10;
+        if value == 0 {
+            break;
+        }
+    }
+    let digits = &tmp[index..];
+    buf[..digits.len()].copy_from_slice(digits);
+    digits.len()
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+fn eval_expr(input: &[u8]) -> Result<i64, ()> {
+    let mut parser = Parser { s: input, i: 0 };
+    let value = parser.parse_expr()?;
+    parser.skip();
+    if parser.i != parser.s.len() {
+        return Err(());
+    }
+    Ok(value)
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+struct Parser<'a> {
+    s: &'a [u8],
+    i: usize,
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+impl Parser<'_> {
+    fn skip(&mut self) {
+        while self.i < self.s.len() && self.s[self.i] == b' ' {
+            self.i += 1;
+        }
+    }
+
+    fn peek(&mut self) -> Option<u8> {
+        self.skip();
+        self.s.get(self.i).copied()
+    }
+
+    fn bump(&mut self) -> Option<u8> {
+        let byte = self.peek()?;
+        self.i += 1;
+        Some(byte)
+    }
+
+    fn parse_expr(&mut self) -> Result<i64, ()> {
+        let mut value = self.parse_term()?;
+        loop {
+            match self.peek() {
+                Some(b'+') => {
+                    self.bump();
+                    value = value.saturating_add(self.parse_term()?);
+                }
+                Some(b'-') => {
+                    self.bump();
+                    value = value.saturating_sub(self.parse_term()?);
+                }
+                _ => break,
+            }
+        }
+        Ok(value)
+    }
+
+    fn parse_term(&mut self) -> Result<i64, ()> {
+        let mut value = self.parse_factor()?;
+        loop {
+            match self.peek() {
+                Some(b'*') => {
+                    self.bump();
+                    value = value.saturating_mul(self.parse_factor()?);
+                }
+                Some(b'/') => {
+                    self.bump();
+                    let right = self.parse_factor()?;
+                    if right == 0 {
+                        return Err(());
+                    }
+                    value /= right;
+                }
+                _ => break,
+            }
+        }
+        Ok(value)
+    }
+
+    fn parse_factor(&mut self) -> Result<i64, ()> {
+        match self.peek() {
+            Some(b'(') => {
+                self.bump();
+                let value = self.parse_expr()?;
+                if self.bump() != Some(b')') {
+                    return Err(());
+                }
+                Ok(value)
+            }
+            Some(b'+') => {
+                self.bump();
+                self.parse_factor()
+            }
+            Some(b'-') => {
+                self.bump();
+                Ok(self.parse_factor()?.saturating_neg())
+            }
+            Some(b'0'..=b'9') => self.parse_number(),
+            _ => Err(()),
+        }
+    }
+
+    fn parse_number(&mut self) -> Result<i64, ()> {
+        let mut value: i64 = 0;
+        let mut saw = false;
+        while let Some(byte @ b'0'..=b'9') = self.s.get(self.i).copied() {
+            saw = true;
+            self.i += 1;
+            value = value
+                .saturating_mul(10)
+                .saturating_add(i64::from(byte - b'0'));
+        }
+        if saw {
+            Ok(value)
+        } else {
+            Err(())
+        }
+    }
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+fn cmd_backup(rest: &[u8]) {
+    let Some((src, dest)) = split_first(rest) else {
+        say(b"backup err\n");
+        return;
+    };
+    let Some(dest) = one_name(dest) else {
+        say(b"backup err\n");
+        return;
+    };
+    if src.is_empty() {
+        say(b"backup err\n");
+        return;
+    }
+    let fd = match files().open(src, Open::Read) {
+        Ok(fd) => fd,
+        Err(_) => {
+            say(b"backup err\n");
+            return;
+        }
+    };
+    let mut buf = [0u8; 512];
+    let read = files().read(fd, &mut buf);
+    let _ = files().close(fd);
+    let Ok(n) = read else {
+        say(b"backup err\n");
+        return;
+    };
+    if n == 0 {
+        say(b"backup err\n");
+        return;
+    }
+    let fd = match files().open(dest, Open::CreateWrite) {
+        Ok(fd) => fd,
+        Err(_) => {
+            say(b"backup err\n");
+            return;
+        }
+    };
+    let wrote = files().write(fd, &buf[..n]);
+    let _ = files().close(fd);
+    let ok = matches!(wrote, Ok(written) if written == n);
+    reply(ok, b"backup ok\n", b"backup err\n");
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+fn cmd_source(rest: &[u8]) {
+    use core::sync::atomic::{AtomicBool, Ordering};
+    static SOURCING: AtomicBool = AtomicBool::new(false);
+    let Some(name) = one_name(rest) else {
+        say(b"source err\n");
+        return;
+    };
+    if SOURCING.swap(true, Ordering::Relaxed) {
+        say(b"source err\n");
+        return;
+    }
+    let ran = source_file(name);
+    SOURCING.store(false, Ordering::Relaxed);
+    if !ran {
+        say(b"source err\n");
+    }
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+fn source_file(name: &[u8]) -> bool {
+    let fd = match files().open(name, Open::Read) {
+        Ok(fd) => fd,
+        Err(_) => return false,
+    };
+    let mut buf = [0u8; 512];
+    let read = files().read(fd, &mut buf);
+    let _ = files().close(fd);
+    let Ok(n) = read else {
+        return false;
+    };
+    if n == 0 {
+        return false;
+    }
+    let mut ran = false;
+    let mut start = 0;
+    for index in 0..=n {
+        let at_end = index == n || buf[index] == b'\n';
+        if !at_end {
+            continue;
+        }
+        let raw = &buf[start..index];
+        let raw = raw.strip_suffix(b"\r").unwrap_or(raw);
+        start = index + 1;
+        if raw.is_empty() {
+            continue;
+        }
+        if raw.len() > LINE_MAX {
+            return false;
+        }
+        let mut line = [0u8; LINE_MAX];
+        line[..raw.len()].copy_from_slice(raw);
+        dispatch(&line[..raw.len()]);
+        ran = true;
+    }
+    ran
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+fn cmd_cert(rest: &[u8]) {
+    if !rest.is_empty() {
+        say(b"cert err\n");
+        return;
+    }
+    reply(net::cert_ready(), b"cert ok\n", b"cert err\n");
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+fn cmd_edit(rest: &[u8]) {
+    let Some((name, text)) = split_first(rest) else {
+        say(b"edit err\n");
+        return;
+    };
+    if name.is_empty() || text.is_empty() || text.len() > 512 {
+        say(b"edit err\n");
+        return;
+    }
+    let fd = match files().open(name, Open::CreateWrite) {
+        Ok(fd) => fd,
+        Err(_) => {
+            say(b"edit err\n");
+            return;
+        }
+    };
+    let wrote = files().write(fd, text);
+    let _ = files().close(fd);
+    let ok = matches!(wrote, Ok(n) if n == text.len());
+    reply(ok, b"edit ok\n", b"edit err\n");
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+fn cmd_chat(rest: &[u8]) {
+    if !rest.is_empty() {
+        say(b"chat err\n");
+        return;
+    }
+    let mut buf = [0u8; 16];
+    let Ok(n) = net::chat_echo(&mut buf) else {
+        say(b"chat err\n");
+        return;
+    };
+    let echoed = n >= 4 && buf[..n].windows(4).any(|window| window == b"chat");
+    reply(echoed, b"chat ok\n", b"chat err\n");
 }
 
 fn cmd_mkdir(rest: &[u8]) {

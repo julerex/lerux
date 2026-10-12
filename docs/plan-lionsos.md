@@ -2,7 +2,7 @@
 
 Last updated: 2026-10-12
 
-**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is done and is the file-descriptor library. Milestone 6 is done and is the shell on that filesystem image. Milestone 7 is done and is the network-role image. Milestone 8 is done and is the socket and fetch image. Milestone 9 is done and is the timer and static status on the filesystem image. Milestone 10 is done and is the remaining shell commands on the fetch image. Milestone 11 is done and is the web image that serves the seeded hostname file. Milestone 12 is done and is the virtio graphics driver, virtualiser, and browser image. Milestone 13 is done and is the agent image. Milestone 14 is next. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
+**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is done and is the file-descriptor library. Milestone 6 is done and is the shell on that filesystem image. Milestone 7 is done and is the network-role image. Milestone 8 is done and is the socket and fetch image. Milestone 9 is done and is the timer and static status on the filesystem image. Milestone 10 is done and is the remaining shell commands on the fetch image. Milestone 11 is done and is the web image that serves the seeded hostname file. Milestone 12 is done and is the virtio graphics driver, virtualiser, and browser image. Milestone 13 is done and is the agent image. Milestone 14 is done and is the WebAssembly runtime protection domain. Milestone 15 is next. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
 
 **Goal:** Every lerux guest protection domain stays Rust, and the queues, configuration pages, filesystem messages, and component graph are the same ones LionsOS uses.
 
@@ -258,6 +258,16 @@ Landed:
 ## Milestone 14 — WebAssembly role
 
 **Exit:** One Rust runtime protection domain has filesystem and socket access through `lerux-posix`, which is the role of the LionsOS WebAssembly component. `just test-program-sddf` runs a signed ordinary WebAssembly module and expects its print. A bad signature does not instantiate the module. The `LRW1` opcode list and `lerux-prog` interpreter are deleted in this milestone.
+
+Done.
+
+Landed:
+
+- `lerux-wasm` runs ordinary WebAssembly with `wasmi` 2.0.0. The features are `validate`, `prefer-btree-collections`, and `portable-dispatch`. `run_signed` checks the ed25519 signature before instantiate. [ADR-012](decisions/012-ordinary-webassembly.md) records why `wasmi` is accepted here and why `wasmtime` and the WebAssembly Micro Runtime stay out. [ADR-010](decisions/010-program-runtime.md) still records the envelope. Its interpreter decision is superseded.
+- `qemu_virt_aarch64_program_sddf` is the fetch image with `program` (`sddf-program.elf`) in place of the shell. The protection domain is the serial client, the filesystem client, and the network client. The module reads `/config/hostname` and allocates a socket through `lerux-posix`. The pipe does not connect. The network queues are mapped. `net_buffers_init` runs once on the transmit free queue.
+- A bad signature prints `program: rejected` and does not instantiate the module. The signed module then prints `lerux-wasm: ran`. `support/smoke-expects.toml` expects those two lines in that order. The continuous integration job is `program-sddf`. The smoke count is 53.
+- `lerux-prog` is deleted. The postcard `program-runtime` uses `lerux-wasm` and still logs `lerux-prog: ran`. `just test-program` stays. That protection domain has no network client.
+- Checked on 2026-10-12: `just check` passed, `just check-pd` passed, `just test-program-sddf` printed `program: rejected` and `lerux-wasm: ran`, and `just test-program` printed `lerux-prog: ran`.
 
 ## Milestone 15 — Packages
 

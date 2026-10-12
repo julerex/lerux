@@ -30,6 +30,7 @@ mod path;
 mod process;
 mod profile;
 mod prog;
+mod program_sddf;
 mod qemu;
 mod qos_check;
 mod serial_sddf;

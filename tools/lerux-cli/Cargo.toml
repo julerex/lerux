@@ -30,5 +30,5 @@ ed25519-dalek = { version = "2", features = ["rand_core"] }
 rand = "0.8"
 lerux-interface-types = { path = "../../userspace/crates/lerux-interface-types" }
 lerux-fs = { path = "../../userspace/crates/lerux-fs" }
-lerux-prog = { path = "../../userspace/crates/lerux-prog" }
+lerux-wasm = { path = "../../userspace/crates/lerux-wasm" }
 lerux-sddf = { path = "../../userspace/crates/lerux-sddf" }

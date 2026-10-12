@@ -1,0 +1,21 @@
+[package]
+name = "lerux-wasm"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Signed ordinary WebAssembly modules for the runtime protection domain"
+
+[lints]
+workspace = true
+
+[dependencies]
+ed25519-dalek = { version = "2", default-features = false }
+wasmi = { version = "2", default-features = false, features = [
+    "validate",
+    "prefer-btree-collections",
+    "portable-dispatch",
+] }
+
+[dev-dependencies]
+ed25519-dalek = { version = "2", features = ["rand_core"] }
+wat = "1"

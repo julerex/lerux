@@ -15,5 +15,5 @@ board-qemu_virt_aarch64_program = []
 lerux-interface-types = { path = "../../crates/lerux-interface-types" }
 lerux-ipc = { path = "../../crates/lerux-ipc" }
 lerux-logging = { path = "../../crates/lerux-logging", features = ["serial"] }
-lerux-prog = { path = "../../crates/lerux-prog" }
+lerux-wasm = { path = "../../crates/lerux-wasm" }
 sel4-microkit = { workspace = true, features = ["alloc"] }

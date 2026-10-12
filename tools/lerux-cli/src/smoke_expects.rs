@@ -243,6 +243,20 @@ mod tests {
     }
 
     #[test]
+    fn loads_program_sddf_board() {
+        let root = repo_root();
+        let t = smoke_test_for_board(&root, "qemu_virt_aarch64_program_sddf").unwrap();
+        assert_eq!(t.timeout_secs, 180);
+        assert!(t.script.is_empty());
+        assert!(
+            t.expects
+                .windows(2)
+                .any(|pair| pair[0].contains("rejected") && pair[1].contains("lerux-wasm: ran")),
+            "bad signature is printed before the module"
+        );
+    }
+
+    #[test]
     fn loads_agent_sddf_board() {
         let root = repo_root();
         let t = smoke_test_for_board(&root, "qemu_virt_aarch64_agent_sddf").unwrap();

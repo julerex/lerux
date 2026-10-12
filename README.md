@@ -58,7 +58,7 @@ just test-all
 
 ## CI
 
-GitHub Actions runs on every push to `main`: **check** (`just check`), one **sdk** job (SDK + patched SP804 QEMU), **check-pd** (cross-target clippy on userspace crates), then **52 smoke** matrix jobs (the workflow `include` list). `just test-all` runs every `ci = true` board, a wider set than that list. Local lint: `just check` (host crates) or `just check-all` (host + PD, needs SDK). Details: [`docs/ci.md`](docs/ci.md).
+GitHub Actions runs on every push to `main`: **check** (`just check`), one **sdk** job (SDK + patched SP804 QEMU), **check-pd** (cross-target clippy on userspace crates), then **53 smoke** matrix jobs (the workflow `include` list). `just test-all` runs every `ci = true` board, a wider set than that list. Local lint: `just check` (host crates) or `just check-all` (host + PD, needs SDK). Details: [`docs/ci.md`](docs/ci.md).
 
 ## Architecture
 
@@ -100,6 +100,7 @@ Default: `qemu_virt_aarch64` (QEMU ARM virt). Override with `BOARD=... just run`
 | HTTPS fetch over tls-proxy | `qemu_virt_aarch64_fetch_tls` | `just test-fetch-tls` |
 | HTTPS via request-server | `qemu_virt_aarch64_request` | `just test-request` |
 | Signed Wasm program | `qemu_virt_aarch64_program` | `just test-program` |
+| LionsOS WebAssembly runtime | `qemu_virt_aarch64_program_sddf` | `just test-program-sddf` |
 | Init + net IPC | `qemu_virt_aarch64_net_composed` | `just test-net-composed` |
 | Init + blk/net IPC | `qemu_virt_aarch64_ipc_composed` | `just test-ipc-composed` |
 | RISC-V serial / echo / virtio / HTTP | `qemu_virt_riscv64` variants | `just test-riscv` / `just test-riscv-echo` / `just test-riscv-virtio` / `just test-riscv-http` |

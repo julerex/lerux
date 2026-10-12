@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted for the envelope and the untrusted `program-runtime` role. Decision 2, the closed interpreter, is superseded by [ADR-012](012-ordinary-webassembly.md).
 
 ## Date
 

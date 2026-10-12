@@ -90,6 +90,10 @@ Templates under `userspace/systems/templates/`. Most still embed hand channels f
 
 `qemu_virt_aarch64_browser_sddf` has no profile. `browser-sddf.system.template` is the fetch template plus `gpu_driver` and `gpu_virt`. Virtio-gpu is the third virtio-mmio device, at `+0xa00` and interrupt 77. Graphics regions start at `0x7_000_000`. The shell config stays the serial client page, the filesystem shell page, and the network shell page. The pinned graphics headers have no configuration page. Agent rules are in [AGENTS.md](../AGENTS.md#browser-image-qemu_virt_aarch64_browser_sddf).
 
+## Program image
+
+`qemu_virt_aarch64_program_sddf` has no profile. `program-sddf.system.template` is the fetch template with `program` (`sddf-program.elf`) in place of the shell. The protection domain embeds the serial client page, `fs_image::shell_client_config()`, and `net_image::shell_client_config()`. It maps the serial client regions, the filesystem client regions, and the network client queues and data regions. It does not map virtio memory-mapped input/output. A bad signature is rejected before the module is instantiated. Agent rules are in [AGENTS.md](../AGENTS.md#program-image-qemu_virt_aarch64_program_sddf).
+
 ## Agent image
 
 `qemu_virt_aarch64_agent_sddf` has no profile. `agent-sddf.system.template` is the fetch template plus the tool page and the agent protection domain. The shell program is `sddf-grok.elf`. It maps the serial client regions and the tool page. The agent maps the filesystem client regions, the network client regions, and the tool page. The shell embeds the serial client config only. The agent embeds `fs_image::shell_client_config()` and then `net_image::shell_client_config()`. The tool region is `0xa_000_000` and its size is `0x1_000`. Shell channel 2 notifies agent channel 0. Shell channel 3 notifies agent channel 1. There is no graphics role. Agent rules are in [AGENTS.md](../AGENTS.md#agent-image-qemu_virt_aarch64_agent_sddf).

@@ -85,6 +85,10 @@ timeout_secs = 180
 expects = ["title lerux", "pixel 4c5258ff"]
 timeout_secs = 180
 
+[boards.qemu_virt_aarch64_program_sddf]
+expects = ["program: rejected", "lerux-wasm: ran"]
+timeout_secs = 180
+
 [boards.qemu_virt_aarch64_agent_sddf]
 expects = ["lerux shell ready"]
 timeout_secs = 180

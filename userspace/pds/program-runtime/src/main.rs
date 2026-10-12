@@ -3,12 +3,10 @@
 
 extern crate alloc;
 
-use alloc::vec;
-
 use lerux_interface_types::{HttpRequest, HttpResponse};
 use lerux_ipc::HttpClient;
 use lerux_logging::{log, serial};
-use lerux_prog::{run, verify, MEMORY_LEN, SMOKE_LOG};
+use lerux_wasm::{run, verify, Imports, SMOKE_LOG};
 use sel4_microkit::{protection_domain, Channel, Handler, Infallible};
 
 /// Channel 0: serial-driver (`<end pd="program_runtime" id="0" pp="true" />`).
@@ -18,12 +16,12 @@ const REQUEST_SERVER: HttpClient = HttpClient::new(Channel::new(1));
 
 const FETCH_URL: &[u8] = b"https://host:8443/smoke.lrw";
 /// Header (7) + max Wasm payload + ed25519 signature.
-const MAX_BLOB: usize = lerux_prog::HEADER_LEN + lerux_prog::MAX_WASM_LEN + lerux_prog::SIG_LEN;
+const MAX_BLOB: usize = lerux_wasm::HEADER_LEN + lerux_wasm::MAX_WASM_LEN + lerux_wasm::SIG_LEN;
 const SMOKE_VK: [u8; 32] = *include_bytes!("../../../../support/keys/smoke.ed25519.pub");
 
 struct HandlerImpl;
 
-#[protection_domain(heap_size = 128 * 1024)]
+#[protection_domain(heap_size = 2 * 1024 * 1024)]
 fn init() -> HandlerImpl {
     serial::init(SERIAL_DRIVER).expect("serial");
     match fetch_and_run() {
@@ -37,18 +35,31 @@ fn fetch_and_run() -> Result<(), ()> {
     let mut blob = [0u8; MAX_BLOB];
     let n = fetch(&mut blob)?;
     let wasm = verify(&blob[..n], &SMOKE_VK).map_err(|_| ())?;
-    let mut memory = vec![0u8; MEMORY_LEN];
-    let mut saw_log = false;
-    run(wasm, &mut memory, |msg| {
-        if msg == SMOKE_LOG {
-            saw_log = true;
-        }
-    })
-    .map_err(|_| ())?;
-    if saw_log {
+    let mut saw = Saw(false);
+    run(wasm, &mut saw).map_err(|_| ())?;
+    if saw.0 {
         Ok(())
     } else {
         Err(())
+    }
+}
+
+/// The postcard smoke module only calls `lerux.log`.
+struct Saw(bool);
+
+impl Imports for Saw {
+    fn log(&mut self, msg: &[u8]) {
+        if msg == SMOKE_LOG {
+            self.0 = true;
+        }
+    }
+
+    fn read(&mut self, _path: &[u8], _dst: &mut [u8]) -> i32 {
+        -1
+    }
+
+    fn socket(&mut self) -> i32 {
+        -1
     }
 }
 

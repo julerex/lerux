@@ -20,6 +20,7 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `qemu_virt_aarch64_web_sddf` | aarch64 | `just test-web-sddf` | `blk_driver`, `net_driver`, `serial_driver`, `blk_virt`, `net_virt_tx`, `net_virt_rx`, `serial_virt_tx`, `serial_virt_rx`, `fatfs`, `net_copy`, `shell` |
 | `qemu_virt_aarch64_browser_sddf` | aarch64 | `just test-browser-sddf` | `blk_driver`, `net_driver`, `gpu_driver`, `serial_driver`, `blk_virt`, `net_virt_tx`, `net_virt_rx`, `serial_virt_tx`, `serial_virt_rx`, `gpu_virt`, `fatfs`, `net_copy`, `shell` |
 | `qemu_virt_aarch64_agent_sddf` | aarch64 | `just test-agent-sddf` | `blk_driver`, `net_driver`, `serial_driver`, `blk_virt`, `net_virt_tx`, `net_virt_rx`, `serial_virt_tx`, `serial_virt_rx`, `fatfs`, `net_copy`, shell running `sddf-grok.elf`, agent running `sddf-agent.elf` |
+| `qemu_virt_aarch64_program_sddf` | aarch64 | `just test-program-sddf` | fetch roles with `program` (`sddf-program.elf`) in place of the shell |
 | `qemu_virt_aarch64_display` | aarch64 | `just test-display` | Phase 72: ramfb + display-server + display-demo |
 | `qemu_virt_aarch64_html` | aarch64 | `just test-html` | Phase 74: html-demo + lerux-html (baked-in fixture) |
 | `qemu_virt_aarch64_paint` | aarch64 | `just test-paint` | Phase 75: paint-demo + display-server (HTML+CSS → ramfb) |
@@ -335,7 +336,9 @@ See [plan.md](plan.md) Phases 15 and 24.
 
 `qemu_virt_aarch64_request` (Phase 73) runs untrusted `request-client` over `HttpRequest` to `request-server`, which is the sole `TlsClient` of `tls-proxy`. The app PD has no NIC map and does not link rustls. Smoke `GET https://host:8443/fixture.html` against `lerux https-one` expects `lerux-http: fixture ok`. See [plan-interactive.md](plan-interactive.md) and [ADR-009](decisions/009-interactive-surface.md).
 
-`qemu_virt_aarch64_program` (Phase 81, ADR-010) runs untrusted `program-runtime` on the same HTTP path. It GETs `https://host:8443/smoke.lrw`, checks the ed25519 signature, and interprets the Wasm subset. The app has no `NetClient`. Smoke expects `lerux-prog: ran`. See [ADR-010](decisions/010-program-runtime.md).
+`qemu_virt_aarch64_program` (Phase 81, ADR-010) runs untrusted `program-runtime` on the same HTTP path. It GETs `https://host:8443/smoke.lrw`, checks the ed25519 signature, and runs the module with `wasmi`. The app has no `NetClient`. Smoke expects `lerux-prog: ran`. See [ADR-010](decisions/010-program-runtime.md) and [ADR-012](decisions/012-ordinary-webassembly.md).
+
+`qemu_virt_aarch64_program_sddf` (Milestone 14) is the fetch image with `program` in place of the shell. The module reads `/config/hostname` and allocates a socket through `lerux-posix`. A bad signature prints `program: rejected` and is not instantiated. The signed module then prints `lerux-wasm: ran`. See [ADR-012](decisions/012-ordinary-webassembly.md).
 
 `qemu_virt_aarch64_html` (Phase 74) runs `html-demo`, which parses the baked-in `support/browser/fixture.html` with `lerux-html` and logs `lerux-html: nodes=8`. No NIC or filesystem.
 

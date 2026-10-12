@@ -103,4 +103,4 @@ Breaking `interface_types` majors requires rebuilding all PDs that speak that IP
 
 ## Not in scope
 
-Runtime loading of native ELFs into a live Microkit image. A signed Wasm subset inside `program-runtime` is [Phase 81](plan.md#phase-81--signed-wasm-runtime) ([ADR-010](decisions/010-program-runtime.md)).
+Runtime loading of native ELFs into a live Microkit image. A signed module inside `program-runtime` is [Phase 81](plan.md#phase-81--signed-wasm-runtime) ([ADR-010](decisions/010-program-runtime.md)). Milestone 14 runs ordinary WebAssembly on `qemu_virt_aarch64_program_sddf` ([ADR-012](decisions/012-ordinary-webassembly.md)).

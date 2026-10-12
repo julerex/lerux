@@ -58,7 +58,7 @@ This document is the Phase 60 threat model and trust map. It does not claim form
 | `config-server` / `log-server` | service | no | no | shell, supervisor | device DMA |
 | `supervisor` | control | no | no | shell (status/reboot/time) | device DMA |
 | shell / apps | untrusted | no | **none** | each other only via typed RPC | any DMA / MMIO |
-| `program-runtime` | untrusted | no | **none** | `request-server`, serial | any DMA / MMIO; the Wasm module's only import is `lerux.log` (Phase 81, ADR-010) |
+| `program-runtime` | untrusted | no | **none** | `request-server`, serial | any DMA / MMIO; the WebAssembly module's only import is `lerux.log` (Phase 81, ADR-010). The LionsOS `program` protection domain on `qemu_virt_aarch64_program_sddf` is a different role: it is the filesystem client and the network client, and it maps no device memory-mapped input/output (Milestone 14, ADR-012) |
 | `debug-handler` | debug-only | no | no | hierarchy parent | production workstation default |
 
 Channel numbers come from profile `[[channel]]` manifests; PPC callees outrank callers ([`qos.md`](qos.md), ADR-006).

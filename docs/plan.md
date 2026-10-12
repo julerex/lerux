@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-10-12. Numbered phases 1–82 below are done. The active rewrite is [plan-lionsos.md](plan-lionsos.md). Milestones 1 through 13 of that plan are done. Milestone 14 is next.
+Last updated: 2026-10-12. Numbered phases 1–82 below are done. The active rewrite is [plan-lionsos.md](plan-lionsos.md). Milestones 1 through 14 of that plan are done. Milestone 15 is next.
 
 ## Phase 1 — Bring-up
 
@@ -682,7 +682,7 @@ These two landed after phase 80 and are recorded here. The on-guest compiler, an
 - [x] Host `lerux prog pack` writes `support/prog/smoke.lrw`.
 - [x] Board `qemu_virt_aarch64_program`. `just test-program` expects `lerux-prog: ran`.
 
-The on-guest compiler (a protection domain that reads a small Rust subset and emits this Wasm) is still ahead. `wasmi`, `wasmtime`, and a second runtime domain stay out. `pc_z97_d3h` has no NIC, so this fetch stays on QEMU.
+The on-guest compiler (a protection domain that reads a small Rust subset and emits this Wasm) is still ahead. `pc_z97_d3h` has no NIC, so this fetch stays on QEMU. Milestone 14 later replaced the interpreter with `wasmi` on the LionsOS image. See [plan-lionsos.md](plan-lionsos.md) and [ADR-012](decisions/012-ordinary-webassembly.md). `wasmtime` and a second runtime domain stay out.
 
 ## Phase 82 — Z97 on-screen shell ✅
 

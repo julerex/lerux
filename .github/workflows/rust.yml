@@ -305,6 +305,9 @@ jobs:
           - id: agent-sddf
             board: qemu_virt_aarch64_agent_sddf
             command: just test-agent-sddf
+          - id: program-sddf
+            board: qemu_virt_aarch64_program_sddf
+            command: just test-program-sddf
           - id: display
             board: qemu_virt_aarch64_display
             command: just test-display

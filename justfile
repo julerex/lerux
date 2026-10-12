@@ -20,8 +20,8 @@ default: build
 # Format, clippy, and host tests for host crates (no SDK required)
 check:
     cargo fmt --all --check
-    CARGO_TARGET_DIR={{root}}/build/host cargo clippy -p lerux-cli -p lerux-interface-types -p lerux-tls -p lerux-html -p lerux-web -p lerux-prog -p lerux-rtw8852be -p lerux-sddf -p lerux-cothread -p lerux-posix --all-targets -- -D warnings
-    CARGO_TARGET_DIR={{root}}/build/host cargo test -p lerux-interface-types -p lerux-tls -p lerux-html -p lerux-web -p lerux-prog -p lerux-rtw8852be -p lerux-cli -p lerux-sddf -p lerux-cothread -p lerux-posix
+    CARGO_TARGET_DIR={{root}}/build/host cargo clippy -p lerux-cli -p lerux-interface-types -p lerux-tls -p lerux-html -p lerux-web -p lerux-wasm -p lerux-rtw8852be -p lerux-sddf -p lerux-cothread -p lerux-posix --all-targets -- -D warnings
+    CARGO_TARGET_DIR={{root}}/build/host cargo test -p lerux-interface-types -p lerux-tls -p lerux-html -p lerux-web -p lerux-wasm -p lerux-rtw8852be -p lerux-cli -p lerux-sddf -p lerux-cothread -p lerux-posix
     # Phase 60 Track D: PPC priority + service-class band checks (host, no QEMU)
     {{lerux}} profile check-qos
 
@@ -132,6 +132,10 @@ test-browser-sddf:
 # Milestone 13: grok notifies the agent, which writes through the filesystem queue
 test-agent-sddf:
     BOARD=qemu_virt_aarch64_agent_sddf just test
+
+# Milestone 14: signed ordinary WebAssembly with filesystem and socket access
+test-program-sddf:
+    BOARD=qemu_virt_aarch64_program_sddf just test
 
 # Milestone 3: cothread blocks on a channel until a Microkit notification
 test-cothread:

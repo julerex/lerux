@@ -1,4 +1,4 @@
-//! Host checks for the ADR-010 smoke module: verify, run, and reject.
+//! Host checks: verify, run an ordinary module, and reject a bad signature.
 
 use std::{
     fs,
@@ -7,7 +7,29 @@ use std::{
 };
 
 use ed25519_dalek::{Signer, SigningKey};
-use lerux_prog::{encode, run, signing_message, verify, Error, MEMORY_LEN, SIG_LEN, SMOKE_LOG};
+use lerux_wasm::{
+    encode, run, run_signed, signing_message, verify, Error, Imports, SIG_LEN, SMOKE_LOG,
+};
+
+struct Capture {
+    bytes: Vec<u8>,
+    calls: u32,
+}
+
+impl Imports for Capture {
+    fn log(&mut self, bytes: &[u8]) {
+        self.calls += 1;
+        self.bytes.extend_from_slice(bytes);
+    }
+
+    fn read(&mut self, _path: &[u8], _dst: &mut [u8]) -> i32 {
+        -1
+    }
+
+    fn socket(&mut self) -> i32 {
+        -1
+    }
+}
 
 fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")
@@ -26,7 +48,7 @@ fn smoke_vk() -> [u8; 32] {
 
 fn compile(src: &Path, out: &Path) {
     let status = Command::new("rustc")
-        .args(lerux_prog::SMOKE_RUSTC_ARGS)
+        .args(lerux_wasm::SMOKE_RUSTC_ARGS)
         .arg(src)
         .arg("-o")
         .arg(out)
@@ -46,18 +68,21 @@ fn sign_wasm(wasm: &[u8]) -> Vec<u8> {
     blob
 }
 
-fn execute(wasm: &[u8]) -> Result<Vec<u8>, Error> {
-    let mut memory = vec![0u8; MEMORY_LEN];
-    let mut logged = Vec::new();
-    run(wasm, &mut memory, |chunk| logged.extend_from_slice(chunk))?;
-    Ok(logged)
+fn execute(wasm: &[u8]) -> Result<Capture, Error> {
+    let mut host = Capture {
+        bytes: Vec::new(),
+        calls: 0,
+    };
+    run(wasm, &mut host)?;
+    Ok(host)
 }
 
 #[test]
 fn committed_module_runs() {
     let blob = fs::read(repo_root().join("support/prog/smoke.lrw")).unwrap();
     let wasm = verify(&blob, &smoke_vk()).unwrap();
-    assert_eq!(execute(wasm).unwrap(), SMOKE_LOG);
+    let host = execute(wasm).unwrap();
+    assert_eq!(host.bytes, SMOKE_LOG);
 }
 
 #[test]
@@ -67,14 +92,15 @@ fn recompiled_smoke_runs() {
     compile(&src, &out);
     let wasm = fs::read(&out).unwrap();
     let _ = fs::remove_file(&out);
-    assert!(wasm.len() <= lerux_prog::MAX_WASM_LEN);
+    assert!(wasm.len() <= lerux_wasm::MAX_WASM_LEN);
     let blob = sign_wasm(&wasm);
     let wasm = verify(&blob, &smoke_vk()).unwrap();
-    assert_eq!(execute(wasm).unwrap(), SMOKE_LOG);
+    let host = execute(wasm).unwrap();
+    assert_eq!(host.bytes, SMOKE_LOG);
 }
 
 #[test]
-fn flipped_byte_fails_verify_and_does_not_run() {
+fn flipped_byte_fails_verify_and_does_not_instantiate() {
     let src = repo_root().join("support/prog/smoke.rs");
     let out = std::env::temp_dir().join(format!("lerux-flip-{}.wasm", std::process::id()));
     compile(&src, &out);
@@ -84,6 +110,16 @@ fn flipped_byte_fails_verify_and_does_not_run() {
     let flip_at = 7 + wasm.len() / 2;
     blob[flip_at] ^= 0x01;
     assert_eq!(verify(&blob, &smoke_vk()), Err(Error::Signature));
+
+    let mut host = Capture {
+        bytes: Vec::new(),
+        calls: 0,
+    };
+    assert_eq!(
+        run_signed(&blob, &smoke_vk(), &mut host),
+        Err(Error::Signature)
+    );
+    assert_eq!(host.calls, 0);
 }
 
 #[test]
@@ -101,78 +137,30 @@ fn sum_not_two_does_not_log() {
     let _ = fs::remove_file(&out);
     let blob = sign_wasm(&wasm);
     let wasm = verify(&blob, &smoke_vk()).unwrap();
-    assert_eq!(execute(wasm).unwrap(), b"");
+    let host = execute(wasm).unwrap();
+    assert_eq!(host.bytes, b"");
 }
 
 #[test]
-fn unknown_opcode_is_rejected_before_log() {
-    let wasm = unreachable_module();
-    let mut logged = false;
-    let mut memory = vec![0u8; MEMORY_LEN];
-    let err = run(&wasm, &mut memory, |_| logged = true);
-    assert_eq!(err, Err(Error::Opcode));
-    assert!(!logged);
-}
-
-/// One-page module whose `start` body is `unreachable`.
-fn unreachable_module() -> Vec<u8> {
-    fn uleb(mut n: u32) -> Vec<u8> {
-        let mut out = Vec::new();
-        loop {
-            let mut byte = (n & 0x7f) as u8;
-            n >>= 7;
-            if n != 0 {
-                byte |= 0x80;
-            }
-            out.push(byte);
-            if n == 0 {
-                break;
-            }
-        }
-        out
-    }
-    fn section(id: u8, body: &[u8]) -> Vec<u8> {
-        let mut out = vec![id];
-        out.extend(uleb(body.len() as u32));
-        out.extend_from_slice(body);
-        out
-    }
-    fn name(bytes: &[u8]) -> Vec<u8> {
-        let mut out = uleb(bytes.len() as u32);
-        out.extend_from_slice(bytes);
-        out
-    }
-
-    let mut module = vec![0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00];
-    let types = {
-        let mut body = uleb(2);
-        body.extend_from_slice(&[0x60, 2, 0x7f, 0x7f, 0]);
-        body.extend_from_slice(&[0x60, 0, 0]);
-        body
+fn unreachable_traps_after_the_import_runs() {
+    let wasm = wat::parse_str(
+        r#"
+        (module
+          (import "lerux" "log" (func $log (param i32 i32)))
+          (memory (export "memory") 1)
+          (data (i32.const 0) "x")
+          (func (export "start")
+            (call $log (i32.const 0) (i32.const 1))
+            unreachable)
+        )
+        "#,
+    )
+    .unwrap();
+    let mut host = Capture {
+        bytes: Vec::new(),
+        calls: 0,
     };
-    module.extend(section(1, &types));
-    let mut import = uleb(1);
-    import.extend(name(b"lerux"));
-    import.extend(name(b"log"));
-    import.extend_from_slice(&[0x00, 0x00]);
-    module.extend(section(2, &import));
-    module.extend(section(3, &[1, 1]));
-    module.extend(section(5, &[1, 0x00, 1]));
-    let mut export = uleb(1);
-    export.extend(name(b"start"));
-    export.extend_from_slice(&[0x00, 1]);
-    module.extend(section(7, &export));
-    // locals 0, unreachable, end
-    let code_body = {
-        let inner = [0x00u8, 0x00, 0x0b];
-        let mut body = uleb(1);
-        body.extend(uleb(inner.len() as u32));
-        body.extend_from_slice(&inner);
-        body
-    };
-    module.extend(section(10, &code_body));
-    // active data at 0, empty payload (section is required)
-    let data = [1u8, 0x00, 0x41, 0x00, 0x0b, 0x00];
-    module.extend(section(11, &data));
-    module
+    assert_eq!(run(&wasm, &mut host), Err(Error::Trap));
+    assert_eq!(host.calls, 1);
+    assert_eq!(host.bytes, b"x");
 }

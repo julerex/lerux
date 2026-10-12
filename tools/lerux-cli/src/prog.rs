@@ -18,7 +18,7 @@ pub fn pack(root: &Path, key: &Path, out: &Path, src: Option<&Path>) -> Result<(
     }
     let wasm_tmp = tempfile::NamedTempFile::new().context("wasm temp file")?;
     let status = Command::new("rustc")
-        .args(lerux_prog::SMOKE_RUSTC_ARGS)
+        .args(lerux_wasm::SMOKE_RUSTC_ARGS)
         .arg(&src)
         .arg("-o")
         .arg(wasm_tmp.path())
@@ -28,11 +28,11 @@ pub fn pack(root: &Path, key: &Path, out: &Path, src: Option<&Path>) -> Result<(
         bail!("rustc failed for {}", src.display());
     }
     let wasm = fs::read(wasm_tmp.path()).context("read wasm")?;
-    if wasm.len() > lerux_prog::MAX_WASM_LEN {
+    if wasm.len() > lerux_wasm::MAX_WASM_LEN {
         bail!(
             "wasm is {} bytes; max is {}",
             wasm.len(),
-            lerux_prog::MAX_WASM_LEN
+            lerux_wasm::MAX_WASM_LEN
         );
     }
     let secret = fs::read(key).with_context(|| format!("read {}", key.display()))?;
@@ -41,14 +41,14 @@ pub fn pack(root: &Path, key: &Path, out: &Path, src: Option<&Path>) -> Result<(
         .try_into()
         .map_err(|_| anyhow::anyhow!("ed25519 secret key must be 32 bytes"))?;
     let signing = SigningKey::from_bytes(&secret);
-    let mut message = vec![0u8; lerux_prog::HEADER_LEN + wasm.len()];
-    let message_len = lerux_prog::signing_message(&wasm, &mut message)
+    let mut message = vec![0u8; lerux_wasm::HEADER_LEN + wasm.len()];
+    let message_len = lerux_wasm::signing_message(&wasm, &mut message)
         .map_err(|err| anyhow::anyhow!("signing message: {err:?}"))?;
     let signature = signing.sign(&message[..message_len]);
-    let mut sig = [0u8; lerux_prog::SIG_LEN];
+    let mut sig = [0u8; lerux_wasm::SIG_LEN];
     sig.copy_from_slice(&signature.to_bytes());
-    let mut blob = vec![0u8; message_len + lerux_prog::SIG_LEN];
-    let n = lerux_prog::encode(&wasm, &sig, &mut blob)
+    let mut blob = vec![0u8; message_len + lerux_wasm::SIG_LEN];
+    let n = lerux_wasm::encode(&wasm, &sig, &mut blob)
         .map_err(|err| anyhow::anyhow!("encode blob: {err:?}"))?;
     if let Some(parent) = out.parent() {
         fs::create_dir_all(parent).ok();
@@ -84,6 +84,22 @@ fn resolve(root: &Path, path: &Path) -> std::path::PathBuf {
 mod tests {
     use super::*;
 
+    struct Capture(Vec<u8>);
+
+    impl lerux_wasm::Imports for Capture {
+        fn log(&mut self, bytes: &[u8]) {
+            self.0.extend_from_slice(bytes);
+        }
+
+        fn read(&mut self, _path: &[u8], _dst: &mut [u8]) -> i32 {
+            -1
+        }
+
+        fn socket(&mut self) -> i32 {
+            -1
+        }
+    }
+
     #[test]
     fn pack_smoke_verifies_and_runs() {
         let root = repo_root().unwrap();
@@ -93,10 +109,9 @@ mod tests {
         let blob = fs::read(&out).unwrap();
         let vk = fs::read(root.join("support/keys/smoke.ed25519.pub")).unwrap();
         let vk: [u8; 32] = vk.as_slice().try_into().unwrap();
-        let wasm = lerux_prog::verify(&blob, &vk).unwrap();
-        let mut memory = vec![0u8; lerux_prog::MEMORY_LEN];
-        let mut logged = Vec::new();
-        lerux_prog::run(wasm, &mut memory, |chunk| logged.extend_from_slice(chunk)).unwrap();
-        assert_eq!(logged, lerux_prog::SMOKE_LOG);
+        let wasm = lerux_wasm::verify(&blob, &vk).unwrap();
+        let mut logged = Capture(Vec::new());
+        lerux_wasm::run(wasm, &mut logged).unwrap();
+        assert_eq!(logged.0, lerux_wasm::SMOKE_LOG);
     }
 }

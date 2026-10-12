@@ -14,7 +14,7 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `qemu_virt_aarch64_echo` | aarch64 | `just test-echo` | echo client/server + serial |
 | `qemu_virt_aarch64_serial_sddf` | aarch64 | `just test-serial-sddf` | `serial_driver`, `serial_virt_tx`, `serial_virt_rx`, `serial_client` |
 | `qemu_virt_aarch64_cothread` | aarch64 | `just test-cothread` | `cothread_client`, `cothread_peer`, postcard `serial_driver` |
-| `qemu_virt_aarch64_fs_sddf` | aarch64 | `just test-fs-sddf` | `blk_driver`, `serial_driver`, `blk_virt`, `serial_virt_tx`, `serial_virt_rx`, `fatfs`, `shell` |
+| `qemu_virt_aarch64_fs_sddf` | aarch64 | `just test-fs-sddf` | `blk_driver`, `serial_driver`, `blk_virt`, `serial_virt_tx`, `serial_virt_rx`, `fatfs`, `timer_driver`, `shell` |
 | `qemu_virt_aarch64_net_sddf` | aarch64 | `just test-net-sddf` | `net_driver`, `serial_driver`, `net_virt_tx`, `net_virt_rx`, `serial_virt_tx`, `serial_virt_rx`, `net_copy`, `net_client` |
 | `qemu_virt_aarch64_fetch_sddf` | aarch64 | `just test-fetch-sddf` | `blk_driver`, `net_driver`, `serial_driver`, `blk_virt`, `net_virt_tx`, `net_virt_rx`, `serial_virt_tx`, `serial_virt_rx`, `fatfs`, `net_copy`, `shell` |
 | `qemu_virt_aarch64_display` | aarch64 | `just test-display` | Phase 72: ramfb + display-server + display-demo |

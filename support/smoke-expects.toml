@@ -72,7 +72,7 @@ script = [
 [boards.qemu_virt_aarch64_fs_sddf]
 expects = ["lerux shell ready"]
 timeout_secs = 120
-script_timeout_secs = 30
+script_timeout_secs = 120
 script = [
   { send = "mkdir SUB\r", expect = "mkdir ok" },
   { send = "write NOTE.TXT hello\r", expect = "write ok" },
@@ -83,6 +83,12 @@ script = [
   { send = "stat MOVED.TXT\r", expect = "size 5" },
   { send = "rm MOVED.TXT\r", expect = "rm ok" },
   { send = "stat SUB\r", expect = "stat dir" },
+  { send = "config get hostname\r", expect = "lerux" },
+  { send = "date\r", expect = "1970-01-01" },
+  { send = "ps\r", expect = "shell 1 1000" },
+  { send = "qos\r", expect = "fatfs 2 2000" },
+  { send = "dmesg\r", expect = "lerux shell ready" },
+  { send = "reboot\r", expect = "lerux shell ready" },
 ]
 
 [boards.qemu_virt_aarch64_html]

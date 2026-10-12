@@ -64,6 +64,7 @@ mod tests {
             TX_DRIVER_DATA_VADDR, TX_DRIVER_QUEUE_VADDR, UART_VADDR, VIRT_RX_CLIENT_CHANNEL,
             VIRT_RX_DRIVER_CHANNEL, VIRT_TX_CLIENT_CHANNEL, VIRT_TX_DRIVER_CHANNEL,
         },
+        FS_IMAGE_ROLES, SHELL_TIMER_CHANNEL, TIMER_CLIENT_CHANNEL,
     };
 
     use super::*;
@@ -137,14 +138,14 @@ mod tests {
         let xml =
             render_system(&root, "qemu_virt_aarch64_fs_sddf").expect("render filesystem image");
 
-        assert_eq!(xml.matches("<protection_domain ").count(), 7);
-        assert_eq!(xml.matches("<channel>").count(), 7);
-        assert_eq!(xml.matches("program_image").count(), 7);
-        assert_eq!(xml.matches("stack_size=\"0x10_000\"").count(), 7);
+        assert_eq!(xml.matches("<protection_domain ").count(), 8);
+        assert_eq!(xml.matches("<channel>").count(), 8);
+        assert_eq!(xml.matches("program_image").count(), 8);
+        assert_eq!(xml.matches("stack_size=\"0x10_000\"").count(), 8);
         assert_eq!(xml.matches("cached=\"true\"").count(), 36);
         assert_eq!(xml.matches("cached=\"false\"").count(), 1);
         assert_eq!(xml.matches("<irq ").count(), 2);
-        assert!(!xml.contains("pp="));
+        assert_eq!(xml.matches("pp=\"true\"").count(), 1);
         assert!(!xml.contains("fs_client"));
         assert!(!xml.contains("sddf-fs-client"));
         assert!(xml.contains("phys_addr=\"0xa003000\""));
@@ -154,21 +155,16 @@ mod tests {
         )));
         assert!(xml.contains(&format!("<irq irq=\"33\" id=\"{DRIVER_IRQ_CHANNEL}\" />")));
 
-        for (name, priority) in [
-            ("blk_driver", 4),
-            ("serial_driver", 4),
-            ("blk_virt", 3),
-            ("serial_virt_tx", 3),
-            ("serial_virt_rx", 3),
-            ("fatfs", 2),
-            ("shell", 1),
-        ] {
-            assert!(
-                xml.contains(&format!(
-                    "<protection_domain name=\"{name}\" priority=\"{priority}\" stack_size=\"0x10_000\">"
-                )),
-                "{name}"
+        for role in FS_IMAGE_ROLES {
+            let mut tag = format!(
+                "<protection_domain name=\"{}\" priority=\"{}\" budget=\"{}\" period=\"{}\"",
+                role.name, role.priority, role.budget_us, role.budget_us
             );
+            if role.passive {
+                tag.push_str(" passive=\"true\"");
+            }
+            tag.push_str(" stack_size=\"0x10_000\">");
+            assert!(xml.contains(&tag), "{tag}");
         }
 
         for image in [
@@ -178,6 +174,7 @@ mod tests {
             "sddf-serial-driver.elf",
             "sddf-serial-virt-tx.elf",
             "sddf-serial-virt-rx.elf",
+            "sddf-timer-driver.elf",
             "sddf-shell.elf",
         ] {
             assert!(xml.contains(&format!("<program_image path=\"{image}\" />")));
@@ -198,6 +195,7 @@ mod tests {
             ("shell", CLIENT_TX_CHANNEL),
             ("serial_virt_rx", VIRT_RX_CLIENT_CHANNEL),
             ("shell", CLIENT_RX_CHANNEL),
+            ("timer_driver", TIMER_CLIENT_CHANNEL),
         ] {
             assert!(
                 xml.contains(&format!("<end pd=\"{pd}\" id=\"{id}\" />")),
@@ -205,6 +203,9 @@ mod tests {
             );
         }
         assert_ne!(FS_CLIENT_SERVER_CHANNEL, FS_SHELL_SERVER_CHANNEL);
+        assert!(xml.contains(&format!(
+            "<end pd=\"shell\" id=\"{SHELL_TIMER_CHANNEL}\" pp=\"true\" />"
+        )));
 
         let maps = [
             ("virtio_mmio", BLK_VIRTIO_MMIO_VADDR, 1),

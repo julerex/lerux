@@ -1,8 +1,8 @@
 # Lerux in Rust, on the LionsOS architecture
 
-Last updated: 2026-10-09
+Last updated: 2026-10-12
 
-**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is done and is the file-descriptor library. Milestone 6 is done and is the shell on that filesystem image. Milestone 7 is done and is the network-role image. Milestone 8 is done and is the socket and fetch image. Milestone 9 is next. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
+**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is done and is the file-descriptor library. Milestone 6 is done and is the shell on that filesystem image. Milestone 7 is done and is the network-role image. Milestone 8 is done and is the socket and fetch image. Milestone 9 is done and is the timer and static status on the filesystem image. Milestone 10 is next. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
 
 **Goal:** Every lerux guest protection domain stays Rust, and the queues, configuration pages, filesystem messages, and component graph are the same ones LionsOS uses.
 
@@ -185,6 +185,19 @@ Landed:
 ## Milestone 9 — Config, time, reboot, static status
 
 **Exit:** `config get hostname` reads `/config/hostname` with `open`. `date` reads the driver-framework timer client. `reboot` resets QEMU and the next log contains `lerux shell ready`. `ps` and `qos` print the protection domains, priorities, and budgets written into the generated configuration. `dmesg` prints serial bytes the shell stored. No `config-server`, `supervisor`, or `log-server` is in the image. The supervisor-only `secret.*` rule is not reimplemented.
+
+Done.
+
+Landed:
+
+- The filesystem image adds `timer_driver`. The program name is `sddf-timer-driver.elf`. It is passive, priority 5, budget 5000, and period 5000. The shell calls it on channel 3 with `pp="true"`. `date` sends `SDDF_TIMER_GET_TIME` and prints `YYYY-MM-DD`. A reply of 0 nanoseconds prints `date err`.
+- Every role on this image has a budget, and the period equals that budget. `ps` and `qos` print `name priority budget` from the schedule page the shell embeds.
+- `fatfs` creates `/config/hostname` with the bytes `lerux` when that file is missing, including on a volume that was already formatted. `config get hostname` opens that path. Any other key prints `config err`. A nested path is a read-only open of exactly two 8.3 components. A nested create or write is rejected.
+- `dmesg` prints the serial bytes the shell stored. The log holds 2048 bytes and stops when it is full, so the boot line stays at the front. The dump itself is not stored.
+- `reboot` prints `reboot`. The host then sends QMP `system_reset`. The next boot prints `lerux shell ready`. The board sets `qemu.qmp`.
+- The image has no `config-server`, no `supervisor`, and no `log-server`.
+- `support/smoke-expects.toml` scripts those six commands after the file commands. The continuous integration job stays `fs-sddf`. The smoke count stays 49.
+- Checked on 2026-10-12: `just check` passed, `just check-pd` passed, and `just test-fs-sddf` printed `lerux`, `1970-01-01`, `shell 1 1000`, `fatfs 2 2000`, `lerux shell ready`, and a second `lerux shell ready` after the reset.
 
 ## Milestone 10 — Remaining shell programs
 

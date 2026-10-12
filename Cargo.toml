@@ -14,6 +14,7 @@ members = [
     "userspace/pds/sddf-fatfs",
     "userspace/pds/sddf-fs-client",
     "userspace/pds/sddf-shell",
+    "userspace/pds/sddf-timer-driver",
     "userspace/pds/sddf-net-driver",
     "userspace/pds/sddf-net-virt-tx",
     "userspace/pds/sddf-net-virt-rx",

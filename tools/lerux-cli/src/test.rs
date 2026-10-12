@@ -133,11 +133,17 @@ fn run_smoke_inner(
         }
         if !test.script.is_empty() {
             let stdin = script_in.as_mut().context("script stdin")?;
-            run_script_steps(&output, &test.script, test.script_timeout_secs, |bytes| {
-                stdin.write_all(bytes)?;
-                stdin.flush()?;
-                Ok(())
-            })?;
+            run_script_steps(
+                &output,
+                &test.script,
+                test.script_timeout_secs,
+                qmp_socket,
+                |bytes| {
+                    stdin.write_all(bytes)?;
+                    stdin.flush()?;
+                    Ok(())
+                },
+            )?;
         }
         println!("\n==> smoke test passed");
         Ok(())
@@ -253,6 +259,64 @@ fn send_qmp_keys(socket: &Path, keys: &[String]) -> Result<()> {
             .with_context(|| format!("QMP send-key {key}"))?;
         std::thread::sleep(Duration::from_millis(40));
     }
+    Ok(())
+}
+
+fn wait_for_mark(
+    output: &std::sync::Arc<std::sync::Mutex<String>>,
+    mark: usize,
+    needle: &str,
+    deadline: Instant,
+) -> Result<()> {
+    loop {
+        let found = output
+            .lock()
+            .map(|capture| capture.len() > mark && capture_contains(&capture[mark..], needle))
+            .unwrap_or(false);
+        if found {
+            return Ok(());
+        }
+        if Instant::now() >= deadline {
+            bail!("timed out waiting for {needle:?}");
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
+
+fn qmp_system_reset(socket: &Path) -> Result<()> {
+    use std::os::unix::net::UnixStream;
+
+    let started = Instant::now();
+    let mut stream = loop {
+        match UnixStream::connect(socket) {
+            Ok(stream) => break stream,
+            Err(err) => {
+                if started.elapsed() >= Duration::from_secs(5) {
+                    return Err(err).with_context(|| format!("connect QMP {}", socket.display()));
+                }
+                std::thread::sleep(Duration::from_millis(50));
+            }
+        }
+    };
+    let cloned = stream.try_clone().context("clone QMP socket")?;
+    cloned
+        .set_read_timeout(Some(Duration::from_secs(2)))
+        .context("qmp read timeout")?;
+    let mut reader = BufReader::new(cloned);
+    let mut line = String::new();
+    reader.read_line(&mut line).context("QMP greeting")?;
+    qmp_exec(
+        &mut stream,
+        &mut reader,
+        &mut line,
+        "{\"execute\":\"qmp_capabilities\"}",
+    )?;
+    qmp_exec(
+        &mut stream,
+        &mut reader,
+        &mut line,
+        "{\"execute\":\"system_reset\"}",
+    )?;
     Ok(())
 }
 
@@ -410,13 +474,19 @@ pub fn run_hw_serial_smoke(test: &SmokeTest) -> Result<()> {
 
     // Scripted REPL (Phase 52): send commands, wait for substrings in the serial log.
     if !test.script.is_empty() {
-        run_script_steps(&output, &test.script, test.script_timeout_secs, |bytes| {
-            writer
-                .write_all(bytes)
-                .with_context(|| "write serial step")?;
-            writer.flush().context("flush serial")?;
-            Ok(())
-        })?;
+        run_script_steps(
+            &output,
+            &test.script,
+            test.script_timeout_secs,
+            None,
+            |bytes| {
+                writer
+                    .write_all(bytes)
+                    .with_context(|| "write serial step")?;
+                writer.flush().context("flush serial")?;
+                Ok(())
+            },
+        )?;
     }
 
     // Detach: reader may block on serial; we don't join forever.
@@ -430,6 +500,7 @@ fn run_script_steps(
     output: &std::sync::Arc<std::sync::Mutex<String>>,
     script: &[ScriptStep],
     timeout_secs: u64,
+    qmp_socket: Option<&Path>,
     mut send: impl FnMut(&[u8]) -> Result<()>,
 ) -> Result<()> {
     println!("==> running {} scripted serial step(s)…", script.len());
@@ -444,6 +515,16 @@ fn run_script_steps(
         let _ = std::io::Write::flush(&mut std::io::stdout());
         send(step.send.as_bytes()).with_context(|| format!("write serial step {}", i + 1))?;
         let step_deadline = Instant::now() + Duration::from_secs(timeout_secs);
+        if step.send.starts_with("reboot") {
+            let socket = qmp_socket.context("a reboot step needs a QMP socket")?;
+            wait_for_mark(output, mark, "reboot", step_deadline).with_context(|| {
+                format!(
+                    "script step {} timed out waiting for the guest reboot line",
+                    i + 1
+                )
+            })?;
+            qmp_system_reset(socket).context("QMP system_reset")?;
+        }
         loop {
             let found = output
                 .lock()
@@ -840,12 +921,19 @@ pub fn run_board_test_with_mode(
         .join(build_dir)
         .join("smoke-logs")
         .join(format!("{board}.serial.log"));
-    let result = if test.qmp_keys.is_empty() {
+    let script_reboots = test
+        .script
+        .iter()
+        .any(|step| step.send.starts_with("reboot"));
+    let result = if test.qmp_keys.is_empty() && !script_reboots {
         run_smoke_with_capture(cmd, &test, Some(&log_path))
     } else {
-        let qemu = ctx.board.qemu().context("qmp_keys require a QEMU board")?;
+        let qemu = ctx
+            .board
+            .qemu()
+            .context("this smoke needs a QEMU board with QMP")?;
         if !qemu.qmp {
-            bail!("board {board:?} smoke sets qmp_keys but qemu.qmp is false");
+            bail!("board {board:?} smoke needs QMP but qemu.qmp is false");
         }
         let socket = crate::qemu::qmp_socket(&ctx);
         run_smoke_with_qmp(cmd, &test, Some(&log_path), &socket)

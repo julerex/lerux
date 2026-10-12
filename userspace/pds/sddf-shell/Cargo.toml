@@ -9,6 +9,7 @@ workspace = true
 
 [features]
 board-qemu_virt_aarch64_fetch_sddf = ["dep:lerux-tls", "dep:smoltcp"]
+board-qemu_virt_aarch64_fs_sddf = []
 
 [dependencies]
 lerux-cothread = { path = "../../crates/lerux-cothread" }

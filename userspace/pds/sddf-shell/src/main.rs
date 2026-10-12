@@ -1,12 +1,21 @@
 #![no_std]
 #![no_main]
 
+#[cfg(all(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_aarch64_fs_sddf"
+))]
+compile_error!("the fetch image and the filesystem image both use channel 3");
+
 use core::{
     cell::UnsafeCell,
     mem::{size_of, MaybeUninit},
 };
 
 use sel4_microkit::{protection_domain, Channel, ChannelSet, Handler, Infallible};
+
+#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+use sel4_microkit::{get_mr, MessageInfo};
 
 use lerux_cothread::{
     microkit_cothread_init, microkit_cothread_recv_ntfn, microkit_cothread_spawn,
@@ -24,6 +33,13 @@ use lerux_sddf::{
     serial_image::{self, CLIENT_RX_CHANNEL, CLIENT_TX_CHANNEL},
     serial_queue_handle_t, serial_request_consumer_signal, serial_require_consumer_signal,
     LIONS_FS_MAGIC, SDDF_SERIAL_MAGIC,
+};
+
+#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+use lerux_sddf::{
+    date_from_ns, sched_config_t, sched_from_bytes, timer_client_config_t, timer_config_from_bytes,
+    FS_IMAGE_ROLES, SDDF_TIMER_GET_TIME, SDDF_TIMER_MAGIC, SHELL_TIMER_CHANNEL,
+    TIMER_CLIENT_CHANNEL,
 };
 
 const CONFIG: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/config.bin"));
@@ -75,6 +91,38 @@ struct FilesCell(UnsafeCell<MaybeUninit<Files>>);
 unsafe impl Sync for FilesCell {}
 
 static FILES: FilesCell = FilesCell(UnsafeCell::new(MaybeUninit::uninit()));
+
+#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+const LOG_CAP: usize = 2048;
+
+#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+struct Log {
+    bytes: [u8; LOG_CAP],
+    len: usize,
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+struct LogCell(UnsafeCell<Log>);
+
+#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+// SAFETY: the worker is the only user. The root does not read the log.
+unsafe impl Sync for LogCell {}
+
+#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+static LOG: LogCell = LogCell(UnsafeCell::new(Log {
+    bytes: [0; LOG_CAP],
+    len: 0,
+}));
+
+#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+struct SchedCell(UnsafeCell<MaybeUninit<sched_config_t>>);
+
+#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+// SAFETY: init writes this cell before the worker starts. The worker only reads it.
+unsafe impl Sync for SchedCell {}
+
+#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+static SCHED: SchedCell = SchedCell(UnsafeCell::new(MaybeUninit::uninit()));
 
 struct HandlerImpl;
 
@@ -135,6 +183,12 @@ fn io() -> &'static Io {
 }
 
 fn say(bytes: &[u8]) {
+    #[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+    store_serial(bytes);
+    emit(bytes);
+}
+
+fn emit(bytes: &[u8]) {
     let tx = &io().tx;
     for &byte in bytes {
         // SAFETY: `tx` is this client's mapped transmit queue. This worker produces it.
@@ -197,8 +251,183 @@ fn dispatch(line: &[u8]) {
         b"stat" => cmd_stat(rest),
         #[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
         b"fetch" => cmd_fetch(rest),
+        #[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+        b"config" => cmd_config(rest),
+        #[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+        b"date" => cmd_date(rest),
+        #[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+        b"ps" => cmd_table(rest, b"ps ok\n", b"ps err\n"),
+        #[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+        b"qos" => cmd_table(rest, b"qos ok\n", b"qos err\n"),
+        #[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+        b"dmesg" => cmd_dmesg(rest),
+        #[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+        b"reboot" => cmd_reboot(rest),
         _ => say(b"err\n"),
     }
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+fn cmd_config(rest: &[u8]) {
+    let Some((verb, key)) = split_first(rest) else {
+        say(b"config err\n");
+        return;
+    };
+    if verb != b"get" || key != b"hostname" {
+        say(b"config err\n");
+        return;
+    }
+    let fd = match files().open(b"/config/hostname", Open::Read) {
+        Ok(fd) => fd,
+        Err(_) => {
+            say(b"config err\n");
+            return;
+        }
+    };
+    let mut buf = [0u8; 64];
+    let read = files().read(fd, &mut buf);
+    let _ = files().close(fd);
+    let Ok(n) = read else {
+        say(b"config err\n");
+        return;
+    };
+    if n == 0 {
+        say(b"config err\n");
+        return;
+    }
+    let mut out = [0u8; 65];
+    out[..n].copy_from_slice(&buf[..n]);
+    out[n] = b'\n';
+    say(&out[..=n]);
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+fn cmd_date(rest: &[u8]) {
+    if !rest.is_empty() {
+        say(b"date err\n");
+        return;
+    }
+    // The worker is the kernel thread while it is switched in, so the protected call runs here.
+    let reply = Channel::new(usize::from(SHELL_TIMER_CHANNEL))
+        .pp_call(MessageInfo::new(SDDF_TIMER_GET_TIME, 0));
+    if reply.count() < 1 {
+        say(b"date err\n");
+        return;
+    }
+    let ns = get_mr(0);
+    if ns == 0 {
+        say(b"date err\n");
+        return;
+    }
+    let (year, month, day) = date_from_ns(ns);
+    let mut line = [0u8; 11];
+    write_width(&mut line[0..4], year);
+    line[4] = b'-';
+    write_width(&mut line[5..7], u16::from(month));
+    line[7] = b'-';
+    write_width(&mut line[8..10], u16::from(day));
+    line[10] = b'\n';
+    say(&line);
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+fn write_width(buf: &mut [u8], mut value: u16) {
+    for index in (0..buf.len()).rev() {
+        buf[index] = b'0' + (value % 10) as u8;
+        value /= 10;
+    }
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+fn cmd_table(rest: &[u8], ok: &'static [u8], err: &'static [u8]) {
+    if !rest.is_empty() {
+        say(err);
+        return;
+    }
+    let page = schedule();
+    for index in 0..usize::from(page.count) {
+        say_role(&page.entry[index]);
+    }
+    say(ok);
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+fn say_role(entry: &lerux_sddf::sched_entry_t) {
+    let mut line = [0u8; 40];
+    let name_len = entry
+        .name
+        .iter()
+        .position(|byte| *byte == 0)
+        .unwrap_or(entry.name.len());
+    line[..name_len].copy_from_slice(&entry.name[..name_len]);
+    let mut len = name_len;
+    line[len] = b' ';
+    len += 1;
+    len += push_dec(&mut line[len..], u32::from(entry.priority));
+    line[len] = b' ';
+    len += 1;
+    len += push_dec(&mut line[len..], entry.budget_us);
+    line[len] = b'\n';
+    len += 1;
+    say(&line[..len]);
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+fn push_dec(buf: &mut [u8], mut value: u32) -> usize {
+    let mut tmp = [0u8; 10];
+    let mut index = tmp.len();
+    loop {
+        index -= 1;
+        tmp[index] = b'0' + (value % 10) as u8;
+        value /= 10;
+        if value == 0 {
+            break;
+        }
+    }
+    let digits = &tmp[index..];
+    buf[..digits.len()].copy_from_slice(digits);
+    digits.len()
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+fn cmd_dmesg(rest: &[u8]) {
+    if !rest.is_empty() {
+        say(b"dmesg err\n");
+        return;
+    }
+    // Printing through `say` would append the dump to the log it is printing.
+    // SAFETY: the worker is the only user of this log.
+    let log = unsafe { &*LOG.0.get() };
+    emit(&log.bytes[..log.len]);
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+fn cmd_reboot(rest: &[u8]) {
+    if !rest.is_empty() {
+        say(b"reboot err\n");
+        return;
+    }
+    say(b"reboot\n");
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+fn store_serial(bytes: &[u8]) {
+    // The boot line has to stay readable, so a full log stops instead of dropping the front.
+    // SAFETY: the worker is the only user of this log.
+    let log = unsafe { &mut *LOG.0.get() };
+    for &byte in bytes {
+        if log.len == LOG_CAP {
+            break;
+        }
+        log.bytes[log.len] = byte;
+        log.len += 1;
+    }
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+fn schedule() -> &'static sched_config_t {
+    // SAFETY: `install_status` wrote this cell before the worker started.
+    unsafe { (*SCHED.0.get()).assume_init_ref() }
 }
 
 #[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
@@ -474,7 +703,10 @@ fn trim(line: &[u8]) -> &[u8] {
 fn init() -> HandlerImpl {
     let serial_len = size_of::<serial_client_config_t>();
     let fs_len = size_of::<fs_client_config_t>();
-    #[cfg(not(feature = "board-qemu_virt_aarch64_fetch_sddf"))]
+    #[cfg(not(any(
+        feature = "board-qemu_virt_aarch64_fetch_sddf",
+        feature = "board-qemu_virt_aarch64_fs_sddf"
+    )))]
     assert_eq!(CONFIG.len(), serial_len + fs_len);
     // SAFETY: the build script wrote a `serial_client_config_t` and then an `fs_client_config_t`.
     let serial = unsafe {
@@ -492,6 +724,8 @@ fn init() -> HandlerImpl {
     assert_eq!(fs.server.id, FS_SHELL_SERVER_CHANNEL);
     #[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
     install_net(serial_len + fs_len);
+    #[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+    install_status(serial_len + fs_len);
     // SAFETY: the template maps this client's transmit and receive regions.
     let tx = unsafe { serial_handle_from_connection(&serial.tx) };
     let rx = unsafe { serial_handle_from_connection(&serial.rx) };
@@ -542,4 +776,20 @@ fn install_net(at: usize) {
     assert_eq!(net.rx.id, SHELL_NET_RX_CHANNEL);
     assert_eq!(net.tx.id, SHELL_NET_TX_CHANNEL);
     net::install(&net);
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+fn install_status(at: usize) {
+    let timer_len = size_of::<timer_client_config_t>();
+    let schedule_len = size_of::<sched_config_t>();
+    assert_eq!(CONFIG.len(), at + timer_len + schedule_len);
+    // SAFETY: the build script wrote the timer client page and then the schedule page.
+    let timer =
+        unsafe { timer_config_from_bytes::<timer_client_config_t>(&CONFIG[at..at + timer_len]) };
+    assert_eq!(timer.magic, SDDF_TIMER_MAGIC);
+    assert_eq!(timer.driver_id, TIMER_CLIENT_CHANNEL);
+    let page = unsafe { sched_from_bytes(&CONFIG[at + timer_len..]) };
+    assert_eq!(usize::from(page.count), FS_IMAGE_ROLES.len());
+    // SAFETY: init is the only writer, and the worker has not started.
+    unsafe { (*SCHED.0.get()).write(page) };
 }

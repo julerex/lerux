@@ -75,7 +75,10 @@ static STACKS: Stacks = Stacks(UnsafeCell::new(
 struct OpenFile {
     cluster: u16,
     size: u32,
+    /// Index of the directory entry. `parent` 0 means this index is in the root.
     dir_index: u16,
+    /// Cluster of the parent directory. 0 is the root. A subdirectory cluster is at least 2.
+    parent: u16,
 }
 
 #[derive(Clone, Copy)]
@@ -185,6 +188,11 @@ fn prepare() -> bool {
         log::info!("fatfs: format failed");
         return false;
     }
+    // A formatted image keeps its files across reset, so the hostname file is created only when missing.
+    if !seed_hostname() {
+        log::info!("fatfs: hostname seed failed");
+        return false;
+    }
     log::info!("fatfs: serving");
     true
 }
@@ -274,17 +282,37 @@ fn serve_one() -> bool {
 }
 
 fn handle_open(id: u64, params: fs_cmd_params_file_open_t) -> bool {
-    if params.path.size > 11 {
-        return complete(id, FS_STATUS_INVALID_NAME, Completion::Empty);
-    }
+    const PATH_MAX: usize = 24;
     let Ok(size) = usize::try_from(params.path.size) else {
         return complete(id, FS_STATUS_INVALID_NAME, Completion::Empty);
     };
-    let mut raw = [0u8; 11];
-    if !copy_share(params.path.offset, size, &mut raw[..size]) {
+    if size > PATH_MAX {
+        return complete(id, FS_STATUS_INVALID_NAME, Completion::Empty);
+    }
+    let mut raw = [0u8; PATH_MAX];
+    if size > 0 && !copy_share(params.path.offset, size, &mut raw[..size]) {
         return complete(id, FS_STATUS_INVALID_BUFFER, Completion::Empty);
     }
-    let Some(name) = pack_name(&raw[..size]) else {
+    let path = &raw[..size];
+    if path.contains(&b'/') {
+        if params.flags != FS_OPEN_FLAGS_READ_ONLY {
+            return complete(id, FS_STATUS_ERROR, Completion::Empty);
+        }
+        let Some((dir, file)) = two_components(path) else {
+            return complete(id, FS_STATUS_INVALID_NAME, Completion::Empty);
+        };
+        let Some(dir_name) = pack_name(dir) else {
+            return complete(id, FS_STATUS_INVALID_NAME, Completion::Empty);
+        };
+        let Some(file_name) = pack_name(file) else {
+            return complete(id, FS_STATUS_INVALID_NAME, Completion::Empty);
+        };
+        return open_nested_read(id, &dir_name, &file_name);
+    }
+    if size > 11 {
+        return complete(id, FS_STATUS_INVALID_NAME, Completion::Empty);
+    }
+    let Some(name) = pack_name(path) else {
         return complete(id, FS_STATUS_INVALID_NAME, Completion::Empty);
     };
     if params.flags == (FS_OPEN_FLAGS_CREATE | FS_OPEN_FLAGS_WRITE_ONLY) {
@@ -293,6 +321,54 @@ fn handle_open(id: u64, params: fs_cmd_params_file_open_t) -> bool {
         open_read(id, &name)
     } else {
         complete(id, FS_STATUS_ERROR, Completion::Empty)
+    }
+}
+
+/// Optional leading slash, then exactly two 8.3 components.
+fn two_components(path: &[u8]) -> Option<(&[u8], &[u8])> {
+    let path = path.strip_prefix(b"/").unwrap_or(path);
+    let slash = path.iter().position(|byte| *byte == b'/')?;
+    let dir = &path[..slash];
+    let file = &path[slash + 1..];
+    if dir.is_empty() || file.is_empty() || file.contains(&b'/') {
+        return None;
+    }
+    Some((dir, file))
+}
+
+fn open_nested_read(id: u64, dir_name: &[u8; 11], file_name: &[u8; 11]) -> bool {
+    if file_busy() {
+        return complete(id, FS_STATUS_TOO_MANY_OPEN_FILES, Completion::Empty);
+    }
+    let parent = match find_name(dir_name) {
+        Scan::Hit(hit) if hit.attr & ATTR_DIR != 0 && hit.cluster >= 2 => hit,
+        Scan::Hit(_) => return complete(id, FS_STATUS_ERROR, Completion::Empty),
+        Scan::Missing => return complete(id, FS_STATUS_NO_FILE, Completion::Empty),
+        Scan::Failed => {
+            let _ = complete(id, FS_STATUS_ERROR, Completion::Empty);
+            return false;
+        }
+    };
+    match find_in_cluster(parent.cluster, file_name) {
+        Scan::Hit(hit) => {
+            if hit.attr & ATTR_DIR != 0 || hit.cluster < 2 {
+                return complete(id, FS_STATUS_ERROR, Completion::Empty);
+            }
+            unsafe {
+                (*state()).file = Some(OpenFile {
+                    cluster: hit.cluster,
+                    size: hit.size,
+                    dir_index: hit.index,
+                    parent: parent.cluster,
+                });
+            }
+            complete(id, FS_STATUS_SUCCESS, Completion::Fd(FD_FILE))
+        }
+        Scan::Missing => complete(id, FS_STATUS_NO_FILE, Completion::Empty),
+        Scan::Failed => {
+            let _ = complete(id, FS_STATUS_ERROR, Completion::Empty);
+            false
+        }
     }
 }
 
@@ -344,6 +420,7 @@ fn create_file(id: u64, name: &[u8; 11]) -> bool {
             cluster,
             size: 0,
             dir_index: slot,
+            parent: 0,
         });
     }
     complete(id, FS_STATUS_SUCCESS, Completion::Fd(FD_FILE))
@@ -363,6 +440,7 @@ fn open_read(id: u64, name: &[u8; 11]) -> bool {
                     cluster: hit.cluster,
                     size: hit.size,
                     dir_index: hit.index,
+                    parent: 0,
                 });
             }
             complete(id, FS_STATUS_SUCCESS, Completion::Fd(FD_FILE))
@@ -392,6 +470,9 @@ fn handle_write(id: u64, params: fs_cmd_params_file_write_t) -> bool {
     if params.fd != FD_FILE {
         return complete(id, FS_STATUS_INVALID_FD, Completion::Empty);
     }
+    if file.parent != 0 {
+        return complete(id, FS_STATUS_INVALID_WRITE, Completion::Empty);
+    }
     if params.offset != 0 || params.buf.size == 0 || params.buf.size > SECTOR_BYTES as u64 {
         return complete(id, FS_STATUS_INVALID_WRITE, Completion::Empty);
     }
@@ -412,7 +493,7 @@ fn handle_write(id: u64, params: fs_cmd_params_file_write_t) -> bool {
     let Ok(size) = u32::try_from(len) else {
         return complete(id, FS_STATUS_INVALID_WRITE, Completion::Empty);
     };
-    if !update_size(file.dir_index, size) || !flush_block() {
+    if !update_size(file.parent, file.dir_index, size) || !flush_block() {
         let _ = complete(id, FS_STATUS_ERROR, Completion::Empty);
         return false;
     }
@@ -547,11 +628,151 @@ fn put_entry(entry: &mut [u8], name: &[u8; 11], cluster: u16, size: u32, attr: u
     entry[28..32].copy_from_slice(&size.to_le_bytes());
 }
 
-fn update_size(index: u16, size: u32) -> bool {
-    let lba = ROOT_LBA + u32::from(index / ENTRIES_PER_SECTOR);
-    let off = usize::from(index % ENTRIES_PER_SECTOR) * DIR_ENTRY;
+fn update_size(parent: u16, index: u16, size: u32) -> bool {
+    let (lba, off) = if parent == 0 {
+        (
+            ROOT_LBA + u32::from(index / ENTRIES_PER_SECTOR),
+            usize::from(index % ENTRIES_PER_SECTOR) * DIR_ENTRY,
+        )
+    } else if parent < 2 || index >= ENTRIES_PER_SECTOR {
+        return false;
+    } else {
+        (
+            DATA_LBA + u32::from(parent - 2),
+            usize::from(index) * DIR_ENTRY,
+        )
+    };
     edit_sector(lba, |sector| {
         sector[off + 28..off + 32].copy_from_slice(&size.to_le_bytes());
+    })
+}
+
+fn seed_hostname() -> bool {
+    let Some(dir_name) = pack_name(b"config") else {
+        return false;
+    };
+    let Some(file_name) = pack_name(b"hostname") else {
+        return false;
+    };
+    let dir_cluster = match find_name(&dir_name) {
+        Scan::Hit(hit) => {
+            if hit.attr & ATTR_DIR == 0 || hit.cluster < 2 {
+                return false;
+            }
+            hit.cluster
+        }
+        Scan::Missing => match create_directory(&dir_name) {
+            Some(cluster) => cluster,
+            None => return false,
+        },
+        Scan::Failed => return false,
+    };
+    match find_in_cluster(dir_cluster, &file_name) {
+        Scan::Hit(_) => true,
+        Scan::Missing => write_seed_file(dir_cluster, &file_name),
+        Scan::Failed => false,
+    }
+}
+
+fn create_directory(name: &[u8; 11]) -> Option<u16> {
+    let slot = match find_free() {
+        Scan::Hit(index) => index,
+        Scan::Missing | Scan::Failed => return None,
+    };
+    let cluster = match alloc_cluster() {
+        Scan::Hit(cluster) => cluster,
+        Scan::Missing | Scan::Failed => return None,
+    };
+    if !set_fat(cluster, 0xFFFF)
+        || !format_directory(cluster)
+        || !write_dir(slot, name, cluster, 0, ATTR_DIR)
+        || !flush_block()
+    {
+        return None;
+    }
+    Some(cluster)
+}
+
+fn write_seed_file(parent: u16, name: &[u8; 11]) -> bool {
+    let slot = match find_free_in_cluster(parent) {
+        Scan::Hit(index) => index,
+        Scan::Missing | Scan::Failed => return false,
+    };
+    let cluster = match alloc_cluster() {
+        Scan::Hit(cluster) => cluster,
+        Scan::Missing | Scan::Failed => return false,
+    };
+    let bytes = b"lerux";
+    let lba = DATA_LBA + u32::from(cluster - 2);
+    set_fat(cluster, 0xFFFF)
+        && edit_sector(lba, |sector| {
+            sector.fill(0);
+            sector[..bytes.len()].copy_from_slice(bytes);
+        })
+        && write_in_cluster(
+            parent,
+            slot,
+            name,
+            cluster,
+            bytes.len() as u32,
+            ATTR_ARCHIVE,
+        )
+        && flush_block()
+}
+
+fn find_in_cluster(cluster: u16, name: &[u8; 11]) -> Scan<DirHit> {
+    if cluster < 2 {
+        return Scan::Failed;
+    }
+    for index in 0..ENTRIES_PER_SECTOR {
+        let mut entry = [0u8; DIR_ENTRY];
+        if !read_placed(cluster, index, &mut entry) {
+            return Scan::Failed;
+        }
+        if entry[0] == 0x00 {
+            return Scan::Missing;
+        }
+        if entry[0] == 0xE5 {
+            continue;
+        }
+        if entry[..11] == *name {
+            return Scan::Hit(hit_from(index, &entry));
+        }
+    }
+    Scan::Missing
+}
+
+fn find_free_in_cluster(cluster: u16) -> Scan<u16> {
+    if cluster < 2 {
+        return Scan::Failed;
+    }
+    for index in 0..ENTRIES_PER_SECTOR {
+        let mut entry = [0u8; DIR_ENTRY];
+        if !read_placed(cluster, index, &mut entry) {
+            return Scan::Failed;
+        }
+        if entry[0] == 0x00 || entry[0] == 0xE5 {
+            return Scan::Hit(index);
+        }
+    }
+    Scan::Missing
+}
+
+fn write_in_cluster(
+    parent: u16,
+    index: u16,
+    name: &[u8; 11],
+    cluster: u16,
+    size: u32,
+    attr: u8,
+) -> bool {
+    if parent < 2 || index >= ENTRIES_PER_SECTOR {
+        return false;
+    }
+    let lba = DATA_LBA + u32::from(parent - 2);
+    let off = usize::from(index) * DIR_ENTRY;
+    edit_sector(lba, |sector| {
+        put_entry(&mut sector[off..off + DIR_ENTRY], name, cluster, size, attr);
     })
 }
 
@@ -709,7 +930,7 @@ fn handle_remove(id: u64, params: fs_cmd_params_file_remove_t) -> bool {
         if (*state())
             .file
             .as_ref()
-            .is_some_and(|file| file.dir_index == hit.index)
+            .is_some_and(|file| file.parent == 0 && file.dir_index == hit.index)
         {
             (*state()).file = None;
         }

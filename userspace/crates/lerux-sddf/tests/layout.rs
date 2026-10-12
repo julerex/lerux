@@ -29,13 +29,14 @@ use lerux_sddf::{
     net_vswitch_config_t, net_vswitch_port_config_t, region_resource_t, serial_client_config_t,
     serial_connection_resource_t, serial_driver_config_t, serial_queue_handle_t, serial_queue_t,
     serial_virt_rx_config_t, serial_virt_tx_client_config_t, serial_virt_tx_config_t,
-    BLK_MAX_SERIAL_NUMBER, BLK_STORAGE_INFO_REGION_SIZE, BLK_TRANSFER_SIZE, FS_CMD_DIR_REWIND,
-    FS_CMD_FILE_OPEN, FS_CMD_INITIALISE, FS_NUM_COMMANDS, FS_OPEN_FLAGS_CREATE, FS_QUEUE_CAPACITY,
-    FS_STATUS_NOT_EMPTY, FS_STATUS_NO_FILE, FS_STATUS_NUM_STATUSES, FS_STATUS_SUCCESS,
-    LIONS_FS_MAGIC, LIONS_FS_MAGIC_LEN, MAC802_BYTES, NET_BUFFER_SIZE, SDDF_BLK_MAGIC,
-    SDDF_BLK_MAGIC_LEN, SDDF_BLK_MAX_CLIENTS, SDDF_NAME_LENGTH, SDDF_NET_MAGIC, SDDF_NET_MAGIC_LEN,
-    SDDF_NET_MAX_CLIENTS, SDDF_SERIAL_BEGIN_STR_MAX_LEN, SDDF_SERIAL_MAGIC, SDDF_SERIAL_MAGIC_LEN,
-    SDDF_SERIAL_MAX_CLIENTS,
+    timer_client_config_t, BLK_MAX_SERIAL_NUMBER, BLK_STORAGE_INFO_REGION_SIZE, BLK_TRANSFER_SIZE,
+    FS_CMD_DIR_REWIND, FS_CMD_FILE_OPEN, FS_CMD_INITIALISE, FS_NUM_COMMANDS, FS_OPEN_FLAGS_CREATE,
+    FS_QUEUE_CAPACITY, FS_STATUS_NOT_EMPTY, FS_STATUS_NO_FILE, FS_STATUS_NUM_STATUSES,
+    FS_STATUS_SUCCESS, LIONS_FS_MAGIC, LIONS_FS_MAGIC_LEN, MAC802_BYTES, NET_BUFFER_SIZE,
+    SDDF_BLK_MAGIC, SDDF_BLK_MAGIC_LEN, SDDF_BLK_MAX_CLIENTS, SDDF_NAME_LENGTH, SDDF_NET_MAGIC,
+    SDDF_NET_MAGIC_LEN, SDDF_NET_MAX_CLIENTS, SDDF_SERIAL_BEGIN_STR_MAX_LEN, SDDF_SERIAL_MAGIC,
+    SDDF_SERIAL_MAGIC_LEN, SDDF_SERIAL_MAX_CLIENTS, SDDF_TIMER_GET_TIME, SDDF_TIMER_MAGIC,
+    SDDF_TIMER_MAGIC_LEN, SDDF_TIMER_MAX_CLIENTS, SDDF_TIMER_SET_TIMEOUT,
 };
 
 struct TempDir(PathBuf);
@@ -56,6 +57,7 @@ struct CReport {
     blk_magic: Vec<u8>,
     fs_magic: Vec<u8>,
     net_magic: Vec<u8>,
+    timer_magic: Vec<u8>,
 }
 
 #[test]
@@ -147,6 +149,7 @@ fn parse_report(text: &str) -> CReport {
         blk_magic: Vec::new(),
         fs_magic: Vec::new(),
         net_magic: Vec::new(),
+        timer_magic: Vec::new(),
     };
     for line in text.lines() {
         let mut parts = line.split_whitespace();
@@ -179,6 +182,7 @@ fn parse_report(text: &str) -> CReport {
             "blkmagic" => report.blk_magic = hex_bytes(parts, line),
             "fsmagic" => report.fs_magic = hex_bytes(parts, line),
             "netmagic" => report.net_magic = hex_bytes(parts, line),
+            "timermagic" => report.timer_magic = hex_bytes(parts, line),
             other => panic!("unknown probe line kind {other} in {line}"),
         }
     }
@@ -323,6 +327,12 @@ fn check_magic(report: &CReport, errors: &mut Vec<String>) {
             report.net_magic, SDDF_NET_MAGIC
         ));
     }
+    if report.timer_magic != SDDF_TIMER_MAGIC {
+        errors.push(format!(
+            "SDDF_TIMER_MAGIC: C {:02x?}, Rust {:02x?}",
+            report.timer_magic, SDDF_TIMER_MAGIC
+        ));
+    }
 }
 
 fn rust_types() -> Vec<(&'static str, usize, usize)> {
@@ -383,6 +393,7 @@ fn rust_types() -> Vec<(&'static str, usize, usize)> {
         fs_cmpl_t,
         fs_msg_t,
         fs_queue_t,
+        timer_client_config_t,
     ]
 }
 
@@ -558,6 +569,16 @@ fn rust_fields() -> Vec<(&'static str, &'static str, usize)> {
         fs_queue_t, buffer;
     ];
     fields.push(("fs_cmd_t", "type", core::mem::offset_of!(fs_cmd_t, r#type)));
+    fields.push((
+        "timer_client_config_t",
+        "magic",
+        core::mem::offset_of!(timer_client_config_t, magic),
+    ));
+    fields.push((
+        "timer_client_config_t",
+        "driver_id",
+        core::mem::offset_of!(timer_client_config_t, driver_id),
+    ));
     fields
 }
 
@@ -593,6 +614,10 @@ fn rust_constants() -> Vec<(&'static str, u64)> {
         ),
         ("BLK_MAX_SERIAL_NUMBER", BLK_MAX_SERIAL_NUMBER as u64),
         ("LIONS_FS_MAGIC_LEN", LIONS_FS_MAGIC_LEN as u64),
+        ("SDDF_TIMER_GET_TIME", SDDF_TIMER_GET_TIME),
+        ("SDDF_TIMER_SET_TIMEOUT", SDDF_TIMER_SET_TIMEOUT),
+        ("SDDF_TIMER_MAGIC_LEN", SDDF_TIMER_MAGIC_LEN as u64),
+        ("SDDF_TIMER_MAX_CLIENTS", SDDF_TIMER_MAX_CLIENTS as u64),
     ]
 }
 
@@ -640,6 +665,8 @@ const LAYOUT_C: &str = r#"
 #include <sddf/resources/device.h>
 #include <sddf/serial/config.h>
 #include <sddf/serial/queue.h>
+#include <sddf/timer/config.h>
+#include <sddf/timer/protocol.h>
 
 #define REPORT_TYPE(t) \
     do { \
@@ -873,6 +900,9 @@ int main(void)
     REPORT_FIELD(fs_queue_t, tail);
     REPORT_FIELD(fs_queue_t, padding);
     REPORT_FIELD(fs_queue_t, buffer);
+    REPORT_TYPE(timer_client_config_t);
+    REPORT_FIELD(timer_client_config_t, magic);
+    REPORT_FIELD(timer_client_config_t, driver_id);
 
     printf("const FS_QUEUE_CAPACITY %d\n", FS_QUEUE_CAPACITY);
     printf("const FS_STATUS_SUCCESS %d\n", FS_STATUS_SUCCESS);
@@ -900,6 +930,10 @@ int main(void)
     printf("const LIONS_FS_MAGIC_LEN %d\n", LIONS_FS_MAGIC_LEN);
     printf("const BLK_REQ_BARRIER %d\n", BLK_REQ_BARRIER);
     printf("const BLK_RESP_ERR_NO_DEVICE %d\n", BLK_RESP_ERR_NO_DEVICE);
+    printf("const SDDF_TIMER_GET_TIME %d\n", SDDF_TIMER_GET_TIME);
+    printf("const SDDF_TIMER_SET_TIMEOUT %d\n", SDDF_TIMER_SET_TIMEOUT);
+    printf("const SDDF_TIMER_MAGIC_LEN %d\n", SDDF_TIMER_MAGIC_LEN);
+    printf("const SDDF_TIMER_MAX_CLIENTS %d\n", SDDF_TIMER_MAX_CLIENTS);
 
     print_desc("fit", 0x2a);
     print_desc("wide", 0xff);
@@ -922,6 +956,11 @@ int main(void)
     printf("netmagic");
     for (i = 0; i < SDDF_NET_MAGIC_LEN; i++) {
         printf(" %02x", (unsigned char)SDDF_NET_MAGIC[i]);
+    }
+    printf("\n");
+    printf("timermagic");
+    for (i = 0; i < SDDF_TIMER_MAGIC_LEN; i++) {
+        printf(" %02x", (unsigned char)SDDF_TIMER_MAGIC[i]);
     }
     printf("\n");
     return 0;

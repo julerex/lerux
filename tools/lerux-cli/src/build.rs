@@ -114,6 +114,26 @@ pub fn build_pd(
 
 pub fn image(root: &Path, board: &str, build_dir: &str, config: &str) -> Result<()> {
     build(root, board, build_dir, config)?;
+    assemble_image(root, board, build_dir, config)
+}
+
+/// Compile `pds` and run Microkit on the `system.system` already in the board directory.
+///
+/// Does not call `generate_system` or `render_system`. Callers pass `board.pds`.
+pub fn link_image(
+    root: &Path,
+    board: &str,
+    build_dir: &str,
+    config: &str,
+    pds: &[String],
+) -> Result<()> {
+    for crate_name in pds {
+        build_pd(root, board, build_dir, config, crate_name)?;
+    }
+    assemble_image(root, board, build_dir, config)
+}
+
+fn assemble_image(root: &Path, board: &str, build_dir: &str, config: &str) -> Result<()> {
     let boards = load_boards(root)?;
     let board_cfg = get_board(&boards, board)?;
     let sdk = sdk_path(root)?;

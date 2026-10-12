@@ -100,11 +100,30 @@ pub fn strip_channel_blocks(system_xml: &str) -> String {
 ///
 /// Keeps memory regions and protection domains from the template; inserts
 /// generated channels immediately before `</system>`.
-pub fn replace_channels_in_system(system_xml: &str, channels: &[ChannelSpec]) -> Result<String> {
+///
+/// `known_components` is the template's system-description names. An end outside
+/// that set bails `unknown component "{sdf_name}"` and does not splice.
+pub fn replace_channels_in_system(
+    system_xml: &str,
+    channels: &[ChannelSpec],
+    known_components: &[String],
+) -> Result<String> {
     if channels.is_empty() {
         bail!("replace_channels_in_system: channel list is empty");
     }
     ensure_channels_valid(channels, &[], "replace_channels_in_system")?;
+    let known: BTreeSet<String> = known_components
+        .iter()
+        .map(|name| to_sdf_pd_name(name))
+        .collect();
+    for channel in channels {
+        for end in &channel.ends {
+            let sdf_name = to_sdf_pd_name(&end.pd);
+            if !known.contains(&sdf_name) {
+                bail!("unknown component \"{sdf_name}\"");
+            }
+        }
+    }
 
     let without = strip_channel_blocks(system_xml);
     let Some(close_idx) = without.rfind("</system>") else {
@@ -358,7 +377,8 @@ mod tests {
 </system>
 "#;
         let channels = vec![ch(end("serial_driver", 1, false), end("hello", 0, true))];
-        let out = replace_channels_in_system(template, &channels).unwrap();
+        let known = vec!["serial_driver".to_string(), "hello".to_string()];
+        let out = replace_channels_in_system(template, &channels, &known).unwrap();
         assert!(out.contains("protection_domain name=\"hello\""));
         assert!(out.contains("id=\"1\""));
         assert!(out.contains("id=\"0\" pp=\"true\""));

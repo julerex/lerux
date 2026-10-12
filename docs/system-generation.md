@@ -1,6 +1,6 @@
 # System generation (Phase 41) ✅
 
-Last updated: 2026-10-04
+Last updated: 2026-10-12
 
 Companion to [ADR-001](decisions/001-in-tree-system-generation.md) and [plan-au-ts.md](plan-au-ts.md) Phase 41.
 
@@ -64,7 +64,9 @@ Templates under `userspace/systems/templates/`. Most still embed hand channels f
 | UART / virtio / genet MMIO + IRQ | `system_vars` | — |
 | Shared ring MR sizes/vaddrs | — | template layout |
 | Channel ends | — | profile `[[channel]]` |
-| App-only PDs | — | template PD stanza |
+| App-only protection domains | profile selects the package name | template element |
+
+The generator keeps a template protection domain when no package fragment names it. It also keeps a package protection domain the profile selects. It deletes an optional protection domain the profile does not select. A profile name or a channel end that is not in the template fails with `unknown component "nosuch"`, and the generator writes nothing.
 
 ## Serial role image
 

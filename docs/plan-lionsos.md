@@ -2,7 +2,7 @@
 
 Last updated: 2026-10-12
 
-**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is done and is the file-descriptor library. Milestone 6 is done and is the shell on that filesystem image. Milestone 7 is done and is the network-role image. Milestone 8 is done and is the socket and fetch image. Milestone 9 is done and is the timer and static status on the filesystem image. Milestone 10 is done and is the remaining shell commands on the fetch image. Milestone 11 is done and is the web image that serves the seeded hostname file. Milestone 12 is done and is the virtio graphics driver, virtualiser, and browser image. Milestone 13 is done and is the agent image. Milestone 14 is done and is the WebAssembly runtime protection domain. Milestone 15 is next. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
+**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is done and is the file-descriptor library. Milestone 6 is done and is the shell on that filesystem image. Milestone 7 is done and is the network-role image. Milestone 8 is done and is the socket and fetch image. Milestone 9 is done and is the timer and static status on the filesystem image. Milestone 10 is done and is the remaining shell commands on the fetch image. Milestone 11 is done and is the web image that serves the seeded hostname file. Milestone 12 is done and is the virtio graphics driver, virtualiser, and browser image. Milestone 13 is done and is the agent image. Milestone 14 is done and is the WebAssembly runtime protection domain. Milestone 15 is done and is package selection from the template. Milestone 16 is next. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
 
 **Goal:** Every lerux guest protection domain stays Rust, and the queues, configuration pages, filesystem messages, and component graph are the same ones LionsOS uses.
 
@@ -272,6 +272,15 @@ Landed:
 ## Milestone 15 — Packages
 
 **Exit:** `lerux package install edit` adds the edit program to the Rust system description for the workstation. The generator fails when the component name is unknown. Installing still rebuilds the image.
+
+Done.
+
+Landed:
+
+- The template is the component table. Package fragments name the optional protection domains. `lerux package install edit` merges `edit` into `dev-workstation`, writes a system description with one `edit` protection domain, and rebuilds `loader.img`. A second run does not add a second `edit` element. The command refuses a profile that extends another profile, so `support/profiles/workstation.toml` stays as it is.
+- The generator deletes an optional protection domain the profile does not select and leaves every other template protection domain in place. A profile name or a channel end that is not in the template fails with `unknown component "nosuch"` and does not write the system description.
+- The pre-wired `workstation` profile still selects `edit`. Board generation for the workstation images still contains that protection domain. `dev-workstation` does not, until install.
+- Checked on 2026-10-12. `cargo test -p lerux-cli` passed, including the install test and `unknown component "nosuch"`. `just check` passed. `lerux package install edit` wrote one `edit` protection domain into `build/qemu_virt_aarch64_workstation/system.system` and rebuilt `loader.img`.
 
 ## Milestone 16 — Other boards
 

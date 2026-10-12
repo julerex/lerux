@@ -446,15 +446,12 @@ enum PackageCommands {
     Search { query: String },
     /// Show one package manifest (PD, interface-types, fragment).
     Show { name: String },
-    /// Merge package fragment into a profile (pds + channels) and write TOML.
+    /// Merge a package fragment into a profile and rebuild loader.img.
     Install {
         name: String,
-        /// Target profile under support/profiles/ (default: workstation).
-        #[arg(long, default_value = "workstation")]
+        /// Target profile under support/profiles/.
+        #[arg(long, default_value = crate::package::DEFAULT_INSTALL_PROFILE)]
         profile: String,
-        /// Also run `profile build` after merge.
-        #[arg(long, default_value_t = false)]
-        build: bool,
         #[arg(long)]
         board: Option<String>,
         #[arg(long, default_value = "build")]
@@ -679,12 +676,28 @@ fn main() -> Result<()> {
                     build_dir,
                     config,
                 } => {
+                    let profile = crate::profile::get_profile(&profiles, &name)?;
                     let board_name = crate::profile::resolve_board_for_profile(
                         &profiles,
                         &name,
                         board.as_deref(),
                     )?;
-                    build::image(&root, &board_name, &build_dir, &config)?;
+                    let sdf = crate::system::render_profile_system(
+                        &root,
+                        &name,
+                        profile,
+                        board.as_deref(),
+                    )?;
+                    let out = crate::system::system_file(&root, &board_name, &build_dir);
+                    if let Some(parent) = out.parent() {
+                        std::fs::create_dir_all(parent)
+                            .with_context(|| format!("mkdir {}", parent.display()))?;
+                    }
+                    std::fs::write(&out, sdf)
+                        .with_context(|| format!("write {}", out.display()))?;
+                    let boards = load_boards(&root)?;
+                    let board_cfg = get_board(&boards, &board_name)?;
+                    build::link_image(&root, &board_name, &build_dir, &config, &board_cfg.pds)?;
                     println!("profile {name} -> board {board_name}: loader.img ready");
                 }
                 ProfileCommands::Diff {
@@ -777,7 +790,6 @@ fn main() -> Result<()> {
                 PackageCommands::Install {
                     name,
                     profile,
-                    build,
                     board,
                     build_dir,
                     config,
@@ -787,7 +799,6 @@ fn main() -> Result<()> {
                         &packages,
                         &name,
                         &profile,
-                        build,
                         board.as_deref(),
                         &build_dir,
                         &config,

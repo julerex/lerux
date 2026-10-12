@@ -5,7 +5,7 @@
 //! rebuilding `loader.img` — Microkit does not load ELFs at runtime.
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fs,
     path::{Path, PathBuf},
 };
@@ -15,6 +15,9 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::{build, channels::ChannelSpec};
+
+/// Default profile for `lerux package install`.
+pub const DEFAULT_INSTALL_PROFILE: &str = "dev-workstation";
 
 /// One package under `support/packages/<name>.toml`.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -96,6 +99,20 @@ pub fn load_packages(root: &Path) -> Result<Packages> {
         packages.insert(name, package);
     }
     Ok(packages)
+}
+
+/// Protection-domain names from package fragments, in system-description spelling.
+pub fn optional_component_names(packages: &Packages) -> BTreeSet<String> {
+    let mut names = BTreeSet::new();
+    for package in packages.values() {
+        let Some(fragment) = &package.fragment else {
+            continue;
+        };
+        for pd in &fragment.pds {
+            names.insert(crate::channels::to_sdf_pd_name(pd));
+        }
+    }
+    names
 }
 
 pub fn get_package<'a>(packages: &'a Packages, name: &str) -> Result<&'a Package> {
@@ -320,23 +337,29 @@ fn profile_has_pd(profile: &crate::profile::Profile, pd: &str) -> bool {
         .any(|p| crate::channels::to_sdf_pd_name(p) == want)
 }
 
-/// Merge package fragment into a profile and write `support/profiles/<profile>.toml`.
+/// Merge `name` into `profile_name` and return the description `install_package` writes.
 ///
-/// Does not rebuild the image unless `build` is true.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "install options map 1:1 to CLI flags"
-)]
-pub fn install_package(
+/// Writes the profile file only when the merge added a protection domain or a channel,
+/// and only after render succeeds. Creates the parent directory, then always writes
+/// `system_file` with the returned string. Does not call `link_image`.
+///
+/// An extending profile returns
+/// `refusing to rewrite profile "{profile_name}" which extends another profile`
+/// before render and before any write.
+pub fn merge_and_render(
     root: &Path,
     packages: &Packages,
     name: &str,
     profile_name: &str,
-    build: bool,
     board: Option<&str>,
     build_dir: &str,
-    config: &str,
-) -> Result<()> {
+) -> Result<String> {
+    if crate::profile::profile_path(root, profile_name).is_file()
+        && crate::profile::profile_source_extends(root, profile_name)?
+    {
+        bail!("refusing to rewrite profile \"{profile_name}\" which extends another profile");
+    }
+
     let package = get_package(packages, name)?;
     let Some(frag) = &package.fragment else {
         bail!(
@@ -347,7 +370,6 @@ pub fn install_package(
     let profiles = crate::profile::load_profiles(root)?;
     let mut profile = crate::profile::get_profile(&profiles, profile_name)?.clone();
 
-    // Requires must already be present (or be part of this fragment).
     for req in &frag.requires {
         let in_frag = frag
             .pds
@@ -388,28 +410,49 @@ pub fn install_package(
         added_ch += 1;
     }
 
-    if added_pds.is_empty() && added_ch == 0 {
+    let board_name = crate::profile::resolve_board_for_profile(&profiles, profile_name, board)?;
+    let rendered =
+        crate::system::render_profile_system(root, profile_name, &profile, Some(&board_name))?;
+
+    if !added_pds.is_empty() || added_ch > 0 {
+        let path = crate::profile::save_profile(root, profile_name, &profile)?;
+        println!(
+            "package {name}: installed into profile {profile_name} (+pds {added_pds:?} +{added_ch} channels)"
+        );
+        println!("  wrote {}", path.display());
+    } else {
         println!("package {name}: already installed in profile {profile_name}");
-        return Ok(());
     }
 
-    let path = crate::profile::save_profile(root, profile_name, &profile)?;
-    println!(
-        "package {name}: installed into profile {profile_name} (+pds {:?} +{added_ch} channels)",
-        added_pds
-    );
-    println!("  wrote {}", path.display());
-    println!("  next: lerux profile build {profile_name}");
-
-    if build {
-        let board_name = crate::profile::resolve_board_for_profile(
-            &crate::profile::load_profiles(root)?,
-            profile_name,
-            board,
-        )?;
-        build::image(root, &board_name, build_dir, config)?;
-        println!("  built loader.img for board {board_name}");
+    let system_path = crate::system::system_file(root, &board_name, build_dir);
+    if let Some(parent) = system_path.parent() {
+        fs::create_dir_all(parent).with_context(|| format!("mkdir {}", parent.display()))?;
     }
+    fs::write(&system_path, &rendered)
+        .with_context(|| format!("write {}", system_path.display()))?;
+    Ok(rendered)
+}
+
+/// Merge the fragment, write the system description, and link `board.pds`.
+///
+/// `link_image` runs on a second install too. There is no early return when the
+/// package is already present.
+pub fn install_package(
+    root: &Path,
+    packages: &Packages,
+    name: &str,
+    profile_name: &str,
+    board: Option<&str>,
+    build_dir: &str,
+    config: &str,
+) -> Result<()> {
+    merge_and_render(root, packages, name, profile_name, board, build_dir)?;
+    let profiles = crate::profile::load_profiles(root)?;
+    let board_name = crate::profile::resolve_board_for_profile(&profiles, profile_name, board)?;
+    let boards = crate::board::load_boards(root)?;
+    let board_cfg = crate::board::get_board(&boards, &board_name)?;
+    build::link_image(root, &board_name, build_dir, config, &board_cfg.pds)?;
+    println!("package {name}: built loader.img for board {board_name}");
     Ok(())
 }
 
@@ -584,10 +627,221 @@ mod tests {
         search_packages(&packages, "zzz-nope");
     }
 
+    fn write_pd_template(root: &std::path::Path, template: &str, names: &[&str]) {
+        let dir = root.join("userspace/systems/templates");
+        fs::create_dir_all(&dir).unwrap();
+        let mut body = String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<system>\n");
+        for name in names {
+            body.push_str(&format!(
+                "    <protection_domain name=\"{name}\" priority=\"1\">\n        <program_image path=\"{name}.elf\" />\n    </protection_domain>\n"
+            ));
+        }
+        body.push_str("</system>\n");
+        fs::write(dir.join(template), body).unwrap();
+    }
+
+    fn write_board(root: &std::path::Path, board: &str, template: &str, pds: &str) {
+        fs::create_dir_all(root.join("support")).unwrap();
+        fs::write(
+            root.join("support/boards.toml"),
+            format!(
+                r#"
+[{board}]
+arch = "aarch64"
+microkit_board = "qemu_virt_aarch64"
+target = "aarch64-sel4-microkit"
+template = "{template}"
+pds = [{pds}]
+system_vars = {{}}
+"#
+            ),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn install_edit_adds_one_protection_domain() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_pd_template(
+            root,
+            "workstation.system.template",
+            &["shell", "fs_server", "net_server", "edit", "chat_client"],
+        );
+        write_board(
+            root,
+            "qemu_virt_aarch64_workstation",
+            "workstation.system.template",
+            "\"shell\", \"fs-server\", \"edit\", \"chat-client\"",
+        );
+        fs::create_dir_all(root.join("support/packages")).unwrap();
+        fs::create_dir_all(root.join("support/profiles")).unwrap();
+        fs::write(
+            root.join("support/packages/edit.toml"),
+            r#"
+pd = "edit"
+interface_types = "0.1.0"
+description = "Serial TUI text editor (FS load/save via shell proxy)"
+
+[fragment]
+pds = ["edit"]
+requires = ["shell", "fs-server"]
+
+[[fragment.channel]]
+name = "edit_shell"
+ends = [
+  { pd = "shell", id = 6, pp = true },
+  { pd = "edit", id = 0 },
+]
+
+[[fragment.channel]]
+name = "edit_fs"
+ends = [
+  { pd = "fs_server", id = 6 },
+  { pd = "edit", id = 1, pp = true },
+]
+"#,
+        )
+        .unwrap();
+        fs::write(
+            root.join("support/packages/chat-client.toml"),
+            include_str!("../../../support/packages/chat-client.toml"),
+        )
+        .unwrap();
+        fs::write(
+            root.join("support/profiles/dev-workstation.toml"),
+            r#"
+template = "workstation.system.template"
+pds = ["shell", "fs-server"]
+description = "core"
+default_board = "qemu_virt_aarch64_workstation"
+
+[[channel]]
+name = "shell_fs"
+ends = [
+  { pd = "shell", id = 2, pp = true },
+  { pd = "fs_server", id = 1 },
+]
+"#,
+        )
+        .unwrap();
+
+        let profiles = crate::profile::load_profiles(root).unwrap();
+        let profile = profiles.get("dev-workstation").unwrap();
+        let before =
+            crate::system::render_profile_system(root, "dev-workstation", profile, None).unwrap();
+        assert!(!before.contains("protection_domain name=\"edit\""));
+
+        let packages = load_packages(root).unwrap();
+        let after =
+            merge_and_render(root, &packages, "edit", "dev-workstation", None, "build").unwrap();
+        let system_path =
+            crate::system::system_file(root, "qemu_virt_aarch64_workstation", "build");
+        assert_eq!(after.matches("protection_domain name=\"edit\"").count(), 1);
+        assert_eq!(fs::read_to_string(&system_path).unwrap(), after);
+
+        fs::write(&system_path, b"stale").unwrap();
+        let again =
+            merge_and_render(root, &packages, "edit", "dev-workstation", None, "build").unwrap();
+        let written = fs::read_to_string(&system_path).unwrap();
+        assert_ne!(written, "stale");
+        assert_eq!(
+            written.matches("protection_domain name=\"edit\"").count(),
+            1
+        );
+        assert_eq!(again.matches("protection_domain name=\"edit\"").count(), 1);
+    }
+
+    #[test]
+    fn install_chat_client_adds_one_protection_domain() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        write_pd_template(
+            root,
+            "workstation.system.template",
+            &["shell", "fs_server", "net_server", "edit", "chat_client"],
+        );
+        write_board(
+            root,
+            "qemu_virt_aarch64_workstation",
+            "workstation.system.template",
+            "\"shell\", \"fs-server\", \"net-server\", \"chat-client\"",
+        );
+        fs::create_dir_all(root.join("support/packages")).unwrap();
+        fs::create_dir_all(root.join("support/profiles")).unwrap();
+        fs::write(
+            root.join("support/packages/chat-client.toml"),
+            include_str!("../../../support/packages/chat-client.toml"),
+        )
+        .unwrap();
+        fs::write(
+            root.join("support/profiles/dev-workstation.toml"),
+            r#"
+template = "workstation.system.template"
+pds = ["shell", "fs-server", "net-server"]
+description = "core"
+default_board = "qemu_virt_aarch64_workstation"
+
+[[channel]]
+name = "shell_fs"
+ends = [
+  { pd = "shell", id = 2, pp = true },
+  { pd = "fs_server", id = 1 },
+]
+"#,
+        )
+        .unwrap();
+
+        let packages = load_packages(root).unwrap();
+        let after = merge_and_render(
+            root,
+            &packages,
+            "chat-client",
+            "dev-workstation",
+            None,
+            "build",
+        )
+        .unwrap();
+        assert_eq!(
+            after
+                .matches("protection_domain name=\"chat_client\"")
+                .count(),
+            1
+        );
+    }
+
+    #[test]
+    fn install_refuses_to_rewrite_extending_profile() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        fs::create_dir_all(root.join("support/profiles")).unwrap();
+        let path = root.join("support/profiles/workstation.toml");
+        let bytes_before = b"extends = \"workstation-base\"\ntemplate = \"workstation.system.template\"\npds = [\"shell\"]\n";
+        fs::write(&path, bytes_before).unwrap();
+        let err = merge_and_render(root, &BTreeMap::new(), "edit", "workstation", None, "build")
+            .unwrap_err();
+        assert_eq!(
+            err.to_string(),
+            "refusing to rewrite profile \"workstation\" which extends another profile"
+        );
+        assert_eq!(fs::read(&path).unwrap(), bytes_before);
+    }
+
     #[test]
     fn install_merges_channels() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
+        write_pd_template(
+            root,
+            "serial-hello.system.template",
+            &["shell", "serial_driver", "toy"],
+        );
+        write_board(
+            root,
+            "qemu_virt_aarch64",
+            "serial-hello.system.template",
+            "\"shell\", \"serial-driver\", \"toy\"",
+        );
         fs::create_dir_all(root.join("support/packages")).unwrap();
         fs::create_dir_all(root.join("support/profiles")).unwrap();
         fs::write(
@@ -629,10 +883,7 @@ ends = [
         .unwrap();
 
         let packages = load_packages(root).unwrap();
-        install_package(
-            root, &packages, "toy", "sandbox", false, None, "build", "debug",
-        )
-        .unwrap();
+        merge_and_render(root, &packages, "toy", "sandbox", None, "build").unwrap();
         let profiles = crate::profile::load_profiles(root).unwrap();
         let p = profiles.get("sandbox").unwrap();
         assert!(p.pds.iter().any(|x| x == "toy"));
@@ -677,10 +928,7 @@ pds = ["shell"]
         )
         .unwrap();
         let packages = load_packages(root).unwrap();
-        let err = install_package(
-            root, &packages, "toy", "sandbox", false, None, "build", "debug",
-        )
-        .unwrap_err();
+        let err = merge_and_render(root, &packages, "toy", "sandbox", None, "build").unwrap_err();
         assert!(err.to_string().contains("requires"));
     }
 

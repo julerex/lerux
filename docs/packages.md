@@ -9,10 +9,10 @@ lerux package list
 lerux package search editor          # substring over name/pd/description
 lerux package show edit
 
-# Merge fragment into a profile (writes support/profiles/<name>.toml)
-lerux package install edit --profile dev-workstation
-lerux package install chat-client --profile dev-workstation
-lerux package install http-file-browser --profile dev-workstation
+# Install into dev-workstation and rebuild loader.img.
+lerux package install edit
+lerux package install chat-client
+lerux package install http-file-browser
 
 lerux package remove edit --profile dev-workstation
 
@@ -23,12 +23,13 @@ lerux package diff edit --board qemu_virt_aarch64_workstation
 lerux package upgrade edit --board qemu_virt_aarch64_workstation
 lerux package upgrade --all --board qemu_virt_aarch64_workstation
 
+# Rebuild that profile's system description and link loader.img.
 lerux profile build dev-workstation
 lerux profile validate
 lerux profile check-channels
 ```
 
-Install checks `fragment.requires` against the profile’s current PD set, merges `fragment.pds`, and appends named `[[fragment.channel]]` edges (skips channels whose `name` already exists).
+`lerux package install edit` installs into `dev-workstation` and rebuilds `loader.img`. Install checks `fragment.requires` against the profile, merges `fragment.pds`, and appends named `[[fragment.channel]]` edges. It skips a protection domain or a channel that is already present. It writes the profile file only when the merge added a protection domain or a channel. It writes the system description on every successful install. Install refuses a profile whose file sets `extends`, and leaves that file unchanged. The generator fails with `unknown component "nosuch"` when the name is not in the template. The pre-wired workstation image still contains `edit`.
 
 ## Recipes (Phase 55 / 60)
 
@@ -96,7 +97,7 @@ Pins: `support/package-pins.toml` (sha256 per board artifact).
 1. Out-of-tree crate implements a PD (`#![no_std]`, `lerux-ipc`) against a published `lerux-interface-types` version.  
 2. Ship a package TOML + optional profile fragment (same shape as `support/packages/`).  
 3. Vendor or path-depend the crate in the consumer tree; copy the TOML into `support/packages/`.  
-4. `lerux package install <name> --profile <recipe>` then `lerux profile build <recipe>`.  
+4. `lerux package install <name>` rebuilds `loader.img` for `dev-workstation`. `lerux profile build <recipe>` rebuilds that named profile and links `loader.img`.  
 5. Follow the **ported app checklist** in [`context.md`](context.md).  
 
 Breaking `interface_types` majors requires rebuilding all PDs that speak that IPC.

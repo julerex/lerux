@@ -15,14 +15,153 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 
 use crate::{
     board::{format_system_var, get_board, load_boards},
     channel_consts::write_channel_consts,
-    channels::{extract_channel_blocks, replace_channels_in_system},
+    channels::{extract_channel_blocks, replace_channels_in_system, to_sdf_pd_name, ChannelSpec},
     profile::{find_profile_for_board, load_profiles, Profile},
 };
+
+/// System-description name of one protection domain.
+struct ComponentName(String);
+
+/// One `<protection_domain>` element. Constructed only by [`ComponentSet::parse`].
+pub(crate) struct Component {
+    name: ComponentName,
+    /// Bytes from `<protection_domain` through `</protection_domain>`.
+    xml: String,
+}
+
+/// Protection domains of one template, in document order.
+pub(crate) struct ComponentSet {
+    order: Vec<Component>,
+}
+
+impl ComponentSet {
+    /// Duplicate `name` returns `duplicate component "{name}"`.
+    /// Elements do not nest.
+    pub(crate) fn parse(template_body: &str) -> Result<Self> {
+        let mut order: Vec<Component> = Vec::new();
+        let mut rest = template_body;
+        while let Some(start) = rest.find("<protection_domain") {
+            let after = &rest[start..];
+            let Some(close_rel) = after.find("</protection_domain>") else {
+                bail!("unclosed protection domain");
+            };
+            let end = close_rel + "</protection_domain>".len();
+            let xml = &after[..end];
+            let name = component_name(xml)?;
+            if order.iter().any(|component| component.name.0 == name) {
+                bail!("duplicate component \"{name}\"");
+            }
+            order.push(Component {
+                name: ComponentName(name),
+                xml: xml.to_string(),
+            });
+            rest = &after[end..];
+        }
+        Ok(Self { order })
+    }
+
+    /// `to_sdf_pd_name` once. A missing name returns `unknown component "{sdf_name}"`.
+    pub(crate) fn resolve(&self, pd: &str) -> Result<&Component> {
+        let sdf_name = to_sdf_pd_name(pd);
+        self.order
+            .iter()
+            .find(|component| component.name.0 == sdf_name)
+            .ok_or_else(|| anyhow!("unknown component \"{sdf_name}\""))
+    }
+
+    pub(crate) fn sdf_names(&self) -> Vec<String> {
+        self.order
+            .iter()
+            .map(|component| component.name.0.clone())
+            .collect()
+    }
+}
+
+fn component_name(xml: &str) -> Result<String> {
+    let tag_end = xml
+        .find('>')
+        .ok_or_else(|| anyhow!("protection domain tag is missing a closing bracket"))?;
+    let tag = &xml[..tag_end];
+    let Some(start) = tag.find("name=\"") else {
+        bail!("protection domain is missing a name");
+    };
+    let rest = &tag[start + "name=\"".len()..];
+    let Some(end) = rest.find('"') else {
+        bail!("protection domain name is missing a closing quote");
+    };
+    Ok(rest[..end].to_string())
+}
+
+/// Every profile protection domain and every channel end must resolve.
+/// Returned references follow template order, not profile order.
+pub(crate) fn select_components<'a>(
+    set: &'a ComponentSet,
+    pds: &[String],
+    channels: &[ChannelSpec],
+) -> Result<Vec<&'a Component>> {
+    let mut selected_names = BTreeSet::new();
+    for pd in pds {
+        let component = set.resolve(pd)?;
+        selected_names.insert(component.name.0.clone());
+    }
+    for channel in channels {
+        for end in &channel.ends {
+            set.resolve(&end.pd)?;
+        }
+    }
+    Ok(set
+        .order
+        .iter()
+        .filter(|component| selected_names.contains(&component.name.0))
+        .collect())
+}
+
+/// Drops a protection domain only when a package fragment names it and the
+/// profile does not select it. Fixed template protection domains stay, so
+/// echo and browser keep the protection domains their templates already
+/// define. A dropped element is removed by its exact text. When nothing is
+/// dropped, those bytes stay identical and channels are spliced as before.
+pub(crate) fn compose_system(
+    body: &str,
+    set: &ComponentSet,
+    selected: &[&Component],
+    optional: &BTreeSet<String>,
+    channels: &[ChannelSpec],
+) -> Result<String> {
+    let selected_names: BTreeSet<&str> = selected
+        .iter()
+        .map(|component| component.name.0.as_str())
+        .collect();
+    let mut composed = body.to_string();
+    for component in &set.order {
+        let name = &component.name.0;
+        let keep = !optional.contains(name) || selected_names.contains(name.as_str());
+        if keep {
+            continue;
+        }
+        let Some(at) = composed.find(&component.xml) else {
+            bail!("missing component \"{name}\"");
+        };
+        composed.replace_range(at..at + component.xml.len(), "");
+    }
+    if channels.is_empty() {
+        return Ok(composed);
+    }
+    replace_channels_in_system(&composed, channels, &set.sdf_names())
+}
+
+fn compose_profile_body(root: &Path, body: &str, profile: &Profile) -> Result<String> {
+    let packages = crate::package::load_packages(root)?;
+    let optional = crate::package::optional_component_names(&packages);
+    let set = ComponentSet::parse(body)?;
+    let selected = select_components(&set, &profile.pds, &profile.channel)?;
+    compose_system(body, &set, &selected, &optional, &profile.channel)
+}
 
 pub fn generate_system(root: &Path, board_name: &str, output: &Path) -> Result<()> {
     let rendered = render_system(root, board_name)?;
@@ -49,17 +188,17 @@ pub fn generate_system(root: &Path, board_name: &str, output: &Path) -> Result<(
 }
 
 /// Compose the full Microkit system description for a board (no write).
+///
+/// A board with no profile returns the template body and does not load packages.
 pub fn render_system(root: &Path, board_name: &str) -> Result<String> {
     let body = render_system_body(root, board_name)?;
-    if let Ok(profiles) = load_profiles(root)
-        && let Some((profile_name, profile)) = find_profile_for_board(&profiles, board_name)
-        && !profile.channel.is_empty()
-    {
-        return replace_channels_in_system(&body, &profile.channel).with_context(|| {
-            format!("compose channels from profile {profile_name} into board {board_name}")
-        });
-    }
-    Ok(body)
+    let Ok(profiles) = load_profiles(root) else {
+        return Ok(body);
+    };
+    let Some((_, profile)) = find_profile_for_board(&profiles, board_name) else {
+        return Ok(body);
+    };
+    compose_profile_body(root, &body, profile)
 }
 
 /// Compose SDF for a named profile (uses `default_board` or override).
@@ -74,11 +213,7 @@ pub fn render_profile_system(
         .or_else(|| profile.default_board.clone())
         .with_context(|| format!("profile {profile_name} has no default_board"))?;
     let body = render_system_body(root, &board)?;
-    if profile.channel.is_empty() {
-        return Ok(body);
-    }
-    replace_channels_in_system(&body, &profile.channel)
-        .with_context(|| format!("compose channels for profile {profile_name}"))
+    compose_profile_body(root, &body, profile)
 }
 
 /// Layout body: template + `system_vars` (may still contain hand channels on
@@ -359,6 +494,81 @@ mod tests {
             assert!(
                 !sdf.contains("name=\"virtio_net_client_dma\""),
                 "{board} still declares a distinct virtio_net_client_dma MR"
+            );
+        }
+    }
+
+    #[test]
+    fn generate_system_rejects_unknown_component() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        let template_dir = root.join("userspace/systems/templates");
+        std::fs::create_dir_all(&template_dir).unwrap();
+        std::fs::write(
+            template_dir.join("only-shell.system.template"),
+            r#"<?xml version="1.0" encoding="UTF-8"?>
+<system>
+    <protection_domain name="shell" priority="1">
+        <program_image path="shell.elf" />
+    </protection_domain>
+</system>
+"#,
+        )
+        .unwrap();
+        std::fs::create_dir_all(root.join("support/profiles")).unwrap();
+        std::fs::write(
+            root.join("support/boards.toml"),
+            r#"
+[test_board]
+arch = "aarch64"
+microkit_board = "qemu_virt_aarch64"
+target = "aarch64-sel4-microkit"
+template = "only-shell.system.template"
+pds = ["shell"]
+system_vars = {}
+"#,
+        )
+        .unwrap();
+        std::fs::write(
+            root.join("support/profiles/only.toml"),
+            r#"
+template = "only-shell.system.template"
+pds = ["nosuch"]
+default_board = "test_board"
+description = "unknown"
+"#,
+        )
+        .unwrap();
+        let output = root.join("out.system");
+        std::fs::write(&output, b"SENTINEL").unwrap();
+        let err = generate_system(root, "test_board", &output).unwrap_err();
+        assert_eq!(err.to_string(), "unknown component \"nosuch\"");
+        assert_eq!(std::fs::read(&output).unwrap(), b"SENTINEL");
+    }
+
+    #[test]
+    fn workstation_profile_still_selects_edit() {
+        let root = repo_root();
+        let board = render_system(&root, "qemu_virt_aarch64_workstation").unwrap();
+        assert_eq!(board.matches("protection_domain name=\"edit\"").count(), 1);
+        let profiles = load_profiles(&root).unwrap();
+        let dev = profiles.get("dev-workstation").unwrap();
+        let dev_sdf = render_profile_system(&root, "dev-workstation", dev, None).unwrap();
+        assert!(!dev_sdf.contains("protection_domain name=\"edit\""));
+        let raw_workstation =
+            std::fs::read_to_string(root.join("support/profiles/workstation.toml")).unwrap();
+        assert!(raw_workstation.contains("extends = \"workstation-base\""));
+        for board_name in [
+            "qemu_virt_riscv64_workstation",
+            "x86_64_generic_workstation",
+            "rpi4b_4gb_workstation",
+            "qemu_virt_aarch64_interactive",
+        ] {
+            let sdf = render_system(&root, board_name).unwrap();
+            assert_eq!(
+                sdf.matches("protection_domain name=\"edit\"").count(),
+                1,
+                "{board_name}"
             );
         }
     }

@@ -2,7 +2,7 @@
 
 Last updated: 2026-10-12
 
-**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is done and is the file-descriptor library. Milestone 6 is done and is the shell on that filesystem image. Milestone 7 is done and is the network-role image. Milestone 8 is done and is the socket and fetch image. Milestone 9 is done and is the timer and static status on the filesystem image. Milestone 10 is done and is the remaining shell commands on the fetch image. Milestone 11 is next. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
+**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is done and is the file-descriptor library. Milestone 6 is done and is the shell on that filesystem image. Milestone 7 is done and is the network-role image. Milestone 8 is done and is the socket and fetch image. Milestone 9 is done and is the timer and static status on the filesystem image. Milestone 10 is done and is the remaining shell commands on the fetch image. Milestone 11 is done and is the web image that serves the seeded hostname file. Milestone 12 is next. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
 
 **Goal:** Every lerux guest protection domain stays Rust, and the queues, configuration pages, filesystem messages, and component graph are the same ones LionsOS uses.
 
@@ -215,6 +215,15 @@ Landed:
 ## Milestone 11 — File browser
 
 **Exit:** A Rust program on the socket and file libraries serves one seeded file over Hypertext Transfer Protocol. `just test-web-sddf` expects that body in the host response. `http-file-browser` and `http-server` are not ported as postcard clients.
+
+Done.
+
+Landed:
+
+- `lerux-posix` adds `listen`, `accept`, and `shutdown` on the one socket. `listen` binds that socket. `accept` waits for the peer. `shutdown` finishes the connection and leaves the table closed. `close` still aborts and returns the table to empty. A pipe that only connects returns errno 95 from `listen`. A listen the stack rejects as already bound returns errno 98.
+- The shell on `qemu_virt_aarch64_web_sddf` reads `/config/hostname` and serves those bytes on guest port 8080. The image reuses `fetch-sddf.system.template` and the fetch protection domains. It does not link `lerux-tls`. Postcard `http-file-browser` and `http-server` stay.
+- The worker prints `web listening` after `listen` and before `accept`. The host curls `http://127.0.0.1:18080/` and expects the body `lerux`. `support/smoke-expects.toml` expects `web listening`. The continuous integration job is `web-sddf`. The smoke count is 50.
+- Checked on 2026-10-12: `just check` passed, `just check-pd` passed, and `just test-web-sddf` printed `web listening` and the host curl matched `lerux`.
 
 ## Milestone 12 — Display and browser
 

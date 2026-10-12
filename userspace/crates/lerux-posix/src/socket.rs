@@ -3,7 +3,7 @@
 //! [`Sockets`] owns the call order. The caller owns the stack through [`Tcp`].
 //! A second `socket` returns errno 24 while one is still open. [`Sockets::close`]
 //! returns that table to empty. `send` and `recv` run only while the connection
-//! is open.
+//! is open. `listen` waits for one inbound connection on this same socket.
 
 use super::Errno;
 
@@ -32,6 +32,21 @@ pub trait Tcp {
     fn send(&mut self, data: &[u8]) -> Result<usize, Errno>;
     fn recv(&mut self, buf: &mut [u8]) -> Result<usize, Errno>;
 
+    /// Bind this pipe to `port` and wait for one peer.
+    ///
+    /// A pipe that only connects returns [`Errno::EOPNOTSUPP`].
+    fn listen(&mut self, _port: u16) -> Result<(), Errno> {
+        Err(Errno(Errno::EOPNOTSUPP))
+    }
+
+    /// Queue a finish. `Ok(true)` means the peer has the bytes.
+    ///
+    /// The default has nothing to drain. A stack that still holds bytes returns
+    /// `Ok(false)` until [`Tcp::poll`] has moved them.
+    fn shutdown(&mut self) -> Result<bool, Errno> {
+        Ok(true)
+    }
+
     /// Drop the connection so a later [`Sockets::socket`] can use this pipe.
     fn finish(&mut self) {}
 }
@@ -39,6 +54,7 @@ pub trait Tcp {
 enum Phase {
     Empty,
     Idle,
+    Listening,
     Connecting,
     Open,
     Closed,
@@ -76,25 +92,34 @@ impl<T: Tcp> Sockets<T> {
         match self.phase {
             Phase::Idle => {}
             Phase::Open | Phase::Connecting => return Err(Errno(Errno::EISCONN)),
+            Phase::Listening => return Err(Errno(Errno::EINVAL)),
             Phase::Empty | Phase::Closed => return Err(Errno(Errno::ENOTCONN)),
         }
         self.tcp.start();
         self.tcp.connect(addr, port)?;
         self.phase = Phase::Connecting;
-        loop {
-            if self.tcp.ready() {
-                self.phase = Phase::Open;
-                return Ok(());
-            }
-            if self.tcp.failed() {
-                self.phase = Phase::Closed;
-                return Err(Errno(Errno::ECONNREFUSED));
-            }
-            if !self.tcp.poll() {
-                self.phase = Phase::Closed;
-                return Err(Errno(Errno::ETIMEDOUT));
-            }
+        self.wait_until_open()
+    }
+
+    /// Bind `fd` to `port`. The socket stays one entry. The peer arrives later.
+    pub fn listen(&mut self, fd: SockFd, port: u16) -> Result<(), Errno> {
+        self.live(fd)?;
+        if !matches!(self.phase, Phase::Idle) {
+            return Err(Errno(Errno::EINVAL));
         }
+        self.tcp.listen(port)?;
+        self.phase = Phase::Listening;
+        Ok(())
+    }
+
+    /// Wait until the peer of a listening socket is connected.
+    pub fn accept(&mut self, fd: SockFd) -> Result<(), Errno> {
+        self.live(fd)?;
+        if !matches!(self.phase, Phase::Listening) {
+            return Err(Errno(Errno::EINVAL));
+        }
+        self.tcp.start();
+        self.wait_until_open()
     }
 
     /// Send `data` on an open socket. An empty slice sends nothing.
@@ -121,6 +146,32 @@ impl<T: Tcp> Sockets<T> {
             }
         }
         Ok(sent)
+    }
+
+    /// Finish an open socket and leave the table closed.
+    ///
+    /// This does not abort. [`Self::close`] aborts and frees the entry.
+    pub fn shutdown(&mut self, fd: SockFd) -> Result<(), Errno> {
+        self.open(fd)?;
+        self.tcp.start();
+        loop {
+            match self.tcp.shutdown() {
+                Ok(true) => {
+                    self.phase = Phase::Closed;
+                    return Ok(());
+                }
+                Ok(false) => {
+                    if !self.tcp.poll() {
+                        self.phase = Phase::Closed;
+                        return Err(Errno(Errno::ETIMEDOUT));
+                    }
+                }
+                Err(err) => {
+                    self.phase = Phase::Closed;
+                    return Err(err);
+                }
+            }
+        }
     }
 
     /// Drop `fd` and let the next [`Self::socket`] allocate again.
@@ -154,6 +205,23 @@ impl<T: Tcp> Sockets<T> {
                     }
                 }
                 Err(err) => return Err(err),
+            }
+        }
+    }
+
+    fn wait_until_open(&mut self) -> Result<(), Errno> {
+        loop {
+            if self.tcp.ready() {
+                self.phase = Phase::Open;
+                return Ok(());
+            }
+            if self.tcp.failed() {
+                self.phase = Phase::Closed;
+                return Err(Errno(Errno::ECONNREFUSED));
+            }
+            if !self.tcp.poll() {
+                self.phase = Phase::Closed;
+                return Err(Errno(Errno::ETIMEDOUT));
             }
         }
     }

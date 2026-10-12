@@ -1,7 +1,9 @@
-//! Host checks for `socket`, `connect`, `send`, and `recv`.
+//! Host checks for `socket`, `connect`, `listen`, `accept`, `send`, and `recv`.
 //!
 //! The fake pipe accepts `10.0.2.2:8443` and returns the fixture mark after
-//! it sees a `GET`.
+//! it sees a `GET`. The listener pipe accepts one inbound request on port 8080.
+
+use std::sync::{Arc, Mutex};
 
 use lerux_posix::{Errno, Sockets, Tcp};
 
@@ -148,4 +150,131 @@ fn second_connect_is_eisconn() {
     sockets.connect(fd, HOST, PORT).expect("connect");
     let err = sockets.connect(fd, HOST, PORT).expect_err("second connect");
     assert_eq!(err, Errno(Errno::EISCONN));
+}
+
+struct Listener {
+    open: bool,
+    stalled: bool,
+    inbox: &'static [u8],
+    pos: usize,
+    sent: Arc<Mutex<Vec<u8>>>,
+}
+
+impl Listener {
+    fn ready(sent: Arc<Mutex<Vec<u8>>>) -> Self {
+        Self {
+            open: false,
+            stalled: false,
+            inbox: b"GET / HTTP/1.1\r\n\r\n",
+            pos: 0,
+            sent,
+        }
+    }
+
+    fn stalled() -> Self {
+        Self {
+            open: false,
+            stalled: true,
+            inbox: b"",
+            pos: 0,
+            sent: Arc::new(Mutex::new(Vec::new())),
+        }
+    }
+}
+
+impl Tcp for Listener {
+    fn start(&mut self) {}
+
+    fn poll(&mut self) -> bool {
+        if self.stalled {
+            return false;
+        }
+        self.open = true;
+        true
+    }
+
+    fn connect(&mut self, _addr: [u8; 4], _port: u16) -> Result<(), Errno> {
+        Err(Errno(Errno::EOPNOTSUPP))
+    }
+
+    fn listen(&mut self, port: u16) -> Result<(), Errno> {
+        if port != 8080 {
+            return Err(Errno(Errno::EADDRINUSE));
+        }
+        Ok(())
+    }
+
+    fn ready(&self) -> bool {
+        self.open
+    }
+
+    fn failed(&self) -> bool {
+        false
+    }
+
+    fn send(&mut self, data: &[u8]) -> Result<usize, Errno> {
+        self.sent
+            .lock()
+            .expect("sent buffer")
+            .extend_from_slice(data);
+        Ok(data.len())
+    }
+
+    fn recv(&mut self, buf: &mut [u8]) -> Result<usize, Errno> {
+        if self.pos >= self.inbox.len() {
+            return Err(Errno(Errno::EAGAIN));
+        }
+        let n = (self.inbox.len() - self.pos).min(buf.len());
+        buf[..n].copy_from_slice(&self.inbox[self.pos..self.pos + n]);
+        self.pos += n;
+        Ok(n)
+    }
+
+    fn shutdown(&mut self) -> Result<bool, Errno> {
+        Ok(true)
+    }
+}
+
+#[test]
+fn listen_accept_send_shutdown_passes_the_body() {
+    let sent = Arc::new(Mutex::new(Vec::new()));
+    let mut sockets = Sockets::new(Listener::ready(Arc::clone(&sent)));
+    let fd = sockets.socket().expect("socket");
+    sockets.listen(fd, 8080).expect("listen");
+    let err = sockets.socket().expect_err("second socket");
+    assert_eq!(err, Errno(Errno::EMFILE));
+    sockets.accept(fd).expect("accept");
+    let mut buf = [0u8; 32];
+    let n = sockets.recv(fd, &mut buf).expect("recv");
+    assert_eq!(&buf[..n], b"GET / HTTP/1.1\r\n\r\n");
+    let wrote = sockets.send(fd, b"lerux").expect("send");
+    assert_eq!(wrote, 5);
+    sockets.shutdown(fd).expect("shutdown");
+    assert_eq!(sent.lock().expect("sent buffer").as_slice(), b"lerux");
+}
+
+#[test]
+fn listen_on_a_connect_pipe_is_eopnotsupp() {
+    let mut sockets = Sockets::new(Pipe::open());
+    let fd = sockets.socket().expect("socket");
+    let err = sockets.listen(fd, 8080).expect_err("listen");
+    assert_eq!(err, Errno(Errno::EOPNOTSUPP));
+}
+
+#[test]
+fn accept_timeout_is_etimedout() {
+    let mut sockets = Sockets::new(Listener::stalled());
+    let fd = sockets.socket().expect("socket");
+    sockets.listen(fd, 8080).expect("listen");
+    let err = sockets.accept(fd).expect_err("accept");
+    assert_eq!(err, Errno(Errno::ETIMEDOUT));
+}
+
+#[test]
+fn send_while_listening_is_enotconn() {
+    let mut sockets = Sockets::new(Listener::stalled());
+    let fd = sockets.socket().expect("socket");
+    sockets.listen(fd, 8080).expect("listen");
+    let err = sockets.send(fd, b"x").expect_err("send");
+    assert_eq!(err, Errno(Errno::ENOTCONN));
 }

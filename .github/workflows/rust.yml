@@ -296,6 +296,9 @@ jobs:
           - id: fetch-sddf
             board: qemu_virt_aarch64_fetch_sddf
             command: just test-fetch-sddf
+          - id: web-sddf
+            board: qemu_virt_aarch64_web_sddf
+            command: just test-web-sddf
           - id: display
             board: qemu_virt_aarch64_display
             command: just test-display

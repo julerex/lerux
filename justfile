@@ -121,6 +121,10 @@ test-net-sddf:
 test-fetch-sddf:
     BOARD=qemu_virt_aarch64_fetch_sddf just test
 
+# Milestone 11: shell serves the seeded hostname file over hostfwd
+test-web-sddf:
+    BOARD=qemu_virt_aarch64_web_sddf just test
+
 # Milestone 3: cothread blocks on a channel until a Microkit notification
 test-cothread:
     BOARD=qemu_virt_aarch64_cothread just test

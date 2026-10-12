@@ -30,7 +30,7 @@ pub fn build(root: &Path, board: &str, build_dir: &str, config: &str) -> Result<
     if board == "qemu_virt_aarch64_net_sddf" {
         crate::net_sddf::write_configs(&board_build_dir(root, board, build_dir))?;
     }
-    if board == "qemu_virt_aarch64_fetch_sddf" {
+    if board == "qemu_virt_aarch64_fetch_sddf" || board == "qemu_virt_aarch64_web_sddf" {
         crate::fetch_sddf::write_configs(&board_build_dir(root, board, build_dir))?;
     }
     let boards = load_boards(root)?;

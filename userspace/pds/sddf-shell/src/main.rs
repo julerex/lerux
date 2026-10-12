@@ -1,11 +1,23 @@
 #![no_std]
 #![no_main]
 
-#[cfg(all(
-    feature = "board-qemu_virt_aarch64_fetch_sddf",
-    feature = "board-qemu_virt_aarch64_fs_sddf"
+#[cfg(any(
+    all(
+        feature = "board-qemu_virt_aarch64_fetch_sddf",
+        feature = "board-qemu_virt_aarch64_fs_sddf"
+    ),
+    all(
+        feature = "board-qemu_virt_aarch64_web_sddf",
+        feature = "board-qemu_virt_aarch64_fs_sddf"
+    ),
 ))]
 compile_error!("the fetch image and the filesystem image both use channel 3");
+
+#[cfg(all(
+    feature = "board-qemu_virt_aarch64_web_sddf",
+    feature = "board-qemu_virt_aarch64_fetch_sddf"
+))]
+compile_error!("the web image and the fetch image are separate boards");
 
 use core::{
     cell::UnsafeCell,
@@ -46,9 +58,9 @@ const CONFIG: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/config.bin"));
 const TX_CH: usize = CLIENT_TX_CHANNEL as usize;
 const RX_CH: usize = CLIENT_RX_CHANNEL as usize;
 const FS_CH: usize = FS_SHELL_SERVER_CHANNEL as usize;
-#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+#[cfg(feature = "net-client")]
 const STACK_SIZE: usize = 0x1_0000;
-#[cfg(not(feature = "board-qemu_virt_aarch64_fetch_sddf"))]
+#[cfg(not(feature = "net-client"))]
 const STACK_SIZE: usize = 0x4000;
 const LINE_MAX: usize = 80;
 const NAME_MAX: usize = 12;
@@ -56,9 +68,9 @@ const LIST_MAX: usize = 32;
 const S_IFMT: u64 = 0o170000;
 const S_IFDIR: u64 = 0o040000;
 
-#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+#[cfg(feature = "net-client")]
 mod net;
-#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+#[cfg(feature = "net-client")]
 mod net_device;
 
 #[repr(C, align(16))]
@@ -136,6 +148,8 @@ extern "C" fn worker() {
     if !bind_files() {
         return;
     }
+    #[cfg(feature = "board-qemu_virt_aarch64_web_sddf")]
+    serve_seeded_file();
     say(b"lerux shell ready\n");
     let mut line = [0u8; LINE_MAX];
     loop {
@@ -175,6 +189,34 @@ fn wake_fs(_: *mut ()) {
 fn files() -> &'static mut Files {
     // SAFETY: `bind_files` wrote this cell, and only the worker calls this.
     unsafe { (*FILES.0.get()).assume_init_mut() }
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_web_sddf")]
+fn serve_seeded_file() {
+    let mut body = [0u8; 64];
+    let n = read_seed(&mut body);
+    if n == 0 {
+        say(b"web err\n");
+        return;
+    }
+    let Ok(fd) = net::begin_listen() else {
+        say(b"web err\n");
+        return;
+    };
+    say(b"web listening\n");
+    if net::serve_one(fd, &body[..n]).is_err() {
+        say(b"web err\n");
+    }
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_web_sddf")]
+fn read_seed(buf: &mut [u8]) -> usize {
+    let Ok(fd) = files().open(b"/config/hostname", Open::Read) else {
+        return 0;
+    };
+    let read = files().read(fd, buf);
+    let _ = files().close(fd);
+    read.unwrap_or(0)
 }
 
 fn io() -> &'static Io {
@@ -1024,18 +1066,12 @@ fn trim(line: &[u8]) -> &[u8] {
     &line[start..end]
 }
 
-#[cfg_attr(
-    feature = "board-qemu_virt_aarch64_fetch_sddf",
-    protection_domain(heap_size = 1024 * 1024)
-)]
-#[cfg_attr(not(feature = "board-qemu_virt_aarch64_fetch_sddf"), protection_domain)]
+#[cfg_attr(feature = "net-client", protection_domain(heap_size = 1024 * 1024))]
+#[cfg_attr(not(feature = "net-client"), protection_domain)]
 fn init() -> HandlerImpl {
     let serial_len = size_of::<serial_client_config_t>();
     let fs_len = size_of::<fs_client_config_t>();
-    #[cfg(not(any(
-        feature = "board-qemu_virt_aarch64_fetch_sddf",
-        feature = "board-qemu_virt_aarch64_fs_sddf"
-    )))]
+    #[cfg(not(any(feature = "net-client", feature = "board-qemu_virt_aarch64_fs_sddf")))]
     assert_eq!(CONFIG.len(), serial_len + fs_len);
     // SAFETY: the build script wrote a `serial_client_config_t` and then an `fs_client_config_t`.
     let serial = unsafe {
@@ -1051,7 +1087,7 @@ fn init() -> HandlerImpl {
     assert_eq!(serial.tx.id, CLIENT_TX_CHANNEL);
     assert_eq!(serial.rx.id, CLIENT_RX_CHANNEL);
     assert_eq!(fs.server.id, FS_SHELL_SERVER_CHANNEL);
-    #[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+    #[cfg(feature = "net-client")]
     install_net(serial_len + fs_len);
     #[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
     install_status(serial_len + fs_len);
@@ -1083,13 +1119,13 @@ impl Handler for HandlerImpl {
         if channels.contains(Channel::new(FS_CH)) {
             microkit_cothread_recv_ntfn(FS_CH);
         }
-        #[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+        #[cfg(feature = "net-client")]
         net::on_notify(channels);
         Ok(())
     }
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+#[cfg(feature = "net-client")]
 fn install_net(at: usize) {
     use lerux_sddf::{
         net_client_config_t,

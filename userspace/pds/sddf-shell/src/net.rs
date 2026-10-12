@@ -30,6 +30,7 @@ use lerux_sddf::{
     net_buffers_init, net_client_config_t, net_connection_resource_t,
     net_image::SHELL_NET_RX_CHANNEL, net_queue_handle_t, net_queue_init,
 };
+#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
 use lerux_tls::{ClientSession, Status};
 
 use crate::net_device::NetDevice;
@@ -38,10 +39,16 @@ const SPINS_PER_VIRTUAL_MS: u32 = 30_000;
 const LIMIT_MS: u64 = 30_000;
 const LOCAL_PORT: u16 = 49152;
 const GATEWAY: Ipv4Address = Ipv4Address::new(10, 0, 2, 2);
+#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
 const FIXTURE_PORT: u16 = 8443;
+#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
 const ECHO_PORT: u16 = 18080;
+#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
 const CHAT_LINE: &[u8] = b"chat\n";
+#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
 const HTTP_GET: &[u8] = b"GET /fixture.html HTTP/1.1\r\nHost: host\r\nConnection: close\r\n\r\n";
+#[cfg(feature = "board-qemu_virt_aarch64_web_sddf")]
+const WEB_PORT: u16 = 8080;
 
 struct Map {
     rx: net_queue_handle_t,
@@ -96,6 +103,7 @@ pub fn on_notify(channels: ChannelSet) {
     }
 }
 
+#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
 pub fn fetch_body(out: &mut [u8]) -> Result<usize, ()> {
     let sockets = sockets()?;
     let fd = sockets.socket().map_err(|_| ())?;
@@ -110,11 +118,13 @@ pub fn fetch_body(out: &mut [u8]) -> Result<usize, ()> {
 }
 
 /// The baked-in smoke certificate authority loads.
+#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
 pub fn cert_ready() -> bool {
     ClientSession::new("host").is_ok()
 }
 
 /// Send one line to the host echo and return the bytes it wrote back.
+#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
 pub fn chat_echo(out: &mut [u8]) -> Result<usize, ()> {
     let sockets = sockets()?;
     let fd = sockets.socket().map_err(|_| ())?;
@@ -185,6 +195,7 @@ struct Stack {
     local_port: u16,
     local_ip: Ipv4Address,
     connecting: bool,
+    listening: bool,
 }
 
 impl Stack {
@@ -226,6 +237,7 @@ impl Stack {
             local_port: LOCAL_PORT,
             local_ip: Ipv4Address::UNSPECIFIED,
             connecting: false,
+            listening: false,
         })
     }
 
@@ -337,6 +349,22 @@ impl Tcp for Stack {
                 .map_err(|_| Errno(Errno::ECONNREFUSED))?;
         }
         self.connecting = true;
+        self.listening = false;
+        Ok(())
+    }
+
+    fn listen(&mut self, port: u16) -> Result<(), Errno> {
+        let local = IpListenEndpoint { addr: None, port };
+        let handle = self.tcp;
+        self.sockets
+            .get_mut::<tcp::Socket>(handle)
+            .listen(local)
+            .map_err(|err| match err {
+                tcp::ListenError::Unaddressable => Errno(Errno::EINVAL),
+                tcp::ListenError::InvalidState => Errno(Errno::EADDRINUSE),
+            })?;
+        self.connecting = false;
+        self.listening = true;
         Ok(())
     }
 
@@ -345,7 +373,8 @@ impl Tcp for Stack {
     }
 
     fn failed(&self) -> bool {
-        self.connecting && self.sockets.get::<tcp::Socket>(self.tcp).state() == tcp::State::Closed
+        let closed = self.sockets.get::<tcp::Socket>(self.tcp).state() == tcp::State::Closed;
+        (self.connecting || self.listening) && closed
     }
 
     fn send(&mut self, data: &[u8]) -> Result<usize, Errno> {
@@ -373,7 +402,22 @@ impl Tcp for Stack {
             tcp.abort();
         }
         self.connecting = false;
+        self.listening = false;
         self.poll_iface();
+    }
+
+    fn shutdown(&mut self) -> Result<bool, Errno> {
+        let handle = self.tcp;
+        let done = {
+            let tcp = self.sockets.get_mut::<tcp::Socket>(handle);
+            tcp.close();
+            !tcp.is_open()
+        };
+        if done {
+            self.connecting = false;
+            self.listening = false;
+        }
+        Ok(done)
     }
 }
 
@@ -391,6 +435,7 @@ fn instant(ms: u64) -> Instant {
     Instant::from_millis(i64::try_from(ms).unwrap_or(i64::MAX))
 }
 
+#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
 fn http_body(sockets: &mut Sockets<Stack>, fd: SockFd, out: &mut [u8]) -> Result<usize, ()> {
     let mut session = ClientSession::new("host").map_err(|_| ())?;
     let mut requested = false;
@@ -435,6 +480,7 @@ fn http_body(sockets: &mut Sockets<Stack>, fd: SockFd, out: &mut [u8]) -> Result
     copy_body(&raw[..raw_len], out).ok_or(())
 }
 
+#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
 fn feed(session: &mut ClientSession, sockets: &mut Sockets<Stack>, fd: SockFd) -> Result<(), ()> {
     let mut buf = [0u8; 512];
     let n = sockets.recv(fd, &mut buf).map_err(|_| ())?;
@@ -445,6 +491,7 @@ fn feed(session: &mut ClientSession, sockets: &mut Sockets<Stack>, fd: SockFd) -
     Ok(())
 }
 
+#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
 fn copy_body(raw: &[u8], out: &mut [u8]) -> Option<usize> {
     let split = raw.windows(4).position(|window| window == b"\r\n\r\n")?;
     let len = content_length(&raw[..split])?;
@@ -456,6 +503,7 @@ fn copy_body(raw: &[u8], out: &mut [u8]) -> Option<usize> {
     Some(len)
 }
 
+#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
 fn content_length(headers: &[u8]) -> Option<usize> {
     let key = b"Content-Length: ";
     let start = headers
@@ -476,3 +524,83 @@ fn content_length(headers: &[u8]) -> Option<usize> {
 }
 
 const _: () = assert!(SHELL_NET_RX_CHANNEL == 3);
+
+/// Listen on the guest Hypertext Transfer Protocol port.
+///
+/// Dynamic Host Configuration Protocol runs first. The caller prints its ready
+/// line before [`serve_one`], so the host can connect while this worker waits.
+#[cfg(feature = "board-qemu_virt_aarch64_web_sddf")]
+pub fn begin_listen() -> Result<SockFd, ()> {
+    let sockets = sockets()?;
+    let fd = sockets.socket().map_err(|_| ())?;
+    if sockets.listen(fd, WEB_PORT).is_err() {
+        let _ = sockets.close(fd);
+        return Err(());
+    }
+    Ok(fd)
+}
+
+/// Read one request and write `body` as the response.
+#[cfg(feature = "board-qemu_virt_aarch64_web_sddf")]
+pub fn serve_one(fd: SockFd, body: &[u8]) -> Result<(), ()> {
+    let sockets = sockets()?;
+    let result = (|| {
+        sockets.accept(fd).map_err(|_| ())?;
+        read_headers(sockets, fd)?;
+        let mut header = [0u8; 96];
+        let n = write_header(body.len(), &mut header);
+        sockets.send(fd, &header[..n]).map_err(|_| ())?;
+        if !body.is_empty() {
+            sockets.send(fd, body).map_err(|_| ())?;
+        }
+        sockets.shutdown(fd).map_err(|_| ())
+    })();
+    if result.is_err() {
+        let _ = sockets.close(fd);
+    }
+    result
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_web_sddf")]
+fn read_headers(sockets: &mut Sockets<Stack>, fd: SockFd) -> Result<(), ()> {
+    let mut req = [0u8; 512];
+    let mut len = 0usize;
+    while !req[..len].windows(4).any(|window| window == b"\r\n\r\n") {
+        if len == req.len() {
+            return Err(());
+        }
+        let n = sockets.recv(fd, &mut req[len..]).map_err(|_| ())?;
+        if n == 0 {
+            return Err(());
+        }
+        len += n;
+    }
+    Ok(())
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_web_sddf")]
+fn write_header(len: usize, out: &mut [u8; 96]) -> usize {
+    const HEAD: &[u8] = b"HTTP/1.1 200 OK\r\nContent-Length: ";
+    const TAIL: &[u8] = b"\r\nConnection: close\r\n\r\n";
+    out[..HEAD.len()].copy_from_slice(HEAD);
+    let mut n = HEAD.len();
+    let mut digits = [0u8; 20];
+    let mut value = len;
+    let mut count = 0usize;
+    loop {
+        let digit = u8::try_from(value % 10).unwrap_or(0);
+        digits[count] = b'0' + digit;
+        count += 1;
+        value /= 10;
+        if value == 0 {
+            break;
+        }
+    }
+    while count > 0 {
+        count -= 1;
+        out[n] = digits[count];
+        n += 1;
+    }
+    out[n..n + TAIL.len()].copy_from_slice(TAIL);
+    n + TAIL.len()
+}

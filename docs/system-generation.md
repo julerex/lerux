@@ -82,6 +82,10 @@ Templates under `userspace/systems/templates/`. Most still embed hand channels f
 
 `qemu_virt_aarch64_fetch_sddf` has no profile. `fetch-sddf.system.template` owns the memory regions and the channel ends. It is the filesystem image plus the network roles. The shell is the one client of the serial queues, the filesystem queue, and the network queues. Its network channels are 3 and 4 because serial transmit, serial receive, and the filesystem server already use 0, 1, and 2. The shell embeds the serial client config, `fs_image::shell_client_config()`, and `net_image::shell_client_config()` in one file. The same shell runs `calc`, `backup`, `source`, `cert`, `edit`, and `chat`. `chat` uses the host echo on port 18080, which the board starts with `qemu.tcp_echo`. Virtio-net is the first virtio device at `+0xe00` and interrupt 79. Virtio-blk stays at `+0xc00` and interrupt 78. Agent rules for the socket calls, the fixture fetch, and the transmit-buffer init are in [AGENTS.md](../AGENTS.md#fetch-image-qemu_virt_aarch64_fetch_sddf).
 
+## Web image
+
+`qemu_virt_aarch64_web_sddf` has no profile. It uses `fetch-sddf.system.template` and the same protection-domain list as the fetch image. The shell reads `/config/hostname` and serves those bytes on guest port 8080. Hostfwd maps host port 18080 to that port. The board sets `curl_expect` to `lerux` and does not start the host echo or the https-one fixture. Agent rules are in [AGENTS.md](../AGENTS.md#web-image-qemu_virt_aarch64_web_sddf).
+
 ## Incremental history
 
 1. ✅ Structured `[[channel]]` + validation  

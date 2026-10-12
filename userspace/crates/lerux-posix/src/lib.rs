@@ -8,8 +8,8 @@
 //! the queue inside that function. A later guest notifies its server and
 //! waits there. The file methods do not branch on which wake is bound.
 //!
-//! [`Sockets`] issues `socket`, `connect`, `send`, and `recv` on a caller-owned
-//! [`Tcp`] pipe. The pipe is not a filesystem queue.
+//! [`Sockets`] issues `socket`, `connect`, `listen`, `accept`, `send`, and
+//! `recv` on a caller-owned [`Tcp`] pipe. The pipe is not a filesystem queue.
 
 #![cfg_attr(not(test), no_std)]
 
@@ -76,6 +76,8 @@ impl Errno {
     pub const EPIPE: i32 = 32;
     pub const ENAMETOOLONG: i32 = 36;
     pub const ENOTEMPTY: i32 = 39;
+    pub const EOPNOTSUPP: i32 = 95;
+    pub const EADDRINUSE: i32 = 98;
     pub const EISCONN: i32 = 106;
     pub const ENOTCONN: i32 = 107;
     pub const ETIMEDOUT: i32 = 110;

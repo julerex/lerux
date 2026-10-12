@@ -2,7 +2,7 @@
 
 Last updated: 2026-10-12
 
-**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is done and is the file-descriptor library. Milestone 6 is done and is the shell on that filesystem image. Milestone 7 is done and is the network-role image. Milestone 8 is done and is the socket and fetch image. Milestone 9 is done and is the timer and static status on the filesystem image. Milestone 10 is done and is the remaining shell commands on the fetch image. Milestone 11 is done and is the web image that serves the seeded hostname file. Milestone 12 is next. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
+**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is done and is the file-descriptor library. Milestone 6 is done and is the shell on that filesystem image. Milestone 7 is done and is the network-role image. Milestone 8 is done and is the socket and fetch image. Milestone 9 is done and is the timer and static status on the filesystem image. Milestone 10 is done and is the remaining shell commands on the fetch image. Milestone 11 is done and is the web image that serves the seeded hostname file. Milestone 12 is done and is the virtio graphics driver, virtualiser, and browser image. Milestone 13 is next. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
 
 **Goal:** Every lerux guest protection domain stays Rust, and the queues, configuration pages, filesystem messages, and component graph are the same ones LionsOS uses.
 
@@ -42,7 +42,8 @@ Last updated: 2026-10-12
 | File and socket calls mapped onto the filesystem queue and the client stack | `lerux-posix`: file-descriptor table, `open`/`read`/`write`/`socket`, filesystem status codes mapped to the same `errno` values as `lib/libc/posix` at the pinned tag |
 | sdfgen metaprogram and `serialise_config` | The Rust system generator emits the same protection-domain set and writes the same configuration structs. Python sdfgen is not added. |
 | WebAssembly runtime protection domain with filesystem and network access | A Rust WebAssembly runtime in that role. The `LRW1` opcode allowlist is removed. A signature check before instantiate may stay. |
-| Kitty Linux guest framebuffer | Not ported. That path is a Linux guest, and the LionsOS header calls it unprincipled. Display uses the driver-framework virtio graphics class, in Rust, once its headers are in the specification checkout. |
+| `gpu_req_t`, `gpu_resp_t`, `gpu_events_t`, and the queue prefixes | Same fields. The pinned graphics headers have no configuration struct and no magic. |
+| Kitty Linux guest framebuffer | Not ported. That path is a Linux guest, and the LionsOS header calls it unprincipled. Display uses the driver-framework virtio graphics class, in Rust, on `qemu_virt_aarch64_browser_sddf`. |
 
 LERUXFS2, the combined `net-server`, the postcard `serial-virt`, and `config-server` as its own protocol are the divergences this plan removes.
 
@@ -228,6 +229,17 @@ Landed:
 ## Milestone 12 — Display and browser
 
 **Exit:** A Rust virtio graphics driver and virtualiser use the queue and configuration structs from the pinned driver-framework graphics headers. The browser program writes pixels through that client interface and fetches the page through the socket library. `just test-browser-sddf` expects a known pixel pattern and the page title on the serial log. `DisplayRequest` is not ported.
+
+Done.
+
+Landed:
+
+- `lerux-sddf` copies `gpu_req_t`, `gpu_resp_t`, `gpu_events_t`, and the queue prefixes from the pinned graphics headers. Those headers have no configuration struct and no magic. Queue capacity is 16. Graphics regions start at `0x7_000_000`.
+- `qemu_virt_aarch64_browser_sddf` adds `gpu_driver` and `gpu_virt` to the fetch protection domains. The programs are `sddf-gpu-driver.elf` and `sddf-gpu-virt.elf`. Virtio-gpu is the third virtio-mmio device, at `+0xa00` and interrupt 77. The driver maps that page and a 2 MiB direct-memory-access region. The shell maps only the four client graphics regions. The shell config stays the serial page, the filesystem page, and the network page.
+- The shell fetches `GET /fixture.html` and prints `title lerux`. It then submits display info, a 16 by 16 resource, and a flush. QEMU rejects a scanout whose width or height is below 16. The pixel bytes are `4c 52 58 ff`. The success line is `pixel 4c5258ff`. `DisplayRequest` is not ported. Postcard `display-server`, `browser-ui`, and `web-content` stay.
+- Shell channel 5 is the graphics virtualiser. Drivers stay at priority 4 and virtualisers at priority 3. The board feature does not share a build with the fetch, web, or filesystem shell features.
+- `support/smoke-expects.toml` expects `title lerux` and then `pixel 4c5258ff`. The continuous integration job is `browser-sddf`. The smoke count is 51.
+- Checked on 2026-10-12: `just check` passed, `just check-pd` passed, and `just test-browser-sddf` printed `title lerux` and `pixel 4c5258ff`.
 
 ## Milestone 13 — Agent
 

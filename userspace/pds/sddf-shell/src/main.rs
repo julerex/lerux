@@ -10,14 +10,30 @@
         feature = "board-qemu_virt_aarch64_web_sddf",
         feature = "board-qemu_virt_aarch64_fs_sddf"
     ),
+    all(
+        feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-qemu_virt_aarch64_fs_sddf"
+    ),
 ))]
-compile_error!("the fetch image and the filesystem image both use channel 3");
+compile_error!(
+    "the fetch image, the web image, the browser image, and the filesystem image do not share channel 3"
+);
 
-#[cfg(all(
-    feature = "board-qemu_virt_aarch64_web_sddf",
-    feature = "board-qemu_virt_aarch64_fetch_sddf"
+#[cfg(any(
+    all(
+        feature = "board-qemu_virt_aarch64_web_sddf",
+        feature = "board-qemu_virt_aarch64_fetch_sddf"
+    ),
+    all(
+        feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-qemu_virt_aarch64_fetch_sddf"
+    ),
+    all(
+        feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-qemu_virt_aarch64_web_sddf"
+    ),
 ))]
-compile_error!("the web image and the fetch image are separate boards");
+compile_error!("the fetch image, the web image, and the browser image are separate boards");
 
 use core::{
     cell::UnsafeCell,
@@ -68,6 +84,8 @@ const LIST_MAX: usize = 32;
 const S_IFMT: u64 = 0o170000;
 const S_IFDIR: u64 = 0o040000;
 
+#[cfg(feature = "board-qemu_virt_aarch64_browser_sddf")]
+mod gpu;
 #[cfg(feature = "net-client")]
 mod net;
 #[cfg(feature = "net-client")]
@@ -150,6 +168,8 @@ extern "C" fn worker() {
     }
     #[cfg(feature = "board-qemu_virt_aarch64_web_sddf")]
     serve_seeded_file();
+    #[cfg(feature = "board-qemu_virt_aarch64_browser_sddf")]
+    browse();
     say(b"lerux shell ready\n");
     let mut line = [0u8; LINE_MAX];
     loop {
@@ -207,6 +227,51 @@ fn serve_seeded_file() {
     if net::serve_one(fd, &body[..n]).is_err() {
         say(b"web err\n");
     }
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_browser_sddf")]
+fn browse() {
+    let mut body = [0u8; 512];
+    match net::fetch_body(&mut body) {
+        Ok(n) => match page_title(&body[..n]) {
+            Some(title) => say_title(title),
+            None => say(b"title err\n"),
+        },
+        Err(()) => say(b"title err\n"),
+    }
+    if gpu::paint().is_ok() {
+        say(b"pixel 4c5258ff\n");
+    } else {
+        say(b"pixel err\n");
+    }
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_browser_sddf")]
+fn page_title(body: &[u8]) -> Option<&[u8]> {
+    let open = b"<title>";
+    let close = b"</title>";
+    let start = body.windows(open.len()).position(|window| window == open)? + open.len();
+    let rest = body.get(start..)?;
+    let end = rest
+        .windows(close.len())
+        .position(|window| window == close)?;
+    let title = rest.get(..end)?;
+    if title.is_empty() || title.len() > 32 {
+        return None;
+    }
+    Some(title)
+}
+
+#[cfg(feature = "board-qemu_virt_aarch64_browser_sddf")]
+fn say_title(title: &[u8]) {
+    let mut line = [0u8; 40];
+    let prefix = b"title ";
+    line[..prefix.len()].copy_from_slice(prefix);
+    let mut len = prefix.len();
+    line[len..len + title.len()].copy_from_slice(title);
+    len += title.len();
+    line[len] = b'\n';
+    say(&line[..=len]);
 }
 
 #[cfg(feature = "board-qemu_virt_aarch64_web_sddf")]
@@ -1089,6 +1154,8 @@ fn init() -> HandlerImpl {
     assert_eq!(fs.server.id, FS_SHELL_SERVER_CHANNEL);
     #[cfg(feature = "net-client")]
     install_net(serial_len + fs_len);
+    #[cfg(feature = "board-qemu_virt_aarch64_browser_sddf")]
+    gpu::install();
     #[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
     install_status(serial_len + fs_len);
     // SAFETY: the template maps this client's transmit and receive regions.
@@ -1121,6 +1188,8 @@ impl Handler for HandlerImpl {
         }
         #[cfg(feature = "net-client")]
         net::on_notify(channels);
+        #[cfg(feature = "board-qemu_virt_aarch64_browser_sddf")]
+        gpu::on_notify(channels);
         Ok(())
     }
 }

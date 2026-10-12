@@ -12,9 +12,21 @@ fn main() {
             feature = "board-qemu_virt_aarch64_web_sddf",
             feature = "board-qemu_virt_aarch64_fetch_sddf"
         ),
+        all(
+            feature = "board-qemu_virt_aarch64_browser_sddf",
+            feature = "board-qemu_virt_aarch64_fs_sddf"
+        ),
+        all(
+            feature = "board-qemu_virt_aarch64_browser_sddf",
+            feature = "board-qemu_virt_aarch64_fetch_sddf"
+        ),
+        all(
+            feature = "board-qemu_virt_aarch64_browser_sddf",
+            feature = "board-qemu_virt_aarch64_web_sddf"
+        ),
     ))]
     compile_error!(
-        "the fetch image, the web image, and the filesystem image do not share one build"
+        "the fetch image, the web image, the browser image, and the filesystem image do not share one build"
     );
 
     let serial = lerux_sddf::serial_image::client_config();

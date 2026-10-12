@@ -13,6 +13,7 @@ mod fetch;
 mod fetch_sddf;
 mod fs_host;
 mod fs_sddf;
+mod gpu_sddf;
 mod grok_one;
 mod http_one;
 mod https_one;

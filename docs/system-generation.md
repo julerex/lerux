@@ -86,6 +86,10 @@ Templates under `userspace/systems/templates/`. Most still embed hand channels f
 
 `qemu_virt_aarch64_web_sddf` has no profile. It uses `fetch-sddf.system.template` and the same protection-domain list as the fetch image. The shell reads `/config/hostname` and serves those bytes on guest port 8080. Hostfwd maps host port 18080 to that port. The board sets `curl_expect` to `lerux` and does not start the host echo or the https-one fixture. Agent rules are in [AGENTS.md](../AGENTS.md#web-image-qemu_virt_aarch64_web_sddf).
 
+## Browser image
+
+`qemu_virt_aarch64_browser_sddf` has no profile. `browser-sddf.system.template` is the fetch template plus `gpu_driver` and `gpu_virt`. Virtio-gpu is the third virtio-mmio device, at `+0xa00` and interrupt 77. Graphics regions start at `0x7_000_000`. The shell config stays the serial client page, the filesystem shell page, and the network shell page. The pinned graphics headers have no configuration page. Agent rules are in [AGENTS.md](../AGENTS.md#browser-image-qemu_virt_aarch64_browser_sddf).
+
 ## Incremental history
 
 1. ✅ Structured `[[channel]]` + validation  

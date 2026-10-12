@@ -1,7 +1,7 @@
 //! QEMU launch derived from `support/boards.toml` (`[board].qemu` table).
 //!
 //! The board entry is the whole interface: arch picks the base machine,
-//! `disk`/`net`/`sp804`/`tcp_echo`/`http_one`/`https_one`/`grok_one` pick devices and host helpers.
+//! `disk`/`net`/`sp804`/`tcp_echo`/`http_one`/`https_one`/`grok_one`/`gpu` pick devices and host helpers.
 
 use std::{
     path::{Path, PathBuf},
@@ -173,8 +173,8 @@ fn aarch64_command(qemu: &QemuConfig, loader: &Path, disk: &Path, window: bool) 
         "-device",
         &format!("loader,file={},addr=0x70000000,cpu-num=0", path_str(loader)),
     ]);
-    // Virtio-mmio slot order matters: net first, blk at +0xc00 in the same page
-    // (see virtio-blk-driver VIRTIO_BLK_MMIO_OFFSET).
+    // Virtio-mmio slot order matters: net first, blk at +0xc00, gpu at +0xa00
+    // in the same page. The first device occupies the highest address.
     if let Some(netdev) = netdev_arg(qemu.net) {
         c.args([
             "-device",
@@ -190,6 +190,9 @@ fn aarch64_command(qemu: &QemuConfig, loader: &Path, disk: &Path, window: bool) 
             "-blockdev",
             &blockdev,
         ]);
+    }
+    if qemu.gpu {
+        c.args(["-device", "virtio-gpu-device"]);
     }
     c
 }
@@ -449,6 +452,15 @@ mod tests {
         let mut cmd = Command::new("qemu-system-x86_64");
         append_usb_kbd(&mut cmd, &qemu);
         assert!(!format!("{cmd:?}").contains("qemu-xhci"));
+    }
+
+    #[test]
+    fn gpu_device_follows_net_and_blk() {
+        let line = render_aarch64("disk = \"rw\"\nnet = \"user\"\ngpu = true", false);
+        let net = line.find("virtio-net-device").expect("net device");
+        let blk = line.find("virtio-blk-device").expect("blk device");
+        let gpu = line.find("virtio-gpu-device").expect("gpu device");
+        assert!(net < blk && blk < gpu, "{line}");
     }
 
     #[test]

@@ -54,6 +54,9 @@ pub struct QemuConfig {
     /// Attach QEMU `-device ramfb` (Phase 72 software framebuffer).
     #[serde(default)]
     pub ramfb: bool,
+    /// Attach `-device virtio-gpu-device` after virtio-net and virtio-blk.
+    #[serde(default)]
+    pub gpu: bool,
     /// Open a QMP socket (`console.qmp` in the board build dir) so a smoke can
     /// inject PS/2 keys with `send-key`.
     #[serde(default)]

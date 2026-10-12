@@ -22,21 +22,28 @@ use lerux_sddf::{
     blk_resp_status_t::BLK_RESP_ERR_NO_DEVICE, blk_resp_t, blk_storage_info_t,
     blk_virt_config_client_t, blk_virt_config_driver_t, blk_virt_config_t,
     device_region_resource_t, fs_client_config_t, fs_cmd_t, fs_cmpl_t, fs_connection_resource_t,
-    fs_msg_t, fs_queue_t, fs_server_config_t, fs_stat_t, mac_addr_t, net_buff_desc_t,
-    net_client_config_t, net_connection_resource_t, net_copy_config_t, net_driver_config_t,
-    net_queue_handle_t, net_queue_t, net_virt_rx_client_config_t, net_virt_rx_config_t,
-    net_virt_tx_client_config_t, net_virt_tx_config_t, net_virt_tx_data_region_t,
-    net_vswitch_config_t, net_vswitch_port_config_t, region_resource_t, serial_client_config_t,
+    fs_msg_t, fs_queue_t, fs_server_config_t, fs_stat_t, gpu_events_t, gpu_formats_t,
+    gpu_queue_handle_t, gpu_rect_t, gpu_req_code_t, gpu_req_get_display_info_t, gpu_req_queue_t,
+    gpu_req_resource_attach_backing_t, gpu_req_resource_create_2d_t,
+    gpu_req_resource_create_blob_t, gpu_req_resource_detach_backing_t, gpu_req_resource_flush_t,
+    gpu_req_resource_unref_t, gpu_req_set_scanout_blob_t, gpu_req_set_scanout_t, gpu_req_t,
+    gpu_req_transfer_to_2d_t, gpu_resp_get_display_info_t, gpu_resp_queue_t, gpu_resp_status_t,
+    gpu_resp_t, gpu_scanout_t, mac_addr_t, net_buff_desc_t, net_client_config_t,
+    net_connection_resource_t, net_copy_config_t, net_driver_config_t, net_queue_handle_t,
+    net_queue_t, net_virt_rx_client_config_t, net_virt_rx_config_t, net_virt_tx_client_config_t,
+    net_virt_tx_config_t, net_virt_tx_data_region_t, net_vswitch_config_t,
+    net_vswitch_port_config_t, region_resource_t, serial_client_config_t,
     serial_connection_resource_t, serial_driver_config_t, serial_queue_handle_t, serial_queue_t,
     serial_virt_rx_config_t, serial_virt_tx_client_config_t, serial_virt_tx_config_t,
     timer_client_config_t, BLK_MAX_SERIAL_NUMBER, BLK_STORAGE_INFO_REGION_SIZE, BLK_TRANSFER_SIZE,
     FS_CMD_DIR_REWIND, FS_CMD_FILE_OPEN, FS_CMD_INITIALISE, FS_NUM_COMMANDS, FS_OPEN_FLAGS_CREATE,
     FS_QUEUE_CAPACITY, FS_STATUS_NOT_EMPTY, FS_STATUS_NO_FILE, FS_STATUS_NUM_STATUSES,
-    FS_STATUS_SUCCESS, LIONS_FS_MAGIC, LIONS_FS_MAGIC_LEN, MAC802_BYTES, NET_BUFFER_SIZE,
-    SDDF_BLK_MAGIC, SDDF_BLK_MAGIC_LEN, SDDF_BLK_MAX_CLIENTS, SDDF_NAME_LENGTH, SDDF_NET_MAGIC,
-    SDDF_NET_MAGIC_LEN, SDDF_NET_MAX_CLIENTS, SDDF_SERIAL_BEGIN_STR_MAX_LEN, SDDF_SERIAL_MAGIC,
-    SDDF_SERIAL_MAGIC_LEN, SDDF_SERIAL_MAX_CLIENTS, SDDF_TIMER_GET_TIME, SDDF_TIMER_MAGIC,
-    SDDF_TIMER_MAGIC_LEN, SDDF_TIMER_MAX_CLIENTS, SDDF_TIMER_SET_TIMEOUT,
+    FS_STATUS_SUCCESS, GPU_BPP_2D, GPU_DISABLE_SCANOUT_RESOURCE_ID, GPU_EVENTS_REGION_SIZE,
+    GPU_MAX_RESOURCES, GPU_MAX_SCANOUTS, LIONS_FS_MAGIC, LIONS_FS_MAGIC_LEN, MAC802_BYTES,
+    NET_BUFFER_SIZE, SDDF_BLK_MAGIC, SDDF_BLK_MAGIC_LEN, SDDF_BLK_MAX_CLIENTS, SDDF_NAME_LENGTH,
+    SDDF_NET_MAGIC, SDDF_NET_MAGIC_LEN, SDDF_NET_MAX_CLIENTS, SDDF_SERIAL_BEGIN_STR_MAX_LEN,
+    SDDF_SERIAL_MAGIC, SDDF_SERIAL_MAGIC_LEN, SDDF_SERIAL_MAX_CLIENTS, SDDF_TIMER_GET_TIME,
+    SDDF_TIMER_MAGIC, SDDF_TIMER_MAGIC_LEN, SDDF_TIMER_MAX_CLIENTS, SDDF_TIMER_SET_TIMEOUT,
 };
 
 struct TempDir(PathBuf);
@@ -394,6 +401,25 @@ fn rust_types() -> Vec<(&'static str, usize, usize)> {
         fs_msg_t,
         fs_queue_t,
         timer_client_config_t,
+        gpu_rect_t,
+        gpu_scanout_t,
+        gpu_events_t,
+        gpu_req_get_display_info_t,
+        gpu_resp_get_display_info_t,
+        gpu_req_resource_create_blob_t,
+        gpu_req_set_scanout_blob_t,
+        gpu_req_resource_create_2d_t,
+        gpu_req_resource_attach_backing_t,
+        gpu_req_resource_detach_backing_t,
+        gpu_req_set_scanout_t,
+        gpu_req_transfer_to_2d_t,
+        gpu_req_resource_flush_t,
+        gpu_req_resource_unref_t,
+        gpu_req_t,
+        gpu_resp_t,
+        gpu_req_queue_t,
+        gpu_resp_queue_t,
+        gpu_queue_handle_t,
     ]
 }
 
@@ -567,6 +593,55 @@ fn rust_fields() -> Vec<(&'static str, &'static str, usize)> {
         fs_queue_t, tail;
         fs_queue_t, padding;
         fs_queue_t, buffer;
+        gpu_rect_t, x;
+        gpu_rect_t, y;
+        gpu_rect_t, width;
+        gpu_rect_t, height;
+        gpu_scanout_t, rect;
+        gpu_scanout_t, enabled;
+        gpu_events_t, display_info;
+        gpu_req_get_display_info_t, mem_offset;
+        gpu_resp_get_display_info_t, scanouts;
+        gpu_resp_get_display_info_t, num_scanouts;
+        gpu_req_resource_create_blob_t, resource_id;
+        gpu_req_resource_create_blob_t, mem_offset;
+        gpu_req_resource_create_blob_t, mem_size;
+        gpu_req_set_scanout_blob_t, resource_id;
+        gpu_req_set_scanout_blob_t, scanout_id;
+        gpu_req_set_scanout_blob_t, width;
+        gpu_req_set_scanout_blob_t, height;
+        gpu_req_set_scanout_blob_t, format;
+        gpu_req_set_scanout_blob_t, stride;
+        gpu_req_set_scanout_blob_t, offset;
+        gpu_req_set_scanout_blob_t, rect;
+        gpu_req_resource_create_2d_t, resource_id;
+        gpu_req_resource_create_2d_t, width;
+        gpu_req_resource_create_2d_t, height;
+        gpu_req_resource_create_2d_t, format;
+        gpu_req_resource_attach_backing_t, resource_id;
+        gpu_req_resource_attach_backing_t, mem_offset;
+        gpu_req_resource_attach_backing_t, mem_size;
+        gpu_req_resource_detach_backing_t, resource_id;
+        gpu_req_set_scanout_t, resource_id;
+        gpu_req_set_scanout_t, scanout_id;
+        gpu_req_set_scanout_t, rect;
+        gpu_req_transfer_to_2d_t, resource_id;
+        gpu_req_transfer_to_2d_t, rect;
+        gpu_req_transfer_to_2d_t, mem_offset;
+        gpu_req_resource_flush_t, resource_id;
+        gpu_req_resource_flush_t, rect;
+        gpu_req_resource_unref_t, resource_id;
+        gpu_req_t, code;
+        gpu_req_t, id;
+        gpu_resp_t, status;
+        gpu_resp_t, id;
+        gpu_req_queue_t, head;
+        gpu_req_queue_t, tail;
+        gpu_resp_queue_t, head;
+        gpu_resp_queue_t, tail;
+        gpu_queue_handle_t, req_queue;
+        gpu_queue_handle_t, resp_queue;
+        gpu_queue_handle_t, capacity;
     ];
     fields.push(("fs_cmd_t", "type", core::mem::offset_of!(fs_cmd_t, r#type)));
     fields.push((
@@ -579,6 +654,50 @@ fn rust_fields() -> Vec<(&'static str, &'static str, usize)> {
         "driver_id",
         core::mem::offset_of!(timer_client_config_t, driver_id),
     ));
+    for (field, offset) in [
+        (
+            "get_display_info",
+            core::mem::offset_of!(gpu_req_t, payload.get_display_info),
+        ),
+        (
+            "resource_create_blob",
+            core::mem::offset_of!(gpu_req_t, payload.resource_create_blob),
+        ),
+        (
+            "set_scanout_blob",
+            core::mem::offset_of!(gpu_req_t, payload.set_scanout_blob),
+        ),
+        (
+            "resource_create_2d",
+            core::mem::offset_of!(gpu_req_t, payload.resource_create_2d),
+        ),
+        (
+            "resource_attach_backing",
+            core::mem::offset_of!(gpu_req_t, payload.resource_attach_backing),
+        ),
+        (
+            "resource_detach_backing",
+            core::mem::offset_of!(gpu_req_t, payload.resource_detach_backing),
+        ),
+        (
+            "set_scanout",
+            core::mem::offset_of!(gpu_req_t, payload.set_scanout),
+        ),
+        (
+            "transfer_to_2d",
+            core::mem::offset_of!(gpu_req_t, payload.transfer_to_2d),
+        ),
+        (
+            "resource_flush",
+            core::mem::offset_of!(gpu_req_t, payload.resource_flush),
+        ),
+        (
+            "resource_unref",
+            core::mem::offset_of!(gpu_req_t, payload.resource_unref),
+        ),
+    ] {
+        fields.push(("gpu_req_t", field, offset));
+    }
     fields
 }
 
@@ -618,6 +737,35 @@ fn rust_constants() -> Vec<(&'static str, u64)> {
         ("SDDF_TIMER_SET_TIMEOUT", SDDF_TIMER_SET_TIMEOUT),
         ("SDDF_TIMER_MAGIC_LEN", SDDF_TIMER_MAGIC_LEN as u64),
         ("SDDF_TIMER_MAX_CLIENTS", SDDF_TIMER_MAX_CLIENTS as u64),
+        ("GPU_MAX_RESOURCES", GPU_MAX_RESOURCES as u64),
+        (
+            "GPU_DISABLE_SCANOUT_RESOURCE_ID",
+            u64::from(GPU_DISABLE_SCANOUT_RESOURCE_ID),
+        ),
+        ("GPU_BPP_2D", u64::from(GPU_BPP_2D)),
+        ("GPU_MAX_SCANOUTS", GPU_MAX_SCANOUTS as u64),
+        ("GPU_EVENTS_REGION_SIZE", GPU_EVENTS_REGION_SIZE as u64),
+        (
+            "GPU_REQ_GET_DISPLAY_INFO",
+            gpu_req_code_t::GPU_REQ_GET_DISPLAY_INFO as u64,
+        ),
+        (
+            "GPU_REQ_RESOURCE_UNREF",
+            gpu_req_code_t::GPU_REQ_RESOURCE_UNREF as u64,
+        ),
+        ("GPU_RESP_OK", gpu_resp_status_t::GPU_RESP_OK as u64),
+        (
+            "GPU_RESP_ERR_INVALID_PARAMETER",
+            gpu_resp_status_t::GPU_RESP_ERR_INVALID_PARAMETER as u64,
+        ),
+        (
+            "GPU_FORMAT_B8G8R8A8_UNORM",
+            gpu_formats_t::GPU_FORMAT_B8G8R8A8_UNORM as u64,
+        ),
+        (
+            "GPU_FORMAT_R8G8B8X8_UNORM",
+            gpu_formats_t::GPU_FORMAT_R8G8B8X8_UNORM as u64,
+        ),
     ]
 }
 
@@ -658,6 +806,9 @@ const LAYOUT_C: &str = r#"
 #include <lions/fs/config.h>
 #include <lions/fs/protocol.h>
 #include <sddf/blk/config.h>
+#include <sddf/gpu/events.h>
+#include <sddf/gpu/gpu.h>
+#include <sddf/gpu/queue.h>
 #include <sddf/blk/queue.h>
 #include <sddf/blk/storage_info.h>
 #include <sddf/network/config.h>
@@ -903,6 +1054,84 @@ int main(void)
     REPORT_TYPE(timer_client_config_t);
     REPORT_FIELD(timer_client_config_t, magic);
     REPORT_FIELD(timer_client_config_t, driver_id);
+    REPORT_TYPE(gpu_rect_t);
+    REPORT_FIELD(gpu_rect_t, x);
+    REPORT_FIELD(gpu_rect_t, y);
+    REPORT_FIELD(gpu_rect_t, width);
+    REPORT_FIELD(gpu_rect_t, height);
+    REPORT_TYPE(gpu_scanout_t);
+    REPORT_FIELD(gpu_scanout_t, rect);
+    REPORT_FIELD(gpu_scanout_t, enabled);
+    REPORT_TYPE(gpu_events_t);
+    REPORT_FIELD(gpu_events_t, display_info);
+    REPORT_TYPE(gpu_req_get_display_info_t);
+    REPORT_FIELD(gpu_req_get_display_info_t, mem_offset);
+    REPORT_TYPE(gpu_resp_get_display_info_t);
+    REPORT_FIELD(gpu_resp_get_display_info_t, scanouts);
+    REPORT_FIELD(gpu_resp_get_display_info_t, num_scanouts);
+    REPORT_TYPE(gpu_req_resource_create_blob_t);
+    REPORT_FIELD(gpu_req_resource_create_blob_t, resource_id);
+    REPORT_FIELD(gpu_req_resource_create_blob_t, mem_offset);
+    REPORT_FIELD(gpu_req_resource_create_blob_t, mem_size);
+    REPORT_TYPE(gpu_req_set_scanout_blob_t);
+    REPORT_FIELD(gpu_req_set_scanout_blob_t, resource_id);
+    REPORT_FIELD(gpu_req_set_scanout_blob_t, scanout_id);
+    REPORT_FIELD(gpu_req_set_scanout_blob_t, width);
+    REPORT_FIELD(gpu_req_set_scanout_blob_t, height);
+    REPORT_FIELD(gpu_req_set_scanout_blob_t, format);
+    REPORT_FIELD(gpu_req_set_scanout_blob_t, stride);
+    REPORT_FIELD(gpu_req_set_scanout_blob_t, offset);
+    REPORT_FIELD(gpu_req_set_scanout_blob_t, rect);
+    REPORT_TYPE(gpu_req_resource_create_2d_t);
+    REPORT_FIELD(gpu_req_resource_create_2d_t, resource_id);
+    REPORT_FIELD(gpu_req_resource_create_2d_t, width);
+    REPORT_FIELD(gpu_req_resource_create_2d_t, height);
+    REPORT_FIELD(gpu_req_resource_create_2d_t, format);
+    REPORT_TYPE(gpu_req_resource_attach_backing_t);
+    REPORT_FIELD(gpu_req_resource_attach_backing_t, resource_id);
+    REPORT_FIELD(gpu_req_resource_attach_backing_t, mem_offset);
+    REPORT_FIELD(gpu_req_resource_attach_backing_t, mem_size);
+    REPORT_TYPE(gpu_req_resource_detach_backing_t);
+    REPORT_FIELD(gpu_req_resource_detach_backing_t, resource_id);
+    REPORT_TYPE(gpu_req_set_scanout_t);
+    REPORT_FIELD(gpu_req_set_scanout_t, resource_id);
+    REPORT_FIELD(gpu_req_set_scanout_t, scanout_id);
+    REPORT_FIELD(gpu_req_set_scanout_t, rect);
+    REPORT_TYPE(gpu_req_transfer_to_2d_t);
+    REPORT_FIELD(gpu_req_transfer_to_2d_t, resource_id);
+    REPORT_FIELD(gpu_req_transfer_to_2d_t, rect);
+    REPORT_FIELD(gpu_req_transfer_to_2d_t, mem_offset);
+    REPORT_TYPE(gpu_req_resource_flush_t);
+    REPORT_FIELD(gpu_req_resource_flush_t, resource_id);
+    REPORT_FIELD(gpu_req_resource_flush_t, rect);
+    REPORT_TYPE(gpu_req_resource_unref_t);
+    REPORT_FIELD(gpu_req_resource_unref_t, resource_id);
+    REPORT_TYPE(gpu_req_t);
+    REPORT_FIELD(gpu_req_t, code);
+    REPORT_FIELD(gpu_req_t, id);
+    REPORT_FIELD(gpu_req_t, get_display_info);
+    REPORT_FIELD(gpu_req_t, resource_create_blob);
+    REPORT_FIELD(gpu_req_t, set_scanout_blob);
+    REPORT_FIELD(gpu_req_t, resource_create_2d);
+    REPORT_FIELD(gpu_req_t, resource_attach_backing);
+    REPORT_FIELD(gpu_req_t, resource_detach_backing);
+    REPORT_FIELD(gpu_req_t, set_scanout);
+    REPORT_FIELD(gpu_req_t, transfer_to_2d);
+    REPORT_FIELD(gpu_req_t, resource_flush);
+    REPORT_FIELD(gpu_req_t, resource_unref);
+    REPORT_TYPE(gpu_resp_t);
+    REPORT_FIELD(gpu_resp_t, status);
+    REPORT_FIELD(gpu_resp_t, id);
+    REPORT_TYPE(gpu_req_queue_t);
+    REPORT_FIELD(gpu_req_queue_t, head);
+    REPORT_FIELD(gpu_req_queue_t, tail);
+    REPORT_TYPE(gpu_resp_queue_t);
+    REPORT_FIELD(gpu_resp_queue_t, head);
+    REPORT_FIELD(gpu_resp_queue_t, tail);
+    REPORT_TYPE(gpu_queue_handle_t);
+    REPORT_FIELD(gpu_queue_handle_t, req_queue);
+    REPORT_FIELD(gpu_queue_handle_t, resp_queue);
+    REPORT_FIELD(gpu_queue_handle_t, capacity);
 
     printf("const FS_QUEUE_CAPACITY %d\n", FS_QUEUE_CAPACITY);
     printf("const FS_STATUS_SUCCESS %d\n", FS_STATUS_SUCCESS);
@@ -934,6 +1163,17 @@ int main(void)
     printf("const SDDF_TIMER_SET_TIMEOUT %d\n", SDDF_TIMER_SET_TIMEOUT);
     printf("const SDDF_TIMER_MAGIC_LEN %d\n", SDDF_TIMER_MAGIC_LEN);
     printf("const SDDF_TIMER_MAX_CLIENTS %d\n", SDDF_TIMER_MAX_CLIENTS);
+    printf("const GPU_MAX_RESOURCES %d\n", GPU_MAX_RESOURCES);
+    printf("const GPU_DISABLE_SCANOUT_RESOURCE_ID %d\n", GPU_DISABLE_SCANOUT_RESOURCE_ID);
+    printf("const GPU_BPP_2D %d\n", GPU_BPP_2D);
+    printf("const GPU_MAX_SCANOUTS %d\n", GPU_MAX_SCANOUTS);
+    printf("const GPU_EVENTS_REGION_SIZE %d\n", GPU_EVENTS_REGION_SIZE);
+    printf("const GPU_REQ_GET_DISPLAY_INFO %d\n", GPU_REQ_GET_DISPLAY_INFO);
+    printf("const GPU_REQ_RESOURCE_UNREF %d\n", GPU_REQ_RESOURCE_UNREF);
+    printf("const GPU_RESP_OK %d\n", GPU_RESP_OK);
+    printf("const GPU_RESP_ERR_INVALID_PARAMETER %d\n", GPU_RESP_ERR_INVALID_PARAMETER);
+    printf("const GPU_FORMAT_B8G8R8A8_UNORM %d\n", GPU_FORMAT_B8G8R8A8_UNORM);
+    printf("const GPU_FORMAT_R8G8B8X8_UNORM %d\n", GPU_FORMAT_R8G8B8X8_UNORM);
 
     print_desc("fit", 0x2a);
     print_desc("wide", 0xff);

@@ -125,6 +125,10 @@ test-fetch-sddf:
 test-web-sddf:
     BOARD=qemu_virt_aarch64_web_sddf just test
 
+# Milestone 12: shell fetches the fixture and paints through the graphics client
+test-browser-sddf:
+    BOARD=qemu_virt_aarch64_browser_sddf just test
+
 # Milestone 3: cothread blocks on a channel until a Microkit notification
 test-cothread:
     BOARD=qemu_virt_aarch64_cothread just test

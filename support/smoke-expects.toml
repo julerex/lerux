@@ -81,6 +81,10 @@ script = [
 expects = ["web listening"]
 timeout_secs = 180
 
+[boards.qemu_virt_aarch64_browser_sddf]
+expects = ["title lerux", "pixel 4c5258ff"]
+timeout_secs = 180
+
 [boards.qemu_virt_aarch64_fs_sddf]
 expects = ["lerux shell ready"]
 timeout_secs = 120

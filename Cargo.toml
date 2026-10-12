@@ -20,6 +20,8 @@ members = [
     "userspace/pds/sddf-net-virt-rx",
     "userspace/pds/sddf-net-copy",
     "userspace/pds/sddf-net-client",
+    "userspace/pds/sddf-gpu-driver",
+    "userspace/pds/sddf-gpu-virt",
     "userspace/pds/cothread-client",
     "userspace/pds/cothread-peer",
     "userspace/crates/lerux-serial-queue",

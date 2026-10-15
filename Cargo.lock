@@ -1359,6 +1359,13 @@ name = "lerux-html"
 version = "0.1.0"
 
 [[package]]
+name = "lerux-image"
+version = "0.1.0"
+dependencies = [
+ "lerux-sddf",
+]
+
+[[package]]
 name = "lerux-interface-types"
 version = "0.1.0"
 dependencies = [

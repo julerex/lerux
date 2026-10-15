@@ -12,4 +12,4 @@ lerux-sddf = { path = "../../crates/lerux-sddf" }
 sel4-microkit = { workspace = true }
 
 [build-dependencies]
-lerux-sddf = { path = "../../crates/lerux-sddf" }
+lerux-image = { path = "../../../tools/lerux-image" }

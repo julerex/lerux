@@ -1,8 +1,6 @@
 fn main() {
-    let config = lerux_sddf::net_image::driver_config();
-    let mut bytes = vec![0u8; std::mem::size_of_val(&config)];
-    lerux_sddf::net_image::net_config_to_bytes(&config, &mut bytes);
-    let out = std::path::Path::new(&std::env::var("OUT_DIR").expect("OUT_DIR")).join("config.bin");
-    std::fs::write(&out, bytes).expect("write config.bin");
+    let out =
+        std::path::PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR")).join("config.bin");
+    lerux_image::emit_pd_binding("sddf-net-driver", &[], &out).expect("config.bin");
     println!("cargo:rerun-if-changed=build.rs");
 }

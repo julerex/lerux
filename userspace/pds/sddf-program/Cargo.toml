@@ -16,6 +16,6 @@ sel4-microkit = { workspace = true }
 
 [build-dependencies]
 ed25519-dalek = { version = "2", default-features = false }
-lerux-sddf = { path = "../../crates/lerux-sddf" }
+lerux-image = { path = "../../../tools/lerux-image" }
 lerux-wasm = { path = "../../crates/lerux-wasm" }
 wat = "1"

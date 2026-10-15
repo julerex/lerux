@@ -216,11 +216,16 @@ pub fn render_profile_system(
     compose_profile_body(root, &body, profile)
 }
 
-/// Layout body: template + `system_vars` (may still contain hand channels on
-/// non-profile boards).
+/// Layout body for one board.
+///
+/// A device-framework board reads its description from `lerux-image`. Every
+/// other board reads its template and substitutes `system_vars`.
 pub fn render_system_body(root: &Path, board_name: &str) -> Result<String> {
     let boards = load_boards(root)?;
     let board = get_board(&boards, board_name)?;
+    if let Some(rendered) = lerux_image::render_board(board_name)? {
+        return Ok(rendered);
+    }
     let template_path = root
         .join("userspace/systems/templates")
         .join(&board.template);

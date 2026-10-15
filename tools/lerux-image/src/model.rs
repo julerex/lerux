@@ -18,6 +18,9 @@ pub enum ImageError {
     UnknownRegion { name: String },
     ChannelOverflow { pd: String },
     MissingIrq { pd: String },
+    UnknownCrate { name: String },
+    ConflictingFeatures { crate_name: String },
+    WriteConfig { path: String, detail: String },
 }
 
 impl fmt::Display for ImageError {
@@ -29,6 +32,13 @@ impl fmt::Display for ImageError {
                 write!(formatter, "channel id overflow on {pd}")
             }
             ImageError::MissingIrq { pd } => write!(formatter, "missing irq id for {pd}"),
+            ImageError::UnknownCrate { name } => write!(formatter, "unknown crate {name}"),
+            ImageError::ConflictingFeatures { crate_name } => {
+                write!(formatter, "conflicting board features on {crate_name}")
+            }
+            ImageError::WriteConfig { path, detail } => {
+                write!(formatter, "write {path}: {detail}")
+            }
         }
     }
 }

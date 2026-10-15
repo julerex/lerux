@@ -4,30 +4,21 @@
 //! page, the filesystem client page, then the network client page. The host
 //! checks those bytes and the rendered system description.
 
-use std::{fs, mem::size_of_val, path::Path};
+use std::{fs, path::Path};
 
 use anyhow::{Context, Result};
-use lerux_sddf::{fs_image, net_image, serial_image};
 
 pub fn write_configs(dir: &Path) -> Result<()> {
     fs::create_dir_all(dir).with_context(|| format!("mkdir {}", dir.display()))?;
-    let bytes = shell_config_bytes();
     let path = dir.join("shell_config.bin");
-    fs::write(&path, &bytes).with_context(|| format!("write {}", path.display()))?;
+    lerux_image::emit_pd_binding(
+        "sddf-shell",
+        &["board-qemu_virt_aarch64_fetch_sddf", "net-client"],
+        &path,
+    )
+    .map_err(|error| anyhow::anyhow!("{error}"))
+    .with_context(|| "bind sddf-shell")?;
     Ok(())
-}
-
-fn shell_config_bytes() -> Vec<u8> {
-    let serial = serial_image::client_config();
-    let fs = fs_image::shell_client_config();
-    let net = net_image::shell_client_config();
-    let serial_len = size_of_val(&serial);
-    let fs_len = size_of_val(&fs);
-    let mut bytes = vec![0u8; serial_len + fs_len + size_of_val(&net)];
-    serial_image::serial_config_to_bytes(&serial, &mut bytes[..serial_len]);
-    fs_image::fs_config_to_bytes(&fs, &mut bytes[serial_len..serial_len + fs_len]);
-    net_image::net_config_to_bytes(&net, &mut bytes[serial_len + fs_len..]);
-    bytes
 }
 
 #[cfg(test)]
@@ -52,7 +43,6 @@ mod tests {
         let dir = tempfile::tempdir().expect("tempdir");
         write_configs(dir.path()).expect("write configs");
         let bytes = fs::read(dir.path().join("shell_config.bin")).expect("read shell config");
-        assert_eq!(bytes, shell_config_bytes());
 
         let serial_len = size_of::<serial_client_config_t>();
         let fs_len = size_of::<fs_client_config_t>();

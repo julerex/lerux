@@ -3,44 +3,35 @@
 //! The protection domains embed the same bytes from their build scripts. These
 //! files are the copy the host checks against the rendered system description.
 
-use std::{fs, mem::size_of, path::Path};
+use std::{fs, path::Path};
 
 use anyhow::{Context, Result};
-use lerux_sddf::{
-    blk_image::{self, driver_config, virt_config},
-    fs_image::{self, server_config},
-};
 
 pub fn write_configs(dir: &Path) -> Result<()> {
     fs::create_dir_all(dir).with_context(|| format!("mkdir {}", dir.display()))?;
-    write_blk(dir, "blk_driver_config.bin", &driver_config())?;
-    write_blk(dir, "blk_virt_config.bin", &virt_config())?;
-    write_blk(dir, "blk_client_config.bin", &blk_image::client_config())?;
-    write_fs(dir, "fs_server_config.bin", &server_config())?;
-    write_fs(dir, "fs_client_config.bin", &fs_image::client_config())?;
-    write_fs(dir, "fs_shell_config.bin", &fs_image::shell_client_config())?;
+    bind(dir, "sddf-blk-driver", &[], "blk_driver_config.bin")?;
+    bind(dir, "sddf-blk-virt", &[], "blk_virt_config.bin")?;
+    bind(dir, "sddf-fatfs", &[], "fatfs_config.bin")?;
+    bind(dir, "sddf-fs-client", &[], "fs_client_config.bin")?;
+    bind(
+        dir,
+        "sddf-shell",
+        &["board-qemu_virt_aarch64_fs_sddf"],
+        "shell_config.bin",
+    )?;
     Ok(())
 }
 
-fn write_blk<T>(dir: &Path, name: &str, value: &T) -> Result<()> {
-    write_encoded(dir, name, value, blk_image::blk_config_to_bytes)
-}
-
-fn write_fs<T>(dir: &Path, name: &str, value: &T) -> Result<()> {
-    write_encoded(dir, name, value, fs_image::fs_config_to_bytes)
-}
-
-fn write_encoded<T>(dir: &Path, name: &str, value: &T, encode: fn(&T, &mut [u8])) -> Result<()> {
-    let mut bytes = vec![0u8; size_of::<T>()];
-    encode(value, &mut bytes);
-    let path = dir.join(name);
-    fs::write(&path, &bytes).with_context(|| format!("write {}", path.display()))?;
-    Ok(())
+fn bind(dir: &Path, crate_name: &str, features: &[&str], file_name: &str) -> Result<()> {
+    let path = dir.join(file_name);
+    lerux_image::emit_pd_binding(crate_name, features, &path)
+        .map_err(|error| anyhow::anyhow!("{error}"))
+        .with_context(|| format!("bind {crate_name}"))
 }
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::{mem::size_of, path::PathBuf};
 
     use lerux_sddf::{
         blk_config_check_magic,
@@ -80,38 +71,56 @@ mod tests {
         write_configs(dir.path()).expect("write configs");
         check_blk(dir.path(), "blk_driver_config.bin", &driver_config());
         check_blk(dir.path(), "blk_virt_config.bin", &virt_config());
-        check_blk(
-            dir.path(),
-            "blk_client_config.bin",
-            &blk_image::client_config(),
-        );
-        check_fs(dir.path(), "fs_server_config.bin", &server_config());
         check_fs(
             dir.path(),
             "fs_client_config.bin",
             &fs_image::client_config(),
         );
-        check_fs(
-            dir.path(),
-            "fs_shell_config.bin",
-            &fs_image::shell_client_config(),
+        let fatfs = fs::read(dir.path().join("fatfs_config.bin")).expect("fatfs config");
+        let blk_len = size_of::<lerux_sddf::blk_client_config_t>();
+        check_prefix(&fatfs, &encoded_blk(&blk_image::client_config()));
+        check_prefix(&fatfs[blk_len..], &encoded_fs(&server_config()));
+        let shell = fs::read(dir.path().join("shell_config.bin")).expect("shell config");
+        let serial_len = size_of::<lerux_sddf::serial_client_config_t>();
+        assert!(lerux_sddf::serial_config_check_magic(&shell[..serial_len]));
+        check_prefix(
+            &shell[serial_len..],
+            &encoded_fs(&fs_image::shell_client_config()),
         );
     }
 
     fn check_blk<T>(dir: &Path, name: &str, value: &T) {
         let bytes = fs::read(dir.join(name)).expect(name);
         assert!(blk_config_check_magic(&bytes), "{name}");
-        let mut expected = vec![0u8; size_of::<T>()];
-        blk_image::blk_config_to_bytes(value, &mut expected);
-        assert_eq!(bytes, expected, "{name}");
+        assert_eq!(bytes, encoded_blk(value), "{name}");
     }
 
     fn check_fs<T>(dir: &Path, name: &str, value: &T) {
         let bytes = fs::read(dir.join(name)).expect(name);
         assert!(fs_config_check_magic(&bytes), "{name}");
+        assert_eq!(bytes, encoded_fs(value), "{name}");
+    }
+
+    fn encoded_blk<T>(value: &T) -> Vec<u8> {
+        let mut expected = vec![0u8; size_of::<T>()];
+        blk_image::blk_config_to_bytes(value, &mut expected);
+        expected
+    }
+
+    fn encoded_fs<T>(value: &T) -> Vec<u8> {
         let mut expected = vec![0u8; size_of::<T>()];
         fs_image::fs_config_to_bytes(value, &mut expected);
-        assert_eq!(bytes, expected, "{name}");
+        expected
+    }
+
+    fn check_prefix(bytes: &[u8], expected: &[u8]) {
+        assert!(
+            bytes.len() >= expected.len(),
+            "page length {} is shorter than {}",
+            bytes.len(),
+            expected.len()
+        );
+        assert_eq!(&bytes[..expected.len()], expected);
     }
 
     #[test]

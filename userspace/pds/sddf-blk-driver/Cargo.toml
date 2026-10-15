@@ -15,4 +15,4 @@ sel4-virtio-hal-impl = { workspace = true }
 virtio-drivers = { workspace = true }
 
 [build-dependencies]
-lerux-sddf = { path = "../../crates/lerux-sddf" }
+lerux-image = { path = "../../../tools/lerux-image" }

@@ -3,32 +3,30 @@
 //! The protection domains embed the same bytes from their build scripts. These
 //! files are the copy the host checks against the rendered system description.
 
-use std::{fs, mem::size_of, path::Path};
+use std::{fs, path::Path};
 
 use anyhow::{Context, Result};
-use lerux_sddf::net_image::{self, copy_config, driver_config, virt_rx_config, virt_tx_config};
 
 pub fn write_configs(dir: &Path) -> Result<()> {
     fs::create_dir_all(dir).with_context(|| format!("mkdir {}", dir.display()))?;
-    write_one(dir, "net_driver_config.bin", &driver_config())?;
-    write_one(dir, "net_virt_tx_config.bin", &virt_tx_config())?;
-    write_one(dir, "net_virt_rx_config.bin", &virt_rx_config())?;
-    write_one(dir, "net_copy_config.bin", &copy_config())?;
-    write_one(dir, "net_client_config.bin", &net_image::client_config())?;
+    bind(dir, "sddf-net-driver", "net_driver_config.bin")?;
+    bind(dir, "sddf-net-virt-tx", "net_virt_tx_config.bin")?;
+    bind(dir, "sddf-net-virt-rx", "net_virt_rx_config.bin")?;
+    bind(dir, "sddf-net-copy", "net_copy_config.bin")?;
+    bind(dir, "sddf-net-client", "net_client_config.bin")?;
     Ok(())
 }
 
-fn write_one<T>(dir: &Path, name: &str, value: &T) -> Result<()> {
-    let mut bytes = vec![0u8; size_of::<T>()];
-    net_image::net_config_to_bytes(value, &mut bytes);
-    let path = dir.join(name);
-    fs::write(&path, &bytes).with_context(|| format!("write {}", path.display()))?;
-    Ok(())
+fn bind(dir: &Path, crate_name: &str, file_name: &str) -> Result<()> {
+    let path = dir.join(file_name);
+    lerux_image::emit_pd_binding(crate_name, &[], &path)
+        .map_err(|error| anyhow::anyhow!("{error}"))
+        .with_context(|| format!("bind {crate_name}"))
 }
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::{mem::size_of, path::PathBuf};
 
     use lerux_sddf::{
         net_config_check_magic,
@@ -62,11 +60,15 @@ mod tests {
         check(dir.path(), "net_virt_tx_config.bin", &virt_tx_config());
         check(dir.path(), "net_virt_rx_config.bin", &virt_rx_config());
         check(dir.path(), "net_copy_config.bin", &copy_config());
-        check(
-            dir.path(),
-            "net_client_config.bin",
-            &net_image::client_config(),
-        );
+        let client = fs::read(dir.path().join("net_client_config.bin")).expect("client config");
+        let serial_len = size_of::<lerux_sddf::serial_client_config_t>();
+        let net_len = size_of::<lerux_sddf::net_client_config_t>();
+        assert_eq!(client.len(), serial_len + net_len);
+        assert!(lerux_sddf::serial_config_check_magic(&client[..serial_len]));
+        assert!(net_config_check_magic(&client[serial_len..]));
+        let mut net = vec![0u8; net_len];
+        net_image::net_config_to_bytes(&net_image::client_config(), &mut net);
+        assert_eq!(&client[serial_len..], net.as_slice());
     }
 
     fn check<T>(dir: &Path, name: &str, value: &T) {

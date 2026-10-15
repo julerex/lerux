@@ -1,10 +1,13 @@
 //! Host registry for device-framework images.
 //!
-//! The serial image is one private table. The board build still reads the serial system template.
+//! Seven images render from this table. Web reuses the fetch image.
+//! The board build still reads the system templates.
 
 mod images;
+mod model;
 
-pub use images::ImageError;
+pub use images::{board_registration, render_board, render_kind, ImageKind, Mode};
+pub use model::ImageError;
 
 /// System description for the one-client serial image.
 pub fn render_serial_xml() -> Result<String, ImageError> {
@@ -29,8 +32,9 @@ mod tests {
 
     use super::render_serial_xml;
     use crate::{
-        images::{render_with_extra_end, render_with_region_vaddr},
-        ImageError,
+        board_registration,
+        images::{render_kind, render_with_extra_end, render_with_region_vaddr, ImageKind},
+        render_board, ImageError, Mode,
     };
 
     fn repo_root() -> PathBuf {
@@ -71,19 +75,35 @@ mod tests {
         }
     }
 
-    fn filled_serial_template() -> String {
+    fn filled_template(template_name: &str, board: &str) -> String {
         let root = repo_root();
-        let template_path = root.join("userspace/systems/templates/serial-sddf.system.template");
+        let template_path = root.join("userspace/systems/templates").join(template_name);
         let template = fs::read_to_string(&template_path)
             .unwrap_or_else(|error| panic!("read {}: {error}", template_path.display()));
         let boards = fs::read_to_string(root.join("support/boards.toml")).expect("boards.toml");
-        let board = "qemu_virt_aarch64_serial_sddf";
         let mut rendered = template;
-        for key in ["serial_mmio_phys_addr", "serial_irq"] {
+        for key in [
+            "serial_mmio_phys_addr",
+            "serial_irq",
+            "virtio_mmio_phys_addr",
+            "virtio_blk_irq",
+            "virtio_net_irq",
+            "virtio_gpu_irq",
+        ] {
+            if !rendered.contains(&format!("{{{key}}}")) {
+                continue;
+            }
             let value = board_system_var(&boards, board, key);
             rendered = rendered.replace(&format!("{{{key}}}"), &value);
         }
         rendered
+    }
+
+    fn filled_serial_template() -> String {
+        filled_template(
+            "serial-sddf.system.template",
+            "qemu_virt_aarch64_serial_sddf",
+        )
     }
 
     fn compare_bytes(actual: &str, expected: &str) -> Result<(), String> {
@@ -107,7 +127,7 @@ mod tests {
         let rendered_line = actual.lines().nth(line - 1).unwrap_or("");
         let template_line = expected.lines().nth(line - 1).unwrap_or("");
         Err(format!(
-            "rendered serial xml differs from the filled template\nline {line}\nrendered: {rendered_line}\ntemplate: {template_line}"
+            "rendered xml differs from the filled template\nline {line}\nrendered: {rendered_line}\ntemplate: {template_line}"
         ))
     }
 
@@ -149,6 +169,73 @@ mod tests {
         let rendered = render_serial_xml().expect("render serial xml");
         let expected = filled_serial_template();
         compare_bytes(&rendered, &expected).unwrap_or_else(|error| panic!("{error}"));
+    }
+
+    #[test]
+    fn each_image_matches_its_template_bytes() {
+        let cases = [
+            (
+                ImageKind::Serial,
+                "serial-sddf.system.template",
+                "qemu_virt_aarch64_serial_sddf",
+            ),
+            (
+                ImageKind::Fs,
+                "fs-sddf.system.template",
+                "qemu_virt_aarch64_fs_sddf",
+            ),
+            (
+                ImageKind::Net,
+                "net-sddf.system.template",
+                "qemu_virt_aarch64_net_sddf",
+            ),
+            (
+                ImageKind::Fetch,
+                "fetch-sddf.system.template",
+                "qemu_virt_aarch64_fetch_sddf",
+            ),
+            (
+                ImageKind::Browser,
+                "browser-sddf.system.template",
+                "qemu_virt_aarch64_browser_sddf",
+            ),
+            (
+                ImageKind::Agent,
+                "agent-sddf.system.template",
+                "qemu_virt_aarch64_agent_sddf",
+            ),
+            (
+                ImageKind::Program,
+                "program-sddf.system.template",
+                "qemu_virt_aarch64_program_sddf",
+            ),
+        ];
+        for (kind, template, board) in cases {
+            let rendered = render_kind(kind).unwrap_or_else(|error| panic!("{template}: {error}"));
+            let expected = filled_template(template, board);
+            compare_bytes(&rendered, &expected)
+                .unwrap_or_else(|error| panic!("{template}\n{error}"));
+        }
+    }
+
+    #[test]
+    fn web_reuses_the_fetch_description() {
+        let fetch = render_board("qemu_virt_aarch64_fetch_sddf")
+            .expect("fetch")
+            .expect("fetch image");
+        let web = render_board("qemu_virt_aarch64_web_sddf")
+            .expect("web")
+            .expect("web image");
+        assert_eq!(fetch, web);
+        assert_eq!(
+            board_registration("qemu_virt_aarch64_fetch_sddf"),
+            Some((ImageKind::Fetch, Some(Mode::Fetch)))
+        );
+        assert_eq!(
+            board_registration("qemu_virt_aarch64_web_sddf"),
+            Some((ImageKind::Fetch, Some(Mode::Web)))
+        );
+        assert!(web.contains("sddf-shell.elf"));
     }
 
     #[test]

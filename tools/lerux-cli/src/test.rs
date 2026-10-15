@@ -352,7 +352,7 @@ fn ordered_hit(raw: &str, pattern: &str, cursor: usize) -> Option<usize> {
 
 fn earliest_collapsed_end(
     text: &str,
-    src: &[usize],
+    src: &[Option<usize>],
     pattern: &str,
     cursor: usize,
 ) -> Option<usize> {
@@ -378,9 +378,8 @@ fn earliest_collapsed_end(
     best
 }
 
-fn real_raw_end(src: &[usize]) -> Option<usize> {
-    let end = src.iter().copied().max()?;
-    (end > 0).then_some(end)
+fn real_raw_end(src: &[Option<usize>]) -> Option<usize> {
+    src.iter().copied().flatten().max().map(|at| at + 1)
 }
 
 fn expect_ordered(
@@ -646,10 +645,9 @@ fn is_prefix_only(s: &str) -> bool {
     sel4_log_prefix_len(s).is_some_and(|n| n == s.len())
 }
 
-/// `src` is the exclusive raw index of each byte. Zero marks a byte recovery inserted.
 struct Traced {
     text: String,
-    src: Vec<usize>,
+    src: Vec<Option<usize>>,
 }
 
 impl Traced {
@@ -662,8 +660,8 @@ impl Traced {
 
     fn push_raw(&mut self, bytes: &str, raw_at: usize) {
         self.text.push_str(bytes);
-        let start = raw_at + 1;
-        self.src.extend(start..start + bytes.len());
+        self.src
+            .extend((0..bytes.len()).map(|offset| Some(raw_at + offset)));
     }
 
     fn push_copied(&mut self, other: &Traced, range: std::ops::Range<usize>) {
@@ -674,13 +672,14 @@ impl Traced {
     fn push_char(&mut self, ch: char, raw_at: usize) {
         let before = self.text.len();
         self.text.push(ch);
-        let start = raw_at + 1;
-        self.src.extend(start..start + (self.text.len() - before));
+        let width = self.text.len() - before;
+        self.src
+            .extend((0..width).map(|offset| Some(raw_at + offset)));
     }
 
     fn push_inserted(&mut self, ch: char) {
         self.text.push(ch);
-        self.src.resize(self.text.len(), 0);
+        self.src.resize(self.text.len(), None);
     }
 
     fn append(&mut self, other: &Traced) {

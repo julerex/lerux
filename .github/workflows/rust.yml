@@ -83,6 +83,7 @@ jobs:
             -v "${{ github.workspace }}:/work" -w /work lerux-dev \
             bash -c 'set -euo pipefail
               just fetch
+              LERUX_LIONSOS_LAYOUT=1 cargo test -p lerux-sddf --test layout
               if [[ -d deps/sdk-cache/microkit-sdk ]]; then
                 mkdir -p deps/workspace/microkit/release
                 rm -rf deps/workspace/microkit/release/microkit-sdk*

@@ -1,0 +1,609 @@
+[serial_queue_t]
+size = 12
+align = 4
+
+[serial_queue_t.field]
+tail = 0
+head = 4
+producer_signalled = 8
+
+[serial_queue_handle_t]
+size = 24
+align = 8
+
+[serial_queue_handle_t.field]
+queue = 0
+capacity = 8
+data_region = 16
+
+[region_resource_t]
+size = 16
+align = 8
+
+[region_resource_t.field]
+vaddr = 0
+size = 8
+
+[serial_connection_resource_t]
+size = 40
+align = 8
+
+[serial_connection_resource_t.field]
+queue = 0
+data = 16
+id = 32
+
+[serial_driver_config_t]
+size = 104
+align = 8
+
+[serial_driver_config_t.field]
+magic = 0
+rx = 8
+tx = 48
+default_baud = 88
+rx_enabled = 96
+
+[serial_virt_rx_config_t]
+size = 2616
+align = 8
+
+[serial_virt_rx_config_t.field]
+magic = 0
+driver = 8
+clients = 48
+num_clients = 2608
+switch_char = 2609
+terminate_num_char = 2610
+
+[serial_virt_tx_client_config_t]
+size = 104
+align = 8
+
+[serial_virt_tx_client_config_t.field]
+conn = 0
+name = 40
+
+[serial_virt_tx_config_t]
+size = 6840
+align = 8
+
+[serial_virt_tx_config_t.field]
+magic = 0
+driver = 8
+clients = 48
+num_clients = 6704
+begin_str = 6705
+enable_colour = 6833
+enable_rx = 6834
+
+[serial_client_config_t]
+size = 88
+align = 8
+
+[serial_client_config_t.field]
+magic = 0
+rx = 8
+tx = 48
+
+[net_buff_desc_t]
+size = 16
+align = 8
+
+[net_buff_desc_t.field]
+io_or_offset = 0
+len = 8
+
+[net_queue_t]
+size = 8
+align = 8
+
+[net_queue_t.field]
+tail = 0
+head = 2
+consumer_signalled = 4
+
+[net_queue_handle_t]
+size = 24
+align = 8
+
+[net_queue_handle_t.field]
+free = 0
+active = 8
+capacity = 16
+
+[mac_addr_t]
+size = 6
+align = 1
+
+[mac_addr_t.field]
+addr = 0
+
+[net_connection_resource_t]
+size = 40
+align = 8
+
+[net_connection_resource_t.field]
+free_queue = 0
+active_queue = 16
+num_buffers = 32
+id = 34
+
+[net_driver_config_t]
+size = 88
+align = 8
+
+[net_driver_config_t.field]
+magic = 0
+virt_rx = 8
+virt_tx = 48
+
+[net_virt_tx_data_region_t]
+size = 32
+align = 8
+
+[net_virt_tx_data_region_t.field]
+data = 0
+num_buffers = 24
+
+[net_virt_tx_client_config_t]
+size = 2096
+align = 8
+
+[net_virt_tx_client_config_t.field]
+conn = 0
+regions = 40
+num_regions = 2088
+
+[net_virt_tx_config_t]
+size = 134200
+align = 8
+
+[net_virt_tx_config_t.field]
+magic = 0
+driver = 8
+clients = 48
+num_clients = 134192
+
+[net_virt_rx_client_config_t]
+size = 432
+align = 8
+
+[net_virt_rx_client_config_t.field]
+conn = 0
+mac_addrs = 40
+num_macs = 424
+
+[net_virt_rx_config_t]
+size = 27744
+align = 8
+
+[net_virt_rx_config_t.field]
+magic = 0
+driver = 8
+data = 48
+buffer_metadata = 72
+clients = 88
+num_clients = 27736
+
+[net_copy_config_t]
+size = 1128
+align = 8
+
+[net_copy_config_t.field]
+magic = 0
+rx = 8
+rx_data = 48
+client = 1072
+client_data = 1112
+
+[net_client_config_t]
+size = 128
+align = 8
+
+[net_client_config_t.field]
+magic = 0
+rx = 8
+rx_data = 48
+tx = 64
+tx_data = 104
+mac_addr = 120
+
+[net_vswitch_port_config_t]
+size = 112
+align = 8
+
+[net_vswitch_port_config_t.field]
+rx = 0
+tx = 40
+tx_data = 80
+mac_addr = 96
+acl = 104
+
+[net_vswitch_config_t]
+size = 7200
+align = 8
+
+[net_vswitch_config_t.field]
+magic = 0
+ports = 8
+num_ports = 7176
+buffer_metadata = 7184
+
+[blk_req_t]
+size = 32
+align = 8
+
+[blk_req_t.field]
+code = 0
+io_or_offset = 8
+block_number = 16
+count = 24
+id = 28
+
+[blk_resp_t]
+size = 12
+align = 4
+
+[blk_resp_t.field]
+status = 0
+success_count = 4
+id = 8
+
+[blk_req_queue_t]
+size = 16
+align = 8
+
+[blk_req_queue_t.field]
+head = 0
+tail = 4
+plugged = 8
+
+[blk_resp_queue_t]
+size = 8
+align = 4
+
+[blk_resp_queue_t.field]
+head = 0
+tail = 4
+
+[blk_queue_handle_t]
+size = 24
+align = 8
+
+[blk_queue_handle_t.field]
+req_queue = 0
+resp_queue = 8
+capacity = 16
+
+[device_region_resource_t]
+size = 24
+align = 8
+
+[device_region_resource_t.field]
+region = 0
+io_addr = 16
+
+[blk_connection_resource_t]
+size = 56
+align = 8
+
+[blk_connection_resource_t.field]
+storage_info = 0
+req_queue = 16
+resp_queue = 32
+num_buffers = 48
+id = 50
+
+[blk_driver_config_t]
+size = 64
+align = 8
+
+[blk_driver_config_t.field]
+magic = 0
+virt = 8
+
+[blk_virt_config_driver_t]
+size = 80
+align = 8
+
+[blk_virt_config_driver_t.field]
+conn = 0
+data = 56
+
+[blk_virt_config_client_t]
+size = 88
+align = 8
+
+[blk_virt_config_client_t.field]
+conn = 0
+data = 56
+partition = 80
+
+[blk_virt_config_t]
+size = 5728
+align = 8
+
+[blk_virt_config_t.field]
+magic = 0
+num_clients = 8
+driver = 16
+clients = 96
+
+[blk_client_config_t]
+size = 80
+align = 8
+
+[blk_client_config_t.field]
+magic = 0
+virt = 8
+data = 64
+
+[blk_storage_info_t]
+size = 88
+align = 8
+
+[blk_storage_info_t.field]
+serial_number = 0
+read_only = 64
+ready = 65
+sector_size = 66
+block_size = 68
+queue_depth = 70
+cylinders = 72
+heads = 74
+blocks = 76
+capacity = 80
+
+[fs_connection_resource_t]
+size = 56
+align = 8
+
+[fs_connection_resource_t.field]
+command_queue = 0
+completion_queue = 16
+share = 32
+queue_len = 48
+id = 50
+
+[fs_server_config_t]
+size = 64
+align = 8
+
+[fs_server_config_t.field]
+magic = 0
+client = 8
+
+[fs_client_config_t]
+size = 64
+align = 8
+
+[fs_client_config_t.field]
+magic = 0
+server = 8
+
+[fs_stat_t]
+size = 136
+align = 8
+
+[fs_stat_t.field]
+dev = 0
+used = 128
+
+[fs_cmd_t]
+size = 64
+align = 8
+
+[fs_cmd_t.field]
+id = 0
+params = 16
+type = 8
+
+[fs_cmpl_t]
+size = 24
+align = 8
+
+[fs_cmpl_t.field]
+id = 0
+status = 8
+data = 16
+
+[fs_msg_t]
+size = 64
+align = 8
+
+[fs_msg_t.field]
+cmd = 0
+cmpl = 0
+
+[fs_queue_t]
+size = 32768
+align = 8
+
+[fs_queue_t.field]
+head = 0
+tail = 8
+padding = 16
+buffer = 64
+
+[timer_client_config_t]
+size = 6
+align = 1
+
+[timer_client_config_t.field]
+magic = 0
+driver_id = 5
+
+[gpu_rect_t]
+size = 16
+align = 4
+
+[gpu_rect_t.field]
+x = 0
+y = 4
+width = 8
+height = 12
+
+[gpu_scanout_t]
+size = 20
+align = 4
+
+[gpu_scanout_t.field]
+rect = 0
+enabled = 16
+
+[gpu_events_t]
+size = 1
+align = 1
+
+[gpu_events_t.field]
+display_info = 0
+
+[gpu_req_get_display_info_t]
+size = 8
+align = 8
+
+[gpu_req_get_display_info_t.field]
+mem_offset = 0
+
+[gpu_resp_get_display_info_t]
+size = 324
+align = 4
+
+[gpu_resp_get_display_info_t.field]
+scanouts = 0
+num_scanouts = 320
+
+[gpu_req_resource_create_blob_t]
+size = 24
+align = 8
+
+[gpu_req_resource_create_blob_t.field]
+resource_id = 0
+mem_offset = 8
+mem_size = 16
+
+[gpu_req_set_scanout_blob_t]
+size = 44
+align = 4
+
+[gpu_req_set_scanout_blob_t.field]
+resource_id = 0
+scanout_id = 4
+width = 8
+height = 12
+format = 16
+stride = 20
+offset = 24
+rect = 28
+
+[gpu_req_resource_create_2d_t]
+size = 16
+align = 4
+
+[gpu_req_resource_create_2d_t.field]
+resource_id = 0
+width = 4
+height = 8
+format = 12
+
+[gpu_req_resource_attach_backing_t]
+size = 24
+align = 8
+
+[gpu_req_resource_attach_backing_t.field]
+resource_id = 0
+mem_offset = 8
+mem_size = 16
+
+[gpu_req_resource_detach_backing_t]
+size = 4
+align = 4
+
+[gpu_req_resource_detach_backing_t.field]
+resource_id = 0
+
+[gpu_req_set_scanout_t]
+size = 24
+align = 4
+
+[gpu_req_set_scanout_t.field]
+resource_id = 0
+scanout_id = 4
+rect = 8
+
+[gpu_req_transfer_to_2d_t]
+size = 32
+align = 8
+
+[gpu_req_transfer_to_2d_t.field]
+resource_id = 0
+rect = 4
+mem_offset = 24
+
+[gpu_req_resource_flush_t]
+size = 20
+align = 4
+
+[gpu_req_resource_flush_t.field]
+resource_id = 0
+rect = 4
+
+[gpu_req_resource_unref_t]
+size = 4
+align = 4
+
+[gpu_req_resource_unref_t.field]
+resource_id = 0
+
+[gpu_req_t]
+size = 56
+align = 8
+
+[gpu_req_t.field]
+code = 0
+id = 4
+get_display_info = 8
+resource_create_blob = 8
+set_scanout_blob = 8
+resource_create_2d = 8
+resource_attach_backing = 8
+resource_detach_backing = 8
+set_scanout = 8
+transfer_to_2d = 8
+resource_flush = 8
+resource_unref = 8
+
+[gpu_resp_t]
+size = 8
+align = 4
+
+[gpu_resp_t.field]
+status = 0
+id = 4
+
+[gpu_req_queue_t]
+size = 8
+align = 8
+
+[gpu_req_queue_t.field]
+head = 0
+tail = 4
+
+[gpu_resp_queue_t]
+size = 8
+align = 4
+
+[gpu_resp_queue_t.field]
+head = 0
+tail = 4
+
+[gpu_queue_handle_t]
+size = 24
+align = 8
+
+[gpu_queue_handle_t.field]
+req_queue = 0
+resp_queue = 8
+capacity = 16
+

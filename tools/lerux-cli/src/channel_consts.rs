@@ -272,7 +272,10 @@ pub fn write_channel_consts(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::channels::{ChannelEnd, ChannelSpec};
+    use crate::{
+        channels::{ChannelEnd, ChannelSpec},
+        profile::Profile,
+    };
 
     fn ch(a_pd: &str, a_id: u8, b_pd: &str, b_id: u8) -> ChannelSpec {
         ChannelSpec {
@@ -357,5 +360,31 @@ mod tests {
             check_profile_channels(&root, name, profile)
                 .unwrap_or_else(|err| panic!("support/profiles/{name}.toml: {err}"));
         }
+    }
+
+    #[test]
+    fn disjoint_const_id_is_an_error_without_an_exception() {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let src = tmp.path().join("userspace/pds/fixture-server/src");
+        fs::create_dir_all(&src).expect("fixture pd dir");
+        fs::write(
+            src.join("main.rs"),
+            "const ECHO_SERVER: Channel = Channel::new(9);\n",
+        )
+        .expect("fixture source");
+        let profile = Profile {
+            template: "fixture".into(),
+            pds: vec!["fixture-server".into()],
+            description: None,
+            default_board: None,
+            trust_class: None,
+            channel: vec![ch("fixture-server", 1, "echo_server", 0)],
+        };
+        let err = check_profile_channels(tmp.path(), "fixture", &profile)
+            .expect_err("peer id 1 and const id 9 disagree");
+        assert_eq!(
+            err.to_string(),
+            "profile fixture channel check failed (1 issue(s)):\n  - fixture-server: const ECHO_SERVER uses Channel::new ids {9}, but manifest requires one of {1} for peer echo_server"
+        );
     }
 }

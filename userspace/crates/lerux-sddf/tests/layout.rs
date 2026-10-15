@@ -1,17 +1,10 @@
-//! Compare `lerux-sddf` with the LionsOS 0.4.0 headers.
-//!
-//! The host C compiler is the oracle. When `deps/workspace/lionsos` is absent
-//! the comparison is skipped and this test passes, so `just check` can run
-//! before `lerux fetch`. After fetch, a size, alignment, or field-offset
-//! mismatch fails the build.
-//!
 //! `MICROKIT_PD_NAME_LENGTH` is supplied by a stub. LionsOS 0.4.0 uses Microkit
 //! 2.3.0, which defines that length as 64. The stub exists so the driver-framework
 //! headers can be parsed without linking seL4.
 
 use std::{
     collections::BTreeMap,
-    fs,
+    env, fs,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -67,18 +60,152 @@ struct CReport {
     timer_magic: Vec<u8>,
 }
 
+struct SnapshotStruct {
+    name: String,
+    size: usize,
+    align: usize,
+    fields: Vec<(String, usize)>,
+}
+
 #[test]
-fn rust_layouts_match_lionsos_headers() {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..");
-    let protocol = root.join("deps/workspace/lionsos/include/lions/fs/protocol.h");
-    let serial_queue = root.join("deps/workspace/lionsos/dep/sddf/include/sddf/serial/queue.h");
-    if !protocol.is_file() || !serial_queue.is_file() {
-        eprintln!("lerux fetch is required before the LionsOS layout comparison is meaningful");
-        eprintln!("missing {}", protocol.display());
-        eprintln!("missing {}", serial_queue.display());
+fn snapshot_matches_lerux_sddf() {
+    let path = snapshot_path();
+    println!("{}", path.display());
+    println!("header lions/fs/protocol.h");
+    let rust = rust_layout();
+    for item in &rust {
+        println!("size_of {} {}", item.name, item.size);
+    }
+    if env_flag("LERUX_LIONSOS_LAYOUT_BAD_SIZE") {
+        let mut snapshot = load_snapshot(&path);
+        apply_bad_serial_size(&mut snapshot);
+        finish_compare(&rust, &snapshot);
         return;
     }
+    if env_flag("LERUX_LIONSOS_LAYOUT") {
+        match_lionsos_headers();
+        if env_flag("LERUX_LIONSOS_LAYOUT_WRITE") {
+            write_snapshot(&path, &rust);
+        } else {
+            finish_compare(&rust, &load_snapshot(&path));
+            println!("no diff");
+        }
+        return;
+    }
+    finish_compare(&rust, &load_snapshot(&path));
+}
 
+#[test]
+fn bad_size_fixture() {
+    let mut snapshot = load_snapshot(&snapshot_path());
+    apply_bad_serial_size(&mut snapshot);
+    let errors = compare_snapshot(&rust_layout(), &snapshot);
+    assert!(
+        errors
+            .iter()
+            .any(|error| error.starts_with("serial_queue_t:")),
+        "bad size must name serial_queue_t, got {errors:?}"
+    );
+}
+
+fn repo_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../..")
+}
+
+fn snapshot_path() -> PathBuf {
+    repo_root().join("support/lionsos-layout.toml")
+}
+
+fn env_flag(name: &str) -> bool {
+    env::var(name).ok().as_deref() == Some("1")
+}
+
+fn rust_layout() -> Vec<SnapshotStruct> {
+    let fields = rust_fields();
+    rust_types()
+        .into_iter()
+        .map(|(name, size, align)| SnapshotStruct {
+            name: name.to_string(),
+            size,
+            align,
+            fields: fields
+                .iter()
+                .filter(|(struct_name, _, _)| *struct_name == name)
+                .map(|(_, field, offset)| ((*field).to_string(), *offset))
+                .collect(),
+        })
+        .collect()
+}
+
+fn apply_bad_serial_size(snapshot: &mut [SnapshotStruct]) {
+    let serial = snapshot
+        .iter_mut()
+        .find(|item| item.name == "serial_queue_t")
+        .expect("serial_queue_t");
+    serial.size += 1;
+}
+
+fn finish_compare(rust: &[SnapshotStruct], snapshot: &[SnapshotStruct]) {
+    let errors = compare_snapshot(rust, snapshot);
+    assert!(
+        errors.is_empty(),
+        "LionsOS layout snapshot disagrees with lerux-sddf:\n{}",
+        errors.join("\n")
+    );
+}
+
+fn compare_snapshot(rust: &[SnapshotStruct], snapshot: &[SnapshotStruct]) -> Vec<String> {
+    let mut errors = Vec::new();
+    for item in rust {
+        let Some(snap) = snapshot
+            .iter()
+            .find(|candidate| candidate.name == item.name)
+        else {
+            errors.push(format!("{}: snapshot missing", item.name));
+            continue;
+        };
+        if snap.size != item.size {
+            errors.push(format!(
+                "{}: snapshot size {}, Rust size {}",
+                item.name, snap.size, item.size
+            ));
+        }
+        if snap.align != item.align {
+            errors.push(format!(
+                "{}: snapshot align {}, Rust align {}",
+                item.name, snap.align, item.align
+            ));
+        }
+        for (field, offset) in &item.fields {
+            match snap.fields.iter().find(|(name, _)| name == field) {
+                Some((_, snap_offset)) if snap_offset != offset => errors.push(format!(
+                    "{}.{}: snapshot offset {snap_offset}, Rust offset {offset}",
+                    item.name, field
+                )),
+                Some(_) => {}
+                None => errors.push(format!("{}.{}: snapshot missing", item.name, field)),
+            }
+        }
+        for (field, _) in &snap.fields {
+            if !item.fields.iter().any(|(name, _)| name == field) {
+                errors.push(format!(
+                    "{}.{}: snapshot has an extra field",
+                    item.name, field
+                ));
+            }
+        }
+    }
+    for snap in snapshot {
+        if !rust.iter().any(|item| item.name == snap.name) {
+            errors.push(format!("{}: snapshot has an extra struct", snap.name));
+        }
+    }
+    errors
+}
+
+fn match_lionsos_headers() {
+    let root = repo_root();
+    require_headers(&root);
     let report = compile_and_run(&root);
     let mut errors = Vec::new();
     check_types(&report, &mut errors);
@@ -91,6 +218,134 @@ fn rust_layouts_match_lionsos_headers() {
         "LionsOS header layout disagrees with lerux-sddf:\n{}",
         errors.join("\n")
     );
+}
+
+fn write_snapshot(path: &Path, rust: &[SnapshotStruct]) {
+    let rendered = render_snapshot(rust);
+    let previous = fs::read_to_string(path).unwrap_or_default();
+    if previous == rendered {
+        println!("no diff");
+        return;
+    }
+    fs::write(path, &rendered).unwrap_or_else(|err| panic!("write {}: {err}", path.display()));
+    println!("wrote {}", path.display());
+}
+
+fn require_headers(root: &Path) {
+    let protocol = root.join("deps/workspace/lionsos/include/lions/fs/protocol.h");
+    let serial_queue = root.join("deps/workspace/lionsos/dep/sddf/include/sddf/serial/queue.h");
+    if protocol.is_file() && serial_queue.is_file() {
+        return;
+    }
+    panic!(
+        "deps/workspace/lionsos is missing ({}; {})",
+        protocol.display(),
+        serial_queue.display()
+    );
+}
+
+fn load_snapshot(path: &Path) -> Vec<SnapshotStruct> {
+    let text =
+        fs::read_to_string(path).unwrap_or_else(|err| panic!("read {}: {err}", path.display()));
+    parse_snapshot(&text)
+}
+
+fn parse_snapshot(text: &str) -> Vec<SnapshotStruct> {
+    struct RawStruct {
+        name: String,
+        size: Option<usize>,
+        align: Option<usize>,
+        fields: Vec<(String, usize)>,
+    }
+
+    let mut structs: Vec<RawStruct> = Vec::new();
+    let mut current: Option<usize> = None;
+    let mut in_fields = false;
+    for (line_no, raw) in text.lines().enumerate() {
+        let line = raw.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let line_number = line_no + 1;
+        if let Some(header) = line
+            .strip_prefix('[')
+            .and_then(|rest| rest.strip_suffix(']'))
+        {
+            if let Some(name) = header.strip_suffix(".field") {
+                let index = structs
+                    .iter()
+                    .position(|item| item.name == name)
+                    .unwrap_or_else(|| {
+                        panic!("snapshot field table {name} has no struct at line {line_number}")
+                    });
+                current = Some(index);
+                in_fields = true;
+            } else if structs.iter().any(|item| item.name == header) {
+                panic!("duplicate snapshot struct {header} at line {line_number}");
+            } else {
+                structs.push(RawStruct {
+                    name: header.to_string(),
+                    size: None,
+                    align: None,
+                    fields: Vec::new(),
+                });
+                current = Some(structs.len() - 1);
+                in_fields = false;
+            }
+            continue;
+        }
+        let Some((key, value)) = line.split_once('=') else {
+            panic!("bad snapshot line {line_number}");
+        };
+        let key = key.trim();
+        let value: usize = value
+            .trim()
+            .parse()
+            .unwrap_or_else(|err| panic!("bad snapshot number on line {line_number}: {err}"));
+        let Some(index) = current else {
+            panic!("snapshot assignment before a struct at line {line_number}");
+        };
+        if in_fields {
+            if structs[index].fields.iter().any(|(name, _)| name == key) {
+                panic!("duplicate snapshot field {key} at line {line_number}");
+            }
+            structs[index].fields.push((key.to_string(), value));
+        } else if key == "size" {
+            structs[index].size = Some(value);
+        } else if key == "align" {
+            structs[index].align = Some(value);
+        } else {
+            panic!("unknown snapshot key {key} at line {line_number}");
+        }
+    }
+    structs
+        .into_iter()
+        .map(|item| SnapshotStruct {
+            size: item
+                .size
+                .unwrap_or_else(|| panic!("{}: snapshot size is required", item.name)),
+            align: item
+                .align
+                .unwrap_or_else(|| panic!("{}: snapshot align is required", item.name)),
+            name: item.name,
+            fields: item.fields,
+        })
+        .collect()
+}
+
+fn render_snapshot(items: &[SnapshotStruct]) -> String {
+    let mut out = String::new();
+    for item in items {
+        out.push_str(&format!(
+            "[{}]\nsize = {}\nalign = {}\n\n[{}.field]\n",
+            item.name, item.size, item.align, item.name
+        ));
+        for (field, offset) in &item.fields {
+            out.push_str(&format!("{field} = {offset}\n"));
+        }
+        out.push('\n');
+    }
+    out
 }
 
 fn compile_and_run(root: &Path) -> CReport {

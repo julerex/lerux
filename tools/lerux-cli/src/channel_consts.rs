@@ -18,19 +18,6 @@ use crate::{
     profile::Profile,
 };
 
-/// Local channel ids used by each SDF PD name, derived from the manifest.
-pub fn pd_local_ids(channels: &[ChannelSpec]) -> BTreeMap<String, BTreeSet<u8>> {
-    let mut map: BTreeMap<String, BTreeSet<u8>> = BTreeMap::new();
-    for ch in channels {
-        for end in &ch.ends {
-            map.entry(to_sdf_pd_name(&end.pd))
-                .or_default()
-                .insert(end.id);
-        }
-    }
-    map
-}
-
 /// Peer edges: for each PD, map local id → peer SDF name.
 pub fn pd_peer_map(channels: &[ChannelSpec]) -> BTreeMap<String, BTreeMap<u8, String>> {
     let mut map: BTreeMap<String, BTreeMap<u8, String>> = BTreeMap::new();
@@ -127,6 +114,36 @@ fn collect_rs_sources(dir: &Path) -> Result<String> {
     Ok(combined)
 }
 
+struct TrunkChannelException {
+    profile: &'static str,
+    const_name: &'static str,
+    manifest_id: u8,
+    const_id: u8,
+}
+
+const TRUNK_CHANNEL_EXCEPTIONS: [TrunkChannelException; 1] = [TrunkChannelException {
+    profile: "agent",
+    const_name: "AGENT",
+    manifest_id: 2,
+    const_id: 9,
+}];
+
+fn is_trunk_exception(
+    profile_name: &str,
+    const_name: &str,
+    ids: &BTreeSet<u8>,
+    expected_ids: &BTreeSet<u8>,
+) -> bool {
+    TRUNK_CHANNEL_EXCEPTIONS.iter().any(|exception| {
+        profile_name == exception.profile
+            && const_name == exception.const_name
+            && ids.len() == 1
+            && expected_ids.len() == 1
+            && ids.contains(&exception.const_id)
+            && expected_ids.contains(&exception.manifest_id)
+    })
+}
+
 /// Check that named `const …: Channel = Channel::new(N)` bindings in each
 /// profile PD match the manifest when the named peer is present in this profile.
 ///
@@ -134,15 +151,11 @@ fn collect_rs_sources(dir: &Path) -> Result<String> {
 /// ignored — they are expected to be behind `#[cfg]` in source.
 pub fn check_profile_channels(root: &Path, profile_name: &str, profile: &Profile) -> Result<()> {
     let peers = pd_peer_map(&profile.channel);
-    let local_ids = pd_local_ids(&profile.channel);
     let mut errors: Vec<String> = Vec::new();
 
     for pd_crate in &profile.pds {
         let sdf = to_sdf_pd_name(pd_crate);
         let Some(peer_map) = peers.get(&sdf) else {
-            continue;
-        };
-        let Some(profile_local_ids) = local_ids.get(&sdf) else {
             continue;
         };
         let dir = crate_dir_for_pd(root, pd_crate);
@@ -178,17 +191,16 @@ pub fn check_profile_channels(root: &Path, profile_name: &str, profile: &Profile
                 .filter(|(_, peer)| *peer == &expected_peer || peer_aliases(peer, &expected_peer))
                 .map(|(id, _)| *id)
                 .collect();
-            if expected_ids.is_empty() {
+            if expected_ids.is_empty() || !ids.is_disjoint(&expected_ids) {
                 continue;
             }
-            // Pass if any cfg-gated binding matches the manifest id.
-            let binds_this_profile = !ids.is_disjoint(profile_local_ids);
-            if ids.is_disjoint(&expected_ids) && binds_this_profile {
-                errors.push(format!(
-                    "{pd_crate}: const {const_name} uses Channel::new ids {ids:?}, \
-                     but manifest requires one of {expected_ids:?} for peer {expected_peer}"
-                ));
+            if is_trunk_exception(profile_name, const_name, ids, &expected_ids) {
+                continue;
             }
+            errors.push(format!(
+                "{pd_crate}: const {const_name} uses Channel::new ids {ids:?}, \
+                 but manifest requires one of {expected_ids:?} for peer {expected_peer}"
+            ));
         }
     }
 
@@ -352,6 +364,12 @@ mod tests {
             println!("support/profiles/{name}.toml");
         }
         assert!(!names.is_empty(), "support/profiles has no profile files");
+        assert_eq!(TRUNK_CHANNEL_EXCEPTIONS.len(), 1);
+        let exception = &TRUNK_CHANNEL_EXCEPTIONS[0];
+        assert_eq!(exception.profile, "agent");
+        assert_eq!(exception.const_name, "AGENT");
+        assert_eq!(exception.manifest_id, 2);
+        assert_eq!(exception.const_id, 9);
         let profiles = crate::profile::load_profiles(&root).expect("load profiles");
         for name in &names {
             let Some(profile) = profiles.get(name) else {

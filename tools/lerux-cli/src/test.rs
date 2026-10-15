@@ -337,19 +337,66 @@ fn qmp_exec(
     Ok(())
 }
 
+fn ordered_hit(raw: &str, pattern: &str, cursor: usize) -> Option<usize> {
+    let raw_end = raw
+        .get(cursor..)
+        .and_then(|suffix| suffix.find(pattern).map(|at| cursor + at + pattern.len()));
+    let traced = collapse_traced(raw);
+    let collapsed_end = earliest_collapsed_end(&traced.text, &traced.src, pattern, cursor);
+    match (raw_end, collapsed_end) {
+        (Some(raw_end), Some(collapsed_end)) => Some(raw_end.min(collapsed_end)),
+        (Some(end), None) | (None, Some(end)) => Some(end),
+        (None, None) => None,
+    }
+}
+
+fn earliest_collapsed_end(
+    text: &str,
+    src: &[Option<usize>],
+    pattern: &str,
+    cursor: usize,
+) -> Option<usize> {
+    debug_assert_eq!(text.len(), src.len());
+    let mut from = 0;
+    let mut best: Option<usize> = None;
+    while from < text.len() {
+        let Some(at) = text[from..].find(pattern) else {
+            break;
+        };
+        let abs = from + at;
+        let end = abs + pattern.len();
+        if let Some(raw_end) = real_raw_end(&src[abs..end])
+            && raw_end > cursor
+        {
+            best = Some(best.map_or(raw_end, |have| have.min(raw_end)));
+        }
+        let Some(ch) = text[abs..].chars().next() else {
+            break;
+        };
+        from = abs + ch.len_utf8();
+    }
+    best
+}
+
+fn real_raw_end(src: &[Option<usize>]) -> Option<usize> {
+    src.iter().copied().flatten().max().map(|at| at + 1)
+}
+
 fn expect_ordered(
     output: &std::sync::Arc<std::sync::Mutex<String>>,
     patterns: &[String],
     per: u64,
 ) -> Result<()> {
+    let mut cursor = 0;
     for pattern in patterns {
         let deadline = Instant::now() + Duration::from_secs(per);
         loop {
-            if output
+            let hit = output
                 .lock()
-                .map(|s| capture_contains(&s, pattern))
-                .unwrap_or(false)
-            {
+                .ok()
+                .and_then(|buf| ordered_hit(&buf, pattern, cursor));
+            if let Some(end) = hit {
+                cursor = end;
                 break;
             }
             if Instant::now() >= deadline {
@@ -598,27 +645,76 @@ fn is_prefix_only(s: &str) -> bool {
     sel4_log_prefix_len(s).is_some_and(|n| n == s.len())
 }
 
+struct Traced {
+    text: String,
+    src: Vec<Option<usize>>,
+}
+
+impl Traced {
+    fn new() -> Self {
+        Self {
+            text: String::new(),
+            src: Vec::new(),
+        }
+    }
+
+    fn push_raw(&mut self, bytes: &str, raw_at: usize) {
+        self.text.push_str(bytes);
+        self.src
+            .extend((0..bytes.len()).map(|offset| Some(raw_at + offset)));
+    }
+
+    fn push_copied(&mut self, other: &Traced, range: std::ops::Range<usize>) {
+        self.text.push_str(&other.text[range.clone()]);
+        self.src.extend_from_slice(&other.src[range]);
+    }
+
+    fn push_char(&mut self, ch: char, raw_at: usize) {
+        let before = self.text.len();
+        self.text.push(ch);
+        let width = self.text.len() - before;
+        self.src
+            .extend((0..width).map(|offset| Some(raw_at + offset)));
+    }
+
+    fn push_inserted(&mut self, ch: char) {
+        self.text.push(ch);
+        self.src.resize(self.text.len(), None);
+    }
+
+    fn append(&mut self, other: &Traced) {
+        self.text.push_str(&other.text);
+        self.src.extend_from_slice(&other.src);
+    }
+}
+
 /// When an outer prefix was preempted before any payload, the first newline
 /// often belongs to that outer line (`serial driver: PL011`) even though the
 /// inner line is still current (`lerux-debug:`). Split the inner payload at
 /// the first space so the tail completes the oldest prefix-only line.
-fn steal_preempted_outer_payload(current: &str, oldest: Option<&str>) -> Option<(String, String)> {
+fn steal_preempted_outer_payload(
+    current: &Traced,
+    oldest: Option<&Traced>,
+) -> Option<(Traced, Traced)> {
     let oldest = oldest?;
-    if !is_prefix_only(oldest) {
+    if !is_prefix_only(&oldest.text) {
         return None;
     }
-    let plen = sel4_log_prefix_len(current)?;
-    let payload = &current[plen..];
+    let plen = sel4_log_prefix_len(&current.text)?;
+    let payload = &current.text[plen..];
     let sp = payload.find(' ')?;
     if sp == 0 {
         return None;
     }
-    let tail = &payload[sp + 1..];
-    if tail.is_empty() {
+    let tail_at = plen + sp + 1;
+    if tail_at >= current.text.len() {
         return None;
     }
-    let inner = format!("{}{}", &current[..plen], &payload[..sp]);
-    Some((inner, tail.to_string()))
+    let mut inner = Traced::new();
+    inner.push_copied(current, 0..plen + sp);
+    let mut tail = Traced::new();
+    tail.push_copied(current, tail_at..current.text.len());
+    Some((inner, tail))
 }
 
 /// Text of the next physical line, not including its newline.
@@ -654,18 +750,24 @@ fn mid_word_join(left: &str, right: &str) -> bool {
 /// Splits inside one alphanumeric run tie on healed length (`bloc|irtio`
 /// versus `blocir|tio`). Emit every max-scoring split so the real cut, which
 /// rebuilds `blocks` and `virtio-net`, is one of them.
-fn resumed_outer_lines(oldest: &str, current: &str, after: &str) -> Vec<String> {
-    let Some(old_pre) = sel4_log_prefix_len(oldest) else {
+fn resumed_outer_lines(
+    oldest: &Traced,
+    current: &Traced,
+    after: &str,
+    after_at: usize,
+    outer_newline_at: usize,
+) -> Vec<Traced> {
+    let Some(old_pre) = sel4_log_prefix_len(&oldest.text) else {
         return Vec::new();
     };
-    let Some(cur_pre) = sel4_log_prefix_len(current) else {
+    let Some(cur_pre) = sel4_log_prefix_len(&current.text) else {
         return Vec::new();
     };
     if sel4_log_prefix_len(after).is_some() {
         return Vec::new();
     }
-    let old_pay = &oldest[old_pre..];
-    let cur_pay = &current[cur_pre..];
+    let old_pay = &oldest.text[old_pre..];
+    let cur_pay = &current.text[cur_pre..];
     if old_pay.is_empty() || cur_pay.is_empty() || after.is_empty() {
         return Vec::new();
     }
@@ -694,16 +796,14 @@ fn resumed_outer_lines(oldest: &str, current: &str, after: &str) -> Vec<String> 
     }
     let mut lines = Vec::with_capacity(splits.len().saturating_mul(2));
     for s in splits {
-        let mut outer = String::with_capacity(oldest.len() + cur_pay.len());
-        outer.push_str(&oldest[..old_pre]);
-        outer.push_str(old_pay);
-        outer.push_str(&cur_pay[s..]);
-        outer.push('\n');
-        let mut inner = String::with_capacity(current.len() + after.len());
-        inner.push_str(&current[..cur_pre]);
-        inner.push_str(&cur_pay[..s]);
-        inner.push_str(after);
-        inner.push('\n');
+        let mut outer = Traced::new();
+        outer.append(oldest);
+        outer.push_copied(current, cur_pre + s..current.text.len());
+        outer.push_char('\n', outer_newline_at);
+        let mut inner = Traced::new();
+        inner.push_copied(current, 0..cur_pre + s);
+        inner.push_raw(after, after_at);
+        inner.push_inserted('\n');
         lines.push(outer);
         lines.push(inner);
     }
@@ -727,72 +827,80 @@ fn resumed_outer_lines(oldest: &str, current: &str, after: &str) -> Vec<String> 
 /// (`v` / `bloc` / `irtio-net: MAC` / `ks x 512 bytes`), every max-scoring
 /// mid-word split of that shape is kept as well.
 fn collapse_interleaved_sel4_logs(haystack: &str) -> String {
-    let mut completed = String::with_capacity(haystack.len());
-    let mut incomplete: VecDeque<String> = VecDeque::new();
-    let mut current: Option<String> = None;
+    collapse_traced(haystack).text
+}
+
+fn collapse_traced(haystack: &str) -> Traced {
+    let mut completed = Traced::new();
+    let mut incomplete: VecDeque<Traced> = VecDeque::new();
+    let mut current: Option<Traced> = None;
     let mut i = 0;
     while i < haystack.len() {
         if let Some(plen) = sel4_log_prefix_len(&haystack[i..]) {
             if let Some(cur) = current.take() {
                 incomplete.push_back(cur);
             }
-            current = Some(haystack[i..i + plen].to_string());
+            let mut started = Traced::new();
+            started.push_raw(&haystack[i..i + plen], i);
+            current = Some(started);
             i += plen;
             continue;
         }
-        let ch = match haystack[i..].chars().next() {
-            Some(c) => c,
-            None => break,
+        let Some(ch) = haystack[i..].chars().next() else {
+            break;
         };
+        let ch_at = i;
         i += ch.len_utf8();
         if let Some(mut cur) = current.take() {
             if ch == '\n' {
                 if let Some(oldest) = incomplete.back() {
-                    for line in resumed_outer_lines(oldest, &cur, rest_of_line(&haystack[i..])) {
-                        completed.push_str(&line);
+                    let after = rest_of_line(&haystack[i..]);
+                    for line in resumed_outer_lines(oldest, &cur, after, i, ch_at) {
+                        completed.append(&line);
                     }
                 }
                 if let Some((inner, outer_tail)) =
-                    steal_preempted_outer_payload(&cur, incomplete.front().map(String::as_str))
+                    steal_preempted_outer_payload(&cur, incomplete.front())
                 {
                     if let Some(front) = incomplete.front_mut() {
-                        if !front.ends_with(' ') && !outer_tail.starts_with(' ') {
-                            front.push(' ');
+                        if !front.text.ends_with(' ') && !outer_tail.text.starts_with(' ') {
+                            front.push_inserted(' ');
                         }
-                        front.push_str(&outer_tail);
-                        front.push('\n');
+                        front.append(&outer_tail);
+                        front.push_char('\n', ch_at);
                     }
                     if let Some(done) = incomplete.pop_front() {
-                        completed.push_str(&done);
+                        completed.append(&done);
                     }
                     current = Some(inner);
                 } else {
-                    completed.push_str(&cur);
-                    completed.push('\n');
+                    completed.append(&cur);
+                    completed.push_char('\n', ch_at);
                 }
             } else {
-                cur.push(ch);
+                cur.push_char(ch, ch_at);
                 current = Some(cur);
             }
         } else if incomplete.front().is_some() {
             if let Some(front) = incomplete.front_mut() {
-                front.push(ch);
+                front.push_char(ch, ch_at);
             }
             if ch == '\n'
                 && let Some(done) = incomplete.pop_front()
             {
-                completed.push_str(&done);
+                completed.append(&done);
             }
         } else {
-            completed.push(ch);
+            completed.push_char(ch, ch_at);
         }
     }
     if let Some(cur) = current {
         incomplete.push_back(cur);
     }
-    for s in incomplete {
-        completed.push_str(&s);
+    for line in incomplete {
+        completed.append(&line);
     }
+    debug_assert_eq!(completed.text.len(), completed.src.len());
     completed
 }
 
@@ -1092,5 +1200,83 @@ INFO  [crash_demo] crash-demo: about to fault
     #[test]
     fn capture_contains_rejects_missing_token() {
         assert!(!capture_contains(IPC_COMPOSED_CI_SNIP, "lerux-net: ready"));
+    }
+
+    #[test]
+    fn reversed_program_lines_fail() {
+        let output = std::sync::Arc::new(std::sync::Mutex::new(
+            "lerux-wasm: ran\nprogram: rejected\n".to_string(),
+        ));
+        let patterns = vec![
+            "program: rejected".to_string(),
+            "lerux-wasm: ran".to_string(),
+        ];
+        let result = expect_ordered(&output, &patterns, 0);
+        assert!(result.is_err(), "reversed lines must not match");
+    }
+
+    #[test]
+    fn in_order_program_lines_pass() {
+        let output = std::sync::Arc::new(std::sync::Mutex::new(
+            "program: rejected\nlerux-wasm: ran\n".to_string(),
+        ));
+        let patterns = vec![
+            "program: rejected".to_string(),
+            "lerux-wasm: ran".to_string(),
+        ];
+        expect_ordered(&output, &patterns, 0).expect("in-order lines must match");
+    }
+
+    #[test]
+    fn spliced_token_after_earlier_line_passes() {
+        let capture = format!("early-line\n{IPC_COMPOSED_CI_SNIP}");
+        assert!(
+            !capture.contains("virtio-net: MAC"),
+            "fixture must reproduce the raw split"
+        );
+        let output = std::sync::Arc::new(std::sync::Mutex::new(capture));
+        let patterns = vec!["early-line".to_string(), "virtio-net: MAC".to_string()];
+        expect_ordered(&output, &patterns, 0).expect("spliced token after an earlier line");
+    }
+
+    #[test]
+    fn spliced_token_ending_before_cursor_fails() {
+        let capture = format!("{IPC_COMPOSED_CI_SNIP}later-marker\n");
+        assert!(
+            !capture.contains("virtio-net: MAC"),
+            "fixture must reproduce the raw split"
+        );
+        let output = std::sync::Arc::new(std::sync::Mutex::new(capture));
+        let patterns = vec!["later-marker".to_string(), "virtio-net: MAC".to_string()];
+        let result = expect_ordered(&output, &patterns, 0);
+        assert!(
+            result.is_err(),
+            "spliced token before the cursor must not match"
+        );
+    }
+
+    #[test]
+    fn unordered_expects_pass_in_either_order() {
+        let patterns = vec!["alpha-token".to_string(), "beta-token".to_string()];
+        for capture in ["alpha-token\nbeta-token\n", "beta-token\nalpha-token\n"] {
+            let output = std::sync::Arc::new(std::sync::Mutex::new(capture.to_string()));
+            let deadline = Instant::now() + Duration::from_secs(2);
+            expect_unordered(&output, &patterns, deadline)
+                .expect("unordered list accepts this order");
+        }
+    }
+
+    #[test]
+    fn script_step_ignores_expect_before_send_mark() {
+        let output = std::sync::Arc::new(std::sync::Mutex::new("only-before\n".to_string()));
+        let steps = [ScriptStep {
+            send: "cmd\r".to_string(),
+            expect: "only-before".to_string(),
+        }];
+        let result = run_script_steps(&output, &steps, 0, None, |_| Ok(()));
+        assert!(
+            result.is_err(),
+            "script step must ignore text before the send mark"
+        );
     }
 }

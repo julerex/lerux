@@ -1093,4 +1093,82 @@ INFO  [crash_demo] crash-demo: about to fault
     fn capture_contains_rejects_missing_token() {
         assert!(!capture_contains(IPC_COMPOSED_CI_SNIP, "lerux-net: ready"));
     }
+
+    #[test]
+    fn reversed_program_lines_fail() {
+        let output = std::sync::Arc::new(std::sync::Mutex::new(
+            "lerux-wasm: ran\nprogram: rejected\n".to_string(),
+        ));
+        let patterns = vec![
+            "program: rejected".to_string(),
+            "lerux-wasm: ran".to_string(),
+        ];
+        let result = expect_ordered(&output, &patterns, 0);
+        assert!(result.is_err(), "reversed lines must not match");
+    }
+
+    #[test]
+    fn in_order_program_lines_pass() {
+        let output = std::sync::Arc::new(std::sync::Mutex::new(
+            "program: rejected\nlerux-wasm: ran\n".to_string(),
+        ));
+        let patterns = vec![
+            "program: rejected".to_string(),
+            "lerux-wasm: ran".to_string(),
+        ];
+        expect_ordered(&output, &patterns, 0).expect("in-order lines must match");
+    }
+
+    #[test]
+    fn spliced_token_after_earlier_line_passes() {
+        let capture = format!("early-line\n{IPC_COMPOSED_CI_SNIP}");
+        assert!(
+            !capture.contains("virtio-net: MAC"),
+            "fixture must reproduce the raw split"
+        );
+        let output = std::sync::Arc::new(std::sync::Mutex::new(capture));
+        let patterns = vec!["early-line".to_string(), "virtio-net: MAC".to_string()];
+        expect_ordered(&output, &patterns, 0).expect("spliced token after an earlier line");
+    }
+
+    #[test]
+    fn spliced_token_ending_before_cursor_fails() {
+        let capture = format!("{IPC_COMPOSED_CI_SNIP}later-marker\n");
+        assert!(
+            !capture.contains("virtio-net: MAC"),
+            "fixture must reproduce the raw split"
+        );
+        let output = std::sync::Arc::new(std::sync::Mutex::new(capture));
+        let patterns = vec!["later-marker".to_string(), "virtio-net: MAC".to_string()];
+        let result = expect_ordered(&output, &patterns, 0);
+        assert!(
+            result.is_err(),
+            "spliced token before the cursor must not match"
+        );
+    }
+
+    #[test]
+    fn unordered_expects_pass_in_either_order() {
+        let patterns = vec!["alpha-token".to_string(), "beta-token".to_string()];
+        for capture in ["alpha-token\nbeta-token\n", "beta-token\nalpha-token\n"] {
+            let output = std::sync::Arc::new(std::sync::Mutex::new(capture.to_string()));
+            let deadline = Instant::now() + Duration::from_secs(2);
+            expect_unordered(&output, &patterns, deadline)
+                .expect("unordered list accepts this order");
+        }
+    }
+
+    #[test]
+    fn script_step_ignores_expect_before_send_mark() {
+        let output = std::sync::Arc::new(std::sync::Mutex::new("only-before\n".to_string()));
+        let steps = [ScriptStep {
+            send: "cmd\r".to_string(),
+            expect: "only-before".to_string(),
+        }];
+        let result = run_script_steps(&output, &steps, 0, None, |_| Ok(()));
+        assert!(
+            result.is_err(),
+            "script step must ignore text before the send mark"
+        );
+    }
 }

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <system>
-    <memory_region name="serial_mmio" size="0x1_000" phys_addr="{serial_mmio_phys_addr}" />
+    <memory_region name="serial_mmio" size="0x1_000" phys_addr="0x9_000_000" />
     <memory_region name="serial_tx_driver_queue" size="0x1_000" />
     <memory_region name="serial_tx_driver_data" size="0x1_000" />
     <memory_region name="serial_rx_driver_queue" size="0x1_000" />
@@ -17,7 +17,7 @@
         <map mr="serial_tx_driver_data" vaddr="0x3_001_000" perms="rw" cached="true" />
         <map mr="serial_rx_driver_queue" vaddr="0x3_002_000" perms="rw" cached="true" />
         <map mr="serial_rx_driver_data" vaddr="0x3_003_000" perms="rw" cached="true" />
-        <irq irq="{serial_irq}" id="0" />
+        <irq irq="33" id="0" />
     </protection_domain>
 
     <protection_domain name="serial_virt_tx" priority="3" stack_size="0x10_000">

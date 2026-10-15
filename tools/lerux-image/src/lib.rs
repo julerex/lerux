@@ -1,11 +1,13 @@
 //! Host registry for device-framework images.
 //!
 //! Seven images render from this table. Web reuses the fetch image.
-//! The board build still reads the system templates.
+//! Protection-domain build scripts and the host writer call [`emit_pd_binding`].
 
+mod binding;
 mod images;
 mod model;
 
+pub use binding::{emit_pd_binding, pd_binding_bytes};
 pub use images::{board_registration, render_board, render_kind, ImageKind, Mode};
 pub use model::ImageError;
 
@@ -23,7 +25,9 @@ mod tests {
     };
 
     use lerux_sddf::{
-        serial_client_config_t, serial_connection_resource_t, serial_driver_config_t,
+        fs_client_config_t, fs_config_check_magic, net_client_config_t, net_config_check_magic,
+        serial_client_config_t, serial_config_check_magic, serial_connection_resource_t,
+        serial_driver_config_t,
         serial_image::{
             client_config, driver_config, serial_config_to_bytes, virt_rx_config, virt_tx_config,
         },
@@ -32,9 +36,10 @@ mod tests {
 
     use super::render_serial_xml;
     use crate::{
+        binding::{bytes_for_pages, Page},
         board_registration,
-        images::{render_kind, render_with_extra_end, render_with_region_vaddr, ImageKind},
-        render_board, ImageError, Mode,
+        images::{render_with_extra_end, render_with_region_vaddr, ImageKind},
+        pd_binding_bytes, render_board, ImageError, Mode,
     };
 
     fn repo_root() -> PathBuf {
@@ -51,59 +56,8 @@ mod tests {
         &rest[..end]
     }
 
-    fn board_system_var(boards: &str, board: &str, key: &str) -> String {
-        let section = board_section(boards, board);
-        let line = section
-            .lines()
-            .find(|line| line.contains("system_vars"))
-            .unwrap_or_else(|| panic!("{board} system_vars"));
-        let needle = format!("{key} = ");
-        let pos = line
-            .find(&needle)
-            .unwrap_or_else(|| panic!("{board} {key}"));
-        let value = line[pos + needle.len()..].trim_start();
-        if let Some(rest) = value.strip_prefix('"') {
-            let end = rest.find('"').unwrap_or_else(|| panic!("{key} quote"));
-            rest[..end].to_string()
-        } else {
-            value
-                .split([',', '}'])
-                .next()
-                .unwrap_or_else(|| panic!("{key} value"))
-                .trim()
-                .to_string()
-        }
-    }
-
-    fn filled_template(template_name: &str, board: &str) -> String {
-        let root = repo_root();
-        let template_path = root.join("userspace/systems/templates").join(template_name);
-        let template = fs::read_to_string(&template_path)
-            .unwrap_or_else(|error| panic!("read {}: {error}", template_path.display()));
-        let boards = fs::read_to_string(root.join("support/boards.toml")).expect("boards.toml");
-        let mut rendered = template;
-        for key in [
-            "serial_mmio_phys_addr",
-            "serial_irq",
-            "virtio_mmio_phys_addr",
-            "virtio_blk_irq",
-            "virtio_net_irq",
-            "virtio_gpu_irq",
-        ] {
-            if !rendered.contains(&format!("{{{key}}}")) {
-                continue;
-            }
-            let value = board_system_var(&boards, board, key);
-            rendered = rendered.replace(&format!("{{{key}}}"), &value);
-        }
-        rendered
-    }
-
-    fn filled_serial_template() -> String {
-        filled_template(
-            "serial-sddf.system.template",
-            "qemu_virt_aarch64_serial_sddf",
-        )
+    fn filled_serial_template() -> &'static str {
+        include_str!("serial_filled.xml")
     }
 
     fn compare_bytes(actual: &str, expected: &str) -> Result<(), String> {
@@ -168,54 +122,7 @@ mod tests {
     fn serial_xml_matches_template_bytes() {
         let rendered = render_serial_xml().expect("render serial xml");
         let expected = filled_serial_template();
-        compare_bytes(&rendered, &expected).unwrap_or_else(|error| panic!("{error}"));
-    }
-
-    #[test]
-    fn each_image_matches_its_template_bytes() {
-        let cases = [
-            (
-                ImageKind::Serial,
-                "serial-sddf.system.template",
-                "qemu_virt_aarch64_serial_sddf",
-            ),
-            (
-                ImageKind::Fs,
-                "fs-sddf.system.template",
-                "qemu_virt_aarch64_fs_sddf",
-            ),
-            (
-                ImageKind::Net,
-                "net-sddf.system.template",
-                "qemu_virt_aarch64_net_sddf",
-            ),
-            (
-                ImageKind::Fetch,
-                "fetch-sddf.system.template",
-                "qemu_virt_aarch64_fetch_sddf",
-            ),
-            (
-                ImageKind::Browser,
-                "browser-sddf.system.template",
-                "qemu_virt_aarch64_browser_sddf",
-            ),
-            (
-                ImageKind::Agent,
-                "agent-sddf.system.template",
-                "qemu_virt_aarch64_agent_sddf",
-            ),
-            (
-                ImageKind::Program,
-                "program-sddf.system.template",
-                "qemu_virt_aarch64_program_sddf",
-            ),
-        ];
-        for (kind, template, board) in cases {
-            let rendered = render_kind(kind).unwrap_or_else(|error| panic!("{template}: {error}"));
-            let expected = filled_template(template, board);
-            compare_bytes(&rendered, &expected)
-                .unwrap_or_else(|error| panic!("{template}\n{error}"));
-        }
+        compare_bytes(&rendered, expected).unwrap_or_else(|error| panic!("{error}"));
     }
 
     #[test]
@@ -236,6 +143,159 @@ mod tests {
             Some((ImageKind::Fetch, Some(Mode::Web)))
         );
         assert!(web.contains("sddf-shell.elf"));
+        let boards = fs::read_to_string(repo_root().join("support/boards.toml")).expect("boards");
+        let section = board_section(&boards, "qemu_virt_aarch64_web_sddf");
+        assert!(
+            section.contains("hostfwd"),
+            "web board row should set hostfwd: {section}"
+        );
+        println!("web description matches fetch; board row sets hostfwd");
+    }
+
+    fn shell_page_order(bytes: &[u8]) -> Result<(), String> {
+        let serial_len = size_of::<serial_client_config_t>();
+        let fs_len = size_of::<fs_client_config_t>();
+        let net_len = size_of::<net_client_config_t>();
+        let order = "serial, then filesystem, then network";
+        if bytes.len() != serial_len + fs_len + net_len
+            || !serial_config_check_magic(&bytes[..serial_len])
+            || !fs_config_check_magic(&bytes[serial_len..serial_len + fs_len])
+            || !net_config_check_magic(&bytes[serial_len + fs_len..])
+        {
+            return Err(format!("page order must be {order}"));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn fetch_shell_pages_are_serial_then_filesystem_then_network() {
+        let xml = render_board("qemu_virt_aarch64_fetch_sddf")
+            .expect("fetch")
+            .expect("fetch image");
+        assert_eq!(channel_end_id(&xml, "serial_virt_tx", "shell", "shell"), 0);
+        assert_eq!(channel_end_id(&xml, "fatfs", "shell", "shell"), 2);
+        assert_eq!(channel_end_id(&xml, "net_copy", "shell", "shell"), 3);
+        let bytes = pd_binding_bytes(
+            "sddf-shell",
+            &["board-qemu_virt_aarch64_fetch_sddf", "net-client"],
+        )
+        .expect("shell binding");
+        shell_page_order(&bytes).unwrap_or_else(|error| panic!("{error}"));
+        println!("shell pages are serial, then filesystem, then network");
+    }
+
+    #[test]
+    fn filesystem_shell_pages_start_with_serial_then_filesystem() {
+        let xml = render_board("qemu_virt_aarch64_fs_sddf")
+            .expect("filesystem")
+            .expect("filesystem image");
+        assert_eq!(channel_end_id(&xml, "serial_virt_tx", "shell", "shell"), 0);
+        assert_eq!(channel_end_id(&xml, "fatfs", "shell", "shell"), 2);
+        assert!(xml.contains("pp=\"true\""));
+        let bytes = pd_binding_bytes("sddf-shell", &["board-qemu_virt_aarch64_fs_sddf"])
+            .expect("filesystem shell");
+        let serial_len = size_of::<serial_client_config_t>();
+        let fs_len = size_of::<fs_client_config_t>();
+        assert!(serial_config_check_magic(&bytes[..serial_len]));
+        assert!(fs_config_check_magic(
+            &bytes[serial_len..serial_len + fs_len]
+        ));
+        assert!(bytes.len() > serial_len + fs_len);
+    }
+
+    #[test]
+    fn network_client_pages_are_serial_then_network() {
+        let xml = render_board("qemu_virt_aarch64_net_sddf")
+            .expect("network")
+            .expect("network image");
+        assert!(xml.contains("sddf-net-client.elf"));
+        assert_eq!(
+            channel_end_id(&xml, "serial_virt_tx", "net_client", "net_client"),
+            0
+        );
+        assert_eq!(
+            channel_end_id(&xml, "net_copy", "net_client", "net_client"),
+            2
+        );
+        let bytes = pd_binding_bytes("sddf-net-client", &[]).expect("network client");
+        let serial_len = size_of::<serial_client_config_t>();
+        assert!(serial_config_check_magic(&bytes[..serial_len]));
+        assert!(net_config_check_magic(&bytes[serial_len..]));
+    }
+
+    #[test]
+    fn browser_shell_reuses_the_fetch_pages() {
+        let xml = render_board("qemu_virt_aarch64_browser_sddf")
+            .expect("browser")
+            .expect("browser image");
+        assert!(xml.contains("sddf-gpu-driver.elf"));
+        assert!(xml.contains("sddf-shell.elf"));
+        let browser = pd_binding_bytes("sddf-shell", &["net-client"]).expect("browser shell");
+        let fetch = pd_binding_bytes(
+            "sddf-shell",
+            &["board-qemu_virt_aarch64_fetch_sddf", "net-client"],
+        )
+        .expect("fetch shell");
+        assert_eq!(browser, fetch);
+        shell_page_order(&browser).unwrap_or_else(|error| panic!("{error}"));
+    }
+
+    #[test]
+    fn swapped_shell_pages_fail_the_relation() {
+        let bytes = bytes_for_pages(&[Page::FsShell, Page::SerialClient, Page::NetShell]);
+        let error = shell_page_order(&bytes).expect_err("swapped pages");
+        assert!(
+            error.contains("serial, then filesystem, then network"),
+            "{error}"
+        );
+        println!("{error}");
+    }
+
+    #[test]
+    fn agent_config_has_filesystem_and_network_pages() {
+        let xml = render_board("qemu_virt_aarch64_agent_sddf")
+            .expect("agent")
+            .expect("agent image");
+        assert!(xml.contains("sddf-agent.elf"));
+        assert!(xml.contains("sddf-grok.elf"));
+        let bytes = pd_binding_bytes("sddf-agent", &[]).expect("agent binding");
+        let fs_len = size_of::<fs_client_config_t>();
+        let net_len = size_of::<net_client_config_t>();
+        let serial_len = size_of::<serial_client_config_t>();
+        assert_eq!(bytes.len(), fs_len + net_len);
+        assert!(fs_config_check_magic(&bytes[..fs_len]));
+        assert!(net_config_check_magic(&bytes[fs_len..]));
+        assert!(!serial_config_check_magic(
+            &bytes[..serial_len.min(bytes.len())]
+        ));
+        println!("agent config has filesystem and network pages and no serial page");
+    }
+
+    #[test]
+    fn grok_config_is_the_serial_client_page() {
+        let bytes = pd_binding_bytes("sddf-grok", &[]).expect("grok binding");
+        assert_eq!(bytes.len(), size_of::<serial_client_config_t>());
+        assert!(serial_config_check_magic(&bytes));
+        println!("grok config is the serial client page only");
+    }
+
+    #[test]
+    fn program_description_names_the_program_elf() {
+        let xml = render_board("qemu_virt_aarch64_program_sddf")
+            .expect("program")
+            .expect("program image");
+        assert!(xml.contains("sddf-program.elf"));
+        assert!(!xml.contains("sddf-shell.elf"));
+        let bytes = pd_binding_bytes("sddf-program", &[]).expect("program binding");
+        shell_page_order(&bytes).unwrap_or_else(|error| panic!("{error}"));
+    }
+
+    #[test]
+    fn zero_board_features_bind_the_single_image_crates() {
+        for crate_name in ["sddf-agent", "sddf-grok", "sddf-program"] {
+            pd_binding_bytes(crate_name, &[])
+                .unwrap_or_else(|error| panic!("{crate_name} {error}"));
+        }
     }
 
     #[test]

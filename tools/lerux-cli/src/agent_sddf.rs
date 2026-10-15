@@ -4,33 +4,22 @@
 //! configuration struct. `grok` embeds the serial client page. The agent embeds
 //! the filesystem shell page and then the network shell page.
 
-use std::{fs, mem::size_of_val, path::Path};
+use std::{fs, path::Path};
 
 use anyhow::{Context, Result};
-use lerux_sddf::{fs_image, net_image, serial_image};
 
 pub fn write_configs(dir: &Path) -> Result<()> {
     fs::create_dir_all(dir).with_context(|| format!("mkdir {}", dir.display()))?;
-    let serial = serial_image::client_config();
-    let mut grok = vec![0u8; size_of_val(&serial)];
-    serial_image::serial_config_to_bytes(&serial, &mut grok);
-    let grok_path = dir.join("grok_config.bin");
-    fs::write(&grok_path, &grok).with_context(|| format!("write {}", grok_path.display()))?;
-
-    let agent = agent_config_bytes();
-    let agent_path = dir.join("agent_config.bin");
-    fs::write(&agent_path, &agent).with_context(|| format!("write {}", agent_path.display()))?;
+    bind(dir, "sddf-grok", "grok_config.bin")?;
+    bind(dir, "sddf-agent", "agent_config.bin")?;
     Ok(())
 }
 
-fn agent_config_bytes() -> Vec<u8> {
-    let fs = fs_image::shell_client_config();
-    let net = net_image::shell_client_config();
-    let fs_len = std::mem::size_of_val(&fs);
-    let mut bytes = vec![0u8; fs_len + std::mem::size_of_val(&net)];
-    fs_image::fs_config_to_bytes(&fs, &mut bytes[..fs_len]);
-    net_image::net_config_to_bytes(&net, &mut bytes[fs_len..]);
-    bytes
+fn bind(dir: &Path, crate_name: &str, file_name: &str) -> Result<()> {
+    let path = dir.join(file_name);
+    lerux_image::emit_pd_binding(crate_name, &[], &path)
+        .map_err(|error| anyhow::anyhow!("{error}"))
+        .with_context(|| format!("bind {crate_name}"))
 }
 
 #[cfg(test)]
@@ -59,7 +48,6 @@ mod tests {
         write_configs(dir.path()).expect("write configs");
         let grok = fs::read(dir.path().join("grok_config.bin")).expect("read grok config");
         let agent = fs::read(dir.path().join("agent_config.bin")).expect("read agent config");
-        assert_eq!(agent, agent_config_bytes());
         assert_eq!(grok.len(), size_of::<serial_client_config_t>());
         assert!(serial_config_check_magic(&grok));
 

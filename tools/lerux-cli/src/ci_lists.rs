@@ -10,7 +10,6 @@ use anyhow::{bail, Context, Result};
 
 use crate::board::load_boards;
 
-/// These six stay out of the workflow include list on purpose.
 const LOCAL_ONLY_BOARDS: &[&str] = &[
     "qemu_virt_aarch64_debug",
     "qemu_virt_aarch64_fs_fat",

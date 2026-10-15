@@ -131,9 +131,7 @@ fn collect_rs_sources(dir: &Path) -> Result<String> {
 /// profile PD match the manifest when the named peer is present in this profile.
 ///
 /// Consts for peers that do not appear in the profile (e.g. PL031 on RPi4) are
-/// ignored. They are expected to be behind `#[cfg]` in source. A const whose
-/// ids are absent from this profile's local channel ids is another profile's
-/// binding.
+/// ignored — they are expected to be behind `#[cfg]` in source.
 pub fn check_profile_channels(root: &Path, profile_name: &str, profile: &Profile) -> Result<()> {
     let peers = pd_peer_map(&profile.channel);
     let local_ids = pd_local_ids(&profile.channel);
@@ -144,7 +142,7 @@ pub fn check_profile_channels(root: &Path, profile_name: &str, profile: &Profile
         let Some(peer_map) = peers.get(&sdf) else {
             continue;
         };
-        let Some(allowed) = local_ids.get(&sdf) else {
+        let Some(profile_local_ids) = local_ids.get(&sdf) else {
             continue;
         };
         let dir = crate_dir_for_pd(root, pd_crate);
@@ -184,8 +182,8 @@ pub fn check_profile_channels(root: &Path, profile_name: &str, profile: &Profile
                 continue;
             }
             // Pass if any cfg-gated binding matches the manifest id.
-            // Ids this profile does not use belong to another profile.
-            if ids.is_disjoint(&expected_ids) && !ids.is_disjoint(allowed) {
+            let binds_this_profile = !ids.is_disjoint(profile_local_ids);
+            if ids.is_disjoint(&expected_ids) && binds_this_profile {
                 errors.push(format!(
                     "{pd_crate}: const {const_name} uses Channel::new ids {ids:?}, \
                      but manifest requires one of {expected_ids:?} for peer {expected_peer}"

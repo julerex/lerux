@@ -2,6 +2,7 @@
 resolver = "3"
 members = [
     "tools/lerux-cli",
+    "tools/lerux-image",
     "userspace/pds/hello",
     "userspace/pds/serial-driver",
     "userspace/pds/serial-virt",

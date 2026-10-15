@@ -1,0 +1,10 @@
+[package]
+name = "lerux-image"
+version = "0.1.0"
+edition = "2024"
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+lerux-sddf = { path = "../../userspace/crates/lerux-sddf" }

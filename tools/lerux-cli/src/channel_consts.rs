@@ -131,7 +131,9 @@ fn collect_rs_sources(dir: &Path) -> Result<String> {
 /// profile PD match the manifest when the named peer is present in this profile.
 ///
 /// Consts for peers that do not appear in the profile (e.g. PL031 on RPi4) are
-/// ignored — they are expected to be behind `#[cfg]` in source.
+/// ignored. They are expected to be behind `#[cfg]` in source. A const whose
+/// ids are absent from this profile's local channel ids is another profile's
+/// binding.
 pub fn check_profile_channels(root: &Path, profile_name: &str, profile: &Profile) -> Result<()> {
     let peers = pd_peer_map(&profile.channel);
     let local_ids = pd_local_ids(&profile.channel);
@@ -142,7 +144,7 @@ pub fn check_profile_channels(root: &Path, profile_name: &str, profile: &Profile
         let Some(peer_map) = peers.get(&sdf) else {
             continue;
         };
-        let Some(_allowed) = local_ids.get(&sdf) else {
+        let Some(allowed) = local_ids.get(&sdf) else {
             continue;
         };
         let dir = crate_dir_for_pd(root, pd_crate);
@@ -182,7 +184,8 @@ pub fn check_profile_channels(root: &Path, profile_name: &str, profile: &Profile
                 continue;
             }
             // Pass if any cfg-gated binding matches the manifest id.
-            if ids.is_disjoint(&expected_ids) {
+            // Ids this profile does not use belong to another profile.
+            if ids.is_disjoint(&expected_ids) && !ids.is_disjoint(allowed) {
                 errors.push(format!(
                     "{pd_crate}: const {const_name} uses Channel::new ids {ids:?}, \
                      but manifest requires one of {expected_ids:?} for peer {expected_peer}"
@@ -322,5 +325,39 @@ mod tests {
         let profiles = crate::profile::load_profiles(&root).unwrap();
         let p = profiles.get("workstation-rpi4").unwrap();
         check_profile_channels(&root, "workstation-rpi4", p).expect("rpi4 channels ok");
+    }
+
+    #[test]
+    fn every_profile_file_is_checked() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let dir = root.join("support/profiles");
+        let mut names = Vec::new();
+        for entry in fs::read_dir(&dir).expect("read support/profiles") {
+            let path = entry.expect("profile dir entry").path();
+            if path.extension().and_then(|ext| ext.to_str()) != Some("toml") {
+                continue;
+            }
+            let Some(name) = path.file_stem().and_then(|stem| stem.to_str()) else {
+                continue;
+            };
+            if name.is_empty() {
+                continue;
+            }
+            names.push(name.to_string());
+        }
+        names.sort();
+        println!("support/profiles");
+        for name in &names {
+            println!("support/profiles/{name}.toml");
+        }
+        assert!(!names.is_empty(), "support/profiles has no profile files");
+        let profiles = crate::profile::load_profiles(&root).expect("load profiles");
+        for name in &names {
+            let Some(profile) = profiles.get(name) else {
+                panic!("support/profiles/{name}.toml did not load");
+            };
+            check_profile_channels(&root, name, profile)
+                .unwrap_or_else(|err| panic!("support/profiles/{name}.toml: {err}"));
+        }
     }
 }

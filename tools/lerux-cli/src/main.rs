@@ -6,6 +6,7 @@ mod build;
 mod build_sdk;
 mod channel_consts;
 mod channels;
+mod ci_lists;
 mod clippy;
 mod config_cmd;
 mod deploy;

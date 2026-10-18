@@ -29,6 +29,8 @@ RUN cargo install just --locked
 # Match rust-toolchain.toml before building lerux PDs
 COPY rust-toolchain.toml /work/rust-toolchain.toml
 COPY tools/lerux-cli /work/tools/lerux-cli
+# Cargo reads every workspace member before it builds lerux-cli.
+COPY tools/lerux-image /work/tools/lerux-image
 COPY support/boards.toml /work/support/boards.toml
 COPY userspace/pds /work/userspace/pds
 COPY userspace/crates /work/userspace/crates

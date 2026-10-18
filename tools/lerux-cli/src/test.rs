@@ -654,6 +654,10 @@ fn mid_word_join(left: &str, right: &str) -> bool {
 /// Splits inside one alphanumeric run tie on healed length (`bloc|irtio`
 /// versus `blocir|tio`). Emit every max-scoring split so the real cut, which
 /// rebuilds `blocks` and `virtio-net`, is one of them.
+///
+/// The inner tail may begin on a space instead of continuing that run
+/// (`512|tio` with remainder ` bytes`). The cut is still inside `512tio`, so
+/// the same max-score set includes it.
 fn resumed_outer_lines(oldest: &str, current: &str, after: &str) -> Vec<String> {
     let Some(old_pre) = sel4_log_prefix_len(oldest) else {
         return Vec::new();
@@ -677,7 +681,12 @@ fn resumed_outer_lines(oldest: &str, current: &str, after: &str) -> Vec<String> 
         }
         let b1 = &cur_pay[..s];
         let a2 = &cur_pay[s..];
-        if !mid_word_join(old_pay, a2) || !mid_word_join(b1, after) {
+        // The cut sits inside one alphanumeric run. The inner tail either
+        // continues that run or starts at whitespace (`512` then ` bytes`).
+        if !mid_word_join(old_pay, a2) || !mid_word_join(b1, a2) {
+            continue;
+        }
+        if !mid_word_join(b1, after) && !after.starts_with(char::is_whitespace) {
             continue;
         }
         let score = trailing_alnum_len(old_pay)
@@ -724,8 +733,9 @@ fn resumed_outer_lines(oldest: &str, current: &str, after: &str) -> Vec<String> 
 /// `lerux-debug: serial driver: PL011` / ` ready`).
 ///
 /// If the outer line reaches its newline while the inner line is still open
-/// (`v` / `bloc` / `irtio-net: MAC` / `ks x 512 bytes`), every max-scoring
-/// mid-word split of that shape is kept as well.
+/// (`v` / `bloc` / `irtio-net: MAC` / `ks x 512 bytes`, or `vir` / `512` /
+/// `tio-net: MAC` / ` bytes`), every max-scoring mid-word split of that
+/// shape is kept as well.
 fn collapse_interleaved_sel4_logs(haystack: &str) -> String {
     let mut completed = String::with_capacity(haystack.len());
     let mut incomplete: VecDeque<String> = VecDeque::new();
@@ -971,6 +981,22 @@ ks x 512 bytes
         assert!(!qmp_key_ok("a b"));
     }
 
+    /// 2026-10-18 ipc-composed CI: the outer MAC line reaches its newline
+    /// inside the block line, and the block remainder starts at a space
+    /// (`vir` / `512` / `tio-net: MAC` / ` bytes`). Carriage return is what
+    /// the serial capture stored.
+    const IPC_COMPOSED_CI_SNIP_2026_10_18: &str = "\
+INFO  [virtio_net_driver] virtio-net: unified-dma (no client_dma map)\r
+INFO  [virtio_driversINFO  [virtio_drivers::device::blk] found a block device of size 4096KB\r
+::device::net::dev_raw] negotiated_features Features(MAC | STATUS | RING_INDIRECT_DESC | RING_EVENT_IDX)\r
+INFO  [virtio_blk_driver] virtio-blk driver ready\r
+INFO  [virtio_net_driver] virtio-net driver ready\r
+INFO  [net_server] virINFO  [blk_server] virtio-blk: 8192 blocks x 512tio-net: MAC 52:54:00:12:34:56\r
+ bytes\r
+INFO  [blk_server] lerux-blk: ready\r
+INFO  [net_server] lerux-net: ready\r
+";
+
     /// 2026-08-20 ipc-composed CI: earlier split prefix must not steal the
     /// `net: MAC` leftover from `virtio-`.
     const IPC_COMPOSED_CI_SNIP_2026_08_20: &str = "\
@@ -1035,6 +1061,26 @@ INFO  [crash_demo] crash-demo: about to fault
         assert!(capture_contains(
             IPC_COMPOSED_CI_SNIP_2026_09_25,
             "virtio-blk: 8192 blocks"
+        ));
+    }
+
+    #[test]
+    fn capture_contains_recovers_mac_when_inner_tail_starts_at_a_space() {
+        assert!(
+            !IPC_COMPOSED_CI_SNIP_2026_10_18.contains("virtio-net: MAC"),
+            "fixture must reproduce the raw split"
+        );
+        assert!(capture_contains(
+            IPC_COMPOSED_CI_SNIP_2026_10_18,
+            "virtio-net: MAC"
+        ));
+        assert!(capture_contains(
+            IPC_COMPOSED_CI_SNIP_2026_10_18,
+            "virtio-blk: 8192 blocks"
+        ));
+        assert!(capture_contains(
+            IPC_COMPOSED_CI_SNIP_2026_10_18,
+            "lerux-net: ready"
         ));
     }
 

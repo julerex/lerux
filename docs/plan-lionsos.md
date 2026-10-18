@@ -15,7 +15,7 @@ Last updated: 2026-10-12
 ## Global constraints
 
 - Specification checkout: LionsOS tag `0.4.0`, commit `ad4c35ea7ae657d2f450e45c821035e746cfa48a`. Its `dep/sddf` submodule is commit `650ace5dba984f5d9c7dd1a005648ff7b40655f7`, which `git describe --tags` names `0.7.0`. The local au-ts mirror is behind that tag. Do not copy struct layouts from the mirror.
-- `lerux fetch` clones that LionsOS tag and initialises only `dep/sddf`. It does not initialise the other submodules. Those are C components and language runtimes, and this checkout does not build them. Widen that checkout only when a later milestone needs a header that is not already there.
+- `lerux fetch` clones that LionsOS tag and initialises only `dep/sddf`. It does not initialise the other submodules. Those are C components and language runtimes, and this checkout does not build them. Widen that checkout only when a later milestone needs a header that is not already there. A cached checkout fetches tags with `--no-recurse-submodules`. Fetching every tag otherwise asks the sddf remote for a commit recorded by older LionsOS history, and that remote rejects a commit it no longer has.
 - Guest code stays `#![no_std]` Rust. It includes no C. It does not call musl, lwIP, MicroPython, or the WebAssembly Micro Runtime.
 - Shared structs use `#[repr(C)]`. A host test fails when `size_of` or `offset_of` disagrees with the header. `fs_cmd_t` and `fs_msg_t` are 64 bytes, which the header asserts.
 - Queue indexes use the same acquire and release pairing as the header comments. The producer is the only writer of the tail. The consumer is the only writer of the head. Use that pairing on every new queue, which is the symmetric-multiprocessing branch of the header, including on a single processor.

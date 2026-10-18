@@ -88,9 +88,20 @@ fn clone_or_checkout(workspace: &Path, name: &str, url: &str, tag: &str) -> Resu
             ],
         );
         eprintln!("==> {name}: already cloned, checking out {tag}");
+        // `--tags` retrieves every tag. Git then fetches a populated submodule
+        // commit recorded by that history. Older LionsOS history records an
+        // sddf commit the remote no longer has, and the fetch fails before
+        // checkout. LionsOS dep/sddf is initialised after this checkout.
         run_checked(
             "git",
-            &["-C", &dest.to_string_lossy(), "fetch", "--tags", "origin"],
+            &[
+                "-C",
+                &dest.to_string_lossy(),
+                "fetch",
+                "--no-recurse-submodules",
+                "--tags",
+                "origin",
+            ],
         )?;
         run_checked("git", &["-C", &dest.to_string_lossy(), "checkout", tag])?;
         return Ok(());

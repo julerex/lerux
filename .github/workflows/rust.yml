@@ -164,7 +164,7 @@ jobs:
               fi
             '
           sudo chown -R "$(id -u):$(id -g)" deps
-          chmod +x deps/toolchains/qemu-sp804/bin/qemu-system-aarch64 2>/dev/null || true
+          chmod +x deps/toolchains/qemu-sp804/bin/qemu-system-aarch64
 
       - name: Save SP804 QEMU cache
         if: always() && steps.qemu-sp804-cache.outputs.cache-hit != 'true'
@@ -175,6 +175,15 @@ jobs:
             deps/toolchains/qemu-6.2.0-src
             deps/toolchains/qemu-6.2.0.tar.xz
           key: qemu-sp804-${{ hashFiles('support/qemu/arm-virt-sp804.patch', 'tools/lerux-cli/**') }}
+
+      # The Actions cache is shared with Docker layer caches and can be evicted
+      # before the smoke jobs restore it. The artifact is the copy those jobs use.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qemu-sp804
+          path: deps/toolchains/qemu-sp804/
+          retention-days: 1
+          if-no-files-found: error
 
       - name: Upload SDK bundle
         run: |
@@ -474,25 +483,20 @@ jobs:
           restore-keys: |
             board-${{ matrix.id }}-
 
-      - name: Restore SP804 QEMU cache
+      - name: Download SP804 QEMU
         if: matrix.id == 'init' || matrix.id == 'composed' || matrix.id == 'blk-composed' || matrix.id == 'http-composed' || matrix.id == 'net-composed' || matrix.id == 'ipc-composed' || matrix.id == 'workstation' || matrix.id == 'interactive'
-        uses: actions/cache/restore@v4
+        uses: actions/download-artifact@v4
         with:
-          path: |
-            deps/toolchains/qemu-sp804
-            deps/toolchains/qemu-6.2.0-src
-            deps/toolchains/qemu-6.2.0.tar.xz
-          key: qemu-sp804-${{ hashFiles('support/qemu/arm-virt-sp804.patch', 'tools/lerux-cli/**') }}
-          restore-keys: |
-            qemu-sp804-
+          name: qemu-sp804
+          path: deps/toolchains/qemu-sp804
 
       - name: Ensure SP804 QEMU executable
         if: matrix.id == 'init' || matrix.id == 'composed' || matrix.id == 'blk-composed' || matrix.id == 'http-composed' || matrix.id == 'net-composed' || matrix.id == 'ipc-composed' || matrix.id == 'workstation' || matrix.id == 'interactive'
         run: |
           set -euo pipefail
           qemu="deps/toolchains/qemu-sp804/bin/qemu-system-aarch64"
-          if [[ ! -x "${qemu}" ]]; then
-            echo "error: missing ${qemu}; sdk job should have built or cached SP804 QEMU" >&2
+          if [[ ! -f "${qemu}" ]]; then
+            echo "error: missing ${qemu}; sdk job should have uploaded the SP804 QEMU artifact" >&2
             exit 1
           fi
           chmod +x "${qemu}"

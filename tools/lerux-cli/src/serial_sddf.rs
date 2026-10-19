@@ -3,12 +3,9 @@
 //! The protection domains embed the same bytes from their build scripts. These
 //! files are the copy the host checks against the rendered system description.
 
-use std::{fs, mem::size_of, path::Path};
+use std::{fs, path::Path};
 
 use anyhow::{Context, Result};
-use lerux_sddf::serial_image::{
-    client_config, driver_config, serial_config_to_bytes, virt_rx_config, virt_tx_config,
-};
 
 #[cfg(test)]
 pub(crate) fn hex_group(value: u64) -> String {
@@ -25,24 +22,23 @@ pub(crate) fn hex_group(value: u64) -> String {
 
 pub fn write_configs(dir: &Path) -> Result<()> {
     fs::create_dir_all(dir).with_context(|| format!("mkdir {}", dir.display()))?;
-    write_one(dir, "serial_driver_config.bin", &driver_config())?;
-    write_one(dir, "serial_virt_tx_config.bin", &virt_tx_config())?;
-    write_one(dir, "serial_virt_rx_config.bin", &virt_rx_config())?;
-    write_one(dir, "serial_client_config.bin", &client_config())?;
+    bind(dir, "sddf-serial-driver", "serial_driver_config.bin")?;
+    bind(dir, "sddf-serial-virt-tx", "serial_virt_tx_config.bin")?;
+    bind(dir, "sddf-serial-virt-rx", "serial_virt_rx_config.bin")?;
+    bind(dir, "sddf-serial-client", "serial_client_config.bin")?;
     Ok(())
 }
 
-fn write_one<T>(dir: &Path, name: &str, value: &T) -> Result<()> {
-    let mut bytes = vec![0u8; size_of::<T>()];
-    serial_config_to_bytes(value, &mut bytes);
-    let path = dir.join(name);
-    fs::write(&path, &bytes).with_context(|| format!("write {}", path.display()))?;
-    Ok(())
+fn bind(dir: &Path, crate_name: &str, file_name: &str) -> Result<()> {
+    let path = dir.join(file_name);
+    lerux_image::emit_pd_binding(crate_name, &[], &path)
+        .map_err(|error| anyhow::anyhow!("{error}"))
+        .with_context(|| format!("bind {crate_name}"))
 }
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::{mem::size_of, path::PathBuf};
 
     use lerux_sddf::{
         serial_config_check_magic,

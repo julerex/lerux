@@ -22,4 +22,4 @@ smoltcp = { workspace = true, features = [
 ] }
 
 [build-dependencies]
-lerux-sddf = { path = "../../crates/lerux-sddf" }
+lerux-image = { path = "../../../tools/lerux-image" }

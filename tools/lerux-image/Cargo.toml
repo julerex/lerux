@@ -6,5 +6,5 @@ edition = "2024"
 [lints]
 workspace = true
 
-[dev-dependencies]
+[dependencies]
 lerux-sddf = { path = "../../userspace/crates/lerux-sddf" }

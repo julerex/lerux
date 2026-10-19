@@ -2,8 +2,12 @@
 # Loaded by lerux-cli (`test` / `test-all`). Edit here when adding boards.
 #
 # [boards.<name>]
-# expects = ["ordered substrings…"]  # required
+# expects = ["ordered substrings…"]  # required; each later hit must follow the earlier one
 # unordered = true                   # optional (default false)
+#
+# Guest order, not startup order. A server prints its device line and then ready.
+# On a composed image those server lines precede the supervisor gate. The client
+# lines follow the gate.
 # timeout_secs = 120                 # optional (default 60; hw often 120)
 # script_timeout_secs = 30           # optional; per-step timeout for hw script
 # script = [ { send = "ls\r", expect = "boot.log" }, … ]  # Phase 52 hw-serial REPL
@@ -139,8 +143,8 @@ expects = [
 
 [boards.qemu_virt_aarch64_browser]
 expects = [
-  "lerux-net: ready",
   "virtio-net: MAC",
+  "lerux-net: ready",
   "lerux-display: ramfb ok",
   "lerux-tls: handshake ok",
   "lerux-web: paint ok",
@@ -210,68 +214,69 @@ expects = [
   "lerux-debug: crash dump",
 ]
 
-# Phase 60: crash-demo faults first; fs-client probes only after notify.
+# Phase 60: the filesystem server prints ready during its init, before the fault.
+# crash-demo faults next; the filesystem client probes only after the notify.
 [boards.qemu_virt_aarch64_isolation]
 expects = [
+  "lerux-fs: ready",
   "lerux-debug: ready",
   "crash-demo: about to fault",
   "lerux-debug: crash-demo stopped",
   "lerux-isolation: notified survivor",
-  "lerux-fs: ready",
   "lerux-fs: round-trip ok",
   "lerux-isolation: fs-server survived untrusted PD crash",
 ]
 
 [boards.qemu_virt_riscv64_isolation]
 expects = [
+  "lerux-fs: ready",
   "lerux-debug: ready",
   "crash-demo: about to fault",
   "lerux-debug: crash-demo stopped",
   "lerux-isolation: notified survivor",
-  "lerux-fs: ready",
   "lerux-fs: round-trip ok",
   "lerux-isolation: fs-server survived untrusted PD crash",
 ]
 
 [boards.qemu_virt_aarch64_blk]
 expects = [
-  "lerux-blk: ready",
   "virtio-blk:",
+  "lerux-blk: ready",
   "lerux-blk: MBR sig",
   "lerux-blk: write round-trip ok",
 ]
 
 [boards.qemu_virt_riscv64_blk]
 expects = [
-  "lerux-blk: ready",
   "virtio-blk:",
+  "lerux-blk: ready",
   "lerux-blk: MBR sig",
   "lerux-blk: write round-trip ok",
 ]
 
 [boards.x86_64_generic_blk]
 expects = [
-  "lerux-blk: ready",
   "virtio-blk:",
+  "lerux-blk: ready",
   "lerux-blk: MBR sig",
   "lerux-blk: write round-trip ok",
 ]
 
 [boards.qemu_virt_aarch64_blk_composed]
 expects = [
+  "virtio-blk:",
+  "lerux-blk: ready",
   "lerux-supervisor: RTC",
   "lerux-supervisor: timer ok",
   "lerux-supervisor: init ok",
-  "lerux-blk: ready",
-  "virtio-blk:",
   "lerux-blk: MBR sig",
   "lerux-blk: write round-trip ok",
 ]
 
 [boards.qemu_virt_aarch64_net]
 expects = [
-  "lerux-net: ready",
   "virtio-net: MAC",
+  "lerux-net: ready",
   "lerux-net: TX ok",
   "lerux-net: IPC ok",
   "lerux-net: apply static",
@@ -279,8 +284,8 @@ expects = [
 
 [boards.qemu_virt_riscv64_net]
 expects = [
-  "lerux-net: ready",
   "virtio-net: MAC",
+  "lerux-net: ready",
   "lerux-net: TX ok",
   "lerux-net: IPC ok",
   "lerux-net: apply static",
@@ -288,8 +293,8 @@ expects = [
 
 [boards.x86_64_generic_net]
 expects = [
-  "lerux-net: ready",
   "virtio-net: MAC",
+  "lerux-net: ready",
   "lerux-net: TX ok",
   "lerux-net: IPC ok",
   "lerux-net: apply static",
@@ -297,11 +302,11 @@ expects = [
 
 [boards.qemu_virt_aarch64_net_composed]
 expects = [
+  "virtio-net: MAC",
+  "lerux-net: ready",
   "lerux-supervisor: RTC",
   "lerux-supervisor: timer ok",
   "lerux-supervisor: init ok",
-  "lerux-net: ready",
-  "virtio-net: MAC",
   "lerux-net: TX ok",
   "lerux-net: IPC ok",
   "lerux-net: apply static",
@@ -309,35 +314,35 @@ expects = [
 
 [boards.qemu_virt_aarch64_ipc_composed]
 expects = [
+  "virtio-net: MAC",
+  "virtio-blk:",
+  "lerux-blk: ready",
+  "lerux-net: ready",
   "lerux-supervisor: RTC",
   "lerux-supervisor: timer ok",
   "lerux-supervisor: init ok",
-  "lerux-blk: ready",
-  "virtio-blk:",
   "lerux-blk: MBR sig",
   "lerux-blk: write round-trip ok",
-  "lerux-net: ready",
-  "virtio-net: MAC",
   "lerux-net: TX ok",
   "lerux-net: IPC ok",
 ]
 
 [boards.qemu_virt_aarch64_fetch]
-expects = ["lerux-net: ready", "virtio-net: MAC", "lerux-fetch: 200"]
+expects = ["virtio-net: MAC", "lerux-net: ready", "lerux-fetch: 200"]
 
 [boards.qemu_virt_aarch64_fetch_tls]
-expects = ["lerux-net: ready", "virtio-net: MAC", "lerux-tls: handshake ok", "lerux-fetch: 200"]
+expects = ["virtio-net: MAC", "lerux-net: ready", "lerux-tls: handshake ok", "lerux-fetch: 200"]
 
 [boards.qemu_virt_aarch64_request]
-expects = ["lerux-net: ready", "virtio-net: MAC", "lerux-tls: handshake ok", "lerux-http: fixture ok"]
+expects = ["virtio-net: MAC", "lerux-net: ready", "lerux-tls: handshake ok", "lerux-http: fixture ok"]
 
 [boards.qemu_virt_aarch64_program]
-expects = ["lerux-net: ready", "virtio-net: MAC", "lerux-tls: handshake ok", "lerux-prog: ran"]
+expects = ["virtio-net: MAC", "lerux-net: ready", "lerux-tls: handshake ok", "lerux-prog: ran"]
 
 [boards.qemu_virt_aarch64_agent_runtime]
 expects = [
-  "lerux-net: ready",
   "virtio-net: MAC",
+  "lerux-net: ready",
   "lerux-agent: chrome ok",
   "lerux-tls: handshake ok",
   "lerux-agent: runtime ok",
@@ -346,9 +351,9 @@ expects = [
 [boards.qemu_virt_aarch64_agent]
 timeout_secs = 90
 expects = [
-  "lerux-net: ready",
   "virtio-net: MAC",
   "lerux-fs: ready",
+  "lerux-net: ready",
   "lerux-agent: chrome ok",
   "lerux-agent: workspace ok",
   "lerux-tls: handshake ok",
@@ -357,8 +362,8 @@ expects = [
 
 [boards.qemu_virt_aarch64_fs]
 expects = [
-  "lerux-fs: ready",
   "virtio-blk:",
+  "lerux-fs: ready",
   "lerux-fs: v3 20k ok",
   "lerux-fs: v3 long path ok",
   "lerux-fs: round-trip ok",
@@ -366,16 +371,16 @@ expects = [
 
 [boards.qemu_virt_aarch64_fs_host]
 expects = [
-  "lerux-fs: ready",
   "virtio-blk:",
+  "lerux-fs: ready",
   "lerux-fs: host hello ok",
   "lerux-fs: round-trip ok",
 ]
 
 [boards.qemu_virt_aarch64_fs_fat]
 expects = [
-  "lerux-fs: ready (FAT16)",
   "virtio-blk:",
+  "lerux-fs: ready (FAT16)",
   "lerux-fs: fat lfn ok",
   "lerux-fs: fat hierarchy ok",
   "lerux-fs: fat multi-cluster ok",

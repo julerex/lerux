@@ -502,20 +502,25 @@ fn qmp_exec(
     Ok(())
 }
 
+/// First raw byte of `pattern` at or after `cursor`.
+///
+/// A spliced line can finish after a later line has already ended. Ordering
+/// by that last byte hides the inner line. The first byte is when the guest
+/// started printing the line.
 fn ordered_hit(raw: &str, pattern: &str, cursor: usize) -> Option<usize> {
-    let raw_end = raw
+    let raw_start = raw
         .get(cursor..)
-        .and_then(|suffix| suffix.find(pattern).map(|at| cursor + at + pattern.len()));
+        .and_then(|suffix| suffix.find(pattern).map(|at| cursor + at));
     let traced = collapse_traced(raw);
-    let collapsed_end = earliest_collapsed_end(&traced.text, &traced.src, pattern, cursor);
-    match (raw_end, collapsed_end) {
-        (Some(raw_end), Some(collapsed_end)) => Some(raw_end.min(collapsed_end)),
-        (Some(end), None) | (None, Some(end)) => Some(end),
+    let collapsed_start = earliest_collapsed_start(&traced.text, &traced.src, pattern, cursor);
+    match (raw_start, collapsed_start) {
+        (Some(raw_start), Some(collapsed_start)) => Some(raw_start.min(collapsed_start)),
+        (Some(start), None) | (None, Some(start)) => Some(start),
         (None, None) => None,
     }
 }
 
-fn earliest_collapsed_end(
+fn earliest_collapsed_start(
     text: &str,
     src: &[Option<usize>],
     pattern: &str,
@@ -530,10 +535,10 @@ fn earliest_collapsed_end(
         };
         let abs = from + at;
         let end = abs + pattern.len();
-        if let Some(raw_end) = real_raw_end(&src[abs..end])
-            && raw_end > cursor
+        if let Some(raw_start) = real_raw_start(&src[abs..end])
+            && raw_start >= cursor
         {
-            best = Some(best.map_or(raw_end, |have| have.min(raw_end)));
+            best = Some(best.map_or(raw_start, |have| have.min(raw_start)));
         }
         let Some(ch) = text[abs..].chars().next() else {
             break;
@@ -543,8 +548,8 @@ fn earliest_collapsed_end(
     best
 }
 
-fn real_raw_end(src: &[Option<usize>]) -> Option<usize> {
-    src.iter().copied().flatten().max().map(|at| at + 1)
+fn real_raw_start(src: &[Option<usize>]) -> Option<usize> {
+    src.iter().copied().flatten().min()
 }
 
 fn expect_ordered(
@@ -560,8 +565,8 @@ fn expect_ordered(
                 .lock()
                 .ok()
                 .and_then(|buf| ordered_hit(&buf, pattern, cursor));
-            if let Some(end) = hit {
-                cursor = end;
+            if let Some(start) = hit {
+                cursor = start + 1;
                 break;
             }
             if Instant::now() >= deadline {
@@ -1328,6 +1333,26 @@ INFO  [blk_server] lerux-blk: ready\r
 INFO  [net_server] lerux-net: ready\r
 ";
 
+    /// 2026-10-19 ipc-composed CI: the block line finishes before `AC`
+    /// resumes the MAC line (`virtio-net: M` / full blk line / `AC`).
+    /// `virtio-blk driver ready` is an earlier hit that must not satisfy
+    /// the device line once the MAC line has started.
+    const IPC_COMPOSED_CI_SNIP_2026_10_19: &str = "\
+INFO  [virtio_blk_driver] virtio-blk driver ready
+INFO  [virtio_net_driver] virtio-net driver ready
+INFO  [net_server] virtio-net: MINFO  [blk_server] virtio-blk: 8192 blocks x 512 bytes
+AC 52:54:00:12:34:56
+INFO  [blk_server] lerux-blk: ready
+INFO  [net_server] lerux-net: ready
+INFO  [supervisor] lerux-supervisor: RTC 2026-10-19
+INFO  [supervisor] lerux-supervisor: timer ok
+INFO  [supervisor] lerux-supervisor: init ok
+INFO  [blk_server] lerux-blk: MBR sig 0x55 0xaa
+INFO  [blk_client] lerux-blk: write round-trip ok
+INFO  [net_server::net] lerux-net: TX ok
+INFO  [net_client] lerux-net: IPC ok
+";
+
     /// 2026-08-20 ipc-composed CI: earlier split prefix must not steal the
     /// `net: MAC` leftover from `virtio-`.
     const IPC_COMPOSED_CI_SNIP_2026_08_20: &str = "\
@@ -1521,6 +1546,40 @@ INFO  [crash_demo] crash-demo: about to fault
         assert!(
             result.is_err(),
             "spliced token before the cursor must not match"
+        );
+    }
+
+    #[test]
+    fn inner_blk_line_follows_the_mac_line_that_started_first() {
+        assert!(
+            !IPC_COMPOSED_CI_SNIP_2026_10_19.contains("virtio-net: MAC"),
+            "fixture must reproduce the raw split"
+        );
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let spec =
+            crate::smoke_expects::smoke_test_for_board(&root, "qemu_virt_aarch64_ipc_composed")
+                .expect("ipc-composed expects");
+        let output = std::sync::Arc::new(std::sync::Mutex::new(
+            IPC_COMPOSED_CI_SNIP_2026_10_19.to_string(),
+        ));
+        expect_ordered(&output, &spec.expects, 0).expect("block line nested inside the MAC line");
+    }
+
+    #[test]
+    fn blk_line_nested_inside_mac_is_not_the_earlier_line() {
+        let capture = "\
+INFO  [net_server] virtio-net: MINFO  [blk_server] virtio-blk: 8192 blocks x 512 bytes
+AC 52:54:00:12:34:56
+";
+        let output = std::sync::Arc::new(std::sync::Mutex::new(capture.to_string()));
+        let result = expect_ordered(
+            &output,
+            &["virtio-blk:".to_string(), "virtio-net: MAC".to_string()],
+            0,
+        );
+        assert!(
+            result.is_err(),
+            "a block line that starts after the MAC line is not earlier"
         );
     }
 

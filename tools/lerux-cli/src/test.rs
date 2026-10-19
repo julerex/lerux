@@ -1313,6 +1313,72 @@ INFO  [crash_demo] crash-demo: about to fault
     }
 
     #[test]
+    fn board_expects_match_guest_serial_order() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let cases = [
+            (
+                "qemu_virt_aarch64_blk",
+                "virtio-blk: 8192\nlerux-blk: ready\nlerux-blk: MBR sig\nlerux-blk: write round-trip ok\n",
+            ),
+            (
+                "qemu_virt_aarch64_blk_composed",
+                "virtio-blk: 8192\nlerux-blk: ready\nlerux-supervisor: RTC\nlerux-supervisor: timer ok\nlerux-supervisor: init ok\nlerux-blk: MBR sig\nlerux-blk: write round-trip ok\n",
+            ),
+            (
+                "qemu_virt_aarch64_net",
+                "virtio-net: MAC\nlerux-net: ready\nlerux-net: TX ok\nlerux-net: IPC ok\nlerux-net: apply static\n",
+            ),
+            (
+                "qemu_virt_aarch64_net_composed",
+                "virtio-net: MAC\nlerux-net: ready\nlerux-supervisor: RTC\nlerux-supervisor: timer ok\nlerux-supervisor: init ok\nlerux-net: TX ok\nlerux-net: IPC ok\nlerux-net: apply static\n",
+            ),
+            (
+                "qemu_virt_aarch64_ipc_composed",
+                "virtio-net: MAC\nvirtio-blk: 8192\nlerux-blk: ready\nlerux-net: ready\nlerux-supervisor: RTC\nlerux-supervisor: timer ok\nlerux-supervisor: init ok\nlerux-blk: MBR sig\nlerux-blk: write round-trip ok\nlerux-net: TX ok\nlerux-net: IPC ok\n",
+            ),
+            (
+                "qemu_virt_aarch64_fs",
+                "virtio-blk: 8192\nlerux-fs: ready\nlerux-fs: v3 20k ok\nlerux-fs: v3 long path ok\nlerux-fs: round-trip ok\n",
+            ),
+            (
+                "qemu_virt_aarch64_agent",
+                "virtio-net: MAC\nlerux-fs: ready\nlerux-net: ready\nlerux-agent: chrome ok\nlerux-agent: workspace ok\nlerux-tls: handshake ok\nlerux-agent: tools ok\n",
+            ),
+            (
+                "qemu_virt_aarch64_isolation",
+                "lerux-fs: ready\nlerux-debug: ready\ncrash-demo: about to fault\nlerux-debug: crash-demo stopped\nlerux-isolation: notified survivor\nlerux-fs: round-trip ok\nlerux-isolation: fs-server survived untrusted PD crash\n",
+            ),
+            (
+                "qemu_virt_aarch64_browser",
+                "virtio-net: MAC\nlerux-net: ready\nlerux-display: ramfb ok\nlerux-tls: handshake ok\nlerux-web: paint ok\nlerux-browser: paint ok\n",
+            ),
+        ];
+        for (board, capture) in cases {
+            let spec = crate::smoke_expects::smoke_test_for_board(&root, board)
+                .unwrap_or_else(|err| panic!("{board}: {err}"));
+            let output = std::sync::Arc::new(std::sync::Mutex::new(capture.to_string()));
+            expect_ordered(&output, &spec.expects, 0)
+                .unwrap_or_else(|err| panic!("{board}: {err}"));
+        }
+    }
+
+    #[test]
+    fn blk_ready_before_device_line_fails() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let spec = crate::smoke_expects::smoke_test_for_board(&root, "qemu_virt_aarch64_blk")
+            .expect("blk expects");
+        let output = std::sync::Arc::new(std::sync::Mutex::new(
+            "lerux-blk: ready\nvirtio-blk: 8192\nlerux-blk: MBR sig\nlerux-blk: write round-trip ok\n"
+                .to_string(),
+        ));
+        let result = expect_ordered(&output, &spec.expects, 0);
+        assert!(
+            result.is_err(),
+            "a ready line before the device line is not guest order"
+        );
+    }
+
+    #[test]
     fn script_step_ignores_expect_before_send_mark() {
         let output = std::sync::Arc::new(std::sync::Mutex::new("only-before\n".to_string()));
         let steps = [ScriptStep {

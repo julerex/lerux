@@ -119,7 +119,16 @@ impl Handler for HandlerImpl {
         if channels.contains(self.irq) {
             self.drain_rx();
             self.drain_tx();
+            // The PL011 raises the receive interrupt when the FIFO count
+            // crosses the trigger. It does not raise it again while the count
+            // stays above that trigger. A byte that arrives after the drain
+            // and before the interrupt clear sits in the FIFO with the
+            // interrupt already cleared, and the rest of the line never
+            // wakes the driver. `write NOTE.TXT hello` is longer than the
+            // 16-byte FIFO, so drain once more after the clear.
             self.uart.handle_interrupt();
+            self.drain_rx();
+            self.drain_tx();
             self.irq.irq_ack().expect("ack the serial interrupt");
         }
         if channels.contains(self.tx_ch) {

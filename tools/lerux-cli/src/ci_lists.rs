@@ -12,10 +12,7 @@ use crate::board::load_boards;
 
 const LOCAL_ONLY_BOARDS: &[&str] = &[
     "qemu_virt_aarch64_debug",
-    "qemu_virt_aarch64_fs_fat",
-    "qemu_virt_aarch64_fs_host",
     "qemu_virt_riscv64_debug",
-    "qemu_virt_riscv64_isolation",
     "x86_64_generic_debug",
 ];
 
@@ -225,22 +222,23 @@ mod tests {
     }
 
     #[test]
-    fn include_list_is_53_jobs() {
+    fn include_list_matches_docs() {
         let census = load_census(&root()).expect("load smoke lists");
         let include_len = census.include.len();
-        println!("include length is {include_len}");
-        for count in &census.ci_doc_counts {
-            println!("docs/ci.md matches include length {count}");
-        }
-        assert_eq!(include_len, 53, "workflow include length");
         assert!(
-            census.ci_doc_counts.iter().all(|count| *count == 53),
-            "docs/ci.md counts {:?}",
+            census
+                .ci_doc_counts
+                .iter()
+                .all(|count| *count == include_len),
+            "docs/ci.md counts {:?} vs include {include_len}",
             census.ci_doc_counts
         );
         assert!(
-            census.readme_counts.iter().all(|count| *count == 53),
-            "README.md counts {:?}",
+            census
+                .readme_counts
+                .iter()
+                .all(|count| *count == include_len),
+            "README.md counts {:?} vs include {include_len}",
             census.readme_counts
         );
         check_census(&census).expect("smoke lists match");
@@ -251,17 +249,23 @@ mod tests {
         let repo = root();
         let mut census = load_census(&repo).expect("load smoke lists");
         let readme = fs::read_to_string(repo.join("README.md")).expect("read README.md");
-        let readme = readme.replacen("**53 smoke**", "**52 smoke**", 1);
+        let include_len = census.include.len();
+        let wrong = include_len.saturating_sub(1);
+        let readme = readme.replacen(
+            &format!("**{include_len} smoke**"),
+            &format!("**{wrong} smoke**"),
+            1,
+        );
         assert!(
-            readme.contains("**52 smoke**"),
-            "README.md fixture did not set the smoke count to 52"
+            readme.contains(&format!("**{wrong} smoke**")),
+            "README.md fixture did not adjust the smoke count"
         );
         census.readme_counts = readme_smoke_counts(&readme).expect("parse README.md fixture");
-        assert_eq!(census.readme_counts, vec![52]);
-        let err = check_census(&census).expect_err("README.md count 52");
+        assert_eq!(census.readme_counts, vec![wrong]);
+        let err = check_census(&census).expect_err("README.md count mismatch");
         assert_eq!(
             err.to_string(),
-            "README.md count 52 does not match workflow include length 53"
+            format!("README.md count {wrong} does not match workflow include length {include_len}")
         );
     }
 

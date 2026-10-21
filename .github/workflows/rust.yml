@@ -278,7 +278,7 @@ jobs:
         include:
           - id: aarch64
             board: qemu_virt_aarch64
-            command: just test
+            command: BOARD=qemu_virt_aarch64 just test
           - id: x86_64
             board: x86_64_generic
             command: BOARD=x86_64_generic just test
@@ -288,18 +288,15 @@ jobs:
           - id: virtio
             board: qemu_virt_aarch64_virtio
             command: just disk-img && just test-virtio
-          - id: echo
-            board: qemu_virt_aarch64_echo
-            command: just test-echo
-          - id: serial-sddf
-            board: qemu_virt_aarch64_serial_sddf
-            command: just test-serial-sddf
           - id: cothread
             board: qemu_virt_aarch64_cothread
             command: just test-cothread
+          - id: serial-sddf
+            board: qemu_virt_aarch64_serial_sddf
+            command: just test-serial-sddf
           - id: fs-sddf
             board: qemu_virt_aarch64_fs_sddf
-            command: just test-fs-sddf
+            command: just test
           - id: net-sddf
             board: qemu_virt_aarch64_net_sddf
             command: just test-net-sddf
@@ -318,45 +315,15 @@ jobs:
           - id: program-sddf
             board: qemu_virt_aarch64_program_sddf
             command: just test-program-sddf
-          - id: display
-            board: qemu_virt_aarch64_display
-            command: just test-display
-          - id: x86-echo
-            board: x86_64_generic_echo
-            command: just test-x86-echo
-          - id: x86-console
-            board: x86_64_generic_console
-            command: just test-x86-console
-          - id: x86-usb-kbd
-            board: x86_64_generic_usb_kbd
-            command: just test-x86-usb-kbd
-          - id: riscv-echo
-            board: qemu_virt_riscv64_echo
-            command: just test-riscv-echo
+          - id: html
+            board: qemu_virt_aarch64_html
+            command: just test-html
           - id: riscv-virtio
             board: qemu_virt_riscv64_virtio
             command: just disk-img && just test-riscv-virtio
-          - id: init
-            board: qemu_virt_aarch64_init
-            command: just test-init
-          - id: init-riscv
-            board: qemu_virt_riscv64_init
-            command: just test-init-riscv
-          - id: init-x86
-            board: x86_64_generic_init
-            command: just test-init-x86
-          - id: composed
-            board: qemu_virt_aarch64_composed
-            command: just disk-img && just test-composed
-          - id: blk-composed
-            board: qemu_virt_aarch64_blk_composed
-            command: just disk-img && just test-blk-composed
           - id: http
             board: qemu_virt_aarch64_http
             command: just test-http
-          - id: http-composed
-            board: qemu_virt_aarch64_http_composed
-            command: just test-http-composed
           - id: x86-http
             board: x86_64_generic_http
             command: just test-x86-http
@@ -366,75 +333,6 @@ jobs:
           - id: x86-virtio
             board: x86_64_generic_virtio
             command: just disk-img && just test-x86-virtio
-          - id: blk
-            board: qemu_virt_aarch64_blk
-            command: just test-blk
-          - id: riscv-blk
-            board: qemu_virt_riscv64_blk
-            command: just test-riscv-blk
-          - id: x86-blk
-            board: x86_64_generic_blk
-            command: just test-x86-blk
-          - id: net
-            board: qemu_virt_aarch64_net
-            command: just test-net
-          - id: fetch
-            board: qemu_virt_aarch64_fetch
-            command: just test-fetch
-          - id: fetch-tls
-            board: qemu_virt_aarch64_fetch_tls
-            command: just test-fetch-tls
-          - id: request
-            board: qemu_virt_aarch64_request
-            command: just test-request
-          - id: program
-            board: qemu_virt_aarch64_program
-            command: just test-program
-          - id: html
-            board: qemu_virt_aarch64_html
-            command: just test-html
-          - id: paint
-            board: qemu_virt_aarch64_paint
-            command: just test-paint
-          - id: browser
-            board: qemu_virt_aarch64_browser
-            command: just test-browser
-          - id: agent-runtime
-            board: qemu_virt_aarch64_agent_runtime
-            command: just test-agent-runtime
-          - id: agent
-            board: qemu_virt_aarch64_agent
-            command: just test-agent
-          - id: interactive
-            board: qemu_virt_aarch64_interactive
-            command: just disk-img && just test-interactive
-          - id: fs
-            board: qemu_virt_aarch64_fs
-            command: just disk-img && just test-fs
-          - id: isolation
-            board: qemu_virt_aarch64_isolation
-            command: just disk-img && just test-isolation
-          - id: net-composed
-            board: qemu_virt_aarch64_net_composed
-            command: just test-net-composed
-          - id: ipc-composed
-            board: qemu_virt_aarch64_ipc_composed
-            command: just disk-img && just test-ipc-composed
-          - id: workstation
-            board: qemu_virt_aarch64_workstation
-            command: just disk-img && just test-workstation
-          - id: workstation-riscv
-            board: qemu_virt_riscv64_workstation
-            command: just disk-img && just test-workstation-riscv
-          - id: workstation-x86
-            board: x86_64_generic_workstation
-            command: just disk-img && just test-workstation-x86
-          - id: riscv-net
-            board: qemu_virt_riscv64_net
-            command: just test-riscv-net
-          - id: x86-net
-            board: x86_64_generic_net
-            command: just test-x86-net
     steps:
       - uses: actions/checkout@v4
 
@@ -483,23 +381,6 @@ jobs:
           restore-keys: |
             board-${{ matrix.id }}-
 
-      - name: Download SP804 QEMU
-        if: matrix.id == 'init' || matrix.id == 'composed' || matrix.id == 'blk-composed' || matrix.id == 'http-composed' || matrix.id == 'net-composed' || matrix.id == 'ipc-composed' || matrix.id == 'workstation' || matrix.id == 'interactive'
-        uses: actions/download-artifact@v4
-        with:
-          name: qemu-sp804
-          path: deps/toolchains/qemu-sp804
-
-      - name: Ensure SP804 QEMU executable
-        if: matrix.id == 'init' || matrix.id == 'composed' || matrix.id == 'blk-composed' || matrix.id == 'http-composed' || matrix.id == 'net-composed' || matrix.id == 'ipc-composed' || matrix.id == 'workstation' || matrix.id == 'interactive'
-        run: |
-          set -euo pipefail
-          qemu="deps/toolchains/qemu-sp804/bin/qemu-system-aarch64"
-          if [[ ! -f "${qemu}" ]]; then
-            echo "error: missing ${qemu}; sdk job should have uploaded the SP804 QEMU artifact" >&2
-            exit 1
-          fi
-          chmod +x "${qemu}"
 
       - name: Smoke test (${{ matrix.id }})
         id: smoke
@@ -535,80 +416,3 @@ jobs:
         with:
           path: build/${{ matrix.board }}
           key: board-${{ matrix.id }}-${{ hashFiles('Cargo.lock') }}
-  # Phase 40: build reference package ELF(s) and upload as CI artifacts.
-  package:
-    needs: sdk
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: edit
-            pd: edit
-            board: qemu_virt_aarch64_workstation
-          - name: chat-client
-            pd: chat-client
-            board: qemu_virt_aarch64_workstation
-          - name: http-file-browser
-            pd: http-file-browser
-            board: qemu_virt_aarch64_workstation
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build dev image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: docker/Dockerfile
-          tags: lerux-dev
-          load: true
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: sdk
-          path: sdk-bundle
-
-      - name: Install SDK from artifact
-        run: |
-          set -euo pipefail
-          mkdir -p deps/workspace/microkit/release
-          cp -a sdk-bundle/microkit-sdk deps/workspace/microkit/release/
-          sdk="deps/workspace/microkit/release/$(basename sdk-bundle/microkit-sdk)"
-          chmod -R a+rX "${sdk}"
-          find "${sdk}/bin" -type f -exec chmod a+x {} +
-          echo "/work/${sdk}" > deps/.sdk-path
-
-      - name: Restore shared Cargo target cache
-        uses: actions/cache/restore@v4
-        with:
-          path: build/target
-          key: cargo-target-${{ hashFiles('Cargo.lock') }}
-          restore-keys: |
-            cargo-target-
-
-      - name: Build package ELF
-        run: |
-          docker run --rm -v "${{ github.workspace }}:/work" -w /work lerux-dev \
-            bash -c 'set -euo pipefail
-              sdk="$(tr -d "\n" < deps/.sdk-path)"
-              chmod -R a+rX "${sdk}"
-              find "${sdk}/bin" -type f -exec chmod a+x {} +
-              cargo run -p lerux-cli -- package build ${{ matrix.name }} --board ${{ matrix.board }}
-              cargo run -p lerux-cli -- package pin ${{ matrix.name }} --board ${{ matrix.board }} --git-ref "${{ github.sha }}"
-            '
-          sudo chown -R "$(id -u):$(id -g)" build support deps
-
-      - name: Upload package ELF
-        uses: actions/upload-artifact@v4
-        with:
-          name: package-${{ matrix.name }}-${{ matrix.board }}
-          path: |
-            build/${{ matrix.board }}/${{ matrix.pd }}.elf
-            support/package-pins.toml
-          if-no-files-found: error

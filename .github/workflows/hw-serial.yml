@@ -16,12 +16,9 @@ on:
       board:
         description: Hardware board name
         required: true
-        default: rpi4b_4gb_workstation
+        default: rpi4b_4gb
         type: choice
         options:
-          - rpi4b_4gb_workstation
-          - rpi4b_4gb_net
-          - rpi4b_4gb_blk
           - rpi4b_4gb
 
 concurrency:

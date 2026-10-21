@@ -16,11 +16,7 @@ use serde::Serialize;
 
 use crate::{build, smoke_expects, test::SmokeTest};
 
-const BENCH_BOARDS: &[&str] = &[
-    "qemu_virt_aarch64_bench_echo",
-    "qemu_virt_aarch64_bench_blk",
-    "qemu_virt_aarch64_bench_net",
-];
+const BENCH_BOARDS: &[&str] = &[];
 
 #[derive(Debug, Serialize)]
 struct BenchReport {

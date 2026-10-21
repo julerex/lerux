@@ -13,10 +13,8 @@ mod deploy;
 mod disk_img;
 mod fetch;
 mod fetch_sddf;
-mod fs_host;
 mod fs_sddf;
 mod gpu_sddf;
-mod grok_one;
 mod http_one;
 mod https_one;
 mod hw_lock;
@@ -26,7 +24,6 @@ mod install;
 mod iso;
 mod libclang;
 mod net_sddf;
-mod package;
 mod path;
 mod process;
 mod profile;
@@ -181,11 +178,6 @@ enum Commands {
         #[arg(default_value_t = 8443)]
         port: u16,
     },
-    /// Phase 77: scripted HTTPS completions stub (not live xAI).
-    GrokOne {
-        #[arg(default_value_t = 8444)]
-        port: u16,
-    },
     /// Probe whether something is listening on the TCP echo port.
     TcpEchoProbe {
         #[arg(default_value_t = 18080)]
@@ -214,20 +206,15 @@ enum Commands {
         #[command(subcommand)]
         command: ProgCommands,
     },
-    /// Package commands (PD + interface-types pin + optional profile fragment).
-    Package {
-        #[command(subcommand)]
-        command: PackageCommands,
-    },
     /// Copy board boot images onto a mounted FAT boot directory.
     ///
     /// RPi4: `loader.img` + U-Boot helper. x86 PC: also `sel4_32.elf` + Multiboot 2 snippets.
     ///
-    /// Example: `lerux deploy --board rpi4b_4gb_workstation --dest /media/$USER/boot`
+    /// Example: `lerux deploy --board rpi4b_4gb --dest /media/$USER/boot`
     ///
     /// Phase 60 Track C: verifies SHA-256 sidecars before copy unless `--no-verify`.
     Deploy {
-        #[arg(long, default_value = "rpi4b_4gb_workstation")]
+        #[arg(long, default_value = "rpi4b_4gb")]
         board: String,
         /// Absolute path to a mounted FAT boot directory (must exist; no `..` segments).
         #[arg(long, short = 'd')]
@@ -251,10 +238,9 @@ enum Commands {
     },
     /// Build a hybrid BIOS+UEFI ISO that Multiboot 2-boots an x86 board.
     ///
-    /// Default board is `pc_z97_d3h` (Gigabyte Z97-D3H VGA shell + COM1).
-    /// Writes `build/<board>/lerux.iso`. Does not write a disk.
+    /// Writes `build/<board>/lerux.iso` for an x86 board. Does not write a disk.
     Iso {
-        #[arg(long, default_value = "pc_z97_d3h")]
+        #[arg(long, default_value = "x86_64_generic")]
         board: String,
         #[arg(long, default_value = "build")]
         build_dir: String,
@@ -329,23 +315,6 @@ enum Commands {
         #[command(subcommand)]
         command: ConfigCommands,
     },
-    /// Phase 63: seed a host directory into LERUXFS2 `/host/` (QEMU inject).
-    FsHost {
-        #[command(subcommand)]
-        command: FsHostCommands,
-    },
-}
-
-#[derive(Subcommand)]
-enum FsHostCommands {
-    /// Copy regular files from DIR into `/host/` on the disk image.
-    Seed {
-        #[arg(long)]
-        dir: PathBuf,
-        /// Override path (default: support/disk.img).
-        #[arg(long)]
-        disk: Option<PathBuf>,
-    },
 }
 
 #[derive(Subcommand)]
@@ -354,9 +323,8 @@ enum ConfigCommands {
     Schema,
     /// Print QEMU default key=value pairs.
     Defaults,
-    /// Format `support/disk.img` with LERUXFS2 and seed default config files.
+    /// Ensure support/disk.img exists (raw MBR; no LERUXFS).
     SeedDisk {
-        /// Override path (default: support/disk.img under repo root).
         #[arg(long)]
         disk: Option<PathBuf>,
     },
@@ -436,79 +404,6 @@ enum ProgCommands {
         /// Rust source. Default: `support/prog/smoke.rs`.
         #[arg(long)]
         src: Option<PathBuf>,
-    },
-}
-
-#[derive(Subcommand)]
-enum PackageCommands {
-    /// List packages under support/packages/.
-    List,
-    /// Substring search over name / pd / description (Phase 55).
-    Search { query: String },
-    /// Show one package manifest (PD, interface-types, fragment).
-    Show { name: String },
-    /// Merge a package fragment into a profile and rebuild loader.img.
-    Install {
-        name: String,
-        /// Target profile under support/profiles/.
-        #[arg(long, default_value = crate::package::DEFAULT_INSTALL_PROFILE)]
-        profile: String,
-        #[arg(long)]
-        board: Option<String>,
-        #[arg(long, default_value = "build")]
-        build_dir: String,
-        #[arg(long, default_value = "debug")]
-        config: String,
-    },
-    /// Remove package fragment PDs/channels from a profile.
-    Remove {
-        name: String,
-        #[arg(long, default_value = "workstation")]
-        profile: String,
-    },
-    /// Build the package PD ELF for a board.
-    Build {
-        name: String,
-        #[arg(long, default_value = "qemu_virt_aarch64_workstation")]
-        board: String,
-        #[arg(long, default_value = "build")]
-        build_dir: String,
-        #[arg(long, default_value = "debug")]
-        config: String,
-    },
-    /// Record sha256 pin for a built package ELF into support/package-pins.toml.
-    Pin {
-        name: String,
-        #[arg(long, default_value = "qemu_virt_aarch64_workstation")]
-        board: String,
-        #[arg(long, default_value = "build")]
-        build_dir: String,
-        /// Optional git commit / tag recorded with the pin.
-        #[arg(long)]
-        git_ref: Option<String>,
-    },
-    /// Compare a built ELF against the committed pin.
-    Diff {
-        name: String,
-        #[arg(long, default_value = "qemu_virt_aarch64_workstation")]
-        board: String,
-        #[arg(long, default_value = "build")]
-        build_dir: String,
-    },
-    /// Rebuild + re-pin; print SHA256 / interface_types delta (Phase 55 rolling pins).
-    Upgrade {
-        /// Package name; omit with `--all` to upgrade every pin for the board.
-        name: Option<String>,
-        #[arg(long, default_value_t = false)]
-        all: bool,
-        #[arg(long, default_value = "qemu_virt_aarch64_workstation")]
-        board: String,
-        #[arg(long, default_value = "build")]
-        build_dir: String,
-        #[arg(long, default_value = "debug")]
-        config: String,
-        #[arg(long)]
-        git_ref: Option<String>,
     },
 }
 
@@ -613,7 +508,6 @@ fn main() -> Result<()> {
         Commands::TcpEcho { port } => tcp_echo::tcp_echo(port)?,
         Commands::HttpOne { port } => http_one::http_one(port)?,
         Commands::HttpsOne { port } => https_one::https_one(port)?,
-        Commands::GrokOne { port } => grok_one::grok_one(port)?,
         Commands::TcpEchoProbe { port } => {
             let code = if tcp_echo::port_is_listening(port) {
                 0
@@ -777,101 +671,6 @@ fn main() -> Result<()> {
                 prog::pack_cli(&key, &out, src.as_deref())?;
             }
         },
-        Commands::Package { command } => {
-            let packages = crate::package::load_packages(&root)?;
-            match command {
-                PackageCommands::List => crate::package::list_packages(&packages),
-                PackageCommands::Search { query } => {
-                    crate::package::search_packages(&packages, &query);
-                }
-                PackageCommands::Show { name } => {
-                    let package = crate::package::get_package(&packages, &name)?;
-                    crate::package::show_package(&name, package);
-                }
-                PackageCommands::Install {
-                    name,
-                    profile,
-                    board,
-                    build_dir,
-                    config,
-                } => {
-                    crate::package::install_package(
-                        &root,
-                        &packages,
-                        &name,
-                        &profile,
-                        board.as_deref(),
-                        &build_dir,
-                        &config,
-                    )?;
-                }
-                PackageCommands::Remove { name, profile } => {
-                    crate::package::remove_package(&root, &packages, &name, &profile)?;
-                }
-                PackageCommands::Build {
-                    name,
-                    board,
-                    build_dir,
-                    config,
-                } => {
-                    crate::package::build_package(
-                        &root, &packages, &name, &board, &build_dir, &config,
-                    )?;
-                }
-                PackageCommands::Pin {
-                    name,
-                    board,
-                    build_dir,
-                    git_ref,
-                } => {
-                    crate::package::pin_package(
-                        &root,
-                        &packages,
-                        &name,
-                        &board,
-                        &build_dir,
-                        git_ref.as_deref(),
-                    )?;
-                }
-                PackageCommands::Diff {
-                    name,
-                    board,
-                    build_dir,
-                } => {
-                    crate::package::diff_package_pins(&root, &name, &board, &build_dir)?;
-                }
-                PackageCommands::Upgrade {
-                    name,
-                    all,
-                    board,
-                    build_dir,
-                    config,
-                    git_ref,
-                } => {
-                    if all {
-                        crate::package::upgrade_all(
-                            &root,
-                            &packages,
-                            &board,
-                            &build_dir,
-                            &config,
-                            git_ref.as_deref(),
-                        )?;
-                    } else {
-                        let name = name.context("package name required (or pass --all)")?;
-                        crate::package::upgrade_package(
-                            &root,
-                            &packages,
-                            &name,
-                            &board,
-                            &build_dir,
-                            &config,
-                            git_ref.as_deref(),
-                        )?;
-                    }
-                }
-            }
-        }
         Commands::Deploy {
             board,
             dest,
@@ -969,11 +768,6 @@ fn main() -> Result<()> {
             ConfigCommands::Defaults => crate::config_cmd::print_defaults(),
             ConfigCommands::SeedDisk { disk } => {
                 crate::config_cmd::seed_disk(&root, disk.as_deref())?;
-            }
-        },
-        Commands::FsHost { command } => match command {
-            FsHostCommands::Seed { dir, disk } => {
-                crate::fs_host::seed_host_dir(&root, &dir, disk.as_deref())?;
             }
         },
     }

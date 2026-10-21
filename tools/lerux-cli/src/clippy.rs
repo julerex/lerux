@@ -31,8 +31,6 @@ const SHARED_CRATES: &[&str] = &[
     "lerux-machine",
     "lerux-cothread",
     "lerux-posix",
-    "lerux-service-async",
-    "lerux-fat",
     "lerux-driver-protocols",
     "lerux-tls",
     "lerux-html",

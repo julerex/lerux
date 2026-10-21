@@ -13,9 +13,6 @@ mod linebuf;
 #[cfg(feature = "serial")]
 pub mod serial;
 
-#[cfg(feature = "server")]
-pub mod server;
-
 pub mod debug;
 
 /// Filter out noisy `sel4_sys` targets (matches rust-sel4 http-server example).

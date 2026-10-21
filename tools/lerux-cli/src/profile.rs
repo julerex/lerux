@@ -1,8 +1,4 @@
-use std::{
-    collections::BTreeMap,
-    fs,
-    path::{Path, PathBuf},
-};
+use std::{collections::BTreeMap, fs, path::Path};
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -539,36 +535,6 @@ pub fn diff_profiles_with_sdf(
         crate::system::sdf_diff_summary(a_name, &sdf_a, b_name, &sdf_b)
     );
     Ok(())
-}
-
-/// Path to a profile TOML under `support/profiles/`.
-pub fn profile_path(root: &Path, name: &str) -> PathBuf {
-    root.join("support/profiles").join(format!("{name}.toml"))
-}
-
-/// Whether the on-disk profile source sets `extends`.
-///
-/// The composed profile does not keep that field, so install has to read the file.
-pub fn profile_source_extends(root: &Path, name: &str) -> Result<bool> {
-    let path = profile_path(root, name);
-    let contents = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
-    let file: ProfileFile =
-        toml::from_str(&contents).with_context(|| format!("parse {}", path.display()))?;
-    Ok(file.extends.is_some())
-}
-
-/// Rewrite a profile file (Phase 55 install/remove). Preserves no free comments.
-pub fn save_profile(root: &Path, name: &str, profile: &Profile) -> Result<PathBuf> {
-    ensure_channels_valid(&profile.channel, &profile.pds, &format!("profile {name}"))?;
-    let path = profile_path(root, name);
-    let body = toml::to_string_pretty(profile).context("serialize profile")?;
-    let header = format!(
-        "# Profile `{name}` — managed by `lerux package install|remove` (Phase 55).\n\
-         # Template + default_board are authoritative; channels are the IPC source of truth.\n\n"
-    );
-    fs::write(&path, format!("{header}{body}"))
-        .with_context(|| format!("write {}", path.display()))?;
-    Ok(path)
 }
 
 /// Order-independent key for channel equality (ends sorted by pd:id).

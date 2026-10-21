@@ -7,22 +7,19 @@ GitHub Actions workflow: [`.github/workflows/rust.yml`](../.github/workflows/rus
 1. **check** — `just check` (`cargo fmt --all --check` + clippy on host crates; no SDK).
 2. **sdk** — Docker image, fetch sources, build Microkit SDK (cached), **prebuild patched SP804 QEMU** (cached), upload SDK artifact.
 3. **check-pd** — `just check-pd` (cross-target clippy on PD + shared userspace crates; needs SDK artifact).
-4. **smoke** — 53 parallel matrix jobs; each restores SDK artifact, per-job `build/` cache, and SP804 QEMU (init/composed/blk-composed/http-composed/net-composed/ipc-composed/workstation/interactive only; init-riscv/init-x86 use stock QEMU). Serial captures land in `build/smoke-logs/` and upload as `smoke-serial-<id>` (Phase 57).
-5. **package** — Phase 40: build `edit` / `chat-client` / `http-file-browser` ELFs for workstation, pin sha256, upload artifacts.
+4. **smoke** — 19 parallel matrix jobs; each restores SDK artifact and per-job `build/` cache. Serial captures land in `build/smoke-logs/` and upload as `smoke-serial-<id>` (Phase 57).
 
 ```mermaid
 flowchart LR
   check[check job]
   sdk[sdk job]
   checkPd[check-pd job]
-  smoke[smoke matrix x53]
-  package[package ELF artifacts]
+  smoke[smoke matrix x19]
   sdk --> checkPd
   sdk --> smoke
-  sdk --> package
 ```
 
-Local mirror: `just check` (format + clippy for `lerux-cli` and `lerux-interface-types`, plus `lerux profile check-qos`); `just check-pd` after `just build-sdk` (or `just check-all` for both).
+Local mirror: `just check` (format + clippy for host crates, plus `lerux profile check-qos`); `just check-pd` after `just build-sdk` (or `just check-all` for both).
 
 `just test-all` runs every board with `ci = true`. The jobs in the table below are the workflow `include` list. Nothing generates one list from the other, and nothing checks that the count on this page still matches that list. A new board name is compiled with `--features board-<name>` only when the PD crate declares that feature.
 
@@ -34,59 +31,25 @@ Local mirror: `just check` (format + clippy for `lerux-cli` and `lerux-interface
 
 | Job ID | Command | Notes |
 |--------|---------|-------|
-| `aarch64` | `just test` | Serial hello on virt |
+| `aarch64` | `BOARD=qemu_virt_aarch64 just test` | Serial hello on virt |
 | `x86_64` | `BOARD=x86_64_generic just test` | COM1 serial |
 | `riscv64` | `just test-riscv` | NS16550 MMIO |
 | `virtio` | `just disk-img && just test-virtio` | aarch64 virtio blk/net + TCP RX |
-| `echo` | `just test-echo` | aarch64 echo IPC |
-| `serial-sddf` | `just test-serial-sddf` | aarch64 serial driver, transmit virtualiser, receive virtualiser, and one client |
 | `cothread` | `just test-cothread` | aarch64 worker blocks on a Microkit notification and resumes |
-| `fs-sddf` | `just test-fs-sddf` | aarch64 block driver, serial driver, block and serial virtualisers, File Allocation Table server, and shell |
+| `serial-sddf` | `just test-serial-sddf` | aarch64 serial driver, transmit virtualiser, receive virtualiser, and one client |
+| `fs-sddf` | `just test` | aarch64 block driver, serial driver, block and serial virtualisers, File Allocation Table server, and shell. Bare `just test` is this smoke. |
 | `net-sddf` | `just test-net-sddf` | aarch64 network driver, serial driver, network and serial virtualisers, one copier, and a smoltcp client |
 | `fetch-sddf` | `just test-fetch-sddf` | aarch64 filesystem and network roles; the shell fetches the https-one fixture |
 | `web-sddf` | `just test-web-sddf` | aarch64 filesystem and network roles; the shell serves the seeded hostname file |
 | `browser-sddf` | `just test-browser-sddf` | aarch64 filesystem, network, and graphics roles; the shell prints the fixture title and a pixel pattern |
 | `agent-sddf` | `just test-agent-sddf` | aarch64 filesystem and network roles; grok asks the agent to write and read a file |
 | `program-sddf` | `just test-program-sddf` | aarch64 filesystem and network roles; a signed WebAssembly module reads the hostname and allocates a socket |
-| `display` | `just test-display` | Phase 72 ramfb + display-server (headless `-nographic`) |
-| `x86-echo` | `just test-x86-echo` | x86 echo IPC |
-| `x86-console` | `just test-x86-console` | Phase 82: VGA text shell; QMP injects `echo hi` on PS/2 |
-| `x86-usb-kbd` | `just test-x86-usb-kbd` | Same shell; QMP types `echo hi` on a USB boot keyboard |
-| `riscv-echo` | `just test-riscv-echo` | RISC-V echo IPC |
+| `html` | `just test-html` | Phase 74: lerux-html subset parser (`lerux-html: nodes=8`) |
 | `riscv-virtio` | `just disk-img && just test-riscv-virtio` | RISC-V virtio |
-| `init` | `just test-init` | PL031 + SP804; patched QEMU |
-| `init-riscv` | `just test-init-riscv` | Goldfish RTC + rdtime; stock QEMU |
-| `init-x86` | `just test-init-x86` | CMOS RTC + TSC; stock QEMU |
-| `composed` | `just disk-img && just test-composed` | init + virtio in one system |
-| `blk-composed` | `just disk-img && just test-blk-composed` | init + block IPC; patched QEMU |
 | `http` | `just test-http` | virtio-net HTTP `GET /` via hostfwd |
-| `http-composed` | `just test-http-composed` | init + HTTP; patched QEMU |
 | `x86-http` | `just test-x86-http` | x86 q35 PCI virtio-net HTTP via hostfwd |
 | `riscv-http` | `just test-riscv-http` | RISC-V MMIO virtio-net HTTP via hostfwd |
 | `x86-virtio` | `just disk-img && just test-x86-virtio` | x86 q35 PCI virtio-blk/net + TCP RX |
-| `blk` | `just test-blk` | aarch64 block IPC over virtio-blk |
-| `riscv-blk` | `just test-riscv-blk` | RISC-V block IPC |
-| `x86-blk` | `just test-x86-blk` | x86 PCI virtio-blk block IPC |
-| `net` | `just test-net` | aarch64 net IPC over virtio-net (UDP TX) |
-| `fetch` | `just test-fetch` | aarch64 HTTP fetch over net IPC (TCP + DNS) |
-| `fetch-tls` | `just test-fetch-tls` | aarch64 HTTPS fetch via tls-proxy (rustls + smoke CA) |
-| `request` | `just test-request` | Phase 73: request-server GET fixture via tls-proxy (no NetClient on the app) |
-| `program` | `just test-program` | Phase 81: signed Wasm module via request-server (`lerux-prog: ran`) |
-| `html` | `just test-html` | Phase 74: lerux-html subset parser (`lerux-html: nodes=8`) |
-| `paint` | `just test-paint` | Phase 75: CSS + layout + ramfb paint (`lerux-web: paint ok`) |
-| `browser` | `just test-browser` | Phase 76: browser-ui + web-content via request-server (`lerux-browser: paint ok`) |
-| `agent-runtime` | `just test-agent-runtime` | Phase 77–78: agent TUI + grok-one tool-loop (`lerux-agent: chrome ok`) |
-| `agent` | `just test-agent` | Phase 79: FS tools + WebFetch (`lerux-agent: tools ok`) |
-| `interactive` | `just disk-img && just test-interactive` | Phase 80: joint workstation + browser + agent (`lerux-agent: interactive ok`) |
-| `riscv-net` | `just test-riscv-net` | RISC-V net IPC |
-| `x86-net` | `just test-x86-net` | x86 PCI virtio-net net IPC |
-| `net-composed` | `just test-net-composed` | init + net IPC; patched QEMU |
-| `ipc-composed` | `just disk-img && just test-ipc-composed` | init + blk/net IPC; patched QEMU |
-| `fs` | `just disk-img && just test-fs` | aarch64 FS IPC |
-| `isolation` | `just disk-img && just test-isolation` | Phase 60: untrusted PD crash + FS survives |
-| `workstation` | `just disk-img && just test-workstation` | supervisor+shell+edit+chat+http-fs; SP804 + hostfwd curl |
-| `workstation-riscv` | `just test-workstation-riscv` | Phase 59 RISC-V virt workstation |
-| `workstation-x86` | `just test-workstation-x86` | Phase 59 x86 q35 workstation |
 
 Local mirror: `just test-all` (requires full SDK; creates `support/disk.img` once).
 

@@ -155,9 +155,8 @@ pub(crate) fn compose_system(
     replace_channels_in_system(&composed, channels, &set.sdf_names())
 }
 
-fn compose_profile_body(root: &Path, body: &str, profile: &Profile) -> Result<String> {
-    let packages = crate::package::load_packages(root)?;
-    let optional = crate::package::optional_component_names(&packages);
+fn compose_profile_body(_root: &Path, body: &str, profile: &Profile) -> Result<String> {
+    let optional = BTreeSet::new();
     let set = ComponentSet::parse(body)?;
     let selected = select_components(&set, &profile.pds, &profile.channel)?;
     compose_system(body, &set, &selected, &optional, &profile.channel)
@@ -312,50 +311,9 @@ pub fn sdf_diff_summary(a_label: &str, a: &str, b_label: &str, b: &str) -> Strin
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::profile::load_profiles;
 
     fn repo_root() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
-    }
-
-    #[test]
-    fn workstation_composed_has_29_channels() {
-        let root = repo_root();
-        let generated = render_system(&root, "qemu_virt_aarch64_workstation").expect("gen");
-        // workstation-base app/service edges + drivers + backup_shell/backup_fs (Phase 58).
-        assert_eq!(generated.matches("<channel>").count(), 29);
-        assert!(generated.contains("protection_domain name=\"shell\""));
-        assert!(generated.contains("serial_mmio"));
-        // Placeholder substitution for aarch64 virt UART.
-        assert!(
-            generated.contains("0x9_000_000") || generated.contains("0x9000000"),
-            "serial phys addr substituted"
-        );
-    }
-
-    #[test]
-    fn workstation_profile_render_matches_board_render() {
-        let root = repo_root();
-        let profiles = load_profiles(&root).expect("profiles");
-        let profile = profiles.get("workstation").expect("workstation");
-        let from_profile =
-            render_profile_system(&root, "workstation", profile, None).expect("profile sdf");
-        let from_board = render_system(&root, "qemu_virt_aarch64_workstation").expect("board sdf");
-        assert_eq!(from_profile, from_board);
-    }
-
-    #[test]
-    fn workstation_template_is_channel_free_layout() {
-        let root = repo_root();
-        let body = render_system_body(&root, "qemu_virt_aarch64_workstation").unwrap();
-        assert_eq!(
-            body.matches("<channel>").count(),
-            0,
-            "workstation template must not dual-maintain channels"
-        );
-        let composed = render_system(&root, "qemu_virt_aarch64_workstation").unwrap();
-        assert_eq!(composed.matches("<channel>").count(), 29);
-        assert!(composed.contains("serial_virt"));
     }
 
     #[test]
@@ -369,131 +327,12 @@ mod tests {
     }
 
     #[test]
-    fn browser_template_is_channel_free_and_isolates_untrusted_pds() {
-        let root = repo_root();
-        let body = render_system_body(&root, "qemu_virt_aarch64_browser").unwrap();
-        assert_eq!(
-            body.matches("<channel>").count(),
-            0,
-            "browser template must not dual-maintain channels"
-        );
-        let sdf = render_system(&root, "qemu_virt_aarch64_browser").unwrap();
-        assert_eq!(sdf.matches("<channel>").count(), 10);
-        assert!(sdf.contains("web_content"));
-        assert!(sdf.contains("browser_ui"));
-        assert!(!sdf.contains("name=\"virtio_net_client_dma\""));
-
-        let web = pd_block(&sdf, "web_content");
-        assert!(web.contains("bitmap"), "web-content must map the bitmap MR");
-        assert!(
-            !web.contains("fw_cfg"),
-            "web-content must not map display MMIO"
-        );
-        assert!(
-            !web.contains("virtio"),
-            "web-content must not map NIC DMA/MMIO"
-        );
-
-        let ui = pd_block(&sdf, "browser_ui");
-        assert!(!ui.contains("bitmap"), "browser-ui must not map the bitmap");
-        assert!(
-            !ui.contains("fw_cfg"),
-            "browser-ui must not map display MMIO"
-        );
-        assert!(
-            !ui.contains("virtio"),
-            "browser-ui must not map NIC DMA/MMIO"
-        );
-    }
-
-    fn pd_block<'a>(sdf: &'a str, name: &str) -> &'a str {
-        let start_tag = format!("<protection_domain name=\"{name}\"");
-        let start = sdf
-            .find(&start_tag)
-            .unwrap_or_else(|| panic!("missing PD {name}"));
-        let rest = &sdf[start..];
-        let end = rest
-            .find("</protection_domain>")
-            .unwrap_or_else(|| panic!("unclosed PD {name}"));
-        &rest[..end]
-    }
-
-    #[test]
-    fn agent_runtime_keeps_agent_off_nic() {
-        let root = repo_root();
-        let body = render_system_body(&root, "qemu_virt_aarch64_agent_runtime").unwrap();
-        assert_eq!(body.matches("<channel>").count(), 0);
-        let sdf = render_system(&root, "qemu_virt_aarch64_agent_runtime").unwrap();
-        assert_eq!(sdf.matches("<channel>").count(), 5);
-        let start = sdf.find("<protection_domain name=\"agent\"").unwrap();
-        let rest = &sdf[start..];
-        let end = rest.find("</protection_domain>").unwrap();
-        let agent = &rest[..end];
-        assert!(!agent.contains("virtio"), "agent must not map NIC DMA/MMIO");
-        assert!(!agent.contains("fw_cfg"));
-        assert!(sdf.contains("request_server"));
-    }
-
-    #[test]
-    fn interactive_isolates_untrusted_pds() {
-        let root = repo_root();
-        let body = render_system_body(&root, "qemu_virt_aarch64_interactive").unwrap();
-        assert_eq!(body.matches("<channel>").count(), 0);
-        let sdf = render_system(&root, "qemu_virt_aarch64_interactive").unwrap();
-        assert!(sdf.contains("web_content"));
-        assert!(sdf.contains("browser_ui"));
-        assert!(sdf.contains("agent"));
-        assert!(sdf.contains("request_server"));
-        assert!(sdf.contains("display_server"));
-        for name in ["web_content", "browser_ui", "agent"] {
-            let block = pd_block(&sdf, name);
-            assert!(
-                !block.contains("virtio"),
-                "{name} must not map NIC/blk DMA/MMIO"
-            );
-            assert!(
-                !block.contains("fw_cfg"),
-                "{name} must not map display MMIO"
-            );
-        }
-        let web = pd_block(&sdf, "web_content");
-        assert!(web.contains("bitmap"), "web-content must map the bitmap MR");
-        let agent = pd_block(&sdf, "agent");
-        assert!(!agent.contains("bitmap"), "agent must not map the bitmap");
-    }
-
-    #[test]
-    fn agent_keeps_agent_off_nic() {
-        let root = repo_root();
-        let body = render_system_body(&root, "qemu_virt_aarch64_agent").unwrap();
-        assert_eq!(body.matches("<channel>").count(), 0);
-        let sdf = render_system(&root, "qemu_virt_aarch64_agent").unwrap();
-        assert_eq!(sdf.matches("<channel>").count(), 7);
-        let start = sdf.find("<protection_domain name=\"agent\"").unwrap();
-        let rest = &sdf[start..];
-        let end = rest.find("</protection_domain>").unwrap();
-        let agent = &rest[..end];
-        assert!(
-            !agent.contains("virtio"),
-            "agent must not map NIC/blk DMA/MMIO"
-        );
-        assert!(!agent.contains("fw_cfg"));
-        assert!(sdf.contains("request_server"));
-        assert!(sdf.contains("fs_server"));
-    }
-
-    #[test]
     fn qemu_net_boards_have_no_distinct_client_dma_mr() {
         let root = repo_root();
         for board in [
-            "qemu_virt_aarch64_net",
-            "qemu_virt_riscv64_net",
             "qemu_virt_riscv64_http",
-            "qemu_virt_riscv64_workstation",
-            "x86_64_generic_net",
             "x86_64_generic_http",
             "x86_64_generic_virtio",
-            "x86_64_generic_workstation",
         ] {
             let sdf = render_system(&root, board).unwrap_or_else(|e| panic!("{board}: {e}"));
             assert!(
@@ -549,33 +388,6 @@ description = "unknown"
         let err = generate_system(root, "test_board", &output).unwrap_err();
         assert_eq!(err.to_string(), "unknown component \"nosuch\"");
         assert_eq!(std::fs::read(&output).unwrap(), b"SENTINEL");
-    }
-
-    #[test]
-    fn workstation_profile_still_selects_edit() {
-        let root = repo_root();
-        let board = render_system(&root, "qemu_virt_aarch64_workstation").unwrap();
-        assert_eq!(board.matches("protection_domain name=\"edit\"").count(), 1);
-        let profiles = load_profiles(&root).unwrap();
-        let dev = profiles.get("dev-workstation").unwrap();
-        let dev_sdf = render_profile_system(&root, "dev-workstation", dev, None).unwrap();
-        assert!(!dev_sdf.contains("protection_domain name=\"edit\""));
-        let raw_workstation =
-            std::fs::read_to_string(root.join("support/profiles/workstation.toml")).unwrap();
-        assert!(raw_workstation.contains("extends = \"workstation-base\""));
-        for board_name in [
-            "qemu_virt_riscv64_workstation",
-            "x86_64_generic_workstation",
-            "rpi4b_4gb_workstation",
-            "qemu_virt_aarch64_interactive",
-        ] {
-            let sdf = render_system(&root, board_name).unwrap();
-            assert_eq!(
-                sdf.matches("protection_domain name=\"edit\"").count(),
-                1,
-                "{board_name}"
-            );
-        }
     }
 
     #[test]

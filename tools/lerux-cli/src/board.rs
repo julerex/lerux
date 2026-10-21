@@ -180,16 +180,6 @@ mod tests {
     }
 
     #[test]
-    fn display_board_has_ramfb() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let boards = load_boards(&root).unwrap();
-        let board = boards.get("qemu_virt_aarch64_display").unwrap();
-        assert!(board.qemu().unwrap().ramfb);
-        assert!(board.ci);
-        assert!(board.pds.iter().any(|p| p == "display-server"));
-    }
-
-    #[test]
     fn html_board_has_html_demo() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let boards = load_boards(&root).unwrap();
@@ -200,147 +190,19 @@ mod tests {
     }
 
     #[test]
-    fn paint_board_has_ramfb_and_paint_demo() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let boards = load_boards(&root).unwrap();
-        let board = boards.get("qemu_virt_aarch64_paint").unwrap();
-        assert!(board.qemu().unwrap().ramfb);
-        assert!(board.ci);
-        assert!(board.pds.iter().any(|p| p == "paint-demo"));
-        assert!(board.pds.iter().any(|p| p == "display-server"));
-        assert!(!board.pds.iter().any(|p| p == "request-server"));
-    }
-
-    #[test]
-    fn browser_board_has_ramfb_https_and_split_pds() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let boards = load_boards(&root).unwrap();
-        let board = boards.get("qemu_virt_aarch64_browser").unwrap();
-        assert!(board.qemu().unwrap().ramfb);
-        assert!(board.qemu().unwrap().https_one);
-        assert!(board.ci);
-        assert!(board.pds.iter().any(|p| p == "browser-ui"));
-        assert!(board.pds.iter().any(|p| p == "web-content"));
-        assert!(board.pds.iter().any(|p| p == "display-server"));
-        assert!(board.pds.iter().any(|p| p == "request-server"));
-        assert!(!board.pds.iter().any(|p| p == "fetch-client"));
-        assert!(!board.pds.iter().any(|p| p == "request-client"));
-        assert!(!board.pds.iter().any(|p| p == "net-client"));
-    }
-
-    #[test]
-    fn agent_runtime_board_has_grok_one() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let boards = load_boards(&root).unwrap();
-        let board = boards.get("qemu_virt_aarch64_agent_runtime").unwrap();
-        assert!(board.qemu().unwrap().grok_one);
-        assert!(!board.qemu().unwrap().https_one);
-        assert!(board.ci);
-        assert!(board.pds.iter().any(|p| p == "agent"));
-        assert!(board.pds.iter().any(|p| p == "request-server"));
-        assert!(!board.pds.iter().any(|p| p == "net-client"));
-        assert!(!board.pds.iter().any(|p| p == "fs-server"));
-    }
-
-    #[test]
-    fn interactive_board_has_ramfb_https_grok_and_split_pds() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let boards = load_boards(&root).unwrap();
-        let board = boards.get("qemu_virt_aarch64_interactive").unwrap();
-        let qemu = board.qemu().unwrap();
-        assert!(qemu.ramfb);
-        assert!(qemu.https_one);
-        assert!(qemu.grok_one);
-        assert!(qemu.sp804);
-        assert_eq!(qemu.disk, DiskMode::Rw);
-        assert!(board.ci);
-        for pd in [
-            "agent",
-            "web-content",
-            "browser-ui",
-            "request-server",
-            "display-server",
-            "shell",
-        ] {
-            assert!(board.pds.iter().any(|p| p == pd), "missing {pd}");
-        }
-        assert!(!board.pds.iter().any(|p| p == "net-client"));
-    }
-
-    #[test]
-    fn agent_board_has_fs_and_grok_one() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let boards = load_boards(&root).unwrap();
-        let board = boards.get("qemu_virt_aarch64_agent").unwrap();
-        assert!(board.qemu().unwrap().grok_one);
-        assert_eq!(board.qemu().unwrap().disk, DiskMode::Rw);
-        assert!(board.ci);
-        assert!(board.pds.iter().any(|p| p == "agent"));
-        assert!(board.pds.iter().any(|p| p == "fs-server"));
-        assert!(board.pds.iter().any(|p| p == "request-server"));
-        assert!(!board.pds.iter().any(|p| p == "net-client"));
-    }
-
-    #[test]
-    fn request_board_has_https_one() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let boards = load_boards(&root).unwrap();
-        let board = boards.get("qemu_virt_aarch64_request").unwrap();
-        assert!(board.qemu().unwrap().https_one);
-        assert!(board.ci);
-        assert!(board.pds.iter().any(|p| p == "request-server"));
-        assert!(board.pds.iter().any(|p| p == "request-client"));
-        assert!(!board.pds.iter().any(|p| p == "fetch-client"));
-    }
-
-    #[test]
     fn qmp_flag_parses() {
         let q: QemuConfig = toml::from_str("qmp = true").unwrap();
         assert!(q.qmp);
     }
 
     #[test]
-    fn z97_console_board_is_hardware_x86() {
+    fn rtl8852be_probe_board_is_hardware_only() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let boards = load_boards(&root).unwrap();
-        let board = boards.get("pc_z97_d3h").unwrap();
+        let board = boards.get("pc_z97_d3h_rtl8852be").unwrap();
         assert_eq!(board.arch, "x86_64");
-        assert_eq!(board.microkit_board, "x86_64_generic");
         assert!(board.qemu.is_none());
         assert!(!board.ci);
-        assert_eq!(
-            board.pds,
-            ["shell", "log-server", "serial-driver", "console-driver"]
-        );
-        assert_eq!(board.template, "console-pc.system.template");
-        assert_eq!(
-            crate::board::format_system_var(&board.system_vars["serial_ioport_addr"]),
-            "0x3f8"
-        );
-    }
-
-    #[test]
-    fn x86_console_board_injects_keys_in_qemu() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let boards = load_boards(&root).unwrap();
-        let board = boards.get("x86_64_generic_console").unwrap();
-        assert!(board.ci);
-        assert!(board.qemu().unwrap().qmp);
-        assert!(!board.qemu().unwrap().usb_kbd);
-        assert_eq!(board.template, "console-pc.system.template");
-        assert_eq!(board.pds, boards.get("pc_z97_d3h").unwrap().pds);
-    }
-
-    #[test]
-    fn x86_usb_kbd_board_uses_qemu_xhci() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let boards = load_boards(&root).unwrap();
-        let board = boards.get("x86_64_generic_usb_kbd").unwrap();
-        let qemu = board.qemu().unwrap();
-        assert!(board.ci);
-        assert!(qemu.qmp);
-        assert!(qemu.usb_kbd);
-        assert_eq!(board.template, "console-pc.system.template");
-        assert_eq!(board.pds, boards.get("pc_z97_d3h").unwrap().pds);
+        assert!(board.pds.iter().any(|p| p == "rtl8852be-probe"));
     }
 }

@@ -449,17 +449,22 @@ fn serve_seeded_file() {
 ))]
 fn browse() {
     let mut body = [0u8; 512];
-    match net::fetch_body(&mut body) {
-        Ok(n) => match page_title(&body[..n]) {
-            Some(title) => say_title(title),
-            None => say(b"title err\n"),
-        },
-        Err(()) => say(b"title err\n"),
-    }
-    if gpu::paint().is_ok() {
-        say(b"pixel 4c5258ff\n");
-    } else {
-        say(b"pixel err\n");
+    let html = match net::fetch_body(&mut body) {
+        Ok(n) => {
+            match page_title(&body[..n]) {
+                Some(title) => say_title(title),
+                None => say(b"title err\n"),
+            }
+            &body[..n]
+        }
+        Err(()) => {
+            say(b"title err\n");
+            &[][..]
+        }
+    };
+    match gpu::show_page(html) {
+        Ok(line) => say(line.as_bytes()),
+        Err(()) => say(b"pixel err\n"),
     }
 }
 

@@ -1,9 +1,8 @@
 //! Graphics client for the browser image.
 //!
 //! The worker submits one request at a time. The root installs the queue
-//! handles before the worker starts. A display-info response uses the same
-//! client data offset as the pixel pattern, so pixels are written after that
-//! response returns.
+//! handles before the worker starts. A display-info response uses the client
+//! data page, so pixels are written after that response returns.
 
 use core::{
     cell::UnsafeCell,
@@ -20,18 +19,16 @@ use lerux_sddf::{
     gpu_req_resource_attach_backing_t, gpu_req_resource_create_2d_t, gpu_req_resource_flush_t,
     gpu_req_set_scanout_t, gpu_req_t, gpu_req_transfer_to_2d_t, gpu_resp_status_t, gpu_resp_t,
 };
+use lerux_web::{PaintedPage, PixelLine};
 
 pub const GPU_CH: usize = gpu_image::SHELL_GPU_CHANNEL as usize;
 
-const RESOURCE_ID: u32 = 1;
-const WIDTH: u32 = 16;
-const HEIGHT: u32 = 16;
-const PIXEL_BYTES: u32 = WIDTH * HEIGHT * 4;
-/// Same 1024 bytes as `PIXEL_BYTES`, for indexing the client data region.
-const PIXEL_LEN: usize = 1024;
-const PIXEL: [u8; 4] = [0x4c, 0x52, 0x58, 0xff];
+const _: () = assert!(
+    PaintedPage::BYTES as u64 == gpu_image::GPU_CLIENT_DATA_SIZE,
+    "client data region matches the painted frame"
+);
 
-const _: () = assert!(PIXEL_BYTES == 1024);
+const RESOURCE_ID: u32 = 1;
 
 struct QueueCell(UnsafeCell<MaybeUninit<gpu_queue_handle_t>>);
 
@@ -65,33 +62,33 @@ pub fn on_notify(channels: ChannelSet) {
     }
 }
 
-/// Display info, then a 16 by 16 pattern, then flush. `Ok` means the flush completed.
-///
-/// QEMU rejects a scanout whose width or height is below 16.
-pub fn paint() -> Result<(), ()> {
+/// Paint `html` and return the serial line sampled from that paint.
+pub fn show_page(html: &[u8]) -> Result<PixelLine, ()> {
+    let page = PaintedPage::render(html).map_err(|_| ())?;
     let rect = gpu_rect_t {
         x: 0,
         y: 0,
-        width: WIDTH,
-        height: HEIGHT,
+        width: page.width(),
+        height: page.height(),
     };
     let mut info = gpu_req_new(gpu_req_code_t::GPU_REQ_GET_DISPLAY_INFO, next_id());
     info.payload.get_display_info = gpu_req_get_display_info_t { mem_offset: 0 };
     submit(info)?;
-    write_pixels();
+    copy_frame(&page);
     let mut created = gpu_req_new(gpu_req_code_t::GPU_REQ_RESOURCE_CREATE_2D, next_id());
     created.payload.resource_create_2d = gpu_req_resource_create_2d_t {
         resource_id: RESOURCE_ID,
-        width: WIDTH,
-        height: HEIGHT,
+        width: page.width(),
+        height: page.height(),
         format: gpu_formats_t::GPU_FORMAT_B8G8R8A8_UNORM,
     };
     submit(created)?;
+    let mem_size = u32::try_from(page.bytes().len()).map_err(|_| ())?;
     let mut attached = gpu_req_new(gpu_req_code_t::GPU_REQ_RESOURCE_ATTACH_BACKING, next_id());
     attached.payload.resource_attach_backing = gpu_req_resource_attach_backing_t {
         resource_id: RESOURCE_ID,
         mem_offset: 0,
-        mem_size: PIXEL_BYTES,
+        mem_size,
     };
     submit(attached)?;
     let mut scanout = gpu_req_new(gpu_req_code_t::GPU_REQ_SET_SCANOUT, next_id());
@@ -113,7 +110,17 @@ pub fn paint() -> Result<(), ()> {
         resource_id: RESOURCE_ID,
         rect,
     };
-    submit(flush)
+    submit(flush)?;
+    Ok(*page.pixel_line())
+}
+
+fn copy_frame(page: &PaintedPage) {
+    let dst = gpu_image::GPU_CLIENT_DATA_VADDR as *mut u8;
+    let src = page.bytes();
+    // SAFETY: the template maps `GPU_CLIENT_DATA_SIZE` bytes at this address.
+    unsafe {
+        core::ptr::copy_nonoverlapping(src.as_ptr(), dst, src.len());
+    }
 }
 
 fn next_id() -> u32 {
@@ -123,14 +130,6 @@ fn next_id() -> u32 {
 fn queue() -> &'static gpu_queue_handle_t {
     // SAFETY: `install` wrote this cell before the worker was spawned.
     unsafe { (*QUEUE.0.get()).assume_init_ref() }
-}
-
-fn write_pixels() {
-    let dst = gpu_image::GPU_CLIENT_DATA_VADDR as *mut u8;
-    for index in 0..PIXEL_LEN {
-        // SAFETY: the template maps the client data region, and 1024 bytes fit in one page.
-        unsafe { dst.add(index).write(PIXEL[index % 4]) };
-    }
 }
 
 fn submit(req: gpu_req_t) -> Result<(), ()> {

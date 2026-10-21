@@ -14,8 +14,11 @@ use crate::gpu::{gpu_req_queue_t, gpu_req_t, gpu_resp_queue_t, gpu_resp_t};
 /// Requests in one queue. Sixteen 56-byte requests fit in [`GPU_REGION_SIZE`].
 pub const GPU_QUEUE_CAPACITY: u32 = 16;
 
-/// Mapped size of one queue, event, or data region.
+/// Mapped size of one queue, event, or driver data page.
 pub const GPU_REGION_SIZE: u64 = 0x1000;
+
+/// Client pixel region at [`GPU_CLIENT_DATA_VADDR`]. Equals `PaintedPage::BYTES` (`81920`).
+pub const GPU_CLIENT_DATA_SIZE: u64 = 0x1_4000;
 
 /// Virtio ring direct-memory-access region for the graphics driver.
 pub const GPU_DRIVER_DMA_SIZE: u64 = 0x200_000;

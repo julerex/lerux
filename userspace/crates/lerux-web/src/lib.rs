@@ -14,18 +14,20 @@ mod css;
 mod font;
 mod layout;
 mod paint;
+mod painted_page;
 mod style;
 
-pub use paint::Bitmap;
+pub use painted_page::{FrameError, PaintedPage, PixelLine};
 
 use layout::layout_document;
 use paint::paint as paint_tree;
+pub(crate) use paint::Bitmap;
 
 /// Committed paint fixture (`support/browser/paint.html`).
 pub const PAINT_FIXTURE: &str = include_str!("../../../../support/browser/paint.html");
 
 /// Parse, lay out, and paint `html` into `bitmap`.
-pub fn render(html: &str, bitmap: &mut Bitmap<'_>) {
+pub(crate) fn render(html: &str, bitmap: &mut Bitmap<'_>) {
     let doc = lerux_html::parse(html);
     let tree = layout_document(&doc, bitmap.width() as i32, bitmap.height() as i32);
     paint_tree(&tree, bitmap);
@@ -72,7 +74,8 @@ fn collapse_ws(s: &str) -> alloc::string::String {
 ///
 /// Layout: 32px red `h1`, then a 200px-content yellow `p` with 8px padding
 /// (padding box starts at y=32). Span text is green.
-pub fn fixture_signatures_ok(bitmap: &Bitmap<'_>) -> bool {
+#[cfg(test)]
+fn fixture_signatures_ok(bitmap: &Bitmap<'_>) -> bool {
     const YELLOW: u32 = 0x00FF_FF00;
     const RED: u32 = 0x00CC_0000;
     const BLUE: u32 = 0x0000_3399;

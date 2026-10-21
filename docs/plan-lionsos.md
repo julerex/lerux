@@ -2,7 +2,7 @@
 
 Last updated: 2026-10-21
 
-**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is done and is the file-descriptor library. Milestone 6 is done and is the shell on that filesystem image. Milestone 7 is done and is the network-role image. Milestone 8 is done and is the socket and fetch image. Milestone 9 is done and is the timer and static status on the filesystem image. Milestone 10 is done and is the remaining shell commands on the fetch image. Milestone 11 is done and is the web image that serves the seeded hostname file. Milestone 12 is done and is the virtio graphics driver, virtualiser, and browser image. Milestone 13 is done and is the agent image. Milestone 14 is done and is the WebAssembly runtime protection domain. Milestone 15 is done and is package selection from the template. Milestone 16 is done and is the same protection-domain roles on QEMU RISC-V and QEMU x86. Milestone 17 is done and is the removal of the postcard guest model. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
+**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is done and is the file-descriptor library. Milestone 6 is done and is the shell on that filesystem image. Milestone 7 is done and is the network-role image. Milestone 8 is done and is the socket and fetch image. Milestone 9 is done and is the timer and static status on the filesystem image. Milestone 10 is done and is the remaining shell commands on the fetch image. Milestone 11 is done and is the web image that serves the seeded hostname file. Milestone 12 is done and is the virtio graphics driver, virtualiser, and browser image. Milestone 13 is done and is the agent image. Milestone 14 is done and is the WebAssembly runtime protection domain. Milestone 15 is done and is package selection from the template. Milestone 16 is done and is the same protection-domain roles on QEMU RISC-V and QEMU x86. Milestone 17 is done and is the removal of the postcard guest model. Milestone 18 is done and is a real paint of the fetched fixture on the browser image. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
 
 **Goal:** Every lerux guest protection domain stays Rust, and the queues, configuration pages, filesystem messages, and component graph are the same ones LionsOS uses.
 
@@ -309,3 +309,16 @@ Landed:
 - `just test` with no `BOARD` boots `qemu_virt_aarch64_fs_sddf`. `just build` still defaults to `qemu_virt_aarch64`. The continuous integration hello job is `BOARD=qemu_virt_aarch64 just test`. The smoke include list is 19 jobs. `docs/ci.md` and the README use that count.
 - `pc_z97_d3h` and the postcard workstation boards are gone. Their shells were postcard protection domains.
 - Checked on 2026-10-21. `just check` passed. `just check-pd` passed (51 aarch64 crate combinations and 37 x86_64 crate combinations). On a fresh `support/disk.img`, `just test` printed `lerux shell ready`, the scripted shell lines, and `reboot`.
+
+## Milestone 18 — Paint the fetched fixture
+
+**Exit:** The browser shell parses the fetched fixture with `lerux-html`, lays it out and paints it with `lerux-web`, and presents that frame through the existing graphics queues. `just test-browser-sddf` expects `title lerux` and then `pixel 000000ff`. The pixel line is the first non-white pixel of the frame.
+
+Done.
+
+Landed:
+
+- `PaintedPage` owns a 320 by 64 frame, 81920 bytes. The user-agent sheet places the paragraph at y=24, so a 16-pixel-tall frame has no text. The client data region grows to `0x1_4000`. The other seven graphics regions stay one page. The driver attach and transfer checks use the client data size. Queues stay on `GPU_REGION_SIZE`.
+- The shell calls `show_page` after the title scan. Display info still uses offset 0, and the frame is copied after that reply. The fourth byte is set to `0xff` in one place. The serial line is sampled from the frame. Resource id 1 and the scanout floor of 16 stay.
+- `support/smoke-expects.toml` expects `pixel 000000ff` on both browser rows. The continuous integration job stays `browser-sddf`. The smoke count stays 53.
+- Checked on 2026-10-21. `just check` passed. `just check-pd` passed. `just test-browser-sddf` printed `title lerux`, `pixel 000000ff`, and `lerux shell ready`.

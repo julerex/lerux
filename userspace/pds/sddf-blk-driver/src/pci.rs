@@ -1,6 +1,19 @@
 use lerux_machine::{virtio, Arch, VirtioAttach, VirtioRole};
 use lerux_virtio_hal::{BarRegion, HalImpl};
-use lerux_virtio_pci::{create_pci_transport_ecam, create_pci_transport_ioport};
+#[cfg(any(
+    feature = "board-x86_64_generic_fetch_sddf",
+    feature = "board-x86_64_generic_web_sddf",
+    feature = "board-x86_64_generic_agent_sddf",
+    feature = "board-x86_64_generic_program_sddf"
+))]
+use lerux_virtio_pci::create_pci_transport_ecam;
+#[cfg(not(any(
+    feature = "board-x86_64_generic_fetch_sddf",
+    feature = "board-x86_64_generic_web_sddf",
+    feature = "board-x86_64_generic_agent_sddf",
+    feature = "board-x86_64_generic_program_sddf"
+)))]
+use lerux_virtio_pci::create_pci_transport_ioport;
 use sel4_microkit::var;
 use virtio_drivers::{
     device::blk::VirtIOBlk,

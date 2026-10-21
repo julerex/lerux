@@ -10,7 +10,7 @@ A written spec for booting lerux on this desk and using the full-screen Ladybird
 
 This desk is the Gigabyte Z97-D3H (`pc_z97_d3h`). The monitor is HDMI on the Sapphire RX 560, the firmware boot VGA card. The browser is one full-screen surface: `browser-ui` owns chrome, `web-content` owns `lerux-html` and `lerux-web`, `request-server` fetches, and `display-server` presents the bitmap. The address is typed on that screen from the Phase 82 keyboard (PS/2, or a USB HID boot keyboard). Serial `open` is not the product path.
 
-The spec may amend ADR-009's QEMU-only framebuffer ceiling far enough to present a software bitmap on this HDMI. Ladybird's topology stays. The engines stay `lerux-html` and `lerux-web` until a ticket on this map says otherwise.
+The spec may amend ADR-009's QEMU-only framebuffer ceiling far enough to present a software bitmap on this HDMI. Ladybird's topology stays. `lerux-html` and `lerux-web` stay the engines and grow to the public page recorded in [What counts as seeing a page?](issues/03-page-class.md).
 
 Every session reads [docs/context.md](../../docs/context.md), [ADR-009](../../docs/decisions/009-interactive-surface.md), the Z97 section of [docs/boards.md](../../docs/boards.md), and [docs/plan-interactive.md](../../docs/plan-interactive.md). Grilling tickets use the grilling and domain-modeling skills. Research tickets use the research skill.
 
@@ -20,11 +20,10 @@ Tracker: local markdown in this directory. This repo has no `docs/agents/issue-t
 
 - [How would a page leave this motherboard?](issues/02-desk-ethernet.md): No protection domain can transmit a page; the RTL8852BE probe only reads config space (`10ec:b852`), and native e1000e has no recorded device identity.
 - [What can legacy boot scan out on this RX 560?](issues/01-rx560-scanout.md): Legacy Limine leaves VGA text at `0xb8000`; a linear framebuffer needs a VBE mode set on that same CSM entry, and the address is unknown until a boot reads it.
+- [What counts as seeing a page?](issues/03-page-class.md): The typed `https` public name, first load in a fresh profile, matching the shared behavior of the stable Firefox and Chrome named when the spec is written. `lerux-html` and `lerux-web` grow to that.
 
 ## Not yet specified
 
-- What the page class forces in the engine (JavaScript, images, further CSS), once it is decided what counts as seeing a page.
-- Name lookup and trust anchors, if the address is a public name.
 - Bitmap size, pixel format, and who maps the framebuffer, once a scanout path is committed. If the spec commits to the VESA linear framebuffer, a legacy boot still has to read this card's mode-info block. That boot is not a ticket until the path is chosen.
 - How desk keystrokes reach `browser-ui`.
 - Which other protection domains share the image (COM1 shell, filesystem, TLS proxy, network driver).
@@ -34,6 +33,10 @@ Tracker: local markdown in this directory. This repo has no `docs/agents/issue-t
 ## Out of scope
 
 - Porting Ladybird or embedding Servo. This map keeps `lerux-html` and `lerux-web`.
+- Signing in, and granting a permission. A login wall and an unanswered prompt are the page.
+- A script-opened window, or any second surface.
+- Browser extensions.
+- A digital rights management module. `wasmtime` and the WebAssembly Micro Runtime stay out too.
 - A window manager, Wayland, or a second graphical application.
 - Building the browser. The map ends at the spec.
 - QEMU as the product.

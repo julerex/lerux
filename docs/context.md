@@ -129,7 +129,13 @@ The legacy image does **not** target a Linux or POSIX syscall ABI. Its apps are 
 : Ladybird Browser analogue. Owns chrome (serial `open <url>` in v1) and the channel to `web-content`. Does not parse HTML.
 
 **web-content**
-: Ladybird WebContent analogue. One static PD (Microkit cannot spawn tabs). Hosts `lerux-html` + `lerux-web`. Speaks only `HttpRequest` to `request-server` plus the bitmap MR. **No** `NetClient`, `TlsClient`, or `FsClient`. No JS in phases 71–80.
+: Ladybird WebContent analogue. One static protection domain (Microkit cannot spawn tabs). Hosts `lerux-html` + `lerux-web`. Speaks only `HttpRequest` to `request-server` plus the bitmap memory region. **No** `NetClient`, `TlsClient`, or `FsClient`. No JavaScript in phases 71–80. The desk-browser spec grows these engines so this protection domain can show a public page.
+
+**public name**
+: A hostname resolved through the Domain Name System. It is the host of a public page.
+
+**public page**
+: What the monitor shows for one typed `https` address whose host is a public name: the first load in a fresh profile. This is the desk-browser spec's page.
 
 **request-server**
 : Ladybird RequestServer analogue. Sole HTTP client of `tls-proxy` / `net-server` on interactive boards (Phase 73: `just test-request`). Untrusted `web-content`, `agent`, and `program-runtime` fetch through it; they never hold `NetClient` / `TlsClient`.
@@ -141,14 +147,14 @@ The legacy image does **not** target a Linux or POSIX syscall ABI. Its apps are 
 : Grok Build analogue as a PD: prompt → tool-calls → tools → model. Runtime talks to host `lerux grok-one` through `request-server` (smoke CA; not live xAI). Serial ANSI TUI (Phase 78); shell `grok` PPCs the agent. Tools are Read/Edit/Write/ListDir/Search/Execute/WebFetch/Browse over existing IPC (FS in Phase 79, `web-content` in Phase 80, `request-server`). Sandbox **is** the PD set, not Landlock.
 
 **lerux-html**
-: From-scratch `#![no_std]`+`alloc` HTML subset tokenizer/tree builder. Not Ladybird’s `libweb_html_tokenizer`, not html5ever, not Servo.
+: From-scratch `#![no_std]`+`alloc` HTML engine for `web-content`. Phases 71–80 parse a fixed element subset. The desk-browser spec grows it to the document class of a public page. Not Ladybird’s `libweb_html_tokenizer`, not html5ever, not Servo.
 
 **lerux-web**
-: From-scratch `#![no_std]`+`alloc` CSS subset, block-flow layout, and RGB888 paint. Author `<style>` plus a tiny UA sheet. Hosts no JS. Used by `paint-demo` (Phase 75) and `web-content` (Phase 76).
+: From-scratch `#![no_std]`+`alloc` layout and paint for `web-content`. Phases 71–80 paint a fixed CSS subset and host no JavaScript. The desk-browser spec grows it to the shared layout, script, WebAssembly, and media behavior of the reference browsers. Not Servo. Used by `paint-demo` (Phase 75) and `web-content` (Phase 76).
 
 ## Boundaries
 
-- **In scope:** Rust PD crates, `.system` files, build/CI, docs, host profile tooling, QEMU software framebuffer (ADR-009), ordinary WebAssembly through `wasmi` in the one runtime protection domain (ADR-010, ADR-012)
-- **Out of scope:** POSIX/glibc/musl, Linux ABI emulation, seL4 kernel modifications, C userspace, vendored upstream trees, unmodified third-party binaries (including Ladybird and `grok`), JavaScript engines, `wasmtime`, the WebAssembly Micro Runtime, a second runtime protection domain, GPU compositor / Wayland / libvmm
+- **In scope:** Rust protection-domain crates, `.system` files, build/CI, docs, host profile tooling, QEMU software framebuffer (ADR-009), ordinary WebAssembly through `wasmi` in the one runtime protection domain (ADR-010, ADR-012). The desk-browser spec also grows `lerux-html` and `lerux-web` to show a public page, including its script and WebAssembly.
+- **Out of scope:** POSIX/glibc/musl, Linux ABI emulation, seL4 kernel modifications, C userspace, vendored upstream trees, unmodified third-party binaries (including Ladybird, Servo, and `grok`), `wasmtime`, the WebAssembly Micro Runtime, a second runtime protection domain, GPU compositor / Wayland / libvmm
 - **Upstream SDK components:** Microkit monitor, loader, libmicrokit (C) — part of SDK, not lerux-owned
 - **Reference trees (read, do not vendor):** Ladybird, Grok Build — steal topology and tool loop only ([`plan-au-ts.md`](plan-au-ts.md) rule)

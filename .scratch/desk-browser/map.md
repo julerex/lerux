@@ -1,0 +1,44 @@
+# Browser on this desk
+
+Label: wayfinder:map
+
+## Destination
+
+A written spec for booting lerux on this desk and using the full-screen Ladybird-shaped browser: type an address, and see that page on the monitor. The map ends when that spec is written.
+
+## Notes
+
+This desk is the Gigabyte Z97-D3H (`pc_z97_d3h`). The monitor is HDMI on the Sapphire RX 560, the firmware boot VGA card. The browser is one full-screen surface: `browser-ui` owns chrome, `web-content` owns `lerux-html` and `lerux-web`, `request-server` fetches, and `display-server` presents the bitmap. The address is typed on that screen from the Phase 82 keyboard (PS/2, or a USB HID boot keyboard). Serial `open` is not the product path.
+
+The spec may amend ADR-009's QEMU-only framebuffer ceiling far enough to present a software bitmap on this HDMI. Ladybird's topology stays. The engines stay `lerux-html` and `lerux-web` until a ticket on this map says otherwise.
+
+Every session reads [docs/context.md](../../docs/context.md), [ADR-009](../../docs/decisions/009-interactive-surface.md), the Z97 section of [docs/boards.md](../../docs/boards.md), and [docs/plan-interactive.md](../../docs/plan-interactive.md). Grilling tickets use the grilling and domain-modeling skills. Research tickets use the research skill.
+
+Tracker: local markdown in this directory. This repo has no `docs/agents/issue-tracker.md`.
+
+## Decisions so far
+
+- [How would a page leave this motherboard?](issues/02-desk-ethernet.md): No protection domain can transmit a page; the RTL8852BE probe only reads config space (`10ec:b852`), and native e1000e has no recorded device identity.
+- [What can legacy boot scan out on this RX 560?](issues/01-rx560-scanout.md): Legacy Limine leaves VGA text at `0xb8000`; a linear framebuffer needs a VBE mode set on that same CSM entry, and the address is unknown until a boot reads it.
+
+## Not yet specified
+
+- What the page class forces in the engine (JavaScript, images, further CSS), once it is decided what counts as seeing a page.
+- Name lookup and trust anchors, if the address is a public name.
+- Bitmap size, pixel format, and who maps the framebuffer, once a scanout path is committed. If the spec commits to the VESA linear framebuffer, a legacy boot still has to read this card's mode-info block. That boot is not a ticket until the path is chosen.
+- How desk keystrokes reach `browser-ui`.
+- Which other protection domains share the image (COM1 shell, filesystem, TLS proxy, network driver).
+- The onboard Ethernet's device identity, if the spec takes a driver. The repo only names the RTL8852BE configuration-space probe (`10ec:b852`). `e1000e` has no recorded device id.
+- How the spec is demonstrated before a metal boot. QEMU may be a stand-in; it is not the product.
+
+## Out of scope
+
+- Porting Ladybird or embedding Servo. This map keeps `lerux-html` and `lerux-web`.
+- A window manager, Wayland, or a second graphical application.
+- Building the browser. The map ends at the spec.
+- QEMU as the product.
+- Extra tabs, or a second `web-content`.
+- Disk, downloads, bookmarks, and history.
+- The Intel HD Graphics 4600. Nothing is plugged into it, and it is not the boot VGA device.
+- The agent protection domain.
+- Raspberry Pi HDMI.

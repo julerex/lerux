@@ -9,8 +9,30 @@ use std::{
     fmt,
 };
 
+use lerux_machine::{
+    description::{IoPort, Irq, LineIrq, Polarity, Trigger, X86Irq},
+    Arch,
+};
+
 pub(crate) const REGION_SIZE: u64 = 0x1_000;
 pub(crate) const STACK_SIZE: u64 = 0x10_000;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ImageKind {
+    Serial,
+    Fs,
+    Net,
+    Fetch,
+    Browser,
+    Agent,
+    Program,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Mode {
+    Fetch,
+    Web,
+}
 
 #[derive(Debug)]
 pub enum ImageError {
@@ -21,6 +43,8 @@ pub enum ImageError {
     UnknownCrate { name: String },
     ConflictingFeatures { crate_name: String },
     WriteConfig { path: String, detail: String },
+    Unsupported { kind: ImageKind, arch: Arch },
+    UnknownBoard { name: String },
 }
 
 impl fmt::Display for ImageError {
@@ -39,6 +63,10 @@ impl fmt::Display for ImageError {
             ImageError::WriteConfig { path, detail } => {
                 write!(formatter, "write {path}: {detail}")
             }
+            ImageError::Unsupported { kind, arch } => {
+                write!(formatter, "unsupported {kind:?} on {arch:?}")
+            }
+            ImageError::UnknownBoard { name } => write!(formatter, "unknown board {name}"),
         }
     }
 }
@@ -65,7 +93,7 @@ pub(crate) struct Domain {
     pub stack: u64,
     pub program: &'static str,
     pub slots: Vec<Slot>,
-    pub irq_line: Option<u32>,
+    pub irq: Option<Irq>,
 }
 
 pub(crate) enum Slot {
@@ -74,6 +102,7 @@ pub(crate) enum Slot {
         symbol: &'static str,
         region: &'static str,
     },
+    Port(IoPort),
 }
 
 pub(crate) struct Map {
@@ -145,7 +174,7 @@ fn assign(image: &Image) -> Result<Assigned, ImageError> {
     let mut irqs = Vec::new();
     let mut ends = Vec::new();
     for domain in &image.domains {
-        if domain.irq_line.is_some() {
+        if domain.irq.is_some() {
             let id = take_id(&mut next, domain.name)?;
             irqs.push(AssignedIrq {
                 pd: domain.name,
@@ -267,6 +296,7 @@ fn domain_block(image: &Image, domain: &Domain, assigned: &Assigned) -> Result<S
         hex_group(domain.stack),
         domain.program
     );
+    let mut port_index = 0u8;
     for slot in &domain.slots {
         match slot {
             Slot::Map(map) => {
@@ -279,11 +309,21 @@ fn domain_block(image: &Image, domain: &Domain, assigned: &Assigned) -> Result<S
                     "        <setvar symbol=\"{symbol}\" region_paddr=\"{region}\" />\n"
                 ));
             }
+            Slot::Port(port) => {
+                let id = port.element_id.unwrap_or(port_index);
+                out.push_str(&port_line(id, port));
+                port_index = id
+                    .checked_add(1)
+                    .ok_or_else(|| ImageError::ChannelOverflow {
+                        pd: domain.name.to_string(),
+                    })?;
+                out.push('\n');
+            }
         }
     }
-    if let Some(line) = domain.irq_line {
+    if let Some(irq) = &domain.irq {
         let id = irq_id(&assigned.irqs, domain.name)?;
-        out.push_str(&format!("        <irq irq=\"{line}\" id=\"{id}\" />\n"));
+        out.push_str(&irq_line(irq, id));
     }
     out.push_str("    </protection_domain>\n");
     Ok(out)
@@ -345,6 +385,52 @@ fn irq_id(irqs: &[AssignedIrq], pd: &str) -> Result<u8, ImageError> {
         .find(|irq| irq.pd == pd)
         .map(|irq| irq.id)
         .ok_or_else(|| ImageError::MissingIrq { pd: pd.to_string() })
+}
+
+fn port_line(index: u8, port: &IoPort) -> String {
+    format!(
+        "        <ioport id=\"{index}\" addr=\"{}\" size=\"{}\" setvar_id=\"{}\" setvar_addr=\"{}\" />",
+        port.addr.text(),
+        port.size,
+        port.id_symbol,
+        port.addr_symbol
+    )
+}
+
+fn irq_line(irq: &Irq, channel: u8) -> String {
+    match irq {
+        Irq::Line(LineIrq(line)) => format!("        <irq irq=\"{line}\" id=\"{channel}\" />\n"),
+        Irq::X86(X86Irq {
+            pin,
+            vector,
+            trigger,
+            polarity,
+        }) => format!(
+            "        <irq pin=\"{}\" vector=\"{}\" id=\"{channel}\" trigger=\"{}\" polarity=\"{}\" />\n",
+            pin.0,
+            vector.0,
+            x86_trigger(*trigger),
+            x86_polarity(*polarity)
+        ),
+    }
+}
+
+fn x86_trigger(trigger: Trigger) -> &'static str {
+    match trigger {
+        Trigger::Level => "level",
+        Trigger::Edge => "edge",
+    }
+}
+
+fn x86_polarity(polarity: Polarity) -> &'static str {
+    match polarity {
+        Polarity::High => "high",
+        Polarity::Low => "low",
+    }
+}
+
+pub(crate) fn line_irq(line: u32) -> Irq {
+    Irq::Line(LineIrq(line))
 }
 
 pub(crate) fn hex_group(value: u64) -> String {

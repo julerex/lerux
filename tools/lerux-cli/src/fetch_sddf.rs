@@ -8,16 +8,24 @@ use std::{fs, path::Path};
 
 use anyhow::{Context, Result};
 
-pub fn write_configs(dir: &Path) -> Result<()> {
+fn shell_board_feature(board: &str) -> &'static str {
+    match board {
+        "qemu_virt_riscv64_fetch_sddf" => "board-qemu_virt_riscv64_fetch_sddf",
+        "qemu_virt_riscv64_web_sddf" => "board-qemu_virt_riscv64_web_sddf",
+        "x86_64_generic_fetch_sddf" => "board-x86_64_generic_fetch_sddf",
+        "x86_64_generic_web_sddf" => "board-x86_64_generic_web_sddf",
+        "qemu_virt_aarch64_web_sddf" => "board-qemu_virt_aarch64_web_sddf",
+        _ => "board-qemu_virt_aarch64_fetch_sddf",
+    }
+}
+
+pub fn write_configs(dir: &Path, board: &str) -> Result<()> {
     fs::create_dir_all(dir).with_context(|| format!("mkdir {}", dir.display()))?;
     let path = dir.join("shell_config.bin");
-    lerux_image::emit_pd_binding(
-        "sddf-shell",
-        &["board-qemu_virt_aarch64_fetch_sddf", "net-client"],
-        &path,
-    )
-    .map_err(|error| anyhow::anyhow!("{error}"))
-    .with_context(|| "bind sddf-shell")?;
+    let board_feature = shell_board_feature(board);
+    lerux_image::emit_pd_binding("sddf-shell", &[board_feature, "net-client"], &path)
+        .map_err(|error| anyhow::anyhow!("{error}"))
+        .with_context(|| "bind sddf-shell")?;
     Ok(())
 }
 
@@ -41,7 +49,7 @@ mod tests {
     #[test]
     fn write_configs_is_serial_then_filesystem_then_network() {
         let dir = tempfile::tempdir().expect("tempdir");
-        write_configs(dir.path()).expect("write configs");
+        write_configs(dir.path(), "qemu_virt_aarch64_fetch_sddf").expect("write configs");
         let bytes = fs::read(dir.path().join("shell_config.bin")).expect("read shell config");
 
         let serial_len = size_of::<serial_client_config_t>();

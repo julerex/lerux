@@ -32,7 +32,12 @@ use lerux_sddf::{
 };
 #[cfg(any(
     feature = "board-qemu_virt_aarch64_fetch_sddf",
-    feature = "board-qemu_virt_aarch64_browser_sddf"
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf",
+    any(
+        feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-qemu_virt_riscv64_browser_sddf"
+    )
 ))]
 use lerux_tls::{ClientSession, Status};
 
@@ -44,19 +49,41 @@ const LOCAL_PORT: u16 = 49152;
 const GATEWAY: Ipv4Address = Ipv4Address::new(10, 0, 2, 2);
 #[cfg(any(
     feature = "board-qemu_virt_aarch64_fetch_sddf",
-    feature = "board-qemu_virt_aarch64_browser_sddf"
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf",
+    any(
+        feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-qemu_virt_riscv64_browser_sddf"
+    )
 ))]
 const FIXTURE_PORT: u16 = 8443;
-#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
 const ECHO_PORT: u16 = 18080;
-#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
 const CHAT_LINE: &[u8] = b"chat\n";
 #[cfg(any(
     feature = "board-qemu_virt_aarch64_fetch_sddf",
-    feature = "board-qemu_virt_aarch64_browser_sddf"
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf",
+    any(
+        feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-qemu_virt_riscv64_browser_sddf"
+    )
 ))]
 const HTTP_GET: &[u8] = b"GET /fixture.html HTTP/1.1\r\nHost: host\r\nConnection: close\r\n\r\n";
-#[cfg(feature = "board-qemu_virt_aarch64_web_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_web_sddf",
+    feature = "board-qemu_virt_riscv64_web_sddf",
+    feature = "board-x86_64_generic_web_sddf"
+))]
 const WEB_PORT: u16 = 8080;
 
 struct Map {
@@ -114,7 +141,12 @@ pub fn on_notify(channels: ChannelSet) {
 
 #[cfg(any(
     feature = "board-qemu_virt_aarch64_fetch_sddf",
-    feature = "board-qemu_virt_aarch64_browser_sddf"
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf",
+    any(
+        feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-qemu_virt_riscv64_browser_sddf"
+    )
 ))]
 pub fn fetch_body(out: &mut [u8]) -> Result<usize, ()> {
     let sockets = sockets()?;
@@ -130,13 +162,21 @@ pub fn fetch_body(out: &mut [u8]) -> Result<usize, ()> {
 }
 
 /// The baked-in smoke certificate authority loads.
-#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
 pub fn cert_ready() -> bool {
     ClientSession::new("host").is_ok()
 }
 
 /// Send one line to the host echo and return the bytes it wrote back.
-#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
 pub fn chat_echo(out: &mut [u8]) -> Result<usize, ()> {
     let sockets = sockets()?;
     let fd = sockets.socket().map_err(|_| ())?;
@@ -449,7 +489,12 @@ fn instant(ms: u64) -> Instant {
 
 #[cfg(any(
     feature = "board-qemu_virt_aarch64_fetch_sddf",
-    feature = "board-qemu_virt_aarch64_browser_sddf"
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf",
+    any(
+        feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-qemu_virt_riscv64_browser_sddf"
+    )
 ))]
 fn http_body(sockets: &mut Sockets<Stack>, fd: SockFd, out: &mut [u8]) -> Result<usize, ()> {
     let mut session = ClientSession::new("host").map_err(|_| ())?;
@@ -497,7 +542,12 @@ fn http_body(sockets: &mut Sockets<Stack>, fd: SockFd, out: &mut [u8]) -> Result
 
 #[cfg(any(
     feature = "board-qemu_virt_aarch64_fetch_sddf",
-    feature = "board-qemu_virt_aarch64_browser_sddf"
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf",
+    any(
+        feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-qemu_virt_riscv64_browser_sddf"
+    )
 ))]
 fn feed(session: &mut ClientSession, sockets: &mut Sockets<Stack>, fd: SockFd) -> Result<(), ()> {
     let mut buf = [0u8; 512];
@@ -511,7 +561,12 @@ fn feed(session: &mut ClientSession, sockets: &mut Sockets<Stack>, fd: SockFd) -
 
 #[cfg(any(
     feature = "board-qemu_virt_aarch64_fetch_sddf",
-    feature = "board-qemu_virt_aarch64_browser_sddf"
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf",
+    any(
+        feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-qemu_virt_riscv64_browser_sddf"
+    )
 ))]
 fn copy_body(raw: &[u8], out: &mut [u8]) -> Option<usize> {
     let split = raw.windows(4).position(|window| window == b"\r\n\r\n")?;
@@ -526,7 +581,12 @@ fn copy_body(raw: &[u8], out: &mut [u8]) -> Option<usize> {
 
 #[cfg(any(
     feature = "board-qemu_virt_aarch64_fetch_sddf",
-    feature = "board-qemu_virt_aarch64_browser_sddf"
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf",
+    any(
+        feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-qemu_virt_riscv64_browser_sddf"
+    )
 ))]
 fn content_length(headers: &[u8]) -> Option<usize> {
     let key = b"Content-Length: ";
@@ -553,7 +613,11 @@ const _: () = assert!(SHELL_NET_RX_CHANNEL == 3);
 ///
 /// Dynamic Host Configuration Protocol runs first. The caller prints its ready
 /// line before [`serve_one`], so the host can connect while this worker waits.
-#[cfg(feature = "board-qemu_virt_aarch64_web_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_web_sddf",
+    feature = "board-qemu_virt_riscv64_web_sddf",
+    feature = "board-x86_64_generic_web_sddf"
+))]
 pub fn begin_listen() -> Result<SockFd, ()> {
     let sockets = sockets()?;
     let fd = sockets.socket().map_err(|_| ())?;
@@ -565,7 +629,11 @@ pub fn begin_listen() -> Result<SockFd, ()> {
 }
 
 /// Read one request and write `body` as the response.
-#[cfg(feature = "board-qemu_virt_aarch64_web_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_web_sddf",
+    feature = "board-qemu_virt_riscv64_web_sddf",
+    feature = "board-x86_64_generic_web_sddf"
+))]
 pub fn serve_one(fd: SockFd, body: &[u8]) -> Result<(), ()> {
     let sockets = sockets()?;
     let result = (|| {
@@ -585,7 +653,11 @@ pub fn serve_one(fd: SockFd, body: &[u8]) -> Result<(), ()> {
     result
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_web_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_web_sddf",
+    feature = "board-qemu_virt_riscv64_web_sddf",
+    feature = "board-x86_64_generic_web_sddf"
+))]
 fn read_headers(sockets: &mut Sockets<Stack>, fd: SockFd) -> Result<(), ()> {
     let mut req = [0u8; 512];
     let mut len = 0usize;
@@ -602,7 +674,11 @@ fn read_headers(sockets: &mut Sockets<Stack>, fd: SockFd) -> Result<(), ()> {
     Ok(())
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_web_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_web_sddf",
+    feature = "board-qemu_virt_riscv64_web_sddf",
+    feature = "board-x86_64_generic_web_sddf"
+))]
 fn write_header(len: usize, out: &mut [u8; 96]) -> usize {
     const HEAD: &[u8] = b"HTTP/1.1 200 OK\r\nContent-Length: ";
     const TAIL: &[u8] = b"\r\nConnection: close\r\n\r\n";

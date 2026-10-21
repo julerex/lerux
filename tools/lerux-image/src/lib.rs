@@ -8,8 +8,8 @@ mod images;
 mod model;
 
 pub use binding::{emit_pd_binding, pd_binding_bytes};
-pub use images::{board_registration, render_board, render_kind, ImageKind, Mode};
-pub use model::ImageError;
+pub use images::{board_registration, render_board, render_kind, BoardId};
+pub use model::{ImageError, ImageKind, Mode};
 
 /// System description for the one-client serial image.
 pub fn render_serial_xml() -> Result<String, ImageError> {
@@ -24,6 +24,7 @@ mod tests {
         path::PathBuf,
     };
 
+    use lerux_machine::Arch;
     use lerux_sddf::{
         fs_client_config_t, fs_config_check_magic, net_client_config_t, net_config_check_magic,
         serial_client_config_t, serial_config_check_magic, serial_connection_resource_t,
@@ -38,8 +39,8 @@ mod tests {
     use crate::{
         binding::{bytes_for_pages, Page},
         board_registration,
-        images::{render_with_extra_end, render_with_region_vaddr, ImageKind},
-        pd_binding_bytes, render_board, ImageError, Mode,
+        images::{render_with_extra_end, render_with_region_vaddr, BoardId},
+        pd_binding_bytes, render_board, ImageError, ImageKind, Mode,
     };
 
     fn repo_root() -> PathBuf {
@@ -119,10 +120,309 @@ mod tests {
     }
 
     #[test]
+    fn riscv_serial_board_renders_mmio_and_irq() {
+        let xml = render_board("qemu_virt_riscv64_serial_sddf")
+            .expect("render")
+            .expect("riscv serial image");
+        assert!(xml.contains("phys_addr=\"0x1_000_0000\""));
+        assert!(xml.contains("<irq irq=\"10\" id=\"0\" />"));
+    }
+
+    #[test]
+    fn x86_serial_board_renders_port_and_apic_irq() {
+        let xml = render_board("x86_64_generic_serial_sddf")
+            .expect("render")
+            .expect("x86 serial image");
+        assert!(xml.contains(
+            "<ioport id=\"0\" addr=\"0x3f8\" size=\"8\" setvar_id=\"com1_ioport_id\" setvar_addr=\"com1_ioport_addr\" />"
+        ));
+        assert!(xml.contains(
+            "<irq pin=\"4\" vector=\"48\" id=\"0\" trigger=\"level\" polarity=\"high\" />"
+        ));
+        assert!(!xml.contains("serial_mmio"));
+        assert!(!xml.contains("irq irq="));
+    }
+
+    #[test]
+    fn board_without_sddf_suffix_is_none() {
+        assert_eq!(render_board("pc_z97_d3h").expect("render"), None);
+    }
+
+    #[test]
+    fn riscv_filesystem_board_renders_virtio_and_serial_mmio() {
+        let xml = render_board("qemu_virt_riscv64_fs_sddf")
+            .expect("render")
+            .expect("riscv filesystem image");
+        assert!(xml.contains("phys_addr=\"0x10_001_000\""));
+        assert!(xml.contains("phys_addr=\"0x1_000_0000\""));
+        assert!(xml.contains("vaddr=\"0x10_001_000\""));
+        assert!(xml.contains("vaddr=\"0x41_000_000\""));
+        assert!(xml.contains("<irq irq=\"1\" id=\"0\" />"));
+        assert!(xml.contains("<irq irq=\"10\" id=\"0\" />"));
+        assert!(!xml.contains("0xa003000"));
+        assert!(!xml.contains("0x6_000_000_000"));
+    }
+
+    #[test]
+    fn aarch64_net_board_keeps_virtio_window_and_irq() {
+        let xml = render_board("qemu_virt_aarch64_net_sddf")
+            .expect("render")
+            .expect("aarch64 network image");
+        assert!(xml.contains("phys_addr=\"0xa003000\""));
+        assert!(xml.contains("<irq irq=\"79\" id=\"0\" />"));
+        assert!(!xml.contains("0x10_002_000"));
+    }
+
+    #[test]
+    fn riscv_net_board_renders_virtio_and_serial_mmio() {
+        let xml = render_board("qemu_virt_riscv64_net_sddf")
+            .expect("render")
+            .expect("riscv network image");
+        assert!(xml.contains("phys_addr=\"0x10_002_000\""));
+        assert!(xml.contains("phys_addr=\"0x1_000_0000\""));
+        assert!(xml.contains("vaddr=\"0x10_002_000\""));
+        assert!(xml.contains("vaddr=\"0x40_000_000\""));
+        assert!(xml.contains("<irq irq=\"2\" id=\"0\" />"));
+        assert!(xml.contains("<irq irq=\"10\" id=\"0\" />"));
+        assert!(!xml.contains("0xa003000"));
+        assert!(!xml.contains("0x6_000_000_000"));
+    }
+
+    #[test]
+    fn riscv_fetch_board_renders_virtio_and_serial_mmio() {
+        let xml = render_board("qemu_virt_riscv64_fetch_sddf")
+            .expect("render")
+            .expect("riscv fetch image");
+        assert!(xml.contains("phys_addr=\"0x10_001_000\""));
+        assert!(xml.contains("phys_addr=\"0x10_002_000\""));
+        assert!(xml.contains("phys_addr=\"0x1_000_0000\""));
+        assert!(!xml.contains("0xa003000"));
+        let aarch64 = render_board("qemu_virt_aarch64_fetch_sddf")
+            .expect("render")
+            .expect("aarch64 fetch image");
+        assert!(aarch64.contains("0xa003000"));
+    }
+
+    #[test]
+    fn riscv_web_board_renders_virtio_and_serial_mmio() {
+        let xml = render_board("qemu_virt_riscv64_web_sddf")
+            .expect("render")
+            .expect("riscv web image");
+        assert!(xml.contains("phys_addr=\"0x10_001_000\""));
+        assert!(xml.contains("phys_addr=\"0x10_002_000\""));
+        assert!(xml.contains("phys_addr=\"0x1_000_0000\""));
+        assert!(!xml.contains("0xa003000"));
+        let aarch64 = render_board("qemu_virt_aarch64_web_sddf")
+            .expect("render")
+            .expect("aarch64 web image");
+        assert!(aarch64.contains("0xa003000"));
+    }
+
+    #[test]
+    fn riscv_browser_board_renders_virtio_and_serial_mmio() {
+        let xml = render_board("qemu_virt_riscv64_browser_sddf")
+            .expect("render")
+            .expect("riscv browser image");
+        assert!(xml.contains("phys_addr=\"0x10_001_000\""));
+        assert!(xml.contains("phys_addr=\"0x10_002_000\""));
+        assert!(xml.contains("phys_addr=\"0x10_003_000\""));
+        assert!(xml.contains("phys_addr=\"0x1_000_0000\""));
+        assert!(xml.contains("vaddr=\"0x42_000_000\""));
+        assert!(xml.contains("<irq irq=\"3\" id=\"0\" />"));
+        assert!(!xml.contains("0xa003000"));
+        let aarch64 = render_board("qemu_virt_aarch64_browser_sddf")
+            .expect("render")
+            .expect("aarch64 browser image");
+        assert!(aarch64.contains("0xa003000"));
+        assert!(aarch64.contains("<irq irq=\"77\" id=\"0\" />"));
+    }
+
+    #[test]
+    fn riscv_agent_board_renders_virtio_serial_and_tool_page() {
+        let xml = render_board("qemu_virt_riscv64_agent_sddf")
+            .expect("render")
+            .expect("riscv agent image");
+        assert!(xml.contains("phys_addr=\"0x10_001_000\""));
+        assert!(xml.contains("phys_addr=\"0x10_002_000\""));
+        assert!(xml.contains("phys_addr=\"0x1_000_0000\""));
+        assert!(xml.contains("vaddr=\"0xa_000_000\""));
+        assert!(xml.contains("sddf-grok.elf"));
+        assert!(xml.contains("sddf-agent.elf"));
+        assert!(!xml.contains("0xa003000"));
+        assert!(xml.contains(
+            "<protection_domain name=\"net_driver\" priority=\"4\" stack_size=\"0x10_000\">"
+        ));
+        assert!(!xml.contains("budget=\"2000\""));
+        let aarch64 = render_board("qemu_virt_aarch64_agent_sddf")
+            .expect("render")
+            .expect("aarch64 agent image");
+        assert!(aarch64.contains("0xa003000"));
+        assert!(!aarch64.contains("budget=\"2000\""));
+    }
+
+    #[test]
+    fn x86_agent_board_renders_pci_virtio_and_tool_page() {
+        let xml = render_board("x86_64_generic_agent_sddf")
+            .expect("render")
+            .expect("x86 agent image");
+        assert!(xml.contains(
+            "<ioport id=\"0\" addr=\"0xcf8\" size=\"8\" setvar_id=\"pci_net_config_ioport_id\" setvar_addr=\"pci_net_config_ioport_addr\" />"
+        ));
+        assert!(xml.contains("phys_addr=\"0xfed0_0000\""));
+        assert!(xml.contains("phys_addr=\"0xfed1_0000\""));
+        assert!(xml.contains("phys_addr=\"0xfed2_0000\""));
+        assert!(xml.contains("phys_addr=\"0xfed3_0000\""));
+        assert!(xml.contains("pci_ecam"));
+        assert!(xml.contains(
+            "<irq pin=\"11\" vector=\"49\" id=\"0\" trigger=\"level\" polarity=\"high\" />"
+        ));
+        assert!(xml.contains(
+            "<irq pin=\"10\" vector=\"50\" id=\"0\" trigger=\"level\" polarity=\"high\" />"
+        ));
+        assert!(xml.contains(
+            "<protection_domain name=\"net_driver\" priority=\"2\" budget=\"2000\" period=\"2000\" stack_size=\"0x10_000\">"
+        ));
+        assert!(xml.contains("sddf-grok.elf"));
+        assert!(xml.contains("sddf-agent.elf"));
+        assert!(xml.contains("vaddr=\"0xa_000_000\""));
+        assert!(!xml.contains("0xa003000"));
+        assert!(!xml.contains("serial_mmio"));
+        assert!(!xml.contains("pci_config_ioport_id"));
+    }
+
+    #[test]
+    fn x86_browser_board_is_unsupported() {
+        let err = render_board("x86_64_generic_browser_sddf").expect_err("unsupported");
+        assert!(matches!(err, ImageError::Unsupported { .. }), "{err:?}");
+    }
+
+    #[test]
+    fn x86_filesystem_board_renders_pci_and_dma() {
+        let xml = render_board("x86_64_generic_fs_sddf")
+            .expect("render")
+            .expect("x86 filesystem image");
+        assert!(xml.contains(
+            "<ioport id=\"0\" addr=\"0xcf8\" size=\"8\" setvar_id=\"pci_config_ioport_id\" setvar_addr=\"pci_config_ioport_addr\" />"
+        ));
+        assert!(xml.contains("phys_addr=\"0xfed0_0000\""));
+        assert!(xml.contains("phys_addr=\"0xfed1_0000\""));
+        assert!(xml.contains(
+            "<irq pin=\"10\" vector=\"49\" id=\"0\" trigger=\"level\" polarity=\"high\" />"
+        ));
+        assert!(xml.contains("phys_addr=\"0x6200_0000\""));
+        assert!(!xml.contains("0xa003000"));
+        assert!(!xml.contains("serial_mmio"));
+    }
+
+    #[test]
+    fn x86_net_board_renders_pci_port_and_apic_irq() {
+        let xml = render_board("x86_64_generic_net_sddf")
+            .expect("render")
+            .expect("x86 network image");
+        assert!(xml.contains(
+            "<ioport id=\"0\" addr=\"0xcf8\" size=\"8\" setvar_id=\"pci_net_config_ioport_id\" setvar_addr=\"pci_net_config_ioport_addr\" />"
+        ));
+        assert!(xml.contains("phys_addr=\"0xfed2_0000\""));
+        assert!(xml.contains("phys_addr=\"0xfed3_0000\""));
+        assert!(xml.contains(
+            "<irq pin=\"11\" vector=\"50\" id=\"0\" trigger=\"level\" polarity=\"high\" />"
+        ));
+        assert!(!xml.contains("serial_mmio"));
+        assert!(!xml.contains("irq irq="));
+        assert!(!xml.contains("0xa003000"));
+    }
+
+    #[test]
+    fn x86_fetch_board_renders_pci_virtio_and_serial_port() {
+        let xml = render_board("x86_64_generic_fetch_sddf")
+            .expect("render")
+            .expect("x86 fetch image");
+        assert!(xml.contains(
+            "<ioport id=\"0\" addr=\"0xcf8\" size=\"8\" setvar_id=\"pci_net_config_ioport_id\" setvar_addr=\"pci_net_config_ioport_addr\" />"
+        ));
+        assert!(xml.contains("phys_addr=\"0xfed0_0000\""));
+        assert!(xml.contains("phys_addr=\"0xfed1_0000\""));
+        assert!(xml.contains("phys_addr=\"0xfed2_0000\""));
+        assert!(xml.contains("phys_addr=\"0xfed3_0000\""));
+        assert!(xml.contains("pci_ecam"));
+        assert!(!xml.contains("pci_config_ioport_id"));
+        assert!(xml.contains(
+            "<irq pin=\"11\" vector=\"49\" id=\"0\" trigger=\"level\" polarity=\"high\" />"
+        ));
+        assert!(xml.contains(
+            "<irq pin=\"10\" vector=\"50\" id=\"0\" trigger=\"level\" polarity=\"high\" />"
+        ));
+        assert!(!xml.contains("0xa003000"));
+        assert!(!xml.contains("serial_mmio"));
+        assert!(xml.contains(
+            "<protection_domain name=\"fatfs\" priority=\"2\" budget=\"2000\" period=\"2000\" stack_size=\"0x10_000\">"
+        ));
+        assert!(xml.contains(
+            "<protection_domain name=\"net_driver\" priority=\"2\" budget=\"2000\" period=\"2000\" stack_size=\"0x10_000\">"
+        ));
+        assert!(xml.contains(
+            "<protection_domain name=\"net_copy\" priority=\"2\" budget=\"2000\" period=\"2000\" stack_size=\"0x10_000\">"
+        ));
+    }
+
+    #[test]
     fn serial_xml_matches_template_bytes() {
         let rendered = render_serial_xml().expect("render serial xml");
         let expected = filled_serial_template();
         compare_bytes(&rendered, expected).unwrap_or_else(|error| panic!("{error}"));
+    }
+
+    #[test]
+    fn x86_web_reuses_the_fetch_description() {
+        let fetch = render_board("x86_64_generic_fetch_sddf")
+            .expect("fetch")
+            .expect("x86 fetch image");
+        let web = render_board("x86_64_generic_web_sddf")
+            .expect("web")
+            .expect("x86 web image");
+        assert_eq!(fetch, web);
+        assert!(web.contains("phys_addr=\"0xfed0_0000\""));
+        assert!(web.contains("phys_addr=\"0xfed1_0000\""));
+        assert!(web.contains("phys_addr=\"0xfed2_0000\""));
+        assert!(web.contains("phys_addr=\"0xfed3_0000\""));
+        assert!(web.contains("pci_ecam"));
+        assert!(web.contains(
+            "<ioport id=\"0\" addr=\"0xcf8\" size=\"8\" setvar_id=\"pci_net_config_ioport_id\" setvar_addr=\"pci_net_config_ioport_addr\" />"
+        ));
+        assert!(web.contains(
+            "<irq pin=\"11\" vector=\"49\" id=\"0\" trigger=\"level\" polarity=\"high\" />"
+        ));
+        assert!(web.contains(
+            "<irq pin=\"10\" vector=\"50\" id=\"0\" trigger=\"level\" polarity=\"high\" />"
+        ));
+        assert!(web.contains(
+            "<protection_domain name=\"net_driver\" priority=\"2\" budget=\"2000\" period=\"2000\" stack_size=\"0x10_000\">"
+        ));
+        assert!(!web.contains("0xa003000"));
+        assert!(!web.contains("serial_mmio"));
+        assert!(!web.contains("pci_config_ioport_id"));
+        assert_eq!(
+            board_registration("x86_64_generic_web_sddf").expect("register"),
+            Some(BoardId {
+                kind: ImageKind::Fetch,
+                mode: Some(Mode::Web),
+                arch: Arch::X86_64,
+            })
+        );
+        let boards = fs::read_to_string(repo_root().join("support/boards.toml")).expect("boards");
+        let section = board_section(&boards, "x86_64_generic_web_sddf");
+        assert!(
+            section.contains("hostfwd"),
+            "web board row should set hostfwd: {section}"
+        );
+        let aarch64_fetch = render_board("qemu_virt_aarch64_fetch_sddf")
+            .expect("fetch")
+            .expect("aarch64 fetch image");
+        let aarch64_web = render_board("qemu_virt_aarch64_web_sddf")
+            .expect("web")
+            .expect("aarch64 web image");
+        assert_eq!(aarch64_fetch, aarch64_web);
+        assert!(aarch64_web.contains("0xa003000"));
     }
 
     #[test]
@@ -135,12 +435,20 @@ mod tests {
             .expect("web image");
         assert_eq!(fetch, web);
         assert_eq!(
-            board_registration("qemu_virt_aarch64_fetch_sddf"),
-            Some((ImageKind::Fetch, Some(Mode::Fetch)))
+            board_registration("qemu_virt_aarch64_fetch_sddf").expect("register"),
+            Some(BoardId {
+                kind: ImageKind::Fetch,
+                mode: Some(Mode::Fetch),
+                arch: Arch::Aarch64,
+            })
         );
         assert_eq!(
-            board_registration("qemu_virt_aarch64_web_sddf"),
-            Some((ImageKind::Fetch, Some(Mode::Web)))
+            board_registration("qemu_virt_aarch64_web_sddf").expect("register"),
+            Some(BoardId {
+                kind: ImageKind::Fetch,
+                mode: Some(Mode::Web),
+                arch: Arch::Aarch64,
+            })
         );
         assert!(web.contains("sddf-shell.elf"));
         let boards = fs::read_to_string(repo_root().join("support/boards.toml")).expect("boards");
@@ -285,9 +593,56 @@ mod tests {
             .expect("program")
             .expect("program image");
         assert!(xml.contains("sddf-program.elf"));
+        assert!(xml.contains("0xa003000"));
         assert!(!xml.contains("sddf-shell.elf"));
         let bytes = pd_binding_bytes("sddf-program", &[]).expect("program binding");
         shell_page_order(&bytes).unwrap_or_else(|error| panic!("{error}"));
+    }
+
+    #[test]
+    fn riscv_program_board_renders_virtio_and_serial_mmio() {
+        let xml = render_board("qemu_virt_riscv64_program_sddf")
+            .expect("render")
+            .expect("riscv program image");
+        assert!(xml.contains("phys_addr=\"0x10_001_000\""));
+        assert!(xml.contains("phys_addr=\"0x10_002_000\""));
+        assert!(xml.contains("phys_addr=\"0x1_000_0000\""));
+        assert!(xml.contains("sddf-program.elf"));
+        assert!(!xml.contains("0xa003000"));
+        assert!(!xml.contains("sddf-shell.elf"));
+        assert!(xml.contains(
+            "<protection_domain name=\"net_driver\" priority=\"4\" stack_size=\"0x10_000\">"
+        ));
+        assert!(!xml.contains("budget=\"2000\""));
+    }
+
+    #[test]
+    fn x86_program_board_renders_pci_virtio_and_serial_port() {
+        let xml = render_board("x86_64_generic_program_sddf")
+            .expect("render")
+            .expect("x86 program image");
+        assert!(xml.contains(
+            "<ioport id=\"0\" addr=\"0xcf8\" size=\"8\" setvar_id=\"pci_net_config_ioport_id\" setvar_addr=\"pci_net_config_ioport_addr\" />"
+        ));
+        assert!(xml.contains("phys_addr=\"0xfed0_0000\""));
+        assert!(xml.contains("phys_addr=\"0xfed1_0000\""));
+        assert!(xml.contains("phys_addr=\"0xfed2_0000\""));
+        assert!(xml.contains("phys_addr=\"0xfed3_0000\""));
+        assert!(xml.contains("pci_ecam"));
+        assert!(!xml.contains("pci_config_ioport_id"));
+        assert!(xml.contains(
+            "<irq pin=\"11\" vector=\"49\" id=\"0\" trigger=\"level\" polarity=\"high\" />"
+        ));
+        assert!(xml.contains(
+            "<irq pin=\"10\" vector=\"50\" id=\"0\" trigger=\"level\" polarity=\"high\" />"
+        ));
+        assert!(xml.contains(
+            "<protection_domain name=\"net_driver\" priority=\"2\" budget=\"2000\" period=\"2000\" stack_size=\"0x10_000\">"
+        ));
+        assert!(xml.contains("sddf-program.elf"));
+        assert!(!xml.contains("0xa003000"));
+        assert!(!xml.contains("serial_mmio"));
+        assert!(!xml.contains("sddf-shell.elf"));
     }
 
     #[test]
@@ -301,7 +656,7 @@ mod tests {
     #[test]
     fn uart_vaddr_change_fails_byte_compare() {
         let rendered = render_with_region_vaddr("serial_mmio", 0x2_100_000).expect("render");
-        let err = compare_bytes(&rendered, &filled_serial_template())
+        let err = compare_bytes(&rendered, filled_serial_template())
             .expect_err("changed uart virtual address");
         assert!(
             err.contains("0x2_000_000"),

@@ -1,7 +1,11 @@
+#[cfg(not(target_arch = "x86_64"))]
 use core::ptr::NonNull;
 
+#[cfg(not(target_arch = "x86_64"))]
 use sel4_microkit::var;
+#[cfg(not(target_arch = "x86_64"))]
 use sel4_virtio_hal_impl::HalImpl;
+#[cfg(not(target_arch = "x86_64"))]
 use virtio_drivers::{
     device::blk::VirtIOBlk,
     transport::{
@@ -10,14 +14,26 @@ use virtio_drivers::{
     },
 };
 
+#[cfg(not(target_arch = "x86_64"))]
+use lerux_machine::{virtio, Arch, VirtioRole};
+#[cfg(not(target_arch = "x86_64"))]
 use lerux_sddf::blk_image::BLK_VIRTIO_DMA_SIZE;
 
-/// QEMU `virt` puts virtio-blk at `+0xc00` when a virtio-net device occupies the first slot.
-pub const VIRTIO_BLK_MMIO_OFFSET: usize = 0xc00;
+#[cfg(not(target_arch = "x86_64"))]
 pub const VIRTIO_BLK_MMIO_SIZE: usize = 0x200;
 
+#[cfg(not(target_arch = "x86_64"))]
+const fn blk_mmio_offset() -> usize {
+    match virtio(Arch::TARGET, VirtioRole::Blk) {
+        Some(lerux_machine::VirtioAttach::Mmio { offset }) => offset as usize,
+        _ => 0,
+    }
+}
+
+#[cfg(not(target_arch = "x86_64"))]
 const MMIO_INIT_ATTEMPTS: usize = 10_000;
 
+#[cfg(not(target_arch = "x86_64"))]
 fn wait_for_mmio_transport(
     header: NonNull<VirtIOHeader>,
     mmio_size: usize,
@@ -33,6 +49,7 @@ fn wait_for_mmio_transport(
     unsafe { MmioTransport::new(header, mmio_size) }.expect("virtio-blk MMIO transport")
 }
 
+#[cfg(not(target_arch = "x86_64"))]
 pub fn init_hal() {
     HalImpl::init(
         usize::try_from(BLK_VIRTIO_DMA_SIZE).expect("dma size fits"),
@@ -41,9 +58,13 @@ pub fn init_hal() {
     );
 }
 
-pub fn create_virtio_blk() -> VirtIOBlk<HalImpl, MmioTransport<'static>> {
+#[cfg(not(target_arch = "x86_64"))]
+pub type BlkDev = VirtIOBlk<HalImpl, MmioTransport<'static>>;
+
+#[cfg(not(target_arch = "x86_64"))]
+pub fn create_virtio_blk() -> BlkDev {
     let header = NonNull::new(
-        (*var!(virtio_blk_mmio_vaddr: usize = 0) + VIRTIO_BLK_MMIO_OFFSET) as *mut VirtIOHeader,
+        (*var!(virtio_blk_mmio_vaddr: usize = 0) + blk_mmio_offset()) as *mut VirtIOHeader,
     )
     .expect("virtio-blk mmio vaddr");
     let transport = wait_for_mmio_transport(header, VIRTIO_BLK_MMIO_SIZE);

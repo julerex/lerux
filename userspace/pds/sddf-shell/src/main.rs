@@ -4,15 +4,67 @@
 #[cfg(any(
     all(
         feature = "board-qemu_virt_aarch64_fetch_sddf",
-        feature = "board-qemu_virt_aarch64_fs_sddf"
+        any(
+            feature = "board-qemu_virt_aarch64_fs_sddf",
+            feature = "board-qemu_virt_riscv64_fs_sddf",
+            feature = "board-x86_64_generic_fs_sddf"
+        )
+    ),
+    all(
+        feature = "board-qemu_virt_riscv64_fetch_sddf",
+        any(
+            feature = "board-qemu_virt_aarch64_fs_sddf",
+            feature = "board-qemu_virt_riscv64_fs_sddf",
+            feature = "board-x86_64_generic_fs_sddf"
+        )
+    ),
+    all(
+        feature = "board-x86_64_generic_fetch_sddf",
+        any(
+            feature = "board-qemu_virt_aarch64_fs_sddf",
+            feature = "board-qemu_virt_riscv64_fs_sddf",
+            feature = "board-x86_64_generic_fs_sddf"
+        )
     ),
     all(
         feature = "board-qemu_virt_aarch64_web_sddf",
-        feature = "board-qemu_virt_aarch64_fs_sddf"
+        any(
+            feature = "board-qemu_virt_aarch64_fs_sddf",
+            feature = "board-qemu_virt_riscv64_fs_sddf",
+            feature = "board-x86_64_generic_fs_sddf"
+        )
+    ),
+    all(
+        feature = "board-qemu_virt_riscv64_web_sddf",
+        any(
+            feature = "board-qemu_virt_aarch64_fs_sddf",
+            feature = "board-qemu_virt_riscv64_fs_sddf",
+            feature = "board-x86_64_generic_fs_sddf"
+        )
+    ),
+    all(
+        feature = "board-x86_64_generic_web_sddf",
+        any(
+            feature = "board-qemu_virt_aarch64_fs_sddf",
+            feature = "board-qemu_virt_riscv64_fs_sddf",
+            feature = "board-x86_64_generic_fs_sddf"
+        )
     ),
     all(
         feature = "board-qemu_virt_aarch64_browser_sddf",
-        feature = "board-qemu_virt_aarch64_fs_sddf"
+        any(
+            feature = "board-qemu_virt_aarch64_fs_sddf",
+            feature = "board-qemu_virt_riscv64_fs_sddf",
+            feature = "board-x86_64_generic_fs_sddf"
+        )
+    ),
+    all(
+        feature = "board-qemu_virt_riscv64_browser_sddf",
+        any(
+            feature = "board-qemu_virt_aarch64_fs_sddf",
+            feature = "board-qemu_virt_riscv64_fs_sddf",
+            feature = "board-x86_64_generic_fs_sddf"
+        )
     ),
 ))]
 compile_error!(
@@ -25,12 +77,120 @@ compile_error!(
         feature = "board-qemu_virt_aarch64_fetch_sddf"
     ),
     all(
+        feature = "board-qemu_virt_riscv64_web_sddf",
+        feature = "board-qemu_virt_aarch64_fetch_sddf"
+    ),
+    all(
+        feature = "board-qemu_virt_riscv64_web_sddf",
+        feature = "board-qemu_virt_riscv64_fetch_sddf"
+    ),
+    all(
+        feature = "board-qemu_virt_riscv64_web_sddf",
+        feature = "board-x86_64_generic_fetch_sddf"
+    ),
+    all(
+        feature = "board-x86_64_generic_web_sddf",
+        feature = "board-x86_64_generic_fetch_sddf"
+    ),
+    all(
+        feature = "board-x86_64_generic_web_sddf",
+        feature = "board-qemu_virt_aarch64_fetch_sddf"
+    ),
+    all(
+        feature = "board-x86_64_generic_web_sddf",
+        feature = "board-qemu_virt_riscv64_fetch_sddf"
+    ),
+    all(
+        feature = "board-qemu_virt_aarch64_web_sddf",
+        feature = "board-x86_64_generic_web_sddf"
+    ),
+    all(
+        feature = "board-qemu_virt_riscv64_web_sddf",
+        feature = "board-x86_64_generic_web_sddf"
+    ),
+    all(
+        feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-x86_64_generic_web_sddf"
+    ),
+    all(
         feature = "board-qemu_virt_aarch64_browser_sddf",
         feature = "board-qemu_virt_aarch64_fetch_sddf"
     ),
     all(
         feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-qemu_virt_riscv64_fetch_sddf"
+    ),
+    all(
+        feature = "board-qemu_virt_aarch64_web_sddf",
+        feature = "board-qemu_virt_riscv64_fetch_sddf"
+    ),
+    all(
+        feature = "board-qemu_virt_riscv64_web_sddf",
+        feature = "board-qemu_virt_aarch64_browser_sddf"
+    ),
+    all(
+        feature = "board-qemu_virt_aarch64_web_sddf",
+        feature = "board-qemu_virt_riscv64_web_sddf"
+    ),
+    all(
+        feature = "board-qemu_virt_aarch64_fetch_sddf",
+        feature = "board-qemu_virt_riscv64_fetch_sddf"
+    ),
+    all(
+        feature = "board-qemu_virt_aarch64_fetch_sddf",
+        feature = "board-x86_64_generic_fetch_sddf"
+    ),
+    all(
+        feature = "board-qemu_virt_riscv64_fetch_sddf",
+        feature = "board-x86_64_generic_fetch_sddf"
+    ),
+    all(
+        feature = "board-qemu_virt_aarch64_web_sddf",
+        feature = "board-x86_64_generic_fetch_sddf"
+    ),
+    all(
+        feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-x86_64_generic_fetch_sddf"
+    ),
+    all(
+        feature = "board-qemu_virt_aarch64_browser_sddf",
         feature = "board-qemu_virt_aarch64_web_sddf"
+    ),
+    all(
+        feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-qemu_virt_riscv64_web_sddf"
+    ),
+    all(
+        feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-qemu_virt_riscv64_browser_sddf"
+    ),
+    all(
+        feature = "board-qemu_virt_riscv64_browser_sddf",
+        feature = "board-qemu_virt_aarch64_fetch_sddf"
+    ),
+    all(
+        feature = "board-qemu_virt_riscv64_browser_sddf",
+        feature = "board-qemu_virt_riscv64_fetch_sddf"
+    ),
+    all(
+        feature = "board-qemu_virt_riscv64_browser_sddf",
+        feature = "board-x86_64_generic_fetch_sddf"
+    ),
+    all(
+        feature = "board-qemu_virt_riscv64_browser_sddf",
+        feature = "board-x86_64_generic_web_sddf"
+    ),
+    all(
+        feature = "board-qemu_virt_riscv64_browser_sddf",
+        feature = "board-qemu_virt_aarch64_web_sddf"
+    ),
+    all(
+        feature = "board-qemu_virt_riscv64_browser_sddf",
+        feature = "board-qemu_virt_riscv64_web_sddf"
+    ),
+    all(
+        feature = "board-qemu_virt_riscv64_web_sddf",
+        feature = "board-qemu_virt_riscv64_browser_sddf"
     ),
 ))]
 compile_error!("the fetch image, the web image, and the browser image are separate boards");
@@ -42,7 +202,11 @@ use core::{
 
 use sel4_microkit::{protection_domain, Channel, ChannelSet, Handler, Infallible};
 
-#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf"
+))]
 use sel4_microkit::{get_mr, MessageInfo};
 
 use lerux_cothread::{
@@ -63,7 +227,11 @@ use lerux_sddf::{
     LIONS_FS_MAGIC, SDDF_SERIAL_MAGIC,
 };
 
-#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf"
+))]
 use lerux_sddf::{
     date_from_ns, sched_config_t, sched_from_bytes, timer_client_config_t, timer_config_from_bytes,
     FS_IMAGE_ROLES, SDDF_TIMER_GET_TIME, SDDF_TIMER_MAGIC, SHELL_TIMER_CHANNEL,
@@ -84,7 +252,10 @@ const LIST_MAX: usize = 32;
 const S_IFMT: u64 = 0o170000;
 const S_IFDIR: u64 = 0o040000;
 
-#[cfg(feature = "board-qemu_virt_aarch64_browser_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+))]
 mod gpu;
 #[cfg(feature = "net-client")]
 mod net;
@@ -122,36 +293,68 @@ unsafe impl Sync for FilesCell {}
 
 static FILES: FilesCell = FilesCell(UnsafeCell::new(MaybeUninit::uninit()));
 
-#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf"
+))]
 const LOG_CAP: usize = 2048;
 
-#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf"
+))]
 struct Log {
     bytes: [u8; LOG_CAP],
     len: usize,
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf"
+))]
 struct LogCell(UnsafeCell<Log>);
 
-#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf"
+))]
 // SAFETY: the worker is the only user. The root does not read the log.
 unsafe impl Sync for LogCell {}
 
-#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf"
+))]
 static LOG: LogCell = LogCell(UnsafeCell::new(Log {
     bytes: [0; LOG_CAP],
     len: 0,
 }));
 
-#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf"
+))]
 struct SchedCell(UnsafeCell<MaybeUninit<sched_config_t>>);
 
-#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf"
+))]
 // SAFETY: init writes this cell before the worker starts. The worker only reads it.
 unsafe impl Sync for SchedCell {}
 
-#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf"
+))]
 static SCHED: SchedCell = SchedCell(UnsafeCell::new(MaybeUninit::uninit()));
 
 struct HandlerImpl;
@@ -166,9 +369,16 @@ extern "C" fn worker() {
     if !bind_files() {
         return;
     }
-    #[cfg(feature = "board-qemu_virt_aarch64_web_sddf")]
+    #[cfg(any(
+        feature = "board-qemu_virt_aarch64_web_sddf",
+        feature = "board-qemu_virt_riscv64_web_sddf",
+        feature = "board-x86_64_generic_web_sddf"
+    ))]
     serve_seeded_file();
-    #[cfg(feature = "board-qemu_virt_aarch64_browser_sddf")]
+    #[cfg(any(
+        feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-qemu_virt_riscv64_browser_sddf"
+    ))]
     browse();
     say(b"lerux shell ready\n");
     let mut line = [0u8; LINE_MAX];
@@ -211,7 +421,11 @@ fn files() -> &'static mut Files {
     unsafe { (*FILES.0.get()).assume_init_mut() }
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_web_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_web_sddf",
+    feature = "board-qemu_virt_riscv64_web_sddf",
+    feature = "board-x86_64_generic_web_sddf"
+))]
 fn serve_seeded_file() {
     let mut body = [0u8; 64];
     let n = read_seed(&mut body);
@@ -229,7 +443,10 @@ fn serve_seeded_file() {
     }
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_browser_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+))]
 fn browse() {
     let mut body = [0u8; 512];
     match net::fetch_body(&mut body) {
@@ -246,7 +463,10 @@ fn browse() {
     }
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_browser_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+))]
 fn page_title(body: &[u8]) -> Option<&[u8]> {
     let open = b"<title>";
     let close = b"</title>";
@@ -262,7 +482,10 @@ fn page_title(body: &[u8]) -> Option<&[u8]> {
     Some(title)
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_browser_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+))]
 fn say_title(title: &[u8]) {
     let mut line = [0u8; 40];
     let prefix = b"title ";
@@ -274,7 +497,11 @@ fn say_title(title: &[u8]) {
     say(&line[..=len]);
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_web_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_web_sddf",
+    feature = "board-qemu_virt_riscv64_web_sddf",
+    feature = "board-x86_64_generic_web_sddf"
+))]
 fn read_seed(buf: &mut [u8]) -> usize {
     let Ok(fd) = files().open(b"/config/hostname", Open::Read) else {
         return 0;
@@ -290,7 +517,11 @@ fn io() -> &'static Io {
 }
 
 fn say(bytes: &[u8]) {
-    #[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+    #[cfg(any(
+        feature = "board-qemu_virt_aarch64_fs_sddf",
+        feature = "board-qemu_virt_riscv64_fs_sddf",
+        feature = "board-x86_64_generic_fs_sddf"
+    ))]
     store_serial(bytes);
     emit(bytes);
 }
@@ -356,37 +587,93 @@ fn dispatch(line: &[u8]) {
         b"mv" => cmd_mv(rest),
         b"rm" => cmd_rm(rest),
         b"stat" => cmd_stat(rest),
-        #[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+        #[cfg(any(
+            feature = "board-qemu_virt_aarch64_fetch_sddf",
+            feature = "board-qemu_virt_riscv64_fetch_sddf",
+            feature = "board-x86_64_generic_fetch_sddf"
+        ))]
         b"fetch" => cmd_fetch(rest),
-        #[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+        #[cfg(any(
+            feature = "board-qemu_virt_aarch64_fetch_sddf",
+            feature = "board-qemu_virt_riscv64_fetch_sddf",
+            feature = "board-x86_64_generic_fetch_sddf"
+        ))]
         b"calc" => cmd_calc(rest),
-        #[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+        #[cfg(any(
+            feature = "board-qemu_virt_aarch64_fetch_sddf",
+            feature = "board-qemu_virt_riscv64_fetch_sddf",
+            feature = "board-x86_64_generic_fetch_sddf"
+        ))]
         b"backup" => cmd_backup(rest),
-        #[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+        #[cfg(any(
+            feature = "board-qemu_virt_aarch64_fetch_sddf",
+            feature = "board-qemu_virt_riscv64_fetch_sddf",
+            feature = "board-x86_64_generic_fetch_sddf"
+        ))]
         b"source" => cmd_source(rest),
-        #[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+        #[cfg(any(
+            feature = "board-qemu_virt_aarch64_fetch_sddf",
+            feature = "board-qemu_virt_riscv64_fetch_sddf",
+            feature = "board-x86_64_generic_fetch_sddf"
+        ))]
         b"cert" => cmd_cert(rest),
-        #[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+        #[cfg(any(
+            feature = "board-qemu_virt_aarch64_fetch_sddf",
+            feature = "board-qemu_virt_riscv64_fetch_sddf",
+            feature = "board-x86_64_generic_fetch_sddf"
+        ))]
         b"edit" => cmd_edit(rest),
-        #[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+        #[cfg(any(
+            feature = "board-qemu_virt_aarch64_fetch_sddf",
+            feature = "board-qemu_virt_riscv64_fetch_sddf",
+            feature = "board-x86_64_generic_fetch_sddf"
+        ))]
         b"chat" => cmd_chat(rest),
-        #[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+        #[cfg(any(
+            feature = "board-qemu_virt_aarch64_fs_sddf",
+            feature = "board-qemu_virt_riscv64_fs_sddf",
+            feature = "board-x86_64_generic_fs_sddf"
+        ))]
         b"config" => cmd_config(rest),
-        #[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+        #[cfg(any(
+            feature = "board-qemu_virt_aarch64_fs_sddf",
+            feature = "board-qemu_virt_riscv64_fs_sddf",
+            feature = "board-x86_64_generic_fs_sddf"
+        ))]
         b"date" => cmd_date(rest),
-        #[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+        #[cfg(any(
+            feature = "board-qemu_virt_aarch64_fs_sddf",
+            feature = "board-qemu_virt_riscv64_fs_sddf",
+            feature = "board-x86_64_generic_fs_sddf"
+        ))]
         b"ps" => cmd_table(rest, b"ps ok\n", b"ps err\n"),
-        #[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+        #[cfg(any(
+            feature = "board-qemu_virt_aarch64_fs_sddf",
+            feature = "board-qemu_virt_riscv64_fs_sddf",
+            feature = "board-x86_64_generic_fs_sddf"
+        ))]
         b"qos" => cmd_table(rest, b"qos ok\n", b"qos err\n"),
-        #[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+        #[cfg(any(
+            feature = "board-qemu_virt_aarch64_fs_sddf",
+            feature = "board-qemu_virt_riscv64_fs_sddf",
+            feature = "board-x86_64_generic_fs_sddf"
+        ))]
         b"dmesg" => cmd_dmesg(rest),
-        #[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+        #[cfg(any(
+            feature = "board-qemu_virt_aarch64_fs_sddf",
+            feature = "board-qemu_virt_riscv64_fs_sddf",
+            feature = "board-x86_64_generic_fs_sddf"
+        ))]
         b"reboot" => cmd_reboot(rest),
         _ => say(b"err\n"),
     }
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf"
+))]
 fn cmd_config(rest: &[u8]) {
     let Some((verb, key)) = split_first(rest) else {
         say(b"config err\n");
@@ -420,7 +707,11 @@ fn cmd_config(rest: &[u8]) {
     say(&out[..=n]);
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf"
+))]
 fn cmd_date(rest: &[u8]) {
     if !rest.is_empty() {
         say(b"date err\n");
@@ -449,7 +740,11 @@ fn cmd_date(rest: &[u8]) {
     say(&line);
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf"
+))]
 fn write_width(buf: &mut [u8], mut value: u16) {
     for index in (0..buf.len()).rev() {
         buf[index] = b'0' + (value % 10) as u8;
@@ -457,7 +752,11 @@ fn write_width(buf: &mut [u8], mut value: u16) {
     }
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf"
+))]
 fn cmd_table(rest: &[u8], ok: &'static [u8], err: &'static [u8]) {
     if !rest.is_empty() {
         say(err);
@@ -470,7 +769,11 @@ fn cmd_table(rest: &[u8], ok: &'static [u8], err: &'static [u8]) {
     say(ok);
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf"
+))]
 fn say_role(entry: &lerux_sddf::sched_entry_t) {
     let mut line = [0u8; 40];
     let name_len = entry
@@ -491,7 +794,11 @@ fn say_role(entry: &lerux_sddf::sched_entry_t) {
     say(&line[..len]);
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf"
+))]
 fn push_dec(buf: &mut [u8], mut value: u32) -> usize {
     let mut tmp = [0u8; 10];
     let mut index = tmp.len();
@@ -508,7 +815,11 @@ fn push_dec(buf: &mut [u8], mut value: u32) -> usize {
     digits.len()
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf"
+))]
 fn cmd_dmesg(rest: &[u8]) {
     if !rest.is_empty() {
         say(b"dmesg err\n");
@@ -520,7 +831,11 @@ fn cmd_dmesg(rest: &[u8]) {
     emit(&log.bytes[..log.len]);
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf"
+))]
 fn cmd_reboot(rest: &[u8]) {
     if !rest.is_empty() {
         say(b"reboot err\n");
@@ -529,7 +844,11 @@ fn cmd_reboot(rest: &[u8]) {
     say(b"reboot\n");
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf"
+))]
 fn store_serial(bytes: &[u8]) {
     // The boot line has to stay readable, so a full log stops instead of dropping the front.
     // SAFETY: the worker is the only user of this log.
@@ -543,13 +862,21 @@ fn store_serial(bytes: &[u8]) {
     }
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf"
+))]
 fn schedule() -> &'static sched_config_t {
     // SAFETY: `install_status` wrote this cell before the worker started.
     unsafe { (*SCHED.0.get()).assume_init_ref() }
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
 fn cmd_fetch(rest: &[u8]) {
     let Some(name) = one_name(rest) else {
         say(b"fetch err\n");
@@ -577,7 +904,11 @@ fn cmd_fetch(rest: &[u8]) {
     reply(ok, b"fetch ok\n", b"fetch err\n");
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
 fn cmd_calc(rest: &[u8]) {
     if rest.is_empty() {
         say(b"calc err\n");
@@ -589,7 +920,11 @@ fn cmd_calc(rest: &[u8]) {
     }
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
 fn say_calc(value: i64) {
     let mut line = [0u8; 32];
     let prefix = b"calc ";
@@ -601,7 +936,11 @@ fn say_calc(value: i64) {
     say(&line[..len]);
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
 fn write_i64(buf: &mut [u8], value: i64) -> usize {
     if value < 0 {
         buf[0] = b'-';
@@ -610,7 +949,11 @@ fn write_i64(buf: &mut [u8], value: i64) -> usize {
     write_u64(buf, u64::try_from(value).expect("non-negative"))
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
 fn write_u64(buf: &mut [u8], mut value: u64) -> usize {
     let mut tmp = [0u8; 20];
     let mut index = tmp.len();
@@ -627,7 +970,11 @@ fn write_u64(buf: &mut [u8], mut value: u64) -> usize {
     digits.len()
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
 fn eval_expr(input: &[u8]) -> Result<i64, ()> {
     let mut parser = Parser { s: input, i: 0 };
     let value = parser.parse_expr()?;
@@ -638,13 +985,21 @@ fn eval_expr(input: &[u8]) -> Result<i64, ()> {
     Ok(value)
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
 struct Parser<'a> {
     s: &'a [u8],
     i: usize,
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
 impl Parser<'_> {
     fn skip(&mut self) {
         while self.i < self.s.len() && self.s[self.i] == b' ' {
@@ -744,7 +1099,11 @@ impl Parser<'_> {
     }
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
 fn cmd_backup(rest: &[u8]) {
     let Some((src, dest)) = split_first(rest) else {
         say(b"backup err\n");
@@ -789,7 +1148,11 @@ fn cmd_backup(rest: &[u8]) {
     reply(ok, b"backup ok\n", b"backup err\n");
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
 fn cmd_source(rest: &[u8]) {
     use core::sync::atomic::{AtomicBool, Ordering};
     static SOURCING: AtomicBool = AtomicBool::new(false);
@@ -808,7 +1171,11 @@ fn cmd_source(rest: &[u8]) {
     }
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
 fn source_file(name: &[u8]) -> bool {
     let fd = match files().open(name, Open::Read) {
         Ok(fd) => fd,
@@ -847,7 +1214,11 @@ fn source_file(name: &[u8]) -> bool {
     ran
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
 fn cmd_cert(rest: &[u8]) {
     if !rest.is_empty() {
         say(b"cert err\n");
@@ -856,7 +1227,11 @@ fn cmd_cert(rest: &[u8]) {
     reply(net::cert_ready(), b"cert ok\n", b"cert err\n");
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
 fn cmd_edit(rest: &[u8]) {
     let Some((name, text)) = split_first(rest) else {
         say(b"edit err\n");
@@ -879,7 +1254,11 @@ fn cmd_edit(rest: &[u8]) {
     reply(ok, b"edit ok\n", b"edit err\n");
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_fetch_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
 fn cmd_chat(rest: &[u8]) {
     if !rest.is_empty() {
         say(b"chat err\n");
@@ -1136,7 +1515,14 @@ fn trim(line: &[u8]) -> &[u8] {
 fn init() -> HandlerImpl {
     let serial_len = size_of::<serial_client_config_t>();
     let fs_len = size_of::<fs_client_config_t>();
-    #[cfg(not(any(feature = "net-client", feature = "board-qemu_virt_aarch64_fs_sddf")))]
+    #[cfg(not(any(
+        feature = "net-client",
+        any(
+            feature = "board-qemu_virt_aarch64_fs_sddf",
+            feature = "board-qemu_virt_riscv64_fs_sddf",
+            feature = "board-x86_64_generic_fs_sddf"
+        )
+    )))]
     assert_eq!(CONFIG.len(), serial_len + fs_len);
     // SAFETY: the build script wrote a `serial_client_config_t` and then an `fs_client_config_t`.
     let serial = unsafe {
@@ -1154,9 +1540,16 @@ fn init() -> HandlerImpl {
     assert_eq!(fs.server.id, FS_SHELL_SERVER_CHANNEL);
     #[cfg(feature = "net-client")]
     install_net(serial_len + fs_len);
-    #[cfg(feature = "board-qemu_virt_aarch64_browser_sddf")]
+    #[cfg(any(
+        feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-qemu_virt_riscv64_browser_sddf"
+    ))]
     gpu::install();
-    #[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+    #[cfg(any(
+        feature = "board-qemu_virt_aarch64_fs_sddf",
+        feature = "board-qemu_virt_riscv64_fs_sddf",
+        feature = "board-x86_64_generic_fs_sddf"
+    ))]
     install_status(serial_len + fs_len);
     // SAFETY: the template maps this client's transmit and receive regions.
     let tx = unsafe { serial_handle_from_connection(&serial.tx) };
@@ -1188,7 +1581,10 @@ impl Handler for HandlerImpl {
         }
         #[cfg(feature = "net-client")]
         net::on_notify(channels);
-        #[cfg(feature = "board-qemu_virt_aarch64_browser_sddf")]
+        #[cfg(any(
+            feature = "board-qemu_virt_aarch64_browser_sddf",
+            feature = "board-qemu_virt_riscv64_browser_sddf"
+        ))]
         gpu::on_notify(channels);
         Ok(())
     }
@@ -1212,7 +1608,11 @@ fn install_net(at: usize) {
     net::install(&net);
 }
 
-#[cfg(feature = "board-qemu_virt_aarch64_fs_sddf")]
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf"
+))]
 fn install_status(at: usize) {
     let timer_len = size_of::<timer_client_config_t>();
     let schedule_len = size_of::<sched_config_t>();

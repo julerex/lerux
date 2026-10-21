@@ -8,6 +8,7 @@ license = "MIT"
 workspace = true
 
 [dependencies]
+lerux-machine = { path = "../../crates/lerux-machine" }
 lerux-logging = { path = "../../crates/lerux-logging" }
 lerux-sddf = { path = "../../crates/lerux-sddf" }
 sel4-microkit = { workspace = true }

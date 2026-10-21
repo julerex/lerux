@@ -7,8 +7,15 @@ license = "MIT"
 [lints]
 workspace = true
 
+[features]
+board-x86_64_generic_fetch_sddf = []
+board-x86_64_generic_web_sddf = []
+board-x86_64_generic_agent_sddf = []
+board-x86_64_generic_program_sddf = []
+
 [dependencies]
 lerux-logging = { path = "../../crates/lerux-logging" }
+lerux-machine = { path = "../../crates/lerux-machine" }
 lerux-sddf = { path = "../../crates/lerux-sddf" }
 sel4-microkit = { workspace = true }
 sel4-virtio-hal-impl = { workspace = true }
@@ -16,3 +23,7 @@ virtio-drivers = { workspace = true }
 
 [build-dependencies]
 lerux-image = { path = "../../../tools/lerux-image" }
+
+[target.'cfg(target_arch = "x86_64")'.dependencies]
+lerux-virtio-hal = { path = "../../crates/lerux-virtio-hal" }
+lerux-virtio-pci = { path = "../../crates/lerux-virtio-pci" }

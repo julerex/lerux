@@ -10,10 +10,16 @@ workspace = true
 [dependencies]
 embedded-hal-nb = { workspace = true }
 lerux-logging = { path = "../../crates/lerux-logging" }
+lerux-machine = { path = "../../crates/lerux-machine" }
 lerux-sddf = { path = "../../crates/lerux-sddf" }
 sel4-driver-interfaces = { workspace = true }
 sel4-microkit = { workspace = true }
+
+[target.'cfg(target_arch = "aarch64")'.dependencies]
 sel4-pl011-driver = { workspace = true }
+
+[target.'cfg(target_arch = "x86_64")'.dependencies]
+sel4 = { workspace = true }
 
 [build-dependencies]
 lerux-image = { path = "../../../tools/lerux-image" }

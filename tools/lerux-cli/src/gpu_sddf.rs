@@ -27,6 +27,10 @@ mod tests {
             "shell manifest declares the browser board"
         );
         assert!(
+            shell_manifest.contains("dep:lerux-web"),
+            "browser board links lerux-web"
+        );
+        assert!(
             !shell_manifest.contains("lerux-interface-types"),
             "shell manifest stays off the postcard interface crate"
         );
@@ -62,6 +66,13 @@ mod tests {
             "<irq irq=\"33\" id=\"{}\" />",
             serial_image::DRIVER_IRQ_CHANNEL
         )));
+        assert!(
+            xml.contains(&format!(
+                "name=\"gpu_client_data\" size=\"{}\"",
+                hex_group(gpu_image::GPU_CLIENT_DATA_SIZE)
+            )),
+            "client pixel region size"
+        );
 
         for (name, priority) in [
             ("blk_driver", 4),

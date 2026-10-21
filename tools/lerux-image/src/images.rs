@@ -12,6 +12,8 @@ use lerux_machine::{
     virtio_dma_guest, virtio_dma_phys_addr, virtio_node, Arch, VirtioRole,
 };
 
+use lerux_sddf::gpu_image;
+
 use crate::model::{
     line_irq, render_image, Domain, Image, ImageError, ImageKind, Link, Map, Mode, Qos, Region,
     Slot, REGION_SIZE, STACK_SIZE,
@@ -1078,7 +1080,11 @@ fn gpu_regions() -> Vec<Region> {
         ram("gpu_client_events", REGION_SIZE, 0x7_004_000),
         ram("gpu_client_req", REGION_SIZE, 0x7_005_000),
         ram("gpu_client_resp", REGION_SIZE, 0x7_006_000),
-        ram("gpu_client_data", REGION_SIZE, 0x7_007_000),
+        ram(
+            "gpu_client_data",
+            gpu_image::GPU_CLIENT_DATA_SIZE,
+            0x7_007_000,
+        ),
     ]
 }
 

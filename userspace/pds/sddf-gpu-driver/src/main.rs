@@ -16,9 +16,9 @@ use lerux_logging::{debug, log};
 use lerux_sddf::{
     gpu_dequeue_req, gpu_enqueue_resp, gpu_events_set_display_info, gpu_events_t, gpu_formats_t,
     gpu_image::{
-        DRIVER_IRQ_CHANNEL, DRIVER_VIRT_CHANNEL, GPU_CLIENT_DATA_VADDR, GPU_DRIVER_DATA_VADDR,
-        GPU_DRIVER_DMA_SIZE, GPU_DRIVER_EVENTS_VADDR, GPU_DRIVER_REQ_VADDR, GPU_DRIVER_RESP_VADDR,
-        GPU_QUEUE_CAPACITY, GPU_REGION_SIZE,
+        DRIVER_IRQ_CHANNEL, DRIVER_VIRT_CHANNEL, GPU_CLIENT_DATA_SIZE, GPU_CLIENT_DATA_VADDR,
+        GPU_DRIVER_DATA_VADDR, GPU_DRIVER_DMA_SIZE, GPU_DRIVER_EVENTS_VADDR, GPU_DRIVER_REQ_VADDR,
+        GPU_DRIVER_RESP_VADDR, GPU_QUEUE_CAPACITY, GPU_REGION_SIZE,
     },
     gpu_queue_full_resp, gpu_queue_handle_t, gpu_queue_init, gpu_rect_t, gpu_req_code_t,
     gpu_req_resource_attach_backing_t, gpu_req_resource_create_2d_t, gpu_req_resource_flush_t,
@@ -98,7 +98,7 @@ fn rect_inside(rect: gpu_rect_t, width: u32, height: u32) -> bool {
 fn region_ptr(offset: u64, len: usize) -> Option<*const u8> {
     let off = usize::try_from(offset).ok()?;
     let end = off.checked_add(len)?;
-    if end > usize::try_from(GPU_REGION_SIZE).expect("region size") {
+    if end > usize::try_from(GPU_CLIENT_DATA_SIZE).expect("client data size") {
         return None;
     }
     Some((GPU_CLIENT_DATA_VADDR as *const u8).wrapping_add(off))
@@ -255,7 +255,7 @@ impl HandlerImpl {
         let Some(end) = body.mem_offset.checked_add(u64::from(body.mem_size)) else {
             return gpu_resp_status_t::GPU_RESP_ERR_INVALID_BOUNDS;
         };
-        if end > GPU_REGION_SIZE {
+        if end > GPU_CLIENT_DATA_SIZE {
             return gpu_resp_status_t::GPU_RESP_ERR_INVALID_BOUNDS;
         }
         resource.mem_offset = body.mem_offset;
@@ -318,7 +318,7 @@ impl HandlerImpl {
             return gpu_resp_status_t::GPU_RESP_ERR_INVALID_BOUNDS;
         };
         let backing_end = resource.mem_offset + u64::from(resource.mem_size);
-        if end > backing_end || end > GPU_REGION_SIZE {
+        if end > backing_end || end > GPU_CLIENT_DATA_SIZE {
             return gpu_resp_status_t::GPU_RESP_ERR_INVALID_BOUNDS;
         }
         resource.transfer = Some(Transfer {

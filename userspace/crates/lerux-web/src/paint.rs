@@ -1,11 +1,12 @@
 //! Paint layout boxes into an XRGB8888 bitmap (`0x00RRGGBB`).
 
+#[cfg(test)]
 use alloc::vec::Vec;
 
 use crate::{font::glyph, layout::LayoutBox, style::WHITE};
 
 /// Shared bitmap view. Bytes are little-endian XRGB8888.
-pub struct Bitmap<'a> {
+pub(crate) struct Bitmap<'a> {
     data: &'a mut [u8],
     width: u32,
     height: u32,
@@ -14,7 +15,7 @@ pub struct Bitmap<'a> {
 
 impl<'a> Bitmap<'a> {
     /// `data` must cover `stride * height` bytes; `stride` is at least `width * 4`.
-    pub fn new(data: &'a mut [u8], width: u32, height: u32, stride: u32) -> Option<Self> {
+    pub(crate) fn new(data: &'a mut [u8], width: u32, height: u32, stride: u32) -> Option<Self> {
         let need = stride as usize * height as usize;
         if width == 0 || height == 0 || stride < width.saturating_mul(4) || data.len() < need {
             return None;
@@ -36,6 +37,7 @@ impl<'a> Bitmap<'a> {
     }
 
     /// Native-endian XRGB8888 pixel, or 0 if out of bounds.
+    #[cfg(test)]
     pub fn pixel(&self, x: u32, y: u32) -> u32 {
         if x >= self.width || y >= self.height {
             return 0;
@@ -44,6 +46,7 @@ impl<'a> Bitmap<'a> {
         u32::from_le_bytes(self.data[off..off + 4].try_into().unwrap_or([0; 4]))
     }
 
+    #[cfg(test)]
     pub fn contains_color(&self, color: u32) -> bool {
         for y in 0..self.height {
             for x in 0..self.width {
@@ -56,6 +59,7 @@ impl<'a> Bitmap<'a> {
     }
 
     /// Binary PPM (`P6`) of the visible RGB pixels.
+    #[cfg(test)]
     pub fn encode_ppm(&self) -> Vec<u8> {
         let mut out = Vec::new();
         let header = alloc::format!("P6\n{} {}\n255\n", self.width, self.height);

@@ -2159,6 +2159,7 @@ dependencies = [
  "lerux-posix",
  "lerux-sddf",
  "lerux-tls",
+ "lerux-web",
  "sel4-microkit",
  "smoltcp",
 ]

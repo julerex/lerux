@@ -116,11 +116,11 @@ expects = ["web listening"]
 timeout_secs = 180
 
 [boards.qemu_virt_aarch64_browser_sddf]
-expects = ["title lerux", "pixel 4c5258ff"]
+expects = ["title lerux", "pixel 000000ff"]
 timeout_secs = 180
 
 [boards.qemu_virt_riscv64_browser_sddf]
-expects = ["title lerux", "pixel 4c5258ff"]
+expects = ["title lerux", "pixel 000000ff"]
 timeout_secs = 180
 
 [boards.qemu_virt_aarch64_program_sddf]

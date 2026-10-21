@@ -8,13 +8,13 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 
 | Board | Arch | Smoke command | PDs (summary) |
 |-------|------|---------------|---------------|
-| `qemu_virt_aarch64` | aarch64 | `just test` | hello + serial |
+| `qemu_virt_aarch64` | aarch64 | `BOARD=qemu_virt_aarch64 just test` | hello + serial |
 | `qemu_virt_aarch64_debug` | aarch64 | `just test-debug` | debug-handler (parent) + crash-demo (child fault) |
 | `qemu_virt_aarch64_isolation` | aarch64 | `just test-isolation` | Phase 60: crash-demo fault then fs-client vs live fs-server |
 | `qemu_virt_aarch64_echo` | aarch64 | `just test-echo` | echo client/server + serial |
 | `qemu_virt_aarch64_serial_sddf` | aarch64 | `just test-serial-sddf` | `serial_driver`, `serial_virt_tx`, `serial_virt_rx`, `serial_client` |
 | `qemu_virt_aarch64_cothread` | aarch64 | `just test-cothread` | `cothread_client`, `cothread_peer`, postcard `serial_driver` |
-| `qemu_virt_aarch64_fs_sddf` | aarch64 | `just test-fs-sddf` | `blk_driver`, `serial_driver`, `blk_virt`, `serial_virt_tx`, `serial_virt_rx`, `fatfs`, `timer_driver`, `shell` |
+| `qemu_virt_aarch64_fs_sddf` | aarch64 | `just test` | `blk_driver`, `serial_driver`, `blk_virt`, `serial_virt_tx`, `serial_virt_rx`, `fatfs`, `timer_driver`, `shell` |
 | `qemu_virt_aarch64_net_sddf` | aarch64 | `just test-net-sddf` | `net_driver`, `serial_driver`, `net_virt_tx`, `net_virt_rx`, `serial_virt_tx`, `serial_virt_rx`, `net_copy`, `net_client` |
 | `qemu_virt_aarch64_fetch_sddf` | aarch64 | `just test-fetch-sddf` | `blk_driver`, `net_driver`, `serial_driver`, `blk_virt`, `net_virt_tx`, `net_virt_rx`, `serial_virt_tx`, `serial_virt_rx`, `fatfs`, `net_copy`, `shell` |
 | `qemu_virt_aarch64_web_sddf` | aarch64 | `just test-web-sddf` | `blk_driver`, `net_driver`, `serial_driver`, `blk_virt`, `net_virt_tx`, `net_virt_rx`, `serial_virt_tx`, `serial_virt_rx`, `fatfs`, `net_copy`, `shell` |
@@ -67,11 +67,7 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `x86_64_generic_net` | x86_64 | `just test-x86-net` | net client/server + serial + virtio-pci net |
 | `x86_64_generic_http` | x86_64 | `just test-x86-http` | serial + virtio-pci net + http-server |
 | `rpi4b_4gb` | aarch64 | `BOARD=rpi4b_4gb just image` | hello + serial (PL011; hardware only) |
-| `rpi4b_4gb_workstation` | aarch64 | `just test-rpi4-workstation` | workstation over native genet + emmc2 (hardware only) |
-| `rpi4b_4gb_net` | aarch64 | `BOARD=rpi4b_4gb_net just image` | net slice on hardware |
-| `rpi4b_4gb_blk` | aarch64 | `BOARD=rpi4b_4gb_blk just image` | blk slice on hardware |
-| `pc_z97_d3h` | x86_64 | `BOARD=pc_z97_d3h just image` | Phase 82: VGA text shell + COM1 (hardware only; Gigabyte Z97-D3H) |
-| `pc_z97_d3h_rtl8852be` | x86_64 | `BOARD=pc_z97_d3h_rtl8852be just image` | COM1 plus a config-space read of the RTL8852BE (hardware only; does not replace the shell) |
+| `pc_z97_d3h_rtl8852be` | x86_64 | `BOARD=pc_z97_d3h_rtl8852be just image` | COM1 plus a config-space read of the RTL8852BE (hardware only) |
 
 ## SDK boards
 
@@ -192,6 +188,8 @@ Living work list (what still needs a Pi): [`plan-arch.md` — Physical RPi4 lab]
 **Self-hosted CI:** optional workflow [`.github/workflows/hw-serial.yml`](../.github/workflows/hw-serial.yml); see [`ci.md`](ci.md#hardware-serial-smoke-phase-47).
 
 ### Gigabyte Z97-D3H install path
+
+`pc_z97_d3h` is not in `support/boards.toml`. The on-screen shell was a postcard protection domain.
 
 Board `pc_z97_d3h` is the **on-screen shell** (Phase 82) on this Haswell desktop. It reuses Microkit `x86_64_generic` (same kernel as QEMU x86) and `console-pc.system.template` (COM1 `0x3f8`, IOAPIC pin 4, the VGA text page at `0xb8000`, a PS/2 keyboard, and a USB HID boot keyboard on the xHCI controller at PCI `00:14.0`). QEMU coverage of that image is `x86_64_generic_console` (`just test-x86-console`, PS/2) and `x86_64_generic_usb_kbd` (`just test-x86-usb-kbd`). virtio-pci workstation images will **not** boot this motherboard.
 

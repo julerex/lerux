@@ -44,18 +44,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "agent"
-version = "0.1.0"
-dependencies = [
- "embedded-hal-nb",
- "lerux-interface-types",
- "lerux-ipc",
- "lerux-logging",
- "sel4-microkit",
- "sel4-microkit-driver-adapters",
-]
-
-[[package]]
 name = "aho-corasick"
 version = "1.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -157,16 +145,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
-name = "backup"
-version = "0.1.0"
-dependencies = [
- "lerux-interface-types",
- "lerux-ipc",
- "lerux-logging",
- "sel4-microkit",
-]
-
-[[package]]
 name = "base16ct"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -223,52 +201,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4388bee8683e3d04af747c73422af53102d2bd24d9eadb6cbc100baef4b43f8"
 
 [[package]]
-name = "blk-client"
-version = "0.1.0"
-dependencies = [
- "lerux-interface-types",
- "lerux-ipc",
- "lerux-logging",
- "sel4-microkit",
-]
-
-[[package]]
-name = "blk-server"
-version = "0.1.0"
-dependencies = [
- "async-unsync",
- "lerux-interface-types",
- "lerux-ipc",
- "lerux-logging",
- "sel4-abstract-allocator",
- "sel4-driver-interfaces",
- "sel4-microkit",
- "sel4-microkit-driver-adapters",
- "sel4-shared-memory",
- "sel4-shared-ring-buffer",
- "sel4-shared-ring-buffer-block-io",
- "sel4-shared-ring-buffer-block-io-types",
- "sel4-shared-ring-buffer-bookkeeping",
-]
-
-[[package]]
 name = "block-buffer"
 version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3078c7629b62d3f0439517fa394996acacc5cbc91c5a20d8c658e77abd503a71"
 dependencies = [
  "generic-array",
-]
-
-[[package]]
-name = "browser-ui"
-version = "0.1.0"
-dependencies = [
- "lerux-driver-protocols",
- "lerux-interface-types",
- "lerux-ipc",
- "lerux-logging",
- "sel4-microkit",
 ]
 
 [[package]]
@@ -356,16 +294,6 @@ dependencies = [
  "cipher",
  "poly1305",
  "zeroize",
-]
-
-[[package]]
-name = "chat-client"
-version = "0.1.0"
-dependencies = [
- "lerux-interface-types",
- "lerux-ipc",
- "lerux-logging",
- "sel4-microkit",
 ]
 
 [[package]]
@@ -464,16 +392,6 @@ name = "colorchoice"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d07550c9036bf2ae0c684c4297d503f838287c83c53686d05370d0e139ae570"
-
-[[package]]
-name = "config-server"
-version = "0.1.0"
-dependencies = [
- "lerux-interface-types",
- "lerux-ipc",
- "lerux-logging",
- "sel4-microkit",
-]
 
 [[package]]
 name = "console-driver"
@@ -644,27 +562,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "display-demo"
-version = "0.1.0"
-dependencies = [
- "lerux-interface-types",
- "lerux-ipc",
- "lerux-logging",
- "sel4-microkit",
-]
-
-[[package]]
-name = "display-server"
-version = "0.1.0"
-dependencies = [
- "lerux-driver-protocols",
- "lerux-interface-types",
- "lerux-ipc",
- "lerux-logging",
- "sel4-microkit",
-]
-
-[[package]]
 name = "dlmalloc"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -690,26 +587,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "echo-client"
-version = "0.1.0"
-dependencies = [
- "lerux-interface-types",
- "lerux-ipc",
- "lerux-logging",
- "sel4-microkit",
-]
-
-[[package]]
-name = "echo-server"
-version = "0.1.0"
-dependencies = [
- "lerux-interface-types",
- "lerux-ipc",
- "lerux-logging",
- "sel4-microkit",
-]
-
-[[package]]
 name = "ed25519"
 version = "2.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -732,16 +609,6 @@ dependencies = [
  "sha2",
  "subtle",
  "zeroize",
-]
-
-[[package]]
-name = "edit"
-version = "0.1.0"
-dependencies = [
- "lerux-interface-types",
- "lerux-ipc",
- "lerux-logging",
- "sel4-microkit",
 ]
 
 [[package]]
@@ -850,16 +717,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f1f227452a390804cdb637b74a86990f2a7d7ba4b7d5693aac9b4dd6defd8d6"
 
 [[package]]
-name = "fetch-client"
-version = "0.1.0"
-dependencies = [
- "lerux-interface-types",
- "lerux-ipc",
- "lerux-logging",
- "sel4-microkit",
-]
-
-[[package]]
 name = "ff"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -906,38 +763,6 @@ name = "foldhash"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
-
-[[package]]
-name = "fs-client"
-version = "0.1.0"
-dependencies = [
- "lerux-interface-types",
- "lerux-ipc",
- "lerux-logging",
- "sel4-microkit",
-]
-
-[[package]]
-name = "fs-server"
-version = "0.1.0"
-dependencies = [
- "async-unsync",
- "lerux-fat",
- "lerux-fs",
- "lerux-interface-types",
- "lerux-ipc",
- "lerux-logging",
- "lerux-service-async",
- "sel4-abstract-allocator",
- "sel4-driver-interfaces",
- "sel4-microkit",
- "sel4-microkit-driver-adapters",
- "sel4-shared-memory",
- "sel4-shared-ring-buffer",
- "sel4-shared-ring-buffer-block-io",
- "sel4-shared-ring-buffer-block-io-types",
- "sel4-shared-ring-buffer-bookkeeping",
-]
 
 [[package]]
 name = "futures"
@@ -1213,16 +1038,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "http-file-browser"
-version = "0.1.0"
-dependencies = [
- "lerux-interface-types",
- "lerux-ipc",
- "lerux-logging",
- "sel4-microkit",
-]
-
-[[package]]
 name = "http-server"
 version = "0.1.0"
 dependencies = [
@@ -1306,9 +1121,7 @@ dependencies = [
  "clap",
  "ed25519-dalek",
  "flate2",
- "lerux-fs",
  "lerux-image",
- "lerux-interface-types",
  "lerux-sddf",
  "lerux-wasm",
  "rand",
@@ -1342,20 +1155,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "lerux-fat"
-version = "0.1.0"
-dependencies = [
- "lerux-interface-types",
-]
-
-[[package]]
-name = "lerux-fs"
-version = "0.1.0"
-dependencies = [
- "lerux-interface-types",
-]
-
-[[package]]
 name = "lerux-html"
 version = "0.1.0"
 
@@ -1368,30 +1167,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "lerux-interface-types"
-version = "0.1.0"
-dependencies = [
- "postcard",
- "serde",
-]
-
-[[package]]
-name = "lerux-ipc"
-version = "0.1.0"
-dependencies = [
- "lerux-interface-types",
- "sel4-microkit",
- "sel4-microkit-simple-ipc",
- "serde",
-]
-
-[[package]]
 name = "lerux-logging"
 version = "0.1.0"
 dependencies = [
  "embedded-hal-nb",
- "lerux-interface-types",
- "lerux-ipc",
  "log",
  "sel4",
  "sel4-logging",
@@ -1420,10 +1199,6 @@ version = "0.1.0"
 
 [[package]]
 name = "lerux-serial-queue"
-version = "0.1.0"
-
-[[package]]
-name = "lerux-service-async"
 version = "0.1.0"
 
 [[package]]
@@ -1517,19 +1292,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
 
 [[package]]
-name = "log-server"
-version = "0.1.0"
-dependencies = [
- "embedded-hal-nb",
- "heapless",
- "lerux-interface-types",
- "lerux-ipc",
- "lerux-logging",
- "sel4-microkit",
- "sel4-microkit-driver-adapters",
-]
-
-[[package]]
 name = "lru"
 version = "0.16.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1582,33 +1344,6 @@ name = "nb"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d5439c4ad607c3c23abf66de8c8bf57ba8adcd1f129e699851a6e43935d339d"
-
-[[package]]
-name = "net-client"
-version = "0.1.0"
-dependencies = [
- "lerux-interface-types",
- "lerux-ipc",
- "lerux-logging",
- "sel4-microkit",
-]
-
-[[package]]
-name = "net-server"
-version = "0.1.0"
-dependencies = [
- "lerux-interface-types",
- "lerux-ipc",
- "lerux-logging",
- "sel4-abstract-allocator",
- "sel4-driver-interfaces",
- "sel4-microkit",
- "sel4-microkit-driver-adapters",
- "sel4-shared-memory",
- "sel4-shared-ring-buffer",
- "sel4-shared-ring-buffer-smoltcp",
- "smoltcp",
-]
 
 [[package]]
 name = "nom"
@@ -1735,17 +1470,6 @@ dependencies = [
  "elliptic-curve",
  "primeorder",
  "sha2",
-]
-
-[[package]]
-name = "paint-demo"
-version = "0.1.0"
-dependencies = [
- "lerux-interface-types",
- "lerux-ipc",
- "lerux-logging",
- "lerux-web",
- "sel4-microkit",
 ]
 
 [[package]]
@@ -1936,17 +1660,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "program-runtime"
-version = "0.1.0"
-dependencies = [
- "lerux-interface-types",
- "lerux-ipc",
- "lerux-logging",
- "lerux-wasm",
- "sel4-microkit",
-]
-
-[[package]]
 name = "ptr_meta"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2034,26 +1747,6 @@ name = "regex-syntax"
 version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
-
-[[package]]
-name = "request-client"
-version = "0.1.0"
-dependencies = [
- "lerux-interface-types",
- "lerux-ipc",
- "lerux-logging",
- "sel4-microkit",
-]
-
-[[package]]
-name = "request-server"
-version = "0.1.0"
-dependencies = [
- "lerux-interface-types",
- "lerux-ipc",
- "lerux-logging",
- "sel4-microkit",
-]
 
 [[package]]
 name = "rfc6979"
@@ -2995,18 +2688,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "serial-virt"
-version = "0.1.0"
-dependencies = [
- "heapless",
- "lerux-driver-protocols",
- "lerux-logging",
- "log",
- "sel4-microkit",
- "sel4-microkit-simple-ipc",
-]
-
-[[package]]
 name = "sha2"
 version = "0.10.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3015,19 +2696,6 @@ dependencies = [
  "cfg-if",
  "cpufeatures",
  "digest",
-]
-
-[[package]]
-name = "shell"
-version = "0.1.0"
-dependencies = [
- "embedded-hal-nb",
- "heapless",
- "lerux-interface-types",
- "lerux-ipc",
- "lerux-logging",
- "sel4-microkit",
- "sel4-microkit-driver-adapters",
 ]
 
 [[package]]
@@ -3128,19 +2796,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
-name = "supervisor"
-version = "0.1.0"
-dependencies = [
- "lerux-interface-types",
- "lerux-ipc",
- "lerux-logging",
- "rtcc",
- "sel4-driver-interfaces",
- "sel4-microkit",
- "sel4-microkit-driver-adapters",
-]
-
-[[package]]
 name = "syn"
 version = "2.0.118"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3193,17 +2848,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "tls-proxy"
-version = "0.1.0"
-dependencies = [
- "lerux-interface-types",
- "lerux-ipc",
- "lerux-logging",
- "lerux-tls",
- "sel4-microkit",
 ]
 
 [[package]]
@@ -3539,17 +3183,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a7b4d1a49ea73a8f3326e74e3a05db667001b16bd1035ed3356fc1a0ed05ca7f"
 dependencies = [
  "wast",
-]
-
-[[package]]
-name = "web-content"
-version = "0.1.0"
-dependencies = [
- "lerux-interface-types",
- "lerux-ipc",
- "lerux-logging",
- "lerux-web",
- "sel4-microkit",
 ]
 
 [[package]]

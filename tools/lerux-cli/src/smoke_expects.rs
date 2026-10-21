@@ -118,51 +118,6 @@ mod tests {
     }
 
     #[test]
-    fn loads_rpi_workstation() {
-        let root = repo_root();
-        let t = smoke_test_for_board(&root, "rpi4b_4gb_workstation").unwrap();
-        assert!(t.unordered);
-        assert_eq!(t.timeout_secs, 120);
-        assert!(t.expects.iter().any(|e| e.contains("lerux-shell")));
-        assert!(
-            t.expects
-                .iter()
-                .any(|e| e.contains("config hostname=") || e.contains("first-boot seed ok")),
-            "Phase 52/54 config policy expect missing"
-        );
-        assert!(
-            !t.script.is_empty(),
-            "Phase 52 scripted REPL steps expected on rpi4 workstation"
-        );
-        assert!(t.script.iter().any(|s| s.expect.contains("boot.log")));
-    }
-
-    #[test]
-    fn loads_z97_hello_board() {
-        let root = repo_root();
-        let t = smoke_test_for_board(&root, "pc_z97_d3h").unwrap();
-        assert!(t.unordered);
-        assert_eq!(t.timeout_secs, 120);
-        assert!(
-            t.expects.iter().any(|e| e.contains("lerux-shell: prompt")),
-            "{:?}",
-            t.expects
-        );
-        assert!(t.script.is_empty());
-        assert!(t.qmp_keys.is_empty());
-    }
-
-    #[test]
-    fn loads_x86_console_key_smoke() {
-        let root = repo_root();
-        let t = smoke_test_for_board(&root, "x86_64_generic_console").unwrap();
-        assert_eq!(t.timeout_secs, 120);
-        assert!(t.expects.iter().any(|e| e == "lerux-shell: prompt"));
-        assert_eq!(t.qmp_keys, ["e", "c", "h", "o", "spc", "h", "i", "ret"]);
-        assert_eq!(t.qmp_expect.as_deref(), Some("lerux-shell: cmd=echo hi"));
-    }
-
-    #[test]
     fn loads_debug_board() {
         let root = repo_root();
         let t = smoke_test_for_board(&root, "qemu_virt_aarch64_debug").unwrap();
@@ -186,60 +141,10 @@ mod tests {
     }
 
     #[test]
-    fn loads_display_board() {
-        let root = repo_root();
-        let t = smoke_test_for_board(&root, "qemu_virt_aarch64_display").unwrap();
-        assert!(t.expects.iter().any(|e| e.contains("pattern ok")));
-        assert!(t.expects.iter().any(|e| e.contains("ramfb ok")));
-    }
-
-    #[test]
-    fn loads_request_board() {
-        let root = repo_root();
-        let t = smoke_test_for_board(&root, "qemu_virt_aarch64_request").unwrap();
-        assert!(t.expects.iter().any(|e| e.contains("fixture ok")));
-        assert!(t.expects.iter().any(|e| e.contains("handshake ok")));
-    }
-
-    #[test]
     fn loads_html_board() {
         let root = repo_root();
         let t = smoke_test_for_board(&root, "qemu_virt_aarch64_html").unwrap();
         assert!(t.expects.iter().any(|e| e.contains("lerux-html: nodes=")));
-    }
-
-    #[test]
-    fn loads_paint_board() {
-        let root = repo_root();
-        let t = smoke_test_for_board(&root, "qemu_virt_aarch64_paint").unwrap();
-        assert!(t.expects.iter().any(|e| e.contains("lerux-web: paint ok")));
-        assert!(t.expects.iter().any(|e| e.contains("ramfb ok")));
-    }
-
-    #[test]
-    fn loads_agent_runtime_board() {
-        let root = repo_root();
-        let t = smoke_test_for_board(&root, "qemu_virt_aarch64_agent_runtime").unwrap();
-        assert!(t
-            .expects
-            .iter()
-            .any(|e| e.contains("lerux-agent: runtime ok")));
-        assert!(t.expects.iter().any(|e| e.contains("chrome ok")));
-        assert!(t.expects.iter().any(|e| e.contains("handshake ok")));
-    }
-
-    #[test]
-    fn loads_interactive_board() {
-        let root = repo_root();
-        let t = smoke_test_for_board(&root, "qemu_virt_aarch64_interactive").unwrap();
-        assert!(t.unordered);
-        assert_eq!(t.timeout_secs, 120);
-        assert!(t
-            .expects
-            .iter()
-            .any(|e| e.contains("lerux-agent: interactive ok")));
-        assert!(t.expects.iter().any(|e| e.contains("lerux-web: paint ok")));
-        assert!(t.expects.iter().any(|e| e.contains("ramfb ok")));
     }
 
     #[test]
@@ -273,31 +178,6 @@ mod tests {
             .script
             .iter()
             .any(|step| step.expect.contains("hello-agent")));
-    }
-
-    #[test]
-    fn loads_agent_board() {
-        let root = repo_root();
-        let t = smoke_test_for_board(&root, "qemu_virt_aarch64_agent").unwrap();
-        assert!(t
-            .expects
-            .iter()
-            .any(|e| e.contains("lerux-agent: tools ok")));
-        assert!(t.expects.iter().any(|e| e.contains("workspace ok")));
-        assert!(t.expects.iter().any(|e| e.contains("handshake ok")));
-    }
-
-    #[test]
-    fn loads_browser_board() {
-        let root = repo_root();
-        let t = smoke_test_for_board(&root, "qemu_virt_aarch64_browser").unwrap();
-        assert!(t
-            .expects
-            .iter()
-            .any(|e| e.contains("lerux-browser: paint ok")));
-        assert!(t.expects.iter().any(|e| e.contains("lerux-web: paint ok")));
-        assert!(t.expects.iter().any(|e| e.contains("handshake ok")));
-        assert!(t.expects.iter().any(|e| e.contains("ramfb ok")));
     }
 
     #[test]

@@ -325,19 +325,11 @@ mod tests {
     }
 
     #[test]
-    fn workstation_check_passes() {
+    fn minimal_profile_check_passes() {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
         let profiles = crate::profile::load_profiles(&root).unwrap();
-        let p = profiles.get("workstation").unwrap();
-        check_profile_channels(&root, "workstation", p).expect("workstation channels ok");
-    }
-
-    #[test]
-    fn workstation_rpi4_check_passes() {
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let profiles = crate::profile::load_profiles(&root).unwrap();
-        let p = profiles.get("workstation-rpi4").unwrap();
-        check_profile_channels(&root, "workstation-rpi4", p).expect("rpi4 channels ok");
+        let p = profiles.get("minimal").unwrap();
+        check_profile_channels(&root, "minimal", p).expect("minimal channels ok");
     }
 
     #[test]

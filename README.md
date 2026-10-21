@@ -2,28 +2,9 @@
 
 ## Quickstart
 
-Boot this Gigabyte Z97-D3H from a USB flash drive:
+`just test` boots the serial and filesystem shell on QEMU ARM virt. `just qemu` leaves that shell running. Quit with `Ctrl-A x`. `just qemu-x86-64` is the same shell on the x86-64 filesystem image.
 
-```bash
-just iso  # build build/pc_z97_d3h/lerux.iso
-lsblk  # list disks; the USB stick is sdc on this machine (not sda or sdb)
-udisksctl unmount -b /dev/sdc3  # unmount the ISO filesystem Ubuntu mounted from the stick
-sudo dd if=build/pc_z97_d3h/lerux.iso of=/dev/sdc bs=4M status=progress conv=fsync  # write that ISO onto the whole stick; bs=4M is the chunk size, status=progress prints bytes written, conv=fsync waits until they are on the device
-```
-
-Check `lsblk` before the `dd`. Do not write `sda` (Ubuntu SSD) or `sdb` (data disk). Reboot and open the firmware boot menu (F12 on this board). Choose the USB entry that does not say UEFI. If the stick is missing, enable CSM in setup. The Limine menu counts down, then the screen is blue with `hello lerux` on the first line and `lerux>` under it. That picture is VGA text at `0xb8000` on the firmware boot VGA card. On this desk the cable is HDMI on the Sapphire RX 560 (`01:00.0`); lerux does not load a GPU driver. Details: [VGA text on the RX 560](docs/boards.md#vga-text-on-the-rx-560). A PS/2 keyboard in the rear combo port, or a USB HID boot keyboard on a root xHCI port, types at that prompt (`echo`, `help`, `pwd`, `clear`; other commands print `unavailable` until a disk driver exists). COM1 at 115200 8N1 (the COMA header; there is no rear DB9) prints `lerux-shell: prompt`. The UEFI entry stops in Limine: this kernel is linked at 1MB. Reboot and choose Ubuntu to return.
-
-Reboot once into the stick from Ubuntu, without the F12 menu. The stick has to be plugged in so the entry exists:
-
-```bash
-efibootmgr  # list EFI entries; Boot0018 is Ubuntu (SHIMX64.EFI, the default), Boot0022 is the legacy USB stick
-sudo efibootmgr -n 0022  # set BootNext to that legacy entry for one boot; BootOrder is unchanged, so the boot after that is Ubuntu again
-sudo systemctl reboot  # reboot now into BootNext
-```
-
-`Boot0022` is the `Generic Flash Disk` line with no `UEFI:` prefix. `Boot0021` (`UEFI: Generic Flash Disk`) stops in Limine. If the numbers move, match the label from `efibootmgr` before using `-n`.
-
-**Try it in QEMU:** `just qemu` (ARM virt) or `just qemu-x86-64` (x86-64 q35) boots the workstation with a serial shell at `lerux>`. Quit with `Ctrl-A x`. `just qemu-interactive` opens the interactive workstation in a QEMU window (close the window to quit).
+The Gigabyte on-screen shell used the postcard protection domains this tree no longer builds.
 
 Rust userspace on the [seL4](https://sel4.systems/) microkernel, using [seL4 Microkit](https://github.com/seL4/microkit) for static system layout and [rust-sel4](https://github.com/seL4/rust-sel4) for userspace APIs.
 
@@ -37,9 +18,8 @@ The seL4 kernel is **not vendored** — it is cloned into `deps/workspace/` and 
 just fetch          # clone seL4 15.0.0 + microkit 2.2.0
 just build-sdk      # build Microkit SDK from source (auto-downloads ARM toolchain if needed)
 # or: just fetch-sdk   # download prebuilt SDK 2.2.0 (no compile step)
-just qemu           # aarch64 workstation in QEMU (serial shell; Ctrl-A x to quit)
-just qemu-x86-64    # x86-64 workstation in QEMU (same; alias: just qemu-x86)
-just qemu-interactive  # interactive workstation in a QEMU window (close window to quit)
+just qemu           # serial and filesystem shell in QEMU (Ctrl-A x to quit)
+just qemu-x86-64    # same shell on the x86-64 filesystem image
 just run            # hello PD only (override with BOARD=… just run)
 ```
 
@@ -58,7 +38,7 @@ just test-all
 
 ## CI
 
-GitHub Actions runs on every push to `main`: **check** (`just check`), one **sdk** job (SDK + patched SP804 QEMU), **check-pd** (cross-target clippy on userspace crates), then **53 smoke** matrix jobs (the workflow `include` list). `just test-all` runs every `ci = true` board, a wider set than that list. Local lint: `just check` (host crates) or `just check-all` (host + PD, needs SDK). Details: [`docs/ci.md`](docs/ci.md).
+GitHub Actions runs on every push to `main`: **check** (`just check`), one **sdk** job (SDK + patched SP804 QEMU), **check-pd** (cross-target clippy on userspace crates), then **19 smoke** matrix jobs (the workflow `include` list). `just test-all` runs every `ci = true` board, a wider set than that list. Local lint: `just check` (host crates) or `just check-all` (host + PD, needs SDK). Details: [`docs/ci.md`](docs/ci.md).
 
 ## Architecture
 
@@ -74,11 +54,12 @@ Version pins: [`deps/versions.toml`](deps/versions.toml).
 
 ## Boards
 
-Default: `qemu_virt_aarch64` (QEMU ARM virt). Override with `BOARD=... just run`.
+Default board for `just build` and `just run` is `qemu_virt_aarch64` (QEMU ARM virt). Override with `BOARD=...`. Bare `just test` boots `qemu_virt_aarch64_fs_sddf`.
 
 | Goal | Board | Command |
 |------|-------|---------|
-| Serial hello | `qemu_virt_aarch64` | `just test` |
+| Serial and filesystem shell | `qemu_virt_aarch64_fs_sddf` | `just test` |
+| Serial hello | `qemu_virt_aarch64` | `BOARD=qemu_virt_aarch64 just test` |
 | Echo IPC | `qemu_virt_aarch64_echo` | `just test-echo` |
 | Display (ramfb) | `qemu_virt_aarch64_display` | `just test-display` |
 | HTML subset parse | `qemu_virt_aarch64_html` | `just test-html` |
@@ -104,13 +85,8 @@ Default: `qemu_virt_aarch64` (QEMU ARM virt). Override with `BOARD=... just run`
 | Init + net IPC | `qemu_virt_aarch64_net_composed` | `just test-net-composed` |
 | Init + blk/net IPC | `qemu_virt_aarch64_ipc_composed` | `just test-ipc-composed` |
 | RISC-V serial / echo / virtio / HTTP | `qemu_virt_riscv64` variants | `just test-riscv` / `just test-riscv-echo` / `just test-riscv-virtio` / `just test-riscv-http` |
-| System profiles (workstation etc) | `lerux profile` | `cargo run -p lerux-cli -- profile list` / `profile build workstation` |
-| Real hardware (RPi4 serial slice) | `rpi4b_4gb` | `BOARD=rpi4b_4gb just image` (or `just test` for build verification; see docs for U-Boot deploy) |
-| Real hardware (RPi4 workstation) | `rpi4b_4gb_workstation` | `just deploy-rpi4` / `just test-hw` — [install path](docs/boards.md#rpi4-workstation-install-path-phase-52) |
-| USB ISO (Gigabyte Z97-D3H shell) | `pc_z97_d3h` | `just iso` — [install path](docs/boards.md#gigabyte-z97-d3h-install-path) |
-| Real hardware (Gigabyte Z97-D3H shell) | `pc_z97_d3h` | `just deploy-pc` / `just test-hw` — [install path](docs/boards.md#gigabyte-z97-d3h-install-path) |
-| x86 on-screen shell (QEMU, PS/2) | `x86_64_generic_console` | `just test-x86-console` |
-| x86 on-screen shell (QEMU, USB keyboard) | `x86_64_generic_usb_kbd` | `just test-x86-usb-kbd` |
+| System profiles | `lerux profile` | `cargo run -p lerux-cli -- profile list` |
+| Real hardware (RPi4 hello) | `rpi4b_4gb` | `BOARD=rpi4b_4gb just image` |
 
 Full board reference: [`docs/boards.md`](docs/boards.md).
 

@@ -33,16 +33,6 @@ qemu = {}
 ci = true
 system_vars = { serial_mmio_phys_addr = "0x1_000_0000", serial_irq = 10 }
 
-[qemu_virt_riscv64_echo]
-arch = "riscv64"
-microkit_board = "qemu_virt_riscv64"
-target = "riscv64-sel4-microkit"
-template = "echo.system.template"
-pds = ["echo-client", "echo-server", "serial-driver", "serial-virt"]
-qemu = {}
-ci = true
-system_vars = { serial_mmio_phys_addr = "0x1_000_0000", serial_irq = 10 }
-
 [qemu_virt_riscv64_virtio]
 arch = "riscv64"
 microkit_board = "qemu_virt_riscv64"
@@ -64,69 +54,6 @@ ci = true
 curl_expect = "lerux: HTTP ok"
 system_vars = { serial_mmio_phys_addr = "0x1_000_0000", serial_irq = 10, virtio_net_mmio_phys_addr = "0x10_002_000", virtio_net_irq = 2 }
 
-[qemu_virt_riscv64_blk]
-arch = "riscv64"
-microkit_board = "qemu_virt_riscv64"
-target = "riscv64-sel4-microkit"
-template = "blk-riscv.system.template"
-pds = ["blk-client", "blk-server", "serial-driver", "virtio-blk-driver"]
-qemu = { disk = "rw" }
-ci = true
-system_vars = { serial_mmio_phys_addr = "0x1_000_0000", serial_irq = 10, virtio_blk_mmio_phys_addr = "0x10_001_000", virtio_blk_irq = 1 }
-
-[qemu_virt_riscv64_net]
-arch = "riscv64"
-microkit_board = "qemu_virt_riscv64"
-target = "riscv64-sel4-microkit"
-template = "net-riscv.system.template"
-pds = ["net-client", "net-server", "serial-driver", "virtio-net-driver"]
-qemu = { net = "user" }
-ci = true
-system_vars = { serial_mmio_phys_addr = "0x1_000_0000", serial_irq = 10, virtio_net_mmio_phys_addr = "0x10_002_000", virtio_net_irq = 2 }
-
-[qemu_virt_aarch64_init]
-arch = "aarch64"
-microkit_board = "qemu_virt_aarch64"
-target = "aarch64-sel4-microkit"
-template = "init.system.template"
-pds = ["supervisor", "serial-driver", "pl031-driver", "sp804-driver"]
-qemu = { sp804 = true }
-ci = true
-system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, pl031_mmio_phys_addr = "0x9010000", pl031_irq = 34, sp804_mmio_phys_addr = "0x90d0000", sp804_irq = 43 }
-
-# Phase 56: RTC (Goldfish) + timer (rdtime CSR) on RISC-V virt (stock QEMU).
-[qemu_virt_riscv64_init]
-arch = "riscv64"
-microkit_board = "qemu_virt_riscv64"
-target = "riscv64-sel4-microkit"
-template = "init-riscv.system.template"
-pds = ["supervisor", "serial-driver", "goldfish-rtc-driver", "rdtime-timer-driver"]
-qemu = {}
-ci = true
-system_vars = { serial_mmio_phys_addr = "0x1_000_0000", serial_irq = 10, goldfish_rtc_mmio_phys_addr = "0x101000", goldfish_rtc_irq = 11 }
-
-# Phase 56: RTC (CMOS) + timer (TSC) on x86_64 QEMU PC.
-[x86_64_generic_init]
-arch = "x86_64"
-microkit_board = "x86_64_generic"
-target = "x86_64-sel4-microkit"
-template = "init-x86.system.template"
-pds = ["supervisor", "serial-driver", "cmos-rtc-driver", "tsc-timer-driver"]
-qemu = {}
-ci = true
-system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48, cmos_ioport_addr = "0x70" }
-
-[qemu_virt_aarch64_echo]
-arch = "aarch64"
-microkit_board = "qemu_virt_aarch64"
-target = "aarch64-sel4-microkit"
-template = "echo.system.template"
-pds = ["echo-client", "echo-server", "serial-driver", "serial-virt"]
-qemu = {}
-ci = true
-system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33 }
-
-# Milestone 3: a worker cothread blocks until a peer notification arrives.
 [qemu_virt_aarch64_cothread]
 arch = "aarch64"
 microkit_board = "qemu_virt_aarch64"
@@ -147,7 +74,7 @@ qemu = {}
 ci = false
 system_vars = { serial_mmio_phys_addr = "0x1_000_0000", serial_irq = 10 }
 
-# Milestone 2: LionsOS serial roles. The postcard serial path stays on the echo image.
+# Milestone 2: LionsOS serial roles.
 [qemu_virt_aarch64_serial_sddf]
 arch = "aarch64"
 microkit_board = "qemu_virt_aarch64"
@@ -405,67 +332,6 @@ qemu = {}
 ci = true
 system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33 }
 
-# Phase 75: paint-demo lays out HTML+CSS and presents via display-server.
-[qemu_virt_aarch64_paint]
-arch = "aarch64"
-microkit_board = "qemu_virt_aarch64"
-target = "aarch64-sel4-microkit"
-template = "paint.system.template"
-pds = ["paint-demo", "display-server", "serial-driver", "serial-virt"]
-qemu = { ramfb = true }
-ci = true
-system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, fw_cfg_mmio_phys_addr = "0x9020000" }
-
-# Phase 76: browser-ui + web-content via request-server; paint through ramfb.
-[qemu_virt_aarch64_browser]
-arch = "aarch64"
-microkit_board = "qemu_virt_aarch64"
-target = "aarch64-sel4-microkit"
-template = "browser.system.template"
-pds = ["browser-ui", "web-content", "display-server", "request-server", "tls-proxy", "net-server", "serial-driver", "serial-virt", "virtio-net-driver"]
-qemu = { ramfb = true, net = "user", https_one = true }
-ci = true
-system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, fw_cfg_mmio_phys_addr = "0x9020000", virtio_mmio_phys_addr = "0xa003000", virtio_net_irq = 79 }
-
-# Phase 72: ramfb + display-server + display-demo (shared bitmap MR).
-[qemu_virt_aarch64_display]
-arch = "aarch64"
-microkit_board = "qemu_virt_aarch64"
-target = "aarch64-sel4-microkit"
-template = "display.system.template"
-pds = ["display-demo", "display-server", "serial-driver", "serial-virt"]
-qemu = { ramfb = true }
-ci = true
-system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, fw_cfg_mmio_phys_addr = "0x9020000" }
-
-# Phase 49: same layouts as echo/blk/net with guest microbench instrumentation.
-[qemu_virt_aarch64_bench_echo]
-arch = "aarch64"
-microkit_board = "qemu_virt_aarch64"
-target = "aarch64-sel4-microkit"
-template = "echo.system.template"
-pds = ["echo-client", "echo-server", "serial-driver", "serial-virt"]
-qemu = {}
-system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33 }
-
-[qemu_virt_aarch64_bench_blk]
-arch = "aarch64"
-microkit_board = "qemu_virt_aarch64"
-target = "aarch64-sel4-microkit"
-template = "blk.system.template"
-pds = ["blk-client", "blk-server", "serial-driver", "virtio-blk-driver"]
-qemu = { disk = "rw", net = "user" }
-system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_blk_irq = 78 }
-
-[qemu_virt_aarch64_bench_net]
-arch = "aarch64"
-microkit_board = "qemu_virt_aarch64"
-target = "aarch64-sel4-microkit"
-template = "net.system.template"
-pds = ["net-client", "net-server", "serial-driver", "virtio-net-driver"]
-qemu = { net = "user" }
-system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_net_irq = 79 }
-
 # Phase 66: debug hierarchy on RISC-V / x86 (same SDF as aarch64).
 [qemu_virt_riscv64_debug]
 arch = "riscv64"
@@ -487,16 +353,6 @@ qemu = {}
 ci = true
 system_vars = {}
 
-[qemu_virt_riscv64_isolation]
-arch = "riscv64"
-microkit_board = "qemu_virt_riscv64"
-target = "riscv64-sel4-microkit"
-template = "isolation-riscv.system.template"
-pds = ["debug-handler", "crash-demo", "fs-client", "fs-server", "serial-driver", "virtio-blk-driver"]
-qemu = { disk = "rw" }
-ci = true
-system_vars = { serial_mmio_phys_addr = "0x1_000_0000", serial_irq = 10, virtio_blk_mmio_phys_addr = "0x10_001_000", virtio_blk_irq = 1 }
-
 # Phase 46: parent debug-handler + child crash-demo (Microkit hierarchy faults).
 [qemu_virt_aarch64_debug]
 arch = "aarch64"
@@ -507,17 +363,6 @@ pds = ["debug-handler", "crash-demo"]
 qemu = {}
 ci = true
 system_vars = {}
-
-# Phase 60: untrusted crash-demo fault then fs-client round-trip (isolation).
-[qemu_virt_aarch64_isolation]
-arch = "aarch64"
-microkit_board = "qemu_virt_aarch64"
-target = "aarch64-sel4-microkit"
-template = "isolation.system.template"
-pds = ["debug-handler", "crash-demo", "fs-client", "fs-server", "serial-driver", "virtio-blk-driver"]
-qemu = { disk = "rw", net = "user" }
-ci = true
-system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_blk_irq = 78 }
 
 [qemu_virt_aarch64_virtio]
 arch = "aarch64"
@@ -540,223 +385,6 @@ ci = true
 curl_expect = "lerux: HTTP ok"
 system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_net_irq = 79 }
 
-[qemu_virt_aarch64_net]
-arch = "aarch64"
-microkit_board = "qemu_virt_aarch64"
-target = "aarch64-sel4-microkit"
-template = "net.system.template"
-pds = ["net-client", "net-server", "serial-driver", "virtio-net-driver"]
-qemu = { net = "user" }
-ci = true
-system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_net_irq = 79 }
-
-[qemu_virt_aarch64_fetch]
-arch = "aarch64"
-microkit_board = "qemu_virt_aarch64"
-target = "aarch64-sel4-microkit"
-template = "fetch.system.template"
-pds = ["fetch-client", "net-server", "serial-driver", "virtio-net-driver"]
-qemu = { net = "user", http_one = true }
-ci = true
-system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_net_irq = 79 }
-
-[qemu_virt_aarch64_fetch_tls]
-arch = "aarch64"
-microkit_board = "qemu_virt_aarch64"
-target = "aarch64-sel4-microkit"
-template = "fetch-tls.system.template"
-pds = ["fetch-client", "tls-proxy", "net-server", "serial-driver", "virtio-net-driver"]
-qemu = { net = "user", https_one = true }
-ci = true
-system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_net_irq = 79 }
-
-# Phase 77: agent runtime against lerux grok-one (scripted tool-loop, no live xAI).
-[qemu_virt_aarch64_agent_runtime]
-arch = "aarch64"
-microkit_board = "qemu_virt_aarch64"
-target = "aarch64-sel4-microkit"
-template = "agent-runtime.system.template"
-pds = ["agent", "request-server", "tls-proxy", "net-server", "serial-driver", "virtio-net-driver"]
-qemu = { net = "user", grok_one = true }
-ci = true
-system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_net_irq = 79 }
-
-# Phase 79: agent tools (FsRequest + WebFetch) against grok-one. Net first so
-# blk stays at +0xc00 in the same virtio-mmio page.
-[qemu_virt_aarch64_agent]
-arch = "aarch64"
-microkit_board = "qemu_virt_aarch64"
-target = "aarch64-sel4-microkit"
-template = "agent.system.template"
-pds = ["agent", "request-server", "tls-proxy", "net-server", "fs-server", "serial-driver", "virtio-net-driver", "virtio-blk-driver"]
-qemu = { disk = "rw", net = "user", grok_one = true }
-ci = true
-system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_blk_irq = 78, virtio_net_irq = 79 }
-
-# Phase 73: request-server is the only HTTP client of tls-proxy; request-client
-# has no NetClient / TlsClient (Ladybird RequestServer isolation).
-[qemu_virt_aarch64_request]
-arch = "aarch64"
-microkit_board = "qemu_virt_aarch64"
-target = "aarch64-sel4-microkit"
-template = "request.system.template"
-pds = ["request-client", "request-server", "tls-proxy", "net-server", "serial-driver", "virtio-net-driver"]
-qemu = { net = "user", https_one = true }
-ci = true
-system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_net_irq = 79 }
-
-# ADR-010: program-runtime fetches a signed Wasm module. No NetClient on the app.
-[qemu_virt_aarch64_program]
-arch = "aarch64"
-microkit_board = "qemu_virt_aarch64"
-target = "aarch64-sel4-microkit"
-template = "program.system.template"
-pds = ["program-runtime", "request-server", "tls-proxy", "net-server", "serial-driver", "virtio-net-driver"]
-qemu = { net = "user", https_one = true }
-ci = true
-system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_net_irq = 79 }
-
-# aarch64 blk boards keep a user-net device: it occupies the first virtio-mmio
-# slot so blk stays at +0xc00 in the same page (see virtio-blk-driver).
-[qemu_virt_aarch64_blk]
-arch = "aarch64"
-microkit_board = "qemu_virt_aarch64"
-target = "aarch64-sel4-microkit"
-template = "blk.system.template"
-pds = ["blk-client", "blk-server", "serial-driver", "virtio-blk-driver"]
-qemu = { disk = "rw", net = "user" }
-ci = true
-system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_blk_irq = 78 }
-
-[qemu_virt_aarch64_fs]
-arch = "aarch64"
-microkit_board = "qemu_virt_aarch64"
-target = "aarch64-sel4-microkit"
-template = "fs.system.template"
-pds = ["fs-client", "fs-server", "serial-driver", "virtio-blk-driver"]
-qemu = { disk = "rw", net = "user" }
-ci = true
-system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_blk_irq = 78 }
-
-# Phase 44: same SDF as fs smoke, FAT16 backend in fs-server.
-# Phase 63: LERUXFS2 with host-seeded /host (lerux fs-host seed).
-[qemu_virt_aarch64_fs_host]
-arch = "aarch64"
-microkit_board = "qemu_virt_aarch64"
-target = "aarch64-sel4-microkit"
-template = "fs.system.template"
-pds = ["fs-client", "fs-server", "serial-driver", "virtio-blk-driver"]
-qemu = { disk = "rw", net = "user" }
-ci = true
-system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_blk_irq = 78 }
-
-[qemu_virt_aarch64_fs_fat]
-arch = "aarch64"
-microkit_board = "qemu_virt_aarch64"
-target = "aarch64-sel4-microkit"
-template = "fs.system.template"
-pds = ["fs-client", "fs-server", "serial-driver", "virtio-blk-driver"]
-qemu = { disk = "rw", net = "user" }
-ci = true
-system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, virtio_mmio_phys_addr = "0xa003000", virtio_blk_irq = 78 }
-
-[qemu_virt_aarch64_http_composed]
-arch = "aarch64"
-microkit_board = "qemu_virt_aarch64"
-target = "aarch64-sel4-microkit"
-template = "http-composed.system.template"
-pds = ["supervisor", "http-server", "serial-driver", "pl031-driver", "sp804-driver", "virtio-net-driver"]
-qemu = { net = "hostfwd", sp804 = true }
-ci = true
-curl_expect = "lerux: HTTP ok"
-system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, pl031_mmio_phys_addr = "0x9010000", pl031_irq = 34, sp804_mmio_phys_addr = "0x90d0000", sp804_irq = 43, virtio_mmio_phys_addr = "0xa003000", virtio_net_irq = 79 }
-
-[qemu_virt_aarch64_blk_composed]
-arch = "aarch64"
-microkit_board = "qemu_virt_aarch64"
-target = "aarch64-sel4-microkit"
-template = "blk-composed.system.template"
-pds = ["supervisor", "blk-client", "blk-server", "serial-driver", "pl031-driver", "sp804-driver", "virtio-blk-driver"]
-qemu = { disk = "rw", net = "user", sp804 = true }
-ci = true
-system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, pl031_mmio_phys_addr = "0x9010000", pl031_irq = 34, sp804_mmio_phys_addr = "0x90d0000", sp804_irq = 43, virtio_mmio_phys_addr = "0xa003000", virtio_blk_irq = 78 }
-
-[qemu_virt_aarch64_net_composed]
-arch = "aarch64"
-microkit_board = "qemu_virt_aarch64"
-target = "aarch64-sel4-microkit"
-template = "net-composed.system.template"
-pds = ["supervisor", "net-client", "net-server", "serial-driver", "pl031-driver", "sp804-driver", "virtio-net-driver"]
-qemu = { net = "user", sp804 = true }
-ci = true
-system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, pl031_mmio_phys_addr = "0x9010000", pl031_irq = 34, sp804_mmio_phys_addr = "0x90d0000", sp804_irq = 43, virtio_mmio_phys_addr = "0xa003000", virtio_net_irq = 79 }
-
-[qemu_virt_aarch64_ipc_composed]
-arch = "aarch64"
-microkit_board = "qemu_virt_aarch64"
-target = "aarch64-sel4-microkit"
-template = "ipc-composed.system.template"
-pds = ["supervisor", "blk-client", "blk-server", "net-client", "net-server", "serial-driver", "pl031-driver", "sp804-driver", "virtio-blk-driver", "virtio-net-driver"]
-qemu = { disk = "rw", net = "user", sp804 = true }
-ci = true
-system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, pl031_mmio_phys_addr = "0x9010000", pl031_irq = 34, sp804_mmio_phys_addr = "0x90d0000", sp804_irq = 43, virtio_mmio_phys_addr = "0xa003000", virtio_blk_irq = 78, virtio_net_irq = 79 }
-
-[qemu_virt_aarch64_composed]
-arch = "aarch64"
-microkit_board = "qemu_virt_aarch64"
-target = "aarch64-sel4-microkit"
-template = "composed.system.template"
-pds = ["supervisor", "hello", "serial-driver", "pl031-driver", "sp804-driver", "virtio-blk-driver", "virtio-net-driver"]
-qemu = { disk = "ro", net = "user", sp804 = true, tcp_echo = true }
-ci = true
-system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, pl031_mmio_phys_addr = "0x9010000", pl031_irq = 34, sp804_mmio_phys_addr = "0x90d0000", sp804_irq = 43, virtio_mmio_phys_addr = "0xa003000", virtio_blk_irq = 78, virtio_net_irq = 79 }
-
-[qemu_virt_aarch64_workstation]
-arch = "aarch64"
-microkit_board = "qemu_virt_aarch64"
-target = "aarch64-sel4-microkit"
-template = "workstation.system.template"
-pds = ["supervisor", "shell", "edit", "chat-client", "http-file-browser", "backup", "fs-server", "net-server", "log-server", "config-server", "serial-driver", "serial-virt", "pl031-driver", "sp804-driver", "virtio-blk-driver", "virtio-net-driver"]
-qemu = { disk = "rw", net = "hostfwd", sp804 = true }
-ci = true
-curl_expect = "boot.log"
-system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, pl031_mmio_phys_addr = "0x9010000", pl031_irq = 34, sp804_mmio_phys_addr = "0x90d0000", sp804_irq = 43, virtio_mmio_phys_addr = "0xa003000", virtio_blk_irq = 78, virtio_net_irq = 79 }
-
-# Phase 80: workstation + ramfb + request-server + browser + agent.
-[qemu_virt_aarch64_interactive]
-arch = "aarch64"
-microkit_board = "qemu_virt_aarch64"
-target = "aarch64-sel4-microkit"
-template = "workstation-interactive.system.template"
-pds = ["supervisor", "shell", "edit", "chat-client", "http-file-browser", "backup", "fs-server", "net-server", "log-server", "config-server", "serial-driver", "serial-virt", "pl031-driver", "sp804-driver", "virtio-blk-driver", "virtio-net-driver", "display-server", "request-server", "tls-proxy", "web-content", "browser-ui", "agent"]
-qemu = { disk = "rw", net = "user", ramfb = true, sp804 = true, https_one = true, grok_one = true }
-ci = true
-system_vars = { serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33, pl031_mmio_phys_addr = "0x9010000", pl031_irq = 34, sp804_mmio_phys_addr = "0x90d0000", sp804_irq = 43, virtio_mmio_phys_addr = "0xa003000", virtio_blk_irq = 78, virtio_net_irq = 79, fw_cfg_mmio_phys_addr = "0x9020000" }
-
-# Phase 59: RISC-V virt full workstation (MMIO virtio + Goldfish/rdtime).
-[qemu_virt_riscv64_workstation]
-arch = "riscv64"
-microkit_board = "qemu_virt_riscv64"
-target = "riscv64-sel4-microkit"
-template = "workstation-riscv.system.template"
-pds = ["supervisor", "shell", "edit", "chat-client", "http-file-browser", "backup", "fs-server", "net-server", "log-server", "config-server", "serial-driver", "serial-virt", "goldfish-rtc-driver", "rdtime-timer-driver", "virtio-blk-driver", "virtio-net-driver"]
-qemu = { disk = "rw", net = "hostfwd" }
-ci = true
-curl_expect = "boot.log"
-system_vars = { serial_mmio_phys_addr = "0x1_000_0000", serial_irq = 10, goldfish_rtc_mmio_phys_addr = "0x101000", goldfish_rtc_irq = 11, virtio_blk_mmio_phys_addr = "0x10_001_000", virtio_net_mmio_phys_addr = "0x10_002_000", virtio_blk_irq = 1, virtio_net_irq = 2 }
-
-# Phase 59: x86_64 q35 full workstation (PCI virtio + CMOS/TSC).
-[x86_64_generic_workstation]
-arch = "x86_64"
-microkit_board = "x86_64_generic"
-target = "x86_64-sel4-microkit"
-template = "workstation-x86.system.template"
-pds = ["supervisor", "shell", "edit", "chat-client", "http-file-browser", "backup", "fs-server", "net-server", "log-server", "config-server", "serial-driver", "serial-virt", "cmos-rtc-driver", "tsc-timer-driver", "virtio-pci-driver"]
-qemu = { disk = "rw", net = "hostfwd" }
-ci = true
-curl_expect = "boot.log"
-system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48, cmos_ioport_addr = "0x70", virtio_blk_bar1_phys_addr = "0xfed0_0000", virtio_blk_bar4_phys_addr = "0xfed1_0000", virtio_net_bar1_phys_addr = "0xfed2_0000", virtio_net_bar4_phys_addr = "0xfed3_0000", virtio_blk_ioapic_pin = 10, virtio_blk_ioapic_vector = 49, virtio_net_ioapic_pin = 11, virtio_net_ioapic_vector = 50, virtio_blk_driver_dma_phys_addr = "0x6000_0000", virtio_net_rx_free_phys_addr = "0x6060_0000", virtio_net_rx_used_phys_addr = "0x6080_0000", virtio_net_tx_free_phys_addr = "0x60a0_0000", virtio_net_tx_used_phys_addr = "0x60c0_0000", virtio_blk_client_dma_phys_addr = "0x60e0_0000", virtio_blk_free_phys_addr = "0x6100_0000", virtio_blk_used_phys_addr = "0x6120_0000" }
-
 [x86_64_generic]
 arch = "x86_64"
 microkit_board = "x86_64_generic"
@@ -768,37 +396,6 @@ ci = true
 system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48 }
 
 # Same console image as pc_z97_d3h, booted under QEMU q35 so CI can inject PS/2 keys.
-[x86_64_generic_console]
-arch = "x86_64"
-microkit_board = "x86_64_generic"
-target = "x86_64-sel4-microkit"
-template = "console-pc.system.template"
-pds = ["shell", "log-server", "serial-driver", "console-driver"]
-qemu = { qmp = true }
-ci = true
-system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48 }
-
-# Same shell image, with qemu-xhci at 00:14.0. CI types on a USB boot keyboard.
-[x86_64_generic_usb_kbd]
-arch = "x86_64"
-microkit_board = "x86_64_generic"
-target = "x86_64-sel4-microkit"
-template = "console-pc.system.template"
-pds = ["shell", "log-server", "serial-driver", "console-driver"]
-qemu = { qmp = true, usb_kbd = true }
-ci = true
-system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48 }
-
-[x86_64_generic_echo]
-arch = "x86_64"
-microkit_board = "x86_64_generic"
-target = "x86_64-sel4-microkit"
-template = "echo-x86.system.template"
-pds = ["echo-client", "echo-server", "serial-driver"]
-qemu = {}
-ci = true
-system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48 }
-
 [x86_64_generic_virtio]
 arch = "x86_64"
 microkit_board = "x86_64_generic"
@@ -820,26 +417,6 @@ ci = true
 curl_expect = "lerux: HTTP ok"
 system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48, virtio_net_bar1_phys_addr = "0xfed2_0000", virtio_net_bar4_phys_addr = "0xfed3_0000", virtio_net_ioapic_pin = 11, virtio_net_ioapic_vector = 50, virtio_net_driver_dma_phys_addr = "0x6000_0000", virtio_net_rx_free_phys_addr = "0x6040_0000", virtio_net_rx_used_phys_addr = "0x6060_0000", virtio_net_tx_free_phys_addr = "0x6080_0000", virtio_net_tx_used_phys_addr = "0x60a0_0000" }
 
-[x86_64_generic_blk]
-arch = "x86_64"
-microkit_board = "x86_64_generic"
-target = "x86_64-sel4-microkit"
-template = "blk-x86.system.template"
-pds = ["blk-client", "blk-server", "serial-driver", "virtio-pci-driver"]
-qemu = { disk = "rw" }
-ci = true
-system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48, virtio_blk_bar1_phys_addr = "0xfed0_0000", virtio_blk_bar4_phys_addr = "0xfed1_0000", virtio_blk_ioapic_pin = 10, virtio_blk_ioapic_vector = 49, virtio_blk_driver_dma_phys_addr = "0x6000_0000", virtio_blk_client_dma_phys_addr = "0x60e0_0000", virtio_blk_free_phys_addr = "0x6100_0000", virtio_blk_used_phys_addr = "0x6120_0000" }
-
-[x86_64_generic_net]
-arch = "x86_64"
-microkit_board = "x86_64_generic"
-target = "x86_64-sel4-microkit"
-template = "net-x86.system.template"
-pds = ["net-client", "net-server", "serial-driver", "virtio-pci-driver"]
-qemu = { net = "user" }
-ci = true
-system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48, virtio_net_bar1_phys_addr = "0xfed2_0000", virtio_net_bar4_phys_addr = "0xfed3_0000", virtio_net_ioapic_pin = 11, virtio_net_ioapic_vector = 50, virtio_net_driver_dma_phys_addr = "0x6000_0000", virtio_net_rx_free_phys_addr = "0x6040_0000", virtio_net_rx_used_phys_addr = "0x6060_0000", virtio_net_tx_free_phys_addr = "0x6080_0000", virtio_net_tx_used_phys_addr = "0x60a0_0000" }
-
 # Real hardware example (Phase 37). Produces loader.img for deployment (U-Boot on RPi4: fatload + go 0x10000000).
 # Uses PL011 at the ARM peripheral base (0xfe20_1000 on RPi4 BCM2711). IRQ is GIC SPI 121 (verify per seL4 platform).
 # No QEMU profile: `just image` (or `lerux image`) only; `run`/`test` will error with guidance.
@@ -850,48 +427,6 @@ target = "aarch64-sel4-microkit"
 template = "serial-hello.system.template"
 pds = ["hello", "serial-driver"]
 system_vars = { serial_mmio_phys_addr = "0xfe201000", serial_irq = 121 }
-
-# RPi4 hardware with native genet (Ethernet) for net IPC (Phase 37 native driver slice)
-[rpi4b_4gb_net]
-arch = "aarch64"
-microkit_board = "rpi4b_4gb"
-target = "aarch64-sel4-microkit"
-template = "net-genet-rpi.system.template"
-pds = ["net-client", "net-server", "serial-driver", "genet-driver"]
-system_vars = { serial_mmio_phys_addr = "0xfe201000", serial_irq = 121, genet_mmio_phys_addr = "0x7d580000", genet_irq = 157 }
-
-# RPi4 workstation: full non-POSIX stack over native genet + emmc2 (Phase 39).
-[rpi4b_4gb_workstation]
-arch = "aarch64"
-microkit_board = "rpi4b_4gb"
-target = "aarch64-sel4-microkit"
-template = "workstation-rpi4.system.template"
-pds = ["supervisor", "shell", "edit", "chat-client", "http-file-browser", "backup", "fs-server", "net-server", "log-server", "config-server", "serial-driver", "serial-virt", "genet-driver", "emmc2-driver"]
-system_vars = { serial_mmio_phys_addr = "0xfe201000", serial_irq = 121, genet_mmio_phys_addr = "0x7d580000", genet_irq = 157, emmc2_mmio_phys_addr = "0x7e340000", emmc2_irq = 126 }
-
-# RPi4 hardware with native eMMC2/SD for block (Phase 37)
-[rpi4b_4gb_blk]
-arch = "aarch64"
-microkit_board = "rpi4b_4gb"
-target = "aarch64-sel4-microkit"
-template = "blk-emmc-rpi.system.template"
-pds = ["blk-client", "blk-server", "serial-driver", "emmc2-driver"]
-system_vars = { serial_mmio_phys_addr = "0xfe201000", serial_irq = 121, emmc2_mmio_phys_addr = "0x7e340000", emmc2_irq = 126 }
-
-# Gigabyte Z97-D3H (Haswell desktop). Hardware only: Multiboot 2 `sel4_32.elf` + `loader.img`.
-# COM1 0x3f8 IRQ4 via the board COMA header (no rear DB9). The console PD paints
-# the VGA text page at 0xb8000 and reads a PS/2 keyboard or a USB HID boot
-# keyboard on the xHCI controller at 00:14.0. The picture is that text page on
-# the firmware boot VGA card. On this desk that is the Sapphire RX 560 HDMI
-# (01:00.0, 1002:67ff). There is no amdgpu or Polaris driver. See
-# docs/boards.md. Do not overwrite the Ubuntu SSD.
-[pc_z97_d3h]
-arch = "x86_64"
-microkit_board = "x86_64_generic"
-target = "x86_64-sel4-microkit"
-template = "console-pc.system.template"
-pds = ["shell", "log-server", "serial-driver", "console-driver"]
-system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48 }
 
 # Z97 RTL8852BE config-space probe. Hardware only. Reads root port 00:1c.6,
 # then the device on that port's secondary bus, and logs the id and BAR.

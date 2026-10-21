@@ -20,10 +20,10 @@ default: build
 # Format, clippy, and host tests for host crates (no SDK required)
 check:
     cargo fmt --all --check
-    CARGO_TARGET_DIR={{root}}/build/host cargo clippy -p lerux-cli -p lerux-interface-types -p lerux-tls -p lerux-html -p lerux-web -p lerux-wasm -p lerux-rtw8852be -p lerux-sddf -p lerux-cothread -p lerux-posix --all-targets -- -D warnings
+    CARGO_TARGET_DIR={{root}}/build/host cargo clippy -p lerux-cli -p lerux-tls -p lerux-html -p lerux-web -p lerux-wasm -p lerux-rtw8852be -p lerux-sddf -p lerux-cothread -p lerux-posix --all-targets -- -D warnings
     CARGO_TARGET_DIR={{root}}/build/host cargo clippy -p lerux-machine --features system-description --all-targets -- -D warnings
     CARGO_TARGET_DIR={{root}}/build/host cargo clippy -p lerux-image --all-targets -- -D warnings
-    CARGO_TARGET_DIR={{root}}/build/host cargo test -p lerux-interface-types -p lerux-tls -p lerux-html -p lerux-web -p lerux-wasm -p lerux-rtw8852be -p lerux-cli -p lerux-sddf -p lerux-cothread -p lerux-posix
+    CARGO_TARGET_DIR={{root}}/build/host cargo test -p lerux-tls -p lerux-html -p lerux-web -p lerux-wasm -p lerux-rtw8852be -p lerux-cli -p lerux-sddf -p lerux-cothread -p lerux-posix
     CARGO_TARGET_DIR={{root}}/build/host cargo test -p lerux-machine --features system-description
     CARGO_TARGET_DIR={{root}}/build/host cargo test -p lerux-image
     # Phase 60 Track D: PPC priority + service-class band checks (host, no QEMU)
@@ -74,27 +74,29 @@ image: build
 run: image
     {{lerux}} run --board {{board}} --build-dir {{build_dir}} --config {{config}}
 
-# Live workstation in QEMU for manual testing (serial shell at lerux>; quit with Ctrl-A x)
+# Serial and filesystem shell in QEMU. Quit with Ctrl-A x.
 qemu: disk-img
-    BOARD=qemu_virt_aarch64_workstation just run
+    BOARD=qemu_virt_aarch64_fs_sddf just run
 
-# Same as `qemu`, on the x86-64 (q35) workstation board
+# Same shell on the x86-64 (q35) filesystem image.
 qemu-x86-64: disk-img
-    BOARD=x86_64_generic_workstation just run
+    BOARD=x86_64_generic_fs_sddf just run
 
 alias qemu-x86 := qemu-x86-64
 
-# Interactive workstation in a QEMU GTK window (ramfb; serial is View → serial0 / Ctrl-Alt-2)
-qemu-interactive: disk-img
-    BOARD=qemu_virt_aarch64_interactive just run
-
-# Serial smoke test (QEMU or hw-serial when LERUX_HW_SERIAL is set on hardware boards)
-test: image
-    {{lerux}} test --board {{board}} --build-dir {{build_dir}} --config {{config}}
+# Bare `just test` boots the serial and filesystem image.
+# `BOARD=... just test` still smokes that board. `just build` keeps the hello default.
+test:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    board="${BOARD:-qemu_virt_aarch64_fs_sddf}"
+    export BOARD="$board"
+    just image
+    {{lerux}} test --board "$board" --build-dir {{build_dir}} --config {{config}}
 
 # Phase 47: force hardware serial smoke (requires LERUX_HW_SERIAL=/dev/ttyUSB0 etc.)
 # Example: LERUX_HW_SERIAL=/dev/ttyUSB0 just test-hw
-# Optional: BOARD=rpi4b_4gb_net LERUX_HW_BAUD=115200 LERUX_HW_LOCK_DIR=/tmp/locks just test-hw
+# Optional: BOARD=rpi4b_4gb LERUX_HW_BAUD=115200 LERUX_HW_LOCK_DIR=/tmp/locks just test-hw
 test-hw:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -102,7 +104,7 @@ test-hw:
       echo "error: LERUX_HW_SERIAL is required (e.g. /dev/ttyUSB0)" >&2
       exit 1
     fi
-    BOARD="${BOARD:-rpi4b_4gb_workstation}"
+    BOARD="${BOARD:-rpi4b_4gb}"
     {{lerux}} test --board "$BOARD" --build-dir {{build_dir}} --config {{config}} --mode hw-serial
 
 # Virtio smoke test (serial + virtio-blk + virtio-net on aarch64 virt)
@@ -110,9 +112,6 @@ test-virtio:
     BOARD=qemu_virt_aarch64_virtio just test
 
 # Custom IPC smoke test (echo-server + echo-client on aarch64 virt)
-test-echo:
-    BOARD=qemu_virt_aarch64_echo just test
-
 # LionsOS serial roles: driver, transmit virtualiser, receive virtualiser, one client
 test-serial-sddf:
     BOARD=qemu_virt_aarch64_serial_sddf just test
@@ -197,22 +196,6 @@ test-cothread:
 test-cothread-riscv:
     BOARD=qemu_virt_riscv64_cothread just test
 
-# Phase 72: QEMU ramfb + display-server + shared bitmap (display-demo)
-test-display:
-    BOARD=qemu_virt_aarch64_display just test
-
-# Echo IPC smoke test on x86_64 generic PC
-test-x86-echo:
-    BOARD=x86_64_generic_echo just test
-
-# On-screen shell: VGA text + PS/2 keys injected over QMP
-test-x86-console:
-    BOARD=x86_64_generic_console just test
-
-# On-screen shell: USB HID boot keyboard on qemu-xhci (Z97 xHCI path)
-test-x86-usb-kbd:
-    BOARD=x86_64_generic_usb_kbd just test
-
 # Virtio smoke test on x86_64 q35 (PCI virtio-blk + virtio-net)
 test-x86-virtio:
     BOARD=x86_64_generic_virtio just test
@@ -225,10 +208,6 @@ test-x86-http:
 test-riscv:
     BOARD=qemu_virt_riscv64 just test
 
-# RISC-V echo IPC smoke test
-test-riscv-echo:
-    BOARD=qemu_virt_riscv64_echo just test
-
 # RISC-V virtio smoke test
 test-riscv-virtio:
     BOARD=qemu_virt_riscv64_virtio just test
@@ -237,98 +216,9 @@ test-riscv-virtio:
 test-riscv-http:
     BOARD=qemu_virt_riscv64_http just test
 
-# Block IPC smoke test (blk-server + blk-client on aarch64 virt)
-test-blk:
-    just disk-img && BOARD=qemu_virt_aarch64_blk just test
-
-# Block IPC smoke test on RISC-V virt
-test-riscv-blk:
-    just disk-img && BOARD=qemu_virt_riscv64_blk just test
-
-# Block IPC smoke test on x86_64 q35 (PCI virtio-blk)
-test-x86-blk:
-    just disk-img && BOARD=x86_64_generic_blk just test
-
-# Timer/RTC/init smoke test (PL031 + SP804 via patched QEMU; see support/qemu/)
-test-init:
-    BOARD=qemu_virt_aarch64_init just test
-
-# Phase 56: init/time on RISC-V virt (Goldfish RTC + rdtime; stock QEMU)
-test-init-riscv:
-    BOARD=qemu_virt_riscv64_init just test
-
-# Phase 56: init/time on x86_64 (CMOS RTC + TSC; stock QEMU)
-test-init-x86:
-    BOARD=x86_64_generic_init just test
-
-# Composed smoke: boot-init + hello virtio (both serial IPC; gated on init notify)
-test-composed:
-    BOARD=qemu_virt_aarch64_composed just test
-
-# Init + block IPC over virtio-blk (boot-init notify gate before blk probe)
-test-blk-composed:
-    BOARD=qemu_virt_aarch64_blk_composed just test
-
-# Net IPC smoke test (net-server + net-client on aarch64 virt)
-test-net:
-    BOARD=qemu_virt_aarch64_net just test
-
-# HTTP fetch over net IPC (DNS + TCP via net-server)
-test-fetch:
-    BOARD=qemu_virt_aarch64_fetch just test
-
-# HTTPS fetch over tls-proxy (DNS + TCP + rustls)
-test-fetch-tls:
-    BOARD=qemu_virt_aarch64_fetch_tls just test
-
-# Phase 73: request-server GET fixture via tls-proxy (no NetClient on the app)
-test-request:
-    BOARD=qemu_virt_aarch64_request just test
-
-# ADR-010: fetch a signed Wasm module and run it inside program-runtime
-test-program:
-    BOARD=qemu_virt_aarch64_program just test
-
 # Phase 74: subset HTML tokenizer + DOM dump
 test-html:
     BOARD=qemu_virt_aarch64_html just test
-
-# Phase 75: CSS subset + block-flow layout + paint into ramfb
-test-paint:
-    BOARD=qemu_virt_aarch64_paint just test
-
-# Phase 76: browser-ui + web-content via request-server (fixture through ramfb)
-test-browser:
-    BOARD=qemu_virt_aarch64_browser just test
-
-# Phase 77: agent tool-loop against lerux grok-one (not live xAI)
-test-agent-runtime:
-    BOARD=qemu_virt_aarch64_agent_runtime just test
-
-# Phase 79: agent Read/Edit/WebFetch against LERUXFS2 + grok-one
-test-agent:
-    just disk-img
-    BOARD=qemu_virt_aarch64_agent just test
-
-# Phase 80: joint workstation + browser + agent (Browse via web-content)
-test-interactive:
-    just disk-img
-    BOARD=qemu_virt_aarch64_interactive just test
-
-# Filesystem IPC smoke test (fs-server + fs-client on aarch64 virt)
-test-fs:
-    BOARD=qemu_virt_aarch64_fs just test
-
-# Phase 63: host-seeded /host on LERUXFS2
-test-fs-host:
-    mkdir -p build/fs-host
-    printf 'hello from host\n' > build/fs-host/hello.txt
-    cargo run -q -p lerux-cli -- fs-host seed --dir build/fs-host
-    BOARD=qemu_virt_aarch64_fs_host just test
-
-# Phase 44: FAT16 backend on same fs SDF / virtio-blk
-test-fs-fat:
-    BOARD=qemu_virt_aarch64_fs_fat just test
 
 # Phase 46 / 66: parent fault handler + deliberate child crash
 test-debug:
@@ -340,42 +230,6 @@ test-debug-riscv:
 test-debug-x86:
     BOARD=x86_64_generic_debug just test
 
-# Phase 60 / 66: untrusted PD crash must not take down fs-server
-test-isolation:
-    just disk-img
-    BOARD=qemu_virt_aarch64_isolation just test
-
-test-isolation-riscv:
-    just disk-img
-    BOARD=qemu_virt_riscv64_isolation just test
-
-# Net IPC smoke test on RISC-V virt
-test-riscv-net:
-    BOARD=qemu_virt_riscv64_net just test
-
-# Net IPC smoke test on x86_64 q35 (PCI virtio-net)
-test-x86-net:
-    BOARD=x86_64_generic_net just test
-
-# Init + net IPC over virtio-net (boot-init notify gate before net probe)
-test-net-composed:
-    BOARD=qemu_virt_aarch64_net_composed just test
-
-# Init + block and net IPC (boot-init → blk-client → net-client notify chain)
-test-ipc-composed:
-    BOARD=qemu_virt_aarch64_ipc_composed just test
-
-# Workstation: supervisor + fs + net over virtio (Phase 33)
-test-workstation:
-    BOARD=qemu_virt_aarch64_workstation just test
-
-# Phase 59: multi-arch workstation smokes
-test-workstation-riscv:
-    just disk-img && BOARD=qemu_virt_riscv64_workstation just test
-
-test-workstation-x86:
-    just disk-img && BOARD=x86_64_generic_workstation just test
-
 # Hardware slice (Phase 37): build image (no QEMU).
 # `just test` / `lerux test` for hardware boards does build verification + manual note.
 # Deploy e.g. build/rpi4b_4gb/loader.img via U-Boot on RPi.
@@ -386,50 +240,15 @@ hardware-rpi4:
 test-hardware-rpi4:
     BOARD=rpi4b_4gb just test
 
-# RPi4 workstation: build image (+ optional serial smoke via LERUX_HW_SERIAL).
-# Install path: docs/boards.md#rpi4-workstation-install-path-phase-52
-# Prefer: LERUX_HW_SERIAL=/dev/ttyUSB0 just test-hw
-test-rpi4-workstation:
-    BOARD=rpi4b_4gb_workstation just test
-
-# Phase 52: copy RPi4 workstation loader.img onto a mounted SD FAT boot dir.
-# Example: DEST=/media/$USER/boot just deploy-rpi4
-# Builds the image if missing. Writes lerux-uboot.txt beside loader.img.
-deploy-rpi4 DEST:
-    {{lerux}} deploy --board rpi4b_4gb_workstation --dest {{DEST}}
-
-# Gigabyte Z97-D3H hello slice: Multiboot 2 `sel4_32.elf` + `loader.img` onto USB/ESP FAT.
-# Example: DEST=/media/$USER/boot just deploy-pc
-# Docs: docs/boards.md#gigabyte-z97-d3h-install-path
-hardware-pc:
-    BOARD=pc_z97_d3h just image
-
-deploy-pc DEST:
-    {{lerux}} deploy --board pc_z97_d3h --dest {{DEST}}
-
-# Hybrid BIOS+UEFI Limine ISO for the Z97-D3H hello image.
-# Writes build/pc_z97_d3h/lerux.iso. Does not write a disk.
-# Docs: docs/boards.md#gigabyte-z97-d3h-install-path
-iso:
-    {{lerux}} iso --board pc_z97_d3h --build-dir {{build_dir}} --config {{config}}
-
-# Boot that ISO in QEMU as a raw disk (SeaBIOS). Local check, not a CI job.
-test-iso:
-    {{lerux}} iso --board pc_z97_d3h --build-dir {{build_dir}} --config {{config}} --boot-test
-
 # HTTP smoke: GET / on virtio-net (host port 18080 -> guest :8080)
 test-http:
     BOARD=qemu_virt_aarch64_http just test
-
-# Composed + HTTP: boot-init then http-server over virtio-net
-test-http-composed:
-    BOARD=qemu_virt_aarch64_http_composed just test
 
 # Run all CI smoke tests (requires SDK with aarch64 + x86_64 + riscv64 boards)
 test-all:
     {{lerux}} test-all --build-dir {{build_dir}} --config {{config}}
 
-# Phase 49: microbenches (echo RTT, blk IOPS, UDP TX PPS) on QEMU aarch64
+# Host microbench runner. No boards are registered.
 # Writes build/bench/bench-results.{md,json} and docs/bench-results.latest.md
 bench:
     just disk-img
@@ -439,10 +258,6 @@ bench:
 bench-check:
     just disk-img
     {{lerux}} bench --build-dir {{build_dir}} --config {{config}} --check
-
-# Phase 57: analyze a serial capture (default: last workstation smoke log)
-diagnose LOG="build/smoke-logs/qemu_virt_aarch64_workstation.serial.log":
-    {{lerux}} diagnose {{LOG}}
 
 # Disk image for virtio-blk QEMU device (MBR boot signature at bytes 510–511)
 disk-img:
@@ -454,13 +269,6 @@ config-schema:
 
 config-seed-disk:
     {{lerux}} config seed-disk
-
-# Phase 55: package / profile helpers
-package-list:
-    {{lerux}} package list
-
-package-search QUERY:
-    {{lerux}} package search {{QUERY}}
 
 # Remove all build artifacts (shared target cache + per-board outputs).
 clean:

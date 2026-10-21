@@ -326,9 +326,6 @@ pub fn setup_test_helpers(ctx: &QemuContext) -> Result<Vec<std::process::Child>>
     if qemu.https_one {
         helpers.push(crate::https_one::start_https_one_background(8443)?);
     }
-    if qemu.grok_one {
-        helpers.push(crate::grok_one::start_grok_one_background(8444)?);
-    }
     if qemu.tcp_echo {
         helpers.push(start_tcp_echo_background(18080)?);
     }

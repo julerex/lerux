@@ -720,6 +720,6 @@ On-device work extracted from Phases 39, 51, and 52. Software for those phases i
 
 | Component | Version |
 |-----------|---------|
-| seL4 | 15.0.0 |
-| Microkit | 2.2.0 |
-| rust-sel4 | v4.0.0 |
+| seL4 | 16.0.0 |
+| Microkit | 2.3.0 |
+| rust-sel4 | v5.0.0 |

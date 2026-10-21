@@ -177,7 +177,7 @@ impl HandlerImpl {
             return invalid;
         };
         // `io_or_offset` is a byte offset into the data region virtual address.
-        // `device_region_resource_t.io_addr` stays 0 because Microkit 2.2.0 assigns RAM physical addresses at load time and this driver does not program that field.
+        // `device_region_resource_t.io_addr` stays 0 because Microkit assigns RAM physical addresses at load time and this driver does not program that field.
         let ptr = (base + offset_usize) as *mut u8;
         // SAFETY: the data region is mapped at `BLK_DATA_VADDR` for `BLK_DATA_SIZE` bytes, and `offset + len` is inside it.
         let result = unsafe {

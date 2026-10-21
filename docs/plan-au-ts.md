@@ -349,9 +349,9 @@ Track alongside [`plan.md`](plan.md) version table. Revisit when adopting debug 
 
 | Component | Current | Watch |
 |-----------|---------|-------|
-| seL4 | 15.0.0 | libgdb fork branches |
-| Microkit | 2.2.0 | sdfgen / GDB patches |
-| rust-sel4 | v4.0.0 | shared-ring + driver-adapter evolution |
+| seL4 | 16.0.0 | libgdb fork branches |
+| Microkit | 2.3.0 | sdfgen / GDB patches |
+| rust-sel4 | v5.0.0 | shared-ring + driver-adapter evolution |
 
 ## Success criteria (program-level)
 

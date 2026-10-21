@@ -137,7 +137,7 @@ mod tests {
             "<ioport id=\"0\" addr=\"0x3f8\" size=\"8\" setvar_id=\"com1_ioport_id\" setvar_addr=\"com1_ioport_addr\" />"
         ));
         assert!(xml.contains(
-            "<irq pin=\"4\" vector=\"48\" id=\"0\" trigger=\"level\" polarity=\"high\" />"
+            "<irq pin=\"4\" vector=\"48\" id=\"0\" trigger=\"level\" polarity=\"low\" />"
         ));
         assert!(!xml.contains("serial_mmio"));
         assert!(!xml.contains("irq irq="));
@@ -274,10 +274,10 @@ mod tests {
         assert!(xml.contains("phys_addr=\"0xfed3_0000\""));
         assert!(xml.contains("pci_ecam"));
         assert!(xml.contains(
-            "<irq pin=\"11\" vector=\"49\" id=\"0\" trigger=\"level\" polarity=\"high\" />"
+            "<irq pin=\"11\" vector=\"49\" id=\"0\" trigger=\"level\" polarity=\"low\" />"
         ));
         assert!(xml.contains(
-            "<irq pin=\"10\" vector=\"50\" id=\"0\" trigger=\"level\" polarity=\"high\" />"
+            "<irq pin=\"10\" vector=\"50\" id=\"0\" trigger=\"level\" polarity=\"low\" />"
         ));
         assert!(xml.contains(
             "<protection_domain name=\"net_driver\" priority=\"2\" budget=\"2000\" period=\"2000\" stack_size=\"0x10_000\">"
@@ -307,7 +307,7 @@ mod tests {
         assert!(xml.contains("phys_addr=\"0xfed0_0000\""));
         assert!(xml.contains("phys_addr=\"0xfed1_0000\""));
         assert!(xml.contains(
-            "<irq pin=\"10\" vector=\"49\" id=\"0\" trigger=\"level\" polarity=\"high\" />"
+            "<irq pin=\"10\" vector=\"49\" id=\"0\" trigger=\"level\" polarity=\"low\" />"
         ));
         assert!(xml.contains("phys_addr=\"0x6200_0000\""));
         assert!(!xml.contains("0xa003000"));
@@ -325,7 +325,7 @@ mod tests {
         assert!(xml.contains("phys_addr=\"0xfed2_0000\""));
         assert!(xml.contains("phys_addr=\"0xfed3_0000\""));
         assert!(xml.contains(
-            "<irq pin=\"11\" vector=\"50\" id=\"0\" trigger=\"level\" polarity=\"high\" />"
+            "<irq pin=\"11\" vector=\"50\" id=\"0\" trigger=\"level\" polarity=\"low\" />"
         ));
         assert!(!xml.contains("serial_mmio"));
         assert!(!xml.contains("irq irq="));
@@ -347,10 +347,10 @@ mod tests {
         assert!(xml.contains("pci_ecam"));
         assert!(!xml.contains("pci_config_ioport_id"));
         assert!(xml.contains(
-            "<irq pin=\"11\" vector=\"49\" id=\"0\" trigger=\"level\" polarity=\"high\" />"
+            "<irq pin=\"11\" vector=\"49\" id=\"0\" trigger=\"level\" polarity=\"low\" />"
         ));
         assert!(xml.contains(
-            "<irq pin=\"10\" vector=\"50\" id=\"0\" trigger=\"level\" polarity=\"high\" />"
+            "<irq pin=\"10\" vector=\"50\" id=\"0\" trigger=\"level\" polarity=\"low\" />"
         ));
         assert!(!xml.contains("0xa003000"));
         assert!(!xml.contains("serial_mmio"));
@@ -390,10 +390,10 @@ mod tests {
             "<ioport id=\"0\" addr=\"0xcf8\" size=\"8\" setvar_id=\"pci_net_config_ioport_id\" setvar_addr=\"pci_net_config_ioport_addr\" />"
         ));
         assert!(web.contains(
-            "<irq pin=\"11\" vector=\"49\" id=\"0\" trigger=\"level\" polarity=\"high\" />"
+            "<irq pin=\"11\" vector=\"49\" id=\"0\" trigger=\"level\" polarity=\"low\" />"
         ));
         assert!(web.contains(
-            "<irq pin=\"10\" vector=\"50\" id=\"0\" trigger=\"level\" polarity=\"high\" />"
+            "<irq pin=\"10\" vector=\"50\" id=\"0\" trigger=\"level\" polarity=\"low\" />"
         ));
         assert!(web.contains(
             "<protection_domain name=\"net_driver\" priority=\"2\" budget=\"2000\" period=\"2000\" stack_size=\"0x10_000\">"
@@ -631,10 +631,10 @@ mod tests {
         assert!(xml.contains("pci_ecam"));
         assert!(!xml.contains("pci_config_ioport_id"));
         assert!(xml.contains(
-            "<irq pin=\"11\" vector=\"49\" id=\"0\" trigger=\"level\" polarity=\"high\" />"
+            "<irq pin=\"11\" vector=\"49\" id=\"0\" trigger=\"level\" polarity=\"low\" />"
         ));
         assert!(xml.contains(
-            "<irq pin=\"10\" vector=\"50\" id=\"0\" trigger=\"level\" polarity=\"high\" />"
+            "<irq pin=\"10\" vector=\"50\" id=\"0\" trigger=\"level\" polarity=\"low\" />"
         ));
         assert!(xml.contains(
             "<protection_domain name=\"net_driver\" priority=\"2\" budget=\"2000\" period=\"2000\" stack_size=\"0x10_000\">"

@@ -9,7 +9,7 @@
 //! Network queues start at `0x5_000_000`. Serial queues stay at `0x3_000_000`
 //! and block regions stay at `0x4_000_000`.
 //!
-//! `device_region_resource_t.io_addr` stays 0. Microkit 2.2.0 assigns RAM
+//! `device_region_resource_t.io_addr` stays 0. Microkit assigns RAM
 //! physical addresses at load time. Descriptors between the virtualisers and
 //! the driver carry byte offsets, and the virtio driver translates those
 //! offsets through the regions it maps.

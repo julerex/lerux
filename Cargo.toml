@@ -61,28 +61,28 @@ members = [
 ]
 
 [workspace.dependencies]
-sel4 = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
-sel4-microkit = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
-sel4-pl011-driver = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
-sel4-driver-interfaces = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
-sel4-microkit-driver-adapters = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
-sel4-microkit-simple-ipc = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
-sel4-logging = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
-sel4-sync = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
-sel4-virtio-blk = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
-sel4-virtio-net = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
-sel4-virtio-hal-impl = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
+sel4 = { git = "https://github.com/seL4/rust-sel4", tag = "v5.0.0" }
+sel4-microkit = { git = "https://github.com/seL4/rust-sel4", tag = "v5.0.0" }
+sel4-pl011-driver = { git = "https://github.com/seL4/rust-sel4", tag = "v5.0.0" }
+sel4-driver-interfaces = { git = "https://github.com/seL4/rust-sel4", tag = "v5.0.0" }
+sel4-microkit-driver-adapters = { git = "https://github.com/seL4/rust-sel4", tag = "v5.0.0" }
+sel4-microkit-simple-ipc = { git = "https://github.com/seL4/rust-sel4", tag = "v5.0.0" }
+sel4-logging = { git = "https://github.com/seL4/rust-sel4", tag = "v5.0.0" }
+sel4-sync = { git = "https://github.com/seL4/rust-sel4", tag = "v5.0.0" }
+sel4-virtio-blk = { git = "https://github.com/seL4/rust-sel4", tag = "v5.0.0" }
+sel4-virtio-net = { git = "https://github.com/seL4/rust-sel4", tag = "v5.0.0" }
+sel4-virtio-hal-impl = { git = "https://github.com/seL4/rust-sel4", tag = "v5.0.0" }
 lerux-virtio-hal = { path = "userspace/crates/lerux-virtio-hal" }
 lerux-virtio-pci = { path = "userspace/crates/lerux-virtio-pci" }
-sel4-sp804-driver = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
-sel4-pl031-driver = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
-sel4-shared-memory = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
-sel4-shared-ring-buffer = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
-sel4-shared-ring-buffer-block-io-types = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
-sel4-shared-ring-buffer-block-io = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
-sel4-shared-ring-buffer-bookkeeping = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
-sel4-shared-ring-buffer-smoltcp = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
-sel4-abstract-allocator = { git = "https://github.com/seL4/rust-sel4", tag = "v4.0.0" }
+sel4-sp804-driver = { git = "https://github.com/seL4/rust-sel4", tag = "v5.0.0" }
+sel4-pl031-driver = { git = "https://github.com/seL4/rust-sel4", tag = "v5.0.0" }
+sel4-shared-memory = { git = "https://github.com/seL4/rust-sel4", tag = "v5.0.0" }
+sel4-shared-ring-buffer = { git = "https://github.com/seL4/rust-sel4", tag = "v5.0.0" }
+sel4-shared-ring-buffer-block-io-types = { git = "https://github.com/seL4/rust-sel4", tag = "v5.0.0" }
+sel4-shared-ring-buffer-block-io = { git = "https://github.com/seL4/rust-sel4", tag = "v5.0.0" }
+sel4-shared-ring-buffer-bookkeeping = { git = "https://github.com/seL4/rust-sel4", tag = "v5.0.0" }
+sel4-shared-ring-buffer-smoltcp = { git = "https://github.com/seL4/rust-sel4", tag = "v5.0.0" }
+sel4-abstract-allocator = { git = "https://github.com/seL4/rust-sel4", tag = "v5.0.0" }
 smoltcp = { version = "0.13.0", default-features = false }
 virtio-drivers = { version = "0.13.0", default-features = false }
 embedded-hal-nb = "1.0"

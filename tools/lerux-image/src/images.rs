@@ -298,7 +298,7 @@ fn fetch_x86_pci_irq(role: VirtioRole) -> Irq {
         pin: IoApicPin(pin),
         vector: IoApicVector(vector),
         trigger: Trigger::Level,
-        polarity: Polarity::High,
+        polarity: Polarity::Low,
     })
 }
 

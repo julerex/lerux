@@ -197,11 +197,11 @@ lerux does **not** vendor seL4 / Microkit / rust-sel4 trees into git. Security a
 
 | Component | Pin location | Current (see also plan version table) | When to bump |
 |-----------|--------------|----------------------------------------|--------------|
-| seL4 | `deps/versions.toml` → `[repos].sel4.tag` | 15.0.0 | Kernel CVE / release notes from seL4 Foundation |
-| Microkit | `deps/versions.toml` → `[repos].microkit.tag` | 2.2.0 | Microkit release; often paired with seL4 |
-| rust-sel4 (docs mirror) | `deps/versions.toml` → `[rust].rust_sel4.tag` | v4.0.0 | Keep in sync with Cargo.toml |
-| rust-sel4 (build) | root `Cargo.toml` workspace git `tag = "…"` for all `sel4*` deps | v4.0.0 | rust-sel4 release / API fixes; **must match** versions.toml |
-| Rust toolchain | `rust-toolchain.toml` | nightly-2026-03-18 | rustc regressions, or when rust-sel4 requires a newer nightly |
+| seL4 | `deps/versions.toml` → `[repos].sel4.tag` | 16.0.0 | Kernel CVE / release notes from seL4 Foundation |
+| Microkit | `deps/versions.toml` → `[repos].microkit.tag` | 2.3.0 | Microkit release; often paired with seL4 |
+| rust-sel4 (docs mirror) | `deps/versions.toml` → `[rust].rust_sel4.tag` | v5.0.0 | Keep in sync with Cargo.toml |
+| rust-sel4 (build) | root `Cargo.toml` workspace git `tag = "…"` for all `sel4*` deps | v5.0.0 | rust-sel4 release / API fixes; **must match** versions.toml |
+| Rust toolchain | `rust-toolchain.toml` | nightly-2026-04-04 | rustc regressions, or when rust-sel4 requires a newer nightly |
 | PD package ELFs | `support/package-pins.toml` | per-board sha256 | After any PD/interface rebuild that ships CI artifacts |
 | Host crates (clap, etc.) | `Cargo.lock` | resolved | Dependabot / `cargo update` for **host** crates only; PD path is git-pinned |
 
@@ -222,7 +222,7 @@ Document the CVE / advisory ID in the commit message and, if user-facing, a shor
 
 ### Standard bump procedure
 
-Work on a branch. Prefer one logical bump per PR (e.g. “seL4 15.0.0 → 15.0.1” or “rust-sel4 v4.0.0 → v4.0.1”).
+Work on a branch. Prefer one logical bump per PR (e.g. “seL4 16.0.0 → 16.0.1” or “rust-sel4 v5.0.0 → v5.0.1”).
 
 #### 1. Edit pins
 

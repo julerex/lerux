@@ -22,7 +22,7 @@ Last updated: 2026-10-21
 - A new guest component discovers its queues from a configuration memory region whose magic and fields match the header (`serial_driver_config_t`, `serial_virt_tx_config_t`, `serial_virt_rx_config_t`, `serial_client_config_t`, and the network, block, and filesystem equivalents). A handwritten `Channel::new` is not the protocol. Milestone 17 removed the postcard image. `hello` and `serial-driver` remain.
 - Postcard request types are not added. An old protection domain stays on postcard only until the milestone that replaces it deletes it.
 - Do not modify `deps/workspace/` by hand. Do not vendor the C trees into git.
-- The legacy image keeps the Microkit software development kit 2.2.0 and rust-sel4 `v4.0.0` until the last postcard protection domain is gone. Queue layouts do not require the Microkit 2.3.0 bump that LionsOS 0.4.0 uses. Bump the kit when a rust-sel4 release supports Microkit 2.3.0, not before.
+- The installed kit is Microkit 2.3.0, seL4 16.0.0, and rust-sel4 `v5.0.0`. Those three pins move together. rust-sel4 5.0.0 is the release that supports this kit. Queue layouts do not depend on the kit version.
 - A missing header in the 0.4.0 checkout stops that milestone. The struct is not invented to keep moving.
 - Milestones 2–15 are QEMU AArch64. Full terms in new docs and commit messages.
 

@@ -16,7 +16,7 @@ lerux builds **Rust-only userspace** on the formally verified [seL4](https://sel
 : An isolated userspace component with its own address space and capabilities. lerux PDs are `#![no_std]` Rust crates using `sel4-microkit`.
 
 **rust-sel4**
-: Foundation-maintained Rust bindings and runtimes ([Git dependency](https://github.com/seL4/rust-sel4), tag `v4.0.0`). Not vendored; pinned in `Cargo.toml`.
+: Foundation-maintained Rust bindings and runtimes ([Git dependency](https://github.com/seL4/rust-sel4), tag `v5.0.0`). Not vendored; pinned in `Cargo.toml`.
 
 **No vendoring**
 : seL4 and microkit source live in gitignored `deps/workspace/`. Version pins are committed in `deps/versions.toml`.
@@ -25,7 +25,7 @@ lerux builds **Rust-only userspace** on the formally verified [seL4](https://sel
 
 | Decision | Choice |
 |----------|--------|
-| Kernel | Upstream seL4 15.0.0, built from source |
+| Kernel | Upstream seL4 16.0.0, built from source |
 | Userspace model | seL4 Microkit (static PD layout) |
 | Userspace language | Rust only (no musllibc/relibc in lerux code) |
 | New device and filesystem connections | LionsOS structures in Rust (`lerux-sddf`, [ADR-011](decisions/011-lionsos-structures.md)) |

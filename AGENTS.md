@@ -331,3 +331,17 @@ The VM snapshot already has the full dev environment: system packages (cmake, ni
 - [rust-sel4 API docs](https://sel4.github.io/rust-sel4/)
 - [Embedded Rust Book — no_std](https://docs.rust-embedded.org/book/intro/no-std.html)
 - [High Assurance Rust](https://highassurance.rs/) — firmware-oriented patterns
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs live as GitHub issues on `julerex/lerux`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default roles: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, and `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context. Domain language is `docs/context.md`; architecture decision records are `docs/decisions/`. See `docs/agents/domain.md`.

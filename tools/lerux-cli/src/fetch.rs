@@ -132,15 +132,26 @@ fn clone_or_checkout(workspace: &Path, name: &str, url: &str, tag: &str) -> Resu
 }
 
 pub fn fetch_sdk(root: &Path) -> Result<()> {
-    let version = "2.2.0";
+    let versions = load_versions(root)?;
+    let version = versions.repos.microkit.tag;
     let dest = root.join("deps/microkit-sdk");
     let url = format!(
         "https://github.com/seL4/microkit/releases/download/{version}/microkit-sdk-{version}-linux-x86-64.tar.gz"
     );
 
-    if dest.join("bin").is_dir() {
-        eprintln!("==> SDK already present at {}", dest.display());
-    } else {
+    let installed = std::fs::read_to_string(dest.join("VERSION"))
+        .ok()
+        .map(|text| text.trim().to_string());
+    let current = installed.as_deref() == Some(version.as_str()) && dest.join("bin").is_dir();
+    if !current {
+        if dest.exists() {
+            eprintln!(
+                "==> Replacing Microkit SDK at {} (installed {})",
+                dest.display(),
+                installed.as_deref().unwrap_or("unknown")
+            );
+            std::fs::remove_dir_all(&dest)?;
+        }
         eprintln!("==> Downloading Microkit SDK {version}");
         ensure_dir(&dest)?;
         let status = std::process::Command::new("bash")
@@ -154,7 +165,16 @@ pub fn fetch_sdk(root: &Path) -> Result<()> {
         if !status.success() {
             bail!("SDK download failed");
         }
+        let downloaded = std::fs::read_to_string(dest.join("VERSION"))
+            .context("read SDK VERSION")?
+            .trim()
+            .to_string();
+        if downloaded != version {
+            bail!("SDK VERSION is {downloaded}, expected {version}");
+        }
         run_checked("chmod", &["-R", "a+X", &dest.to_string_lossy()])?;
+    } else {
+        eprintln!("==> SDK {version} already present at {}", dest.display());
     }
 
     let sdk_path_file = root.join("deps/.sdk-path");

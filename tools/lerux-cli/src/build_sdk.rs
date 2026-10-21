@@ -102,7 +102,7 @@ pub fn build_sdk(root: &Path) -> Result<()> {
             &[
                 "toolchain",
                 "install",
-                "nightly-2026-03-18",
+                "nightly-2026-04-04",
                 "-c",
                 "rust-src",
             ],
@@ -114,7 +114,7 @@ pub fn build_sdk(root: &Path) -> Result<()> {
                 "add",
                 "x86_64-unknown-linux-musl",
                 "--toolchain",
-                "nightly-2026-03-18",
+                "nightly-2026-04-04",
             ],
         );
         if needs_arm {
@@ -126,7 +126,7 @@ pub fn build_sdk(root: &Path) -> Result<()> {
                     "add",
                     "aarch64-unknown-none",
                     "--toolchain",
-                    "nightly-2026-03-18",
+                    "nightly-2026-04-04",
                 ],
             );
         }
@@ -139,7 +139,7 @@ pub fn build_sdk(root: &Path) -> Result<()> {
                     "add",
                     "riscv64gc-unknown-none-elf",
                     "--toolchain",
-                    "nightly-2026-03-18",
+                    "nightly-2026-04-04",
                 ],
             );
         }
@@ -152,7 +152,7 @@ pub fn build_sdk(root: &Path) -> Result<()> {
                     "add",
                     "x86_64-unknown-none",
                     "--toolchain",
-                    "nightly-2026-03-18",
+                    "nightly-2026-04-04",
                 ],
             );
         }

@@ -18,7 +18,7 @@ This plan maps **Arch Linux workflow and capability surface** onto that constrai
 
 | Arch concept | lerux today |
 |--------------|-------------|
-| Kernel | Upstream seL4 15.0.0 (not lerux-owned) |
+| Kernel | Upstream seL4 16.0.0 (not lerux-owned) |
 | Init | `supervisor` (RTC/timer, service bring-up, reboot/status IPC) |
 | Package set / ISO profiles | `support/profiles/*.toml` + `lerux profile build` |
 | pacman package metadata | `support/packages/`, `package-pins.toml`, `lerux package` |

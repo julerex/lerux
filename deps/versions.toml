@@ -4,11 +4,11 @@
 # Keep [rust].rust_sel4.tag in sync with root Cargo.toml sel4* git tags.
 
 [repos]
-sel4 = { remote = "https://github.com/seL4/seL4.git", tag = "15.0.0" }
-microkit = { remote = "https://github.com/seL4/microkit.git", tag = "2.2.0" }
+sel4 = { remote = "https://github.com/seL4/seL4.git", tag = "16.0.0" }
+microkit = { remote = "https://github.com/seL4/microkit.git", tag = "2.3.0" }
 
 [rust]
-rust_sel4 = { remote = "https://github.com/seL4/rust-sel4.git", tag = "v4.0.0" }
+rust_sel4 = { remote = "https://github.com/seL4/rust-sel4.git", tag = "v5.0.0" }
 
 [boards]
 default = "qemu_virt_aarch64"

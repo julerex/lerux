@@ -120,7 +120,7 @@ pub fn serial_node(arch: Arch) -> SerialNode {
                 addr_symbol: X86_UART_ADDR_SYMBOL,
                 element_id: None,
             },
-            irq: x86_level_high(X86_UART_PIN, X86_UART_VECTOR),
+            irq: x86_level_low(X86_UART_PIN, X86_UART_VECTOR),
         },
     }
 }
@@ -214,7 +214,7 @@ pub fn virtio_node(arch: Arch, role: VirtioRole) -> Option<VirtioNode> {
                 },
                 device: X86_BLK_DEVICE,
                 function: X86_BLK_FUNCTION,
-                irq: x86_level_high(X86_BLK_PIN, X86_BLK_VECTOR),
+                irq: x86_level_low(X86_BLK_PIN, X86_BLK_VECTOR),
                 bars: &X86_BLK_BARS,
             }),
             VirtioRole::Net => Some(VirtioNode::Pci {
@@ -227,7 +227,7 @@ pub fn virtio_node(arch: Arch, role: VirtioRole) -> Option<VirtioNode> {
                 },
                 device: X86_NET_DEVICE,
                 function: X86_NET_FUNCTION,
-                irq: x86_level_high(X86_NET_PIN, X86_NET_VECTOR),
+                irq: x86_level_low(X86_NET_PIN, X86_NET_VECTOR),
                 bars: &X86_NET_BARS,
             }),
             VirtioRole::Gpu => None,
@@ -258,12 +258,15 @@ const fn aarch64_virtio_mmio(role: VirtioRole) -> MmioDevice {
     }
 }
 
-const fn x86_level_high(pin: u8, vector: u8) -> X86Irq {
+/// QEMU level lines are active-low. Microkit 2.3.0 programs the polarity
+/// attribute as written. The 2.2.0 tool inverted it, so these descriptions
+/// used to say high.
+const fn x86_level_low(pin: u8, vector: u8) -> X86Irq {
     X86Irq {
         pin: IoApicPin(pin),
         vector: IoApicVector(vector),
         trigger: Trigger::Level,
-        polarity: Polarity::High,
+        polarity: Polarity::Low,
     }
 }
 

@@ -12,7 +12,7 @@ Accepted (Phase 46)
 
 Phase 46 wants a workflow to inspect a crashing or hung protection domain under QEMU (then RPi4), inspired by [libgdb](https://github.com/au-ts/libgdb) (debugger PD as fault handler; serial or TCP GDB RSP).
 
-libgdb’s README states it depends on **seL4 and Microkit patches that are not upstream**. Stock lerux uses Microkit **2.2.0** and rust-sel4 **v4.0.0** with no forked kernel.
+libgdb’s README states it depends on **seL4 and Microkit patches that are not upstream**. Stock lerux uses Microkit **2.3.0** and rust-sel4 **v5.0.0** with no forked kernel.
 
 Stock Microkit already supports:
 

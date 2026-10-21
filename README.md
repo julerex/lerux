@@ -15,9 +15,9 @@ The seL4 kernel is **not vendored** — it is cloned into `deps/workspace/` and 
 **Prerequisites:** Linux, `git`, `just`, `rustup`, `cmake`, `ninja`, `qemu-system-aarch64`, `libclang-dev` (for `bindgen` when building PDs), and optionally the [ARM GNU bare-metal toolchain](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads) (`aarch64-none-elf-gcc`, 12.2.Rel1) for `just build-sdk`. Python 3 is only required for `just build-sdk` (upstream Microkit `build_sdk.py`).
 
 ```bash
-just fetch          # clone seL4 15.0.0 + microkit 2.2.0
+just fetch          # clone seL4 16.0.0 + microkit 2.3.0
 just build-sdk      # build Microkit SDK from source (auto-downloads ARM toolchain if needed)
-# or: just fetch-sdk   # download prebuilt SDK 2.2.0 (no compile step)
+# or: just fetch-sdk   # download prebuilt SDK 2.3.0 (no compile step)
 just qemu           # serial and filesystem shell in QEMU (Ctrl-A x to quit)
 just qemu-x86-64    # same shell on the x86-64 filesystem image
 just run            # hello PD only (override with BOARD=… just run)

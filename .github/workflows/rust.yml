@@ -83,33 +83,35 @@ jobs:
           docker run --rm \
             -e MICROKIT_BOARDS="${{ env.MICROKIT_BOARDS }}" \
             -v "${{ github.workspace }}:/work" -w /work lerux-dev \
-            bash -c 'set -euo pipefail
-              just fetch
-              LERUX_LIONSOS_LAYOUT=1 cargo test -p lerux-sddf --test layout
-              if [[ -d deps/sdk-cache/microkit-sdk ]]; then
-                mkdir -p deps/workspace/microkit/release
-                rm -rf deps/workspace/microkit/release/microkit-sdk*
-                cp -a deps/sdk-cache/microkit-sdk deps/workspace/microkit/release/
-              fi
-              sdk_ready() {
-                local sdk want got
-                sdk="$(find deps/workspace/microkit/release -maxdepth 1 -type d -name "microkit-sdk*" | sort | tail -1)"
-                [[ -n "${sdk}" ]] || return 1
-                [[ -d "${sdk}/board/qemu_virt_aarch64/debug/include" ]] || return 1
-                [[ -d "${sdk}/board/qemu_virt_riscv64/debug/include" ]] || return 1
-                [[ -f "${sdk}/board/x86_64_generic/debug/elf/sel4_32.elf" ]] || return 1
-                want="$(sed -n 's/.*microkit = {.*tag = "\([^"]*\)".*/\1/p' deps/versions.toml)"
-                [[ -n "${want}" && -f "${sdk}/VERSION" ]] || return 1
-                got="$(tr -d '[:space:]' < "${sdk}/VERSION")"
-                [[ "${got}" == "${want}" ]] || return 1
-              }
-              if sdk_ready; then
-                echo "==> SDK cache hit, skipping build-sdk"
-              else
-                echo "==> SDK missing or VERSION does not match deps/versions.toml; building"
-                just build-sdk
-              fi
-            '
+            bash -c "$(cat <<'EOF'
+          set -euo pipefail
+            just fetch
+            LERUX_LIONSOS_LAYOUT=1 cargo test -p lerux-sddf --test layout
+            if [[ -d deps/sdk-cache/microkit-sdk ]]; then
+              mkdir -p deps/workspace/microkit/release
+              rm -rf deps/workspace/microkit/release/microkit-sdk*
+              cp -a deps/sdk-cache/microkit-sdk deps/workspace/microkit/release/
+            fi
+            sdk_ready() {
+              local sdk want got
+              sdk="$(find deps/workspace/microkit/release -maxdepth 1 -type d -name "microkit-sdk*" | sort | tail -1)"
+              [[ -n "${sdk}" ]] || return 1
+              [[ -d "${sdk}/board/qemu_virt_aarch64/debug/include" ]] || return 1
+              [[ -d "${sdk}/board/qemu_virt_riscv64/debug/include" ]] || return 1
+              [[ -f "${sdk}/board/x86_64_generic/debug/elf/sel4_32.elf" ]] || return 1
+              want="$(sed -n 's/.*microkit = {.*tag = "\([^"]*\)".*/\1/p' deps/versions.toml)"
+              [[ -n "${want}" && -f "${sdk}/VERSION" ]] || return 1
+              got="$(tr -d '[:space:]' < "${sdk}/VERSION")"
+              [[ "${got}" == "${want}" ]] || return 1
+            }
+            if sdk_ready; then
+              echo "==> SDK cache hit, skipping build-sdk"
+            else
+              echo "==> SDK missing or VERSION does not match deps/versions.toml; building"
+              just build-sdk
+            fi
+          EOF
+          )"
           # Docker runs as root; host steps need write access under deps/.
           sudo chown -R "$(id -u):$(id -g)" deps
 

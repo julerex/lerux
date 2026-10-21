@@ -146,6 +146,12 @@ The legacy image does **not** target a Linux or POSIX syscall ABI. Its apps are 
 **lerux-web**
 : From-scratch `#![no_std]`+`alloc` CSS subset, block-flow layout, and RGB888 paint. Author `<style>` plus a tiny UA sheet. Hosts no JS. Used by `paint-demo` (Phase 75) and `web-content` (Phase 76).
 
+**address**
+: The `https` URL typed for this desk's browser. It names a public DNS name or an IPv4 host, then a path. An omitted port is 443 and an omitted path is `/`. A public name resolves through `net.dns` to an IPv4 address. The aliases `host` and `dns` still win when they match. The fetch may follow an `https` redirect for at most 5 hops, and it does not fetch an image, a stylesheet, or a script. This desk trusts the smoke certificate authority together with the `webpki-roots` set and checks the certificate time against the CMOS clock. The certificate names the URL host. Builds that leave `webpki-roots` off keep the smoke authority and the fixed instant 2026-09-21 14:13:20 UTC.
+
+**page**
+: The UTF-8 body `web-content` paints for one address, using only the subset in `lerux-html` and `lerux-web`. An `img` is a fixed 16 by 16 gray box. A body outside that subset is not a page. JavaScript, a decoded image, and further CSS are not part of a page.
+
 ## Boundaries
 
 - **In scope:** Rust PD crates, `.system` files, build/CI, docs, host profile tooling, QEMU software framebuffer (ADR-009), ordinary WebAssembly through `wasmi` in the one runtime protection domain (ADR-010, ADR-012)

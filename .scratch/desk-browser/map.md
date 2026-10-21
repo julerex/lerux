@@ -20,11 +20,10 @@ Tracker: local markdown in this directory. This repo has no `docs/agents/issue-t
 
 - [How would a page leave this motherboard?](issues/02-desk-ethernet.md): No protection domain can transmit a page; the RTL8852BE probe only reads config space (`10ec:b852`), and native e1000e has no recorded device identity.
 - [What can legacy boot scan out on this RX 560?](issues/01-rx560-scanout.md): Legacy Limine leaves VGA text at `0xb8000`; a linear framebuffer needs a VBE mode set on that same CSM entry, and the address is unknown until a boot reads it.
+- [What counts as seeing a page?](issues/03-page-class.md): A page is the UTF-8 subset document `web-content` paints. The address is an `https` URL, a public name or an IPv4 host, trusted with the smoke certificate authority plus public roots and checked against the CMOS clock.
 
 ## Not yet specified
 
-- What the page class forces in the engine (JavaScript, images, further CSS), once it is decided what counts as seeing a page.
-- Name lookup and trust anchors, if the address is a public name.
 - Bitmap size, pixel format, and who maps the framebuffer, once a scanout path is committed. If the spec commits to the VESA linear framebuffer, a legacy boot still has to read this card's mode-info block. That boot is not a ticket until the path is chosen.
 - How desk keystrokes reach `browser-ui`.
 - Which other protection domains share the image (COM1 shell, filesystem, TLS proxy, network driver).

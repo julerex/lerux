@@ -89,7 +89,9 @@ fn pages_for(crate_name: &str, board_features: &[&str]) -> Result<Vec<Page>, Ima
 }
 
 fn shell_pages(board_features: &[&str]) -> Result<Vec<Page>, ImageError> {
-    let filesystem = board_features.contains(&"board-qemu_virt_aarch64_fs_sddf");
+    let filesystem = board_features.contains(&"board-qemu_virt_aarch64_fs_sddf")
+        || board_features.contains(&"board-qemu_virt_riscv64_fs_sddf")
+        || board_features.contains(&"board-x86_64_generic_fs_sddf");
     let network = board_features.contains(&"net-client");
     if filesystem && network {
         return Err(ImageError::ConflictingFeatures {

@@ -1,0 +1,13 @@
+[package]
+name = "lerux-machine"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Machine facts for serial and virtio devices on supported boards"
+
+[lints]
+workspace = true
+
+[features]
+default = []
+system-description = []

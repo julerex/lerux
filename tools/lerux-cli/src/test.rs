@@ -1,9 +1,14 @@
 use std::{
     collections::VecDeque,
     fs::OpenOptions,
-    io::{BufRead, BufReader, Read, Write},
-    path::Path,
-    process::{Command, Stdio},
+    io::{BufRead, BufReader, Read, Seek, SeekFrom, Write},
+    path::{Path, PathBuf},
+    process::{Child, ChildStdin, Command, Stdio},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
+    thread::JoinHandle,
     time::{Duration, Instant},
 };
 
@@ -59,7 +64,7 @@ pub fn run_smoke_with_capture(
     test: &SmokeTest,
     save_log: Option<&std::path::Path>,
 ) -> Result<()> {
-    run_smoke_inner(cmd, test, save_log, None)
+    run_smoke_inner(cmd, test, save_log, None, None, None)
 }
 
 /// Same as [`run_smoke_with_capture`], then inject PS/2 keys over QMP.
@@ -68,8 +73,17 @@ pub fn run_smoke_with_qmp(
     test: &SmokeTest,
     save_log: Option<&Path>,
     qmp_socket: &Path,
+    stdio_log: Option<&Path>,
+    host_restart: Option<Box<dyn FnMut() -> Result<Command>>>,
 ) -> Result<()> {
-    run_smoke_inner(cmd, test, save_log, Some(qmp_socket))
+    run_smoke_inner(
+        cmd,
+        test,
+        save_log,
+        Some(qmp_socket),
+        stdio_log,
+        host_restart,
+    )
 }
 
 fn run_smoke_inner(
@@ -77,41 +91,24 @@ fn run_smoke_inner(
     test: &SmokeTest,
     save_log: Option<&Path>,
     qmp_socket: Option<&Path>,
+    stdio_log: Option<&Path>,
+    mut host_restart: Option<Box<dyn FnMut() -> Result<Command>>>,
 ) -> Result<()> {
-    cmd.stdout(Stdio::piped());
-    cmd.stderr(Stdio::piped());
-    // An empty script keeps the inherited stdin. Closing the pipe early makes QEMU see end of file.
-    if !test.script.is_empty() {
-        cmd.stdin(Stdio::piped());
-    }
-    let mut child = cmd.spawn()?;
+    let mut capture = SmokeCapture::new();
+    let mut child = spawn_smoke_qemu(&mut cmd, test, stdio_log, false, &mut capture)?;
     let mut script_in = if test.script.is_empty() {
         None
     } else {
         Some(child.stdin.take().context("child stdin pipe")?)
     };
 
-    let stdout = child.stdout.take().context("child stdout pipe")?;
-    let stderr = child.stderr.take().context("child stderr pipe")?;
-
-    let output = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
-    let out_clone = std::sync::Arc::clone(&output);
-    let err_clone = std::sync::Arc::clone(&output);
-
-    let out_thread = std::thread::spawn(move || {
-        pump_reader(BufReader::new(stdout), out_clone);
-    });
-    let err_thread = std::thread::spawn(move || {
-        pump_reader(BufReader::new(stderr), err_clone);
-    });
-
     let result = (|| -> Result<()> {
         if test.unordered {
             let deadline = Instant::now() + Duration::from_secs(test.timeout_secs);
-            expect_unordered(&output, &test.expects, deadline)?;
+            expect_unordered(&capture.output, &test.expects, deadline)?;
         } else {
             let per = std::cmp::max(30, test.timeout_secs / test.expects.len().max(1) as u64);
-            expect_ordered(&output, &test.expects, per)?;
+            expect_ordered(&capture.output, &test.expects, per)?;
         }
         for (url, expect) in &test.curls {
             curl_check(url, expect, 30)?;
@@ -125,24 +122,29 @@ fn run_smoke_inner(
             println!("==> injecting {} PS/2 key(s) via QMP…", test.qmp_keys.len());
             send_qmp_keys(socket, &test.qmp_keys)?;
             expect_ordered(
-                &output,
+                &capture.output,
                 &[expect.to_string()],
                 test.script_timeout_secs.max(30),
             )?;
             println!("==> PS/2 line matched");
         }
         if !test.script.is_empty() {
-            let stdin = script_in.as_mut().context("script stdin")?;
+            let output = Arc::clone(&capture.output);
+            let mut restart = host_restart.as_mut().map(|factory| HostRestart {
+                factory,
+                child: &mut child,
+                test,
+                stdio_log,
+                capture: &mut capture,
+            });
             run_script_steps(
                 &output,
                 &test.script,
                 test.script_timeout_secs,
                 qmp_socket,
-                |bytes| {
-                    stdin.write_all(bytes)?;
-                    stdin.flush()?;
-                    Ok(())
-                },
+                |_| Ok(()),
+                Some(&mut script_in),
+                restart.as_mut(),
             )?;
         }
         println!("\n==> smoke test passed");
@@ -152,10 +154,9 @@ fn run_smoke_inner(
     let _ = child.kill();
     drop(script_in);
     let _ = child.wait();
-    let _ = out_thread.join();
-    let _ = err_thread.join();
+    capture.join();
 
-    let captured = output.lock().map(|s| s.clone()).unwrap_or_default();
+    let captured = capture.output.lock().map(|s| s.clone()).unwrap_or_default();
     if let Some(path) = save_log {
         if let Some(parent) = path.parent() {
             let _ = std::fs::create_dir_all(parent);
@@ -190,7 +191,171 @@ fn run_smoke_inner(
     result
 }
 
-fn pump_reader<R: Read>(mut reader: BufReader<R>, sink: std::sync::Arc<std::sync::Mutex<String>>) {
+struct SmokeCapture {
+    output: Arc<Mutex<String>>,
+    stdio_stop: Arc<AtomicBool>,
+    stdio_thread: Option<JoinHandle<()>>,
+    out_thread: Option<JoinHandle<()>>,
+    err_thread: Option<JoinHandle<()>>,
+}
+
+impl SmokeCapture {
+    fn new() -> Self {
+        Self {
+            output: Arc::new(Mutex::new(String::new())),
+            stdio_stop: Arc::new(AtomicBool::new(false)),
+            stdio_thread: None,
+            out_thread: None,
+            err_thread: None,
+        }
+    }
+
+    fn join(&mut self) {
+        self.stdio_stop.store(true, Ordering::Relaxed);
+        if let Some(thread) = self.stdio_thread.take() {
+            let _ = thread.join();
+        }
+        if let Some(thread) = self.out_thread.take() {
+            let _ = thread.join();
+        }
+        if let Some(thread) = self.err_thread.take() {
+            let _ = thread.join();
+        }
+    }
+
+    fn release_for_restart(&mut self) {
+        self.join();
+        self.stdio_stop.store(false, Ordering::Relaxed);
+    }
+}
+
+struct HostRestart<'a> {
+    factory: &'a mut dyn FnMut() -> Result<Command>,
+    child: &'a mut Child,
+    test: &'a SmokeTest,
+    stdio_log: Option<&'a Path>,
+    capture: &'a mut SmokeCapture,
+}
+
+impl HostRestart<'_> {
+    fn restart(&mut self, script_in: &mut Option<ChildStdin>) -> Result<()> {
+        self.capture.release_for_restart();
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+        script_in.take();
+        let mut cmd = (self.factory)()?;
+        *self.child = spawn_smoke_qemu(&mut cmd, self.test, self.stdio_log, true, self.capture)?;
+        if !self.test.script.is_empty() {
+            *script_in = Some(self.child.stdin.take().context("child stdin pipe")?);
+        }
+        Ok(())
+    }
+}
+
+fn spawn_smoke_qemu(
+    cmd: &mut Command,
+    test: &SmokeTest,
+    stdio_log: Option<&Path>,
+    append_stdio: bool,
+    capture: &mut SmokeCapture,
+) -> Result<Child> {
+    if !test.script.is_empty() {
+        cmd.stdin(Stdio::piped());
+    }
+    if let Some(path) = stdio_log {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("mkdir {}", parent.display()))?;
+        }
+        let start_offset = if append_stdio {
+            std::fs::metadata(path).map(|m| m.len()).unwrap_or(0)
+        } else {
+            let _ = std::fs::remove_file(path);
+            0
+        };
+        let file = OpenOptions::new()
+            .create(true)
+            .append(append_stdio)
+            .write(true)
+            .read(true)
+            .truncate(!append_stdio)
+            .open(path)
+            .with_context(|| format!("open {}", path.display()))?;
+        let file_err = file.try_clone().context("clone stdio smoke log")?;
+        cmd.stdout(Stdio::from(file));
+        cmd.stderr(Stdio::from(file_err));
+        let path = path.to_path_buf();
+        let sink = Arc::clone(&capture.output);
+        let stop = Arc::clone(&capture.stdio_stop);
+        capture.stdio_thread = Some(std::thread::spawn(move || {
+            pump_stdio_log_file(path, sink, stop, start_offset);
+        }));
+    } else {
+        cmd.stdout(Stdio::piped());
+        cmd.stderr(Stdio::piped());
+    }
+    let mut child = cmd.spawn()?;
+    if stdio_log.is_none() {
+        let stdout = child.stdout.take().context("child stdout pipe")?;
+        let stderr = child.stderr.take().context("child stderr pipe")?;
+        let out_clone = Arc::clone(&capture.output);
+        let err_clone = Arc::clone(&capture.output);
+        capture.out_thread = Some(std::thread::spawn(move || {
+            pump_reader(BufReader::new(stdout), out_clone);
+        }));
+        capture.err_thread = Some(std::thread::spawn(move || {
+            pump_reader(BufReader::new(stderr), err_clone);
+        }));
+    }
+    Ok(child)
+}
+
+fn pump_stdio_log_file(
+    path: PathBuf,
+    sink: Arc<Mutex<String>>,
+    stop: Arc<AtomicBool>,
+    start_offset: u64,
+) {
+    let mut offset = start_offset;
+    while !stop.load(Ordering::Relaxed) {
+        drain_stdio_log(&path, &mut offset, &sink);
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    drain_stdio_log(&path, &mut offset, &sink);
+}
+
+fn drain_stdio_log(path: &Path, offset: &mut u64, sink: &Arc<Mutex<String>>) {
+    let Ok(meta) = std::fs::metadata(path) else {
+        return;
+    };
+    let len = meta.len();
+    if len <= *offset {
+        return;
+    }
+    let Ok(mut file) = std::fs::File::open(path) else {
+        return;
+    };
+    if file.seek(SeekFrom::Start(*offset)).is_err() {
+        return;
+    }
+    let to_read = usize::try_from(len - *offset).unwrap_or(0);
+    if to_read == 0 {
+        return;
+    }
+    let mut buf = vec![0u8; to_read];
+    let Ok(n) = file.read(&mut buf) else {
+        return;
+    };
+    if n == 0 {
+        return;
+    }
+    if let Ok(mut capture) = sink.lock() {
+        capture.push_str(&String::from_utf8_lossy(&buf[..n]));
+    }
+    *offset = offset.saturating_add(u64::try_from(n).unwrap_or(0));
+}
+
+fn pump_reader<R: Read>(mut reader: BufReader<R>, sink: Arc<Mutex<String>>) {
     let mut line = String::new();
     loop {
         line.clear();
@@ -486,6 +651,8 @@ pub fn run_hw_serial_smoke(test: &SmokeTest) -> Result<()> {
                 writer.flush().context("flush serial")?;
                 Ok(())
             },
+            None,
+            None,
         )?;
     }
 
@@ -497,15 +664,17 @@ pub fn run_hw_serial_smoke(test: &SmokeTest) -> Result<()> {
 
 /// Write each script step and wait until the capture after the send contains `expect`.
 fn run_script_steps(
-    output: &std::sync::Arc<std::sync::Mutex<String>>,
+    output: &Arc<Mutex<String>>,
     script: &[ScriptStep],
     timeout_secs: u64,
     qmp_socket: Option<&Path>,
     mut send: impl FnMut(&[u8]) -> Result<()>,
+    mut guest_stdin: Option<&mut Option<std::process::ChildStdin>>,
+    mut host_restart: Option<&mut HostRestart<'_>>,
 ) -> Result<()> {
     println!("==> running {} scripted serial step(s)…", script.len());
     for (i, step) in script.iter().enumerate() {
-        let mark = output.lock().map(|s| s.len()).unwrap_or(0);
+        let mut mark = output.lock().map(|s| s.len()).unwrap_or(0);
         print!(
             "    [{}] send {:?} expect {:?}… ",
             i + 1,
@@ -513,17 +682,38 @@ fn run_script_steps(
             step.expect
         );
         let _ = std::io::Write::flush(&mut std::io::stdout());
-        send(step.send.as_bytes()).with_context(|| format!("write serial step {}", i + 1))?;
-        let step_deadline = Instant::now() + Duration::from_secs(timeout_secs);
+        if let Some(stdin) = guest_stdin.as_mut().and_then(|slot| slot.as_mut()) {
+            stdin
+                .write_all(step.send.as_bytes())
+                .with_context(|| format!("write serial step {}", i + 1))?;
+            stdin.flush().context("flush serial")?;
+        } else {
+            send(step.send.as_bytes()).with_context(|| format!("write serial step {}", i + 1))?;
+        }
+        let mut step_deadline = Instant::now() + Duration::from_secs(timeout_secs);
         if step.send.starts_with("reboot") {
-            let socket = qmp_socket.context("a reboot step needs a QMP socket")?;
             wait_for_mark(output, mark, "reboot", step_deadline).with_context(|| {
                 format!(
                     "script step {} timed out waiting for the guest reboot line",
                     i + 1
                 )
             })?;
-            qmp_system_reset(socket).context("QMP system_reset")?;
+            if let Some(slot) = guest_stdin.as_mut() {
+                slot.take();
+            }
+            if let Some(restart) = host_restart.as_mut() {
+                let stdin_slot = guest_stdin
+                    .as_mut()
+                    .context("host restart needs guest stdin")?;
+                restart.restart(stdin_slot).with_context(|| {
+                    format!("script step {} host QEMU restart after reboot", i + 1)
+                })?;
+            } else {
+                let socket = qmp_socket.context("a reboot step needs a QMP socket")?;
+                qmp_system_reset(socket).context("QMP system_reset")?;
+            }
+            mark = output.lock().map(|s| s.len()).unwrap_or(mark);
+            step_deadline = Instant::now() + Duration::from_secs(timeout_secs);
         }
         loop {
             let found = output
@@ -946,7 +1136,26 @@ pub fn run_board_test_with_mode(
             bail!("board {board:?} smoke needs QMP but qemu.qmp is false");
         }
         let socket = crate::qemu::qmp_socket(&ctx);
-        run_smoke_with_qmp(cmd, &test, Some(&log_path), &socket)
+        let stdio_log = if script_reboots && ctx.board.arch == "x86_64" {
+            Some(crate::qemu::stdio_smoke_log(&ctx))
+        } else {
+            None
+        };
+        let host_restart = if script_reboots && ctx.board.arch == "x86_64" {
+            let restart_ctx = ctx.clone();
+            Some(Box::new(move || crate::qemu::qemu_command(&restart_ctx))
+                as Box<dyn FnMut() -> Result<Command>>)
+        } else {
+            None
+        };
+        run_smoke_with_qmp(
+            cmd,
+            &test,
+            Some(&log_path),
+            &socket,
+            stdio_log.as_deref(),
+            host_restart,
+        )
     };
     for mut child in helpers {
         let _ = child.kill();

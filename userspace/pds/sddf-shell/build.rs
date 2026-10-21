@@ -1,28 +1,198 @@
 fn main() {
     #[cfg(any(
         all(
+            feature = "board-qemu_virt_aarch64_fs_sddf",
+            any(
+                feature = "board-qemu_virt_riscv64_fs_sddf",
+                feature = "board-x86_64_generic_fs_sddf"
+            )
+        ),
+        all(
+            feature = "board-qemu_virt_riscv64_fs_sddf",
+            feature = "board-x86_64_generic_fs_sddf"
+        )
+    ))]
+    compile_error!("filesystem board features are mutually exclusive");
+
+    #[cfg(any(
+        all(
             feature = "board-qemu_virt_aarch64_fetch_sddf",
-            feature = "board-qemu_virt_aarch64_fs_sddf"
+            any(
+                feature = "board-qemu_virt_aarch64_fs_sddf",
+                feature = "board-qemu_virt_riscv64_fs_sddf",
+                feature = "board-x86_64_generic_fs_sddf",
+                feature = "board-qemu_virt_riscv64_fetch_sddf",
+                feature = "board-x86_64_generic_fetch_sddf"
+            )
+        ),
+        all(
+            feature = "board-qemu_virt_riscv64_fetch_sddf",
+            any(
+                feature = "board-qemu_virt_aarch64_fs_sddf",
+                feature = "board-qemu_virt_riscv64_fs_sddf",
+                feature = "board-x86_64_generic_fs_sddf",
+                feature = "board-qemu_virt_aarch64_fetch_sddf",
+                feature = "board-x86_64_generic_fetch_sddf"
+            )
+        ),
+        all(
+            feature = "board-x86_64_generic_fetch_sddf",
+            any(
+                feature = "board-qemu_virt_aarch64_fs_sddf",
+                feature = "board-qemu_virt_riscv64_fs_sddf",
+                feature = "board-x86_64_generic_fs_sddf",
+                feature = "board-qemu_virt_aarch64_fetch_sddf",
+                feature = "board-qemu_virt_riscv64_fetch_sddf",
+                feature = "board-x86_64_generic_web_sddf"
+            )
         ),
         all(
             feature = "board-qemu_virt_aarch64_web_sddf",
-            feature = "board-qemu_virt_aarch64_fs_sddf"
+            any(
+                feature = "board-qemu_virt_aarch64_fs_sddf",
+                feature = "board-qemu_virt_riscv64_fs_sddf",
+                feature = "board-x86_64_generic_fs_sddf"
+            )
+        ),
+        all(
+            feature = "board-qemu_virt_riscv64_web_sddf",
+            any(
+                feature = "board-qemu_virt_aarch64_fs_sddf",
+                feature = "board-qemu_virt_riscv64_fs_sddf",
+                feature = "board-x86_64_generic_fs_sddf"
+            )
+        ),
+        all(
+            feature = "board-x86_64_generic_web_sddf",
+            any(
+                feature = "board-qemu_virt_aarch64_fs_sddf",
+                feature = "board-qemu_virt_riscv64_fs_sddf",
+                feature = "board-x86_64_generic_fs_sddf"
+            )
         ),
         all(
             feature = "board-qemu_virt_aarch64_web_sddf",
             feature = "board-qemu_virt_aarch64_fetch_sddf"
         ),
         all(
+            feature = "board-qemu_virt_riscv64_web_sddf",
+            feature = "board-qemu_virt_aarch64_fetch_sddf"
+        ),
+        all(
+            feature = "board-qemu_virt_riscv64_web_sddf",
+            feature = "board-qemu_virt_riscv64_fetch_sddf"
+        ),
+        all(
+            feature = "board-qemu_virt_riscv64_web_sddf",
+            feature = "board-x86_64_generic_fetch_sddf"
+        ),
+        all(
+            feature = "board-x86_64_generic_web_sddf",
+            feature = "board-x86_64_generic_fetch_sddf"
+        ),
+        all(
+            feature = "board-x86_64_generic_web_sddf",
+            feature = "board-qemu_virt_aarch64_fetch_sddf"
+        ),
+        all(
+            feature = "board-x86_64_generic_web_sddf",
+            feature = "board-qemu_virt_riscv64_fetch_sddf"
+        ),
+        all(
+            feature = "board-qemu_virt_aarch64_web_sddf",
+            feature = "board-x86_64_generic_web_sddf"
+        ),
+        all(
+            feature = "board-qemu_virt_riscv64_web_sddf",
+            feature = "board-x86_64_generic_web_sddf"
+        ),
+        all(
+            feature = "board-qemu_virt_aarch64_web_sddf",
+            feature = "board-qemu_virt_riscv64_web_sddf"
+        ),
+        all(
             feature = "board-qemu_virt_aarch64_browser_sddf",
-            feature = "board-qemu_virt_aarch64_fs_sddf"
+            any(
+                feature = "board-qemu_virt_aarch64_fs_sddf",
+                feature = "board-qemu_virt_riscv64_fs_sddf",
+                feature = "board-x86_64_generic_fs_sddf"
+            )
         ),
         all(
             feature = "board-qemu_virt_aarch64_browser_sddf",
             feature = "board-qemu_virt_aarch64_fetch_sddf"
+        ),
+        all(
+            feature = "board-qemu_virt_aarch64_browser_sddf",
+            feature = "board-qemu_virt_riscv64_fetch_sddf"
+        ),
+        all(
+            feature = "board-qemu_virt_aarch64_web_sddf",
+            feature = "board-qemu_virt_riscv64_fetch_sddf"
+        ),
+        all(
+            feature = "board-qemu_virt_riscv64_web_sddf",
+            feature = "board-qemu_virt_aarch64_browser_sddf"
+        ),
+        all(
+            feature = "board-qemu_virt_aarch64_web_sddf",
+            feature = "board-x86_64_generic_fetch_sddf"
+        ),
+        all(
+            feature = "board-qemu_virt_aarch64_browser_sddf",
+            feature = "board-x86_64_generic_fetch_sddf"
+        ),
+        all(
+            feature = "board-qemu_virt_aarch64_browser_sddf",
+            feature = "board-x86_64_generic_web_sddf"
         ),
         all(
             feature = "board-qemu_virt_aarch64_browser_sddf",
             feature = "board-qemu_virt_aarch64_web_sddf"
+        ),
+        all(
+            feature = "board-qemu_virt_aarch64_browser_sddf",
+            feature = "board-qemu_virt_riscv64_web_sddf"
+        ),
+        all(
+            feature = "board-qemu_virt_aarch64_browser_sddf",
+            feature = "board-qemu_virt_riscv64_browser_sddf"
+        ),
+        all(
+            feature = "board-qemu_virt_riscv64_browser_sddf",
+            any(
+                feature = "board-qemu_virt_aarch64_fs_sddf",
+                feature = "board-qemu_virt_riscv64_fs_sddf",
+                feature = "board-x86_64_generic_fs_sddf"
+            )
+        ),
+        all(
+            feature = "board-qemu_virt_riscv64_browser_sddf",
+            feature = "board-qemu_virt_aarch64_fetch_sddf"
+        ),
+        all(
+            feature = "board-qemu_virt_riscv64_browser_sddf",
+            feature = "board-qemu_virt_riscv64_fetch_sddf"
+        ),
+        all(
+            feature = "board-qemu_virt_riscv64_web_sddf",
+            feature = "board-qemu_virt_riscv64_browser_sddf"
+        ),
+        all(
+            feature = "board-qemu_virt_riscv64_browser_sddf",
+            feature = "board-x86_64_generic_fetch_sddf"
+        ),
+        all(
+            feature = "board-qemu_virt_riscv64_browser_sddf",
+            feature = "board-x86_64_generic_web_sddf"
+        ),
+        all(
+            feature = "board-qemu_virt_riscv64_browser_sddf",
+            feature = "board-qemu_virt_aarch64_web_sddf"
+        ),
+        all(
+            feature = "board-qemu_virt_riscv64_browser_sddf",
+            feature = "board-qemu_virt_riscv64_web_sddf"
         ),
     ))]
     compile_error!(
@@ -32,9 +202,16 @@ fn main() {
     let mut features = Vec::new();
     for feature in [
         "board-qemu_virt_aarch64_fs_sddf",
+        "board-qemu_virt_riscv64_fs_sddf",
+        "board-x86_64_generic_fs_sddf",
         "board-qemu_virt_aarch64_fetch_sddf",
+        "board-qemu_virt_riscv64_fetch_sddf",
+        "board-x86_64_generic_fetch_sddf",
+        "board-x86_64_generic_web_sddf",
         "board-qemu_virt_aarch64_web_sddf",
+        "board-qemu_virt_riscv64_web_sddf",
         "board-qemu_virt_aarch64_browser_sddf",
+        "board-qemu_virt_riscv64_browser_sddf",
         "net-client",
     ] {
         let key = format!(

@@ -296,6 +296,7 @@ A few results look like success and are not:
 - `ci = true` in `support/boards.toml` is the set `just test-all` runs. GitHub smoke is the `include` list in `.github/workflows/rust.yml`. The job count in `docs/ci.md` and the README is written by hand. A new board name is passed as `--features board-<name>` only when that key exists in the PD `Cargo.toml`.
 - Take a QEMU `-device` property from that binary's `-device <name>,help`. The host kernel's interrupt mode is a different machine. `just test-x86-usb-kbd` covers qemu-xhci and QEMU's `usb-kbd`. The desk keyboard and the Intel xHCI path are the metal boot in `docs/boards.md`.
 - The exit status of a shell string is its last command. A redirected recipe that ends in `echo` reports that echo. Read the log for the recipe's own status line.
+- A QEMU smoke, a new architecture, system-description generation, a virtio image that combines devices, and a context-switch port follow `.cursor/skills/port-and-smoke/SKILL.md`. The serial log, plus a zero exit from both `just check` and `just check-pd` on that tree, is the completion check.
 
 ## What not to do
 

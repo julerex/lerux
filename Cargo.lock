@@ -1363,6 +1363,7 @@ version = "0.1.0"
 name = "lerux-image"
 version = "0.1.0"
 dependencies = [
+ "lerux-machine",
  "lerux-sddf",
 ]
 
@@ -1397,6 +1398,10 @@ dependencies = [
  "sel4-microkit",
  "sel4-microkit-driver-adapters",
 ]
+
+[[package]]
+name = "lerux-machine"
+version = "0.1.0"
 
 [[package]]
 name = "lerux-posix"
@@ -2267,7 +2272,10 @@ version = "0.1.0"
 dependencies = [
  "lerux-image",
  "lerux-logging",
+ "lerux-machine",
  "lerux-sddf",
+ "lerux-virtio-hal",
+ "lerux-virtio-pci",
  "sel4-microkit",
  "sel4-virtio-hal-impl",
  "virtio-drivers",
@@ -2310,6 +2318,7 @@ name = "sddf-gpu-driver"
 version = "0.1.0"
 dependencies = [
  "lerux-logging",
+ "lerux-machine",
  "lerux-sddf",
  "sel4-microkit",
  "sel4-virtio-hal-impl",
@@ -2361,7 +2370,10 @@ version = "0.1.0"
 dependencies = [
  "lerux-image",
  "lerux-logging",
+ "lerux-machine",
  "lerux-sddf",
+ "lerux-virtio-hal",
+ "lerux-virtio-pci",
  "sel4-microkit",
  "sel4-virtio-hal-impl",
  "virtio-drivers",
@@ -2417,7 +2429,9 @@ dependencies = [
  "embedded-hal-nb",
  "lerux-image",
  "lerux-logging",
+ "lerux-machine",
  "lerux-sddf",
+ "sel4",
  "sel4-driver-interfaces",
  "sel4-microkit",
  "sel4-pl011-driver",

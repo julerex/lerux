@@ -20,6 +20,7 @@ use crate::{
     tcp_echo::{port_is_listening, start_tcp_echo_background},
 };
 
+#[derive(Clone)]
 pub struct QemuContext {
     pub root: PathBuf,
     pub board_name: String,
@@ -95,6 +96,13 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
 /// QMP socket for [`QemuConfig::qmp`]. The smoke test connects here to send keys.
 pub fn qmp_socket(ctx: &QemuContext) -> PathBuf {
     board_build_dir(&ctx.root, &ctx.board_name, &ctx.build_dir).join("console.qmp")
+}
+
+/// Host-side mirror of `-serial mon:stdio` for x86 QMP smokes. QEMU 6.2 does not
+/// reload an x86 multiboot `-kernel` image on QMP `system_reset`, so the smoke harness
+/// restarts the process and appends to this file for the second boot.
+pub fn stdio_smoke_log(ctx: &QemuContext) -> PathBuf {
+    board_build_dir(&ctx.root, &ctx.board_name, &ctx.build_dir).join("smoke.stdio.log")
 }
 
 fn env_flag(name: &str) -> bool {
@@ -226,6 +234,9 @@ fn riscv64_command(qemu: &QemuConfig, loader: &Path, disk: &Path) -> Command {
             "-netdev",
             netdev,
         ]);
+    }
+    if qemu.gpu {
+        c.args(["-device", "virtio-gpu-device,bus=virtio-mmio-bus.2"]);
     }
     c
 }
@@ -418,6 +429,14 @@ mod tests {
         format!("{cmd:?}")
     }
 
+    fn render_riscv64(qemu_toml: &str) -> String {
+        let qemu: QemuConfig = toml::from_str(qemu_toml).unwrap();
+        format!(
+            "{:?}",
+            riscv64_command(&qemu, Path::new("loader.img"), Path::new("disk.img"))
+        )
+    }
+
     #[test]
     fn graphic_ramfb_should_not_attach_serial_to_stdio() {
         let line = render_aarch64("ramfb = true", true);
@@ -461,6 +480,18 @@ mod tests {
         let blk = line.find("virtio-blk-device").expect("blk device");
         let gpu = line.find("virtio-gpu-device").expect("gpu device");
         assert!(net < blk && blk < gpu, "{line}");
+    }
+
+    #[test]
+    fn riscv_gpu_on_bus_two_only_when_enabled() {
+        let with_gpu = render_riscv64("disk = \"rw\"\nnet = \"user\"\ngpu = true");
+        let bus0 = with_gpu.find("virtio-mmio-bus.0").expect("blk bus");
+        let bus1 = with_gpu.find("virtio-mmio-bus.1").expect("net bus");
+        let bus2 = with_gpu.find("virtio-mmio-bus.2").expect("gpu bus");
+        assert!(bus0 < bus1, "{with_gpu}");
+        assert!(bus1 < bus2, "{with_gpu}");
+        let without_gpu = render_riscv64("disk = \"rw\"\nnet = \"user\"");
+        assert!(!without_gpu.contains("virtio-mmio-bus.2"), "{without_gpu}");
     }
 
     #[test]

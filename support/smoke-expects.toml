@@ -53,10 +53,27 @@ expects = [
 [boards.qemu_virt_aarch64_cothread]
 expects = ["cothread waiting", "cothread resumed"]
 
+[boards.qemu_virt_riscv64_cothread]
+expects = ["cothread waiting", "cothread resumed"]
+
 [boards.qemu_virt_aarch64_serial_sddf]
 expects = ["lerux shell ready"]
 
+[boards.qemu_virt_riscv64_serial_sddf]
+expects = ["lerux shell ready"]
+
+[boards.x86_64_generic_serial_sddf]
+expects = ["lerux shell ready"]
+
 [boards.qemu_virt_aarch64_net_sddf]
+expects = ["ip 10.0.2.15", "ping ok"]
+timeout_secs = 120
+
+[boards.qemu_virt_riscv64_net_sddf]
+expects = ["ip 10.0.2.15", "ping ok"]
+timeout_secs = 120
+
+[boards.x86_64_generic_net_sddf]
 expects = ["ip 10.0.2.15", "ping ok"]
 timeout_secs = 120
 
@@ -77,7 +94,49 @@ script = [
   { send = "chat\r", expect = "chat ok" },
 ]
 
+[boards.qemu_virt_riscv64_fetch_sddf]
+expects = ["lerux shell ready"]
+timeout_secs = 180
+script_timeout_secs = 180
+script = [
+  { send = "fetch FIX.TXT\r", expect = "fetch ok" },
+  { send = "cat FIX.TXT\r", expect = "lerux-http-fixture" },
+  { send = "calc (1+2)*3\r", expect = "calc 9" },
+  { send = "write B.TXT hi\r", expect = "write ok" },
+  { send = "backup B.TXT B.BAK\r", expect = "backup ok" },
+  { send = "write C.TXT calc 2+2\r", expect = "write ok" },
+  { send = "source C.TXT\r", expect = "calc 4" },
+  { send = "cert\r", expect = "cert ok" },
+  { send = "edit E.TXT edited\r", expect = "edit ok" },
+  { send = "chat\r", expect = "chat ok" },
+]
+
+[boards.x86_64_generic_fetch_sddf]
+expects = ["lerux shell ready"]
+timeout_secs = 180
+script_timeout_secs = 180
+script = [
+  { send = "fetch FIX.TXT\r", expect = "fetch ok" },
+  { send = "cat FIX.TXT\r", expect = "lerux-http-fixture" },
+  { send = "calc (1+2)*3\r", expect = "calc 9" },
+  { send = "write B.TXT hi\r", expect = "write ok" },
+  { send = "backup B.TXT B.BAK\r", expect = "backup ok" },
+  { send = "write C.TXT calc 2+2\r", expect = "write ok" },
+  { send = "source C.TXT\r", expect = "calc 4" },
+  { send = "cert\r", expect = "cert ok" },
+  { send = "edit E.TXT edited\r", expect = "edit ok" },
+  { send = "chat\r", expect = "chat ok" },
+]
+
 [boards.qemu_virt_aarch64_web_sddf]
+expects = ["web listening"]
+timeout_secs = 180
+
+[boards.qemu_virt_riscv64_web_sddf]
+expects = ["web listening"]
+timeout_secs = 180
+
+[boards.x86_64_generic_web_sddf]
 expects = ["web listening"]
 timeout_secs = 180
 
@@ -85,7 +144,19 @@ timeout_secs = 180
 expects = ["title lerux", "pixel 4c5258ff"]
 timeout_secs = 180
 
+[boards.qemu_virt_riscv64_browser_sddf]
+expects = ["title lerux", "pixel 4c5258ff"]
+timeout_secs = 180
+
 [boards.qemu_virt_aarch64_program_sddf]
+expects = ["program: rejected", "lerux-wasm: ran"]
+timeout_secs = 180
+
+[boards.qemu_virt_riscv64_program_sddf]
+expects = ["program: rejected", "lerux-wasm: ran"]
+timeout_secs = 180
+
+[boards.x86_64_generic_program_sddf]
 expects = ["program: rejected", "lerux-wasm: ran"]
 timeout_secs = 180
 
@@ -98,7 +169,69 @@ script = [
   { send = "grok read AGENT.TXT\r", expect = "hello-agent" },
 ]
 
+[boards.qemu_virt_riscv64_agent_sddf]
+expects = ["lerux shell ready"]
+timeout_secs = 180
+script_timeout_secs = 120
+script = [
+  { send = "grok write AGENT.TXT hello-agent\r", expect = "agent: tool write ok" },
+  { send = "grok read AGENT.TXT\r", expect = "hello-agent" },
+]
+
+[boards.x86_64_generic_agent_sddf]
+expects = ["lerux shell ready"]
+timeout_secs = 180
+script_timeout_secs = 120
+script = [
+  { send = "grok write AGENT.TXT hello-agent\r", expect = "agent: tool write ok" },
+  { send = "grok read AGENT.TXT\r", expect = "hello-agent" },
+]
+
 [boards.qemu_virt_aarch64_fs_sddf]
+expects = ["lerux shell ready"]
+timeout_secs = 120
+script_timeout_secs = 120
+script = [
+  { send = "mkdir SUB\r", expect = "mkdir ok" },
+  { send = "write NOTE.TXT hello\r", expect = "write ok" },
+  { send = "cat NOTE.TXT\r", expect = "hello" },
+  { send = "ls\r", expect = "NOTE.TXT" },
+  { send = "ls SUB\r", expect = "ls ok" },
+  { send = "mv NOTE.TXT MOVED.TXT\r", expect = "mv ok" },
+  { send = "stat MOVED.TXT\r", expect = "size 5" },
+  { send = "rm MOVED.TXT\r", expect = "rm ok" },
+  { send = "stat SUB\r", expect = "stat dir" },
+  { send = "config get hostname\r", expect = "lerux" },
+  { send = "date\r", expect = "1970-01-01" },
+  { send = "ps\r", expect = "shell 1 1000" },
+  { send = "qos\r", expect = "fatfs 2 2000" },
+  { send = "dmesg\r", expect = "lerux shell ready" },
+  { send = "reboot\r", expect = "lerux shell ready" },
+]
+
+[boards.qemu_virt_riscv64_fs_sddf]
+expects = ["lerux shell ready"]
+timeout_secs = 120
+script_timeout_secs = 120
+script = [
+  { send = "mkdir SUB\r", expect = "mkdir ok" },
+  { send = "write NOTE.TXT hello\r", expect = "write ok" },
+  { send = "cat NOTE.TXT\r", expect = "hello" },
+  { send = "ls\r", expect = "NOTE.TXT" },
+  { send = "ls SUB\r", expect = "ls ok" },
+  { send = "mv NOTE.TXT MOVED.TXT\r", expect = "mv ok" },
+  { send = "stat MOVED.TXT\r", expect = "size 5" },
+  { send = "rm MOVED.TXT\r", expect = "rm ok" },
+  { send = "stat SUB\r", expect = "stat dir" },
+  { send = "config get hostname\r", expect = "lerux" },
+  { send = "date\r", expect = "1970-01-01" },
+  { send = "ps\r", expect = "shell 1 1000" },
+  { send = "qos\r", expect = "fatfs 2 2000" },
+  { send = "dmesg\r", expect = "lerux shell ready" },
+  { send = "reboot\r", expect = "lerux shell ready" },
+]
+
+[boards.x86_64_generic_fs_sddf]
 expects = ["lerux shell ready"]
 timeout_secs = 120
 script_timeout_secs = 120

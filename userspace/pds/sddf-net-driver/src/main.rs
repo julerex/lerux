@@ -26,12 +26,15 @@ use lerux_sddf::{
     net_require_signal_free, NET_BUFFER_SIZE, SDDF_NET_MAGIC,
 };
 
+mod device;
 mod mmio;
+#[cfg(target_arch = "x86_64")]
+mod pci;
 
 const CONFIG: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/config.bin"));
 
 struct HandlerImpl {
-    dev: mmio::NetDev,
+    dev: device::NetDev,
     rx: net_queue_handle_t,
     tx: net_queue_handle_t,
     irq: Channel,
@@ -47,14 +50,14 @@ fn init() -> HandlerImpl {
     assert_eq!(config.magic, SDDF_NET_MAGIC);
     assert_eq!(config.virt_rx.id, DRIVER_RX_CHANNEL);
     assert_eq!(config.virt_tx.id, DRIVER_TX_CHANNEL);
-    mmio::init_hal();
-    let mut dev = mmio::create_virtio_net();
+    device::init_hal();
+    let mut dev = device::create_virtio_net();
     assert_eq!(
         dev.mac_address(),
         CLIENT_MAC.addr,
         "device address is the client address"
     );
-    let _ = dev.ack_interrupt();
+    dev.ack_interrupt();
     let irq = Channel::new(usize::from(DRIVER_IRQ_CHANNEL));
     irq.irq_ack().expect("irq ack");
     log::info!("net_driver: ready");

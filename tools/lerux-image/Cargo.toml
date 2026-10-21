@@ -7,4 +7,5 @@ edition = "2024"
 workspace = true
 
 [dependencies]
+lerux-machine = { path = "../../userspace/crates/lerux-machine", features = ["system-description"] }
 lerux-sddf = { path = "../../userspace/crates/lerux-sddf" }

@@ -1,8 +1,8 @@
 # Lerux in Rust, on the LionsOS architecture
 
-Last updated: 2026-10-12
+Last updated: 2026-10-21
 
-**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is done and is the file-descriptor library. Milestone 6 is done and is the shell on that filesystem image. Milestone 7 is done and is the network-role image. Milestone 8 is done and is the socket and fetch image. Milestone 9 is done and is the timer and static status on the filesystem image. Milestone 10 is done and is the remaining shell commands on the fetch image. Milestone 11 is done and is the web image that serves the seeded hostname file. Milestone 12 is done and is the virtio graphics driver, virtualiser, and browser image. Milestone 13 is done and is the agent image. Milestone 14 is done and is the WebAssembly runtime protection domain. Milestone 15 is done and is package selection from the template. Milestone 16 is next. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
+**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is done and is the file-descriptor library. Milestone 6 is done and is the shell on that filesystem image. Milestone 7 is done and is the network-role image. Milestone 8 is done and is the socket and fetch image. Milestone 9 is done and is the timer and static status on the filesystem image. Milestone 10 is done and is the remaining shell commands on the fetch image. Milestone 11 is done and is the web image that serves the seeded hostname file. Milestone 12 is done and is the virtio graphics driver, virtualiser, and browser image. Milestone 13 is done and is the agent image. Milestone 14 is done and is the WebAssembly runtime protection domain. Milestone 15 is done and is package selection from the template. Milestone 16 is done and is the same protection-domain roles on QEMU RISC-V and QEMU x86. Milestone 17 is next. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
 
 **Goal:** Every lerux guest protection domain stays Rust, and the queues, configuration pages, filesystem messages, and component graph are the same ones LionsOS uses.
 
@@ -285,6 +285,17 @@ Landed:
 ## Milestone 16 — Other boards
 
 **Exit:** The same protection-domain roles boot on QEMU RISC-V and QEMU x86, using the devices the pinned driver framework already classifies (virtio, `ns16550`). `pc_z97_d3h` is unchanged in this milestone. A native Advanced Host Controller Interface, Video Graphics Array, or desk Ethernet driver is a later driver-framework class driver in Rust, with a queue struct taken from the matching header, and it is not part of this milestone.
+
+Done.
+
+Landed:
+
+- `lerux-machine` holds the physical addresses, ports, and interrupts. Protection domains compile the device offsets and the direct-memory-access addresses. The system description compiles the physical addresses when the `system-description` feature is on.
+- QEMU RISC-V and QEMU x86 boot the serial, cothread, network, filesystem, fetch, web, agent, and program roles with virtio and the 16550. RISC-V graphics is the virtio-gpu page at `0x10_003_000`. x86 graphics stays unsupported. `pc_z97_d3h` is unchanged.
+- On x86, an image that has both virtio-blk and virtio-net routes the block interrupt to pin 11 and the network interrupt to pin 10. The block driver uses the memory-mapped configuration window. The network driver stays at priority 2. The standalone network image keeps pin 11. The standalone block image keeps pin 10.
+- An x86 filesystem smoke that prints `reboot` restarts QEMU on the host. QEMU 6.2 does not reload a multiboot kernel on `system_reset`.
+- The new boards set `ci = false`. They are not in the workflow include list. The smoke count stays 53.
+- Checked on 2026-10-21. `just check` passed. `just check-pd` passed for aarch64 (234 crate combinations), riscv64 (74), and x86_64 (79).
 
 ## Milestone 17 — Remove the old model
 

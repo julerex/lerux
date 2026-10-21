@@ -7,18 +7,18 @@ use std::{fs, path::Path};
 
 use anyhow::{Context, Result};
 
-pub fn write_configs(dir: &Path) -> Result<()> {
+pub fn write_configs(dir: &Path, board: &str) -> Result<()> {
     fs::create_dir_all(dir).with_context(|| format!("mkdir {}", dir.display()))?;
     bind(dir, "sddf-blk-driver", &[], "blk_driver_config.bin")?;
     bind(dir, "sddf-blk-virt", &[], "blk_virt_config.bin")?;
     bind(dir, "sddf-fatfs", &[], "fatfs_config.bin")?;
     bind(dir, "sddf-fs-client", &[], "fs_client_config.bin")?;
-    bind(
-        dir,
-        "sddf-shell",
-        &["board-qemu_virt_aarch64_fs_sddf"],
-        "shell_config.bin",
-    )?;
+    let shell_board = match board {
+        "qemu_virt_riscv64_fs_sddf" => "board-qemu_virt_riscv64_fs_sddf",
+        "x86_64_generic_fs_sddf" => "board-x86_64_generic_fs_sddf",
+        _ => "board-qemu_virt_aarch64_fs_sddf",
+    };
+    bind(dir, "sddf-shell", &[shell_board], "shell_config.bin")?;
     Ok(())
 }
 
@@ -68,7 +68,7 @@ mod tests {
     #[test]
     fn write_configs_starts_with_the_fs_sddf_magic() {
         let dir = tempfile::tempdir().expect("tempdir");
-        write_configs(dir.path()).expect("write configs");
+        write_configs(dir.path(), "qemu_virt_aarch64_fs_sddf").expect("write configs");
         check_blk(dir.path(), "blk_driver_config.bin", &driver_config());
         check_blk(dir.path(), "blk_virt_config.bin", &virt_config());
         check_fs(

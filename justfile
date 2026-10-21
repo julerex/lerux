@@ -21,7 +21,11 @@ default: build
 check:
     cargo fmt --all --check
     CARGO_TARGET_DIR={{root}}/build/host cargo clippy -p lerux-cli -p lerux-interface-types -p lerux-tls -p lerux-html -p lerux-web -p lerux-wasm -p lerux-rtw8852be -p lerux-sddf -p lerux-cothread -p lerux-posix --all-targets -- -D warnings
+    CARGO_TARGET_DIR={{root}}/build/host cargo clippy -p lerux-machine --features system-description --all-targets -- -D warnings
+    CARGO_TARGET_DIR={{root}}/build/host cargo clippy -p lerux-image --all-targets -- -D warnings
     CARGO_TARGET_DIR={{root}}/build/host cargo test -p lerux-interface-types -p lerux-tls -p lerux-html -p lerux-web -p lerux-wasm -p lerux-rtw8852be -p lerux-cli -p lerux-sddf -p lerux-cothread -p lerux-posix
+    CARGO_TARGET_DIR={{root}}/build/host cargo test -p lerux-machine --features system-description
+    CARGO_TARGET_DIR={{root}}/build/host cargo test -p lerux-image
     # Phase 60 Track D: PPC priority + service-class band checks (host, no QEMU)
     {{lerux}} profile check-qos
 
@@ -113,37 +117,85 @@ test-echo:
 test-serial-sddf:
     BOARD=qemu_virt_aarch64_serial_sddf just test
 
+test-serial-sddf-riscv:
+    BOARD=qemu_virt_riscv64_serial_sddf just test
+
+test-serial-sddf-x86:
+    BOARD=x86_64_generic_serial_sddf just test
+
 # LionsOS block and filesystem roles: driver, virtualiser, FAT server, one client
 test-fs-sddf:
     BOARD=qemu_virt_aarch64_fs_sddf just test
+
+test-fs-sddf-riscv:
+    BOARD=qemu_virt_riscv64_fs_sddf just test
+
+test-fs-sddf-x86:
+    BOARD=x86_64_generic_fs_sddf just test
 
 # LionsOS network roles: driver, virtualisers, one copier, one smoltcp client
 test-net-sddf:
     BOARD=qemu_virt_aarch64_net_sddf just test
 
+test-net-sddf-riscv:
+    BOARD=qemu_virt_riscv64_net_sddf just test
+
+test-net-sddf-x86:
+    BOARD=x86_64_generic_net_sddf just test
+
 # Milestone 8: shell fetches the https-one fixture over the client's smoltcp
 test-fetch-sddf:
     BOARD=qemu_virt_aarch64_fetch_sddf just test
+
+test-fetch-sddf-riscv:
+    BOARD=qemu_virt_riscv64_fetch_sddf just test
+
+test-fetch-sddf-x86:
+    BOARD=x86_64_generic_fetch_sddf just test
 
 # Milestone 11: shell serves the seeded hostname file over hostfwd
 test-web-sddf:
     BOARD=qemu_virt_aarch64_web_sddf just test
 
+test-web-sddf-riscv:
+    BOARD=qemu_virt_riscv64_web_sddf just test
+
+test-web-sddf-x86:
+    BOARD=x86_64_generic_web_sddf just test
+
 # Milestone 12: shell fetches the fixture and paints through the graphics client
 test-browser-sddf:
     BOARD=qemu_virt_aarch64_browser_sddf just test
+
+test-browser-sddf-riscv:
+    BOARD=qemu_virt_riscv64_browser_sddf just test
 
 # Milestone 13: grok notifies the agent, which writes through the filesystem queue
 test-agent-sddf:
     BOARD=qemu_virt_aarch64_agent_sddf just test
 
+test-agent-sddf-riscv:
+    BOARD=qemu_virt_riscv64_agent_sddf just test
+
+test-agent-sddf-x86:
+    BOARD=x86_64_generic_agent_sddf just test
+
 # Milestone 14: signed ordinary WebAssembly with filesystem and socket access
 test-program-sddf:
     BOARD=qemu_virt_aarch64_program_sddf just test
 
+test-program-sddf-riscv:
+    BOARD=qemu_virt_riscv64_program_sddf just test
+
+test-program-sddf-x86:
+    BOARD=x86_64_generic_program_sddf just test
+
 # Milestone 3: cothread blocks on a channel until a Microkit notification
 test-cothread:
     BOARD=qemu_virt_aarch64_cothread just test
+
+test-cothread-riscv:
+    BOARD=qemu_virt_riscv64_cothread just test
 
 # Phase 72: QEMU ramfb + display-server + shared bitmap (display-demo)
 test-display:

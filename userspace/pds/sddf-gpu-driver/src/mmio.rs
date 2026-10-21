@@ -10,7 +10,8 @@ use virtio_drivers::{
     },
 };
 
-use lerux_sddf::gpu_image::{GPU_DRIVER_DMA_SIZE, GPU_VIRTIO_MMIO_OFFSET, GPU_VIRTIO_MMIO_SIZE};
+use lerux_machine::{virtio, Arch, VirtioAttach, VirtioRole};
+use lerux_sddf::gpu_image::{GPU_DRIVER_DMA_SIZE, GPU_VIRTIO_MMIO_SIZE};
 
 const MMIO_INIT_ATTEMPTS: usize = 10_000;
 
@@ -39,9 +40,17 @@ pub fn init_hal() {
     );
 }
 
+fn gpu_mmio_offset() -> usize {
+    let attach = virtio(Arch::TARGET, VirtioRole::Gpu).expect("browser image includes virtio-gpu");
+    match attach {
+        VirtioAttach::Mmio { offset } => usize::try_from(offset).expect("offset fits"),
+        VirtioAttach::Pci { .. } => panic!("virtio-gpu is memory-mapped on this board"),
+    }
+}
+
 pub fn create_virtio_gpu() -> GpuDev {
     let header = NonNull::new(
-        (*var!(virtio_gpu_mmio_vaddr: usize = 0) + GPU_VIRTIO_MMIO_OFFSET) as *mut VirtIOHeader,
+        (*var!(virtio_gpu_mmio_vaddr: usize = 0) + gpu_mmio_offset()) as *mut VirtIOHeader,
     )
     .expect("virtio-gpu mmio vaddr");
     let transport = wait_for_mmio_transport(header, GPU_VIRTIO_MMIO_SIZE);

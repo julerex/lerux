@@ -12,20 +12,18 @@ use lerux_sddf::{
     blk_queue_handle_t, blk_queue_init, blk_req_code_t, blk_resp_status_t, blk_storage_info_t,
     blk_storage_set_ready, BLK_TRANSFER_SIZE, SDDF_BLK_MAGIC,
 };
-use virtio_drivers::{
-    device::blk::{VirtIOBlk, SECTOR_SIZE},
-    transport::mmio::MmioTransport,
-};
+use virtio_drivers::device::blk::SECTOR_SIZE;
 
-use sel4_virtio_hal_impl::HalImpl;
-
+mod device;
 mod mmio;
+#[cfg(target_arch = "x86_64")]
+mod pci;
 
 const CONFIG: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/config.bin"));
 const VIRTIO_SECTORS_PER_BLOCK: u64 = 8;
 
 struct HandlerImpl {
-    dev: VirtIOBlk<HalImpl, MmioTransport<'static>>,
+    dev: device::BlkDev,
     queues: blk_queue_handle_t,
     irq: Channel,
     virt: Channel,
@@ -38,12 +36,12 @@ fn init() -> HandlerImpl {
     // SAFETY: the build script wrote a `blk_driver_config_t`.
     let config = unsafe { blk_image::blk_config_from_bytes::<blk_driver_config_t>(CONFIG) };
     assert_eq!(config.magic, SDDF_BLK_MAGIC);
-    mmio::init_hal();
-    let mut dev = mmio::create_virtio_blk();
+    device::init_hal();
+    let mut dev = device::create_virtio_blk();
     let capacity_blocks = dev.capacity() / VIRTIO_SECTORS_PER_BLOCK;
     // SAFETY: this protection domain maps the storage-info page at the config address.
     unsafe { publish_storage(config.virt.storage_info.vaddr.cast(), &dev) };
-    let _ = dev.ack_interrupt();
+    dev.ack_interrupt();
     let irq = Channel::new(usize::from(BLK_DRIVER_IRQ_CHANNEL));
     irq.irq_ack().expect("irq ack");
     let mut queues = blk_queue_handle_t {
@@ -73,10 +71,7 @@ fn init() -> HandlerImpl {
 /// # Safety
 ///
 /// `storage` must point at the mapped `blk_storage_info_t`.
-unsafe fn publish_storage(
-    storage: *mut blk_storage_info_t,
-    dev: &VirtIOBlk<HalImpl, MmioTransport<'static>>,
-) {
+unsafe fn publish_storage(storage: *mut blk_storage_info_t, dev: &device::BlkDev) {
     let serial = b"lerux-virtio-blk";
     unsafe {
         core::ptr::write_bytes(storage, 0, 1);

@@ -10,9 +10,16 @@ workspace = true
 [features]
 net-client = ["dep:smoltcp"]
 board-qemu_virt_aarch64_fetch_sddf = ["net-client", "dep:lerux-tls"]
+board-qemu_virt_riscv64_fetch_sddf = ["net-client", "dep:lerux-tls"]
+board-x86_64_generic_fetch_sddf = ["net-client", "dep:lerux-tls"]
+board-x86_64_generic_web_sddf = ["net-client"]
 board-qemu_virt_aarch64_web_sddf = ["net-client"]
+board-qemu_virt_riscv64_web_sddf = ["net-client"]
 board-qemu_virt_aarch64_browser_sddf = ["net-client", "dep:lerux-tls"]
+board-qemu_virt_riscv64_browser_sddf = ["net-client", "dep:lerux-tls"]
 board-qemu_virt_aarch64_fs_sddf = []
+board-qemu_virt_riscv64_fs_sddf = []
+board-x86_64_generic_fs_sddf = []
 
 [dependencies]
 lerux-cothread = { path = "../../crates/lerux-cothread" }

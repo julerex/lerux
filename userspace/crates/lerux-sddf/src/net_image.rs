@@ -33,11 +33,8 @@ pub const NET_QUEUE_REGION_SIZE: u64 = 0x1000;
 /// Virtio ring direct-memory-access region. Packet bytes are copied here.
 pub const NET_DRIVER_DMA_SIZE: u64 = 0x200_000;
 
-/// QEMU `virt` on AArch64 places virtio-net at `+0xe00` in the page at
-/// `0xa003000`, interrupt 79. Virtio-blk, when an image also maps it, occupies
-/// `+0xc00` and ends at this offset. The interrupt is not a field of
-/// `net_driver_config_t`. The system template binds it to [`DRIVER_IRQ_CHANNEL`].
-pub const NET_VIRTIO_MMIO_OFFSET: usize = 0xe00;
+/// Virtio header window within the mapped MMIO region. The net driver adds the
+/// board-specific virtio-net MMIO offset to `virtio_net_mmio_vaddr`.
 pub const NET_VIRTIO_MMIO_SIZE: usize = 0x200;
 
 /// Same virtio window as the block image. This image does not map the block regions.

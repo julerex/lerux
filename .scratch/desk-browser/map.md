@@ -23,17 +23,18 @@ Tracker: local markdown in this directory. This repo has no `docs/agents/issue-t
 - [What counts as seeing a page?](issues/03-page-class.md): The typed `https` public name, first load in a fresh profile, matching the shared behavior of the stable Firefox and Chrome named when the spec is written. `lerux-html` and `lerux-web` grow to that.
 - [What chrome is on the screen?](issues/04-chrome.md): One address line above the page. `browser-ui` paints it, presents the screen, and takes the keyboard. A failure is one of five fixed lines in the page area.
 - [Which scanout path does the spec commit to?](issues/05-scanout-path.md): The VESA linear framebuffer on the legacy Limine entry. `browser-ui` maps it and copies a 1024 by 752 page under a 16-row address line.
+- [Does the spec include the Ethernet driver?](issues/06-ethernet-in-spec.md): The onboard Ethernet port. A new protection domain serves `net-server`, and Dynamic Host Configuration Protocol supplies the address, gateway, and resolver.
 
 ## Not yet specified
 
-- Which other protection domains share the image (COM1 shell, filesystem, TLS proxy, network driver).
-- The onboard Ethernet's device identity, if the spec takes a driver. The repo only names the RTL8852BE configuration-space probe (`10ec:b852`). `e1000e` has no recorded device id.
+- Which other protection domains share the image besides the fetch path. The fetch path is the new onboard driver, `net-server`, `request-server`, and Transport Layer Security. The COM1 shell and the filesystem are still open.
 - How the spec is demonstrated before a metal boot. QEMU may be a stand-in; it is not the product.
 
 ## Out of scope
 
 - Porting Ladybird or embedding Servo. This map keeps `lerux-html` and `lerux-web`.
 - A Polaris display-engine modeset. This spec uses the VESA linear framebuffer.
+- The RTL8852BE as the fetch path. Its probe stays a configuration-space read.
 - Signing in, and granting a permission. A login wall and an unanswered prompt are the page.
 - A script-opened window, or any second surface.
 - Browser extensions.

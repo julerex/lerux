@@ -128,7 +128,10 @@ The legacy image does **not** target a Linux or POSIX syscall ABI. Its apps are 
 : Shared memory region holding RGB pixels. Producers (`display-demo`, `paint-demo`, `web-content`) write; `display-server` blits to the device.
 
 **browser-ui**
-: Ladybird Browser analogue. Owns the address line, presents the screen, and delivers page keys to `web-content`. Does not parse HTML. Phase 76 chrome was a serial `open <url>`. On the desk-browser spec it maps the VESA linear framebuffer.
+: Ladybird Browser analogue. Owns the address line, presents the screen, and delivers page keys to `web-content`. Does not parse HTML. Phase 76 chrome was a serial `open <url>`. On the desk-browser spec it maps the VESA linear framebuffer and receives key-downs from `console-driver`.
+
+**desk keyboard**
+: The PS/2 keyboard or, when one is armed, the USB HID boot keyboard. `console-driver` owns it and forwards key-downs to `browser-ui`.
 
 **address line**
 : The text `browser-ui` paints in the top 16 rows of the desk framebuffer. It shows the address of the public page.

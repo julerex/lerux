@@ -25,10 +25,11 @@ Tracker: local markdown in this directory. This repo has no `docs/agents/issue-t
 - [Which scanout path does the spec commit to?](issues/05-scanout-path.md): The VESA linear framebuffer on the legacy Limine entry. `browser-ui` maps it and copies a 1024 by 752 page under a 16-row address line.
 - [Does the spec include the Ethernet driver?](issues/06-ethernet-in-spec.md): The onboard Ethernet port. A new protection domain serves `net-server`, and Dynamic Host Configuration Protocol supplies the address, gateway, and resolver.
 - [Does the spec include following a link?](issues/07-follow-link.md): Enter on a focused link loads that public page on this surface. The new page replaces the current one, and a tall page scrolls inside 1024 by 752.
+- [How do desk keystrokes reach browser-ui?](issues/08-keyboard-path.md): `console-driver` owns the keyboard and forwards key-downs to `browser-ui`. A USB boot keyboard wins when it is armed. The shell does not receive those keys.
 
 ## Not yet specified
 
-- Which other protection domains share the image besides the fetch path. The fetch path is the new onboard driver, `net-server`, `request-server`, and Transport Layer Security. The COM1 shell and the filesystem are still open.
+- Which other protection domains share the image besides the fetch path. The fetch path is the new onboard driver, `net-server`, `request-server`, and Transport Layer Security. The COM1 shell and the filesystem are still open. The desk keyboard is not the shell's.
 - How the spec is demonstrated before a metal boot. QEMU may be a stand-in; it is not the product.
 
 ## Out of scope

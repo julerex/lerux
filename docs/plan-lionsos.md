@@ -1,8 +1,8 @@
 # Lerux in Rust, on the LionsOS architecture
 
-Last updated: 2026-10-21
+Last updated: 2026-10-22
 
-**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is done and is the file-descriptor library. Milestone 6 is done and is the shell on that filesystem image. Milestone 7 is done and is the network-role image. Milestone 8 is done and is the socket and fetch image. Milestone 9 is done and is the timer and static status on the filesystem image. Milestone 10 is done and is the remaining shell commands on the fetch image. Milestone 11 is done and is the web image that serves the seeded hostname file. Milestone 12 is done and is the virtio graphics driver, virtualiser, and browser image. Milestone 13 is done and is the agent image. Milestone 14 is done and is the WebAssembly runtime protection domain. Milestone 15 is done and is package selection from the template. Milestone 16 is done and is the same protection-domain roles on QEMU RISC-V and QEMU x86. Milestone 17 is done and is the removal of the postcard guest model. Milestone 18 is done and is a real paint of the fetched fixture on the browser image. Milestones run in order. Each remaining milestone gets its own implementation plan after the previous smoke is green. Do not implement more than one milestone in a pass.
+**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is done and is the file-descriptor library. Milestone 6 is done and is the shell on that filesystem image. Milestone 7 is done and is the network-role image. Milestone 8 is done and is the socket and fetch image. Milestone 9 is done and is the timer and static status on the filesystem image. Milestone 10 is done and is the remaining shell commands on the fetch image. Milestone 11 is done and is the web image that serves the seeded hostname file. Milestone 12 is done and is the virtio graphics driver, virtualiser, and browser image. Milestone 13 is done and is the agent image. Milestone 14 is done and is the WebAssembly runtime protection domain. Milestone 15 is done and is package selection from the template. Milestone 16 is done and is the same protection-domain roles on QEMU RISC-V and QEMU x86. Milestone 17 is done and is the removal of the postcard guest model. Milestone 18 is done and is a real paint of the fetched fixture on the browser image. Milestones 19–22 are not started. They add an Advanced Host Controller Interface disk and an Intel Ethernet device on QEMU q35, then bind those drivers on the Z97. Milestones run in order. Implement one milestone per pass, after the previous smoke is green.
 
 **Goal:** Every lerux guest protection domain stays Rust, and the queues, configuration pages, filesystem messages, and component graph are the same ones LionsOS uses.
 
@@ -322,3 +322,46 @@ Landed:
 - The shell calls `show_page` after the title scan. Display info still uses offset 0, and the frame is copied after that reply. The fourth byte is set to `0xff` in one place. The serial line is sampled from the frame. Resource id 1 and the scanout floor of 16 stay.
 - `support/smoke-expects.toml` expects `pixel 000000ff` on both browser rows. The continuous integration job stays `browser-sddf`. The smoke count stays 53.
 - Checked on 2026-10-21. `just check` passed. `just check-pd` passed. `just test-browser-sddf` printed `title lerux`, `pixel 000000ff`, and `lerux shell ready`.
+
+The x86 guest already has the NS16550, the VGA text console, the keyboard, and the clock. The virtio x86 boards stay. Milestones 19–21 give QEMU q35 a disk and a network interface that the Z97 also has. The new protection domains keep the Microkit names `blk_driver` and `net_driver`. The block virtualiser, the filesystem server, the network virtualisers, the copier, and the shell stay. A 4096-byte transfer is eight 512-byte sectors. A flush reports success and submits no device command. The Ethernet device uses the client address `52:54:00:12:34:56`. Interrupts stay I/O APIC pins. Take every QEMU device property from that binary's `-device <name>,help`.
+
+## Milestone 19 — Advanced Host Controller Interface disk
+
+**Exit:** `just test-x86-ahci` boots a filesystem image whose only disk is QEMU `ich9-ahci` and prints `lerux shell ready` plus the scripted shell lines.
+
+Not started.
+
+- New protection domain `sddf-ahci-driver`. It maps the controller register block, keeps the command list and the FIS in its own direct-memory-access region, and runs one command at a time on port 0. It speaks the existing block queues.
+- It accepts a controller by class `0x010601`. On this QEMU that controller is `8086:2922` at `00:1f.2`. The Z97 Serial ATA identifier is recorded in Milestone 22, before the driver accepts it.
+- Board `x86_64_generic_fs_ahci` reuses the filesystem template and roles. The QEMU command attaches `support/disk.img` as an `ide-hd` on that controller and does not attach virtio block.
+- The ready line is `ahci: port 0`, printed once before the shell line. `ci` stays false.
+
+## Milestone 20 — QEMU Ethernet
+
+**Exit:** `just test-x86-e1000e` boots a network image whose only network device is `-device e1000e` and prints `ip 10.0.2.15`, then `ping ok`.
+
+Not started.
+
+- New protection domain `sddf-e1000e-driver`. It programs the 82574 (`8086:10d3`): reset, link, one transmit ring, one receive ring, and the interrupt pin. Frames are copied between the shared data regions and the driver's own buffers. It speaks the existing network queues.
+- Board `x86_64_generic_net_e1000e` reuses the network template and roles. User networking stays, so the address is still `10.0.2.15`. Virtio network is not attached.
+- The ready line is `e1000e: ready`, printed once before the address. `ci` stays false.
+
+## Milestone 21 — One realistic q35 image
+
+**Exit:** `just test-x86-fetch-native` boots the fetch roles with `ich9-ahci` and `e1000e` together and prints `fetch ok`. The host fixture check still expects `lerux-http-fixture`.
+
+Not started.
+
+- Board `x86_64_generic_fetch_native` reuses the fetch template. The block interrupt keeps its pin. The network device uses the other pin, matching the combined virtio x86 image.
+- Serial stays the NS16550. No virtio device is attached.
+- After `just check`, `just check-pd`, and the three smokes pass, the workflow include list and the hand-written smoke counts move together. Until then the new boards stay out of continuous integration.
+
+## Milestone 22 — Desk
+
+**Exit:** The same two programs accept the recorded desk devices. This milestone cannot close on QEMU.
+
+Not started.
+
+- The Ethernet driver also accepts `8086:153b` at `00:19.0`, revision `0`, subsystem `1458:e000`. That is the I217-V recorded in [context.md](context.md). Memory is `0xf7e00000` (128 KiB) and `0xf7e3c000` (4 KiB). I/O is `0xf080`. The QEMU 82574 smoke does not prove that physical-layer path.
+- Read the Z97 Serial ATA configuration space on the desk, then add that identifier beside `8086:2922`.
+- The RTL8852BE probe stays a configuration-space read. There is no Intel display-engine driver and no Radeon driver. The desk image composes this Ethernet driver in the network-driver role.

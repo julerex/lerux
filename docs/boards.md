@@ -282,7 +282,7 @@ That copies `sel4_32.elf` + `loader.img` (and SHA-256 sidecars) and writes `leru
 | Silent serial | Cable on COMA header (TX/RX swapped); 115200 8N1; seL4 debug UART vs PD |
 | Ubuntu gone | You deployed onto `sda` — don't. Use USB. |
 
-Native `e1000e` / AHCI workstation drivers are **not** in this board. QEMU `workstation-x86` is virtio-pci only.
+This board has no native disk or Ethernet driver. QEMU `workstation-x86` is virtio-pci only. The native plan is [Milestones 19–22](plan-lionsos.md#milestone-19--advanced-host-controller-interface-disk).
 
 ## QEMU profiles
 

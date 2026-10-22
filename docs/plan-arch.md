@@ -1,6 +1,6 @@
 # PLAN — Arch-level functionality (phases 50–60)
 
-Last updated: 2026-09-26 (phases 81–82 recorded in plan.md; AHCI / e1000e still open)
+Last updated: 2026-10-22 (native disk and Ethernet are milestones 19–22 in plan-lionsos.md)
 
 Related: [`plan.md`](plan.md) (roadmap 1–82), [`plan-qemu.md`](plan-qemu.md) (phases 61–70, done), [`plan-interactive.md`](plan-interactive.md) (phases 71–80), [`plan-au-ts.md`](plan-au-ts.md) (sDDF/LionsOS inspiration track), [`context.md`](context.md) (domain language).
 
@@ -326,7 +326,6 @@ Procedure and empty result grid: [`boards.md` — RPi4 workstation install path]
 ### Follow-on (after the RPi4 gate)
 
 - [ ] Optional second aarch64 SBC only after RPi4 is reliable.
-- [ ] **Gigabyte Z97-D3H disk and net** (after [Phase 82](plan.md#phase-82--z97-on-screen-shell)): native AHCI and e1000e so `ls` / `fetch` work on `pc_z97_d3h`. The VGA shell, PS/2 keyboard, USB HID boot keyboard, COM1 log, and Limine ISO are in the image ([`boards.md`](boards.md#gigabyte-z97-d3h-install-path)).
 
 ### Already shipped (no Pi required)
 
@@ -373,7 +372,7 @@ That is Arch’s **workflow and completeness**, reimplemented as static Microkit
 
 ## Near-term priority
 
-Numbered phases 1–82 are done. Remaining work is [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated) when a board is on the desk, and native AHCI / e1000e after [Phase 82](plan.md#phase-82--z97-on-screen-shell). The QEMU software framebuffer shipped in [phases 71–80](plan-interactive.md).
+Numbered phases 1–82 are done. Remaining work is [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated) when a board is on the desk, and [Milestones 19–22](plan-lionsos.md#milestone-19--advanced-host-controller-interface-disk) for a native disk and Ethernet device on QEMU q35 and the Z97. The QEMU software framebuffer shipped in [phases 71–80](plan-interactive.md).
 
 JS, GPU compositors, and libvmm still need a new ADR.
 
@@ -409,4 +408,4 @@ Each phase should add or extend **one** profile board smoke rather than only uni
 
 ## Summary
 
-Phases **1–60** built the **kernel of an Arch-like workflow** (profiles, init, shell, FS/net, packages, multi-arch workstation, hardening). Phases **61–70** deepened QEMU ([`plan-qemu.md`](plan-qemu.md), done). Phases **71–80** shipped the interactive surface ([`plan-interactive.md`](plan-interactive.md), done). [Phase 81](plan.md#phase-81--signed-wasm-runtime) shipped signed Wasm execution ([ADR-010](decisions/010-program-runtime.md)). [Phase 82](plan.md#phase-82--z97-on-screen-shell) shipped the Z97 VGA shell. On-device truth is [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated), including AHCI / e1000e after Phase 82. All of it as **ported Rust PDs and host tooling**, never as a Linux compatibility layer.
+Phases **1–60** built the **kernel of an Arch-like workflow** (profiles, init, shell, FS/net, packages, multi-arch workstation, hardening). Phases **61–70** deepened QEMU ([`plan-qemu.md`](plan-qemu.md), done). Phases **71–80** shipped the interactive surface ([`plan-interactive.md`](plan-interactive.md), done). [Phase 81](plan.md#phase-81--signed-wasm-runtime) shipped signed Wasm execution ([ADR-010](decisions/010-program-runtime.md)). [Phase 82](plan.md#phase-82--z97-on-screen-shell) shipped the Z97 VGA shell. On-device truth is [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated). Native disk and Ethernet are [Milestones 19–22](plan-lionsos.md#milestone-19--advanced-host-controller-interface-disk). All of it as **ported Rust PDs and host tooling**, never as a Linux compatibility layer.

@@ -670,7 +670,7 @@ Interactive-surface program (71–80) is complete. JS, GPU, extra tabs, and live
 
 ## Phases 81–82 — Follow-ons ✅
 
-These two landed after phase 80 and are recorded here. The on-guest compiler, and native AHCI / e1000e, are still ahead of this list.
+These two landed after phase 80 and are recorded here. The on-guest compiler is still ahead of this list. Native disk and Ethernet are [Milestones 19–22](plan-lionsos.md#milestone-19--advanced-host-controller-interface-disk).
 
 ## Phase 81 — Signed Wasm runtime ✅
 
@@ -696,7 +696,7 @@ The on-guest compiler (a protection domain that reads a small Rust subset and em
 - [x] `just test-x86-console` injects PS/2 qcodes for `echo hi` and expects `lerux-shell: prompt` then `lerux-shell: cmd=echo hi`. Metal serial smoke expects `lerux-shell: prompt`.
 - [x] `just iso` writes the hybrid Limine ISO `build/pc_z97_d3h/lerux.iso` and does not write a disk. Legacy USB boot loads Multiboot 2 `/boot/sel4_32.elf` plus `/boot/loader.img`. `just test-iso` boots that file in QEMU under SeaBIOS (local check, not CI).
 
-Native AHCI and e1000e stay in the [physical-lab follow-on](#physical-rpi4-lab-hardware-gated), so `ls` and `fetch` stay unavailable on this image. The UEFI USB entry stays out: `sel4_32.elf` is linked at 1MB. The monitor path is the VGA text page on the firmware boot VGA card. On this desk the cable is on the motherboard HDMI port, and the desk-browser spec sets Initial Display Output to `IGFX`. There is no Polaris or `amdgpu` driver. See [boards.md](boards.md#vga-text-on-the-rx-560).
+Native disk and Ethernet are [Milestones 19–22](plan-lionsos.md#milestone-19--advanced-host-controller-interface-disk), so `ls` and `fetch` stay unavailable on this image. The UEFI USB entry stays out: `sel4_32.elf` is linked at 1MB. The monitor path is the VGA text page on the firmware boot VGA card. On this desk the cable is on the motherboard HDMI port, and the desk-browser spec sets Initial Display Output to `IGFX`. There is no Polaris or `amdgpu` driver. See [boards.md](boards.md#vga-text-on-the-rx-560).
 
 The same image also arms one USB HID boot keyboard on the xHCI controller at PCI `00:14.0` (root ports, boot protocol). `just test-x86-usb-kbd` types `echo hi` through qemu-xhci. When that keyboard is armed, the shell reads it and leaves PS/2 bytes unread. With no USB boot keyboard, `just test-x86-console` is unchanged.
 
@@ -714,7 +714,6 @@ On-device work extracted from Phases 39, 51, and 52. Software for those phases i
 - [ ] GENET: TCP + DNS + DHCP (`fetch` is UDP-demo-only on HW)
 - [ ] Unified-dma on `genet-driver`
 - [ ] Optional second SBC after RPi4 is reliable
-- [ ] **Gigabyte Z97-D3H disk and net** (after [Phase 82](#phase-82--z97-on-screen-shell)): native AHCI and e1000e so `ls` / `fetch` work on `pc_z97_d3h`. The VGA shell, PS/2 keyboard, USB HID boot keyboard, COM1 log, and Limine ISO are in the image.
 
 ## Version alignment
 

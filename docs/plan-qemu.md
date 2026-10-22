@@ -323,7 +323,7 @@ Hardware truth remains [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardwa
 
 ## Near-term priority
 
-This program is **done**. [Phases 71–82](plan.md) are done too. Remaining capacity is the [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated) and native AHCI / e1000e after [Phase 82](plan.md#phase-82--z97-on-screen-shell).
+This program is **done**. [Phases 71–82](plan.md) are done too. Remaining capacity is the [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated) and [Milestones 19–22](plan-lionsos.md#milestone-19--advanced-host-controller-interface-disk) for a native disk and Ethernet device on QEMU q35 and the Z97.
 
 ---
 

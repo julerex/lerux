@@ -46,6 +46,8 @@ The written desk-browser spec is [`desk-browser.md`](desk-browser.md).
 
 ## Platform parity
 
+x86 names that get mixed across QEMU and the desk (q35, the 82574, the I217-V, COM1, the VGA text page, the CRTC, the Intel display engine) are defined in [GLOSSARY.md](../GLOSSARY.md). The driver tables are in [platforms.md](platforms.md#x86-device-map).
+
 Echo IPC and virtio smoke tests run on aarch64, RISC-V virt, and x86 (PCI virtio on q35). Block IPC (read + write) and net IPC (UDP TX) run on all three arches. RTC/timer init runs on all three: aarch64 PL031/SP804, RISC-V Goldfish RTC + `rdtime`, x86 CMOS RTC + TSC (Phase 56).
 
 The composed board (`qemu_virt_aarch64_composed`) runs `supervisor` (historically `boot-init`) and `hello`+virtio in one system. Both PDs log via serial IPC (multi-client serial driver). `supervisor` notifies `hello` when init is complete before virtio starts (composed-sync). See [`boards.md`](boards.md) and [`plan.md`](plan.md).

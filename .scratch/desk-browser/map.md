@@ -4,7 +4,7 @@ Label: wayfinder:map
 
 ## Destination
 
-A written spec for booting lerux on this desk and using the full-screen Ladybird-shaped browser: type an address, and see that page on the monitor. The map ends when that spec is written.
+The spec is [docs/desk-browser.md](../../docs/desk-browser.md). It covers booting lerux on this desk and using the full-screen Ladybird-shaped browser: type an address, and see that page on the monitor. The map ends here.
 
 ## Notes
 
@@ -12,7 +12,7 @@ This desk is the Gigabyte Z97-D3H (`pc_z97_d3h`). The monitor is on the motherbo
 
 The spec amends ADR-009's QEMU-only framebuffer ceiling for this desk, as recorded in [Which scanout path does the spec commit to?](issues/05-scanout-path.md). Ladybird's topology stays. `lerux-html` and `lerux-web` stay the engines and grow to the public page recorded in [What counts as seeing a page?](issues/03-page-class.md).
 
-Every session reads [docs/context.md](../../docs/context.md), [ADR-009](../../docs/decisions/009-interactive-surface.md), the Z97 section of [docs/boards.md](../../docs/boards.md), and [docs/plan-interactive.md](../../docs/plan-interactive.md). Grilling tickets use the grilling and domain-modeling skills. Research tickets use the research skill.
+Every session reads [docs/desk-browser.md](../../docs/desk-browser.md), [docs/context.md](../../docs/context.md), [ADR-009](../../docs/decisions/009-interactive-surface.md), the Z97 section of [docs/boards.md](../../docs/boards.md), and [docs/plan-interactive.md](../../docs/plan-interactive.md). Grilling tickets use the grilling and domain-modeling skills. Research tickets use the research skill.
 
 Tracker: local markdown in this directory. This repo has no `docs/agents/issue-tracker.md`.
 
@@ -32,10 +32,6 @@ Tracker: local markdown in this directory. This repo has no `docs/agents/issue-t
 - [Does the spec include submitting a form?](issues/11-submit-form.md): Submitting a form loads the public page the response names on this surface. The new page replaces the current one. A password field ignores keys, and a file field stays empty.
 - [Which protection domains share the desk browser image?](issues/13-desk-image.md): `console-driver`, `serial-driver`, `log-server`, `browser-ui`, one `web-content`, `request-server`, `tls-proxy`, `net-server`, and the new onboard Ethernet driver. COM1 is the log. The shell and the filesystem stay off this image.
 - [How is the spec demonstrated before a metal boot?](issues/14-qemu-demonstration.md): A separate QEMU image loads `https://host:8443/desk.html`, follows the link, and submits `q=hi`. COM1 records each address and its first non-white pixel. The metal boot remains the product.
-
-## Not yet specified
-
-- The written spec. The map ends when that spec is written.
 
 ## Out of scope
 

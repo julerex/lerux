@@ -31,10 +31,11 @@ Tracker: local markdown in this directory. This repo has no `docs/agents/issue-t
 - [Record the onboard Ethernet device identity](issues/10-onboard-ethernet-id.md): Bus address `00:19.0`, vendor `8086`, device `153b`, revision `0`, subsystem `1458:e000`. Memory `0xf7e00000` (128 KiB), memory `0xf7e3c000` (4 KiB), I/O `0xf080` (32 bytes).
 - [Does the spec include submitting a form?](issues/11-submit-form.md): Submitting a form loads the public page the response names on this surface. The new page replaces the current one. A password field ignores keys, and a file field stays empty.
 - [Which protection domains share the desk browser image?](issues/13-desk-image.md): `console-driver`, `serial-driver`, `log-server`, `browser-ui`, one `web-content`, `request-server`, `tls-proxy`, `net-server`, and the new onboard Ethernet driver. COM1 is the log. The shell and the filesystem stay off this image.
+- [How is the spec demonstrated before a metal boot?](issues/14-qemu-demonstration.md): A separate QEMU image loads `https://host:8443/desk.html`, follows the link, and submits `q=hi`. COM1 records each address and its first non-white pixel. The metal boot remains the product.
 
 ## Not yet specified
 
-- How the spec is demonstrated before a metal boot. QEMU may be a stand-in; it is not the product.
+- The written spec. The map ends when that spec is written.
 
 ## Out of scope
 

@@ -214,6 +214,8 @@ The desk-browser spec keeps the cable on the motherboard HDMI port ([ADR-013](de
 
 The desk browser image is the one this desk boots. It contains `console-driver`, `serial-driver`, `log-server`, `browser-ui`, one `web-content`, `request-server`, `tls-proxy`, `net-server`, and the new onboard Ethernet driver. On that image `console-driver` forwards key-downs and does not paint the text page. COM1 stays the log. The shell and the filesystem are absent. The Phase 82 shell image remains `x86_64_generic_console` and `x86_64_generic_usb_kbd`.
 
+Before a metal boot, a separate QEMU image runs those browser protection domains with the existing x86 virtio network driver. It loads `https://host:8443/desk.html` from `lerux https-one`, follows the link to `https://host:8443/desk-link.html`, and submits `q=hi` to `https://host:8443/desk-form.html?q=hi`. COM1 records each address and the first non-white pixel. That boot is not the metal product.
+
 Use the USB boot entry that does not say UEFI, with CSM enabled. The documented result of that boot is a blue screen with `hello lerux` on the first line and `lerux>` under it. The UEFI Limine entry stops before the shell: `sel4_32.elf` is linked at 1 MB. A metal boot of this image has not been recorded on this machine. The QEMU proof is `just test-x86-console` (SeaBIOS leaves the same text page).
 
 An AMD modesetting driver would matter only if lerux itself programmed this card (resolution, HDMI, a linear framebuffer) or had to bring the picture up when the firmware had not left VGA text mode. That work is still deferred. The QEMU `ramfb` display server does not drive this card.

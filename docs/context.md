@@ -40,6 +40,8 @@ lerux builds **Rust-only userspace** on the formally verified [seL4](https://sel
 
 **Z97 image (desk-browser spec):** The image this desk boots contains `console-driver`, `serial-driver`, `log-server`, `browser-ui`, one `web-content`, `request-server`, `tls-proxy`, `net-server`, and the new onboard Ethernet driver. `console-driver` forwards key-downs and does not paint. `browser-ui` maps the linear framebuffer. COM1 stays the log, and there is no shell prompt. `tls-proxy` holds the public trust anchors. The shell, the filesystem, `display-server`, and the agent are not on this image. The Phase 82 shell image remains the QEMU console test.
 
+**Z97 demonstration (desk-browser spec):** Before a metal boot, a separate QEMU image boots those browser protection domains on the legacy Limine entry, with the existing x86 virtio network driver in place of the onboard Ethernet driver. `tls-proxy` on that image trusts the smoke certificate authority. The address line accepts `https://host:8443/`. PS/2 injection loads `https://host:8443/desk.html`, follows the link to `https://host:8443/desk-link.html`, and submits the GET field `q` with `hi`, loading `https://host:8443/desk-form.html?q=hi`. COM1 records each address and the first non-white pixel. The framebuffer address in that log is QEMU's. The metal boot remains the public page on this desk.
+
 ## Platform parity
 
 Echo IPC and virtio smoke tests run on aarch64, RISC-V virt, and x86 (PCI virtio on q35). Block IPC (read + write) and net IPC (UDP TX) run on all three arches. RTC/timer init runs on all three: aarch64 PL031/SP804, RISC-V Goldfish RTC + `rdtime`, x86 CMOS RTC + TSC (Phase 56).

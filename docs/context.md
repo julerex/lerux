@@ -126,10 +126,13 @@ The legacy image does **not** target a Linux or POSIX syscall ABI. Its apps are 
 : Shared memory region holding RGB pixels. Producers (`display-demo`, `paint-demo`, `web-content`) write; `display-server` blits to the device.
 
 **browser-ui**
-: Ladybird Browser analogue. Owns chrome (serial `open <url>` in v1) and the channel to `web-content`. Does not parse HTML.
+: Ladybird Browser analogue. Owns the address line, presents the screen, and delivers page keys to `web-content`. Does not parse HTML. Phase 76 chrome was a serial `open <url>`.
+
+**address line**
+: The one row of text `browser-ui` paints above a public page. It shows the address of that page.
 
 **web-content**
-: Ladybird WebContent analogue. One static protection domain (Microkit cannot spawn tabs). Hosts `lerux-html` + `lerux-web`. Speaks only `HttpRequest` to `request-server` plus the bitmap memory region. **No** `NetClient`, `TlsClient`, or `FsClient`. No JavaScript in phases 71–80. The desk-browser spec grows these engines so this protection domain can show a public page.
+: Ladybird WebContent analogue. One static protection domain (Microkit cannot spawn tabs). Hosts `lerux-html` + `lerux-web`. Speaks only `HttpRequest` to `request-server` plus the bitmap memory region. **No** `NetClient`, `TlsClient`, or `FsClient`. No JavaScript in phases 71–80. The desk-browser spec grows these engines so this protection domain can show a public page, and on that spec it paints only the rectangle under the address line.
 
 **public name**
 : A hostname resolved through the Domain Name System. It is the host of a public page.

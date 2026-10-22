@@ -26,6 +26,7 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [decisions/010-program-runtime.md](decisions/010-program-runtime.md) | ADR-010 / Phase 81: signed Wasm subset in `program-runtime` |
 | [decisions/011-lionsos-structures.md](decisions/011-lionsos-structures.md) | ADR-011: LionsOS queue and filesystem structures in Rust |
 | [decisions/012-ordinary-webassembly.md](decisions/012-ordinary-webassembly.md) | ADR-012: ordinary WebAssembly in the LionsOS runtime role |
+| [decisions/013-desk-intel-scanout.md](decisions/013-desk-intel-scanout.md) | ADR-013: desk scanout through the Intel graphics |
 | [decisions/004-service-async.md](decisions/004-service-async.md) | ADR-004: stackless coop async in service PDs |
 | [decisions/005-debug-pd.md](decisions/005-debug-pd.md) | ADR-005: fault parent + QEMU GDB (not libgdb fork) |
 | [debug.md](debug.md) | Phase 46: `test-debug` + gdb-multiarch workflow |

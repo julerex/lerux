@@ -19,4 +19,6 @@ The spec uses the VESA linear framebuffer on the legacy Limine entry. Limine ask
 
 `browser-ui` maps the framebuffer. It clears the framebuffer, paints the address line in the top 16 rows, and copies the page into the top-left of the rows beneath. Each row advances by the mode-info pitch, and each pixel uses that block's masks. `web-content` paints a shared bitmap of 1024 by 752, which is not the framebuffer, and `web-content` does not map the framebuffer. A larger mode does not grow that bitmap. Pixels that do not fit are not copied, and the rest of a larger mode stays clear. `display-server` stays on the QEMU path.
 
-A mode shorter than 16 rows, or no linear direct-color mode, means this path failed. The spec does not then commit to a Polaris modeset. The address, pitch, and masks are recorded from a boot of this card.
+A mode shorter than 16 rows, or no linear direct-color mode, means this path failed. The spec does not then commit to a Polaris modeset. The address, pitch, and masks are recorded from a boot of the primary VGA device.
+
+The primary device was later changed. [Which graphics device does the desk scan out through?](12-intel-scanout.md) selects the Intel HD Graphics 4600 on the motherboard HDMI port. The RX 560 stays unused.

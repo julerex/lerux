@@ -89,7 +89,7 @@ Use `lerux image --board <name>` (or `BOARD=<name> just image`).
 - `rpi4b_4gb`: Raspberry Pi 4 Model B (4 GB). Requires U-Boot on SD card. See seL4 docs for initial bring-up and `fatload` / `go`.
 - Serial: PL011 at 0xfe201000 (GPIO 14/15). Update IRQ in `boards.toml` if the platform IRQ mapping differs.
 - Full workstation (FS + net) on hardware requires native (non-virtio) block and network drivers; see `support/profiles/hardware-rpi4.toml`.
-- `pc_z97_d3h`: Gigabyte GA-Z97-D3H (Haswell). Microkit still uses `x86_64_generic`; deploy copies **`sel4_32.elf` + `loader.img`** for Multiboot 2. The monitor shows the shell as VGA text on the firmware boot VGA card (this desk: the RX 560 HDMI). See [Gigabyte Z97-D3H install path](#gigabyte-z97-d3h-install-path) and [VGA text on the RX 560](#vga-text-on-the-rx-560).
+- `pc_z97_d3h`: Gigabyte GA-Z97-D3H (Haswell). Microkit still uses `x86_64_generic`; deploy copies **`sel4_32.elf` + `loader.img`** for Multiboot 2. The monitor shows the shell as VGA text on the firmware boot VGA card. The desk-browser spec makes that card the Intel HD Graphics 4600 on the motherboard HDMI port, with Initial Display Output set to `IGFX`. After the reboot on 2026-10-22, firmware reports that device as the boot VGA device. See [Gigabyte Z97-D3H install path](#gigabyte-z97-d3h-install-path) and [VGA text on the RX 560](#vga-text-on-the-rx-560).
 - `pc_z97_d3h_rtl8852be`: same motherboard, COM1 only. The probe reads root port `00:1c.6`, takes that port's secondary bus, and logs the endpoint vendor, device, and assigned BAR. It does not map the BAR, and it is not the shell ISO.
 
 `just run` on hardware boards builds the image then prints deployment instructions (no QEMU).
@@ -199,7 +199,7 @@ This machine is also the Ubuntu build host. Booting lerux **reboots Linux**. Kee
 
 #### VGA text on the RX 560
 
-Checked 2026-10-03 while Ubuntu was driving the monitor. The cable is HDMI on a Sapphire Radeon RX 560 (Polaris 11 / Baffin):
+Checked 2026-10-03 while Ubuntu was driving the monitor through the RX 560. The cable was HDMI on a Sapphire Radeon RX 560 (Polaris 11 / Baffin):
 
 | Field | This desk |
 |-------|-----------|
@@ -208,9 +208,9 @@ Checked 2026-10-03 while Ubuntu was driving the monitor. The cable is HDMI on a 
 | Linux | `amdgpu`, DRM `card2-HDMI-A-3`, 1920×1080, Wayland |
 | Firmware | boot VGA (`boot_vga=1`) |
 
-The Intel HD Graphics 4600 on the CPU (`00:02.0`, `8086:0412`, Linux `i915`) has nothing on its VGA or HDMI ports and is not the boot VGA device (`boot_vga=0`).
+Checked 2026-10-22. The HDMI cable is on the motherboard port. Linux shows the Intel HD Graphics 4600 (`00:02.0`, `8086:0412`, `i915`, DRM `card1-HDMI-A-1`) connected at 1920×1080. The RX 560 HDMI connector is disconnected. On 2026-10-22 the Setup variable's Initial Display Output was set to `IGFX` (data offset 3, value 0). Intel Processor Graphics was already enabled, and CSM Support was already Always. After the reboot, firmware reports the Intel device as the boot VGA device (`boot_vga=1`) and the RX 560 as `boot_vga=0`.
 
-`pc_z97_d3h` does not talk to `amdgpu`, the Polaris display engine, or HDMI. `console-driver` writes the classic 80×25 color text page at physical `0xb8000` and moves the cursor through the VGA CRTC ports `0x3d4`/`0x3d5`. The legacy Limine entry is what leaves the card in that text mode. Because this RX 560 is the firmware’s primary VGA device, those writes are decoded by this card and scanned out on the HDMI port the firmware already lit. Leave the cable on that HDMI. The motherboard Intel ports are not the boot VGA device, so this image does not scan out there.
+The desk-browser spec keeps the cable on the motherboard HDMI port ([ADR-013](decisions/013-desk-intel-scanout.md)). Firmware Peripherals → Initial Display Output is `IGFX`, and Intel Processor Graphics stays enabled. `console-driver` writes the classic 80×25 color text page at physical `0xb8000` and moves the cursor through the VGA CRTC ports `0x3d4`/`0x3d5`. The legacy Limine entry leaves the primary VGA device in that text mode. After `IGFX` is set, those writes are scanned out on the motherboard HDMI port. The spec's linear framebuffer is the VESA mode Limine sets on that same entry. lerux does not program the Intel display engine, `amdgpu`, or the Polaris display engine. The RX 560 stays unused.
 
 Use the USB boot entry that does not say UEFI, with CSM enabled. The documented result of that boot is a blue screen with `hello lerux` on the first line and `lerux>` under it. The UEFI Limine entry stops before the shell: `sel4_32.elf` is linked at 1 MB. A metal boot of this image has not been recorded on this machine. The QEMU proof is `just test-x86-console` (SeaBIOS leaves the same text page).
 
@@ -253,7 +253,7 @@ That copies `sel4_32.elf` + `loader.img` (and SHA-256 sidecars) and writes `leru
 
 - Gigabyte GA-Z97-D3H, i5-4690K (or another PC99 box with the same COM1 + CPU flags: `pat`, `xsave`, `fpu`, `sse`, `pdpe1gb`, `fsgsbase`)
 - PS/2 keyboard in the rear combo port, or a USB HID boot keyboard on a root xHCI port
-- Monitor cable on the firmware boot VGA card. On this desk that is the RX 560 HDMI. See [VGA text on the RX 560](#vga-text-on-the-rx-560).
+- Monitor cable on the motherboard HDMI port. Set Peripherals → Initial Display Output to `IGFX` before a boot that should appear there. See [VGA text on the RX 560](#vga-text-on-the-rx-560).
 - USB stick (or a unused FAT partition). Not the Ubuntu root disk.
 - Optional: second computer as serial console, to see `lerux-shell: prompt` on COM1
 
@@ -273,7 +273,7 @@ That copies `sel4_32.elf` + `loader.img` (and SHA-256 sidecars) and writes `leru
 | Limine menu, then a flashing cursor and no blue screen | The console PD did not run. Kernel output is still COM1 (COMA header, 115200 8N1). |
 | Prompt is visible, keys do nothing | Serial shows `xhci none` or `xhci no keyboard`, and the combo port has no PS/2 keyboard. A boot keyboard on a hub is not seen. If the log already says `usb keyboard`, the xHCI interrupt did not arrive. |
 | Limine says it could not find a load address | The UEFI entry. Choose the legacy USB entry, or enable CSM. |
-| HDMI picture never changes, or only the motherboard video ports are connected | The cable is not on the firmware boot VGA card, or this was the UEFI entry. This image does not modeset. See [VGA text on the RX 560](#vga-text-on-the-rx-560). |
+| HDMI picture never changes | The cable is not on the firmware primary VGA device, or this was the UEFI entry. Until Initial Display Output is `IGFX`, that device is still the RX 560. This image does not modeset. See [VGA text on the RX 560](#vga-text-on-the-rx-560). |
 | Kernel on serial, no prompt | COM1 IRQ pin/polarity; try `trigger="edge"` on the serial irq in the SDF |
 | Silent serial | Cable on COMA header (TX/RX swapped); 115200 8N1; seL4 debug UART vs PD |
 | Ubuntu gone | You deployed onto `sda` — don't. Use USB. |

@@ -13,6 +13,7 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [plan-arch.md](plan-arch.md) | Phases 50–60 living checklist; [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated) (hardware-gated) |
 | [plan-qemu.md](plan-qemu.md) | Phases 61–70 living checklist (QEMU-only workstation deepening; done) |
 | [plan-interactive.md](plan-interactive.md) | Phases 71–80 living checklist (done): QEMU interactive surface, Ladybird-shaped browser + Grok-shaped agent |
+| [desk-browser.md](desk-browser.md) | Desk browser spec: one public page on this Z97, from the typed address to the motherboard HDMI port |
 | [config.md](config.md) | Phase 54: config key schema, secrets, boot policy |
 | [packages.md](packages.md) | Phase 55: package CLI, pins, profile recipes, out-of-tree “AUR” |
 | [plan-au-ts.md](plan-au-ts.md) | Phases 41–49: sDDF/LionsOS/sdfgen-inspired work |

@@ -41,7 +41,7 @@ That is the same class of driver, aimed at the other device. The Intel option RO
 ## Consequences
 
 - A Video BIOS call reaches the Intel option ROM only after Initial Display Output is `IGFX`. On 2026-10-22 the Setup variable's byte at offset 3 was changed from 1 (PCIEX16 slot) to 0 (`IGFX`). Intel Processor Graphics was already enabled. After the reboot, firmware reports the Intel device as the boot VGA device and the RX 560 as not.
-- The address, pitch, and color masks come from a boot that reads the Intel mode-info block. The PCI regions at `0xf7800000` and `0xd0000000` are not those fields.
+- The address, pitch, and color masks come from a boot that reads the Intel mode-info block. On 2026-10-22 that boot reported `0xd0000000`, pitch 4096, 1024 by 768, and 32 bits per pixel, with red at shift 16, green at shift 8, and blue at shift 0. The address matches the Intel prefetchable region. It is used because the Multiboot 2 tag names it.
 - Once `IGFX` is the primary device, the VGA text page at `0xb8000` is scanned out on the motherboard HDMI port.
 - A mode shorter than 16 rows, or no linear direct-color mode, fails this path. The spec does not then start a display-engine driver.
 - [`context.md`](../context.md) and [`boards.md`](../boards.md) carry the desk terms.

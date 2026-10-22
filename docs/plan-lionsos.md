@@ -323,6 +323,8 @@ Landed:
 - `support/smoke-expects.toml` expects `pixel 000000ff` on both browser rows. The continuous integration job stays `browser-sddf`. The smoke count stays 53.
 - Checked on 2026-10-21. `just check` passed. `just check-pd` passed. `just test-browser-sddf` printed `title lerux`, `pixel 000000ff`, and `lerux shell ready`.
 
+Part names for these milestones are in [GLOSSARY.md](../GLOSSARY.md). The driver tables are in [platforms.md](platforms.md#x86-device-map).
+
 The x86 guest already has the NS16550, the VGA text console, the keyboard, and the clock. The virtio x86 boards stay. Milestones 19–21 give QEMU q35 a disk and a network interface that the Z97 also has. The new protection domains keep the Microkit names `blk_driver` and `net_driver`. The block virtualiser, the filesystem server, the network virtualisers, the copier, and the shell stay. A 4096-byte transfer is eight 512-byte sectors. A flush reports success and submits no device command. The Ethernet device uses the client address `52:54:00:12:34:56`. Interrupts stay I/O APIC pins. Take every QEMU device property from that binary's `-device <name>,help`.
 
 ## Milestone 19 — Advanced Host Controller Interface disk

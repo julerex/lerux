@@ -189,6 +189,8 @@ Living work list (what still needs a Pi): [`plan-arch.md` — Physical RPi4 lab]
 
 ### Gigabyte Z97-D3H install path
 
+Part names for this desk and for QEMU q35 are in [GLOSSARY.md](../GLOSSARY.md). The driver tables are in [platforms.md](platforms.md#x86-device-map).
+
 `pc_z97_d3h` is not in `support/boards.toml`. The on-screen shell was a postcard protection domain.
 
 Board `pc_z97_d3h` is the **on-screen shell** (Phase 82) on this Haswell desktop. It reuses Microkit `x86_64_generic` (same kernel as QEMU x86) and `console-pc.system.template` (COM1 `0x3f8`, IOAPIC pin 4, the VGA text page at `0xb8000`, a PS/2 keyboard, and a USB HID boot keyboard on the xHCI controller at PCI `00:14.0`). QEMU coverage of that image is `x86_64_generic_console` (`just test-x86-console`, PS/2) and `x86_64_generic_usb_kbd` (`just test-x86-usb-kbd`). virtio-pci workstation images will **not** boot this motherboard.

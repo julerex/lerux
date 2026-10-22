@@ -28,6 +28,8 @@ Tracker: local markdown in this directory. This repo has no `docs/agents/issue-t
 - [Does the spec include the Ethernet driver?](issues/06-ethernet-in-spec.md): The onboard Ethernet port. A new protection domain serves `net-server`, and Dynamic Host Configuration Protocol supplies the address, gateway, and resolver.
 - [Does the spec include following a link?](issues/07-follow-link.md): Enter on a focused link loads that public page on this surface. The new page replaces the current one, and a tall page scrolls inside 1024 by 752.
 - [How do desk keystrokes reach browser-ui?](issues/08-keyboard-path.md): `console-driver` owns the keyboard and forwards key-downs to `browser-ui`. A USB boot keyboard wins when it is armed. The shell does not receive those keys.
+- [Record the onboard Ethernet device identity](issues/10-onboard-ethernet-id.md): Bus address `00:19.0`, vendor `8086`, device `153b`, revision `0`, subsystem `1458:e000`. Memory `0xf7e00000` (128 KiB), memory `0xf7e3c000` (4 KiB), I/O `0xf080` (32 bytes).
+- [Does the spec include submitting a form?](issues/11-submit-form.md): Submitting a form loads the public page the response names on this surface. The new page replaces the current one. A password field ignores keys, and a file field stays empty.
 
 ## Not yet specified
 

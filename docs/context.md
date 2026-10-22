@@ -36,7 +36,7 @@ lerux builds **Rust-only userspace** on the formally verified [seL4](https://sel
 
 **Z97 monitor (phase 82):** `pc_z97_d3h` paints VGA text at `0xb8000` through the firmware boot VGA card. The desk-browser spec makes that card the Intel HD Graphics 4600. The monitor cable is on the motherboard HDMI port. Firmware Peripherals → Initial Display Output is `IGFX`, and Intel Processor Graphics stays enabled. The spec uses the VESA linear framebuffer Limine sets on that legacy entry. `browser-ui` maps it. lerux does not program the Intel display engine or the Polaris display engine. The RX 560 stays unused. After the reboot on 2026-10-22, firmware reports the Intel device as the boot VGA device. Limine's legacy entry reports a linear framebuffer at `0xd0000000`, pitch 4096, 1024 by 768, 32 bits per pixel, with red at shift 16, green at shift 8, and blue at shift 0. See [ADR-013](decisions/013-desk-intel-scanout.md) and [`boards.md`](boards.md#vga-text-on-the-rx-560).
 
-**Z97 fetch (desk-browser spec):** `request-server` fetches the public page through `net-server`. A new driver owns the onboard Ethernet port and serves `net-server`. That port's device identity is not recorded yet. The RTL8852BE probe is not that driver.
+**Z97 fetch (desk-browser spec):** `request-server` fetches the public page through `net-server`. A new driver owns the onboard Ethernet port and serves `net-server`. That port is bus address `00:19.0`, vendor `8086`, device `153b`, revision `0`, subsystem `1458:e000`, with memory `0xf7e00000` (128 KiB), memory `0xf7e3c000` (4 KiB), and I/O `0xf080` (32 bytes). The RTL8852BE probe is not that driver.
 
 ## Platform parity
 
@@ -143,7 +143,10 @@ The legacy image does **not** target a Linux or POSIX syscall ABI. Its apps are 
 : A hostname resolved through the Domain Name System. It is the host of a public page.
 
 **public page**
-: What the monitor shows for one `https` address whose host is a public name. The desk-browser spec reaches it by typing the address or by activating a link. The typed address is the first load in a fresh profile.
+: What the monitor shows for one `https` address whose host is a public name. The desk-browser spec reaches it by typing the address, by activating a link, or by submitting a form. The typed address is the first load in a fresh profile.
+
+**focused control**
+: The one link or form control on the public page that receives keys. Tab moves to the next one and wraps.
 
 **request-server**
 : Ladybird RequestServer analogue. Sole HTTP client of `tls-proxy` / `net-server` on interactive boards (Phase 73: `just test-request`). Untrusted `web-content`, `agent`, and `program-runtime` fetch through it; they never hold `NetClient` / `TlsClient`.

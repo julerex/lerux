@@ -176,14 +176,7 @@ pub fn build_sdk(root: &Path) -> Result<()> {
             &["install", "--upgrade", "pip", "setuptools", "wheel"],
         )?;
         let pip = pyenv.join("bin/pip");
-        let status = std::process::Command::new(&pip)
-            .current_dir(&microkit)
-            .args(["install", "-r", "requirements.txt"])
-            .status()
-            .context("pip install microkit requirements")?;
-        if !status.success() {
-            bail!("pip install microkit requirements failed");
-        }
+        install_microkit_python_deps(&pip, &microkit)?;
     }
 
     let status = std::process::Command::new(pyenv.join("bin/python"))
@@ -211,6 +204,28 @@ pub fn build_sdk(root: &Path) -> Result<()> {
         &format!("{}\n", sdk.display()),
     )?;
     eprintln!("==> Microkit SDK: {}", sdk.display());
+    Ok(())
+}
+
+/// Microkit 2.3.0 installs the `sel4-deps` metapackage. A checkout that
+/// still has `requirements.txt` installs that file.
+fn microkit_pip_args(microkit: &Path) -> [&'static str; 3] {
+    if microkit.join("requirements.txt").is_file() {
+        ["install", "-r", "requirements.txt"]
+    } else {
+        ["install", "--upgrade", "sel4-deps"]
+    }
+}
+
+fn install_microkit_python_deps(pip: &Path, microkit: &Path) -> Result<()> {
+    let status = std::process::Command::new(pip)
+        .current_dir(microkit)
+        .args(microkit_pip_args(microkit))
+        .status()
+        .context("pip install microkit python dependencies")?;
+    if !status.success() {
+        bail!("pip install microkit python dependencies failed");
+    }
     Ok(())
 }
 
@@ -281,4 +296,32 @@ pub fn sdk_path(root: &Path) -> Result<String> {
         return Ok(std::fs::read_to_string(&file)?.trim().to_string());
     }
     bail!("run `lerux build-sdk` or set MICROKIT_SDK")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::microkit_pip_args;
+
+    #[test]
+    fn requirements_file_keeps_the_old_pip_args() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let microkit = root.path().join("microkit");
+        std::fs::create_dir_all(&microkit).expect("microkit dir");
+        std::fs::write(microkit.join("requirements.txt"), "ply==3.11\n").expect("requirements");
+        assert_eq!(
+            microkit_pip_args(&microkit),
+            ["install", "-r", "requirements.txt"]
+        );
+    }
+
+    #[test]
+    fn missing_requirements_file_installs_sel4_deps() {
+        let root = tempfile::tempdir().expect("tempdir");
+        let microkit = root.path().join("microkit");
+        std::fs::create_dir_all(&microkit).expect("microkit dir");
+        assert_eq!(
+            microkit_pip_args(&microkit),
+            ["install", "--upgrade", "sel4-deps"]
+        );
+    }
 }

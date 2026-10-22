@@ -38,6 +38,8 @@ lerux builds **Rust-only userspace** on the formally verified [seL4](https://sel
 
 **Z97 fetch (desk-browser spec):** `request-server` fetches the public page through `net-server`. A new driver owns the onboard Ethernet port and serves `net-server`. That port is bus address `00:19.0`, vendor `8086`, device `153b`, revision `0`, subsystem `1458:e000`, with memory `0xf7e00000` (128 KiB), memory `0xf7e3c000` (4 KiB), and I/O `0xf080` (32 bytes). The RTL8852BE probe is not that driver.
 
+**Z97 image (desk-browser spec):** The image this desk boots contains `console-driver`, `serial-driver`, `log-server`, `browser-ui`, one `web-content`, `request-server`, `tls-proxy`, `net-server`, and the new onboard Ethernet driver. `console-driver` forwards key-downs and does not paint. `browser-ui` maps the linear framebuffer. COM1 stays the log, and there is no shell prompt. `tls-proxy` holds the public trust anchors. The shell, the filesystem, `display-server`, and the agent are not on this image. The Phase 82 shell image remains the QEMU console test.
+
 ## Platform parity
 
 Echo IPC and virtio smoke tests run on aarch64, RISC-V virt, and x86 (PCI virtio on q35). Block IPC (read + write) and net IPC (UDP TX) run on all three arches. RTC/timer init runs on all three: aarch64 PL031/SP804, RISC-V Goldfish RTC + `rdtime`, x86 CMOS RTC + TSC (Phase 56).

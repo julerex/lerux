@@ -13,6 +13,7 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [plan-arch.md](plan-arch.md) | Phases 50–60 living checklist; [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated) (hardware-gated) |
 | [plan-qemu.md](plan-qemu.md) | Phases 61–70 living checklist (QEMU-only workstation deepening; done) |
 | [plan-interactive.md](plan-interactive.md) | Phases 71–80 living checklist (done): QEMU interactive surface, Ladybird-shaped browser + Grok-shaped agent |
+| [plan-qip.md](plan-qip.md) | Investigation: QIP component contracts and whether a host belongs in lerux. No decision yet. |
 | [config.md](config.md) | Phase 54: config key schema, secrets, boot policy |
 | [packages.md](packages.md) | Phase 55: package CLI, pins, profile recipes, out-of-tree “AUR” |
 | [plan-au-ts.md](plan-au-ts.md) | Phases 41–49: sDDF/LionsOS/sdfgen-inspired work |
@@ -51,3 +52,4 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 - [au-ts org](https://github.com/au-ts) — upstream Microkit / sDDF / LionsOS / rust-sel4 ecosystem (see [plan-au-ts.md](plan-au-ts.md))
 - [Ladybird](https://github.com/LadybirdBrowser/ladybird) — process topology inspiration for phases 71–80 (see [plan-interactive.md](plan-interactive.md)); not vendored
 - [Grok Build](https://github.com/xai-org/grok-build) — agent-loop / tool-taxonomy inspiration for phases 71–80; not vendored
+- [QIP](https://github.com/patrickgwsmith/qip) — Content and graphical WebAssembly contracts under investigation ([plan-qip.md](plan-qip.md)); not vendored

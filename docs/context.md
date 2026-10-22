@@ -140,7 +140,7 @@ The legacy image does **not** target a Linux or POSIX syscall ABI. Its apps are 
 : A hostname resolved through the Domain Name System. It is the host of a public page.
 
 **public page**
-: What the monitor shows for one typed `https` address whose host is a public name: the first load in a fresh profile. This is the desk-browser spec's page.
+: What the monitor shows for one `https` address whose host is a public name. The desk-browser spec reaches it by typing the address or by activating a link. The typed address is the first load in a fresh profile.
 
 **request-server**
 : Ladybird RequestServer analogue. Sole HTTP client of `tls-proxy` / `net-server` on interactive boards (Phase 73: `just test-request`). Untrusted `web-content`, `agent`, and `program-runtime` fetch through it; they never hold `NetClient` / `TlsClient`.

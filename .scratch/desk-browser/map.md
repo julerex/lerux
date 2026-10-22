@@ -24,6 +24,7 @@ Tracker: local markdown in this directory. This repo has no `docs/agents/issue-t
 - [What chrome is on the screen?](issues/04-chrome.md): One address line above the page. `browser-ui` paints it, presents the screen, and takes the keyboard. A failure is one of five fixed lines in the page area.
 - [Which scanout path does the spec commit to?](issues/05-scanout-path.md): The VESA linear framebuffer on the legacy Limine entry. `browser-ui` maps it and copies a 1024 by 752 page under a 16-row address line.
 - [Does the spec include the Ethernet driver?](issues/06-ethernet-in-spec.md): The onboard Ethernet port. A new protection domain serves `net-server`, and Dynamic Host Configuration Protocol supplies the address, gateway, and resolver.
+- [Does the spec include following a link?](issues/07-follow-link.md): Enter on a focused link loads that public page on this surface. The new page replaces the current one, and a tall page scrolls inside 1024 by 752.
 
 ## Not yet specified
 

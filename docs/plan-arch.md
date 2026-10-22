@@ -351,7 +351,7 @@ Fold in as capacity allows; see also [`plan-au-ts.md`](plan-au-ts.md) and ADRs:
 - In-guest GDB RSP (needs fork or upstream APIs; QEMU gdbstub parity is [Phase 66](plan-qemu.md#phase-66--qemu-arch-parity-debug-isolation-serial-virt))
 - libvmm / guest Linux — **only with dedicated ADR** (explicit non-goal today)
 - Formal verification of lerux PDs
-- JavaScript engines, `wasmtime`, and the WebAssembly Micro Runtime stay out. Ordinary WebAssembly in the one LionsOS runtime protection domain is [Milestone 14](plan-lionsos.md) ([ADR-012](decisions/012-ordinary-webassembly.md)). The postcard `program-runtime` path is [Phase 81](plan.md#phase-81--signed-wasm-runtime) ([ADR-010](decisions/010-program-runtime.md))
+- The desk-browser spec grows `lerux-html` and `lerux-web` to show a public page, including its script and WebAssembly. `wasmtime` and the WebAssembly Micro Runtime stay out. Ordinary WebAssembly in the one LionsOS runtime protection domain is [Milestone 14](plan-lionsos.md) ([ADR-012](decisions/012-ordinary-webassembly.md)). The postcard `program-runtime` path is [Phase 81](plan.md#phase-81--signed-wasm-runtime) ([ADR-010](decisions/010-program-runtime.md))
 
 ---
 

@@ -87,6 +87,7 @@ Constraints that still hold:
 - Framebuffer MRs are large (~2 MiB at 800×600×32). Channel numbers still come from the profile manifest (AGENTS.md).
 - New PDs sit in the **bulk** QoS band; PPC callees outrank callers (ADR-006). `web-content` must not outrank `request-server` / `display-server` if it PPCs them.
 - [`plan-arch.md`](../plan-arch.md) “do not start with graphics” is **superseded for QEMU software framebuffer only**. GPU, JS, POSIX, and libvmm remain forbidden.
+- The desk's firmware framebuffer is [ADR-013](013-desk-intel-scanout.md). QEMU images still present through `display-server`.
 - [`security.md`](../security.md) gains a planned trust row: `web-content` and `agent` are untrusted; `request-server` and `display-server` are trusted services.
 - Living checklist: [`plan-interactive.md`](../plan-interactive.md).
 

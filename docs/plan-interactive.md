@@ -32,7 +32,7 @@ Every deliverable is **completable on QEMU virt aarch64**. No board on the desk,
 
 ### Hard ceiling (ADR-009)
 
-Lifted: **QEMU software framebuffer** owned by `display-server`. Apps present via a shared bitmap MR.
+Lifted: **QEMU software framebuffer** owned by `display-server`. Apps present via a shared bitmap MR. The desk's VESA framebuffer on the Intel graphics is [ADR-013](decisions/013-desk-intel-scanout.md). That path is the firmware option ROM, not a display-engine driver.
 
 Still forbidden:
 

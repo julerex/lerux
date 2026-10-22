@@ -34,7 +34,13 @@ lerux builds **Rust-only userspace** on the formally verified [seL4](https://sel
 
 **Interactive surface (2026-09, ADR-009):** QEMU software framebuffer is in scope; GPU/Wayland/libvmm/JS are not. Browser and agent are new PDs, not ports of Ladybird or `grok`. See [`plan-interactive.md`](plan-interactive.md).
 
-**Z97 monitor (phase 82):** `pc_z97_d3h` paints VGA text at `0xb8000` through the firmware boot VGA card. On this desk that card is the Sapphire RX 560 on HDMI. lerux does not drive `amdgpu`, the Polaris display engine, or HDMI. See [`boards.md`](boards.md#vga-text-on-the-rx-560).
+**Z97 monitor (phase 82):** `pc_z97_d3h` paints VGA text at `0xb8000` through the firmware boot VGA card. The desk-browser spec makes that card the Intel HD Graphics 4600. The monitor cable is on the motherboard HDMI port. Firmware Peripherals → Initial Display Output is `IGFX`, and Intel Processor Graphics stays enabled. The spec uses the VESA linear framebuffer Limine sets on that legacy entry. `browser-ui` maps it. lerux does not program the Intel display engine or the Polaris display engine. The RX 560 stays unused. After the reboot on 2026-10-22, firmware reports the Intel device as the boot VGA device. Limine's legacy entry reports a linear framebuffer at `0xd0000000`, pitch 4096, 1024 by 768, 32 bits per pixel, with red at shift 16, green at shift 8, and blue at shift 0. See [ADR-013](decisions/013-desk-intel-scanout.md) and [`boards.md`](boards.md#vga-text-on-the-rx-560).
+
+**Z97 fetch (desk-browser spec):** `request-server` fetches the public page through `net-server`. A new driver owns the onboard Ethernet port and serves `net-server`. That port is bus address `00:19.0`, vendor `8086`, device `153b`, revision `0`, subsystem `1458:e000`, with memory `0xf7e00000` (128 KiB), memory `0xf7e3c000` (4 KiB), and I/O `0xf080` (32 bytes). The RTL8852BE probe is not that driver.
+
+**Z97 image (desk-browser spec):** The image this desk boots contains `console-driver`, `serial-driver`, `log-server`, `browser-ui`, one `web-content`, `request-server`, `tls-proxy`, `net-server`, and the new onboard Ethernet driver. `console-driver` forwards key-downs and does not paint. `browser-ui` maps the linear framebuffer. COM1 stays the log, and there is no shell prompt. `tls-proxy` holds the public trust anchors. The shell, the filesystem, `display-server`, and the agent are not on this image. The Phase 82 shell image remains the QEMU console test.
+
+**Z97 demonstration (desk-browser spec):** Before a metal boot, a separate QEMU image boots those browser protection domains on the legacy Limine entry, with the existing x86 virtio network driver in place of the onboard Ethernet driver. `tls-proxy` on that image trusts the smoke certificate authority. The address line accepts `https://host:8443/`. PS/2 injection loads `https://host:8443/desk.html`, follows the link to `https://host:8443/desk-link.html`, and submits the GET field `q` with `hi`, loading `https://host:8443/desk-form.html?q=hi`. COM1 records each address and the first non-white pixel. The framebuffer address in that log is QEMU's. The metal boot remains the public page on this desk.
 
 ## Platform parity
 
@@ -126,10 +132,25 @@ The legacy image does **not** target a Linux or POSIX syscall ABI. Its apps are 
 : Shared memory region holding RGB pixels. Producers (`display-demo`, `paint-demo`, `web-content`) write; `display-server` blits to the device.
 
 **browser-ui**
-: Ladybird Browser analogue. Owns chrome (serial `open <url>` in v1) and the channel to `web-content`. Does not parse HTML.
+: Ladybird Browser analogue. Owns the address line, presents the screen, and delivers page keys to `web-content`. Does not parse HTML. Phase 76 chrome was a serial `open <url>`. On the desk-browser spec it maps the VESA linear framebuffer and receives key-downs from `console-driver`.
+
+**desk keyboard**
+: The PS/2 keyboard or, when one is armed, the USB HID boot keyboard. `console-driver` owns it and forwards key-downs to `browser-ui`.
+
+**address line**
+: The text `browser-ui` paints in the top 16 rows of the desk framebuffer. It shows the address of the public page.
 
 **web-content**
-: Ladybird WebContent analogue. One static PD (Microkit cannot spawn tabs). Hosts `lerux-html` + `lerux-web`. Speaks only `HttpRequest` to `request-server` plus the bitmap MR. **No** `NetClient`, `TlsClient`, or `FsClient`. No JS in phases 71–80.
+: Ladybird WebContent analogue. One static protection domain (Microkit cannot spawn tabs). Hosts `lerux-html` + `lerux-web`. Speaks only `HttpRequest` to `request-server` plus the bitmap memory region. **No** `NetClient`, `TlsClient`, or `FsClient`. No JavaScript in phases 71–80. The desk-browser spec grows these engines so this protection domain can show a public page, and on that spec it paints only the rectangle under the address line.
+
+**public name**
+: A hostname resolved through the Domain Name System. It is the host of a public page.
+
+**public page**
+: What the monitor shows for one `https` address whose host is a public name. The desk-browser spec reaches it by typing the address, by activating a link, or by submitting a form. The typed address is the first load in a fresh profile.
+
+**focused control**
+: The one link or form control on the public page that receives keys. Tab moves to the next one and wraps.
 
 **request-server**
 : Ladybird RequestServer analogue. Sole HTTP client of `tls-proxy` / `net-server` on interactive boards (Phase 73: `just test-request`). Untrusted `web-content`, `agent`, and `program-runtime` fetch through it; they never hold `NetClient` / `TlsClient`.
@@ -141,14 +162,14 @@ The legacy image does **not** target a Linux or POSIX syscall ABI. Its apps are 
 : Grok Build analogue as a PD: prompt → tool-calls → tools → model. Runtime talks to host `lerux grok-one` through `request-server` (smoke CA; not live xAI). Serial ANSI TUI (Phase 78); shell `grok` PPCs the agent. Tools are Read/Edit/Write/ListDir/Search/Execute/WebFetch/Browse over existing IPC (FS in Phase 79, `web-content` in Phase 80, `request-server`). Sandbox **is** the PD set, not Landlock.
 
 **lerux-html**
-: From-scratch `#![no_std]`+`alloc` HTML subset tokenizer/tree builder. Not Ladybird’s `libweb_html_tokenizer`, not html5ever, not Servo.
+: From-scratch `#![no_std]`+`alloc` HTML engine for `web-content`. Phases 71–80 parse a fixed element subset. The desk-browser spec grows it to the document class of a public page. Not Ladybird’s `libweb_html_tokenizer`, not html5ever, not Servo.
 
 **lerux-web**
-: From-scratch `#![no_std]`+`alloc` CSS subset, block-flow layout, and RGB888 paint. Author `<style>` plus a tiny UA sheet. Hosts no JS. Used by `paint-demo` (Phase 75) and `web-content` (Phase 76).
+: From-scratch `#![no_std]`+`alloc` layout and paint for `web-content`. Phases 71–80 paint a fixed CSS subset and host no JavaScript. The desk-browser spec grows it to the shared layout, script, WebAssembly, and media behavior of the reference browsers. Not Servo. Used by `paint-demo` (Phase 75) and `web-content` (Phase 76).
 
 ## Boundaries
 
-- **In scope:** Rust PD crates, `.system` files, build/CI, docs, host profile tooling, QEMU software framebuffer (ADR-009), ordinary WebAssembly through `wasmi` in the one runtime protection domain (ADR-010, ADR-012)
-- **Out of scope:** POSIX/glibc/musl, Linux ABI emulation, seL4 kernel modifications, C userspace, vendored upstream trees, unmodified third-party binaries (including Ladybird and `grok`), JavaScript engines, `wasmtime`, the WebAssembly Micro Runtime, a second runtime protection domain, GPU compositor / Wayland / libvmm
+- **In scope:** Rust protection-domain crates, `.system` files, build/CI, docs, host profile tooling, QEMU software framebuffer (ADR-009), ordinary WebAssembly through `wasmi` in the one runtime protection domain (ADR-010, ADR-012). The desk-browser spec also grows `lerux-html` and `lerux-web` to show a public page, including its script and WebAssembly.
+- **Out of scope:** POSIX/glibc/musl, Linux ABI emulation, seL4 kernel modifications, C userspace, vendored upstream trees, unmodified third-party binaries (including Ladybird, Servo, and `grok`), `wasmtime`, the WebAssembly Micro Runtime, a second runtime protection domain, GPU compositor / Wayland / libvmm
 - **Upstream SDK components:** Microkit monitor, loader, libmicrokit (C) — part of SDK, not lerux-owned
 - **Reference trees (read, do not vendor):** Ladybird, Grok Build — steal topology and tool loop only ([`plan-au-ts.md`](plan-au-ts.md) rule)

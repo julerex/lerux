@@ -33,7 +33,7 @@ jobs:
           targets: wasm32-unknown-unknown
 
       - name: Install just
-        uses: extractions/setup-just@v2
+        run: bash .github/scripts/install-just.sh
 
       - name: Format and clippy
         run: just check

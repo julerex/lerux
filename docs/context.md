@@ -34,7 +34,7 @@ lerux builds **Rust-only userspace** on the formally verified [seL4](https://sel
 
 **Interactive surface (2026-09, ADR-009):** QEMU software framebuffer is in scope; GPU/Wayland/libvmm/JS are not. Browser and agent are new PDs, not ports of Ladybird or `grok`. See [`plan-interactive.md`](plan-interactive.md).
 
-**Z97 monitor (phase 82):** `pc_z97_d3h` paints VGA text at `0xb8000` through the firmware boot VGA card. On this desk that card is the Sapphire RX 560 on HDMI. lerux does not drive `amdgpu`, the Polaris display engine, or HDMI. See [`boards.md`](boards.md#vga-text-on-the-rx-560).
+**Z97 monitor (phase 82):** `pc_z97_d3h` paints VGA text at `0xb8000` through the firmware boot VGA card. On this desk that card is the Sapphire RX 560 on HDMI. The desk-browser spec uses the VESA linear framebuffer Limine sets on that same legacy entry. `browser-ui` maps it. lerux does not program `amdgpu` or the Polaris display engine. See [`boards.md`](boards.md#vga-text-on-the-rx-560).
 
 ## Platform parity
 
@@ -126,10 +126,10 @@ The legacy image does **not** target a Linux or POSIX syscall ABI. Its apps are 
 : Shared memory region holding RGB pixels. Producers (`display-demo`, `paint-demo`, `web-content`) write; `display-server` blits to the device.
 
 **browser-ui**
-: Ladybird Browser analogue. Owns the address line, presents the screen, and delivers page keys to `web-content`. Does not parse HTML. Phase 76 chrome was a serial `open <url>`.
+: Ladybird Browser analogue. Owns the address line, presents the screen, and delivers page keys to `web-content`. Does not parse HTML. Phase 76 chrome was a serial `open <url>`. On the desk-browser spec it maps the VESA linear framebuffer.
 
 **address line**
-: The one row of text `browser-ui` paints above a public page. It shows the address of that page.
+: The text `browser-ui` paints in the top 16 rows of the desk framebuffer. It shows the address of the public page.
 
 **web-content**
 : Ladybird WebContent analogue. One static protection domain (Microkit cannot spawn tabs). Hosts `lerux-html` + `lerux-web`. Speaks only `HttpRequest` to `request-server` plus the bitmap memory region. **No** `NetClient`, `TlsClient`, or `FsClient`. No JavaScript in phases 71–80. The desk-browser spec grows these engines so this protection domain can show a public page, and on that spec it paints only the rectangle under the address line.

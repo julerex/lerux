@@ -1,0 +1,12 @@
+[package]
+name = "lerux-desk"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Desk address line and Multiboot framebuffer mode"
+
+[dependencies]
+lerux-input = { path = "../lerux-input" }
+
+[lints]
+workspace = true

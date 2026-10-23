@@ -20,10 +20,10 @@ default: build
 # Format, clippy, and host tests for host crates (no SDK required)
 check:
     cargo fmt --all --check
-    CARGO_TARGET_DIR={{root}}/build/host cargo clippy -p lerux-cli -p lerux-tls -p lerux-html -p lerux-web -p lerux-wasm -p lerux-rtw8852be -p lerux-sddf -p lerux-cothread -p lerux-posix --all-targets -- -D warnings
+    CARGO_TARGET_DIR={{root}}/build/host cargo clippy -p lerux-cli -p lerux-tls -p lerux-html -p lerux-input -p lerux-web -p lerux-wasm -p lerux-rtw8852be -p lerux-sddf -p lerux-cothread -p lerux-posix --all-targets -- -D warnings
     CARGO_TARGET_DIR={{root}}/build/host cargo clippy -p lerux-machine --features system-description --all-targets -- -D warnings
     CARGO_TARGET_DIR={{root}}/build/host cargo clippy -p lerux-image --all-targets -- -D warnings
-    CARGO_TARGET_DIR={{root}}/build/host cargo test -p lerux-tls -p lerux-html -p lerux-web -p lerux-wasm -p lerux-rtw8852be -p lerux-cli -p lerux-sddf -p lerux-cothread -p lerux-posix
+    CARGO_TARGET_DIR={{root}}/build/host cargo test -p lerux-tls -p lerux-html -p lerux-input -p lerux-web -p lerux-wasm -p lerux-rtw8852be -p lerux-cli -p lerux-sddf -p lerux-cothread -p lerux-posix
     CARGO_TARGET_DIR={{root}}/build/host cargo test -p lerux-machine --features system-description
     CARGO_TARGET_DIR={{root}}/build/host cargo test -p lerux-image
     # Phase 60 Track D: PPC priority + service-class band checks (host, no QEMU)

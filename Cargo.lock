@@ -1144,6 +1144,13 @@ name = "lerux-cothread"
 version = "0.1.0"
 
 [[package]]
+name = "lerux-desk"
+version = "0.1.0"
+dependencies = [
+ "lerux-input",
+]
+
+[[package]]
 name = "lerux-driver-protocols"
 version = "0.1.0"
 dependencies = [
@@ -1165,6 +1172,10 @@ dependencies = [
  "lerux-machine",
  "lerux-sddf",
 ]
+
+[[package]]
+name = "lerux-input"
+version = "0.1.0"
 
 [[package]]
 name = "lerux-logging"

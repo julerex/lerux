@@ -42,6 +42,43 @@ impl core::fmt::Debug for HttpsUrl {
 }
 
 pub(crate) fn normalize(text: &str, policy: NamePolicy) -> Result<HttpsUrl, ()> {
+    let url = normalize_structure(text)?;
+    if policy_allows(&url, policy) {
+        Ok(url)
+    } else {
+        Err(())
+    }
+}
+
+fn policy_allows(url: &HttpsUrl, policy: NamePolicy) -> bool {
+    let Ok(host) = host_from_url(url.as_str()) else {
+        return false;
+    };
+    match policy {
+        NamePolicy::DemoHost => host == "host",
+        NamePolicy::Public => host != "host",
+    }
+}
+
+fn host_from_url(text: &str) -> Result<&str, ()> {
+    const PREFIX: &str = "https://";
+    if !text.starts_with(PREFIX) {
+        return Err(());
+    }
+    let rest = &text[PREFIX.len()..];
+    let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+    let authority = &rest[..end];
+    let (host, _) = match authority.rsplit_once(':') {
+        Some((host, _)) => (host, ()),
+        None => (authority, ()),
+    };
+    if host.is_empty() {
+        return Err(());
+    }
+    Ok(host)
+}
+
+fn normalize_structure(text: &str) -> Result<HttpsUrl, ()> {
     let rest = https_rest(text)?;
     let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
     let authority = &rest[..end];
@@ -62,13 +99,6 @@ pub(crate) fn normalize(text: &str, policy: NamePolicy) -> Result<HttpsUrl, ()> 
     }
     let host = core::str::from_utf8(&host_bytes[..host_raw.len()]).map_err(|_| ())?;
     if is_ipv4(host) || !is_dns_name(host) {
-        return Err(());
-    }
-    let allowed = match policy {
-        NamePolicy::DemoHost => host == "host",
-        NamePolicy::Public => host != "host",
-    };
-    if !allowed {
         return Err(());
     }
     let port = match port_text {
@@ -197,4 +227,425 @@ fn is_dns_name(host: &str) -> bool {
         }
     }
     any
+}
+
+/// Navigation decision for a focused link href against a loaded page.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum HrefIntent {
+    Fetch(HttpsUrl),
+    Fragment(HttpsUrl),
+    Already,
+    Script,
+    Rejected,
+}
+
+/// Resolve `href` against `base`. Join and scheme checks only; [`NamePolicy`] runs in activation.
+pub(crate) fn resolve_href(base: &HttpsUrl, href: &str) -> HrefIntent {
+    let href = trim_ascii(href);
+    if href.is_empty() {
+        return empty_href_intent(base);
+    }
+    if href.len() >= "javascript:".len()
+        && href[.."javascript:".len()].eq_ignore_ascii_case("javascript:")
+    {
+        return HrefIntent::Script;
+    }
+    if let Some(idx) = href.find("://") {
+        let scheme = &href[..idx];
+        if !scheme.eq_ignore_ascii_case("https") {
+            return HrefIntent::Rejected;
+        }
+        return finish_intent(base, href);
+    }
+    if href.starts_with("//") {
+        let mut absolute = [0u8; LINE_CAP + 6];
+        absolute[..6].copy_from_slice(b"https:");
+        let tail = href.as_bytes();
+        if tail.len() + 6 > absolute.len() {
+            return HrefIntent::Rejected;
+        }
+        absolute[6..6 + tail.len()].copy_from_slice(tail);
+        let text = core::str::from_utf8(&absolute[..6 + tail.len()]).unwrap_or("");
+        return finish_intent(base, text);
+    }
+    match join_to_base(base, href) {
+        Ok(text) => finish_intent(base, text.as_str()),
+        Err(()) => HrefIntent::Rejected,
+    }
+}
+
+fn finish_intent(base: &HttpsUrl, absolute: &str) -> HrefIntent {
+    let Ok(url) = normalize_structure(absolute) else {
+        return HrefIntent::Rejected;
+    };
+    classify_against_base(base, &url)
+}
+
+fn empty_href_intent(base: &HttpsUrl) -> HrefIntent {
+    let Ok(parts) = split_url(base.as_str()) else {
+        return HrefIntent::Rejected;
+    };
+    if parts.fragment.is_none() {
+        return HrefIntent::Already;
+    }
+    match render_url(parts.authority, parts.path, parts.query, None) {
+        Ok(url) => HrefIntent::Fragment(url),
+        Err(()) => HrefIntent::Rejected,
+    }
+}
+
+fn classify_against_base(base: &HttpsUrl, url: &HttpsUrl) -> HrefIntent {
+    if url.as_str() == base.as_str() {
+        return HrefIntent::Already;
+    }
+    let Ok(base_parts) = split_url(base.as_str()) else {
+        return HrefIntent::Fetch(*url);
+    };
+    let Ok(url_parts) = split_url(url.as_str()) else {
+        return HrefIntent::Fetch(*url);
+    };
+    if base_parts.authority == url_parts.authority
+        && base_parts.path == url_parts.path
+        && base_parts.query == url_parts.query
+    {
+        if base_parts.fragment.is_none() && url_parts.fragment.is_none() {
+            return HrefIntent::Already;
+        }
+        return HrefIntent::Fragment(*url);
+    }
+    HrefIntent::Fetch(*url)
+}
+
+struct UrlParts<'a> {
+    authority: &'a str,
+    path: &'a str,
+    query: Option<&'a str>,
+    fragment: Option<&'a str>,
+}
+
+fn split_url(text: &str) -> Result<UrlParts<'_>, ()> {
+    const PREFIX: &str = "https://";
+    if !text.starts_with(PREFIX) {
+        return Err(());
+    }
+    let rest = &text[PREFIX.len()..];
+    let auth_end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+    let authority = &rest[..auth_end];
+    let tail = &rest[auth_end..];
+    let (path, query, fragment) = split_path_query_fragment(tail)?;
+    Ok(UrlParts {
+        authority,
+        path,
+        query,
+        fragment,
+    })
+}
+
+fn split_path_query_fragment(tail: &str) -> Result<(&str, Option<&str>, Option<&str>), ()> {
+    if tail.is_empty() {
+        return Ok(("/", None, None));
+    }
+    let path_end = tail.find(['?', '#']).unwrap_or(tail.len());
+    let path = if path_end == 0 {
+        "/"
+    } else {
+        &tail[..path_end]
+    };
+    let mut query = None;
+    let mut fragment = None;
+    let mut rest = &tail[path_end..];
+    if let Some(after) = rest.strip_prefix('?') {
+        rest = after;
+        let q_end = rest.find('#').unwrap_or(rest.len());
+        query = Some(&rest[..q_end]);
+        rest = &rest[q_end..];
+    }
+    if let Some(after) = rest.strip_prefix('#') {
+        fragment = Some(after);
+    }
+    Ok((path, query, fragment))
+}
+
+fn join_to_base(base: &HttpsUrl, href: &str) -> Result<HttpsUrl, ()> {
+    let parts = split_url(base.as_str())?;
+    let (href_path, href_query, href_fragment) = split_href_tail(href);
+    let path_url = if href.starts_with('#') || href.starts_with('?') {
+        None
+    } else if href.starts_with('/') {
+        Some(normalize_path_segments(
+            href_path,
+            href_path.ends_with('/'),
+        )?)
+    } else {
+        Some(merge_relative_path(parts.path, href_path)?)
+    };
+    let path = path_url
+        .as_ref()
+        .map(HttpsUrl::as_str)
+        .unwrap_or(parts.path);
+    // A `#` reference keeps the base query. A path reference carries only its own query.
+    let query = if href.starts_with('#') {
+        parts.query
+    } else if href.contains('?') {
+        href_query
+    } else {
+        None
+    };
+    let fragment = if href.contains('#') {
+        href_fragment
+    } else {
+        None
+    };
+    render_url(parts.authority, path, query, fragment)
+}
+
+fn split_href_tail(href: &str) -> (&str, Option<&str>, Option<&str>) {
+    if let Some(fragment) = href.strip_prefix('#') {
+        return ("/", None, Some(fragment));
+    }
+    if let Some(rest) = href.strip_prefix('?') {
+        let f = rest.find('#').map(|i| &rest[i + 1..]);
+        let q_end = rest.find('#').unwrap_or(rest.len());
+        return ("/", Some(&rest[..q_end]), f);
+    }
+    let path_end = href.find(['?', '#']).unwrap_or(href.len());
+    let path = &href[..path_end];
+    let mut rest = &href[path_end..];
+    let mut query = None;
+    let mut fragment = None;
+    if let Some(after) = rest.strip_prefix('?') {
+        rest = after;
+        let q_end = rest.find('#').unwrap_or(rest.len());
+        query = Some(&rest[..q_end]);
+        rest = &rest[q_end..];
+    }
+    if let Some(after) = rest.strip_prefix('#') {
+        fragment = Some(after);
+    }
+    (path, query, fragment)
+}
+
+fn merge_relative_path(base_path: &str, href_path: &str) -> Result<HttpsUrl, ()> {
+    let dir = base_directory(base_path);
+    let trailing = href_path.ends_with('/');
+    let merged = merge_path_segments(dir, href_path)?;
+    normalize_path_segments(merged.as_str(), trailing)
+}
+
+fn base_directory(path: &str) -> &str {
+    if path == "/" {
+        return "/";
+    }
+    match path.rfind('/') {
+        Some(0) => "/",
+        Some(idx) => &path[..=idx],
+        None => "/",
+    }
+}
+
+fn merge_path_segments(base_dir: &str, href_path: &str) -> Result<HttpsUrl, ()> {
+    let mut segments: [&str; 64] = [""; 64];
+    let mut count = 0usize;
+
+    if base_dir != "/" {
+        for seg in base_dir.trim_matches('/').split('/') {
+            push_path_segment(seg, &mut segments, &mut count)?;
+        }
+    }
+    for seg in href_path.split('/') {
+        push_path_segment(seg, &mut segments, &mut count)?;
+    }
+
+    let mut out = [0u8; LINE_CAP];
+    let mut n = 0usize;
+    if !push(&mut out, &mut n, b"/") {
+        return Err(());
+    }
+    if count == 0 {
+        return HttpsUrl::from_bytes(&out[..1]).ok_or(());
+    }
+    for (i, segment) in segments.iter().take(count).enumerate() {
+        if !push(&mut out, &mut n, segment.as_bytes()) {
+            return Err(());
+        }
+        if i + 1 < count && !push(&mut out, &mut n, b"/") {
+            return Err(());
+        }
+    }
+    HttpsUrl::from_bytes(&out[..n]).ok_or(())
+}
+
+fn push_path_segment<'a>(
+    seg: &'a str,
+    segments: &mut [&'a str; 64],
+    count: &mut usize,
+) -> Result<(), ()> {
+    if seg.is_empty() || seg == "." {
+        return Ok(());
+    }
+    if seg == ".." {
+        *count = count.saturating_sub(1);
+        return Ok(());
+    }
+    if *count >= segments.len() {
+        return Err(());
+    }
+    segments[*count] = seg;
+    *count += 1;
+    Ok(())
+}
+
+fn normalize_path_segments(path: &str, keep_trailing_slash: bool) -> Result<HttpsUrl, ()> {
+    let trailing = keep_trailing_slash || path.ends_with('/');
+    let mut segments: [&str; 64] = [""; 64];
+    let mut count = 0usize;
+    for seg in path.split('/') {
+        if seg.is_empty() || seg == "." {
+            continue;
+        }
+        if seg == ".." {
+            count = count.saturating_sub(1);
+            continue;
+        }
+        if count >= segments.len() {
+            return Err(());
+        }
+        segments[count] = seg;
+        count += 1;
+    }
+    let mut out = [0u8; LINE_CAP];
+    let mut n = 0usize;
+    if !push(&mut out, &mut n, b"/") {
+        return Err(());
+    }
+    if count == 0 {
+        return HttpsUrl::from_bytes(&out[..1]).ok_or(());
+    }
+    for (i, segment) in segments.iter().take(count).enumerate() {
+        if !push(&mut out, &mut n, segment.as_bytes()) {
+            return Err(());
+        }
+        if i + 1 < count && !push(&mut out, &mut n, b"/") {
+            return Err(());
+        }
+    }
+    if trailing && !out[..n].ends_with(b"/") && !push(&mut out, &mut n, b"/") {
+        return Err(());
+    }
+    HttpsUrl::from_bytes(&out[..n]).ok_or(())
+}
+
+fn render_url(
+    authority: &str,
+    path: &str,
+    query: Option<&str>,
+    fragment: Option<&str>,
+) -> Result<HttpsUrl, ()> {
+    let mut out = [0u8; LINE_CAP];
+    let mut n = 0;
+    if !push(&mut out, &mut n, b"https://")
+        || !push(&mut out, &mut n, authority.as_bytes())
+        || !push(&mut out, &mut n, path.as_bytes())
+    {
+        return Err(());
+    }
+    if let Some(q) = query
+        && (!push(&mut out, &mut n, b"?") || !push(&mut out, &mut n, q.as_bytes()))
+    {
+        return Err(());
+    }
+    if let Some(f) = fragment
+        && !f.is_empty()
+        && (!push(&mut out, &mut n, b"#") || !push(&mut out, &mut n, f.as_bytes()))
+    {
+        return Err(());
+    }
+    HttpsUrl::from_bytes(&out[..n]).ok_or(())
+}
+
+fn trim_ascii(s: &str) -> &str {
+    s.trim_matches(|c: char| c.is_ascii_whitespace())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn base() -> HttpsUrl {
+        normalize("https://host:8443/fixture.html", NamePolicy::DemoHost).expect("fixture base")
+    }
+
+    fn intent(href: &str) -> HrefIntent {
+        resolve_href(&base(), href)
+    }
+
+    #[test]
+    fn join_rows_desk_link_and_abs() {
+        match intent("desk-link.html") {
+            HrefIntent::Fetch(url) => {
+                assert_eq!(url.as_str(), "https://host:8443/desk-link.html");
+            }
+            other => panic!("expected fetch, got {other:?}"),
+        }
+        match intent("/other.html") {
+            HrefIntent::Fetch(url) => assert_eq!(url.as_str(), "https://host:8443/other.html"),
+            other => panic!("expected fetch, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn join_rows_relative_query_fragment() {
+        match intent("../x") {
+            HrefIntent::Fetch(url) => assert_eq!(url.as_str(), "https://host:8443/x"),
+            other => panic!("expected fetch, got {other:?}"),
+        }
+        match intent("?q=1") {
+            HrefIntent::Fetch(url) => {
+                assert_eq!(url.as_str(), "https://host:8443/fixture.html?q=1")
+            }
+            other => panic!("expected fetch, got {other:?}"),
+        }
+        match intent("#section") {
+            HrefIntent::Fragment(url) => {
+                assert_eq!(url.as_str(), "https://host:8443/fixture.html#section");
+            }
+            other => panic!("expected fragment, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn join_rows_script_and_http() {
+        assert_eq!(intent("javascript:void(0)"), HrefIntent::Script);
+        assert_eq!(intent("http://host/no"), HrefIntent::Rejected);
+    }
+
+    #[test]
+    fn path_href_drops_base_query_and_fragment() {
+        let base = normalize(
+            "https://host:8443/dir/fixture.html?keep=1#old",
+            NamePolicy::DemoHost,
+        )
+        .expect("base with a query and a fragment");
+        match resolve_href(&base, "desk-link.html") {
+            HrefIntent::Fetch(url) => {
+                assert_eq!(url.as_str(), "https://host:8443/dir/desk-link.html");
+            }
+            other => panic!("expected fetch, got {other:?}"),
+        }
+        match resolve_href(&base, "?q=1") {
+            HrefIntent::Fetch(url) => {
+                assert_eq!(url.as_str(), "https://host:8443/dir/fixture.html?q=1");
+            }
+            other => panic!("expected fetch, got {other:?}"),
+        }
+        match resolve_href(&base, "#section") {
+            HrefIntent::Fragment(url) => {
+                assert_eq!(
+                    url.as_str(),
+                    "https://host:8443/dir/fixture.html?keep=1#section"
+                );
+            }
+            other => panic!("expected fragment, got {other:?}"),
+        }
+    }
 }

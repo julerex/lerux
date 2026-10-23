@@ -15,7 +15,7 @@ pub fn write_configs(dir: &Path, board: &str) -> Result<()> {
     bind(dir, "sddf-fs-client", &[], "fs_client_config.bin")?;
     let shell_board = match board {
         "qemu_virt_riscv64_fs_sddf" => "board-qemu_virt_riscv64_fs_sddf",
-        "x86_64_generic_fs_sddf" => "board-x86_64_generic_fs_sddf",
+        "x86_64_generic_fs_sddf" | "x86_64_generic_fs_ahci" => "board-x86_64_generic_fs_sddf",
         _ => "board-qemu_virt_aarch64_fs_sddf",
     };
     bind(dir, "sddf-shell", &[shell_board], "shell_config.bin")?;

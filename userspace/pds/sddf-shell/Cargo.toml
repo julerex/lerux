@@ -20,6 +20,7 @@ board-qemu_virt_riscv64_browser_sddf = ["net-client", "dep:lerux-tls", "dep:leru
 board-qemu_virt_aarch64_fs_sddf = []
 board-qemu_virt_riscv64_fs_sddf = []
 board-x86_64_generic_fs_sddf = []
+board-x86_64_generic_fs_ahci = ["board-x86_64_generic_fs_sddf"]
 
 [dependencies]
 lerux-cothread = { path = "../../crates/lerux-cothread" }

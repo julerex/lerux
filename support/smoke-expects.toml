@@ -228,6 +228,28 @@ script = [
   { send = "reboot\r", expect = "lerux shell ready" },
 ]
 
+[boards.x86_64_generic_fs_ahci]
+expects = ["ahci: port 0", "lerux shell ready"]
+timeout_secs = 120
+script_timeout_secs = 120
+script = [
+  { send = "mkdir SUB\r", expect = "mkdir ok" },
+  { send = "write NOTE.TXT hello\r", expect = "write ok" },
+  { send = "cat NOTE.TXT\r", expect = "hello" },
+  { send = "ls\r", expect = "NOTE.TXT" },
+  { send = "ls SUB\r", expect = "ls ok" },
+  { send = "mv NOTE.TXT MOVED.TXT\r", expect = "mv ok" },
+  { send = "stat MOVED.TXT\r", expect = "size 5" },
+  { send = "rm MOVED.TXT\r", expect = "rm ok" },
+  { send = "stat SUB\r", expect = "stat dir" },
+  { send = "config get hostname\r", expect = "lerux" },
+  { send = "date\r", expect = "1970-01-01" },
+  { send = "ps\r", expect = "shell 1 1000" },
+  { send = "qos\r", expect = "fatfs 2 2000" },
+  { send = "dmesg\r", expect = "lerux shell ready" },
+  { send = "reboot\r", expect = "lerux shell ready" },
+]
+
 [boards.qemu_virt_aarch64_html]
 expects = ["lerux-html: nodes=8"]
 

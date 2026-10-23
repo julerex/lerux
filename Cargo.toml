@@ -10,6 +10,7 @@ members = [
     "userspace/pds/sddf-serial-virt-rx",
     "userspace/pds/sddf-serial-client",
     "userspace/pds/sddf-blk-driver",
+    "userspace/pds/sddf-ahci-driver",
     "userspace/pds/sddf-blk-virt",
     "userspace/pds/sddf-fatfs",
     "userspace/pds/sddf-fs-client",

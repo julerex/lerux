@@ -47,7 +47,7 @@ GitHub Actions runs on every push to `main`: **check** (`just check`), one **sdk
 | Kernel | [seL4/seL4](https://github.com/seL4/seL4) — built by `build_sdk.py` |
 | System framework | [seL4/microkit](https://github.com/seL4/microkit) SDK |
 | Userspace | Rust protection domains in `userspace/pds/` via `sel4-microkit` |
-| Utilities | Shared crates in `userspace/crates/` (`lerux-logging`, `lerux-ipc`, `lerux-driver-protocols`) |
+| Utilities | Shared crates in `userspace/crates/` (`lerux-logging`, `lerux-sddf`, `lerux-driver-protocols`) |
 | Serial console | Driver PD + IPC client PDs — PL011 (aarch64), NS16550 MMIO (riscv64), or NS16550/COM1 (x86) |
 
 Version pins: [`deps/versions.toml`](deps/versions.toml).
@@ -60,31 +60,15 @@ Default board for `just build` and `just run` is `qemu_virt_aarch64` (QEMU ARM v
 |------|-------|---------|
 | Serial and filesystem shell | `qemu_virt_aarch64_fs_sddf` | `just test` |
 | Serial hello | `qemu_virt_aarch64` | `BOARD=qemu_virt_aarch64 just test` |
-| Echo IPC | `qemu_virt_aarch64_echo` | `just test-echo` |
-| Display (ramfb) | `qemu_virt_aarch64_display` | `just test-display` |
 | HTML subset parse | `qemu_virt_aarch64_html` | `just test-html` |
-| HTML+CSS paint | `qemu_virt_aarch64_paint` | `just test-paint` |
-| Browser (one tab) | `qemu_virt_aarch64_browser` | `just test-browser` |
-| Agent runtime | `qemu_virt_aarch64_agent_runtime` | `just test-agent-runtime` |
-| Agent tools | `qemu_virt_aarch64_agent` | `just test-agent` |
-| Interactive (joint) | `qemu_virt_aarch64_interactive` | `just test-interactive` |
+| Browser (fixture paint) | `qemu_virt_aarch64_browser_sddf` | `just test-browser-sddf` |
+| Agent tools | `qemu_virt_aarch64_agent_sddf` | `just test-agent-sddf` |
 | Virtio blk/net | `qemu_virt_aarch64_virtio` | `just disk-img && just test-virtio` |
-| RTC + timer (all arches) | `*_init` | `just test-init` / `test-init-riscv` / `test-init-x86` |
-| Init + virtio | `qemu_virt_aarch64_composed` | `just disk-img && just test-composed` |
 | HTTP over virtio-net | `qemu_virt_aarch64_http` | `just test-http` |
 | x86 HTTP over virtio-net | `x86_64_generic_http` | `just test-x86-http` |
-| Init + HTTP | `qemu_virt_aarch64_http_composed` | `just test-http-composed` |
-| x86 serial / echo / virtio | `x86_64_generic` variants | `BOARD=x86_64_generic just test` / `just test-x86-echo` / `just disk-img && just test-x86-virtio` |
-| Block IPC over virtio-blk | `qemu_virt_aarch64_blk` variants | `just test-blk` / `just test-riscv-blk` / `just test-x86-blk` |
-| Net IPC over virtio-net | `qemu_virt_aarch64_net` variants | `just test-net` / `just test-riscv-net` / `just test-x86-net` |
-| HTTP fetch over net IPC | `qemu_virt_aarch64_fetch` | `just test-fetch` |
-| HTTPS fetch over tls-proxy | `qemu_virt_aarch64_fetch_tls` | `just test-fetch-tls` |
-| HTTPS via request-server | `qemu_virt_aarch64_request` | `just test-request` |
-| Signed Wasm program | `qemu_virt_aarch64_program` | `just test-program` |
+| x86 serial / virtio | `x86_64_generic` variants | `BOARD=x86_64_generic just test` / `just disk-img && just test-x86-virtio` |
 | LionsOS WebAssembly runtime | `qemu_virt_aarch64_program_sddf` | `just test-program-sddf` |
-| Init + net IPC | `qemu_virt_aarch64_net_composed` | `just test-net-composed` |
-| Init + blk/net IPC | `qemu_virt_aarch64_ipc_composed` | `just test-ipc-composed` |
-| RISC-V serial / echo / virtio / HTTP | `qemu_virt_riscv64` variants | `just test-riscv` / `just test-riscv-echo` / `just test-riscv-virtio` / `just test-riscv-http` |
+| RISC-V serial / virtio / HTTP | `qemu_virt_riscv64` variants | `just test-riscv` / `just test-riscv-virtio` / `just test-riscv-http` |
 | System profiles | `lerux profile` | `cargo run -p lerux-cli -- profile list` |
 | Real hardware (RPi4 hello) | `rpi4b_4gb` | `BOARD=rpi4b_4gb just image` |
 
@@ -102,7 +86,7 @@ Full board reference: [`docs/boards.md`](docs/boards.md).
 | [docs/plan.md](docs/plan.md) | Roadmap and smoke parity table (phases 1–82, done) |
 | [docs/plan-arch.md](docs/plan-arch.md) | Arch-level functionality gap plan (phases 50–60, done; physical lab still open) |
 | [docs/plan-qemu.md](docs/plan-qemu.md) | QEMU-only workstation deepening (phases 61–70, done) |
-| [docs/plan-interactive.md](docs/plan-interactive.md) | Interactive surface (phases 71–80, done: browser + agent) |
+| [docs/plan-interactive.md](docs/plan-interactive.md) | Interactive surface (phases 71–80 record; Milestone 17 deleted those protection domains) |
 | [docs/boards.md](docs/boards.md) | Board and QEMU profile reference |
 | [docs/ci.md](docs/ci.md) | CI pipeline, caches, troubleshooting |
 | [docs/seL4-whitepaper.pdf](docs/seL4-whitepaper.pdf) | seL4 overview (reference) |

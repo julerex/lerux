@@ -1,10 +1,17 @@
-//! One-shot HTTPS origin for the fetch-tls, request-server, and browser smokes
+//! One-shot HTTPS origin for the fetch, browser, agent, and program smokes
 //! (port 8443 by default).
 //!
+//! The matcher compares the raw request-target. The method is ignored. A query
+//! on an otherwise matching path is a 404: `GET /fixture.html?q=hi` does not
+//! serve `/fixture.html`. One connection carries one response, then
+//! `Connection: close`. Eight connections, then the helper stops.
+//!
 //! `GET /` keeps the same `200 OK` body as [`crate::http_one`]. `GET /fixture.html`
-//! serves `support/browser/fixture.html` (Phase 73). `GET /paint.html` serves
-//! `support/browser/paint.html` (Phase 76). `GET /smoke.lrw` serves
-//! `support/prog/smoke.lrw` (ADR-010). Smoke server cert lives in `support/tls/`.
+//! serves `support/browser/fixture.html`. `GET /paint.html` serves
+//! `support/browser/paint.html`. `GET /smoke.lrw` serves
+//! `support/prog/smoke.lrw`. Desk pages (`desk.html`, `desk-link.html`,
+//! `desk-form.html`) are not in `support/browser/`. Smoke server cert lives in
+//! `support/tls/`.
 
 use std::{
     io::{Read, Write},

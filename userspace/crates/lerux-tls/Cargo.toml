@@ -3,7 +3,7 @@ name = "lerux-tls"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-description = "no_std rustls client session for the tls-proxy PD"
+description = "no_std rustls client session linked into the shell and the agent"
 
 [lints]
 workspace = true

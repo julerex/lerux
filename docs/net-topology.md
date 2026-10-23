@@ -1,67 +1,50 @@
-# Network topology (Phase 43)
+# Network topology
 
 Companion to [ADR-003](decisions/003-net-virtualiser.md).
 
-## App path (all arches)
+Milestone 17 deleted `userspace/pds/net-server` and the postcard `NetRequest` path. There is no `net-server`. Two client paths remain.
 
-Untrusted apps never see the NIC. They use postcard RPC:
+## Device-framework images
 
-| Client PD | Typical `NetRequest` ops | net-server channel (workstation) |
-|-----------|--------------------------|----------------------------------|
-| shell | UDP demo / fetch helper | 3 |
-| supervisor | UDP probe | 2 |
-| chat-client | UDP | 6 |
-| http-file-browser | TCP listen/send/recv | 7 |
-| config-server | (optional) | 5 |
-| fetch-client / net-client | UDP/TCP | board-specific |
-| tls-proxy | TCP (then rustls) | board-specific (`fetch_tls`, `request`) |
-| request-server | HTTP via `TlsRequest` | board-specific (`request`); apps use `HttpRequest` |
+The client owns smoltcp. A driver, a transmit virtualiser, a receive virtualiser, and one copier move the frames. The client does not map the device queue.
 
-Server entry: `userspace/pds/net-server` (`smoltcp` + multi-client `Handler`).
+| Image | Recipe | Client |
+|-------|--------|--------|
+| `qemu_virt_aarch64_net_sddf` | `just test-net-sddf` | `net_client` |
+| `qemu_virt_aarch64_fetch_sddf` | `just test-fetch-sddf` | shell (`lerux-tls` inside the client) |
+| `qemu_virt_aarch64_browser_sddf` | `just test-browser-sddf` | shell (same fetch path, then paint) |
 
-## L2 path (QEMU virtio-net, Phase 43 / 61 unified-dma)
+The web, agent, and program images reuse that network path. Agent rules are in [AGENTS.md](../AGENTS.md#network-image-qemu_virt_aarch64_net_sddf).
+
+## Remaining virtio boards
+
+`virtio-net-driver` owns the device. `http-server` is the inbound client on the HTTP boards. The virtio hello boards attach the same driver next to `hello`.
+
+| Recipe | Exercises |
+|--------|-----------|
+| `just test-http` | inbound HTTP on `qemu_virt_aarch64_http` |
+| `just test-x86-http` | inbound HTTP on `x86_64_generic_http` |
+| `just test-riscv-http` | inbound HTTP on `qemu_virt_riscv64_http` |
+| `just test-virtio` | virtio hello with `virtio-net-driver` |
+| `just test-x86-virtio` | virtio hello with `virtio-pci-driver` |
+| `just test-riscv-virtio` | virtio hello with `virtio-net-driver` |
+
+On QEMU virtio-net, **unified-dma** still applies: Hal plus bounce share the driver DMA region. Apps never map net DMA. See [ADR-003](decisions/003-net-virtualiser.md).
 
 ```
 virtio_net_driver / virtio_pci_driver  ←IRQ→  NIC
   maps: MMIO/PCI + driver_dma (Hal | bounce) + rings
-       ↕ channel 1 (pp on server)
-   net_server  (smoltcp + app RPC virt)
-  maps: driver_dma (bounce half) + rings
 ```
 
-There is **no** `virtio_net_client_dma` region on QEMU aarch64, RISC-V, or x86. Feature `unified-dma` on driver + stack PDs.
-
 - aarch64 / RISC-V MMIO: bounce is the high half of `virtio_net_driver_dma` (1 MiB + 1 MiB).
-- x86 net-only (http/net): same 1+1 MiB split of `virtio_pci_driver_dma`.
-- x86 combo (virtio hello / workstation): bounce sits after the 4 MiB Hal in a 6 MiB `virtio_pci_driver_dma`.
-
-Template example: `userspace/systems/templates/net.system.template`.
+- x86 HTTP: same 1+1 MiB split of the driver DMA region.
+- x86 virtio hello: bounce sits after the 4 MiB Hal in a 6 MiB driver DMA region.
 
 ## L2 path (RPi4 genet)
 
 Still uses a separate client_dma-style region ([Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated)).
 
-## Why there is no extra `net-virt` PD
-
-Serial needed a virt because the UART driver multi-cliented apps. Net multi-clients apps in `net-server`; the driver already has a single Microkit client. The sDDF win for Phase 43 is **map ownership** (no distinct client_dma in the driver SDF), not an extra hop.
-
-## Smoke coverage
-
-| Board / recipe | Exercises |
-|----------------|-----------|
-| `just test-net` | unified-dma + UDP IPC |
-| `just test-fetch` | TCP fetch |
-| `just test-fetch-tls` | HTTPS via tls-proxy (ADR-007) |
-| `just test-request` | HTTPS via request-server → tls-proxy (ADR-009) |
-| `just test-program` | Phase 81: HTTPS GET of a signed Wasm module via request-server (ADR-010) |
-| `just test-browser` | HTTPS fixture via request-server into web-content (Phase 76) |
-| `just test-agent-runtime` | HTTPS POST completions via request-server to grok-one (Phase 77) |
-| `just test-agent` | HTTPS POST completions + GET fixture via request-server (Phase 79) |
-| `just test-interactive` | Joint Browse + completions via request-server (Phase 80) |
-| `just test-http` | inbound HTTP |
-| `just test-workstation` | multi-client net-server + http-fs (Phase 64 queue) |
-
 ## Follow-up
 
 - genet unified-dma stays [lab](plan-arch.md#physical-rpi4-lab-hardware-gated) (Phase 61 closed QEMU arches)
-- Optional Rx/Tx virt PD split + copy PDs if a second untrusted L2 client appears
+- The desk-browser spec names a `net-server` served by an onboard Ethernet driver. That protection domain is not in this tree.

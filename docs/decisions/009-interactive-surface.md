@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (Phase 71; phases 72–80 done)
+Accepted (Phase 71; phases 72–80 done). Milestone 17 deleted those protection domains and `lerux-interface-types`. The current browser command is `just test-browser-sddf`. The desk-browser spec names the Ladybird-shaped set again.
 
 ## Date
 

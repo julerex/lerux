@@ -10,16 +10,12 @@ pub mod channels {
 #[cfg(any(
     feature = "board-qemu_virt_riscv64_virtio",
     feature = "board-qemu_virt_riscv64_http",
-    feature = "board-qemu_virt_riscv64_net",
-    feature = "board-qemu_virt_riscv64_workstation",
 ))]
 pub const VIRTIO_NET_MMIO_OFFSET: usize = 0;
 
 #[cfg(all(
     not(feature = "board-qemu_virt_riscv64_virtio"),
     not(feature = "board-qemu_virt_riscv64_http"),
-    not(feature = "board-qemu_virt_riscv64_net"),
-    not(feature = "board-qemu_virt_riscv64_workstation"),
     not(feature = "board-x86_64_generic_virtio"),
     not(feature = "board-x86_64_generic_http")
 ))]

@@ -25,25 +25,20 @@ This document is the Phase 60 threat model and trust map. It does not claim form
                              │ rings / device RPC (not app-facing)
 ┌────────────────────────────┴────────────────────────────────────┐
 │  Trusted services                                               │
-│  fs-server, net-server, serial-virt, config-server, log-server, │
-│  supervisor, blk-server (when present)                          │
-│  Maps: device client DMA only where required; no app DMA share  │
+│  fatfs, serial virtualisers, network virtualisers, copier       │
+│  Maps: shared queues; no app DMA share                          │
 └────────────────────────────▲────────────────────────────────────┘
-                             │ postcard RPC (Fs/Net/Config/Log/…)
+                             │ LionsOS queues (`fs_cmd_t`, rings)
 ┌────────────────────────────┴────────────────────────────────────┐
 │  Untrusted / interactive apps                                   │
-│  shell, edit, chat-client, http-file-browser, backup,           │
-│  fetch-client, crash-demo (isolation smoke)                     │
-│  display-demo (Phase 72), request-client (Phase 73),            │
-│  paint-demo (Phase 75), web-content / browser-ui (Phase 76),    │
-│  agent (phases 77–80), program-runtime (Phase 81, ADR-010)      │
+│  shell, sddf-agent, sddf-program, crash-demo                    │
 │  Maps: **no** virtio/net/blk/display DMA; channels only         │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Rule (ADR-003, workstation):** untrusted apps never map NIC or block DMA. They speak `NetRequest` / `FsRequest` (and similar) only.
+**Rule (ADR-003):** untrusted apps never map NIC or block DMA. On the device-framework images they speak LionsOS queues. The remaining virtio boards keep the driver DMA off the app.
 
-**Rule (ADR-009):** untrusted apps never map display MMIO either. `web-content` and `agent` fetch only through `request-server`; they present pixels only through a shared bitmap MR owned with `display-server`.
+**Rule (ADR-009):** untrusted apps never map display MMIO. The live browser shell paints through the graphics client queues. The desk-browser spec names `request-server` and `display-server` again; those protection domains are not in this tree.
 
 ## Trust map (workstation-shaped)
 
@@ -53,19 +48,21 @@ This document is the Phase 60 threat model and trust map. It does not claim form
 | `serial-driver` | platform | UART | no | `serial-virt` (device-only mode) | app channels |
 | `serial-virt` | service | no | no | apps (serial RPC) | UART MMIO |
 | `fs-server` | service | no | blk client DMA | shell, edit, backup, http-fs, config | NIC DMA |
-| `net-server` | service | no | net bounce (unified-dma) | shell, fetch, chat, http-fs, tls-proxy | blk DMA |
-| `tls-proxy` | service | no | no | fetch-client / request-server (TlsRequest) | NIC / blk DMA |
+| `net_virt_*` / `net_copy` | service | no | shared data regions | `net_client` / shell | device MMIO |
+| `lerux-tls` (library) | in the client | no | no | shell / agent fetch | NIC / blk DMA |
 | `config-server` / `log-server` | service | no | no | shell, supervisor | device DMA |
 | `supervisor` | control | no | no | shell (status/reboot/time) | device DMA |
 | shell / apps | untrusted | no | **none** | each other only via typed RPC | any DMA / MMIO |
-| `program-runtime` | untrusted | no | **none** | `request-server`, serial | any DMA / MMIO; the WebAssembly module's only import is `lerux.log` (Phase 81, ADR-010). The LionsOS `program` protection domain on `qemu_virt_aarch64_program_sddf` is a different role: it is the filesystem client and the network client, and it maps no device memory-mapped input/output (Milestone 14, ADR-012) |
+| `program` (`sddf-program`) | untrusted | no | **none** | filesystem and network queues | any DMA / MMIO (Milestone 14, ADR-012) |
 | `debug-handler` | debug-only | no | no | hierarchy parent | production workstation default |
 
 Channel numbers come from profile `[[channel]]` manifests; PPC callees outrank callers ([`qos.md`](qos.md), ADR-006).
 
 ### Interactive trust map (phases 72–80)
 
-Phase 72 composed `display-server` + `display-demo` on `qemu_virt_aarch64_display`. Phase 73 composed `request-server` + `request-client` on `qemu_virt_aarch64_request`. Phase 75 composed `display-server` + `paint-demo` on `qemu_virt_aarch64_paint`. Phase 76 composed `browser-ui` + `web-content` + `request-server` + `display-server` on `qemu_virt_aarch64_browser` (profile `browser`). Phase 77 composed `agent` + `request-server` on `qemu_virt_aarch64_agent_runtime` (profile `agent-runtime`). Phase 79 composed `agent` + `fs-server` + `request-server` on `qemu_virt_aarch64_agent` (profile `agent`). Phase 80 composed them with workstation on `qemu_virt_aarch64_interactive` (profile `workstation-interactive`). `web-content`, `agent`, and `program-runtime` have no `NetClient`.
+Those boards are a phase record. Milestone 17 deleted `display-server`, `request-server`, `browser-ui`, `web-content`, and the postcard `agent`. The live browser image is `qemu_virt_aarch64_browser_sddf`: the shell owns smoltcp and `lerux-tls`, and paints through the graphics client queues. The desk-browser spec names the Ladybird-shaped set again.
+
+The table below is the phase-72–80 trust map. Those protection domains are not in this tree.
 
 | PD | Trust class | MMIO / IRQ | DMA | Clients may call | Must not map |
 |----|-------------|------------|-----|------------------|--------------|
@@ -75,37 +72,28 @@ Phase 72 composed `display-server` + `display-demo` on `qemu_virt_aarch64_displa
 | `web-content` | untrusted | no | bitmap MR only | `request-server` | NIC / blk / display MMIO, FS |
 | `agent` | untrusted | no | **none** | `request-server`, `fs-server`, `web-content` (Browse), shell `grok` | NIC / display MMIO |
 
-Isolation residual to keep: existing `just test-isolation` stays green; a later smoke should crash `web-content` and still complete an FS or HTTP round-trip from another PD.
+The live residual is that the browser shell owns smoltcp. A later smoke should crash the shell's worker and still complete a filesystem round-trip from another protection domain.
 
 ## Threats and mitigations
 
 | Threat | Status | Mitigation |
 |--------|--------|------------|
-| Untrusted app corrupts FS DMA / disk | **Mitigated** | Apps use postcard FS RPC only; only `fs-server` maps blk rings |
-| Untrusted app sniffs NIC DMA | **Mitigated** (QEMU virtio-net all arches) | Unified-dma + net-server sole stack; apps have no DMA map (ADR-003, Phase 61) |
-| App crash takes down services | **Mitigated (smoke)** | Separate PDs; `just test-isolation` crashes a child then FS round-trips |
+| Untrusted app corrupts FS DMA / disk | **Mitigated** | Apps use `fs_cmd_t` only; only `fatfs` and `blk_driver` map the data region |
+| Untrusted app sniffs NIC DMA | **Mitigated** (QEMU virtio-net all arches) | Unified-dma; apps have no DMA map (ADR-003, Phase 61) |
+| App crash takes down services | **Partial** | Separate PDs; `just test-debug` crashes a child. Milestone 17 deleted the isolation board |
 | Shell over-privileged surface | **Partial** | Profile tiers (`admin` / `admin-core` / `appliance`); `lerux profile audit`; shell still holds many ends on admin images |
 | Secrets on disk writable by shell | **Mitigated (ACL)** | `secret.*` Set/Delete is supervisor-only (`ConfigResponse::Denied` for shell) |
 | Secrets on disk readable by any FS client | **Partial** | Path prefix `/config/secrets/`; no encryption; FS RPC clients can still open paths |
-| Compromised net-server | **Accepted residual** | Stack is trusted; full sDDF copy-swarm deferred |
+| Compromised network client | **Accepted residual** | The shell owns smoltcp; the driver and virtualisers stay trusted |
 | Malicious `loader.img` | **Partial (host digest)** | SHA-256 sidecar at image build; `lerux deploy` verifies by default; asymmetric / measured boot still open |
 | Channel/QoS abuse (starve shell) | **Mitigated (checks)** | Fixed priorities + single-flight; `lerux profile check-qos` + workstation concurrent-boot smoke; MCS deferred |
 | Supply-chain pin drift | **Mitigated (process)** | Pins in `deps/versions.toml` / `Cargo.toml` / package pins; [runbook](#dependency-pins-and-security-update-runbook-track-b) for bumps and CVE response |
 
 ## Isolation smoke (automated)
 
-Board: `qemu_virt_aarch64_isolation` (`just test-isolation`).
+`just test-debug` still nests `crash-demo` under `debug-handler` and logs the fault. Milestone 17 deleted `qemu_virt_aarch64_isolation`, so there is no follow-on filesystem round-trip after that crash.
 
-1. `crash-demo` (child of `debug-handler`) deliberately raises a VM fault.
-2. `debug-handler` logs the fault, suspends the child, and **notifies** `fs-client`.
-3. `fs-client` then performs a normal FS round-trip against `fs-server`.
-
-Success strings prove the untrusted fault path ran **and** the FS service remained usable afterward:
-
-- `lerux-debug: crash-demo stopped`
-- `lerux-isolation: fs-server survived untrusted PD crash`
-
-Production **workstation** images stay flat (no debug parent) per ADR-005. Isolation is a CI property of the PD layout, not something users enable on device.
+Production images stay flat (no debug parent) per ADR-005. Isolation is a property of the protection-domain layout.
 
 ## Capability audit (Track A)
 

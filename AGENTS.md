@@ -30,7 +30,7 @@ Apply to all Rust code unless a context-specific section overrides.
 
 ## Protection domains (`userspace/pds/**`)
 
-Match the style already used in PD crates such as `echo-server` and `boot-init`.
+Match the style already used in PD crates such as `sddf-shell` and `hello`.
 
 ### Crate attributes and entry
 
@@ -61,10 +61,8 @@ Do not drive-by refactor existing `unwrap` sites unless the task requires it.
 
 ### IPC
 
-- Use `lerux_ipc` and typed messages from `lerux_interface_types` (postcard + serde).
-- On decode failure, return `send_unspecified_error()` rather than panicking.
-- Example pattern: `userspace/pds/echo-server/src/main.rs`.
-- New queue and filesystem code uses `lerux-sddf` (`serial_queue_t`, `fs_cmd_t`, and the other headers named in ADR-011). Do not add a postcard message for a new device or filesystem connection. Postcard remains for protection domains that ADR-011 has not replaced yet.
+- New queue and filesystem code uses `lerux-sddf` (`serial_queue_t`, `fs_cmd_t`, and the other headers named in ADR-011). Do not add a postcard message.
+- Milestone 17 deleted `lerux-interface-types` and `lerux-ipc`. Example pattern: `userspace/pds/sddf-shell/src/main.rs`.
 
 ### Logging
 
@@ -84,7 +82,7 @@ Stricter than PDs.
 - Stay `#![no_std]` unless there is a strong reason not to.
 - Document public items with `//!` / `///`, including IPC contracts and safety assumptions.
 - Prefer `Result` in fallible APIs; avoid new `panic!` in library code.
-- Re-export upstream rust-sel4 APIs rather than reimplementing them (see `lerux-ipc`).
+- Re-export upstream rust-sel4 APIs rather than reimplementing them.
 - Restrict `unsafe` to MMIO/HAL boundaries with documented invariants (see `lerux-virtio-hal`).
 - Pin rust-sel4 via workspace git deps at `v5.0.0`; do not vendor copies.
 
@@ -172,7 +170,7 @@ Read Milestone 7 in [docs/plan-lionsos.md](docs/plan-lionsos.md). The postcard `
 
 ## Fetch image (`qemu_virt_aarch64_fetch_sddf`)
 
-Read Milestones 8 and 10 in [docs/plan-lionsos.md](docs/plan-lionsos.md). This image is the filesystem image plus the network roles. The shell is the one serial client, the filesystem client, and the network client. Postcard `net-server`, `fs-server`, and `tls-proxy` stay on the other boards.
+Read Milestones 8 and 10 in [docs/plan-lionsos.md](docs/plan-lionsos.md). This image is the filesystem image plus the network roles. The shell is the one serial client, the filesystem client, and the network client. Milestone 17 deleted `net-server`, `fs-server`, and `tls-proxy`. Transport Layer Security is `lerux-tls` inside the shell.
 
 - Protection domains are `blk_driver`, `net_driver`, `serial_driver`, `blk_virt`, `net_virt_tx`, `net_virt_rx`, `serial_virt_tx`, `serial_virt_rx`, `fatfs`, `net_copy`, and `shell`. The shell program is `sddf-shell.elf`.
 - Virtio-net is the first virtio device, at `+0xe00` in the page at `0xa003000`, interrupt 79. Virtio-blk stays at `+0xc00`, interrupt 78. Both drivers map that page at `0x6_000_000_000`. Each driver has its own direct-memory-access region, and both regions use virtual address `0x8_000_000_000`.
@@ -188,7 +186,7 @@ Read Milestones 8 and 10 in [docs/plan-lionsos.md](docs/plan-lionsos.md). This i
 
 ## Web image (`qemu_virt_aarch64_web_sddf`)
 
-Read Milestone 11 in [docs/plan-lionsos.md](docs/plan-lionsos.md). This image reuses `fetch-sddf.system.template` and the same protection domains as the fetch image. The shell serves `/config/hostname`. Postcard `http-file-browser` and `http-server` stay.
+Read Milestone 11 in [docs/plan-lionsos.md](docs/plan-lionsos.md). This image reuses `fetch-sddf.system.template` and the same protection domains as the fetch image. The shell serves `/config/hostname`. `http-server` remains on the virtio HTTP boards. Milestone 17 deleted `http-file-browser`.
 
 - The board feature `board-qemu_virt_aarch64_web_sddf` enables `net-client` and does not link `lerux-tls`, `lerux-logging`, or `lerux-interface-types`. Do not enable it with `board-qemu_virt_aarch64_fetch_sddf`, `board-qemu_virt_aarch64_browser_sddf`, or `board-qemu_virt_aarch64_fs_sddf`. Those features do not share one build. Channel 3 is the network receive channel here and the timer channel on the filesystem image.
 - There is no timer. `qemu.tcp_echo` and `qemu.https_one` stay off. `qemu.net` is `hostfwd`, which maps host port 18080 to guest port 8080. Virtio-net stays at `+0xe00` and interrupt 79. Virtio-blk stays at `+0xc00` and interrupt 78.
@@ -199,7 +197,7 @@ Read Milestone 11 in [docs/plan-lionsos.md](docs/plan-lionsos.md). This image re
 
 ## Browser image (`qemu_virt_aarch64_browser_sddf`)
 
-Read Milestone 12 in [docs/plan-lionsos.md](docs/plan-lionsos.md). This image is the fetch image plus `gpu_driver` and `gpu_virt`. The shell fetches the fixture and paints through the graphics client queues. Postcard `display-server`, `browser-ui`, `web-content`, and `DisplayRequest` stay.
+Read Milestone 12 in [docs/plan-lionsos.md](docs/plan-lionsos.md). This image is the fetch image plus `gpu_driver` and `gpu_virt`. The shell fetches the fixture and paints through the graphics client queues. Milestone 17 deleted `display-server`, `browser-ui`, `web-content`, and `DisplayRequest`. Do not grow `lerux-html` or `lerux-web` for the desk-browser issues 03, 07, 11, or 14. The aarch64 smoke stays `title lerux` then `pixel 000000ff`. It does not record a loaded address on COM1.
 
 - Protection domains are `blk_driver`, `net_driver`, `gpu_driver`, `serial_driver`, `blk_virt`, `net_virt_tx`, `net_virt_rx`, `serial_virt_tx`, `serial_virt_rx`, `gpu_virt`, `fatfs`, `net_copy`, and `shell`. Programs use hyphens (`sddf-gpu-driver.elf`, `sddf-gpu-virt.elf`, `sddf-shell.elf`).
 - The pinned graphics headers have no configuration struct and no magic. Do not invent `gpu_driver_config_t`. The shell config stays the serial client page, the filesystem shell page, and the network shell page.
@@ -211,14 +209,17 @@ Read Milestone 12 in [docs/plan-lionsos.md](docs/plan-lionsos.md). This image is
 - `change_resolution` returns the framebuffer borrow. Copy the client pixels, drop the borrow, then flush. Blob commands return `GPU_RESP_ERR_INVALID_PARAMETER`. One resource record. Skip the cursor and the example timer state machine.
 - The virtualiser forwards one client and keeps the client's resource ids. It copies a display-info response from the driver data region into the client data region. It rejects blob requests locally. Queue indexes use an acquire load for the other side and a release store for this side.
 - The board feature `board-qemu_virt_aarch64_browser_sddf` links smoltcp, `lerux-tls`, and `lerux-web`. Do not enable it with `board-qemu_virt_aarch64_fetch_sddf`, `board-qemu_virt_aarch64_web_sddf`, or `board-qemu_virt_aarch64_fs_sddf`. Do not add `lerux-logging` or `lerux-interface-types`.
-- The worker fetches the fixture, prints `title lerux`, then `gpu::show_page` paints and prints the sampled `PixelLine`, then `lerux shell ready`. A failed title prints `title err`. A failed paint prints `pixel err`. Write the pixels after display info returns. Both use client data offset 0. A shell const assert ties `PaintedPage::BYTES` to `GPU_CLIENT_DATA_SIZE`. The worker stack is `0x1_0000` and the heap is 1 MiB. Assertions stay on the root. Do not panic inside the cothread.
+- The worker fetches the fixture, prints `title lerux`, then `gpu::show_page` paints and prints the sampled `PixelLine`, then `lerux shell ready`. `page_title` is a byte search for `<title>` in the response body, not a DOM walk. `lerux-web` then parses the same bytes and hides `title` with `display: none`. A fetch failure prints `title err` and still calls `show_page`. An empty document is all white, the sampler returns `FrameError::Blank`, and the UART gets `pixel err`. Write the pixels after display info returns. Both use client data offset 0. A shell const assert ties `PaintedPage::BYTES` to `GPU_CLIENT_DATA_SIZE`. The worker stack is `0x1_0000` and the heap is 1 MiB. Assertions stay on the root. Do not panic inside the cothread.
+- The frame is 320 by 64. Layout may extend past y=64. `set_pixel` returns without drawing those pixels. There is no scroll. The user-agent sheet puts the fixture paragraph at y=24.
+- `<a href>` is stored and never read. Layout paints the link's text as ordinary inline glyphs. `<form>` and `<input>` are unknown tags: the tag and its attributes disappear while the inner text remains. Tab, focus, and Enter are not engine events. After the paint, the shell reads serial lines as shell commands.
+- The shell's Transport Layer Security name is the string `host`. The TCP address is `10.0.2.2`. Nothing resolves a public Domain Name System name, nothing follows a redirect, and nothing sends `Accept-Language`.
 - The root installs the client queues and calls `microkit_cothread_recv_ntfn` for channel 5. The worker notifies that channel and waits. Priorities match the fetch image, with `gpu_driver` at 4 and `gpu_virt` at 3.
 - `just test-browser-sddf` expects `title lerux` and then `pixel 000000ff`. The smoke does not send a command. Keep `lerux shell ready`, `title lerux`, `pixel 000000ff`, `title err`, and `pixel err` out of `expect` and `assert` messages.
 - The one-shot ready lines print before the title. Leave them.
 
 ## Agent image (`qemu_virt_aarch64_agent_sddf`)
 
-Read Milestone 13 in [docs/plan-lionsos.md](docs/plan-lionsos.md). `sddf-shell` stays on the other images. The postcard `agent` protection domain stays. LionsOS 0.4.0 has no agent header. The tool page is `agent_tool_t` in `lerux-sddf`.
+Read Milestone 13 in [docs/plan-lionsos.md](docs/plan-lionsos.md). `sddf-shell` stays on the other images. Milestone 17 deleted the postcard `agent`. LionsOS 0.4.0 has no agent header. The tool page is `agent_tool_t` in `lerux-sddf`.
 
 - Protection domains are `blk_driver`, `net_driver`, `serial_driver`, `blk_virt`, `net_virt_tx`, `net_virt_rx`, `serial_virt_tx`, `serial_virt_rx`, `fatfs`, `net_copy`, `shell`, and `agent`. The shell program is `sddf-grok.elf`. The agent program is `sddf-agent.elf`. Neither crate has a board feature.
 - The shell maps the four serial client regions and the tool page. The agent maps the three filesystem client regions, the network client queues and data regions, and the tool page. The tool page is `0xa_000_000`, size `0x1_000`, and both map it read-write. The shell embeds the serial client config only. The agent embeds `fs_image::shell_client_config()` and then `net_image::shell_client_config()`.
@@ -235,7 +236,7 @@ Read Milestone 13 in [docs/plan-lionsos.md](docs/plan-lionsos.md). `sddf-shell` 
 
 ## Program image (`qemu_virt_aarch64_program_sddf`)
 
-Read Milestone 14 in [docs/plan-lionsos.md](docs/plan-lionsos.md) and [ADR-012](docs/decisions/012-ordinary-webassembly.md). The postcard `program-runtime` stays. `lerux-prog` is deleted. The engine is `wasmi` in `lerux-wasm`.
+Read Milestone 14 in [docs/plan-lionsos.md](docs/plan-lionsos.md) and [ADR-012](docs/decisions/012-ordinary-webassembly.md). Milestone 17 deleted `program-runtime`. `lerux-prog` is deleted. The engine is `wasmi` in `lerux-wasm`.
 
 - Protection domains are the fetch image with `program` in place of `shell`. The program is `sddf-program.elf`. The crate has no board feature.
 - The protection domain maps the four serial client regions, the three filesystem regions, and the network client queues and data regions. It leaves virtio memory-mapped input/output and the direct-memory-access regions unmapped. The config is the serial client page, the filesystem shell page, then the network shell page.
@@ -245,7 +246,7 @@ Read Milestone 14 in [docs/plan-lionsos.md](docs/plan-lionsos.md) and [ADR-012](
 - The heap is 2 MiB. The worker stack is `0x1_0000`. The protection-domain stack attribute stays `0x10_000`. Assertions stay on the root. Do not panic inside the cothread. Do not add `lerux-logging` or `lerux-interface-types`. One `files()` borrow covers open, read, and close.
 - Priorities match the fetch image, with `program` at 1.
 - `just test-program-sddf` expects `program: rejected` and then `lerux-wasm: ran`. Keep those strings, and `program: err`, out of `expect` and `assert` messages. The one-shot ready lines print before the rejection. Leave them.
-- `just test-program` still expects `lerux-prog: ran` from `program-runtime`. That protection domain stays untrusted and has no network client. Its heap is 2 MiB.
+- Milestone 17 deleted `program-runtime`. The live runtime is this protection domain.
 
 ## File-descriptor library (`lerux-posix`)
 

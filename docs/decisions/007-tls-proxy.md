@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (Phase 51 TLS stretch)
+Superseded (Milestone 17). Milestone 17 removed `tls-proxy`. `lerux-tls` is linked into the shell and the agent and trusts the smoke certificate authority. The desk-browser spec names a `tls-proxy` again; that protection domain is not in the tree.
 
 ## Date
 

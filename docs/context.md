@@ -48,17 +48,15 @@ The written desk-browser spec is [`desk-browser.md`](desk-browser.md).
 
 x86 names that get mixed across QEMU and the desk (q35, the 82574, the I217-V, COM1, the VGA text page, the CRTC, the Intel display engine) are defined in [GLOSSARY.md](../GLOSSARY.md). The driver tables are in [platforms.md](platforms.md#x86-device-map).
 
-Echo IPC and virtio smoke tests run on aarch64, RISC-V virt, and x86 (PCI virtio on q35). Block IPC (read + write) and net IPC (UDP TX) run on all three arches. RTC/timer init runs on all three: aarch64 PL031/SP804, RISC-V Goldfish RTC + `rdtime`, x86 CMOS RTC + TSC (Phase 56).
-
-The composed board (`qemu_virt_aarch64_composed`) runs `supervisor` (historically `boot-init`) and `hello`+virtio in one system. Both PDs log via serial IPC (multi-client serial driver). `supervisor` notifies `hello` when init is complete before virtio starts (composed-sync). See [`boards.md`](boards.md) and [`plan.md`](plan.md).
+Virtio hello and HTTP smokes run on aarch64, RISC-V virt, and x86 (PCI virtio on q35). Debug hierarchy smokes run on all three. See [`boards.md`](boards.md) and [`plan.md`](plan.md).
 
 ## LionsOS structures
 
-The guest remains Rust. New device and filesystem connections use the LionsOS and seL4 Device Driver Framework structures in [`lerux-sddf`](../userspace/crates/lerux-sddf), checked against the LionsOS 0.4.0 headers. A header that is missing from that checkout stops the milestone. The struct is not invented. Postcard messages remain on protection domains that have not moved yet. See [ADR-011](decisions/011-lionsos-structures.md) and the milestone list in [plan-lionsos.md](plan-lionsos.md).
+The guest remains Rust. Device and filesystem connections use the LionsOS and seL4 Device Driver Framework structures in [`lerux-sddf`](../userspace/crates/lerux-sddf), checked against the LionsOS 0.4.0 headers. A header that is missing from that checkout stops the milestone. The struct is not invented. Milestone 17 deleted the postcard protection domains and `lerux-interface-types`. See [ADR-011](decisions/011-lionsos-structures.md) and the milestone list in [plan-lionsos.md](plan-lionsos.md).
 
 ## Non-POSIX direction
 
-The legacy image does **not** target a Linux or POSIX syscall ABI. Its apps are Rust protection domains that speak **typed postcard RPC** (`lerux-interface-types`) over Microkit channels — not file descriptors, `errno`, or `fork`/`exec`. New filesystem connections use `fs_cmd_t` instead.
+The guest does **not** target a Linux or POSIX syscall ABI. Remaining protection domains speak LionsOS queues (`fs_cmd_t`, serial and network rings) and, where a file descriptor table exists, `lerux-posix`. Milestone 17 deleted typed postcard RPC (`lerux-interface-types`). The guest still has no `fork`/`exec`.
 
 “Arch-like” means **workflow**, not binary compatibility: rolling PD artifact pins, named system profiles, init ordering, shell + core utilities — each implemented as PDs you port deliberately. Unmodified Arch packages (`bash`, `pacman`, `firefox`, etc.) are out of scope. Numbered plans through phase 82 are done: Arch-level capability (phases 50–60, [`plan-arch.md`](plan-arch.md)), QEMU deepening (phases 61–70, [`plan-qemu.md`](plan-qemu.md)), the interactive surface (phases 71–80, [`plan-interactive.md`](plan-interactive.md), [ADR-009](decisions/009-interactive-surface.md)), the signed Wasm runtime (phase 81, [ADR-010](decisions/010-program-runtime.md)), and the Z97 on-screen shell (phase 82). Remaining on-device work is the physical lab in [`plan-arch.md`](plan-arch.md).
 
@@ -71,22 +69,22 @@ The legacy image does **not** target a Linux or POSIX syscall ABI. Its apps are 
 : Composed Microkit SDF = board `system_vars` + layout template (MRs/PDs/maps) + **generated channels** from the profile’s structured `[[channel]]` list ([ADR-001](decisions/001-in-tree-system-generation.md)). Workstation templates are channel-free; `lerux profile check-channels` guards PD `Channel::new` drift. Details: [`system-generation.md`](system-generation.md).
 
 **Serial virtualiser (Phase 42)**
-: On workstation, UART is owned by `serial-driver` (`device-only`); multi-client postcard RPC is served by `serial-virt` (PPC to the driver). Apps still use `SerialClient` / `SERIAL_DRIVER` channel consts (peer is `serial_virt`). See [ADR-002](decisions/002-serial-virtualiser.md). The `qemu_virt_aarch64_serial_sddf` image is separate. Its protection domains are `serial_driver`, `serial_virt_tx`, `serial_virt_rx`, and `serial_client`. The client writes `lerux shell ready` with `serial_enqueue`. The workstation shell still uses the postcard `serial-driver` and `serial-virt` protection domains.
+: The `qemu_virt_aarch64_serial_sddf` image is the live serial path. Its protection domains are `serial_driver`, `serial_virt_tx`, `serial_virt_rx`, and `serial_client`. The client writes `lerux shell ready` with `serial_enqueue`. `hello`, `html-demo`, and the cothread image still use the remaining `serial-driver` crate. Milestone 17 deleted `serial-virt` and the postcard workstation shell. See [ADR-002](decisions/002-serial-virtualiser.md).
 
 **Network topology (Phase 43 / 51)**
-: Untrusted apps use only `NetRequest` / `NetResponse` against `net-server`. On QEMU virtio-net (aarch64, RISC-V, x86 PCI), **unified-dma** removes the separate client_dma MR: Hal + bounce share the driver DMA region; the stack maps the bounce half only. Apps never map net DMA. See [ADR-003](decisions/003-net-virtualiser.md), [`net-topology.md`](net-topology.md). Phase 51: **DHCP** (with static fallback), **real DNS** (static `host`/`dns` aliases for smokes), dual TCP (client + listen), `GetIface` / shell `ip`, and **TLS fetch** via `tls-proxy` ([ADR-007](decisions/007-tls-proxy.md), `just test-fetch-tls`). The Milestone 7 image `qemu_virt_aarch64_net_sddf` is a different path. The client owns smoltcp. A driver, a transmit virtualiser, a receive virtualiser, and one copier move the frames. The client does not map the device queue. Agent rules are in [AGENTS.md](../AGENTS.md#network-image-qemu_virt_aarch64_net_sddf). The Milestone 8 image `qemu_virt_aarch64_fetch_sddf` puts that network path and the filesystem shell in one image. The shell fetches the host fixture with `lerux-tls` and writes the body through `lerux-posix`. The same shell runs `calc`, `backup`, `source`, `cert`, `edit`, and `chat`. `chat` uses the socket calls. Agent rules are in [AGENTS.md](../AGENTS.md#fetch-image-qemu_virt_aarch64_fetch_sddf). The Milestone 11 image `qemu_virt_aarch64_web_sddf` reuses that template. The shell reads `/config/hostname` and serves those bytes on guest port 8080. Agent rules are in [AGENTS.md](../AGENTS.md#web-image-qemu_virt_aarch64_web_sddf). The Milestone 12 image `qemu_virt_aarch64_browser_sddf` adds a virtio graphics driver and virtualiser. The shell prints the fixture title and flushes a 16 by 16 pattern. Agent rules are in [AGENTS.md](../AGENTS.md#browser-image-qemu_virt_aarch64_browser_sddf). The Milestone 13 image `qemu_virt_aarch64_agent_sddf` keeps the filesystem and network roles. `grok` notifies the agent. The agent uses `lerux-posix` for the file tools and the socket library for WebFetch, and one shared page plus a notification for Browse. Agent rules are in [AGENTS.md](../AGENTS.md#agent-image-qemu_virt_aarch64_agent_sddf).
+: Milestone 17 deleted `net-server` and `NetRequest`. On the device-framework images the client owns smoltcp. A driver, a transmit virtualiser, a receive virtualiser, and one copier move the frames. The client does not map the device queue. Remaining virtio boards attach `virtio-net-driver` (or `virtio-pci-driver` on x86) next to `hello` or `http-server`. On QEMU virtio-net, **unified-dma** still removes the separate client_dma region: Hal plus bounce share the driver DMA region. Apps never map net DMA. See [ADR-003](decisions/003-net-virtualiser.md), [`net-topology.md`](net-topology.md). The Milestone 7 image is `qemu_virt_aarch64_net_sddf` (`just test-net-sddf`). Agent rules are in [AGENTS.md](../AGENTS.md#network-image-qemu_virt_aarch64_net_sddf). The Milestone 8 image `qemu_virt_aarch64_fetch_sddf` puts that network path and the filesystem shell in one image. The shell fetches the host fixture with `lerux-tls` and writes the body through `lerux-posix`. The same shell runs `calc`, `backup`, `source`, `cert`, `edit`, and `chat`. `chat` uses the socket calls. Agent rules are in [AGENTS.md](../AGENTS.md#fetch-image-qemu_virt_aarch64_fetch_sddf). The Milestone 11 image `qemu_virt_aarch64_web_sddf` reuses that template. The shell reads `/config/hostname` and serves those bytes on guest port 8080. Agent rules are in [AGENTS.md](../AGENTS.md#web-image-qemu_virt_aarch64_web_sddf). The Milestone 12 image `qemu_virt_aarch64_browser_sddf` adds a virtio graphics driver and virtualiser. The shell prints `title lerux` and then `pixel 000000ff` from a 320 by 64 frame. Agent rules are in [AGENTS.md](../AGENTS.md#browser-image-qemu_virt_aarch64_browser_sddf). The Milestone 13 image `qemu_virt_aarch64_agent_sddf` keeps the filesystem and network roles. `grok` notifies the agent. The agent uses `lerux-posix` for the file tools and the socket library for WebFetch, and one shared page plus a notification for Browse. Agent rules are in [AGENTS.md](../AGENTS.md#agent-image-qemu_virt_aarch64_agent_sddf).
 
 **Filesystem backends (Phase 44 / 50)**
-: `fs-server` serves `FsRequest` / `FsResponse` over virtio-blk (or emmc2). Default on-disk format is **LERUXFS2** (`lerux-fs`): hierarchical directories, free-map allocation, multi-sector contiguous files (up to 256 KiB; in-place extent grow). IPC includes `Mkdir` / `Unlink` / `Rename` and path-scoped `ListDir`. Path grammar: `/`-separated components, optional leading `/`, max 128-byte paths (see `lerux-interface-types`). Alternate **FAT16** backend (`lerux-fat`, feature `backend-fat`) has hierarchical directories, VFAT long names, and **multi-cluster** files (up to 32 clusters / 16 KiB — small-file alternate). Select via board feature (`qemu_virt_aarch64_fs` vs `qemu_virt_aarch64_fs_fat`). Shell/edit/config stay on the same IPC. The Milestone 4 image `qemu_virt_aarch64_fs_sddf` is a different server. It speaks `fs_cmd_t`, keeps its File Allocation Table in `sddf-fatfs`, and does not use `lerux-fat`. The shell on that image is the filesystem client. Serial roles share the image. A path is one 8.3 component in the root, and one read-only open of exactly two components serves `/config/hostname`. Agent rules are in [AGENTS.md](../AGENTS.md#filesystem-image-qemu_virt_aarch64_fs_sddf).
+: Milestone 17 deleted `fs-server`, `lerux-fs`, and `lerux-fat`. The live filesystem image is `qemu_virt_aarch64_fs_sddf`. It speaks `fs_cmd_t`, keeps its File Allocation Table in `sddf-fatfs`, and does not use `lerux-fat`. The shell on that image is the filesystem client. Serial roles share the image. A path is one 8.3 component in the root, and one read-only open of exactly two components serves `/config/hostname`. Agent rules are in [AGENTS.md](../AGENTS.md#filesystem-image-qemu_virt_aarch64_fs_sddf).
 
 **Service async (Phase 45)**
-: Service PDs keep Microkit `Handler` as the root event loop. Long sequential device I/O may use **stackless cooperative async** (`lerux-service-async`: `SingleTask`, `poll_fn`, `WakeCell`) instead of only explicit step machines. Clients still use postcard `Poll` RPC. See [ADR-004](decisions/004-service-async.md). New blocking input and output uses stackful cothreads in `lerux-cothread` (Milestone 3). `lerux-service-async` stays for postcard servers.
+: Service protection domains keep Microkit `Handler` as the root event loop. Blocking input and output uses stackful cothreads in `lerux-cothread` (Milestone 3). Milestone 17 deleted `lerux-service-async`. See [ADR-004](decisions/004-service-async.md).
 
 **Debug / faults (Phase 46)**
 : Child PD faults can be delivered to a **parent** PD (`Handler::fault`) via Microkit hierarchy. Demo: `debug-handler` + `crash-demo` (`just test-debug`). Interactive host debugging uses QEMU’s gdbstub + `gdb-multiarch` ([`debug.md`](debug.md), [ADR-005](decisions/005-debug-pd.md)).
 
 **Security posture (Phase 60)**
-: Trust map and threat model in [`security.md`](security.md). Automated isolation smoke (`just test-isolation`): untrusted `crash-demo` faults, then `fs-client` still completes an FS round-trip against `fs-server`. Production workstation stays without a debug parent (ADR-005).
+: Trust map and threat model in [`security.md`](security.md). `just test-debug` still nests `crash-demo` under `debug-handler`. Milestone 17 deleted the isolation board that completed a filesystem round-trip after that fault.
 
 **Hardware serial smoke (Phase 47 / 52)**
 : On-device boot checks use `LERUX_HW_SERIAL` + `--mode hw-serial` / `just test-hw`, with expects from `support/smoke-expects.toml` and a local board lock. Phase 52 adds optional **scripted REPL** steps (`script = [{send, expect}, …]`) after boot match, and `lerux deploy` / `just deploy-rpi4` for SD boot media. First-boot seeds `/config` via supervisor. Cloud CI stays QEMU-only; optional self-hosted workflow is documented in [`ci.md`](ci.md). Install path: [`boards.md`](boards.md#rpi4-workstation-install-path-phase-52). Remaining on-device work: [`plan-arch.md` — Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated).
@@ -120,23 +118,23 @@ The legacy image does **not** target a Linux or POSIX syscall ABI. Its apps are 
 
 **Ported app checklist** (new PD that users interact with):
 
-1. Define request/response types in `lerux-interface-types`
-2. Implement client and/or server PD (`#![no_std]`, `lerux-ipc`)
-3. Wire channels in the profile `[[channel]]` manifest (workstation templates are channel-free; `lerux profile check-channels` validates ends)
-4. Add `board-<profile>` features in PD `Cargo.toml` files
-5. Register board in `support/boards.toml`, smoke expects in `lerux-cli`, CI job if needed
+1. Use the LionsOS queue or configuration struct from the pinned headers (`lerux-sddf`). Do not invent a postcard type.
+2. Implement the protection domain (`#![no_std]`)
+3. Wire channels in the profile `[[channel]]` manifest (or copy them from the system template into the config struct). `lerux profile check-channels` validates ends
+4. Add `board-<name>` features in PD `Cargo.toml` files when that key exists in `support/boards.toml`
+5. Register the board in `support/boards.toml`, smoke expects in `lerux-cli`, and a continuous integration job if needed
 
 **Interactive surface (Phase 71 / ADR-009)**
-: QEMU software framebuffer + Ladybird-shaped browser PDs + Grok-shaped agent PDs. Living checklist: [`plan-interactive.md`](plan-interactive.md).
+: Phases 71–80 built a QEMU software framebuffer and Ladybird-shaped browser protection domains. Milestone 17 deleted those protection domains. The live browser smoke is `just test-browser-sddf`. The desk-browser spec names the Ladybird-shaped set again. Checklist: [`plan-interactive.md`](plan-interactive.md).
 
 **display-server**
-: Trusted PD that owns the QEMU framebuffer device (ramfb first). Apps never map display MMIO. They present a **shared bitmap memory region** via postcard `DisplayRequest` (same trust shape as ADR-003 for NIC DMA).
+: Desk-browser spec term for a trusted protection domain that owns a QEMU framebuffer. The crate is not in this tree. Milestone 17 deleted it. The live browser image paints through virtio graphics queues.
 
 **framebuffer MR**
-: Shared memory region holding RGB pixels. Producers (`display-demo`, `paint-demo`, `web-content`) write; `display-server` blits to the device.
+: Desk-browser spec term for a shared bitmap. The live browser image uses the graphics client data region instead.
 
 **browser-ui**
-: Ladybird Browser analogue. Owns the address line, presents the screen, and delivers page keys to `web-content`. Does not parse HTML. Phase 76 chrome was a serial `open <url>`. On the desk-browser spec it maps the VESA linear framebuffer and receives key-downs from `console-driver`.
+: Desk-browser spec term. Ladybird Browser analogue. Owns the address line, presents the screen, and delivers page keys to `web-content`. Does not parse HTML. The protection domain is not built. Phase 76 chrome was a serial `open <url>`. On the desk-browser spec it maps the VESA linear framebuffer and receives key-downs from `console-driver`.
 
 **desk keyboard**
 : The PS/2 keyboard or, when one is armed, the USB HID boot keyboard. `console-driver` owns it and forwards key-downs to `browser-ui`.
@@ -145,7 +143,7 @@ The legacy image does **not** target a Linux or POSIX syscall ABI. Its apps are 
 : The text `browser-ui` paints in the top 16 rows of the desk framebuffer. It shows the address of the public page.
 
 **web-content**
-: Ladybird WebContent analogue. One static protection domain (Microkit cannot spawn tabs). Hosts `lerux-html` + `lerux-web`. Speaks only `HttpRequest` to `request-server` plus the bitmap memory region. **No** `NetClient`, `TlsClient`, or `FsClient`. No JavaScript in phases 71–80. The desk-browser spec grows these engines so this protection domain can show a public page, and on that spec it paints only the rectangle under the address line.
+: Desk-browser spec term. Ladybird WebContent analogue. One static protection domain (Microkit cannot spawn tabs). Hosts `lerux-html` + `lerux-web`. The protection domain is not built. The live browser shell links those engines and fetches with `lerux-tls`. The spec grows the engines so this protection domain can show a public page, and on that spec it paints only the rectangle under the address line.
 
 **public name**
 : A hostname resolved through the Domain Name System. It is the host of a public page.
@@ -157,19 +155,19 @@ The legacy image does **not** target a Linux or POSIX syscall ABI. Its apps are 
 : The one link or form control on the public page that receives keys. Tab moves to the next one and wraps.
 
 **request-server**
-: Ladybird RequestServer analogue. Sole HTTP client of `tls-proxy` / `net-server` on interactive boards (Phase 73: `just test-request`). Untrusted `web-content`, `agent`, and `program-runtime` fetch through it; they never hold `NetClient` / `TlsClient`.
+: Desk-browser spec term. Ladybird RequestServer analogue, the only fetcher on that image. The protection domain is not built. The live browser shell sends one fixed `GET`.
 
 **program-runtime**
-: Untrusted protection domain that fetches a signed WebAssembly module (`LRW1`) over `HttpRequest` and runs it with `wasmi` (Phase 81, [ADR-010](decisions/010-program-runtime.md), [ADR-012](decisions/012-ordinary-webassembly.md)). It holds no `NetClient`. The smoke module's only import is `lerux.log`. `qemu_virt_aarch64_program_sddf` is a separate protection domain with filesystem and socket access through `lerux-posix`.
+: Phase 81 postcard protection domain. Milestone 17 deleted it. The live runtime is `qemu_virt_aarch64_program_sddf`, which reads a file and allocates a socket through `lerux-posix` and runs a signed module with `wasmi` ([ADR-010](decisions/010-program-runtime.md), [ADR-012](decisions/012-ordinary-webassembly.md)).
 
 **agent**
-: Grok Build analogue as a PD: prompt → tool-calls → tools → model. Runtime talks to host `lerux grok-one` through `request-server` (smoke CA; not live xAI). Serial ANSI TUI (Phase 78); shell `grok` PPCs the agent. Tools are Read/Edit/Write/ListDir/Search/Execute/WebFetch/Browse over existing IPC (FS in Phase 79, `web-content` in Phase 80, `request-server`). Sandbox **is** the PD set, not Landlock.
+: Grok Build analogue as a protection domain: prompt → tool-calls → tools → model. The live image is `qemu_virt_aarch64_agent_sddf` (`sddf-agent`). The postcard agent and `request-server` path are gone. Sandbox **is** the protection-domain set, not Landlock.
 
 **lerux-html**
-: From-scratch `#![no_std]`+`alloc` HTML engine for `web-content`. Phases 71–80 parse a fixed element subset. The desk-browser spec grows it to the document class of a public page. Not Ladybird’s `libweb_html_tokenizer`, not html5ever, not Servo.
+: From-scratch `#![no_std]`+`alloc` HTML engine. The live browser shell and `html-demo` use it. Phases 71–80 parse a fixed element subset. The desk-browser spec grows it to the document class of a public page. Not Ladybird’s `libweb_html_tokenizer`, not html5ever, not Servo.
 
 **lerux-web**
-: From-scratch `#![no_std]`+`alloc` layout and paint for `web-content`. Phases 71–80 paint a fixed CSS subset and host no JavaScript. The desk-browser spec grows it to the shared layout, script, WebAssembly, and media behavior of the reference browsers. Not Servo. Used by `paint-demo` (Phase 75) and `web-content` (Phase 76).
+: From-scratch `#![no_std]`+`alloc` layout and paint. Phases 71–80 painted a fixed CSS subset and hosted no JavaScript. The live browser shell uses it on `qemu_virt_aarch64_browser_sddf`. The desk-browser spec grows it to the shared layout, script, WebAssembly, and media behavior of the reference browsers. Not Servo.
 
 ## Boundaries
 

@@ -2,6 +2,8 @@
 
 Last updated: 2026-09-26 (phases 71–80 done)
 
+**Status:** This page is the phase record. Milestone 17 deleted those protection domains and `lerux-interface-types`. New work does not add postcard types. The current browser command is `just test-browser-sddf`. The desk-browser spec names `browser-ui`, `web-content`, `request-server`, `tls-proxy`, and `net-server` again; those crates are not in this tree.
+
 Related: [`plan.md`](plan.md) (roadmap 1–82), [`plan-qemu.md`](plan-qemu.md) (phases 61–70, done), [`plan-arch.md`](plan-arch.md) (phases 50–60 + Physical RPi4 lab), [`plan-au-ts.md`](plan-au-ts.md) (sDDF inspiration), [`context.md`](context.md), [ADR-009](decisions/009-interactive-surface.md).
 
 ## Context

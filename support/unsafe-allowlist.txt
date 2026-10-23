@@ -56,6 +56,8 @@ userspace/pds/hello/src/vga.rs
 userspace/pds/http-server/src/net.rs
 userspace/pds/pl031-driver/src/main.rs
 userspace/pds/rdtime-timer-driver/src/main.rs
+userspace/pds/sddf-ahci-driver/src/engine.rs
+userspace/pds/sddf-ahci-driver/src/main.rs
 userspace/pds/sddf-agent/src/main.rs
 userspace/pds/sddf-agent/src/net.rs
 userspace/pds/sddf-agent/src/net_device.rs

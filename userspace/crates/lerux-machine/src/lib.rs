@@ -2,6 +2,8 @@
 
 #![no_std]
 
+pub mod ahci;
+
 mod table;
 
 #[cfg(feature = "system-description")]
@@ -19,6 +21,11 @@ use table::{
     RISCV64_VIRTIO_BLK_DMA_GUEST, RISCV64_VIRTIO_GPU_DMA_GUEST, RISCV64_VIRTIO_NET_DMA_GUEST,
     X86_BLK_BAR_VALUES, X86_BLK_DEVICE, X86_BLK_FUNCTION, X86_NET_BAR_VALUES, X86_NET_DEVICE,
     X86_NET_FUNCTION, X86_VIRTIO_BLK_DMA_PHYS, X86_VIRTIO_NET_DMA_PHYS,
+};
+
+pub use ahci::{
+    ahci_map, AhciMap, Claimed, PciAddress, RejectedClass, Unclaimed, AHCI_CLASS,
+    AHCI_IOAPIC_VECTOR, AHCI_PORT, QEMU_ICH9_AHCI, READY_LINE,
 };
 
 pub use table::{

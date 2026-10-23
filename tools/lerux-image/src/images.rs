@@ -9,7 +9,7 @@ use lerux_machine::{
         IoApicPin, IoApicVector, Irq, MmioDevice, MmioWindow, PciBar, Polarity, SerialNode,
         Trigger, VirtioNode, X86Irq,
     },
-    virtio_dma_guest, virtio_dma_phys_addr, virtio_node, Arch, VirtioRole,
+    virtio_dma_guest, virtio_dma_phys_addr, virtio_node, Arch, VirtioRole, AHCI_PORT,
 };
 
 use lerux_sddf::gpu_image;
@@ -20,10 +20,28 @@ use crate::model::{
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DiskBackend {
+    Virtio,
+    Ahci,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BoardId {
     pub kind: ImageKind,
     pub mode: Option<Mode>,
     pub arch: Arch,
+    pub disk: DiskBackend,
+}
+
+pub fn x86_disk_backend(board: &str) -> Result<DiskBackend, ImageError> {
+    match board_registration(board)? {
+        Some(id) => Ok(id.disk),
+        None => Ok(DiskBackend::Virtio),
+    }
+}
+
+pub fn ahci_disk_device(drive: &str) -> String {
+    format!("ide-hd,bus=ide.0,drive={drive},unit={AHCI_PORT}")
 }
 
 pub(crate) fn render_serial() -> Result<String, ImageError> {
@@ -37,6 +55,22 @@ pub fn render_kind(kind: ImageKind, arch: Arch) -> Result<String, ImageError> {
 const SDDF_SUFFIX: &str = "_sddf";
 
 pub fn board_registration(board: &str) -> Result<Option<BoardId>, ImageError> {
+    if board == "x86_64_generic_fs_ahci" {
+        return Ok(Some(BoardId {
+            kind: ImageKind::Fs,
+            mode: None,
+            arch: Arch::X86_64,
+            disk: DiskBackend::Ahci,
+        }));
+    }
+    if let Some((arch, token)) = Arch::split_prefix(board) {
+        if token == "fs_ahci" {
+            return Err(ImageError::Unsupported {
+                kind: ImageKind::Fs,
+                arch,
+            });
+        }
+    }
     if !board.ends_with(SDDF_SUFFIX) {
         return Ok(None);
     }
@@ -47,7 +81,12 @@ pub fn board_registration(board: &str) -> Result<Option<BoardId>, ImageError> {
     let (kind, mode) = kind_from_token(token).ok_or_else(|| ImageError::UnknownBoard {
         name: board.to_string(),
     })?;
-    Ok(Some(BoardId { kind, mode, arch }))
+    Ok(Some(BoardId {
+        kind,
+        mode,
+        arch,
+        disk: DiskBackend::Virtio,
+    }))
 }
 
 fn kind_from_token(token: &str) -> Option<(ImageKind, Option<Mode>)> {

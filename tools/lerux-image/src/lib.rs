@@ -8,7 +8,10 @@ mod images;
 mod model;
 
 pub use binding::{emit_pd_binding, pd_binding_bytes};
-pub use images::{board_registration, render_board, render_kind, BoardId};
+pub use images::{
+    ahci_disk_device, board_registration, render_board, render_kind, x86_disk_backend, BoardId,
+    DiskBackend,
+};
 pub use model::{ImageError, ImageKind, Mode};
 
 /// System description for the one-client serial image.
@@ -37,10 +40,11 @@ mod tests {
 
     use super::render_serial_xml;
     use crate::{
+        ahci_disk_device,
         binding::{bytes_for_pages, Page},
         board_registration,
         images::{render_with_extra_end, render_with_region_vaddr, BoardId},
-        pd_binding_bytes, render_board, ImageError, ImageKind, Mode,
+        pd_binding_bytes, render_board, x86_disk_backend, DiskBackend, ImageError, ImageKind, Mode,
     };
 
     fn repo_root() -> PathBuf {
@@ -297,6 +301,72 @@ mod tests {
     }
 
     #[test]
+    fn x86_ahci_board_registers_with_ahci_disk_backend() {
+        assert_eq!(
+            board_registration("x86_64_generic_fs_ahci").expect("register"),
+            Some(BoardId {
+                kind: ImageKind::Fs,
+                mode: None,
+                arch: Arch::X86_64,
+                disk: DiskBackend::Ahci,
+            })
+        );
+        assert_eq!(
+            x86_disk_backend("x86_64_generic_fs_ahci").expect("backend"),
+            DiskBackend::Ahci
+        );
+    }
+
+    #[test]
+    fn x86_virtio_filesystem_board_registers_with_virtio_disk() {
+        assert_eq!(
+            board_registration("x86_64_generic_fs_sddf").expect("register"),
+            Some(BoardId {
+                kind: ImageKind::Fs,
+                mode: None,
+                arch: Arch::X86_64,
+                disk: DiskBackend::Virtio,
+            })
+        );
+    }
+
+    #[test]
+    fn fs_ahci_token_on_non_x86_is_unsupported() {
+        let err = board_registration("qemu_virt_aarch64_fs_ahci").expect_err("unsupported");
+        assert!(matches!(err, ImageError::Unsupported { .. }), "{err:?}");
+    }
+
+    #[test]
+    fn ahci_disk_device_formats_ide_hd_on_port_zero() {
+        assert_eq!(
+            ahci_disk_device("blkdev0"),
+            "ide-hd,bus=ide.0,drive=blkdev0,unit=0"
+        );
+        assert!(!ahci_disk_device("blkdev0").contains("ich9-ahci"));
+        assert!(!ahci_disk_device("blkdev0").contains("virtio-blk"));
+    }
+
+    #[test]
+    fn x86_ahci_board_render_still_virtio_until_irq_unit() {
+        let xml = render_board("x86_64_generic_fs_ahci")
+            .expect("render")
+            .expect("registered filesystem image");
+        assert!(
+            xml.contains("phys_addr=\"0x6200_0000\""),
+            "unit 1 still emits virtio block dma until ahci_irq exists"
+        );
+        assert!(xml.contains("sddf-blk-driver.elf"));
+    }
+
+    #[test]
+    fn unregistered_x86_board_disk_backend_defaults_virtio() {
+        assert_eq!(
+            x86_disk_backend("x86_64_generic").expect("backend"),
+            DiskBackend::Virtio
+        );
+    }
+
+    #[test]
     fn x86_filesystem_board_renders_pci_and_dma() {
         let xml = render_board("x86_64_generic_fs_sddf")
             .expect("render")
@@ -407,6 +477,7 @@ mod tests {
                 kind: ImageKind::Fetch,
                 mode: Some(Mode::Web),
                 arch: Arch::X86_64,
+                disk: DiskBackend::Virtio,
             })
         );
         let boards = fs::read_to_string(repo_root().join("support/boards.toml")).expect("boards");
@@ -440,6 +511,7 @@ mod tests {
                 kind: ImageKind::Fetch,
                 mode: Some(Mode::Fetch),
                 arch: Arch::Aarch64,
+                disk: DiskBackend::Virtio,
             })
         );
         assert_eq!(
@@ -448,6 +520,7 @@ mod tests {
                 kind: ImageKind::Fetch,
                 mode: Some(Mode::Web),
                 arch: Arch::Aarch64,
+                disk: DiskBackend::Virtio,
             })
         );
         assert!(web.contains("sddf-shell.elf"));

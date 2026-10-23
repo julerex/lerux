@@ -41,7 +41,7 @@ QEMU machine `q35`. SeaBIOS leaves the standard VGA in text mode. The virtio boa
 | Interval timer | time-stamp counter | `tsc-timer-driver` on the init image | yes |
 | Disk | `virtio-blk-pci` | `virtio-pci-driver`, and `sddf-blk-driver` on the device-framework images | yes |
 | Network | `virtio-net-pci` | `virtio-pci-driver`, and `sddf-net-driver` on the device-framework images | yes |
-| Disk | `ich9-ahci` (`8086:2922` at `00:1f.2`), Advanced Host Controller Interface | `sddf-ahci-driver`, [Milestone 19](plan-lionsos.md#milestone-19--advanced-host-controller-interface-disk) | no |
+| Disk | `ich9-ahci` (`8086:2922` at `00:1f.2`), Advanced Host Controller Interface | `sddf-ahci-driver`, [Milestone 19](plan-lionsos.md#milestone-19--advanced-host-controller-interface-disk) | yes |
 | Network | `e1000e`, the 82574 (`8086:10d3`) | `sddf-e1000e-driver`, [Milestone 20](plan-lionsos.md#milestone-20--qemu-ethernet) | no |
 
 ### Z97 desk devices

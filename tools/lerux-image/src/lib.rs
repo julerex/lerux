@@ -347,15 +347,29 @@ mod tests {
     }
 
     #[test]
-    fn x86_ahci_board_render_still_virtio_until_irq_unit() {
+    fn x86_ahci_board_render_ahci_block_driver() {
+        use lerux_machine::{ahci_map, ahci_msi};
+
         let xml = render_board("x86_64_generic_fs_ahci")
             .expect("render")
             .expect("registered filesystem image");
-        assert!(
-            xml.contains("phys_addr=\"0x6200_0000\""),
-            "unit 1 still emits virtio block dma until ahci_irq exists"
+        let map = ahci_map();
+        let irq = ahci_msi();
+        assert!(xml.contains("sddf-ahci-driver.elf"));
+        assert!(!xml.contains("sddf-blk-driver.elf"));
+        assert!(xml.contains(&format!("phys_addr=\"{}\"", map.abar_paddr.text())));
+        assert!(xml.contains(&format!("phys_addr=\"{}\"", map.dma_paddr.text())));
+        assert!(xml.contains(&format!(
+            "<irq pcidev=\"00:1f.2\" handle=\"{}\" vector=\"{}\" id=\"0\" />",
+            irq.handle, irq.vector.0
+        )));
+        assert!(xml.contains("<end pd=\"blk_driver\" id=\"1\" />"));
+        assert!(!xml.contains("virtio-blk"));
+        assert!(!xml.contains("0x6200_0000"));
+        assert_eq!(
+            pd_binding_bytes("sddf-ahci-driver", &[]).expect("ahci binding"),
+            pd_binding_bytes("sddf-blk-driver", &[]).expect("virtio binding")
         );
-        assert!(xml.contains("sddf-blk-driver.elf"));
     }
 
     #[test]

@@ -9,6 +9,7 @@ use std::{
 };
 
 use anyhow::{bail, Context, Result};
+use lerux_image::{ahci_disk_device, x86_disk_backend, DiskBackend};
 
 use crate::{
     board::{get_board, load_boards, Board, DiskMode, NetMode, QemuConfig},
@@ -241,6 +242,15 @@ fn riscv64_command(qemu: &QemuConfig, loader: &Path, disk: &Path) -> Command {
     c
 }
 
+const X86_VIRTIO_BLK_PCI: &str = "virtio-blk-pci,id=blk0,addr=0x3.0x0,drive=blkdev0";
+
+fn x86_block_disk_device(board_name: &str) -> Result<String> {
+    match x86_disk_backend(board_name)? {
+        DiskBackend::Virtio => Ok(X86_VIRTIO_BLK_PCI.to_string()),
+        DiskBackend::Ahci => Ok(ahci_disk_device("blkdev0")),
+    }
+}
+
 fn x86_command(
     ctx: &QemuContext,
     qemu: &QemuConfig,
@@ -278,7 +288,7 @@ fn x86_command(
     if let Some(blockdev) = blockdev_arg(qemu.disk, disk) {
         c.args([
             "-device",
-            "virtio-blk-pci,id=blk0,addr=0x3.0x0,drive=blkdev0",
+            &x86_block_disk_device(&ctx.board_name)?,
             "-blockdev",
             &blockdev,
         ]);
@@ -502,5 +512,19 @@ mod tests {
             line.contains("\"-nographic\""),
             "smokes must stay headless: {line}"
         );
+    }
+
+    #[test]
+    fn x86_block_disk_ahci_uses_ide_hd_on_stock_controller() {
+        let dev = x86_block_disk_device("x86_64_generic_fs_ahci").unwrap();
+        assert_eq!(dev, "ide-hd,bus=ide.0,drive=blkdev0,unit=0");
+        assert!(!dev.contains("ich9-ahci"));
+        assert!(!dev.contains("virtio-blk"));
+    }
+
+    #[test]
+    fn x86_block_disk_sddf_uses_virtio_pci() {
+        let dev = x86_block_disk_device("x86_64_generic_fs_sddf").unwrap();
+        assert_eq!(dev, X86_VIRTIO_BLK_PCI);
     }
 }

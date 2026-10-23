@@ -9,6 +9,14 @@ pub const READY_LINE: &str = "ahci: port 0";
 /// Guest vector chosen beside serial 48 and virtio block 49; not a measured pin.
 pub const AHCI_IOAPIC_VECTOR: u8 = 51;
 
+/// Local APIC address written into an MSI capability.
+pub const MSI_ADDRESS: u32 = 0xfee0_0000;
+
+/// seL4 delivers SDF vector V as V + 0x30. The kernel does not rewrite the message.
+pub const fn msi_data(sdf_vector: u8) -> u32 {
+    (sdf_vector as u32) + 0x30
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PciAddress {
     bus: u8,
@@ -115,6 +123,12 @@ mod tests {
             Unclaimed::compiled().claim(0x010600),
             Err(RejectedClass { found: 0x010600 })
         );
+    }
+
+    #[test]
+    fn msi_data_matches_sel4_irq_offset() {
+        assert_eq!(msi_data(50), 98);
+        assert_eq!(msi_data(AHCI_IOAPIC_VECTOR), 99);
     }
 
     #[test]

@@ -27,6 +27,7 @@ pub fn build(root: &Path, board: &str, build_dir: &str, config: &str) -> Result<
     if board == "qemu_virt_aarch64_fs_sddf"
         || board == "qemu_virt_riscv64_fs_sddf"
         || board == "x86_64_generic_fs_sddf"
+        || board == "x86_64_generic_fs_ahci"
     {
         crate::fs_sddf::write_configs(&board_build_dir(root, board, build_dir), board)?;
     }

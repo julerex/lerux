@@ -10,7 +10,8 @@ use std::{
 };
 
 use lerux_machine::{
-    description::{IoPort, Irq, LineIrq, Polarity, Trigger, X86Irq},
+    ahci::PciAddress,
+    description::{IoPort, Irq, LineIrq, MsiIrq, Polarity, Trigger, X86Irq},
     Arch,
 };
 
@@ -412,7 +413,25 @@ fn irq_line(irq: &Irq, channel: u8) -> String {
             x86_trigger(*trigger),
             x86_polarity(*polarity)
         ),
+        Irq::Msi(MsiIrq {
+            pcidev,
+            handle,
+            vector,
+        }) => format!(
+            "        <irq pcidev=\"{}\" handle=\"{handle}\" vector=\"{}\" id=\"{channel}\" />\n",
+            bdf(*pcidev),
+            vector.0,
+        ),
     }
+}
+
+fn bdf(address: PciAddress) -> String {
+    format!(
+        "{:02x}:{:x}.{}",
+        address.bus(),
+        address.device(),
+        address.function()
+    )
 }
 
 fn x86_trigger(trigger: Trigger) -> &'static str {

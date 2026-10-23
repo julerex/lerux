@@ -11,9 +11,9 @@ pub mod description;
 
 #[cfg(feature = "system-description")]
 pub use description::{
-    qemu_plan, serial_node, virtio_node, IoApicPin, IoApicVector, IoPort, Irq, LineIrq, MmioDevice,
-    MmioWindow, PciBar, Polarity, QemuDevice, QemuPlan, SerialNode, SpelledAddr, Trigger,
-    VirtioNode, X86Irq,
+    ahci_msi, pci_config_port, qemu_plan, serial_node, virtio_node, IoApicPin, IoApicVector,
+    IoPort, Irq, LineIrq, MmioDevice, MmioWindow, MsiIrq, PciBar, Polarity, QemuDevice, QemuPlan,
+    SerialNode, SpelledAddr, Trigger, VirtioNode, X86Irq,
 };
 
 use table::{
@@ -24,8 +24,8 @@ use table::{
 };
 
 pub use ahci::{
-    ahci_map, AhciMap, Claimed, PciAddress, RejectedClass, Unclaimed, AHCI_CLASS,
-    AHCI_IOAPIC_VECTOR, AHCI_PORT, QEMU_ICH9_AHCI, READY_LINE,
+    ahci_map, msi_data, AhciMap, Claimed, PciAddress, RejectedClass, Unclaimed, AHCI_CLASS,
+    AHCI_IOAPIC_VECTOR, AHCI_PORT, MSI_ADDRESS, QEMU_ICH9_AHCI, READY_LINE,
 };
 
 pub use table::{

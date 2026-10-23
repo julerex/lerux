@@ -1,0 +1,18 @@
+[package]
+name = "sddf-ahci-driver"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[lints]
+workspace = true
+
+[dependencies]
+lerux-logging = { path = "../../crates/lerux-logging" }
+lerux-machine = { path = "../../crates/lerux-machine" }
+lerux-sddf = { path = "../../crates/lerux-sddf" }
+sel4 = { workspace = true }
+sel4-microkit = { workspace = true }
+
+[build-dependencies]
+lerux-image = { path = "../../../tools/lerux-image" }

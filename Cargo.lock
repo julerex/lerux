@@ -1971,6 +1971,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "sddf-ahci-driver"
+version = "0.1.0"
+dependencies = [
+ "lerux-image",
+ "lerux-logging",
+ "lerux-machine",
+ "lerux-sddf",
+ "sel4",
+ "sel4-microkit",
+]
+
+[[package]]
 name = "sddf-blk-driver"
 version = "0.1.0"
 dependencies = [

@@ -5,11 +5,12 @@
 #[cfg(test)]
 use crate::model::render_forcing_end;
 use lerux_machine::{
+    ahci_map,
     description::{
-        IoApicPin, IoApicVector, Irq, MmioDevice, MmioWindow, PciBar, Polarity, SerialNode,
-        Trigger, VirtioNode, X86Irq,
+        ahci_msi, pci_config_port, IoApicPin, IoApicVector, Irq, MmioDevice, MmioWindow, PciBar,
+        Polarity, SerialNode, Trigger, VirtioNode, X86Irq,
     },
-    virtio_dma_guest, virtio_dma_phys_addr, virtio_node, Arch, VirtioRole,
+    virtio_dma_guest, virtio_dma_phys_addr, virtio_node, Arch, VirtioRole, AHCI_PORT,
 };
 
 use lerux_sddf::gpu_image;
@@ -20,10 +21,28 @@ use crate::model::{
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DiskBackend {
+    Virtio,
+    Ahci,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BoardId {
     pub kind: ImageKind,
     pub mode: Option<Mode>,
     pub arch: Arch,
+    pub disk: DiskBackend,
+}
+
+pub fn x86_disk_backend(board: &str) -> Result<DiskBackend, ImageError> {
+    match board_registration(board)? {
+        Some(id) => Ok(id.disk),
+        None => Ok(DiskBackend::Virtio),
+    }
+}
+
+pub fn ahci_disk_device(drive: &str) -> String {
+    format!("ide-hd,bus=ide.0,drive={drive},unit={AHCI_PORT}")
 }
 
 pub(crate) fn render_serial() -> Result<String, ImageError> {
@@ -37,6 +56,22 @@ pub fn render_kind(kind: ImageKind, arch: Arch) -> Result<String, ImageError> {
 const SDDF_SUFFIX: &str = "_sddf";
 
 pub fn board_registration(board: &str) -> Result<Option<BoardId>, ImageError> {
+    if board == "x86_64_generic_fs_ahci" {
+        return Ok(Some(BoardId {
+            kind: ImageKind::Fs,
+            mode: None,
+            arch: Arch::X86_64,
+            disk: DiskBackend::Ahci,
+        }));
+    }
+    if let Some((arch, token)) = Arch::split_prefix(board)
+        && token == "fs_ahci"
+    {
+        return Err(ImageError::Unsupported {
+            kind: ImageKind::Fs,
+            arch,
+        });
+    }
     if !board.ends_with(SDDF_SUFFIX) {
         return Ok(None);
     }
@@ -47,7 +82,12 @@ pub fn board_registration(board: &str) -> Result<Option<BoardId>, ImageError> {
     let (kind, mode) = kind_from_token(token).ok_or_else(|| ImageError::UnknownBoard {
         name: board.to_string(),
     })?;
-    Ok(Some(BoardId { kind, mode, arch }))
+    Ok(Some(BoardId {
+        kind,
+        mode,
+        arch,
+        disk: DiskBackend::Virtio,
+    }))
 }
 
 fn kind_from_token(token: &str) -> Option<(ImageKind, Option<Mode>)> {
@@ -68,7 +108,11 @@ pub fn render_board(board: &str) -> Result<Option<String>, ImageError> {
     let Some(id) = board_registration(board)? else {
         return Ok(None);
     };
-    render_kind(id.kind, id.arch).map(Some)
+    let image = match id.kind {
+        ImageKind::Fs => fs_image(id.arch, id.disk),
+        kind => image(kind, id.arch)?,
+    };
+    render_image(&image).map(Some)
 }
 
 #[cfg(test)]
@@ -108,7 +152,7 @@ fn image(kind: ImageKind, arch: Arch) -> Result<Image, ImageError> {
     }
     Ok(match kind {
         ImageKind::Serial => serial_image(arch),
-        ImageKind::Fs => fs_image(arch),
+        ImageKind::Fs => fs_image(arch, DiskBackend::Virtio),
         ImageKind::Net => net_image(arch),
         ImageKind::Fetch => fetch_image(arch, "shell", "sddf-shell.elf", fetch_client_slots()),
         ImageKind::Browser => browser_image(arch),
@@ -174,13 +218,15 @@ fn serial_attachment(arch: Arch) -> Attachment {
     }
 }
 
-fn fs_image(arch: Arch) -> Image {
+const VIRTIO_BLK_PROGRAM: &str = "sddf-blk-driver.elf";
+const AHCI_BLK_PROGRAM: &str = "sddf-ahci-driver.elf";
+
+fn fs_image(arch: Arch, disk: DiskBackend) -> Image {
     let serial = serial_attachment(arch);
-    let BlkVirtioAttachment {
-        regions: blk_virtio_regions,
-        driver_slots: blk_driver_slots,
-        irq: blk_irq,
-    } = blk_virtio_attachment(arch, false);
+    let block = match disk {
+        DiskBackend::Virtio => virtio_block(arch, false),
+        DiskBackend::Ahci => ahci_block(),
+    };
     let mut shell = serial_client_slots();
     shell.extend(fs_client_slots());
     let mut links = link_rows(&[
@@ -199,14 +245,15 @@ fn fs_image(arch: Arch) -> Image {
         order: 7,
     });
     Image {
-        groups: vec![
-            serial.regions,
-            blk_virtio_regions,
-            blk_regions(),
-            fs_regions(),
-        ],
+        groups: vec![serial.regions, block.regions, blk_regions(), fs_regions()],
         domains: vec![
-            blk_driver_domain(blk_driver_slots, blk_irq, budget(4000), 4),
+            blk_driver_domain(
+                block.driver_slots,
+                block.irq,
+                budget(4000),
+                4,
+                block.program,
+            ),
             serial_driver(serial.slots, serial.irq, budget(4000)),
             blk_virt(budget(3000)),
             serial_virt_tx(budget(3000)),
@@ -267,12 +314,12 @@ fn fetch_virtio_regions(arch: Arch) -> Vec<Region> {
     match arch {
         Arch::Aarch64 => virtio_regions(true, true, false),
         Arch::Riscv64 => {
-            let mut regions = blk_virtio_attachment(arch, false).regions;
+            let mut regions = virtio_block(arch, false).regions;
             regions.extend(net_virtio_regions(arch, false));
             regions
         }
         Arch::X86_64 => {
-            let mut regions = blk_virtio_attachment(arch, true).regions;
+            let mut regions = virtio_block(arch, true).regions;
             regions.extend(net_virtio_regions(arch, false));
             regions
         }
@@ -306,7 +353,7 @@ fn fetch_x86_pci_irq(role: VirtioRole) -> Irq {
 
 fn fetch_image(arch: Arch, client: &'static str, program: &'static str, slots: Vec<Slot>) -> Image {
     let serial = serial_attachment(arch);
-    let blk = blk_virtio_attachment(arch, arch == Arch::X86_64);
+    let blk = virtio_block(arch, arch == Arch::X86_64);
     let blk_irq = if arch == Arch::X86_64 {
         fetch_x86_pci_irq(VirtioRole::Blk)
     } else {
@@ -326,7 +373,13 @@ fn fetch_image(arch: Arch, client: &'static str, program: &'static str, slots: V
             net_regions(false),
         ],
         domains: vec![
-            blk_driver_domain(blk.driver_slots, blk_irq, fetch_qos(arch, 4000), 4),
+            blk_driver_domain(
+                blk.driver_slots,
+                blk_irq,
+                fetch_qos(arch, 4000),
+                4,
+                blk.program,
+            ),
             serial_driver(serial.slots, serial.irq, fetch_qos(arch, 4000)),
             blk_virt(fetch_qos(arch, 3000)),
             serial_virt_tx(fetch_qos(arch, 3000)),
@@ -352,7 +405,7 @@ fn browser_virtio_regions(arch: Arch) -> Vec<Region> {
     match arch {
         Arch::Aarch64 => virtio_regions(true, true, true),
         Arch::Riscv64 => {
-            let mut regions = blk_virtio_attachment(arch, false).regions;
+            let mut regions = virtio_block(arch, false).regions;
             regions.extend(net_virtio_regions(arch, false));
             regions.extend(gpu_virtio_regions(arch));
             regions
@@ -388,7 +441,7 @@ fn gpu_driver_dma_region(arch: Arch) -> Region {
 
 fn browser_image(arch: Arch) -> Image {
     let serial = serial_attachment(arch);
-    let blk = blk_virtio_attachment(arch, false);
+    let blk = virtio_block(arch, false);
     let net_irq = net_virtio_attachment(arch, false).irq;
     let mut slots = fetch_client_slots();
     slots.extend(cached(&[
@@ -412,7 +465,7 @@ fn browser_image(arch: Arch) -> Image {
             gpu_regions(),
         ],
         domains: vec![
-            blk_driver_domain(blk.driver_slots, blk.irq, None, 4),
+            blk_driver_domain(blk.driver_slots, blk.irq, None, 4, blk.program),
             net_driver_with_irq(arch, false, net_irq, None, 4),
             gpu_driver(arch),
             serial_driver(serial.slots, serial.irq, None),
@@ -432,7 +485,7 @@ fn browser_image(arch: Arch) -> Image {
 
 fn agent_image(arch: Arch) -> Image {
     let serial = serial_attachment(arch);
-    let blk = blk_virtio_attachment(arch, arch == Arch::X86_64);
+    let blk = virtio_block(arch, arch == Arch::X86_64);
     let blk_irq = if arch == Arch::X86_64 {
         fetch_x86_pci_irq(VirtioRole::Blk)
     } else {
@@ -457,7 +510,13 @@ fn agent_image(arch: Arch) -> Image {
             net_regions(true),
         ],
         domains: vec![
-            blk_driver_domain(blk.driver_slots, blk_irq, fetch_qos(arch, 4000), 4),
+            blk_driver_domain(
+                blk.driver_slots,
+                blk_irq,
+                fetch_qos(arch, 4000),
+                4,
+                blk.program,
+            ),
             net_driver_with_irq(
                 arch,
                 false,
@@ -569,15 +628,16 @@ fn serial_virt_rx(qos: Option<Qos>) -> Domain {
     )
 }
 
-struct BlkVirtioAttachment {
+struct BlockAttachment {
     regions: Vec<Region>,
     driver_slots: Vec<Slot>,
     irq: Irq,
+    program: &'static str,
 }
 
-fn blk_virtio_attachment(arch: Arch, blk_pci_ecam: bool) -> BlkVirtioAttachment {
+fn virtio_block(arch: Arch, blk_pci_ecam: bool) -> BlockAttachment {
     match arch {
-        Arch::Aarch64 => BlkVirtioAttachment {
+        Arch::Aarch64 => BlockAttachment {
             regions: virtio_regions(true, false, false),
             driver_slots: vec![
                 mmio("virtio_mmio", "virtio_blk_mmio_vaddr"),
@@ -585,6 +645,7 @@ fn blk_virtio_attachment(arch: Arch, blk_pci_ecam: bool) -> BlkVirtioAttachment 
                 setvar("virtio_blk_driver_dma_paddr", "virtio_blk_driver_dma"),
             ],
             irq: line_irq(78),
+            program: VIRTIO_BLK_PROGRAM,
         },
         Arch::Riscv64 => {
             let VirtioNode::Mmio(device) =
@@ -592,7 +653,7 @@ fn blk_virtio_attachment(arch: Arch, blk_pci_ecam: bool) -> BlkVirtioAttachment 
             else {
                 panic!("riscv virtio-blk is memory-mapped input/output");
             };
-            BlkVirtioAttachment {
+            BlockAttachment {
                 regions: vec![window_region(&device.window), blk_driver_dma_region(arch)],
                 driver_slots: vec![
                     mmio(device.window.name, device.setvar),
@@ -600,6 +661,7 @@ fn blk_virtio_attachment(arch: Arch, blk_pci_ecam: bool) -> BlkVirtioAttachment 
                     setvar("virtio_blk_driver_dma_paddr", "virtio_blk_driver_dma"),
                 ],
                 irq: Irq::Line(device.irq),
+                program: VIRTIO_BLK_PROGRAM,
             }
         }
         Arch::X86_64 => {
@@ -639,12 +701,48 @@ fn blk_virtio_attachment(arch: Arch, blk_pci_ecam: bool) -> BlkVirtioAttachment 
                 dma("virtio_blk_driver_dma", "virtio_blk_driver_dma_vaddr"),
                 setvar("virtio_blk_driver_dma_paddr", "virtio_blk_driver_dma"),
             ]);
-            BlkVirtioAttachment {
+            BlockAttachment {
                 regions,
                 driver_slots,
                 irq: Irq::X86(irq),
+                program: VIRTIO_BLK_PROGRAM,
             }
         }
+    }
+}
+
+fn ahci_block() -> BlockAttachment {
+    let map = ahci_map();
+    BlockAttachment {
+        regions: vec![
+            phys(
+                "ahci_abar",
+                map.abar_size,
+                map.abar_vaddr,
+                map.abar_paddr.text(),
+            ),
+            phys(
+                "ahci_dma",
+                map.dma_size,
+                map.dma_vaddr,
+                map.dma_paddr.text(),
+            ),
+        ],
+        driver_slots: vec![
+            Slot::Map(Map {
+                region: "ahci_abar",
+                cached: Some(false),
+                setvar: None,
+            }),
+            Slot::Map(Map {
+                region: "ahci_dma",
+                cached: Some(true),
+                setvar: None,
+            }),
+            Slot::Port(pci_config_port()),
+        ],
+        irq: Irq::Msi(ahci_msi()),
+        program: AHCI_BLK_PROGRAM,
     }
 }
 
@@ -664,7 +762,13 @@ fn blk_driver_dma_region(arch: Arch) -> Region {
     }
 }
 
-fn blk_driver_domain(slots: Vec<Slot>, irq: Irq, qos: Option<Qos>, priority: u8) -> Domain {
+fn blk_driver_domain(
+    slots: Vec<Slot>,
+    irq: Irq,
+    qos: Option<Qos>,
+    priority: u8,
+    program: &'static str,
+) -> Domain {
     let mut slots = slots;
     slots.extend(cached(&[
         "blk_storage_info",
@@ -672,14 +776,7 @@ fn blk_driver_domain(slots: Vec<Slot>, irq: Irq, qos: Option<Qos>, priority: u8)
         "blk_driver_resp_queue",
         "blk_data",
     ]));
-    domain(
-        "blk_driver",
-        priority,
-        qos,
-        "sddf-blk-driver.elf",
-        slots,
-        Some(irq),
-    )
+    domain("blk_driver", priority, qos, program, slots, Some(irq))
 }
 
 fn blk_virt(qos: Option<Qos>) -> Domain {

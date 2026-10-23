@@ -1,6 +1,7 @@
 pub use crate::table::SpelledAddr;
 
 use crate::{
+    ahci::{msi_data, PciAddress, Unclaimed, AHCI_IOAPIC_VECTOR},
     serial_kind,
     table::{
         AARCH64_UART_GUEST, AARCH64_UART_IRQ, AARCH64_UART_PHYS, AARCH64_UART_SETVAR,
@@ -51,9 +52,35 @@ pub struct X86Irq {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MsiIrq {
+    pub pcidev: PciAddress,
+    pub handle: u32,
+    pub vector: IoApicVector,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Irq {
     Line(LineIrq),
     X86(X86Irq),
+    Msi(MsiIrq),
+}
+
+pub fn pci_config_port() -> IoPort {
+    IoPort {
+        addr: X86_PCI_CONFIG_PORT,
+        size: X86_PCI_CONFIG_SIZE,
+        id_symbol: X86_PCI_CONFIG_ID_SYMBOL,
+        addr_symbol: X86_PCI_CONFIG_ADDR_SYMBOL,
+        element_id: None,
+    }
+}
+
+pub fn ahci_msi() -> MsiIrq {
+    MsiIrq {
+        pcidev: Unclaimed::compiled().address(),
+        handle: msi_data(AHCI_IOAPIC_VECTOR),
+        vector: IoApicVector(AHCI_IOAPIC_VECTOR),
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -205,13 +232,7 @@ pub fn virtio_node(arch: Arch, role: VirtioRole) -> Option<VirtioNode> {
         },
         Arch::X86_64 => match role {
             VirtioRole::Blk => Some(VirtioNode::Pci {
-                config: IoPort {
-                    addr: X86_PCI_CONFIG_PORT,
-                    size: X86_PCI_CONFIG_SIZE,
-                    id_symbol: X86_PCI_CONFIG_ID_SYMBOL,
-                    addr_symbol: X86_PCI_CONFIG_ADDR_SYMBOL,
-                    element_id: None,
-                },
+                config: pci_config_port(),
                 device: X86_BLK_DEVICE,
                 function: X86_BLK_FUNCTION,
                 irq: x86_level_low(X86_BLK_PIN, X86_BLK_VECTOR),

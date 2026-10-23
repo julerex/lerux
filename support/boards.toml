@@ -280,6 +280,16 @@ qemu = { disk = "rw", qmp = true }
 ci = false
 system_vars = {}
 
+[x86_64_generic_fs_ahci]
+arch = "x86_64"
+microkit_board = "x86_64_generic"
+target = "x86_64-sel4-microkit"
+template = "fs-sddf.system.template"
+pds = ["sddf-ahci-driver", "sddf-blk-virt", "sddf-fatfs", "sddf-serial-driver", "sddf-serial-virt-tx", "sddf-serial-virt-rx", "sddf-timer-driver", "sddf-shell"]
+qemu = { disk = "rw", qmp = true }
+ci = false
+system_vars = {}
+
 [x86_64_generic_fetch_sddf]
 arch = "x86_64"
 microkit_board = "x86_64_generic"

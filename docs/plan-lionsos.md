@@ -331,7 +331,7 @@ The x86 guest already has the NS16550, the VGA text console, the keyboard, and t
 
 **Exit:** `just test-x86-ahci` boots a filesystem image whose only disk is QEMU `ich9-ahci` and prints `lerux shell ready` plus the scripted shell lines.
 
-Not started.
+Done. `just test-x86-ahci` printed `ahci: port 0`, then `lerux shell ready`, then the scripted shell lines. The controller interrupt is a message-signaled interrupt on vector 51.
 
 - New protection domain `sddf-ahci-driver`. It maps the controller register block, keeps the command list and the FIS in its own direct-memory-access region, and runs one command at a time on port 0. It speaks the existing block queues.
 - It accepts a controller by class `0x010601`. On this QEMU that controller is `8086:2922` at `00:1f.2`. The Z97 Serial ATA identifier is recorded in Milestone 22, before the driver accepts it.

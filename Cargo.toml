@@ -55,6 +55,7 @@ members = [
     "userspace/crates/lerux-logging",
     "userspace/crates/lerux-rtw8852be",
     "userspace/crates/lerux-cothread",
+    "userspace/crates/lerux-gate",
     "userspace/crates/lerux-posix",
     "userspace/pds/debug-handler",
     "userspace/pds/crash-demo",

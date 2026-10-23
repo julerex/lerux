@@ -1,0 +1,11 @@
+[package]
+name = "lerux-gate"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "The only first-party home of unsafe pointer, queue, and device operations"
+
+[lints]
+workspace = true
+
+[dependencies]

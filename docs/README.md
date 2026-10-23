@@ -13,7 +13,7 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [plan-lionsos.md](plan-lionsos.md) | LionsOS structures in a Rust guest (milestones 1–18 done; 19–22 are the QEMU q35 native disk and Ethernet plan) |
 | [plan-arch.md](plan-arch.md) | Phases 50–60 living checklist; [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated) (hardware-gated) |
 | [plan-qemu.md](plan-qemu.md) | Phases 61–70 living checklist (QEMU-only workstation deepening; done) |
-| [plan-interactive.md](plan-interactive.md) | Phases 71–80 living checklist (done): QEMU interactive surface, Ladybird-shaped browser + Grok-shaped agent |
+| [plan-interactive.md](plan-interactive.md) | Phases 71–80 record: QEMU interactive surface. Milestone 17 deleted those protection domains |
 | [desk-browser.md](desk-browser.md) | Desk browser spec: one public page on this Z97, from the typed address to the motherboard HDMI port |
 | [config.md](config.md) | Phase 54: config key schema, secrets, boot policy |
 | [packages.md](packages.md) | Phase 55: package CLI, pins, profile recipes, out-of-tree “AUR” |
@@ -22,7 +22,7 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [decisions/001-in-tree-system-generation.md](decisions/001-in-tree-system-generation.md) | ADR-001: in-tree Rust SDF gen (not sdfgen) |
 | [decisions/002-serial-virtualiser.md](decisions/002-serial-virtualiser.md) | ADR-002: serial-driver + serial-virt (sDDF-shaped) |
 | [decisions/003-net-virtualiser.md](decisions/003-net-virtualiser.md) | ADR-003: net trust map; unified-dma on aarch64 virtio |
-| [decisions/007-tls-proxy.md](decisions/007-tls-proxy.md) | ADR-007: tls-proxy PD; rustls + smoke CA |
+| [decisions/007-tls-proxy.md](decisions/007-tls-proxy.md) | ADR-007: superseded; rustls now lives in `lerux-tls` inside the client |
 | [decisions/008-host-backed-fs.md](decisions/008-host-backed-fs.md) | ADR-008: QEMU host FS inject (`/host`) |
 | [decisions/009-interactive-surface.md](decisions/009-interactive-surface.md) | ADR-009: QEMU software framebuffer; static Ladybird PDs; Grok-shaped agent |
 | [decisions/010-program-runtime.md](decisions/010-program-runtime.md) | ADR-010 / Phase 81: signed Wasm subset in `program-runtime` |
@@ -39,7 +39,7 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [ops.md](ops.md) | Operations: diagnose, smoke logs, host helpers |
 | [platforms.md](platforms.md) | Platform notes and hardware bring-up |
 | [bench-results.latest.md](bench-results.latest.md) | Latest `just bench` snapshot (regenerated) |
-| [net-topology.md](net-topology.md) | NIC / net-server / app channel map |
+| [net-topology.md](net-topology.md) | NIC paths: device-framework client vs remaining virtio boards |
 | [boards.md](boards.md) | Board names, PDs, QEMU profiles; [RPi4 install path](boards.md#rpi4-workstation-install-path-phase-52); [Z97-D3H install path](boards.md#gigabyte-z97-d3h-install-path) |
 | [ci.md](ci.md) | GitHub Actions pipeline, caches, troubleshooting |
 | [seL4-whitepaper.pdf](seL4-whitepaper.pdf) | seL4 high-level overview (reference) |

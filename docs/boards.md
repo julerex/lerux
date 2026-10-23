@@ -10,10 +10,8 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 |-------|------|---------------|---------------|
 | `qemu_virt_aarch64` | aarch64 | `BOARD=qemu_virt_aarch64 just test` | hello + serial |
 | `qemu_virt_aarch64_debug` | aarch64 | `just test-debug` | debug-handler (parent) + crash-demo (child fault) |
-| `qemu_virt_aarch64_isolation` | aarch64 | `just test-isolation` | Phase 60: crash-demo fault then fs-client vs live fs-server |
-| `qemu_virt_aarch64_echo` | aarch64 | `just test-echo` | echo client/server + serial |
 | `qemu_virt_aarch64_serial_sddf` | aarch64 | `just test-serial-sddf` | `serial_driver`, `serial_virt_tx`, `serial_virt_rx`, `serial_client` |
-| `qemu_virt_aarch64_cothread` | aarch64 | `just test-cothread` | `cothread_client`, `cothread_peer`, postcard `serial_driver` |
+| `qemu_virt_aarch64_cothread` | aarch64 | `just test-cothread` | `cothread_client`, `cothread_peer`, `serial_driver` |
 | `qemu_virt_aarch64_fs_sddf` | aarch64 | `just test` | `blk_driver`, `serial_driver`, `blk_virt`, `serial_virt_tx`, `serial_virt_rx`, `fatfs`, `timer_driver`, `shell` |
 | `qemu_virt_aarch64_net_sddf` | aarch64 | `just test-net-sddf` | `net_driver`, `serial_driver`, `net_virt_tx`, `net_virt_rx`, `serial_virt_tx`, `serial_virt_rx`, `net_copy`, `net_client` |
 | `qemu_virt_aarch64_fetch_sddf` | aarch64 | `just test-fetch-sddf` | `blk_driver`, `net_driver`, `serial_driver`, `blk_virt`, `net_virt_tx`, `net_virt_rx`, `serial_virt_tx`, `serial_virt_rx`, `fatfs`, `net_copy`, `shell` |
@@ -21,53 +19,19 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `qemu_virt_aarch64_browser_sddf` | aarch64 | `just test-browser-sddf` | `blk_driver`, `net_driver`, `gpu_driver`, `serial_driver`, `blk_virt`, `net_virt_tx`, `net_virt_rx`, `serial_virt_tx`, `serial_virt_rx`, `gpu_virt`, `fatfs`, `net_copy`, `shell` |
 | `qemu_virt_aarch64_agent_sddf` | aarch64 | `just test-agent-sddf` | `blk_driver`, `net_driver`, `serial_driver`, `blk_virt`, `net_virt_tx`, `net_virt_rx`, `serial_virt_tx`, `serial_virt_rx`, `fatfs`, `net_copy`, shell running `sddf-grok.elf`, agent running `sddf-agent.elf` |
 | `qemu_virt_aarch64_program_sddf` | aarch64 | `just test-program-sddf` | fetch roles with `program` (`sddf-program.elf`) in place of the shell |
-| `qemu_virt_aarch64_display` | aarch64 | `just test-display` | Phase 72: ramfb + display-server + display-demo |
 | `qemu_virt_aarch64_html` | aarch64 | `just test-html` | Phase 74: html-demo + lerux-html (baked-in fixture) |
-| `qemu_virt_aarch64_paint` | aarch64 | `just test-paint` | Phase 75: paint-demo + display-server (HTML+CSS → ramfb) |
-| `qemu_virt_aarch64_browser` | aarch64 | `just test-browser` | Phase 76: browser-ui + web-content via request-server + ramfb |
-| `qemu_virt_aarch64_agent_runtime` | aarch64 | `just test-agent-runtime` | Phase 77: agent PD + request-server + grok-one stub |
-| `qemu_virt_aarch64_agent` | aarch64 | `just test-agent` | Phase 79: agent tools (FsRequest + WebFetch) |
-| `qemu_virt_aarch64_interactive` | aarch64 | `just test-interactive` | Phase 80: workstation + browser + agent |
 | `qemu_virt_aarch64_virtio` | aarch64 | `just test-virtio` | hello + serial + virtio blk/net |
-| `qemu_virt_aarch64_blk` | aarch64 | `just test-blk` | blk client/server + serial + virtio-blk |
-| `qemu_virt_aarch64_blk_composed` | aarch64 | `just test-blk-composed` | supervisor + init drivers + blk IPC + virtio-blk |
-| `qemu_virt_aarch64_net` | aarch64 | `just test-net` | net client/server + serial + virtio-net |
-| `qemu_virt_aarch64_fetch` | aarch64 | `just test-fetch` | fetch-client + net-server + serial + virtio-net |
-| `qemu_virt_aarch64_fetch_tls` | aarch64 | `just test-fetch-tls` | fetch-client + tls-proxy + net-server + serial + virtio-net |
-| `qemu_virt_aarch64_request` | aarch64 | `just test-request` | Phase 73: request-client + request-server + tls-proxy + net-server |
-| `qemu_virt_aarch64_program` | aarch64 | `just test-program` | Phase 81: program-runtime fetches a signed Wasm module |
-| `qemu_virt_aarch64_fs` | aarch64 | `just test-fs` | fs-client + fs-server (LERUXFS2) + serial + virtio-blk |
-| `qemu_virt_aarch64_fs_fat` | aarch64 | `just test-fs-fat` | same SDF; fs-server FAT16 backend |
-| `qemu_virt_aarch64_net_composed` | aarch64 | `just test-net-composed` | supervisor + init drivers + net IPC + virtio-net |
-| `qemu_virt_aarch64_ipc_composed` | aarch64 | `just test-ipc-composed` | supervisor + init drivers + blk/net IPC + virtio-blk/net |
-| `qemu_virt_aarch64_init` | aarch64 | `just test-init` | supervisor + PL031 + SP804 + serial |
-| `qemu_virt_aarch64_composed` | aarch64 | `just test-composed` | supervisor + hello virtio + all drivers |
 | `qemu_virt_aarch64_http` | aarch64 | `just test-http` | serial + virtio-net + http-server |
-| `qemu_virt_aarch64_http_composed` | aarch64 | `just test-http-composed` | supervisor + init drivers + virtio-net + http-server |
-| `qemu_virt_aarch64_workstation` | aarch64 | `just test-workstation` | full workstation (profile `workstation`) |
 | `qemu_virt_riscv64` | riscv64 | `just test-riscv` | hello + serial (MMIO UART) |
-| `qemu_virt_riscv64_echo` | riscv64 | `just test-riscv-echo` | echo + serial |
 | `qemu_virt_riscv64_virtio` | riscv64 | `just test-riscv-virtio` | hello + serial + virtio |
-| `qemu_virt_riscv64_init` | riscv64 | `just test-init-riscv` | supervisor + Goldfish RTC + rdtime timer + serial |
-| `qemu_virt_riscv64_workstation` | riscv64 | `just test-workstation-riscv` | full workstation (Phase 59) |
-| `x86_64_generic_workstation` | x86_64 | `just test-workstation-x86` | full workstation PCI virtio (Phase 59) |
-| `qemu_virt_aarch64_bench_echo` | aarch64 | `just bench-echo` | echo microbench (Phase 49) |
-| `qemu_virt_aarch64_bench_blk` | aarch64 | `just bench-blk` | blk microbench |
-| `qemu_virt_aarch64_bench_net` | aarch64 | `just bench-net` | net microbench |
-| `qemu_virt_riscv64_blk` | riscv64 | `just test-riscv-blk` | blk client/server + serial + virtio-blk |
-| `qemu_virt_riscv64_net` | riscv64 | `just test-riscv-net` | net client/server + serial + virtio-net |
 | `qemu_virt_riscv64_http` | riscv64 | `just test-riscv-http` | serial + virtio-net + http-server |
 | `x86_64_generic` | x86_64 | `BOARD=x86_64_generic just test` | hello + serial (COM1) |
-| `x86_64_generic_console` | x86_64 | `just test-x86-console` | Phase 82: VGA text shell; QMP types `echo hi` on PS/2 |
-| `x86_64_generic_usb_kbd` | x86_64 | `just test-x86-usb-kbd` | Same shell; QMP types `echo hi` on a USB boot keyboard |
-| `x86_64_generic_echo` | x86_64 | `just test-x86-echo` | echo + serial |
-| `x86_64_generic_init` | x86_64 | `just test-init-x86` | supervisor + CMOS RTC + TSC timer + serial |
 | `x86_64_generic_virtio` | x86_64 | `just test-x86-virtio` | hello + serial + virtio-pci blk/net |
-| `x86_64_generic_blk` | x86_64 | `just test-x86-blk` | blk client/server + serial + virtio-pci blk |
-| `x86_64_generic_net` | x86_64 | `just test-x86-net` | net client/server + serial + virtio-pci net |
 | `x86_64_generic_http` | x86_64 | `just test-x86-http` | serial + virtio-pci net + http-server |
 | `rpi4b_4gb` | aarch64 | `BOARD=rpi4b_4gb just image` | hello + serial (PL011; hardware only) |
 | `pc_z97_d3h_rtl8852be` | x86_64 | `BOARD=pc_z97_d3h_rtl8852be just image` | COM1 plus a config-space read of the RTL8852BE (hardware only) |
+
+Milestone 17 deleted the postcard boards. Their rows, including `qemu_virt_aarch64_browser` and `just test-browser`, are gone. The live browser smoke is `just test-browser-sddf`.
 
 ## SDK boards
 
@@ -214,7 +178,7 @@ Checked 2026-10-22. The HDMI cable is on the motherboard port. Linux shows the I
 
 The desk-browser spec ([`desk-browser.md`](desk-browser.md)) keeps the cable on the motherboard HDMI port ([ADR-013](decisions/013-desk-intel-scanout.md)). Firmware Peripherals → Initial Display Output is `IGFX`, and Intel Processor Graphics stays enabled. `console-driver` writes the classic 80×25 color text page at physical `0xb8000` and moves the cursor through the VGA CRTC ports `0x3d4`/`0x3d5`. The legacy Limine entry leaves the primary VGA device in that text mode. After `IGFX` is set, those writes are scanned out on the motherboard HDMI port. The spec's linear framebuffer is the VESA mode Limine sets on that same entry. lerux does not program the Intel display engine, `amdgpu`, or the Polaris display engine. The RX 560 stays unused.
 
-The desk browser image is the one this desk boots. It contains `console-driver`, `serial-driver`, `log-server`, `browser-ui`, one `web-content`, `request-server`, `tls-proxy`, `net-server`, and the new onboard Ethernet driver. On that image `console-driver` forwards key-downs and does not paint the text page. COM1 stays the log. The shell and the filesystem are absent. The Phase 82 shell image remains `x86_64_generic_console` and `x86_64_generic_usb_kbd`.
+The desk-browser spec names `console-driver`, `serial-driver`, `log-server`, `browser-ui`, one `web-content`, `request-server`, `tls-proxy`, `net-server`, and a new onboard Ethernet driver as the image this desk boots. Those named protection domains are the spec. The crates are not in this tree. On that image `console-driver` forwards key-downs and does not paint the text page. COM1 stays the log. The shell and the filesystem are absent. The Phase 82 shell image remains the QEMU console test.
 
 Before a metal boot, a separate QEMU image runs those browser protection domains with the existing x86 virtio network driver. It loads `https://host:8443/desk.html` from `lerux https-one`, follows the link to `https://host:8443/desk-link.html`, and submits `q=hi` to `https://host:8443/desk-form.html?q=hi`. COM1 records each address and the first non-white pixel. That boot is not the metal product.
 
@@ -313,58 +277,21 @@ This board has no native disk or Ethernet driver. QEMU `workstation-x86` is virt
 | `x86_64_net` | x86 net | q35 + PCI virtio-net (no `disk.img`) |
 | `x86_64_http` | x86 http | q35 + PCI virtio-net + `hostfwd=tcp::18080-:8080` |
 
-## Composed board
-
-`qemu_virt_aarch64_composed` runs two app PDs in one system:
-
-- **supervisor** — RTC + SP804 via serial IPC (crate `supervisor`; was `boot-init` before Phase 33).
-- **hello** — virtio blk/net via serial IPC; waits for `supervisor` notify before probing virtio.
-
-See [plan.md](plan.md) Phases 15 and 24.
-
 ## HTTP boards
 
 `qemu_virt_aarch64_http` serves `GET /` on guest port **8080** (`10.0.2.15`). QEMU user netdev forwards host `127.0.0.1:18080` → guest `:8080`; smoke uses `curl` after serial shows `lerux-http: listening`.
-
-`qemu_virt_aarch64_http_composed` runs supervisor (RTC + SP804) then http-server over virtio-net — same notify gate as composed hello. See [plan.md](plan.md) Phase 17.
 
 `x86_64_generic_http` uses the same HTTP PD and hostfwd layout on QEMU **q35** with PCI virtio-net via `virtio-pci-driver` (net-only). See [plan.md](plan.md) Phase 19.
 
 `qemu_virt_riscv64_http` serves HTTP over MMIO virtio-net on `virtio-mmio-bus.1` (same layout as riscv virtio hello). See [plan.md](plan.md) Phase 22.
 
-## Net IPC board
-
-`qemu_virt_aarch64_net`, `qemu_virt_riscv64_net`, and `x86_64_generic_net` run `net-server` (virtio-net driver client) and `net-client` (UDP TX over IPC). Smoke expects `lerux-net: IPC ok` after `virtio-net: TX ok`. See [plan.md](plan.md) Phases 27–28.
-
-`qemu_virt_aarch64_fetch` runs `fetch-client` over extended net IPC (DNS resolve, TCP connect/send/recv) to perform `GET /` against a host HTTP server at `10.0.2.2:8081`. Smoke expects `lerux-fetch: 200`. See [plan.md](plan.md) Phase 31.
-
-`qemu_virt_aarch64_request` (Phase 73) runs untrusted `request-client` over `HttpRequest` to `request-server`, which is the sole `TlsClient` of `tls-proxy`. The app PD has no NIC map and does not link rustls. Smoke `GET https://host:8443/fixture.html` against `lerux https-one` expects `lerux-http: fixture ok`. See [plan-interactive.md](plan-interactive.md) and [ADR-009](decisions/009-interactive-surface.md).
-
-`qemu_virt_aarch64_program` (Phase 81, ADR-010) runs untrusted `program-runtime` on the same HTTP path. It GETs `https://host:8443/smoke.lrw`, checks the ed25519 signature, and runs the module with `wasmi`. The app has no `NetClient`. Smoke expects `lerux-prog: ran`. See [ADR-010](decisions/010-program-runtime.md) and [ADR-012](decisions/012-ordinary-webassembly.md).
-
-`qemu_virt_aarch64_program_sddf` (Milestone 14) is the fetch image with `program` in place of the shell. The module reads `/config/hostname` and allocates a socket through `lerux-posix`. A bad signature prints `program: rejected` and is not instantiated. The signed module then prints `lerux-wasm: ran`. See [ADR-012](decisions/012-ordinary-webassembly.md).
+## HTML and program boards
 
 `qemu_virt_aarch64_html` (Phase 74) runs `html-demo`, which parses the baked-in `support/browser/fixture.html` with `lerux-html` and logs `lerux-html: nodes=8`. No NIC or filesystem.
 
-`qemu_virt_aarch64_paint` (Phase 75) runs `paint-demo`, which lays out `support/browser/paint.html` with `lerux-web` into the shared bitmap MR and PPCs `display-server`. Smoke expects `lerux-display: ramfb ok` then `lerux-web: paint ok`. The app does not map fw_cfg or the ramfb backing.
+`qemu_virt_aarch64_program_sddf` (Milestone 14) is the fetch image with `program` in place of the shell. The module reads `/config/hostname` and allocates a socket through `lerux-posix`. A bad signature prints `program: rejected` and is not instantiated. The signed module then prints `lerux-wasm: ran`. See [ADR-012](decisions/012-ordinary-webassembly.md).
 
-`qemu_virt_aarch64_browser` (Phase 76, profile `browser`) splits Ladybird’s Browser / WebContent: `browser-ui` issues serial `open <url>` (smoke auto-opens `https://host:8443/paint.html`) and PPCs Present; `web-content` fetches via `request-server` and paints the bitmap MR. `web-content` has no `NetClient` / `TlsClient` / `FsClient` and does not map NIC DMA or display MMIO. Smoke expects `lerux-web: paint ok` then `lerux-browser: paint ok`.
-
-`qemu_virt_aarch64_agent_runtime` (Phase 77–78, profile `agent-runtime`) runs untrusted `agent` over `HttpRequest` POST to `request-server`, which is the sole `TlsClient` of `tls-proxy`. Completions hit host `lerux grok-one` on `:8444` (smoke CA; not live xAI). The agent draws a fullscreen serial ANSI TUI (header / transcript / prompt). Smoke prompt `read /hello.txt` → stub `TOOL_CALL Read` → baked-in file body `hello` → `lerux-agent: chrome ok` then `lerux-agent: runtime ok`. Shell `grok` PPCs the agent (same pattern as `edit` / `chat`) for Phase 80 composition. The agent has no NIC map.
-
-`qemu_virt_aarch64_agent` (Phase 79, profile `agent`) adds `fs-server` + virtio-blk. Workspace is LERUXFS2 `/work`. Smoke prompt `edit and fetch` → Read `/work/hello.txt` → Edit `hello`→`hello-edited` → WebFetch `https://host:8444/fixture.html` → `lerux-agent: tools ok`. Execute is an on-disk `echo` batch inside the agent PD (no `fork`/`exec`, no PPC to shell). The agent still has no `NetClient` / `TlsClient`.
-
-`qemu_virt_aarch64_interactive` (Phase 80, profile `workstation-interactive`) composes workstation + `display-server` + `request-server` + `web-content` + `browser-ui` + `agent`. It is **not** the default workstation. Agent `Browse` PPCs `web-content` (no NIC map); `web-content` fetches `https://host:8443/paint.html` through `request-server` and paints the bitmap MR. Smoke expects `lerux-web: paint ok` and `lerux-agent: interactive ok`. HTTP-stack priorities are raised so PPC callees outrank callers (ADR-006).
-
-`qemu_virt_aarch64_fs` runs `fs-client` over filesystem IPC (`Create`/`Write`/`Read`/`Stat`/`ListDir`/`Mkdir`/`Unlink`/`Rename`) backed by `fs-server` on virtio-blk with **LERUXFS2** (hierarchical dirs, multi-sector files). Smoke expects `lerux-fs: ready (LERUXFS2)` and `lerux-fs: round-trip ok` (includes nested path + multi-sector). See [plan.md](plan.md) Phase 50.
-
-`qemu_virt_aarch64_isolation` (Phase 60) nests `crash-demo` under `debug-handler`, then notifies `fs-client` only after the untrusted PD is suspended. Smoke expects fault strings plus `lerux-isolation: fs-server survived untrusted PD crash`. See [`security.md`](security.md).
-
-`qemu_virt_aarch64_fs_fat` uses the same SDF and IPC; `fs-server` is built with `backend-fat` (FAT16: hierarchical directories, VFAT long names, multi-cluster files). Smoke expects `lerux-fs: ready (FAT16)`, `lerux-fs: fat hierarchy ok`, `lerux-fs: fat lfn ok`, and `lerux-fs: round-trip ok`.
-
-`qemu_virt_aarch64_net_composed` gates net probe on supervisor notify (same composed-sync pattern as blk-composed). See [plan.md](plan.md) Phase 29.
-
-`qemu_virt_aarch64_ipc_composed` runs supervisor plus both block and net IPC services in one system. Probes run sequentially via a notify chain: supervisor → blk-client → net-client. See [plan.md](plan.md) Phase 30.
+The postcard net, request, paint, browser, agent, and filesystem boards are gone. Milestone 17 deleted `net-server`, `request-server`, `tls-proxy`, `display-server`, and `lerux-interface-types`. The live browser image is `qemu_virt_aarch64_browser_sddf`.
 
 ### x86 HTTP inbound (operational notes)
 

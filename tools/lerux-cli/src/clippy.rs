@@ -2,7 +2,7 @@
 //!
 //! Every (PD crate, board) pair in the matrix is linted with the same
 //! `board-<name>` feature the build uses, so lint coverage cannot drift from
-//! the board matrix. Shared userspace crates without board features are
+//! the board matrix. Shared library crates without board features are
 //! linted once per arch.
 
 use std::{
@@ -30,7 +30,7 @@ const ARCH_PASSES: &[(&str, &str)] = &[
     ("x86_64", "x86_64_generic"),
 ];
 
-/// Shared userspace library crates linted per-arch (no board features).
+/// Shared library crates linted per-arch (no board features).
 const SHARED_CRATES: &[&str] = &[
     "lerux-serial-queue",
     "lerux-sddf",

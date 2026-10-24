@@ -1,47 +1,41 @@
 #!/usr/bin/env python3
-"""Fail when a crate under userspace/crates is missing from a lint list.
-
-Every such crate is a workspace member and is named in SHARED_CRATES.
-A crate whose Cargo.toml does not depend on sel4 is also named in the
-host clippy list and the host test list inside support/host-check.sh.
-A sel4 crate stays off that host list: `just check` has no SDK. Forgetting
-the host list for a crate that does compile on the host, or forgetting
-SHARED_CRATES, is a failure.
-"""
+"""Fail when a crate under userspace/crates or lerux-ladybird/crates is missing from a lint list."""
 
 import re
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-CRATES = ROOT / "userspace" / "crates"
+CRATE_TREES = (
+    "userspace/crates",
+    "lerux-ladybird/crates",
+)
 WORKSPACE = ROOT / "Cargo.toml"
 HOST = ROOT / "support" / "host-check.sh"
 CLIPPY = ROOT / "tools" / "lerux-cli" / "src" / "clippy.rs"
 
 
-def crate_names() -> list[str]:
-    names = []
-    for path in sorted(CRATES.iterdir()):
-        manifest = path / "Cargo.toml"
-        if not manifest.is_file():
-            continue
-        match = re.search(r'(?m)^name = "([^"]+)"', manifest.read_text())
-        if not match:
-            raise SystemExit(f"{manifest} has no package name")
-        names.append(match.group(1))
-    return names
+def crate_manifests() -> list[tuple[str, str, Path]]:
+    found = []
+    for prefix in CRATE_TREES:
+        root = ROOT / prefix
+        if not root.is_dir():
+            raise SystemExit(f"{prefix} is not a directory")
+        for path in sorted(root.iterdir()):
+            manifest = path / "Cargo.toml"
+            if not manifest.is_file():
+                continue
+            match = re.search(r'(?m)^name = "([^"]+)"', manifest.read_text())
+            if not match:
+                raise SystemExit(f"{manifest} has no package name")
+            found.append((match.group(1), prefix, manifest))
+    return found
 
 
-def needs_sel4(name: str) -> bool:
-    text = (CRATES / name / "Cargo.toml").read_text()
+def needs_sel4(manifest: Path) -> bool:
+    text = manifest.read_text()
     deps = text.split("[dependencies]", 1)[-1].split("\n[", 1)[0]
     return re.search(r"(?m)^\s*sel4[\w-]*\s*=", deps) is not None
-
-
-def workspace_members() -> set[str]:
-    text = WORKSPACE.read_text()
-    return set(re.findall(r'"userspace/crates/([^"]+)"', text))
 
 
 def dash_p(script: str, tool: str) -> set[str]:
@@ -69,16 +63,21 @@ def main() -> int:
     clippy = dash_p(host, "clippy")
     tests = dash_p(host, "test")
     shared = shared_crates()
-    members = workspace_members()
+    workspace = WORKSPACE.read_text()
     errors = []
     host_checked = 0
     cross_only = 0
-    for name in crate_names():
-        if name not in members:
+    for name, prefix, manifest in crate_manifests():
+        if manifest.parent.name != name:
+            errors.append(
+                f"{prefix}/{manifest.parent.name} package name is {name}"
+            )
+        quoted = f'"{prefix}/{name}"'
+        if quoted not in workspace:
             errors.append(f"{name} is not a workspace member")
         if name not in shared:
             errors.append(f"{name} is missing from SHARED_CRATES")
-        if needs_sel4(name):
+        if needs_sel4(manifest):
             cross_only += 1
             continue
         host_checked += 1

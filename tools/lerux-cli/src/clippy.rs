@@ -71,15 +71,25 @@ fn derive_entries(root: &Path, boards: &Boards, arch: &str) -> Vec<ClippyEntry> 
             }
         }
     }
-    if arch == "aarch64" {
-        for name in SHARED_CRATES {
-            entries.push(ClippyEntry {
-                crate_name: (*name).to_string(),
-                feature: None,
-            });
+    for name in SHARED_CRATES {
+        if !shared_on_arch(name, arch) {
+            continue;
         }
+        entries.push(ClippyEntry {
+            crate_name: (*name).to_string(),
+            feature: None,
+        });
     }
     entries
+}
+
+/// Portable shared crates are linted on the aarch64 pass.
+/// `lerux-virtio-pci` calls `seL4_X86_IOPort_*`, so it is linted on x86_64.
+fn shared_on_arch(name: &str, arch: &str) -> bool {
+    match name {
+        "lerux-virtio-pci" => arch == "x86_64",
+        _ => arch == "aarch64",
+    }
 }
 
 pub fn clippy_workspace(root: &Path, build_dir: &str, config: &str) -> Result<()> {
@@ -241,4 +251,18 @@ fn clear_cross_incremental(target_dir: &Path) -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::shared_on_arch;
+
+    #[test]
+    fn virtio_pci_is_linted_on_x86_only() {
+        assert!(shared_on_arch("lerux-virtio-pci", "x86_64"));
+        assert!(!shared_on_arch("lerux-virtio-pci", "aarch64"));
+        assert!(!shared_on_arch("lerux-virtio-pci", "riscv64"));
+        assert!(shared_on_arch("lerux-logging", "aarch64"));
+        assert!(!shared_on_arch("lerux-logging", "x86_64"));
+    }
 }

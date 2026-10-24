@@ -294,7 +294,7 @@ Landed:
 - QEMU RISC-V and QEMU x86 boot the serial, cothread, network, filesystem, fetch, web, agent, and program roles with virtio and the 16550. RISC-V graphics is the virtio-gpu page at `0x10_003_000`. x86 graphics stays unsupported. `pc_z97_d3h` is unchanged.
 - On x86, an image that has both virtio-blk and virtio-net routes the block interrupt to pin 11 and the network interrupt to pin 10. The block driver uses the memory-mapped configuration window. The network driver stays at priority 2. The standalone network image keeps pin 11. The standalone block image keeps pin 10.
 - An x86 filesystem smoke that prints `reboot` restarts QEMU on the host. QEMU 6.2 does not reload a multiboot kernel on `system_reset`.
-- The new boards set `ci = false`. They are not in the workflow include list. The smoke count stays 53.
+- The new boards set `ci = false`. They are not in the workflow include list. The smoke count stays 53. Each one joins that list only after `just check`, `just check-pd`, and that board's smoke have passed, in the same change as the include list and the handwritten counts. The waiting list is [Outside the workflow](ci.md#waiting-on-a-smoke). Done for this milestone does not mean those boards are in continuous integration.
 - Checked on 2026-10-21. `just check` passed. `just check-pd` passed for aarch64 (234 crate combinations), riscv64 (74), and x86_64 (79).
 
 ## Milestone 17 — Remove the old model
@@ -308,6 +308,7 @@ Landed:
 - Guest code under `userspace/` has no `lerux-interface-types` dependency, no `LERUXFS`, and no `NetRequest`. The postcard protection domains and the crates `lerux-interface-types`, `lerux-ipc`, `lerux-fs`, `lerux-fat`, and `lerux-service-async` are deleted. Device-framework images, `hello`, and the drivers that did not use those crates stay. The logging serial sink stays for `hello` and the cothread client.
 - `just test` with no `BOARD` boots `qemu_virt_aarch64_fs_sddf`. `just build` still defaults to `qemu_virt_aarch64`. The continuous integration hello job is `BOARD=qemu_virt_aarch64 just test`. The smoke include list is 19 jobs. `docs/ci.md` and the README use that count.
 - `pc_z97_d3h` and the postcard workstation boards are gone. Their shells were postcard protection domains.
+- A board `lerux_image::render_board` accepts, including every name ending in `_sddf` and `x86_64_generic_fs_ahci`, takes its system description from that renderer. The `template` string on those rows is not a file in `userspace/systems/templates`, and `system_vars` on those rows are not substituted. Postcard boards still read the template file.
 - Checked on 2026-10-21. `just check` passed. `just check-pd` passed (51 aarch64 crate combinations and 37 x86_64 crate combinations). On a fresh `support/disk.img`, `just test` printed `lerux shell ready`, the scripted shell lines, and `reboot`.
 
 ## Milestone 18 — Paint the fetched fixture
@@ -367,3 +368,11 @@ Not started.
 - The Ethernet driver also accepts `8086:153b` at `00:19.0`, revision `0`, subsystem `1458:e000`. That is the I217-V recorded in [context.md](context.md). Memory is `0xf7e00000` (128 KiB) and `0xf7e3c000` (4 KiB). I/O is `0xf080`. The QEMU 82574 smoke does not prove that physical-layer path.
 - Read the Z97 Serial ATA configuration space on the desk, then add that identifier beside `8086:2922`.
 - The RTL8852BE probe stays a configuration-space read. There is no Intel display-engine driver and no Radeon driver. The desk image composes this Ethernet driver in the network-driver role.
+
+## Milestone 23 — RISC-V high guest virtio map
+
+**Exit:** A RISC-V virtio memory-mapped window can use a high guest virtual address, and the identity map is no longer required for boot.
+
+Not started.
+
+- On QEMU RISC-V the virtio memory-mapped guest virtual address equals the physical page (`0x10_001_000`, `0x10_002_000`, `0x10_003_000`). AArch64 uses the high window `0x6_000_000_000` for the same role. Copying that window onto RISC-V stops the boot. Leave the identity map in place until Microkit can place a high guest map on this architecture. `riscv_virtio_guest_address_matches_the_physical_page` locks the rule.

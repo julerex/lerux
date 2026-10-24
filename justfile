@@ -17,18 +17,18 @@ export RUSTC_BOOTSTRAP := "1"
 
 default: build
 
-# Format, clippy, and host tests for host crates (no SDK required)
+# Format, clippy, and host tests for host crates (no SDK required).
+# The command is support/host-check.sh. It sets CARGO_TARGET_DIR=build/host.
 check:
-    cargo fmt --all --check
-    CARGO_TARGET_DIR={{root}}/build/host cargo clippy -p lerux-cli -p lerux-tls -p lerux-html -p lerux-input -p lerux-desk -p lerux-web -p lerux-wasm -p lerux-rtw8852be -p lerux-sddf -p lerux-ring -p lerux-cothread -p lerux-gate -p lerux-posix --all-targets -- -D warnings
-    CARGO_TARGET_DIR={{root}}/build/host cargo clippy -p lerux-machine --features system-description --all-targets -- -D warnings
-    CARGO_TARGET_DIR={{root}}/build/host cargo clippy -p lerux-image --all-targets -- -D warnings
-    CARGO_TARGET_DIR={{root}}/build/host cargo test -p lerux-tls -p lerux-html -p lerux-input -p lerux-desk -p lerux-web -p lerux-wasm -p lerux-rtw8852be -p lerux-cli -p lerux-sddf -p lerux-ring -p lerux-cothread -p lerux-gate -p lerux-posix
-    python3 support/check-unsafe.py
-    CARGO_TARGET_DIR={{root}}/build/host cargo test -p lerux-machine --features system-description
-    CARGO_TARGET_DIR={{root}}/build/host cargo test -p lerux-image
-    # Phase 60 Track D: PPC priority + service-class band checks (host, no QEMU)
-    {{lerux}} profile check-qos
+    bash support/host-check.sh
+
+# One host-only crate. Does not start the protection-domain clippy gate.
+check-host crate:
+    CARGO_TARGET_DIR={{root}}/build/host cargo clippy -p {{crate}} --all-targets -- -D warnings
+    CARGO_TARGET_DIR={{root}}/build/host cargo test -p {{crate}}
+
+test-host crate:
+    CARGO_TARGET_DIR={{root}}/build/host cargo test -p {{crate}}
 
 # Cross-target clippy for PD + shared userspace crates (requires SDK)
 check-pd:
@@ -92,6 +92,8 @@ qemu-x86-64: disk-img
 alias qemu-x86 := qemu-x86-64
 
 # Bare `just test` boots the serial and filesystem image.
+# A board with a disk rebuilds support/disk.img before QEMU, so a stale
+# local format cannot fail mkdir with "already exists".
 # `BOARD=... just test` still smokes that board. `just build` keeps the hello default.
 test:
     #!/usr/bin/env bash

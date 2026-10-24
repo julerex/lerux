@@ -13,6 +13,7 @@ mod deploy;
 mod disk_img;
 mod fetch;
 mod fetch_sddf;
+mod fs_scaffold;
 mod fs_sddf;
 mod gpu_sddf;
 mod http_one;
@@ -78,6 +79,15 @@ enum Commands {
         tool: InstallTool,
     },
     DiskImg,
+    /// Diff the shell-feature alias for a filesystem board copied from another.
+    FsScaffold {
+        /// Board whose shell feature and config writer are copied.
+        #[arg(long)]
+        from: String,
+        /// New filesystem board. Its shell feature must enable `from`.
+        #[arg(long)]
+        board: String,
+    },
     /// Cross-target clippy for PD and shared userspace crates (requires SDK).
     Clippy {
         #[arg(long, default_value = "build")]
@@ -431,6 +441,9 @@ fn main() -> Result<()> {
             println!("{}", bin.display());
         }
         Commands::DiskImg => disk_img::disk_img(&root)?,
+        Commands::FsScaffold { from, board } => {
+            print!("{}", fs_scaffold::report(&root, &from, &board)?);
+        }
         Commands::Clippy { build_dir, config } => {
             clippy::clippy_workspace(&root, &build_dir, &config)?;
         }

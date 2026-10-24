@@ -7,7 +7,15 @@
 #                                   sp804 (patched QEMU), ramfb (QEMU ram framebuffer),
 #                                   tcp_echo / http_one / https_one (host smoke helpers).
 #                                   Omit `qemu` entirely for hardware-only boards.
-#   ci                              board runs in `lerux test-all` (and CI smoke)
+#   ci                              board runs in `lerux test-all`. The GitHub smoke
+#                                   matrix is the workflow include list, a subset.
+#                                   Every workflow board has ci = true. A ci = true
+#                                   board can stay out of that list; name it in
+#                                   docs/ci.md. For a board lerux-image renders
+#                                   (names ending in _sddf, and x86_64_generic_fs_ahci),
+#                                   template is not a file and system_vars are not
+#                                   substituted. The system description is the Rust
+#                                   image renderer.
 #   curl_expect                     smoke curls http://127.0.0.1:18080/ for this substring
 #
 # lerux-cli derives QEMU args, clippy matrices, disk/helper setup, and CI

@@ -1106,10 +1106,9 @@ pub fn run_board_test_with_mode(
     crate::qemu::print_http_hint(&ctx);
 
     if ctx.board.needs_disk() {
-        let disk = root.join("support/disk.img");
-        if !disk.is_file() {
-            crate::disk_img::disk_img(root)?;
-        }
+        // A scripted smoke starts from a fresh image. An existing
+        // support/disk.img keeps files from the last local run.
+        crate::disk_img::fresh_disk_img(root)?;
     }
 
     let helpers = crate::qemu::setup_test_helpers(&ctx)?;
@@ -1136,12 +1135,12 @@ pub fn run_board_test_with_mode(
             bail!("board {board:?} smoke needs QMP but qemu.qmp is false");
         }
         let socket = crate::qemu::qmp_socket(&ctx);
-        let stdio_log = if script_reboots && ctx.board.arch == "x86_64" {
+        let stdio_log = if reboot_needs_new_process(&ctx.board.arch, script_reboots) {
             Some(crate::qemu::stdio_smoke_log(&ctx))
         } else {
             None
         };
-        let host_restart = if script_reboots && ctx.board.arch == "x86_64" {
+        let host_restart = if reboot_needs_new_process(&ctx.board.arch, script_reboots) {
             let restart_ctx = ctx.clone();
             Some(Box::new(move || crate::qemu::qemu_command(&restart_ctx))
                 as Box<dyn FnMut() -> Result<Command>>)
@@ -1163,6 +1162,13 @@ pub fn run_board_test_with_mode(
     result
 }
 
+/// QEMU 6.2 does not reload a multiboot `-kernel` guest on `system_reset`.
+/// An x86 reboot script kills that process and starts a new one, which loads
+/// the kernel again. AArch64 and RISC-V stay on the QMP reset.
+fn reboot_needs_new_process(arch: &str, script_reboots: bool) -> bool {
+    script_reboots && arch == "x86_64"
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1180,6 +1186,14 @@ et: MAC 52:54:00:12:34:56
 INFO  [net_server] vINFO  [blk_server] virtio-blk: 8192 blocirtio-net: MAC 52:54:00:12:34:56
 ks x 512 bytes
 ";
+
+    #[test]
+    fn x86_reboot_script_starts_a_new_qemu_process() {
+        assert!(reboot_needs_new_process("x86_64", true));
+        assert!(!reboot_needs_new_process("aarch64", true));
+        assert!(!reboot_needs_new_process("riscv64", true));
+        assert!(!reboot_needs_new_process("x86_64", false));
+    }
 
     #[test]
     fn qmp_keys_reject_json_breakers() {

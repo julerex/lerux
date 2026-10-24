@@ -55,7 +55,13 @@ Harvest each explorer's final report into one scratch file and point the explain
 
 When the unknown is operational, probe it on the host before a large delegated smoke. Reset behavior, interrupt routing, and capture plumbing are that kind of unknown.
 
-Jobs that share one build-driver target directory run one at a time. Host-only tests use a separate target directory.
+Jobs that share one build-driver target directory run one at a time. Host-only tests use `just test-host <crate>` or `just check-host <crate>`. Both set `CARGO_TARGET_DIR` to `build/host` and do not start `just check-pd`.
+
+Before a Task spawn, run `python3 support/check-spawn.py` with the role, the subagent type, and the prompt. A non-zero exit is a refusal. Do not spawn.
+
+Before the numbered plan skill does any other work, run `python3 support/check-plan-owner.py --skills` with every attached skill name. If poteto-mode is one of them, the script exits non-zero and names the design doc.
+
+A change that touches a shared filesystem config writer is not done until `python3 support/check-sibling-smoke.py` exits zero. That requires `ci = true` on the new board, or a sibling `just test-...` recipe named in the test plan.
 
 A long run keeps its decision trail. Skipping the trail takes an explicit waiver from the operator.
 

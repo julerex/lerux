@@ -23,7 +23,7 @@ flowchart LR
 
 Local mirror: `just check` (format + clippy for host crates, plus `lerux profile check-qos`); `just check-pd` after `just build-sdk` (or `just check-all` for both).
 
-`just test-all` runs every board with `ci = true`. The jobs in the table below are the workflow `include` list. Nothing generates one list from the other, and nothing checks that the count on this page still matches that list. A new board name is compiled with `--features board-<name>` only when the PD crate declares that feature.
+`just test-all` runs every board with `ci = true`. The jobs in the table below are the workflow `include` list. Those two sets are not the same. `cargo test -p lerux-cli -- ci_lists` fails when a count on this page or in the README disagrees with the include list, when a workflow board has `ci = false`, or when a board in either set below is missing from this page. A new board name is compiled with `--features board-<name>` only when the PD crate declares that feature.
 
 **Security pin bumps** (seL4 / Microkit / rust-sel4): follow the Phase 60 Track B runbook in [`security.md`](security.md#dependency-pins-and-security-update-runbook-track-b) — pin edit → SDK refresh → check / check-pd → smoke matrix → rebuild images.
 
@@ -99,6 +99,38 @@ Workflow: [`.github/workflows/hw-serial.yml`](../.github/workflows/hw-serial.yml
 4. Optional `LERUX_HW_BAUD`
 
 Cloud PR smoke **does not** require a Pi. Hardware remains an opt-in lab path.
+
+## In test-all, outside the workflow
+
+These boards have `ci = true`, so `just test-all` runs them. They are not in the GitHub include list.
+
+- `qemu_virt_aarch64_debug`
+- `qemu_virt_riscv64_debug`
+- `x86_64_generic_debug`
+
+## Waiting on a smoke
+
+These boards have `ci = false`. Milestone 16 added the QEMU RISC-V and QEMU x86 device-framework boards in this list. Each board joins the workflow only after `just check`, `just check-pd`, and that board's smoke have passed, in the same change as the include list and the handwritten counts. Marking the milestone done does not put the board in continuous integration. `rpi4b_4gb` and `pc_z97_d3h_rtl8852be` stay here until a hardware runner is the smoke.
+
+- `pc_z97_d3h_rtl8852be`
+- `qemu_virt_riscv64_agent_sddf`
+- `qemu_virt_riscv64_browser_sddf`
+- `qemu_virt_riscv64_cothread`
+- `qemu_virt_riscv64_fetch_sddf`
+- `qemu_virt_riscv64_fs_sddf`
+- `qemu_virt_riscv64_net_sddf`
+- `qemu_virt_riscv64_program_sddf`
+- `qemu_virt_riscv64_serial_sddf`
+- `qemu_virt_riscv64_web_sddf`
+- `rpi4b_4gb`
+- `x86_64_generic_agent_sddf`
+- `x86_64_generic_fetch_sddf`
+- `x86_64_generic_fs_ahci`
+- `x86_64_generic_fs_sddf`
+- `x86_64_generic_net_sddf`
+- `x86_64_generic_program_sddf`
+- `x86_64_generic_serial_sddf`
+- `x86_64_generic_web_sddf`
 
 ## Caches
 

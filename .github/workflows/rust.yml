@@ -38,6 +38,15 @@ jobs:
       - name: Format and clippy
         run: just check
 
+      # The repro is support/host-check.sh. It sets CARGO_TARGET_DIR to
+      # build/host and runs fmt, clippy -D warnings, and the host tests.
+      - name: Publish the host check repro script
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: host-check-repro
+          path: support/host-check.sh
+
   sdk:
     runs-on: ubuntu-latest
     timeout-minutes: 120

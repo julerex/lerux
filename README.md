@@ -83,7 +83,6 @@ Full board reference: [`docs/boards.md`](docs/boards.md).
 | [AGENTS.md](AGENTS.md) | LLM agent instructions for idiomatic Rust |
 | [docs/README.md](docs/README.md) | Documentation index |
 | [docs/context.md](docs/context.md) | Domain language and decisions |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Dependency hierarchy and call graph across lerux, rust-sel4, Microkit, and seL4 |
 | [docs/plan.md](docs/plan.md) | Roadmap and smoke parity table (phases 1–82, done) |
 | [docs/plan-arch.md](docs/plan-arch.md) | Arch-level functionality gap plan (phases 50–60, done; physical lab still open) |
 | [docs/plan-qemu.md](docs/plan-qemu.md) | QEMU-only workstation deepening (phases 61–70, done) |

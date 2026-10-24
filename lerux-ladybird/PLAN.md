@@ -2,7 +2,7 @@
 
 Last updated: 2026-10-24
 
-**Status:** Not started. Milestones run in order. Implement one milestone per pass, and only after the previous milestone's exit holds. This file is the plan. Landing it adds no crate, no protection domain, and no continuous-integration job.
+**Status:** Milestone 1 is done. The next pass is milestone 2. Milestones run in order. Implement one milestone per pass, and only after the previous milestone's exit holds. This file is the plan.
 
 **Goal:** A browser named lerux-ladybird, written in Rust, `#![no_std]` plus `alloc`, that runs as lerux protection domains. Its process split and its path from a load to pixels follow [Ladybird](https://github.com/LadybirdBrowser/ladybird). The code is written in this tree.
 

@@ -1,33 +1,23 @@
-use crate::document::Document;
+use lerux_ladybird_html::Document;
 
-#[must_use]
+/// Hosts one document.
 pub struct Page {
     document: Document,
 }
 
 impl Page {
+    /// A page whose document is empty.
     #[expect(
         clippy::new_without_default,
-        reason = "Default would be a second constructor for the same empty page"
+        reason = "Default would be a second constructor for the same page"
     )]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             document: Document::empty(),
         }
     }
 
-    pub fn root_child_count(&self) -> usize {
-        self.document.root_child_count()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Page;
-
-    #[test]
-    fn new_page_owns_an_empty_document() {
-        let page = Page::new();
-        assert_eq!(page.root_child_count(), 0);
+    pub const fn document(&self) -> &Document {
+        &self.document
     }
 }

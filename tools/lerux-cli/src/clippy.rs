@@ -45,11 +45,6 @@ const SHARED_CRATES: &[&str] = &[
     "lerux-input",
     "lerux-desk",
     "lerux-web",
-    "lerux-wasm",
-    "lerux-rtw8852be",
-    "lerux-logging",
-    "lerux-virtio-hal",
-    "lerux-virtio-pci",
     "lerux-ladybird-url",
     "lerux-ladybird-gfx",
     "lerux-ladybird-html",
@@ -57,6 +52,11 @@ const SHARED_CRATES: &[&str] = &[
     "lerux-ladybird-http",
     "lerux-ladybird-js",
     "lerux-ladybird-image",
+    "lerux-wasm",
+    "lerux-rtw8852be",
+    "lerux-logging",
+    "lerux-virtio-hal",
+    "lerux-virtio-pci",
 ];
 
 struct ClippyEntry {

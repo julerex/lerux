@@ -3,7 +3,10 @@ name = "lerux-ladybird-web"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-description = "Ladybird LibWeb page that owns one document"
+description = "Ladybird LibWeb"
+
+[dependencies]
+lerux-ladybird-html = { path = "../lerux-ladybird-html" }
 
 [lints]
 workspace = true

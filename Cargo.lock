@@ -1214,6 +1214,9 @@ version = "0.1.0"
 [[package]]
 name = "lerux-ladybird-web"
 version = "0.1.0"
+dependencies = [
+ "lerux-ladybird-html",
+]
 
 [[package]]
 name = "lerux-logging"

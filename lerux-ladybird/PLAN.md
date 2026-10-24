@@ -2,7 +2,7 @@
 
 Last updated: 2026-10-24
 
-**Status:** Milestone 1 is done. The next pass is milestone 2. Milestones run in order. Implement one milestone per pass, and only after the previous milestone's exit holds. This file is the plan.
+**Status:** Milestone 1 has landed. Milestones 2 through 20 have not. Milestones run in order. Implement one milestone per pass, and only after the previous milestone's exit holds. This file is the plan. Milestone 1 adds the library crates. It adds no protection domain and no continuous-integration job.
 
 **Goal:** A browser named lerux-ladybird, written in Rust, `#![no_std]` plus `alloc`, that runs as lerux protection domains. Its process split and its path from a load to pixels follow [Ladybird](https://github.com/LadybirdBrowser/ladybird). The code is written in this tree.
 
@@ -121,7 +121,7 @@ The first bitmap has to paint the tags in [`support/browser/fixture.html`](../su
 - Add those paths to the workspace `members` list in the root `Cargo.toml`.
 - Add the same crate names to the `just check` clippy line and the `just check` test line, and to `SHARED_CRATES` in `tools/lerux-cli/src/clippy.rs`.
 - Each crate's crate-level comment names the Ladybird library it stands in for.
-- `Page` and `Document` live in `lerux-ladybird-web`. The document has a root and no elements yet.
+- `Page` lives in `lerux-ladybird-web` and owns one `Document`. `Document` lives in `lerux-ladybird-html`. The document has a root and no elements yet.
 - Add a row for this file to the index table in `docs/README.md`.
 
 Out of scope: parsers, bitmaps, protection domains, a board.

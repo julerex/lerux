@@ -30,6 +30,7 @@ members = [
     "userspace/pds/cothread-peer",
     "userspace/crates/lerux-serial-queue",
     "userspace/crates/lerux-sddf",
+    "userspace/crates/lerux-ring",
     "userspace/crates/lerux-machine",
     "userspace/crates/lerux-driver-protocols",
     "userspace/pds/html-demo",

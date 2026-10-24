@@ -1,0 +1,27 @@
+[package]
+name = "lerux-ring"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Proved index arithmetic for single-producer single-consumer rings"
+
+[package.metadata.verus]
+verify = true
+
+[lints]
+workspace = true
+
+[dependencies]
+# Pinned to the crates published with Verus 0.2026.10.18.7d82994.
+verus_builtin = "=0.0.0-2026-10-11-0230"
+verus_builtin_macros = "=0.0.0-2026-10-18-0147"
+
+# The verifier's expansion of `verus!` names `vstd`. Protection-domain builds
+# leave this feature off, so they compile the erased functions only.
+[dependencies.vstd]
+version = "=0.0.0-2026-10-18-0147"
+optional = true
+default-features = false
+
+[features]
+verus = ["dep:vstd"]

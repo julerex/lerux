@@ -6,6 +6,8 @@
 
 use core::sync::atomic::{fence, AtomicU32, Ordering};
 
+use lerux_ring::word32;
+
 use crate::serial::{serial_connection_resource_t, serial_queue_handle_t, serial_queue_t};
 
 fn load_acquire(word: &AtomicU32) -> u32 {
@@ -39,7 +41,7 @@ pub unsafe fn serial_queue_length_producer(queue_handle: &serial_queue_handle_t)
     unsafe {
         let tail = (*queue_handle.queue).tail.load(Ordering::Relaxed);
         let head = load_acquire(&(*queue_handle.queue).head);
-        tail.wrapping_sub(head)
+        word32::len(tail, head)
     }
 }
 
@@ -57,7 +59,7 @@ pub unsafe fn serial_queue_length_consumer(queue_handle: &serial_queue_handle_t)
     unsafe {
         let tail = load_acquire(&(*queue_handle.queue).tail);
         let head = (*queue_handle.queue).head.load(Ordering::Relaxed);
-        tail.wrapping_sub(head)
+        word32::len(tail, head)
     }
 }
 
@@ -67,7 +69,7 @@ pub unsafe fn serial_queue_length_consumer(queue_handle: &serial_queue_handle_t)
 pub unsafe fn serial_queue_empty(queue_handle: &serial_queue_handle_t, local_head: u32) -> bool {
     unsafe {
         let tail = load_acquire(&(*queue_handle.queue).tail);
-        local_head == tail
+        word32::is_empty(tail, local_head)
     }
 }
 
@@ -77,7 +79,7 @@ pub unsafe fn serial_queue_empty(queue_handle: &serial_queue_handle_t, local_hea
 pub unsafe fn serial_queue_full(queue_handle: &serial_queue_handle_t, local_tail: u32) -> bool {
     unsafe {
         let head = load_acquire(&(*queue_handle.queue).head);
-        local_tail.wrapping_sub(head) == queue_handle.capacity
+        word32::is_full(local_tail, head, queue_handle.capacity)
     }
 }
 
@@ -87,12 +89,16 @@ pub unsafe fn serial_queue_full(queue_handle: &serial_queue_handle_t, local_tail
 pub unsafe fn serial_enqueue(queue_handle: &serial_queue_handle_t, character: u8) -> i32 {
     unsafe {
         let tail = (*queue_handle.queue).tail.load(Ordering::Relaxed);
-        if serial_queue_full(queue_handle, tail) {
+        let head = load_acquire(&(*queue_handle.queue).head);
+        if word32::is_full(tail, head, queue_handle.capacity) {
             return -1;
         }
-        let index = (tail % queue_handle.capacity) as usize;
+        let index = word32::index(tail, queue_handle.capacity) as usize;
         *queue_handle.data_region.add(index) = character;
-        store_release(&(*queue_handle.queue).tail, tail.wrapping_add(1));
+        store_release(
+            &(*queue_handle.queue).tail,
+            word32::advance_tail(tail, head, queue_handle.capacity),
+        );
         0
     }
 }
@@ -107,12 +113,13 @@ pub unsafe fn serial_enqueue_local(
     character: u8,
 ) -> i32 {
     unsafe {
-        if serial_queue_full(queue_handle, *local_tail) {
+        let head = load_acquire(&(*queue_handle.queue).head);
+        if word32::is_full(*local_tail, head, queue_handle.capacity) {
             return -1;
         }
-        let index = (*local_tail % queue_handle.capacity) as usize;
+        let index = word32::index(*local_tail, queue_handle.capacity) as usize;
         *queue_handle.data_region.add(index) = character;
-        *local_tail = local_tail.wrapping_add(1);
+        *local_tail = word32::advance_tail(*local_tail, head, queue_handle.capacity);
         0
     }
 }
@@ -123,12 +130,16 @@ pub unsafe fn serial_enqueue_local(
 pub unsafe fn serial_dequeue(queue_handle: &serial_queue_handle_t, character: &mut u8) -> i32 {
     unsafe {
         let head = (*queue_handle.queue).head.load(Ordering::Relaxed);
-        if serial_queue_empty(queue_handle, head) {
+        let tail = load_acquire(&(*queue_handle.queue).tail);
+        if word32::is_empty(tail, head) {
             return -1;
         }
-        let index = (head % queue_handle.capacity) as usize;
+        let index = word32::index(head, queue_handle.capacity) as usize;
         *character = *queue_handle.data_region.add(index);
-        store_release(&(*queue_handle.queue).head, head.wrapping_add(1));
+        store_release(
+            &(*queue_handle.queue).head,
+            word32::advance_head(head, tail),
+        );
         0
     }
 }

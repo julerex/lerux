@@ -6,6 +6,8 @@
 
 use core::sync::atomic::{AtomicU32, Ordering};
 
+use lerux_ring::word32;
+
 use crate::blk::{
     blk_queue_handle_t, blk_req_code_t, blk_req_queue_t, blk_req_t, blk_resp_queue_t,
     blk_resp_status_t, blk_resp_t,
@@ -28,7 +30,7 @@ fn req_slot(queue: *mut blk_req_queue_t, index: u32, capacity: u32) -> *mut blk_
         .cast::<u8>()
         .wrapping_add(core::mem::size_of::<blk_req_queue_t>());
     base.cast::<blk_req_t>()
-        .wrapping_add((index % capacity) as usize)
+        .wrapping_add(word32::index(index, capacity) as usize)
 }
 
 fn resp_slot(queue: *mut blk_resp_queue_t, index: u32, capacity: u32) -> *mut blk_resp_t {
@@ -36,7 +38,7 @@ fn resp_slot(queue: *mut blk_resp_queue_t, index: u32, capacity: u32) -> *mut bl
         .cast::<u8>()
         .wrapping_add(core::mem::size_of::<blk_resp_queue_t>());
     base.cast::<blk_resp_t>()
-        .wrapping_add((index % capacity) as usize)
+        .wrapping_add(word32::index(index, capacity) as usize)
 }
 
 /// # Safety
@@ -62,7 +64,7 @@ pub unsafe fn blk_queue_full_req(handle: &blk_queue_handle_t) -> bool {
         let queue = handle.req_queue;
         let tail = load_relaxed(&raw const (*queue).tail);
         let head = load_acquire(&raw const (*queue).head);
-        tail.wrapping_sub(head) == handle.capacity
+        word32::is_full(tail, head, handle.capacity)
     }
 }
 
@@ -74,7 +76,7 @@ pub unsafe fn blk_queue_full_resp(handle: &blk_queue_handle_t) -> bool {
         let queue = handle.resp_queue;
         let tail = load_relaxed(&raw const (*queue).tail);
         let head = load_acquire(&raw const (*queue).head);
-        tail.wrapping_sub(head) == handle.capacity
+        word32::is_full(tail, head, handle.capacity)
     }
 }
 
@@ -92,11 +94,12 @@ pub unsafe fn blk_enqueue_req(
     id: u32,
 ) -> i32 {
     unsafe {
-        if blk_queue_full_req(handle) {
-            return -1;
-        }
         let queue = handle.req_queue;
         let tail = load_relaxed(&raw const (*queue).tail);
+        let head = load_acquire(&raw const (*queue).head);
+        if word32::is_full(tail, head, handle.capacity) {
+            return -1;
+        }
         let mut req = core::mem::zeroed::<blk_req_t>();
         req.code = code;
         req.io_or_offset = io_or_offset;
@@ -104,7 +107,10 @@ pub unsafe fn blk_enqueue_req(
         req.count = count;
         req.id = id;
         req_slot(queue, tail, handle.capacity).write(req);
-        store_release(&raw mut (*queue).tail, tail.wrapping_add(1));
+        store_release(
+            &raw mut (*queue).tail,
+            word32::advance_tail(tail, head, handle.capacity),
+        );
         0
     }
 }
@@ -126,7 +132,7 @@ pub unsafe fn blk_dequeue_req(
         let queue = handle.req_queue;
         let head = load_relaxed(&raw const (*queue).head);
         let tail = load_acquire(&raw const (*queue).tail);
-        if head == tail {
+        if word32::is_empty(tail, head) {
             return -1;
         }
         let req = req_slot(queue, head, handle.capacity).read();
@@ -135,7 +141,7 @@ pub unsafe fn blk_dequeue_req(
         *block_number = req.block_number;
         *count = req.count;
         *id = req.id;
-        store_release(&raw mut (*queue).head, head.wrapping_add(1));
+        store_release(&raw mut (*queue).head, word32::advance_head(head, tail));
         0
     }
 }
@@ -152,17 +158,21 @@ pub unsafe fn blk_enqueue_resp(
     id: u32,
 ) -> i32 {
     unsafe {
-        if blk_queue_full_resp(handle) {
-            return -1;
-        }
         let queue = handle.resp_queue;
         let tail = load_relaxed(&raw const (*queue).tail);
+        let head = load_acquire(&raw const (*queue).head);
+        if word32::is_full(tail, head, handle.capacity) {
+            return -1;
+        }
         let mut resp = core::mem::zeroed::<blk_resp_t>();
         resp.status = status;
         resp.success_count = success_count;
         resp.id = id;
         resp_slot(queue, tail, handle.capacity).write(resp);
-        store_release(&raw mut (*queue).tail, tail.wrapping_add(1));
+        store_release(
+            &raw mut (*queue).tail,
+            word32::advance_tail(tail, head, handle.capacity),
+        );
         0
     }
 }
@@ -182,14 +192,14 @@ pub unsafe fn blk_dequeue_resp(
         let queue = handle.resp_queue;
         let head = load_relaxed(&raw const (*queue).head);
         let tail = load_acquire(&raw const (*queue).tail);
-        if head == tail {
+        if word32::is_empty(tail, head) {
             return -1;
         }
         let resp = resp_slot(queue, head, handle.capacity).read();
         *status = resp.status;
         *success_count = resp.success_count;
         *id = resp.id;
-        store_release(&raw mut (*queue).head, head.wrapping_add(1));
+        store_release(&raw mut (*queue).head, word32::advance_head(head, tail));
         0
     }
 }

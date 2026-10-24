@@ -21,6 +21,7 @@
 /deps/microkit-sdk/
 /deps/sdk-cache/
 /deps/.sdk-path
+/deps/verus/
 
 # Logs
 *.log

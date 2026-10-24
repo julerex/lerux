@@ -28,6 +28,7 @@ const ARCH_PASSES: &[(&str, &str)] = &[
 const SHARED_CRATES: &[&str] = &[
     "lerux-serial-queue",
     "lerux-sddf",
+    "lerux-ring",
     "lerux-machine",
     "lerux-cothread",
     "lerux-gate",

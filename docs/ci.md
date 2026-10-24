@@ -8,10 +8,12 @@ GitHub Actions workflow: [`.github/workflows/rust.yml`](../.github/workflows/rus
 2. **sdk** — Docker image, fetch sources, build Microkit SDK (cached), **prebuild patched SP804 QEMU** (cached), upload SDK artifact.
 3. **check-pd** — `just check-pd` (cross-target clippy on PD + shared userspace crates; needs SDK artifact).
 4. **smoke** — 19 parallel matrix jobs; each restores SDK artifact and per-job `build/` cache. Serial captures land in `build/smoke-logs/` and upload as `smoke-serial-<id>` (Phase 57).
+5. **verify-ring** — `just verify-ring`. Proves `lerux-ring` with the pinned Verus release. Runs in parallel with check and does not need the SDK. Its target directory is `build/verus`.
 
 ```mermaid
 flowchart LR
   check[check job]
+  verifyRing[verify-ring job]
   sdk[sdk job]
   checkPd[check-pd job]
   smoke[smoke matrix x19]

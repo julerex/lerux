@@ -9,3 +9,4 @@ description = "Rust copies of the LionsOS and seL4 Device Driver Framework share
 workspace = true
 
 [dependencies]
+lerux-ring = { path = "../lerux-ring" }

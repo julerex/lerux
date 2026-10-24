@@ -158,6 +158,11 @@ fn want_graphic_window(qemu: &QemuConfig, graphic: bool) -> bool {
     }
 }
 
+/// Guest serial for a headless smoke. Graphic windows use `vc` instead.
+fn headless_serial() -> [&'static str; 2] {
+    ["-serial", "mon:stdio"]
+}
+
 fn aarch64_command(qemu: &QemuConfig, loader: &Path, disk: &Path, window: bool) -> Command {
     let mut c = Command::new("qemu-system-aarch64");
     c.args([
@@ -173,7 +178,8 @@ fn aarch64_command(qemu: &QemuConfig, loader: &Path, disk: &Path, window: bool) 
         // (View → serial0 / Ctrl-Alt-2), not the calling terminal.
         c.args(["-display", "gtk", "-serial", "vc"]);
     } else {
-        c.args(["-serial", "mon:stdio", "-nographic"]);
+        c.args(headless_serial());
+        c.arg("-nographic");
     }
     if qemu.ramfb {
         c.args(["-device", "ramfb"]);
@@ -208,17 +214,9 @@ fn aarch64_command(qemu: &QemuConfig, loader: &Path, disk: &Path, window: bool) 
 
 fn riscv64_command(qemu: &QemuConfig, loader: &Path, disk: &Path) -> Command {
     let mut c = Command::new("qemu-system-riscv64");
-    c.args([
-        "-machine",
-        "virt",
-        "-m",
-        "size=2G",
-        "-nographic",
-        "-serial",
-        "mon:stdio",
-        "-kernel",
-        &path_str(loader),
-    ]);
+    c.args(["-machine", "virt", "-m", "size=2G", "-nographic"]);
+    c.args(headless_serial());
+    c.args(["-kernel", &path_str(loader)]);
     // Fixed virtio-mmio bus slots: blk on bus.0, net on bus.1 (match system_vars).
     if let Some(blockdev) = blockdev_arg(qemu.disk, disk) {
         c.args([
@@ -277,13 +275,9 @@ fn x86_command(
         "2G",
         "-display",
         "none",
-        "-serial",
-        "mon:stdio",
-        "-kernel",
-        &path_str(&kernel),
-        "-initrd",
-        &path_str(loader),
     ]);
+    c.args(headless_serial());
+    c.args(["-kernel", &path_str(&kernel), "-initrd", &path_str(loader)]);
     // Fixed PCI slots: blk at 0x3, net at 0x4 (match system_vars BAR addresses).
     if let Some(blockdev) = blockdev_arg(qemu.disk, disk) {
         c.args([
@@ -499,6 +493,21 @@ mod tests {
         assert!(bus1 < bus2, "{with_gpu}");
         let without_gpu = render_riscv64("disk = \"rw\"\nnet = \"user\"");
         assert!(!without_gpu.contains("virtio-mmio-bus.2"), "{without_gpu}");
+    }
+
+    #[test]
+    fn headless_serial_stays_on_the_monitor_stdio() {
+        let mut cmd = Command::new("qemu");
+        cmd.args(headless_serial());
+        let line = format!("{cmd:?}");
+        assert!(
+            line.contains("\"-serial\" \"mon:stdio\""),
+            "guest serial stays on the monitor stdio: {line}"
+        );
+        let riscv = render_riscv64("qmp = true");
+        assert!(riscv.contains("\"-serial\" \"mon:stdio\""), "{riscv}");
+        let aarch64 = render_aarch64("qmp = true", false);
+        assert!(aarch64.contains("\"-serial\" \"mon:stdio\""), "{aarch64}");
     }
 
     #[test]

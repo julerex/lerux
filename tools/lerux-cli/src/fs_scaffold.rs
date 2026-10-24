@@ -52,7 +52,7 @@ pub(crate) fn scaffold_diff(
     if !files.shell.lines().any(|line| line.trim() == alias) {
         missing.push(format!("userspace/pds/sddf-shell/Cargo.toml\n+{alias}"));
     }
-    if !writer_aliases(&files.writer, board, &feature) {
+    if !writer_aliases(files.writer, board, &feature) {
         missing.push(format!(
             "tools/lerux-cli/src/fs_sddf.rs\n+\"{board}\" => \"{feature}\","
         ));

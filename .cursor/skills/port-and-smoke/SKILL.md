@@ -3,8 +3,10 @@ name: port-and-smoke
 description: >
   Use when porting a protection domain to another architecture, changing a
   system description, combining virtio devices on one image, porting a context
-  switch, or judging a QEMU smoke. Read the serial log and finish both host
-  checks before calling the work done.
+  switch, or judging a QEMU smoke. When adding or changing an interrupt on a
+  board smoke, state whether the guest proof exercised that interrupt or only
+  polling and log lines. Read the serial log and finish both host checks before
+  calling the work done.
 ---
 
 # Port and smoke
@@ -19,11 +21,13 @@ A firmware port is done when that smoke is green and `just check` and `just chec
 
 A claim that a smoke passed, that a serial capture is intact, or that a reboot reloaded the guest is checked against the log file or the harness transcript.
 
+After a change to how QEMU is assembled, run the command-line interface tests for that board before the guest smoke.
+
 ## Sequence
 
 Before scheduling a role on a new architecture, find the compile-time gates and which protection domains link the dependency. Order the units behind that proof.
 
-The first unit ends with host tests that compare the rendered system description, including the architecture that must stay unchanged. The next unit's guest smoke starts after those tests are green.
+The first unit ends with host tests that compare the rendered system description, including the architecture that must stay unchanged. Those tests assert the program name, the regions, and the interrupt element. The next unit's guest smoke starts after those tests are green.
 
 Land each green unit as its own commit or pull request. One branch at the end is the shape only when the operator has said to wait.
 
@@ -39,6 +43,14 @@ When the machine table cannot express a rule that depends on that combination, w
 
 The shared grounding for a design names those feature splits and the invariants that are already true, including what the renderer emits and which board metadata is stale.
 
+Registration of a backend is not proof the image uses it. Trace the function that renders the board until the program name, the regions, and the interrupt element match that backend.
+
+An x86 message-signaled interrupt element carries the PCI address, a handle equal to the guest vector plus 0x30, and that guest vector. A QEMU tree listing does not supply an I/O APIC pin for the stock controller.
+
+Shared queue memory with no physical address is not a device direct-memory-access target. Copy through a driver-owned window that has a fixed physical address.
+
+When the protection domain uses compile-time addresses, map the regions directly. A setvar patch for a symbol the program does not define fails the image step.
+
 ## Context switch
 
 A context-switch port matches the recorded upstream register layout. Stop when that layout cannot be found. The proof is the project's canonical log lines.
@@ -53,7 +65,7 @@ Reconcile an explorer claim about how an image is generated against the function
 
 Harvest each explorer's final report into one scratch file and point the explainer at that file.
 
-When the unknown is operational, probe it on the host before a large delegated smoke. Reset behavior, interrupt routing, and capture plumbing are that kind of unknown.
+When the unknown is operational, probe it on the host before a large delegated smoke. Reset behavior, interrupt routing, and capture plumbing are that kind of unknown. A QEMU device probe is a bounded headless machine (`-machine q35 -nodefaults -S`), then monitor `info qtree` and `quit`. Bare `-device <name>,help` can boot a full virtual machine and hang.
 
 Jobs that share one build-driver target directory run one at a time. Host-only tests use a separate target directory.
 

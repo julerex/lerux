@@ -8,6 +8,7 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 |-----|---------|
 | [../AGENTS.md](../AGENTS.md) | LLM agent instructions for idiomatic Rust in this repo |
 | [context.md](context.md) | Domain language and architectural decisions |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Dependency hierarchy and call graph across lerux, rust-sel4, Microkit, and seL4 |
 | [../GLOSSARY.md](../GLOSSARY.md) | x86 machine names: q35, the Z97 desk, and the parts those machines are not |
 | [plan.md](plan.md) | Roadmap and cross-arch smoke parity (phases 1–82, done); [Physical RPi4 lab](plan.md#physical-rpi4-lab-hardware-gated) |
 | [plan-lionsos.md](plan-lionsos.md) | LionsOS structures in a Rust guest (milestones 1–18 done; 19–22 are the QEMU q35 native disk and Ethernet plan) |

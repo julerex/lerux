@@ -1,0 +1,9 @@
+[package]
+name = "lerux-ladybird-js"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Ladybird LibJS"
+
+[lints]
+workspace = true

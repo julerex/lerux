@@ -37,6 +37,13 @@ const SHARED_CRATES: &[&str] = &[
     "lerux-tls",
     "lerux-html",
     "lerux-web",
+    "lerux-ladybird-url",
+    "lerux-ladybird-gfx",
+    "lerux-ladybird-html",
+    "lerux-ladybird-web",
+    "lerux-ladybird-http",
+    "lerux-ladybird-js",
+    "lerux-ladybird-image",
     "lerux-wasm",
     "lerux-rtw8852be",
 ];

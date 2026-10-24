@@ -20,10 +20,10 @@ default: build
 # Format, clippy, and host tests for host crates (no SDK required)
 check:
     cargo fmt --all --check
-    CARGO_TARGET_DIR={{root}}/build/host cargo clippy -p lerux-cli -p lerux-tls -p lerux-html -p lerux-input -p lerux-desk -p lerux-web -p lerux-wasm -p lerux-rtw8852be -p lerux-sddf -p lerux-ring -p lerux-cothread -p lerux-gate -p lerux-posix --all-targets -- -D warnings
+    CARGO_TARGET_DIR={{root}}/build/host cargo clippy -p lerux-cli -p lerux-tls -p lerux-html -p lerux-input -p lerux-desk -p lerux-web -p lerux-ladybird-url -p lerux-ladybird-gfx -p lerux-ladybird-html -p lerux-ladybird-web -p lerux-ladybird-http -p lerux-ladybird-js -p lerux-ladybird-image -p lerux-wasm -p lerux-rtw8852be -p lerux-sddf -p lerux-ring -p lerux-cothread -p lerux-gate -p lerux-posix --all-targets -- -D warnings
     CARGO_TARGET_DIR={{root}}/build/host cargo clippy -p lerux-machine --features system-description --all-targets -- -D warnings
     CARGO_TARGET_DIR={{root}}/build/host cargo clippy -p lerux-image --all-targets -- -D warnings
-    CARGO_TARGET_DIR={{root}}/build/host cargo test -p lerux-tls -p lerux-html -p lerux-input -p lerux-desk -p lerux-web -p lerux-wasm -p lerux-rtw8852be -p lerux-cli -p lerux-sddf -p lerux-ring -p lerux-cothread -p lerux-gate -p lerux-posix
+    CARGO_TARGET_DIR={{root}}/build/host cargo test -p lerux-tls -p lerux-html -p lerux-input -p lerux-desk -p lerux-web -p lerux-ladybird-url -p lerux-ladybird-gfx -p lerux-ladybird-html -p lerux-ladybird-web -p lerux-ladybird-http -p lerux-ladybird-js -p lerux-ladybird-image -p lerux-wasm -p lerux-rtw8852be -p lerux-cli -p lerux-sddf -p lerux-ring -p lerux-cothread -p lerux-gate -p lerux-posix
     python3 support/check-unsafe.py
     CARGO_TARGET_DIR={{root}}/build/host cargo test -p lerux-machine --features system-description
     CARGO_TARGET_DIR={{root}}/build/host cargo test -p lerux-image

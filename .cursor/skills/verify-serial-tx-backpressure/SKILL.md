@@ -70,7 +70,7 @@ Read every TLC result with `/statechart`. It shows each invariant violation as i
 
 Line numbers are the comment at the top of `support/verify/serial-tx-backpressure/SerialTx.tla`. One TLA action is one branch in that source. The Rust twin is `support/verify/serial-tx-backpressure/replay`. It calls the real queue functions. The TLA module does not execute Rust. The two have to change together when a branch changes.
 
-Sync commit: `SYNC_COMMIT`
+Sync commit: `41dd1272fc0a4e968964e8824c7261af4e5baaf9`
 
 Move that hash forward only after you have re-read the covered functions at the new commit, updated both models so each step is still one branch, and re-run this check.
 

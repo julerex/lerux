@@ -10,17 +10,16 @@ use anyhow::{bail, Context, Result};
 
 use crate::board::load_boards;
 
-const LOCAL_ONLY_BOARDS: &[&str] = &[
-    "qemu_virt_aarch64_debug",
-    "qemu_virt_riscv64_debug",
-    "x86_64_generic_debug",
-];
+const OUTSIDE_WORKFLOW: &str = "In test-all, outside the workflow";
+const WAITING_ON_SMOKE: &str = "Waiting on a smoke";
 
 struct SmokeCensus {
     include: Vec<String>,
     readme_counts: Vec<usize>,
     ci_doc_counts: Vec<usize>,
+    ci_doc: String,
     ci_true: BTreeSet<String>,
+    ci_false: BTreeSet<String>,
 }
 
 fn load_census(root: &Path) -> Result<SmokeCensus> {
@@ -33,9 +32,15 @@ fn load_census(root: &Path) -> Result<SmokeCensus> {
         include: smoke_include_boards(&workflow)?,
         readme_counts: readme_smoke_counts(&readme)?,
         ci_doc_counts: ci_doc_smoke_counts(&ci_doc)?,
+        ci_doc: ci_doc.clone(),
         ci_true: boards
-            .into_iter()
+            .iter()
             .filter(|(_, board)| board.ci)
+            .map(|(name, _)| name.clone())
+            .collect(),
+        ci_false: boards
+            .into_iter()
+            .filter(|(_, board)| !board.ci)
             .map(|(name, _)| name)
             .collect(),
     })
@@ -54,7 +59,6 @@ fn check_census(census: &SmokeCensus) -> Result<()> {
         &census.ci_doc_counts,
         include_len,
     );
-    let include_set: BTreeSet<&str> = census.include.iter().map(String::as_str).collect();
     for board in &census.include {
         if !census.ci_true.contains(board) {
             errors.push(format!(
@@ -62,19 +66,81 @@ fn check_census(census: &SmokeCensus) -> Result<()> {
             ));
         }
     }
-    for board in &census.ci_true {
-        if include_set.contains(board.as_str()) || LOCAL_ONLY_BOARDS.contains(&board.as_str()) {
-            continue;
-        }
-        errors.push(format!(
-            "{board} has ci = true and is absent from the workflow include list"
-        ));
-    }
+    let include_set: BTreeSet<&str> = census.include.iter().map(String::as_str).collect();
+    let outside: BTreeSet<String> = census
+        .ci_true
+        .iter()
+        .filter(|board| !include_set.contains(board.as_str()))
+        .cloned()
+        .collect();
+    push_section_errors(
+        &mut errors,
+        &census.ci_doc,
+        OUTSIDE_WORKFLOW,
+        &outside,
+        "ci = true and outside the workflow",
+    );
+    push_section_errors(
+        &mut errors,
+        &census.ci_doc,
+        WAITING_ON_SMOKE,
+        &census.ci_false,
+        "ci = false",
+    );
     if errors.is_empty() {
         Ok(())
     } else {
         bail!("{}", errors.join("\n"))
     }
+}
+
+fn push_section_errors(
+    errors: &mut Vec<String>,
+    doc: &str,
+    heading: &str,
+    expected: &BTreeSet<String>,
+    why: &str,
+) {
+    let listed = match section_boards(doc, heading) {
+        Ok(listed) => listed,
+        Err(err) => {
+            errors.push(err.to_string());
+            return;
+        }
+    };
+    for board in expected.difference(&listed) {
+        errors.push(format!(
+            "docs/ci.md \"{heading}\" is missing {board} ({why})"
+        ));
+    }
+    for board in listed.difference(expected) {
+        errors.push(format!(
+            "docs/ci.md \"{heading}\" lists {board}, which is not {why}"
+        ));
+    }
+}
+
+fn section_boards(doc: &str, heading: &str) -> Result<BTreeSet<String>> {
+    let marker = format!("## {heading}");
+    let Some(start) = doc.find(&marker) else {
+        bail!("docs/ci.md is missing heading {marker}");
+    };
+    let rest = &doc[start + marker.len()..];
+    let body = rest.split("\n## ").next().unwrap_or(rest);
+    let mut names = BTreeSet::new();
+    for (index, part) in body.split('`').enumerate() {
+        if index % 2 == 1 && is_board_name(part) {
+            names.insert(part.to_string());
+        }
+    }
+    Ok(names)
+}
+
+fn is_board_name(name: &str) -> bool {
+    !name.is_empty()
+        && name
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_')
 }
 
 fn push_count_errors(errors: &mut Vec<String>, path: &str, counts: &[usize], include_len: usize) {
@@ -286,17 +352,15 @@ mod tests {
     }
 
     #[test]
-    fn local_only_boards_stay_legal() {
+    fn ci_true_outside_the_workflow_must_be_named() {
         let mut census = load_census(&root()).expect("load smoke lists");
-        let mut ci_true: BTreeSet<String> = census.include.iter().cloned().collect();
-        for name in LOCAL_ONLY_BOARDS {
-            assert!(
-                !ci_true.contains(*name),
-                "{name} is in the workflow include list"
-            );
-            ci_true.insert((*name).to_string());
-        }
-        census.ci_true = ci_true;
-        check_census(&census).expect("local-only boards stay legal");
+        census.ci_true.insert("not_a_real_board".to_string());
+        let err = check_census(&census).expect_err("unlisted board");
+        assert!(
+            err.to_string().contains(
+                "docs/ci.md \"In test-all, outside the workflow\" is missing not_a_real_board"
+            ),
+            "{err}"
+        );
     }
 }

@@ -1,0 +1,12 @@
+[workspace]
+
+[package]
+name = "serial-tx-backpressure"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+description = "Schedule check for the sDDF client transmit ring. Calls the real queue functions."
+
+[dependencies]
+lerux-sddf = { path = "../../../../userspace/crates/lerux-sddf" }

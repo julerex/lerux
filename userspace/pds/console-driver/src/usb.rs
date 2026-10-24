@@ -57,10 +57,15 @@ pub fn xhci_interval(speed: u8, b_interval: u8) -> u8 {
     b_interval.clamp(1, 16) - 1
 }
 
-/// First HID boot keyboard (class 3, subclass 1, protocol 1) with an IN interrupt.
+/// Last HID boot keyboard (class 3, subclass 1, protocol 1) with an IN interrupt.
+///
+/// An earlier boot interface must not hide a later one. The Z97 typing dongle
+/// is not the first HID device on the bus. A mouse after the only keyboard
+/// does not replace it.
 pub fn find_boot_keyboard(config: &[u8]) -> Option<BootKeyboard> {
     let mut config_value = 0u8;
     let mut boot_interface = None;
+    let mut found = None;
     let mut index = 0usize;
     while index + 1 < config.len() {
         let len = usize::from(config[index]);
@@ -81,18 +86,19 @@ pub fn find_boot_keyboard(config: &[u8]) -> Option<BootKeyboard> {
             let attr = config[index + 3];
             if addr & 0x80 != 0 && attr & 0x03 == 3 {
                 let max_packet = u16::from(config[index + 4]) | (u16::from(config[index + 5]) << 8);
-                return Some(BootKeyboard {
+                found = Some(BootKeyboard {
                     config_value,
                     interface,
                     ep_addr: addr,
                     max_packet,
                     interval: config[index + 6],
                 });
+                boot_interface = None;
             }
         }
         index += len;
     }
-    None
+    found
 }
 
 #[cfg(test)]
@@ -128,6 +134,32 @@ mod tests {
                 ep_addr: 0x81,
                 max_packet: 8,
                 interval: 4,
+            }
+        );
+    }
+
+    #[test]
+    fn a_later_boot_keyboard_wins_over_an_earlier_interface() {
+        // Boot keyboard, then a vendor interface, then the target boot keyboard.
+        // Returning the first interface arms the wrong device.
+        let config = [
+            9u8, 2, 57, 0, 3, 1, 0, 0xa0, 50, // configuration, three interfaces
+            9, 4, 0, 0, 1, 3, 1, 1, 0, // interface 0, boot keyboard
+            7, 5, 0x81, 3, 8, 0, 4, // interrupt IN
+            9, 4, 1, 0, 1, 0xff, 0, 0, 0, // interface 1, vendor, not a keyboard
+            7, 5, 0x82, 3, 8, 0, 1, //
+            9, 4, 2, 0, 1, 3, 1, 1, 0, // interface 2, target boot keyboard
+            7, 5, 0x83, 3, 8, 0, 8, // interrupt IN, interval 8
+        ];
+        let found = find_boot_keyboard(&config).unwrap();
+        assert_eq!(
+            found,
+            BootKeyboard {
+                config_value: 1,
+                interface: 2,
+                ep_addr: 0x83,
+                max_packet: 8,
+                interval: 8,
             }
         );
     }

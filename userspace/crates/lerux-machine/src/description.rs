@@ -195,6 +195,9 @@ static X86_NET_BARS: [PciBar; 2] = [
 pub fn virtio_node(arch: Arch, role: VirtioRole) -> Option<VirtioNode> {
     match arch {
         Arch::Aarch64 => Some(VirtioNode::Mmio(aarch64_virtio_mmio(role))),
+        // Guest virtual address equals the physical page. The AArch64 high
+        // window does not boot on QEMU RISC-V. Milestone 23 records the exit
+        // if Microkit can place a high guest map. Until then, keep the identity.
         Arch::Riscv64 => match role {
             VirtioRole::Blk => Some(VirtioNode::Mmio(MmioDevice {
                 window: MmioWindow {
@@ -387,5 +390,20 @@ mod tests {
                 offset: crate::table::AARCH64_VIRTIO_BLK_OFFSET,
             })
         );
+    }
+
+    #[test]
+    fn riscv_virtio_guest_address_matches_the_physical_page() {
+        for role in [VirtioRole::Blk, VirtioRole::Net, VirtioRole::Gpu] {
+            let Some(VirtioNode::Mmio(device)) = virtio_node(Arch::Riscv64, role) else {
+                panic!("riscv virtio node");
+            };
+            assert_eq!(
+                device.window.vaddr,
+                device.window.phys.value(),
+                "riscv virtio guest map stays the physical page"
+            );
+            assert_ne!(device.window.vaddr, 0x6_000_000_000);
+        }
     }
 }

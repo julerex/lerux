@@ -63,6 +63,13 @@ members = [
     "userspace/pds/crash-demo",
     "userspace/crates/lerux-virtio-hal",
     "userspace/crates/lerux-virtio-pci",
+    "lerux-ladybird/crates/lerux-ladybird-url",
+    "lerux-ladybird/crates/lerux-ladybird-gfx",
+    "lerux-ladybird/crates/lerux-ladybird-html",
+    "lerux-ladybird/crates/lerux-ladybird-web",
+    "lerux-ladybird/crates/lerux-ladybird-http",
+    "lerux-ladybird/crates/lerux-ladybird-js",
+    "lerux-ladybird/crates/lerux-ladybird-image",
 ]
 
 [workspace.dependencies]

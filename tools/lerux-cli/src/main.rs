@@ -10,6 +10,7 @@ mod ci_lists;
 mod clippy;
 mod config_cmd;
 mod deploy;
+mod dev_image;
 mod disk_img;
 mod fetch;
 mod fetch_sddf;

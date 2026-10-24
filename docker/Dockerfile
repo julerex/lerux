@@ -34,6 +34,7 @@ COPY tools/lerux-image /work/tools/lerux-image
 COPY support/boards.toml /work/support/boards.toml
 COPY userspace/pds /work/userspace/pds
 COPY userspace/crates /work/userspace/crates
+COPY lerux-ladybird/crates /work/lerux-ladybird/crates
 COPY Cargo.toml /work/Cargo.toml
 COPY Cargo.lock /work/Cargo.lock
 WORKDIR /work

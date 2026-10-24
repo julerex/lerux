@@ -1,0 +1,9 @@
+[package]
+name = "lerux-ladybird-web"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Ladybird LibWeb page that owns one document"
+
+[lints]
+workspace = true

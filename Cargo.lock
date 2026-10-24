@@ -1188,6 +1188,34 @@ name = "lerux-input"
 version = "0.1.0"
 
 [[package]]
+name = "lerux-ladybird-gfx"
+version = "0.1.0"
+
+[[package]]
+name = "lerux-ladybird-html"
+version = "0.1.0"
+
+[[package]]
+name = "lerux-ladybird-http"
+version = "0.1.0"
+
+[[package]]
+name = "lerux-ladybird-image"
+version = "0.1.0"
+
+[[package]]
+name = "lerux-ladybird-js"
+version = "0.1.0"
+
+[[package]]
+name = "lerux-ladybird-url"
+version = "0.1.0"
+
+[[package]]
+name = "lerux-ladybird-web"
+version = "0.1.0"
+
+[[package]]
 name = "lerux-logging"
 version = "0.1.0"
 dependencies = [

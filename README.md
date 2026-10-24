@@ -38,7 +38,7 @@ just test-all
 
 ## CI
 
-GitHub Actions runs on every push to `main`: **check** (`just check`), one **sdk** job (SDK + patched SP804 QEMU), **check-pd** (cross-target clippy on userspace crates), then **19 smoke** matrix jobs (the workflow `include` list). `just test-all` runs every `ci = true` board, a wider set than that list. Local lint: `just check` (host crates) or `just check-all` (host + PD, needs SDK). Details: [`docs/ci.md`](docs/ci.md).
+GitHub Actions runs on every push to `main`: **check** (`just check`), **verify-ring** (`just verify-ring`, in parallel with check), one **sdk** job (SDK + patched SP804 QEMU), **check-pd** (cross-target clippy on userspace crates), then **19 smoke** matrix jobs (the workflow `include` list). `just test-all` runs every `ci = true` board, a wider set than that list. Local lint: `just check` (host crates) or `just check-all` (host + PD, needs SDK). Details: [`docs/ci.md`](docs/ci.md).
 
 ## Architecture
 
@@ -83,6 +83,7 @@ Full board reference: [`docs/boards.md`](docs/boards.md).
 | [AGENTS.md](AGENTS.md) | LLM agent instructions for idiomatic Rust |
 | [docs/README.md](docs/README.md) | Documentation index |
 | [docs/context.md](docs/context.md) | Domain language and decisions |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Dependency hierarchy and call graph across lerux, rust-sel4, Microkit, and seL4 |
 | [docs/plan.md](docs/plan.md) | Roadmap and smoke parity table (phases 1–82, done) |
 | [docs/plan-arch.md](docs/plan-arch.md) | Arch-level functionality gap plan (phases 50–60, done; physical lab still open) |
 | [docs/plan-qemu.md](docs/plan-qemu.md) | QEMU-only workstation deepening (phases 61–70, done) |

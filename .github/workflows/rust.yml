@@ -47,6 +47,30 @@ jobs:
           name: host-check-repro
           path: support/host-check.sh
 
+  verify-ring:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: nightly-2026-04-04
+          components: rustfmt
+
+      - name: Cache the pinned Verus release
+        uses: actions/cache@v4
+        with:
+          path: deps/verus
+          key: verus-0.2026.10.18.7d82994-verusfmt-0.7.4
+
+      - name: Install just
+        run: bash .github/scripts/install-just.sh
+
+      - name: Prove the ring index crate
+        run: just verify-ring
+
   sdk:
     runs-on: ubuntu-latest
     timeout-minutes: 120

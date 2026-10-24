@@ -6,6 +6,8 @@
 
 use core::sync::atomic::Ordering;
 
+use lerux_ring::word64;
+
 use crate::fs::{fs_cmd_t, fs_cmpl_t, fs_msg_t, fs_queue_t, FS_QUEUE_CAPACITY};
 
 /// # Safety
@@ -16,7 +18,7 @@ pub unsafe fn fs_queue_length_consumer(queue: *const fs_queue_t) -> u64 {
     unsafe {
         let tail = (*queue).tail.load(Ordering::Acquire);
         let head = (*queue).head.load(Ordering::Relaxed);
-        tail.wrapping_sub(head)
+        word64::len(tail, head)
     }
 }
 
@@ -28,7 +30,7 @@ pub unsafe fn fs_queue_length_producer(queue: *const fs_queue_t) -> u64 {
     unsafe {
         let tail = (*queue).tail.load(Ordering::Relaxed);
         let head = (*queue).head.load(Ordering::Acquire);
-        tail.wrapping_sub(head)
+        word64::len(tail, head)
     }
 }
 
@@ -65,13 +67,17 @@ pub unsafe fn fs_command_enqueue(queue: *mut fs_queue_t, cmd: fs_cmd_t) -> i32 {
     unsafe {
         let tail = (*queue).tail.load(Ordering::Relaxed);
         let head = (*queue).head.load(Ordering::Acquire);
-        if tail.wrapping_sub(head) == FS_QUEUE_CAPACITY as u64 {
+        let capacity = FS_QUEUE_CAPACITY as u64;
+        if word64::is_full(tail, head, capacity) {
             return -1;
         }
-        let index = (tail % FS_QUEUE_CAPACITY as u64) as usize;
+        let index = word64::index(tail, capacity) as usize;
         let slot = core::ptr::addr_of_mut!((*queue).buffer).cast::<fs_msg_t>();
         slot.add(index).write(fs_msg_t { cmd });
-        (*queue).tail.store(tail.wrapping_add(1), Ordering::Release);
+        (*queue).tail.store(
+            word64::advance_tail(tail, head, capacity),
+            Ordering::Release,
+        );
         0
     }
 }
@@ -87,15 +93,19 @@ pub unsafe fn fs_completion_enqueue(queue: *mut fs_queue_t, cmpl: fs_cmpl_t) -> 
     unsafe {
         let tail = (*queue).tail.load(Ordering::Relaxed);
         let head = (*queue).head.load(Ordering::Acquire);
-        if tail.wrapping_sub(head) == FS_QUEUE_CAPACITY as u64 {
+        let capacity = FS_QUEUE_CAPACITY as u64;
+        if word64::is_full(tail, head, capacity) {
             return -1;
         }
-        let index = (tail % FS_QUEUE_CAPACITY as u64) as usize;
+        let index = word64::index(tail, capacity) as usize;
         let slot = core::ptr::addr_of_mut!((*queue).buffer).cast::<fs_msg_t>();
         let mut msg = core::mem::zeroed::<fs_msg_t>();
         msg.cmpl = cmpl;
         slot.add(index).write(msg);
-        (*queue).tail.store(tail.wrapping_add(1), Ordering::Release);
+        (*queue).tail.store(
+            word64::advance_tail(tail, head, capacity),
+            Ordering::Release,
+        );
         0
     }
 }
@@ -109,13 +119,15 @@ pub unsafe fn fs_message_dequeue(queue: *mut fs_queue_t, msg: &mut fs_msg_t) -> 
     unsafe {
         let head = (*queue).head.load(Ordering::Relaxed);
         let tail = (*queue).tail.load(Ordering::Acquire);
-        if head == tail {
+        if word64::is_empty(tail, head) {
             return -1;
         }
-        let index = (head % FS_QUEUE_CAPACITY as u64) as usize;
+        let index = word64::index(head, FS_QUEUE_CAPACITY as u64) as usize;
         let slot = core::ptr::addr_of!((*queue).buffer).cast::<fs_msg_t>();
         *msg = slot.add(index).read();
-        (*queue).head.store(head.wrapping_add(1), Ordering::Release);
+        (*queue)
+            .head
+            .store(word64::advance_head(head, tail), Ordering::Release);
         0
     }
 }

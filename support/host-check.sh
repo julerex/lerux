@@ -8,12 +8,12 @@ cd "$ROOT"
 export CARGO_TARGET_DIR="${ROOT}/build/host"
 
 cargo fmt --all --check
-cargo clippy -p lerux-cli -p lerux-tls -p lerux-html -p lerux-input -p lerux-desk -p lerux-web -p lerux-wasm -p lerux-rtw8852be -p lerux-sddf -p lerux-cothread -p lerux-gate -p lerux-posix -p lerux-serial-queue --all-targets -- -D warnings
+cargo clippy -p lerux-cli -p lerux-tls -p lerux-html -p lerux-input -p lerux-desk -p lerux-web -p lerux-wasm -p lerux-rtw8852be -p lerux-sddf -p lerux-ring -p lerux-cothread -p lerux-gate -p lerux-posix -p lerux-serial-queue --all-targets -- -D warnings
 # The console-driver binary is no_std. Host clippy builds its tests only.
 cargo clippy -p console-driver --tests -- -D warnings
 cargo clippy -p lerux-machine --features system-description --all-targets -- -D warnings
 cargo clippy -p lerux-image --all-targets -- -D warnings
-cargo test -p lerux-tls -p lerux-html -p lerux-input -p lerux-desk -p lerux-web -p lerux-wasm -p lerux-rtw8852be -p lerux-cli -p lerux-sddf -p lerux-cothread -p lerux-gate -p lerux-posix -p lerux-serial-queue -p console-driver
+cargo test -p lerux-tls -p lerux-html -p lerux-input -p lerux-desk -p lerux-web -p lerux-wasm -p lerux-rtw8852be -p lerux-cli -p lerux-sddf -p lerux-ring -p lerux-cothread -p lerux-gate -p lerux-posix -p lerux-serial-queue -p console-driver
 python3 support/check-unsafe.py --self-test
 python3 support/check-unsafe.py
 python3 support/check-shared-crates.py

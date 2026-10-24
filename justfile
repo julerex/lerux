@@ -36,6 +36,12 @@ check-pd:
 
 check-all: check check-pd
 
+# Prove userspace/crates/lerux-ring with the pinned Verus release.
+# Downloads the release into deps/verus on first use. A host whose C library
+# is older than the release binary re-runs the proof inside Ubuntu 24.04.
+verify-ring:
+    bash support/verify-ring.sh
+
 # Rewrite support/lionsos-layout.toml from the LionsOS 0.4.0 headers.
 lionsos-layout:
     LERUX_LIONSOS_LAYOUT=1 LERUX_LIONSOS_LAYOUT_WRITE=1 cargo test -p lerux-sddf --test layout

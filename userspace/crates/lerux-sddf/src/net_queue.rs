@@ -8,6 +8,8 @@
 
 use core::sync::atomic::{fence, Ordering};
 
+use lerux_ring::{word16, word32};
+
 use crate::net::{net_buff_desc_t, net_queue_handle_t, net_queue_t, NET_BUFFER_SIZE};
 
 fn load_acquire(word: &core::sync::atomic::AtomicU16) -> u16 {
@@ -26,7 +28,7 @@ fn descriptors(queue: *mut net_queue_t) -> *mut net_buff_desc_t {
 }
 
 fn length(tail: u16, head: u16) -> u16 {
-    tail.wrapping_sub(head)
+    word16::len(tail, head)
 }
 
 /// # Safety
@@ -69,7 +71,7 @@ pub unsafe fn net_queue_empty_free(queue: &net_queue_handle_t) -> bool {
     unsafe {
         let tail = load_acquire(&(*queue.free).tail);
         let head = (*queue.free).head.load(Ordering::Relaxed);
-        length(tail, head) == 0
+        word16::is_empty(tail, head)
     }
 }
 
@@ -80,7 +82,7 @@ pub unsafe fn net_queue_empty_active(queue: &net_queue_handle_t) -> bool {
     unsafe {
         let tail = load_acquire(&(*queue.active).tail);
         let head = (*queue.active).head.load(Ordering::Relaxed);
-        length(tail, head) == 0
+        word16::is_empty(tail, head)
     }
 }
 
@@ -117,9 +119,9 @@ unsafe fn enqueue(
     }
     unsafe {
         let tail = (*queue).tail.load(Ordering::Relaxed);
-        let index = u32::from(tail) % capacity;
+        let index = word32::index(u32::from(tail), capacity);
         *descriptors(queue).wrapping_add(index as usize) = buffer;
-        store_release(&(*queue).tail, tail.wrapping_add(1));
+        store_release(&(*queue).tail, word16::advance(tail));
     }
     0
 }
@@ -135,9 +137,9 @@ unsafe fn dequeue(
     }
     unsafe {
         let head = (*queue).head.load(Ordering::Relaxed);
-        let index = u32::from(head) % capacity;
+        let index = word32::index(u32::from(head), capacity);
         *buffer = *descriptors(queue).wrapping_add(index as usize);
-        store_release(&(*queue).head, head.wrapping_add(1));
+        store_release(&(*queue).head, word16::advance(head));
     }
     0
 }

@@ -1,17 +1,11 @@
-//! Stand-in for Ladybird `libweb_html_tokenizer` and the DOM.
+//! Modes are doctype, `html`, `head`, `title`, `body`, and `p`.
+//! `title` is raw text. Any other tag is an element with no mode of its own.
 
 #![no_std]
 extern crate alloc;
 #[cfg(test)]
 extern crate std;
 
-/// This value is the root.
-pub struct Document {
-    _private: (),
-}
+mod document;
 
-impl Document {
-    pub const fn empty() -> Self {
-        Self { _private: () }
-    }
-}
+pub use document::{Children, Document, Element, Node, Parent, Text};

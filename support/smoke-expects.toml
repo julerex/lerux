@@ -125,10 +125,11 @@ timeout_secs = 180
 expects = ["1 browser"]
 timeout_secs = 180
 script_timeout_secs = 180
+# The maths prompt has no newline. The line reader delivers it with the
+# following result line, so the expression rides in the same send.
 script = [
   { send = "browser\r", expect = "pixel 000000ff" },
-  { send = "maths\r", expect = "maths>" },
-  { send = "(1+2)*3\r", expect = "maths 9" },
+  { send = "maths\r(1+2)*3\r", expect = "maths 9" },
   { send = "quit\r", expect = "1 browser" },
 ]
 
@@ -136,10 +137,10 @@ script = [
 expects = ["1 browser"]
 timeout_secs = 180
 script_timeout_secs = 180
+# Same prompt constraint as the aarch64 browser image.
 script = [
   { send = "browser\r", expect = "pixel 000000ff" },
-  { send = "maths\r", expect = "maths>" },
-  { send = "(1+2)*3\r", expect = "maths 9" },
+  { send = "maths\r(1+2)*3\r", expect = "maths 9" },
   { send = "quit\r", expect = "1 browser" },
 ]
 

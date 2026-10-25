@@ -1,0 +1,19 @@
+[package]
+name = "console-shell"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "VGA start menu: browser is unavailable, maths is an integer session"
+
+[lints]
+workspace = true
+
+[features]
+board-pc_z97_d3h = []
+board-x86_64_generic_console = []
+
+[dependencies]
+embedded-hal-nb = { workspace = true }
+lerux-calc = { path = "../../crates/lerux-calc" }
+sel4-microkit = { workspace = true }
+sel4-microkit-driver-adapters = { workspace = true }

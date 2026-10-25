@@ -81,9 +81,9 @@ image: build
 run: image
     {{lerux}} run --board {{board}} --build-dir {{build_dir}} --config {{config}}
 
-# Serial and filesystem shell in QEMU. Quit with Ctrl-A x.
+# Browser and maths menu. Quit with Ctrl-A x.
 qemu: disk-img
-    BOARD=qemu_virt_aarch64_fs_sddf just run
+    BOARD=qemu_virt_aarch64_browser_sddf just run
 
 # Same shell on the x86-64 (q35) filesystem image.
 qemu-x86-64: disk-img
@@ -91,14 +91,14 @@ qemu-x86-64: disk-img
 
 alias qemu-x86 := qemu-x86-64
 
-# Bare `just test` boots the serial and filesystem image.
+# Bare `just test` boots the browser image and its start menu.
 # A board with a disk rebuilds support/disk.img before QEMU, so a stale
 # local format cannot fail mkdir with "already exists".
 # `BOARD=... just test` still smokes that board. `just build` keeps the hello default.
 test:
     #!/usr/bin/env bash
     set -euo pipefail
-    board="${BOARD:-qemu_virt_aarch64_fs_sddf}"
+    board="${BOARD:-qemu_virt_aarch64_browser_sddf}"
     export BOARD="$board"
     just image
     {{lerux}} test --board "$board" --build-dir {{build_dir}} --config {{config}}
@@ -215,6 +215,10 @@ test-x86-virtio:
 # HTTP smoke test on x86_64 q35 (PCI virtio-net)
 test-x86-http:
     BOARD=x86_64_generic_http just test
+
+# On-screen menu: VGA text, PS/2 keys over QMP, COM1 log
+test-x86-console:
+    BOARD=x86_64_generic_console just test
 
 # RISC-V virt smoke test (NS16550 MMIO UART)
 test-riscv:

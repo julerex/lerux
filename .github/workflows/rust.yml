@@ -338,7 +338,7 @@ jobs:
             command: just test-serial-sddf
           - id: fs-sddf
             board: qemu_virt_aarch64_fs_sddf
-            command: just test
+            command: just test-fs-sddf
           - id: net-sddf
             board: qemu_virt_aarch64_net_sddf
             command: just test-net-sddf
@@ -350,7 +350,7 @@ jobs:
             command: just test-web-sddf
           - id: browser-sddf
             board: qemu_virt_aarch64_browser_sddf
-            command: just test-browser-sddf
+            command: just test
           - id: agent-sddf
             board: qemu_virt_aarch64_agent_sddf
             command: just test-agent-sddf
@@ -369,6 +369,9 @@ jobs:
           - id: x86-http
             board: x86_64_generic_http
             command: just test-x86-http
+          - id: x86-console
+            board: x86_64_generic_console
+            command: just test-x86-console
           - id: riscv-http
             board: qemu_virt_riscv64_http
             command: just test-riscv-http

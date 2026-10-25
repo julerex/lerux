@@ -37,6 +37,7 @@ const SHARED_CRATES: &[&str] = &[
     "lerux-ring",
     "lerux-machine",
     "lerux-cothread",
+    "lerux-calc",
     "lerux-gate",
     "lerux-posix",
     "lerux-driver-protocols",

@@ -414,6 +414,16 @@ ci = true
 system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48 }
 
 # Same console image as pc_z97_d3h, booted under QEMU q35 so CI can inject PS/2 keys.
+[x86_64_generic_console]
+arch = "x86_64"
+microkit_board = "x86_64_generic"
+target = "x86_64-sel4-microkit"
+template = "console-pc.system.template"
+pds = ["console-shell", "serial-driver", "console-driver"]
+qemu = { qmp = true }
+ci = true
+system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48 }
+
 [x86_64_generic_virtio]
 arch = "x86_64"
 microkit_board = "x86_64_generic"
@@ -445,6 +455,15 @@ target = "aarch64-sel4-microkit"
 template = "serial-hello.system.template"
 pds = ["hello", "serial-driver"]
 system_vars = { serial_mmio_phys_addr = "0xfe201000", serial_irq = 121 }
+
+# On-screen menu for this desk. Hardware only. QEMU coverage is x86_64_generic_console.
+[pc_z97_d3h]
+arch = "x86_64"
+microkit_board = "x86_64_generic"
+target = "x86_64-sel4-microkit"
+template = "console-pc.system.template"
+pds = ["console-shell", "serial-driver", "console-driver"]
+system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48 }
 
 # Z97 RTL8852BE config-space probe. Hardware only. Reads root port 00:1c.6,
 # then the device on that port's secondary bus, and logs the id and BAR.

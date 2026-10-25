@@ -23,6 +23,7 @@ board-x86_64_generic_fs_sddf = []
 board-x86_64_generic_fs_ahci = ["board-x86_64_generic_fs_sddf"]
 
 [dependencies]
+lerux-calc = { path = "../../crates/lerux-calc" }
 lerux-cothread = { path = "../../crates/lerux-cothread" }
 lerux-posix = { path = "../../crates/lerux-posix" }
 lerux-sddf = { path = "../../crates/lerux-sddf" }

@@ -1,5 +1,15 @@
 #![no_std]
 #![no_main]
+#![cfg_attr(
+    any(
+        feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-qemu_virt_riscv64_browser_sddf"
+    ),
+    expect(
+        dead_code,
+        reason = "this image is the start menu and does not run the file-command loop"
+    )
+)]
 
 #[cfg(any(
     all(
@@ -379,12 +389,18 @@ extern "C" fn worker() {
         feature = "board-qemu_virt_aarch64_browser_sddf",
         feature = "board-qemu_virt_riscv64_browser_sddf"
     ))]
-    browse();
-    say(b"lerux shell ready\n");
-    let mut line = [0u8; LINE_MAX];
-    loop {
-        let len = read_line(&mut line);
-        dispatch(&line[..len]);
+    app_menu();
+    #[cfg(not(any(
+        feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-qemu_virt_riscv64_browser_sddf"
+    )))]
+    {
+        say(b"lerux shell ready\n");
+        let mut line = [0u8; LINE_MAX];
+        loop {
+            let len = read_line(&mut line);
+            dispatch(&line[..len]);
+        }
     }
 }
 
@@ -485,6 +501,49 @@ fn page_title(body: &[u8]) -> Option<&[u8]> {
         return None;
     }
     Some(title)
+}
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+))]
+const MENU: &[u8] = b"1 browser\n2 maths\n";
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+))]
+fn app_menu() {
+    let mut line = [0u8; LINE_MAX];
+    loop {
+        say(MENU);
+        let len = read_line(&mut line);
+        match trim(&line[..len]) {
+            b"1" | b"browser" => browse(),
+            b"2" | b"maths" => maths_repl(),
+            _ => say(b"err\n"),
+        }
+    }
+}
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+))]
+fn maths_repl() {
+    let mut line = [0u8; LINE_MAX];
+    loop {
+        say(b"maths> ");
+        let len = read_line(&mut line);
+        let text = trim(&line[..len]);
+        if text == b"quit" {
+            return;
+        }
+        match lerux_calc::eval(text) {
+            Ok(value) => say_value(b"maths ", value),
+            Err(_) => say(b"maths err\n"),
+        }
+    }
 }
 
 #[cfg(any(
@@ -919,189 +978,27 @@ fn cmd_calc(rest: &[u8]) {
         say(b"calc err\n");
         return;
     }
-    match eval_expr(rest) {
-        Ok(value) => say_calc(value),
-        Err(()) => say(b"calc err\n"),
+    match lerux_calc::eval(rest) {
+        Ok(value) => say_value(b"calc ", value),
+        Err(_) => say(b"calc err\n"),
     }
 }
 
 #[cfg(any(
     feature = "board-qemu_virt_aarch64_fetch_sddf",
     feature = "board-qemu_virt_riscv64_fetch_sddf",
-    feature = "board-x86_64_generic_fetch_sddf"
+    feature = "board-x86_64_generic_fetch_sddf",
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
 ))]
-fn say_calc(value: i64) {
+fn say_value(prefix: &[u8], value: i64) {
     let mut line = [0u8; 32];
-    let prefix = b"calc ";
     line[..prefix.len()].copy_from_slice(prefix);
     let mut len = prefix.len();
-    len += write_i64(&mut line[len..], value);
+    len += lerux_calc::write_i64(&mut line[len..], value);
     line[len] = b'\n';
     len += 1;
     say(&line[..len]);
-}
-
-#[cfg(any(
-    feature = "board-qemu_virt_aarch64_fetch_sddf",
-    feature = "board-qemu_virt_riscv64_fetch_sddf",
-    feature = "board-x86_64_generic_fetch_sddf"
-))]
-fn write_i64(buf: &mut [u8], value: i64) -> usize {
-    if value < 0 {
-        buf[0] = b'-';
-        return 1 + write_u64(&mut buf[1..], value.unsigned_abs());
-    }
-    write_u64(buf, u64::try_from(value).expect("non-negative"))
-}
-
-#[cfg(any(
-    feature = "board-qemu_virt_aarch64_fetch_sddf",
-    feature = "board-qemu_virt_riscv64_fetch_sddf",
-    feature = "board-x86_64_generic_fetch_sddf"
-))]
-fn write_u64(buf: &mut [u8], mut value: u64) -> usize {
-    let mut tmp = [0u8; 20];
-    let mut index = tmp.len();
-    loop {
-        index -= 1;
-        tmp[index] = b'0' + (value % 10) as u8;
-        value /= 10;
-        if value == 0 {
-            break;
-        }
-    }
-    let digits = &tmp[index..];
-    buf[..digits.len()].copy_from_slice(digits);
-    digits.len()
-}
-
-#[cfg(any(
-    feature = "board-qemu_virt_aarch64_fetch_sddf",
-    feature = "board-qemu_virt_riscv64_fetch_sddf",
-    feature = "board-x86_64_generic_fetch_sddf"
-))]
-fn eval_expr(input: &[u8]) -> Result<i64, ()> {
-    let mut parser = Parser { s: input, i: 0 };
-    let value = parser.parse_expr()?;
-    parser.skip();
-    if parser.i != parser.s.len() {
-        return Err(());
-    }
-    Ok(value)
-}
-
-#[cfg(any(
-    feature = "board-qemu_virt_aarch64_fetch_sddf",
-    feature = "board-qemu_virt_riscv64_fetch_sddf",
-    feature = "board-x86_64_generic_fetch_sddf"
-))]
-struct Parser<'a> {
-    s: &'a [u8],
-    i: usize,
-}
-
-#[cfg(any(
-    feature = "board-qemu_virt_aarch64_fetch_sddf",
-    feature = "board-qemu_virt_riscv64_fetch_sddf",
-    feature = "board-x86_64_generic_fetch_sddf"
-))]
-impl Parser<'_> {
-    fn skip(&mut self) {
-        while self.i < self.s.len() && self.s[self.i] == b' ' {
-            self.i += 1;
-        }
-    }
-
-    fn peek(&mut self) -> Option<u8> {
-        self.skip();
-        self.s.get(self.i).copied()
-    }
-
-    fn bump(&mut self) -> Option<u8> {
-        let byte = self.peek()?;
-        self.i += 1;
-        Some(byte)
-    }
-
-    fn parse_expr(&mut self) -> Result<i64, ()> {
-        let mut value = self.parse_term()?;
-        loop {
-            match self.peek() {
-                Some(b'+') => {
-                    self.bump();
-                    value = value.saturating_add(self.parse_term()?);
-                }
-                Some(b'-') => {
-                    self.bump();
-                    value = value.saturating_sub(self.parse_term()?);
-                }
-                _ => break,
-            }
-        }
-        Ok(value)
-    }
-
-    fn parse_term(&mut self) -> Result<i64, ()> {
-        let mut value = self.parse_factor()?;
-        loop {
-            match self.peek() {
-                Some(b'*') => {
-                    self.bump();
-                    value = value.saturating_mul(self.parse_factor()?);
-                }
-                Some(b'/') => {
-                    self.bump();
-                    let right = self.parse_factor()?;
-                    if right == 0 {
-                        return Err(());
-                    }
-                    value /= right;
-                }
-                _ => break,
-            }
-        }
-        Ok(value)
-    }
-
-    fn parse_factor(&mut self) -> Result<i64, ()> {
-        match self.peek() {
-            Some(b'(') => {
-                self.bump();
-                let value = self.parse_expr()?;
-                if self.bump() != Some(b')') {
-                    return Err(());
-                }
-                Ok(value)
-            }
-            Some(b'+') => {
-                self.bump();
-                self.parse_factor()
-            }
-            Some(b'-') => {
-                self.bump();
-                Ok(self.parse_factor()?.saturating_neg())
-            }
-            Some(b'0'..=b'9') => self.parse_number(),
-            _ => Err(()),
-        }
-    }
-
-    fn parse_number(&mut self) -> Result<i64, ()> {
-        let mut value: i64 = 0;
-        let mut saw = false;
-        while let Some(byte @ b'0'..=b'9') = self.s.get(self.i).copied() {
-            saw = true;
-            self.i += 1;
-            value = value
-                .saturating_mul(10)
-                .saturating_add(i64::from(byte - b'0'));
-        }
-        if saw {
-            Ok(value)
-        } else {
-            Err(())
-        }
-    }
 }
 
 #[cfg(any(

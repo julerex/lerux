@@ -22,6 +22,12 @@ expects = ["lerux: Hello from Rust on seL4 Microkit!"]
 [boards.x86_64_generic]
 expects = ["lerux: Hello from Rust on seL4 Microkit!"]
 
+[boards.x86_64_generic_console]
+expects = ["1 browser"]
+timeout_secs = 120
+qmp_keys = ["2", "ret", "6", "slash", "2", "ret"]
+qmp_expect = "maths 3"
+
 [boards.rpi4b_4gb]
 expects = ["lerux: Hello from Rust on seL4 Microkit!"]
 
@@ -116,12 +122,27 @@ expects = ["web listening"]
 timeout_secs = 180
 
 [boards.qemu_virt_aarch64_browser_sddf]
-expects = ["title lerux", "pixel 000000ff"]
+expects = ["1 browser"]
 timeout_secs = 180
+script_timeout_secs = 180
+# The maths prompt has no newline. The line reader delivers it with the
+# following result line, so the expression rides in the same send.
+script = [
+  { send = "browser\r", expect = "pixel 000000ff" },
+  { send = "maths\r(1+2)*3\r", expect = "maths 9" },
+  { send = "quit\r", expect = "1 browser" },
+]
 
 [boards.qemu_virt_riscv64_browser_sddf]
-expects = ["title lerux", "pixel 000000ff"]
+expects = ["1 browser"]
 timeout_secs = 180
+script_timeout_secs = 180
+# Same prompt constraint as the aarch64 browser image.
+script = [
+  { send = "browser\r", expect = "pixel 000000ff" },
+  { send = "maths\r(1+2)*3\r", expect = "maths 9" },
+  { send = "quit\r", expect = "1 browser" },
+]
 
 [boards.qemu_virt_aarch64_program_sddf]
 expects = ["program: rejected", "lerux-wasm: ran"]

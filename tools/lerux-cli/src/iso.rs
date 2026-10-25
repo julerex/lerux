@@ -465,11 +465,15 @@ fn print_usb_instructions(iso: &Path) {
         "Firmware boot menu (F12) → the USB entry that does not say UEFI. Enable CSM if that entry is missing."
     );
     println!("The UEFI entry stops in Limine: this kernel is linked at 1MB.");
-    println!("Screen: blue background, \"hello lerux\" on the first line, then \"lerux>\".");
-    println!("Keyboard: PS/2 in the rear combo port. USB works only if firmware legacy emulation is still on.");
-    println!("Commands: echo, help, pwd, history, calc, qos, clear. Others print \"unavailable\".");
+    println!("Screen: blue background, \"hello lerux\" on the first line, then \"1 browser\" and \"2 maths\".");
+    println!(
+        "Keyboard: PS/2 in the rear combo port, or a USB HID boot keyboard on a root xHCI port."
+    );
+    println!(
+        "1 or browser prints \"browser unavailable\". 2 or maths reads expressions until quit."
+    );
     println!("Console: COM1 115200 8N1 on the COMA header.");
-    println!("Expect: lerux-shell: prompt");
+    println!("Expect: 1 browser");
     println!("Full procedure: docs/boards.md#gigabyte-z97-d3h-install-path");
 }
 

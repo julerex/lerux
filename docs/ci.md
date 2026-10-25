@@ -7,7 +7,7 @@ GitHub Actions workflow: [`.github/workflows/rust.yml`](../.github/workflows/rus
 1. **check** — `just check` (`cargo fmt --all --check` + clippy on host crates; no SDK).
 2. **sdk** — Docker image, fetch sources, build Microkit SDK (cached), **prebuild patched SP804 QEMU** (cached), upload SDK artifact.
 3. **check-pd** — `just check-pd` (cross-target clippy on PD + shared userspace crates; needs SDK artifact).
-4. **smoke** — 19 parallel matrix jobs; each restores SDK artifact and per-job `build/` cache. Serial captures land in `build/smoke-logs/` and upload as `smoke-serial-<id>` (Phase 57).
+4. **smoke** — 20 parallel matrix jobs; each restores SDK artifact and per-job `build/` cache. Serial captures land in `build/smoke-logs/` and upload as `smoke-serial-<id>` (Phase 57).
 5. **verify-ring** — `just verify-ring`. Proves `lerux-ring` with the pinned Verus release. Runs in parallel with check and does not need the SDK. Its target directory is `build/verus`.
 
 ```mermaid
@@ -16,7 +16,7 @@ flowchart LR
   verifyRing[verify-ring job]
   sdk[sdk job]
   checkPd[check-pd job]
-  smoke[smoke matrix x19]
+  smoke[smoke matrix x20]
   sdk --> checkPd
   sdk --> smoke
 ```
@@ -39,17 +39,18 @@ Local mirror: `just check` (format + clippy for host crates, plus `lerux profile
 | `virtio` | `just disk-img && just test-virtio` | aarch64 virtio blk/net + TCP RX |
 | `cothread` | `just test-cothread` | aarch64 worker blocks on a Microkit notification and resumes |
 | `serial-sddf` | `just test-serial-sddf` | aarch64 serial driver, transmit virtualiser, receive virtualiser, and one client |
-| `fs-sddf` | `just test` | aarch64 block driver, serial driver, block and serial virtualisers, File Allocation Table server, and shell. Bare `just test` is this smoke. |
+| `fs-sddf` | `just test-fs-sddf` | aarch64 block driver, serial driver, block and serial virtualisers, File Allocation Table server, and shell. |
 | `net-sddf` | `just test-net-sddf` | aarch64 network driver, serial driver, network and serial virtualisers, one copier, and a smoltcp client |
 | `fetch-sddf` | `just test-fetch-sddf` | aarch64 filesystem and network roles; the shell fetches the https-one fixture |
 | `web-sddf` | `just test-web-sddf` | aarch64 filesystem and network roles; the shell serves the seeded hostname file |
-| `browser-sddf` | `just test-browser-sddf` | aarch64 filesystem, network, and graphics roles; the shell prints the fixture title and the first non-white pixel of the painted frame |
+| `browser-sddf` | `just test` | aarch64 filesystem, network, and graphics roles; the shell prints a browser and maths menu, paints the fixture, then evaluates `(1+2)*3`. Bare `just test` is this smoke. |
 | `agent-sddf` | `just test-agent-sddf` | aarch64 filesystem and network roles; grok asks the agent to write and read a file |
 | `program-sddf` | `just test-program-sddf` | aarch64 filesystem and network roles; a signed WebAssembly module reads the hostname and allocates a socket |
 | `html` | `just test-html` | Phase 74: lerux-html subset parser (`lerux-html: nodes=8`) |
 | `riscv-virtio` | `just disk-img && just test-riscv-virtio` | RISC-V virtio |
 | `http` | `just test-http` | virtio-net HTTP `GET /` via hostfwd |
 | `x86-http` | `just test-x86-http` | x86 q35 PCI virtio-net HTTP via hostfwd |
+| `x86-console` | `just test-x86-console` | q35 VGA text menu; PS/2 keys choose maths and evaluate `6/2` |
 | `riscv-http` | `just test-riscv-http` | RISC-V MMIO virtio-net HTTP via hostfwd |
 | `x86-virtio` | `just disk-img && just test-x86-virtio` | x86 q35 PCI virtio-blk/net + TCP RX |
 
@@ -112,6 +113,7 @@ These boards have `ci = true`, so `just test-all` runs them. They are not in the
 
 These boards have `ci = false`. Milestone 16 added the QEMU RISC-V and QEMU x86 device-framework boards in this list. Each board joins the workflow only after `just check`, `just check-pd`, and that board's smoke have passed, in the same change as the include list and the handwritten counts. Marking the milestone done does not put the board in continuous integration. `rpi4b_4gb` and `pc_z97_d3h_rtl8852be` stay here until a hardware runner is the smoke.
 
+- `pc_z97_d3h`
 - `pc_z97_d3h_rtl8852be`
 - `qemu_virt_riscv64_agent_sddf`
 - `qemu_virt_riscv64_browser_sddf`

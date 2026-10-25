@@ -8,13 +8,17 @@
 
 #![cfg_attr(not(test), no_std)]
 
+/// The input is empty, unbalanced, or otherwise not this grammar.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Error;
+
 /// Evaluate one expression. An empty input fails.
-pub fn eval(input: &[u8]) -> Result<i64, ()> {
+pub fn eval(input: &[u8]) -> Result<i64, Error> {
     let mut parser = Parser { s: input, i: 0 };
     let value = parser.parse_expr()?;
     parser.skip();
     if parser.i != parser.s.len() {
-        return Err(());
+        return Err(Error);
     }
     Ok(value)
 }
@@ -69,7 +73,7 @@ impl Parser<'_> {
         Some(byte)
     }
 
-    fn parse_expr(&mut self) -> Result<i64, ()> {
+    fn parse_expr(&mut self) -> Result<i64, Error> {
         let mut value = self.parse_term()?;
         loop {
             match self.peek() {
@@ -87,7 +91,7 @@ impl Parser<'_> {
         Ok(value)
     }
 
-    fn parse_term(&mut self) -> Result<i64, ()> {
+    fn parse_term(&mut self) -> Result<i64, Error> {
         let mut value = self.parse_factor()?;
         loop {
             match self.peek() {
@@ -99,7 +103,7 @@ impl Parser<'_> {
                     self.bump();
                     let right = self.parse_factor()?;
                     if right == 0 {
-                        return Err(());
+                        return Err(Error);
                     }
                     value /= right;
                 }
@@ -109,13 +113,13 @@ impl Parser<'_> {
         Ok(value)
     }
 
-    fn parse_factor(&mut self) -> Result<i64, ()> {
+    fn parse_factor(&mut self) -> Result<i64, Error> {
         match self.peek() {
             Some(b'(') => {
                 self.bump();
                 let value = self.parse_expr()?;
                 if self.bump() != Some(b')') {
-                    return Err(());
+                    return Err(Error);
                 }
                 Ok(value)
             }
@@ -128,11 +132,11 @@ impl Parser<'_> {
                 Ok(self.parse_factor()?.saturating_neg())
             }
             Some(b'0'..=b'9') => self.parse_number(),
-            _ => Err(()),
+            _ => Err(Error),
         }
     }
 
-    fn parse_number(&mut self) -> Result<i64, ()> {
+    fn parse_number(&mut self) -> Result<i64, Error> {
         let mut value: i64 = 0;
         let mut saw = false;
         while let Some(byte @ b'0'..=b'9') = self.s.get(self.i).copied() {
@@ -145,14 +149,14 @@ impl Parser<'_> {
         if saw {
             Ok(value)
         } else {
-            Err(())
+            Err(Error)
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{eval, write_i64};
+    use super::{eval, write_i64, Error};
 
     #[test]
     fn product_of_a_sum() {
@@ -166,13 +170,13 @@ mod tests {
 
     #[test]
     fn division_by_zero_fails() {
-        assert_eq!(eval(b"1/0"), Err(()));
+        assert_eq!(eval(b"1/0"), Err(Error));
     }
 
     #[test]
     fn trailing_junk_fails() {
-        assert_eq!(eval(b"1 2"), Err(()));
-        assert_eq!(eval(b""), Err(()));
+        assert_eq!(eval(b"1 2"), Err(Error));
+        assert_eq!(eval(b""), Err(Error));
     }
 
     #[test]

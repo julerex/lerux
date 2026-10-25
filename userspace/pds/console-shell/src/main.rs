@@ -14,7 +14,7 @@ use embedded_hal_nb::{
 use sel4_microkit::{protection_domain, Channel, ChannelSet, Handler, Infallible, MessageInfo};
 use sel4_microkit_driver_adapters::serial::client::Client;
 
-use lerux_calc::{eval, write_i64};
+use lerux_calc::{eval, write_i64, Error};
 
 const CONSOLE: Channel = Channel::new(0);
 const SERIAL: Channel = Channel::new(1);
@@ -131,7 +131,7 @@ impl HandlerImpl {
             Mode::Maths => {
                 match eval(line) {
                     Ok(value) => self.emit_value(b"maths ", value),
-                    Err(()) => self.emit(b"maths err\n"),
+                    Err(Error) => self.emit(b"maths err\n"),
                 }
                 self.emit(b"maths> ");
             }

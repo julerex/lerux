@@ -541,7 +541,7 @@ fn maths_repl() {
         }
         match lerux_calc::eval(text) {
             Ok(value) => say_value(b"maths ", value),
-            Err(()) => say(b"maths err\n"),
+            Err(_) => say(b"maths err\n"),
         }
     }
 }
@@ -980,7 +980,7 @@ fn cmd_calc(rest: &[u8]) {
     }
     match lerux_calc::eval(rest) {
         Ok(value) => say_value(b"calc ", value),
-        Err(()) => say(b"calc err\n"),
+        Err(_) => say(b"calc err\n"),
     }
 }
 

@@ -1,0 +1,9 @@
+[package]
+name = "lerux-calc"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Integer expressions for the shell calc command and the maths session"
+
+[lints]
+workspace = true

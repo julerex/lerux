@@ -12,11 +12,11 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `qemu_virt_aarch64_debug` | aarch64 | `just test-debug` | debug-handler (parent) + crash-demo (child fault) |
 | `qemu_virt_aarch64_serial_sddf` | aarch64 | `just test-serial-sddf` | `serial_driver`, `serial_virt_tx`, `serial_virt_rx`, `serial_client` |
 | `qemu_virt_aarch64_cothread` | aarch64 | `just test-cothread` | `cothread_client`, `cothread_peer`, `serial_driver` |
-| `qemu_virt_aarch64_fs_sddf` | aarch64 | `just test` | `blk_driver`, `serial_driver`, `blk_virt`, `serial_virt_tx`, `serial_virt_rx`, `fatfs`, `timer_driver`, `shell` |
+| `qemu_virt_aarch64_fs_sddf` | aarch64 | `just test-fs-sddf` | `blk_driver`, `serial_driver`, `blk_virt`, `serial_virt_tx`, `serial_virt_rx`, `fatfs`, `timer_driver`, `shell` |
 | `qemu_virt_aarch64_net_sddf` | aarch64 | `just test-net-sddf` | `net_driver`, `serial_driver`, `net_virt_tx`, `net_virt_rx`, `serial_virt_tx`, `serial_virt_rx`, `net_copy`, `net_client` |
 | `qemu_virt_aarch64_fetch_sddf` | aarch64 | `just test-fetch-sddf` | `blk_driver`, `net_driver`, `serial_driver`, `blk_virt`, `net_virt_tx`, `net_virt_rx`, `serial_virt_tx`, `serial_virt_rx`, `fatfs`, `net_copy`, `shell` |
 | `qemu_virt_aarch64_web_sddf` | aarch64 | `just test-web-sddf` | `blk_driver`, `net_driver`, `serial_driver`, `blk_virt`, `net_virt_tx`, `net_virt_rx`, `serial_virt_tx`, `serial_virt_rx`, `fatfs`, `net_copy`, `shell` |
-| `qemu_virt_aarch64_browser_sddf` | aarch64 | `just test-browser-sddf` | `blk_driver`, `net_driver`, `gpu_driver`, `serial_driver`, `blk_virt`, `net_virt_tx`, `net_virt_rx`, `serial_virt_tx`, `serial_virt_rx`, `gpu_virt`, `fatfs`, `net_copy`, `shell` |
+| `qemu_virt_aarch64_browser_sddf` | aarch64 | `just test` | `blk_driver`, `net_driver`, `gpu_driver`, `serial_driver`, `blk_virt`, `net_virt_tx`, `net_virt_rx`, `serial_virt_tx`, `serial_virt_rx`, `gpu_virt`, `fatfs`, `net_copy`, `shell` |
 | `qemu_virt_aarch64_agent_sddf` | aarch64 | `just test-agent-sddf` | `blk_driver`, `net_driver`, `serial_driver`, `blk_virt`, `net_virt_tx`, `net_virt_rx`, `serial_virt_tx`, `serial_virt_rx`, `fatfs`, `net_copy`, shell running `sddf-grok.elf`, agent running `sddf-agent.elf` |
 | `qemu_virt_aarch64_program_sddf` | aarch64 | `just test-program-sddf` | fetch roles with `program` (`sddf-program.elf`) in place of the shell |
 | `qemu_virt_aarch64_html` | aarch64 | `just test-html` | Phase 74: html-demo + lerux-html (baked-in fixture) |
@@ -26,6 +26,8 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `qemu_virt_riscv64_virtio` | riscv64 | `just test-riscv-virtio` | hello + serial + virtio |
 | `qemu_virt_riscv64_http` | riscv64 | `just test-riscv-http` | serial + virtio-net + http-server |
 | `x86_64_generic` | x86_64 | `BOARD=x86_64_generic just test` | hello + serial (COM1) |
+| `x86_64_generic_console` | x86_64 | `just test-x86-console` | `serial_driver`, `console_driver`, `shell` (`console-shell.elf`) |
+| `pc_z97_d3h` | x86_64 | `BOARD=pc_z97_d3h just image` | same menu on the desk VGA text page (hardware only) |
 | `x86_64_generic_virtio` | x86_64 | `just test-x86-virtio` | hello + serial + virtio-pci blk/net |
 | `x86_64_generic_http` | x86_64 | `just test-x86-http` | serial + virtio-pci net + http-server |
 | `rpi4b_4gb` | aarch64 | `BOARD=rpi4b_4gb just image` | hello + serial (PL011; hardware only) |
@@ -155,11 +157,9 @@ Living work list (what still needs a Pi): [`plan-arch.md` — Physical RPi4 lab]
 
 Part names for this desk and for QEMU q35 are in [GLOSSARY.md](../GLOSSARY.md). The driver tables are in [platforms.md](platforms.md#x86-device-map).
 
-`pc_z97_d3h` is not in `support/boards.toml`. The on-screen shell was a postcard protection domain.
+Board `pc_z97_d3h` is the **on-screen menu** on this Haswell desktop. It reuses Microkit `x86_64_generic` (same kernel as QEMU x86) and `console-pc.system.template` (COM1 `0x3f8`, IOAPIC pin 4, the VGA text page at `0xb8000`, a PS/2 keyboard, and a USB HID boot keyboard on the xHCI controller at PCI `00:14.0`). QEMU coverage of that image is `x86_64_generic_console` (`just test-x86-console`, PS/2). virtio-pci workstation images will **not** boot this motherboard.
 
-Board `pc_z97_d3h` is the **on-screen shell** (Phase 82) on this Haswell desktop. It reuses Microkit `x86_64_generic` (same kernel as QEMU x86) and `console-pc.system.template` (COM1 `0x3f8`, IOAPIC pin 4, the VGA text page at `0xb8000`, a PS/2 keyboard, and a USB HID boot keyboard on the xHCI controller at PCI `00:14.0`). QEMU coverage of that image is `x86_64_generic_console` (`just test-x86-console`, PS/2) and `x86_64_generic_usb_kbd` (`just test-x86-usb-kbd`). virtio-pci workstation images will **not** boot this motherboard.
-
-`just test-x86-usb-kbd` boots that image with qemu-xhci and QEMU's `usb-kbd`. Read `-device qemu-xhci,help` on the QEMU binary `just` launches before adding a device property. On this host that device has no `msi` property. The smoke delivers keys on MSI-X, and only after the driver writes interrupter IE while MSI-X is already enabled. The pass is `console-driver: usb keyboard` for QEMU's keyboard and then `lerux-shell: cmd=echo hi`. The desk keyboard is the USB HID boot dongle on the Intel controller at `00:14.0`. Intel port routing and that controller's MSI message stay unchecked until a metal boot.
+The template maps the xHCI window so the desk dongle can type. The separate QEMU USB-keyboard board is not in this tree. The desk keyboard is the USB HID boot dongle on the Intel controller at `00:14.0`, or a PS/2 keyboard in the rear combo port. Keyboards behind a hub are not seen.
 
 This machine is also the Ubuntu build host. Booting lerux **reboots Linux**. Keep Ubuntu as the default EFI entry. Do **not** format or overwrite `sda`.
 
@@ -182,7 +182,7 @@ The desk-browser spec names `console-driver`, `serial-driver`, `log-server`, `br
 
 Before a metal boot, a separate QEMU image runs those browser protection domains with the existing x86 virtio network driver. It loads `https://host:8443/desk.html` from `lerux https-one`, follows the link to `https://host:8443/desk-link.html`, and submits `q=hi` to `https://host:8443/desk-form.html?q=hi`. COM1 records each address and the first non-white pixel. That boot is not the metal product.
 
-Use the USB boot entry that does not say UEFI, with CSM enabled. The documented result of that boot is a blue screen with `hello lerux` on the first line and `lerux>` under it. The UEFI Limine entry stops before the shell: `sel4_32.elf` is linked at 1 MB. A metal boot of this image has not been recorded on this machine. The QEMU proof is `just test-x86-console` (SeaBIOS leaves the same text page).
+Use the USB boot entry that does not say UEFI, with CSM enabled. The documented result of that boot is a blue screen with `hello lerux` on the first line and the menu `1 browser` / `2 maths` under it. The UEFI Limine entry stops before the shell: `sel4_32.elf` is linked at 1 MB. A metal boot of this image has not been recorded on this machine. The QEMU proof is `just test-x86-console` (SeaBIOS leaves the same text page).
 
 An AMD modesetting driver would matter only if lerux itself programmed this card (resolution, HDMI, a linear framebuffer) or had to bring the picture up when the firmware had not left VGA text mode. That work is still deferred. The QEMU `ramfb` display server does not drive this card.
 
@@ -194,7 +194,7 @@ lsblk
 sudo dd if=build/pc_z97_d3h/lerux.iso of=/dev/sdX bs=4M status=progress conv=fsync
 ```
 
-Replace `sdX` with the flash drive from `lsblk`. Do not use `sda` (Ubuntu SSD) or `sdb` (data disk). Reboot and open the firmware boot menu (F12). Choose the USB entry that does not say UEFI. If the stick is missing, enable CSM in setup. The Limine menu counts down, then the screen is blue with `hello lerux` on the first line and `lerux>` under it. Type with a PS/2 keyboard in the rear combo port, or a USB HID boot keyboard on a root xHCI port (the Microsoft Wireless Desktop 900 dongle on this machine is one). Keyboards behind a hub are not seen. `echo`, `help`, `pwd`, `history`, `calc`, `qos`, and `clear` work. `ls`, `fetch`, and `edit` print `unavailable` (this image has no disk or network driver). The serial console is still COM1 at 115200 8N1 on the COMA header. `lerux-shell: prompt` there means the shell reached the prompt, and `console-driver: usb keyboard` means the USB boot keyboard was armed. Reboot and choose Ubuntu to return.
+Replace `sdX` with the flash drive from `lsblk`. Do not use `sda` (Ubuntu SSD) or `sdb` (data disk). Reboot and open the firmware boot menu (F12). Choose the USB entry that does not say UEFI. If the stick is missing, enable CSM in setup. The Limine menu counts down, then the screen is blue with `hello lerux` on the first line and the menu `1 browser` / `2 maths` under it. Type with a PS/2 keyboard in the rear combo port, or a USB HID boot keyboard on a root xHCI port (the Microsoft Wireless Desktop 900 dongle on this machine is one). Keyboards behind a hub are not seen. `1` or `browser` prints `browser unavailable` (this image has no network and no page painter). `2` or `maths` reads integer expressions until `quit`. The serial console is still COM1 at 115200 8N1 on the COMA header and shows the same menu. `console-driver: usb keyboard` means the USB boot keyboard was armed. Reboot and choose Ubuntu to return.
 
 The ISO is a hybrid image. Limine loads Multiboot 2 `/boot/sel4_32.elf` with module `/boot/loader.img` from the legacy entry. `just test-iso` boots that file in QEMU as a raw disk under SeaBIOS (local check, not CI). The UEFI entry stops in Limine: `sel4_32.elf` is linked at 1MB, and UEFI does not leave that range free.
 
@@ -225,15 +225,15 @@ That copies `sel4_32.elf` + `loader.img` (and SHA-256 sidecars) and writes `leru
 - PS/2 keyboard in the rear combo port, or a USB HID boot keyboard on a root xHCI port
 - Monitor cable on the motherboard HDMI port. Set Peripherals → Initial Display Output to `IGFX` before a boot that should appear there. See [VGA text on the RX 560](#vga-text-on-the-rx-560).
 - USB stick (or a unused FAT partition). Not the Ubuntu root disk.
-- Optional: second computer as serial console, to see `lerux-shell: prompt` on COM1
+- Optional: second computer as serial console, to see `1 browser` on COM1
 
 **Pass criteria**
 
 | Check | Pass |
 |-------|------|
-| Screen | Blue background, `hello lerux` on the first line, `lerux>` on the second |
-| Keyboard | `echo hi` then Enter prints `hi` on the next line |
-| Serial | Kernel + `serial driver: NS16550 COM1` + `lerux-shell: prompt` |
+| Screen | Blue background, `hello lerux` on the first line, then `1 browser` and `2 maths` |
+| Keyboard | `2` then Enter, then `6/2` then Enter, prints `maths 3` |
+| Serial | Kernel + `serial driver: NS16550 COM1` + `1 browser` |
 | Ubuntu | `sda` still boots after the experiment |
 
 **Likely failure modes**

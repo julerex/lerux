@@ -2,9 +2,7 @@
 
 ## Quickstart
 
-`just test` boots the serial and filesystem shell on QEMU ARM virt. `just qemu` leaves that shell running. Quit with `Ctrl-A x`. `just qemu-x86-64` is the same shell on the x86-64 filesystem image.
-
-The Gigabyte on-screen shell used the postcard protection domains this tree no longer builds.
+`just test` boots the browser image on QEMU ARM virt and waits at a menu, `1 browser` or `2 maths`. `just qemu` leaves that menu running. Quit with `Ctrl-A x`. `just qemu-x86-64` is the filesystem shell on the x86-64 image. The desk image `pc_z97_d3h` shows the same menu on the VGA text page.
 
 Rust userspace on the [seL4](https://sel4.systems/) microkernel, using [seL4 Microkit](https://github.com/seL4/microkit) for static system layout and [rust-sel4](https://github.com/seL4/rust-sel4) for userspace APIs.
 
@@ -18,7 +16,7 @@ The seL4 kernel is **not vendored** — it is cloned into `deps/workspace/` and 
 just fetch          # clone seL4 16.0.0 + microkit 2.3.0
 just build-sdk      # build Microkit SDK from source (auto-downloads ARM toolchain if needed)
 # or: just fetch-sdk   # download prebuilt SDK 2.3.0 (no compile step)
-just qemu           # serial and filesystem shell in QEMU (Ctrl-A x to quit)
+just qemu           # browser and maths menu in QEMU (Ctrl-A x to quit)
 just qemu-x86-64    # same shell on the x86-64 filesystem image
 just run            # hello PD only (override with BOARD=… just run)
 ```
@@ -38,7 +36,7 @@ just test-all
 
 ## CI
 
-GitHub Actions runs on every push to `main`: **check** (`just check`), **verify-ring** (`just verify-ring`, in parallel with check), one **sdk** job (SDK + patched SP804 QEMU), **check-pd** (cross-target clippy on userspace crates), then **19 smoke** matrix jobs (the workflow `include` list). `just test-all` runs every `ci = true` board, a wider set than that list. Local lint: `just check` (host crates) or `just check-all` (host + PD, needs SDK). Details: [`docs/ci.md`](docs/ci.md).
+GitHub Actions runs on every push to `main`: **check** (`just check`), **verify-ring** (`just verify-ring`, in parallel with check), one **sdk** job (SDK + patched SP804 QEMU), **check-pd** (cross-target clippy on userspace crates), then **20 smoke** matrix jobs (the workflow `include` list). `just test-all` runs every `ci = true` board, a wider set than that list. Local lint: `just check` (host crates) or `just check-all` (host + PD, needs SDK). Details: [`docs/ci.md`](docs/ci.md).
 
 ## Architecture
 
@@ -54,14 +52,14 @@ Version pins: [`deps/versions.toml`](deps/versions.toml).
 
 ## Boards
 
-Default board for `just build` and `just run` is `qemu_virt_aarch64` (QEMU ARM virt). Override with `BOARD=...`. Bare `just test` boots `qemu_virt_aarch64_fs_sddf`.
+Default board for `just build` and `just run` is `qemu_virt_aarch64` (QEMU ARM virt). Override with `BOARD=...`. Bare `just test` boots `qemu_virt_aarch64_browser_sddf`.
 
 | Goal | Board | Command |
 |------|-------|---------|
-| Serial and filesystem shell | `qemu_virt_aarch64_fs_sddf` | `just test` |
+| Serial and filesystem shell | `qemu_virt_aarch64_fs_sddf` | `just test-fs-sddf` |
 | Serial hello | `qemu_virt_aarch64` | `BOARD=qemu_virt_aarch64 just test` |
 | HTML subset parse | `qemu_virt_aarch64_html` | `just test-html` |
-| Browser (fixture paint) | `qemu_virt_aarch64_browser_sddf` | `just test-browser-sddf` |
+| Browser and maths menu | `qemu_virt_aarch64_browser_sddf` | `just test` |
 | Agent tools | `qemu_virt_aarch64_agent_sddf` | `just test-agent-sddf` |
 | Virtio blk/net | `qemu_virt_aarch64_virtio` | `just disk-img && just test-virtio` |
 | HTTP over virtio-net | `qemu_virt_aarch64_http` | `just test-http` |

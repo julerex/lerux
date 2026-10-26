@@ -109,9 +109,7 @@ pub fn boot_test(root: &Path, iso: &Path, board: &str, build_dir: &str) -> Resul
             boot_iso(root, iso, board, build_dir, BiosKind::Ovmf(ovmf))?;
         }
         None => {
-            println!(
-                "==> Skipping OVMF UEFI ISO test (set OVMF_PATH or install ovmf)"
-            );
+            println!("==> Skipping OVMF UEFI ISO test (set OVMF_PATH or install ovmf)");
         }
     }
     Ok(())
@@ -122,13 +120,7 @@ enum BiosKind {
     Ovmf(PathBuf),
 }
 
-fn boot_iso(
-    root: &Path,
-    iso: &Path,
-    board: &str,
-    build_dir: &str,
-    bios: BiosKind,
-) -> Result<()> {
+fn boot_iso(root: &Path, iso: &Path, board: &str, build_dir: &str, bios: BiosKind) -> Result<()> {
     if !iso.is_file() {
         bail!("missing ISO {}", iso.display());
     }
@@ -180,8 +172,9 @@ fn resolve_ovmf() -> Option<PathBuf> {
             return Some(p);
         }
     }
+    // Prefer a combined firmware image usable with QEMU `-bios`. Split
+    // `OVMF_CODE_*.fd` images need a matching VARS pflash and do not work alone.
     for candidate in [
-        "/usr/share/OVMF/OVMF_CODE_4M.fd",
         "/usr/share/ovmf/OVMF.fd",
         "/usr/share/OVMF/OVMF.fd",
         "/usr/share/qemu/OVMF.fd",
@@ -542,12 +535,8 @@ fn print_usb_instructions(iso: &Path) {
     println!(
         "Replace sdX with the flash drive from lsblk. Do not use sda (Ubuntu SSD) or sdb (data disk)."
     );
-    println!(
-        "Firmware boot menu (F12) → the USB entry that says UEFI (Limine BOOTX64.EFI)."
-    );
-    println!(
-        "mb2-stub loads sel4_32.elf at 1 MiB after ExitBootServices; CSM/legacy also works."
-    );
+    println!("Firmware boot menu (F12) → the USB entry that says UEFI (Limine BOOTX64.EFI).");
+    println!("mb2-stub loads sel4_32.elf at 1 MiB after ExitBootServices; CSM/legacy also works.");
     println!("Screen: blue background, \"hello lerux\" on the first line, then \"1 browser\" and \"2 maths\".");
     println!(
         "Keyboard: PS/2 in the rear combo port, or a USB HID boot keyboard on a root xHCI port."

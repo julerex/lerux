@@ -96,31 +96,18 @@ pub fn build_iso(
     Ok(out)
 }
 
-/// Boot an existing ISO in QEMU as a raw disk, the same shape as `dd` onto a stick.
+/// Boot an existing ISO in QEMU as a raw disk under OVMF (UEFI).
 ///
-/// Runs SeaBIOS first, then OVMF (UEFI) when `OVMF_PATH` or a packaged OVMF
-/// firmware is available. Local check; not a CI job.
+/// Matches the metal USB path: Limine `BOOTX64.EFI` → `mb2-stub` → seL4.
+/// Requires a combined OVMF firmware (`OVMF_PATH` or a packaged `OVMF.fd`).
+/// Local check; not a CI job.
 pub fn boot_test(root: &Path, iso: &Path, board: &str, build_dir: &str) -> Result<()> {
-    println!("==> ISO boot test (SeaBIOS, raw disk)");
-    boot_iso(root, iso, board, build_dir, BiosKind::SeaBios)?;
-    match resolve_ovmf() {
-        Some(ovmf) => {
-            println!("==> ISO boot test (OVMF UEFI, raw disk)");
-            boot_iso(root, iso, board, build_dir, BiosKind::Ovmf(ovmf))?;
-        }
-        None => {
-            println!("==> Skipping OVMF UEFI ISO test (set OVMF_PATH or install ovmf)");
-        }
-    }
-    Ok(())
+    let ovmf = require_ovmf()?;
+    println!("==> ISO boot test (OVMF UEFI, raw disk)");
+    boot_iso_ovmf(root, iso, board, build_dir, &ovmf)
 }
 
-enum BiosKind {
-    SeaBios,
-    Ovmf(PathBuf),
-}
-
-fn boot_iso(root: &Path, iso: &Path, board: &str, build_dir: &str, bios: BiosKind) -> Result<()> {
+fn boot_iso_ovmf(root: &Path, iso: &Path, board: &str, build_dir: &str, ovmf: &Path) -> Result<()> {
     if !iso.is_file() {
         bail!("missing ISO {}", iso.display());
     }
@@ -143,37 +130,32 @@ fn boot_iso(root: &Path, iso: &Path, board: &str, build_dir: &str, bios: BiosKin
         "none",
         "-serial",
         "mon:stdio",
+        "-bios",
+        &path_str(ovmf),
         "-drive",
         &drive,
         "-boot",
         "c",
         "-no-reboot",
     ]);
-    let log_suffix = match &bios {
-        BiosKind::SeaBios => "iso-disk",
-        BiosKind::Ovmf(path) => {
-            cmd.args(["-bios", &path_str(path)]);
-            "iso-uefi"
-        }
-    };
     let mut test = crate::smoke_expects::smoke_test_for_board(root, board)?;
     test.curls.clear();
     let log = root
         .join(build_dir)
         .join("smoke-logs")
-        .join(format!("{board}.{log_suffix}.serial.log"));
+        .join(format!("{board}.iso-uefi.serial.log"));
     crate::test::run_smoke_with_capture(cmd, &test, Some(&log))
 }
 
-fn resolve_ovmf() -> Option<PathBuf> {
+/// Combined OVMF image for QEMU `-bios` (not a split CODE/VARS pair).
+pub fn require_ovmf() -> Result<PathBuf> {
     if let Ok(path) = std::env::var("OVMF_PATH") {
-        let p = PathBuf::from(path);
+        let p = PathBuf::from(&path);
         if p.is_file() {
-            return Some(p);
+            return Ok(p);
         }
+        bail!("OVMF_PATH={path} is not a file");
     }
-    // Prefer a combined firmware image usable with QEMU `-bios`. Split
-    // `OVMF_CODE_*.fd` images need a matching VARS pflash and do not work alone.
     for candidate in [
         "/usr/share/ovmf/OVMF.fd",
         "/usr/share/OVMF/OVMF.fd",
@@ -181,10 +163,12 @@ fn resolve_ovmf() -> Option<PathBuf> {
     ] {
         let p = PathBuf::from(candidate);
         if p.is_file() {
-            return Some(p);
+            return Ok(p);
         }
     }
-    None
+    bail!(
+        "OVMF firmware not found. Install the ovmf package or set OVMF_PATH to a combined OVMF.fd"
+    )
 }
 
 fn stage_iso_root(

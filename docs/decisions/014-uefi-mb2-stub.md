@@ -22,5 +22,5 @@ UEFI is the documented metal path. CSM remains supported with the same media.
 
 - `clang` is required to build the stub when packing an ISO or deploying to FAT.
 - QEMU `-kernel sel4_32.elf` smokes are unchanged; only Limine ISO/FAT media use the stub.
-- Local `iso --boot-test` runs SeaBIOS and, when OVMF is present, UEFI.
+- Local `iso --boot-test` boots the ISO under OVMF (UEFI) only; it matches the metal USB entry.
 - GRUB Multiboot 2 snippets still point at `sel4_32.elf` directly and are not the UEFI metal path.

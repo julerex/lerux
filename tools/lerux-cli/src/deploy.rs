@@ -62,6 +62,9 @@ pub fn deploy_loader(
             crate::image_digest::verify_sidecar(&kernel)?;
         }
         copy_file_and_sidecar(&kernel, &dest.join("sel4_32.elf"))?;
+        let stub = crate::iso::build_mb2_stub(root)?;
+        fs::copy(&stub, dest.join("mb2-stub.elf"))
+            .with_context(|| format!("copy {} → {}", stub.display(), dest.display()))?;
     }
 
     // Best-effort sync so unplug is safer.
@@ -126,9 +129,10 @@ fn uboot_commands(board: &str) -> String {
 
 fn limine_commands(board: &str) -> String {
     format!(
-        "# lerux Limine stanza for {board} (Multiboot 2).\n\
+        "# lerux Limine stanza for {board} (Multiboot 2 via mb2-stub).\n\
          # Paste into limine.conf. Do not replace an existing OS menu.\n\
-         # USB FAT: sel4_32.elf and loader.img at the volume root.\n\
+         # USB FAT: mb2-stub.elf, sel4_32.elf, and loader.img at the volume root.\n\
+         # Prefer the UEFI USB entry. The stub places sel4 at 1 MiB after ExitBootServices.\n\
          #\n\
          # Host golden path after boot (serial on a second machine):\n\
          #   LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD={board} just test-hw\n\
@@ -136,7 +140,8 @@ fn limine_commands(board: &str) -> String {
          /lerux ({board})\n\
          \x20   comment: seL4 Microkit\n\
          \x20   protocol: multiboot2\n\
-         \x20   path: boot():/sel4_32.elf\n\
+         \x20   path: boot():/mb2-stub.elf\n\
+         \x20   module_path: boot():/sel4_32.elf\n\
          \x20   module_path: boot():/loader.img\n"
     )
 }
@@ -163,8 +168,9 @@ fn print_x86_post_deploy_instructions(board: &str, dest_loader: &Path) {
     println!(
         "  2. Serial: 115200 8N1 on the board COMA header (no rear DB9) via a laptop USB-serial."
     );
-    println!("  3. Bootloader: Limine (lerux-limine.conf) or GRUB2 (lerux-grub.cfg) Multiboot 2.");
-    println!("       kernel  /sel4_32.elf");
+    println!("  3. Bootloader: Limine (lerux-limine.conf) Multiboot 2 via mb2-stub (prefer UEFI).");
+    println!("       kernel  /mb2-stub.elf");
+    println!("       module  /sel4_32.elf");
     println!("       module  /loader.img");
     println!("  4. Boot smoke (laptop, serial not held by screen):");
     println!("       LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD={board} just test-hw");
@@ -442,6 +448,7 @@ mod tests {
     fn deploy_copies_x86_kernel_and_multiboot_helpers() {
         let tmp = tempfile::tempdir().unwrap();
         let dest = setup_x86_image(tmp.path(), b"fake-loader", b"fake-kernel");
+        plant_fake_mb2_stub(tmp.path());
         let dest_canon = dest.canonicalize().unwrap();
 
         deploy_loader(
@@ -460,8 +467,13 @@ mod tests {
             b"fake-kernel"
         );
         assert!(dest_canon.join("sel4_32.elf.sha256").is_file());
+        assert_eq!(
+            fs::read(dest_canon.join("mb2-stub.elf")).unwrap(),
+            b"fake-stub"
+        );
         let limine = fs::read_to_string(dest_canon.join("lerux-limine.conf")).unwrap();
         assert!(limine.contains("multiboot2"), "{limine}");
+        assert!(limine.contains("mb2-stub.elf"), "{limine}");
         assert!(limine.contains("sel4_32.elf"), "{limine}");
         assert!(limine.contains("loader.img"), "{limine}");
         let grub = fs::read_to_string(dest_canon.join("lerux-grub.cfg")).unwrap();
@@ -469,6 +481,23 @@ mod tests {
         assert!(grub.contains("sel4_32.elf"), "{grub}");
         assert!(grub.contains("module2"), "{grub}");
         assert!(!dest_canon.join("lerux-uboot.txt").is_file());
+    }
+
+    fn plant_fake_mb2_stub(root: &Path) {
+        let dir = root.join("support/mb2-stub");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("build.sh"),
+            "#!/bin/sh\nprintf 'fake-stub' > \"$1\"\n",
+        )
+        .unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = fs::metadata(dir.join("build.sh")).unwrap().permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(dir.join("build.sh"), perms).unwrap();
+        }
     }
 
     #[test]

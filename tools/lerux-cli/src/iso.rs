@@ -1,9 +1,10 @@
 //! Hybrid BIOS+UEFI ISO for x86 Multiboot 2 boards.
 //!
-//! `lerux iso` packs `sel4_32.elf` and `loader.img` into a hybrid ISO. Limine
-//! Multiboot 2-boots that 32-bit kernel from the legacy/CSM entry. The kernel
-//! is linked at 1MB, so a UEFI entry stops in Limine (no free load address).
-//! The image is a file. It does not write a USB device.
+//! `lerux iso` packs `mb2-stub.elf`, `sel4_32.elf`, and `loader.img` into a
+//! hybrid ISO. Limine Multiboot 2-boots the stub (linked at 32 MiB). The stub
+//! ELF-loads `sel4_32.elf` to its 1 MiB link address after Limine has called
+//! `ExitBootServices`, so the UEFI entry works. The same path works under
+//! SeaBIOS/CSM. The image is a file. It does not write a USB device.
 //!
 //! Limine 12.9.0 is pinned in `deps/versions.toml` and unpacked under
 //! `deps/limine/` (gitignored). `xorriso` comes from `PATH` when installed,
@@ -25,9 +26,12 @@ use crate::{
 };
 
 /// Limine menu embedded in the ISO. Paths are on the boot volume.
+///
+/// The Multiboot 2 kernel is `mb2-stub.elf` (32 MiB). Modules are the seL4
+/// kernel ELF and the Microkit loader. See `support/mb2-stub/`.
 pub fn limine_conf() -> String {
     "\
-# Multiboot 2. `serial` is BIOS-only; the menu is on the screen either way.
+# Multiboot 2 via mb2-stub (UEFI and BIOS). `serial` is BIOS-only.
 timeout: 3
 serial: yes
 serial_baudrate: 115200
@@ -35,7 +39,8 @@ serial_baudrate: 115200
 /lerux
     comment: seL4 Microkit
     protocol: multiboot2
-    path: boot():/boot/sel4_32.elf
+    path: boot():/boot/mb2-stub.elf
+    module_path: boot():/boot/sel4_32.elf
     module_path: boot():/boot/loader.img
 "
     .to_string()
@@ -80,7 +85,7 @@ pub fn build_iso(
 
     let limine = ensure_limine(root)?;
     let staging = tempfile::tempdir().context("iso staging directory")?;
-    stage_iso_root(staging.path(), &kernel, &loader, verify)?;
+    stage_iso_root(root, staging.path(), &kernel, &loader, verify)?;
     stage_limine_boot(staging.path(), &limine)?;
     let xorriso = ensure_xorriso(root)?;
     write_iso(&xorriso, &limine, staging.path(), &out)?;
@@ -93,16 +98,37 @@ pub fn build_iso(
 
 /// Boot an existing ISO in QEMU as a raw disk, the same shape as `dd` onto a stick.
 ///
-/// Matches `support/smoke-expects.toml` for `board` under SeaBIOS. Local check;
-/// not a CI job. UEFI is not tested: `sel4_32.elf` is linked at 1MB, Limine
-/// panics with "Could not find viable load address" on OVMF, and UEFI GRUB
-/// places `loader.img` inside that image so seL4 asserts in `try_boot_sys`.
+/// Runs SeaBIOS first, then OVMF (UEFI) when `OVMF_PATH` or a packaged OVMF
+/// firmware is available. Local check; not a CI job.
 pub fn boot_test(root: &Path, iso: &Path, board: &str, build_dir: &str) -> Result<()> {
     println!("==> ISO boot test (SeaBIOS, raw disk)");
-    boot_iso(root, iso, board, build_dir)
+    boot_iso(root, iso, board, build_dir, BiosKind::SeaBios)?;
+    match resolve_ovmf() {
+        Some(ovmf) => {
+            println!("==> ISO boot test (OVMF UEFI, raw disk)");
+            boot_iso(root, iso, board, build_dir, BiosKind::Ovmf(ovmf))?;
+        }
+        None => {
+            println!(
+                "==> Skipping OVMF UEFI ISO test (set OVMF_PATH or install ovmf)"
+            );
+        }
+    }
+    Ok(())
 }
 
-fn boot_iso(root: &Path, iso: &Path, board: &str, build_dir: &str) -> Result<()> {
+enum BiosKind {
+    SeaBios,
+    Ovmf(PathBuf),
+}
+
+fn boot_iso(
+    root: &Path,
+    iso: &Path,
+    board: &str,
+    build_dir: &str,
+    bios: BiosKind,
+) -> Result<()> {
     if !iso.is_file() {
         bail!("missing ISO {}", iso.display());
     }
@@ -131,16 +157,50 @@ fn boot_iso(root: &Path, iso: &Path, board: &str, build_dir: &str) -> Result<()>
         "c",
         "-no-reboot",
     ]);
+    let log_suffix = match &bios {
+        BiosKind::SeaBios => "iso-disk",
+        BiosKind::Ovmf(path) => {
+            cmd.args(["-bios", &path_str(path)]);
+            "iso-uefi"
+        }
+    };
     let mut test = crate::smoke_expects::smoke_test_for_board(root, board)?;
     test.curls.clear();
     let log = root
         .join(build_dir)
         .join("smoke-logs")
-        .join(format!("{board}.iso-disk.serial.log"));
+        .join(format!("{board}.{log_suffix}.serial.log"));
     crate::test::run_smoke_with_capture(cmd, &test, Some(&log))
 }
 
-fn stage_iso_root(dest: &Path, kernel: &Path, loader: &Path, verify: bool) -> Result<()> {
+fn resolve_ovmf() -> Option<PathBuf> {
+    if let Ok(path) = std::env::var("OVMF_PATH") {
+        let p = PathBuf::from(path);
+        if p.is_file() {
+            return Some(p);
+        }
+    }
+    for candidate in [
+        "/usr/share/OVMF/OVMF_CODE_4M.fd",
+        "/usr/share/ovmf/OVMF.fd",
+        "/usr/share/OVMF/OVMF.fd",
+        "/usr/share/qemu/OVMF.fd",
+    ] {
+        let p = PathBuf::from(candidate);
+        if p.is_file() {
+            return Some(p);
+        }
+    }
+    None
+}
+
+fn stage_iso_root(
+    root: &Path,
+    dest: &Path,
+    kernel: &Path,
+    loader: &Path,
+    verify: bool,
+) -> Result<()> {
     if verify {
         image_digest::verify_sidecar(kernel)?;
         image_digest::verify_sidecar(loader)?;
@@ -151,10 +211,31 @@ fn stage_iso_root(dest: &Path, kernel: &Path, loader: &Path, verify: bool) -> Re
             loader.display()
         );
     }
+    let stub = build_mb2_stub(root)?;
+    copy_boot_file(&stub, &dest.join("boot/mb2-stub.elf"))?;
     copy_boot_file(kernel, &dest.join("boot/sel4_32.elf"))?;
     copy_boot_file(loader, &dest.join("boot/loader.img"))?;
     process::write_file(&dest.join("boot/limine.conf"), &limine_conf())?;
     Ok(())
+}
+
+/// Build `support/mb2-stub/mb2-stub.elf` with clang (`support/mb2-stub/build.sh`).
+pub fn build_mb2_stub(root: &Path) -> Result<PathBuf> {
+    let script = root.join("support/mb2-stub/build.sh");
+    let out = root.join("support/mb2-stub/mb2-stub.elf");
+    if !script.is_file() {
+        bail!("missing {}", script.display());
+    }
+    if !command_on_path("clang") {
+        bail!("clang is required to build support/mb2-stub (UEFI Limine trampoline)");
+    }
+    eprintln!("==> Building mb2-stub (UEFI Multiboot 2 trampoline)");
+    process::run_checked("bash", &[&path_str(&script), &path_str(&out)])
+        .context("build support/mb2-stub")?;
+    if !out.is_file() {
+        bail!("mb2-stub build did not write {}", out.display());
+    }
+    Ok(out)
 }
 
 struct LimineTool {
@@ -462,9 +543,11 @@ fn print_usb_instructions(iso: &Path) {
         "Replace sdX with the flash drive from lsblk. Do not use sda (Ubuntu SSD) or sdb (data disk)."
     );
     println!(
-        "Firmware boot menu (F12) → the USB entry that does not say UEFI. Enable CSM if that entry is missing."
+        "Firmware boot menu (F12) → the USB entry that says UEFI (Limine BOOTX64.EFI)."
     );
-    println!("The UEFI entry stops in Limine: this kernel is linked at 1MB.");
+    println!(
+        "mb2-stub loads sel4_32.elf at 1 MiB after ExitBootServices; CSM/legacy also works."
+    );
     println!("Screen: blue background, \"hello lerux\" on the first line, then \"1 browser\" and \"2 maths\".");
     println!(
         "Keyboard: PS/2 in the rear combo port, or a USB HID boot keyboard on a root xHCI port."
@@ -574,7 +657,11 @@ mod tests {
     fn limine_conf_is_multiboot2() {
         let cfg = limine_conf();
         assert!(cfg.contains("protocol: multiboot2"), "{cfg}");
-        assert!(cfg.contains("boot():/boot/sel4_32.elf"), "{cfg}");
+        assert!(cfg.contains("boot():/boot/mb2-stub.elf"), "{cfg}");
+        assert!(
+            cfg.contains("module_path: boot():/boot/sel4_32.elf"),
+            "{cfg}"
+        );
         assert!(
             cfg.contains("module_path: boot():/boot/loader.img"),
             "{cfg}"
@@ -591,7 +678,11 @@ mod tests {
     }
 
     #[test]
-    fn stage_copies_kernel_and_loader_without_sidecars() {
+    fn stage_copies_stub_kernel_and_loader_without_sidecars() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .canonicalize()
+            .unwrap();
         let tmp = tempfile::tempdir().unwrap();
         let kernel = tmp.path().join("sel4_32.elf");
         let loader = tmp.path().join("loader.img");
@@ -601,8 +692,9 @@ mod tests {
         image_digest::write_sidecar(&loader).unwrap();
 
         let dest = tmp.path().join("iso-root");
-        stage_iso_root(&dest, &kernel, &loader, true).unwrap();
+        stage_iso_root(&root, &dest, &kernel, &loader, true).unwrap();
 
+        assert!(dest.join("boot/mb2-stub.elf").is_file());
         assert_eq!(
             fs::read(dest.join("boot/sel4_32.elf")).unwrap(),
             b"kernel-bytes"
@@ -614,6 +706,7 @@ mod tests {
         assert!(!dest.join("boot/sel4_32.elf.sha256").exists());
         assert!(!dest.join("boot/loader.img.sha256").exists());
         let cfg = fs::read_to_string(dest.join("boot/limine.conf")).unwrap();
+        assert!(cfg.contains("mb2-stub.elf"), "{cfg}");
         assert!(
             cfg.contains("module_path: boot():/boot/loader.img"),
             "{cfg}"
@@ -622,6 +715,10 @@ mod tests {
 
     #[test]
     fn stage_refuses_missing_sidecar() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .canonicalize()
+            .unwrap();
         let tmp = tempfile::tempdir().unwrap();
         let kernel = tmp.path().join("sel4_32.elf");
         let loader = tmp.path().join("loader.img");
@@ -630,7 +727,7 @@ mod tests {
         image_digest::write_sidecar(&loader).unwrap();
 
         let dest = tmp.path().join("iso-root");
-        let err = stage_iso_root(&dest, &kernel, &loader, true)
+        let err = stage_iso_root(&root, &dest, &kernel, &loader, true)
             .unwrap_err()
             .to_string();
         assert!(err.contains("missing integrity sidecar"), "{err}");

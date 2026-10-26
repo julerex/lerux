@@ -8,20 +8,22 @@ The seL4 kernel is **not vendored** — it is cloned into `deps/workspace/` and 
 
 ## Quickstart
 
-Build the desk image as a hybrid USB ISO, write it to a flash drive, and boot that drive. The documented metal board is `pc_z97_d3h` (Gigabyte GA-Z97-D3H). Full procedure: [`docs/boards.md`](docs/boards.md#gigabyte-z97-d3h-install-path).
+Build the desk image as a hybrid USB ISO, write it to a flash drive, and boot that drive with **UEFI**. The documented metal board is `pc_z97_d3h` (Gigabyte GA-Z97-D3H). Full procedure: [`docs/boards.md`](docs/boards.md#gigabyte-z97-d3h-install-path).
 
-**Prerequisites:** Linux, `git`, `just`, `rustup`, `cmake`, `ninja`, `libclang-dev`, and a USB flash drive. The PC must legacy-boot USB (CSM). Do not overwrite the host OS disk.
+**Prerequisites:** Linux, `git`, `just`, `rustup`, `cmake`, `ninja`, `libclang-dev`, `clang` (for the Multiboot 2 trampoline), and a USB flash drive. Do not overwrite the host OS disk.
 
 ```bash
 just fetch          # clone seL4 + microkit into deps/workspace/
 just fetch-sdk      # download prebuilt Microkit SDK 2.3.0
 # or: just build-sdk   # build the SDK from source instead
-just iso            # build loader.img and pack build/pc_z97_d3h/lerux.iso
+just iso            # build loader.img, mb2-stub, and pack build/pc_z97_d3h/lerux.iso
 lsblk               # find the flash drive (e.g. /dev/sdX) — not the OS disk
 sudo dd if=build/pc_z97_d3h/lerux.iso of=/dev/sdX bs=4M status=progress conv=fsync
 ```
 
-Reboot and open the firmware boot menu (often F12). Choose the USB entry that does **not** say UEFI. If that entry is missing, enable CSM in setup. Limine counts down, then the screen is blue with `hello lerux` and the menu `1 browser` / `2 maths`. Type with a PS/2 keyboard in the rear combo port, or a USB HID boot keyboard on a root xHCI port.
+Reboot and open the firmware boot menu (often F12). Choose the USB entry that says **UEFI** (Limine `BOOTX64.EFI`). Limine counts down, then the screen is blue with `hello lerux` and the menu `1 browser` / `2 maths`. Type with a PS/2 keyboard in the rear combo port, or a USB HID boot keyboard on a root xHCI port.
+
+`sel4_32.elf` is still linked at 1 MiB. Limine loads `mb2-stub.elf` at 32 MiB under UEFI; the stub places the kernel at 1 MiB after `ExitBootServices`. A legacy/CSM USB entry still works with the same ISO.
 
 ## Quick start (QEMU)
 

@@ -36,7 +36,7 @@ That is the same class of driver, aimed at the other device. The Intel option RO
 
 ### Use the Unified Extensible Firmware Interface graphics output protocol
 
-`sel4_32.elf` is linked at 1 MB. Limine rejects that load on the firmware entry before it sets a mode. Rejected.
+`sel4_32.elf` is linked at 1 MB. Limine alone rejects that load on the firmware entry before it sets a mode. The metal path uses `mb2-stub` ([ADR-014](014-uefi-mb2-stub.md)) so UEFI Limine can boot; GOP modeset for the desk browser remains a separate concern from this VGA-text shell image.
 
 ## Consequences
 

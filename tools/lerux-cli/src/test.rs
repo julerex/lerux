@@ -1555,14 +1555,11 @@ INFO  [crash_demo] crash-demo: about to fault
             !IPC_COMPOSED_CI_SNIP_2026_10_19.contains("virtio-net: MAC"),
             "fixture must reproduce the raw split"
         );
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let spec =
-            crate::smoke_expects::smoke_test_for_board(&root, "qemu_virt_aarch64_ipc_composed")
-                .expect("ipc-composed expects");
         let output = std::sync::Arc::new(std::sync::Mutex::new(
             IPC_COMPOSED_CI_SNIP_2026_10_19.to_string(),
         ));
-        expect_ordered(&output, &spec.expects, 0).expect("block line nested inside the MAC line");
+        let patterns = vec!["virtio-net: MAC".to_string(), "virtio-blk:".to_string()];
+        expect_ordered(&output, &patterns, 0).expect("block line nested inside the MAC line");
     }
 
     #[test]
@@ -1599,41 +1596,18 @@ AC 52:54:00:12:34:56
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let cases = [
             (
-                "qemu_virt_aarch64_blk",
-                "virtio-blk: 8192\nlerux-blk: ready\nlerux-blk: MBR sig\nlerux-blk: write round-trip ok\n",
+                "qemu_virt_aarch64_cothread",
+                "cothread waiting\ncothread resumed\n",
             ),
+            ("qemu_virt_aarch64_net_sddf", "ip 10.0.2.15\nping ok\n"),
             (
-                "qemu_virt_aarch64_blk_composed",
-                "virtio-blk: 8192\nlerux-blk: ready\nlerux-supervisor: RTC\nlerux-supervisor: timer ok\nlerux-supervisor: init ok\nlerux-blk: MBR sig\nlerux-blk: write round-trip ok\n",
+                "qemu_virt_aarch64_program_sddf",
+                "program: rejected\nlerux-wasm: ran\n",
             ),
-            (
-                "qemu_virt_aarch64_net",
-                "virtio-net: MAC\nlerux-net: ready\nlerux-net: TX ok\nlerux-net: IPC ok\nlerux-net: apply static\n",
-            ),
-            (
-                "qemu_virt_aarch64_net_composed",
-                "virtio-net: MAC\nlerux-net: ready\nlerux-supervisor: RTC\nlerux-supervisor: timer ok\nlerux-supervisor: init ok\nlerux-net: TX ok\nlerux-net: IPC ok\nlerux-net: apply static\n",
-            ),
-            (
-                "qemu_virt_aarch64_ipc_composed",
-                "virtio-net: MAC\nvirtio-blk: 8192\nlerux-blk: ready\nlerux-net: ready\nlerux-supervisor: RTC\nlerux-supervisor: timer ok\nlerux-supervisor: init ok\nlerux-blk: MBR sig\nlerux-blk: write round-trip ok\nlerux-net: TX ok\nlerux-net: IPC ok\n",
-            ),
-            (
-                "qemu_virt_aarch64_fs",
-                "virtio-blk: 8192\nlerux-fs: ready\nlerux-fs: v3 20k ok\nlerux-fs: v3 long path ok\nlerux-fs: round-trip ok\n",
-            ),
-            (
-                "qemu_virt_aarch64_agent",
-                "virtio-net: MAC\nlerux-fs: ready\nlerux-net: ready\nlerux-agent: chrome ok\nlerux-agent: workspace ok\nlerux-tls: handshake ok\nlerux-agent: tools ok\n",
-            ),
-            (
-                "qemu_virt_aarch64_isolation",
-                "lerux-fs: ready\nlerux-debug: ready\ncrash-demo: about to fault\nlerux-debug: crash-demo stopped\nlerux-isolation: notified survivor\nlerux-fs: round-trip ok\nlerux-isolation: fs-server survived untrusted PD crash\n",
-            ),
-            (
-                "qemu_virt_aarch64_browser",
-                "virtio-net: MAC\nlerux-net: ready\nlerux-display: ramfb ok\nlerux-tls: handshake ok\nlerux-web: paint ok\nlerux-browser: paint ok\n",
-            ),
+            ("qemu_virt_aarch64_web_sddf", "web listening\n"),
+            ("qemu_virt_aarch64_agent_sddf", "lerux shell ready\n"),
+            ("qemu_virt_aarch64_browser_sddf", "1 browser\n"),
+            ("qemu_virt_aarch64_html", "lerux-html: nodes=8\n"),
         ];
         for (board, capture) in cases {
             let spec = crate::smoke_expects::smoke_test_for_board(&root, board)
@@ -1645,18 +1619,16 @@ AC 52:54:00:12:34:56
     }
 
     #[test]
-    fn blk_ready_before_device_line_fails() {
+    fn ping_before_address_fails() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let spec = crate::smoke_expects::smoke_test_for_board(&root, "qemu_virt_aarch64_blk")
-            .expect("blk expects");
-        let output = std::sync::Arc::new(std::sync::Mutex::new(
-            "lerux-blk: ready\nvirtio-blk: 8192\nlerux-blk: MBR sig\nlerux-blk: write round-trip ok\n"
-                .to_string(),
-        ));
+        let spec = crate::smoke_expects::smoke_test_for_board(&root, "qemu_virt_aarch64_net_sddf")
+            .expect("net-sddf expects");
+        let output =
+            std::sync::Arc::new(std::sync::Mutex::new("ping ok\nip 10.0.2.15\n".to_string()));
         let result = expect_ordered(&output, &spec.expects, 0);
         assert!(
             result.is_err(),
-            "a ready line before the device line is not guest order"
+            "a ping line before the address line is not guest order"
         );
     }
 
@@ -1667,7 +1639,7 @@ AC 52:54:00:12:34:56
             send: "cmd\r".to_string(),
             expect: "only-before".to_string(),
         }];
-        let result = run_script_steps(&output, &steps, 0, None, |_| Ok(()));
+        let result = run_script_steps(&output, &steps, 0, None, |_| Ok(()), None, None);
         assert!(
             result.is_err(),
             "script step must ignore text before the send mark"

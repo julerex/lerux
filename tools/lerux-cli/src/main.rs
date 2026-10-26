@@ -728,7 +728,6 @@ fn main() -> Result<()> {
                 output.as_deref(),
                 build_if_missing,
                 do_verify,
-                /* announce */ true,
             )?;
             if boot_test {
                 crate::iso::boot_test(&root, &iso, &board, &build_dir)?;

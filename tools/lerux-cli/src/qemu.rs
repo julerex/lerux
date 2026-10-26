@@ -256,12 +256,8 @@ fn x86_command(
 ) -> Result<Command> {
     // QEMU `-kernel` rejects ELF64. Boot the same Limine ISO as metal under OVMF.
     let ovmf = crate::iso::require_ovmf()?;
-    let iso = crate::iso::ensure_iso_for_qemu(
-        &ctx.root,
-        &ctx.board_name,
-        &ctx.build_dir,
-        &ctx.config,
-    )?;
+    let iso =
+        crate::iso::ensure_iso_for_qemu(&ctx.root, &ctx.board_name, &ctx.build_dir, &ctx.config)?;
 
     let mut c = Command::new("qemu-system-x86_64");
     c.args([
@@ -277,7 +273,7 @@ fn x86_command(
     c.args(headless_serial());
     crate::iso::append_ovmf_iso_boot(&mut c, &ovmf, &iso);
     // Fixed PCI slots: blk at 0x3, net at 0x4 (match system_vars BAR addresses).
-    // AHCI data disks use ide.0 unit 0; the ISO sits on unit 1 (bootindex 0).
+    // AHCI data disks use ide.0; the ISO sits on ide.1 (bootindex 0).
     if let Some(blockdev) = blockdev_arg(qemu.disk, disk) {
         c.args([
             "-device",

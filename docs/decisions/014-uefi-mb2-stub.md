@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-`sel4.elf` (64-bit) from the Microkit SDK is linked at physical 1 MiB. Limine's Multiboot 2 loader checks that the ELF load address is free **before** `ExitBootServices`. Under UEFI that range is still owned by firmware, so Limine panics with "Could not find viable load address". Relinking seL4 would require a patched SDK rebuild and would break the stock `fetch-sdk` path. The metal path uses the 64-bit kernel only; `sel4_32.elf` remains solely for QEMU `-kernel` (which rejects ELF64).
+`sel4.elf` (64-bit) from the Microkit SDK is linked at physical 1 MiB. Limine's Multiboot 2 loader checks that the ELF load address is free **before** `ExitBootServices`. Under UEFI that range is still owned by firmware, so Limine panics with "Could not find viable load address". Relinking seL4 would require a patched SDK rebuild and would break the stock `fetch-sdk` path. The metal and QEMU paths use the 64-bit kernel only. QEMU `-kernel` rejects ELF64, so x86 QEMU smokes boot the Limine ISO under OVMF instead.
 
 ## Decision
 
@@ -16,10 +16,11 @@ Ship a small i386 Multiboot 2 trampoline (`support/mb2-stub/`) linked at 32 MiB.
 - module 0: `sel4.elf`
 - module 1: `loader.img`
 
-UEFI is the documented metal path.
+UEFI is the documented metal path. Every x86 QEMU smoke packs the same ISO and boots it under OVMF (`ovmf` package or `OVMF_PATH`).
 
 ## Consequences
 
 - `clang` is required to build the stub when packing an ISO or deploying to FAT.
-- QEMU `-kernel` smokes still use `sel4_32.elf`; Limine ISO/FAT media use `sel4.elf`.
-- Local `iso --boot-test` boots the ISO under OVMF (UEFI) only; it matches the metal USB entry.
+- `ovmf` and `xorriso` are required for x86 QEMU smokes (and for `iso --boot-test`).
+- The SDK still ships `sel4_32.elf`; lerux does not stage or boot it.
+- Limine `timeout: 0` so QEMU smokes do not wait on the menu.

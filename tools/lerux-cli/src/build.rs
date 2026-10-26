@@ -184,9 +184,7 @@ fn assemble_image(root: &Path, board: &str, build_dir: &str, config: &str) -> Re
     Ok(())
 }
 
-/// Copy the SDK 64-bit kernel next to `loader.img` for Limine / metal media.
-///
-/// Also stages `sel4_32.elf` for QEMU `-kernel` smokes (QEMU rejects ELF64).
+/// Copy the SDK 64-bit kernel next to `loader.img` for Limine / metal / QEMU ISO.
 pub fn stage_x86_kernel(
     sdk: &str,
     microkit_board: &str,
@@ -206,14 +204,6 @@ pub fn stage_x86_kernel(
     fs::copy(&src64, &dest64)
         .with_context(|| format!("copy {} → {}", src64.display(), dest64.display()))?;
     crate::image_digest::write_sidecar(&dest64)?;
-
-    let src32 = crate::qemu::sel4_32_elf(sdk, microkit_board, config);
-    if src32.is_file() {
-        let dest32 = dest_dir.join("sel4_32.elf");
-        fs::copy(&src32, &dest32)
-            .with_context(|| format!("copy {} → {}", src32.display(), dest32.display()))?;
-        crate::image_digest::write_sidecar(&dest32)?;
-    }
     Ok(dest64)
 }
 
@@ -292,7 +282,6 @@ mod tests {
         let elf_dir = sdk.join("board/x86_64_generic/debug/elf");
         fs::create_dir_all(&elf_dir).unwrap();
         fs::write(elf_dir.join("sel4.elf"), b"kernel64").unwrap();
-        fs::write(elf_dir.join("sel4_32.elf"), b"kernel32").unwrap();
         let dest_dir = tmp.path().join("build/pc_z97_d3h");
 
         let dest =
@@ -301,7 +290,7 @@ mod tests {
         assert_eq!(dest, dest_dir.join("sel4.elf"));
         assert_eq!(fs::read(&dest).unwrap(), b"kernel64");
         assert!(crate::image_digest::sidecar_path(&dest).is_file());
-        assert_eq!(fs::read(dest_dir.join("sel4_32.elf")).unwrap(), b"kernel32");
+        assert!(!dest_dir.join("sel4_32.elf").exists());
     }
 
     #[test]

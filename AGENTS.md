@@ -318,7 +318,7 @@ A few results look like success and are not:
 
 ## Cursor Cloud specific instructions
 
-The VM snapshot already has the full dev environment: system packages (cmake, ninja, dtc, xmllint, `qemu-system-{arm,x86,misc}`, libclang, glib/pixman for SP804 QEMU), the pinned Rust nightly, `just`, the prebuilt Microkit SDK, and the cross toolchains. Do not reinstall these; the startup update script only runs `cargo fetch --locked`.
+The VM snapshot already has the full dev environment: system packages (cmake, ninja, dtc, xmllint, `qemu-system-{arm,x86,misc}`, ovmf, xorriso, clang, libclang, glib/pixman for SP804 QEMU), the pinned Rust nightly, `just`, the prebuilt Microkit SDK, and the cross toolchains. Do not reinstall these; the startup update script only runs `cargo fetch --locked`. x86 QEMU smokes boot a Limine ISO under OVMF (not `-kernel`).
 
 - **SDK**: obtained via `just fetch-sdk` (prebuilt SDK 2.3.0 at `deps/microkit-sdk/`, path in `deps/.sdk-path`), not `just build-sdk`. It covers the `qemu_virt_aarch64`, `qemu_virt_riscv64`, `x86_64_generic`, and `rpi4b_4gb` boards used by the smoke matrix. All of `deps/workspace/`, `deps/microkit-sdk/`, `deps/toolchains/`, `deps/.sdk-path` are gitignored but persist in the snapshot. If the SDK is ever missing, re-run `just fetch && just fetch-sdk`. The download follows the Microkit tag in `deps/versions.toml` and replaces an SDK whose `VERSION` file does not match.
 - **Cross toolchains auto-install**: `just build`/`just test` auto-download the ARM (`aarch64-none-elf`) and RISC-V toolchains into `deps/toolchains/` on the first PD build if absent — no manual ARM toolchain step needed.

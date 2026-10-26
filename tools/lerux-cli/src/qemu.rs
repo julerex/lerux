@@ -13,7 +13,6 @@ use lerux_image::{ahci_disk_device, x86_disk_backend, DiskBackend};
 
 use crate::{
     board::{get_board, load_boards, Board, DiskMode, NetMode, QemuConfig},
-    build_sdk::sdk_path,
     install::install_sp804_qemu,
     path::host_path,
     process::{command_on_path, path_str},
@@ -46,15 +45,6 @@ pub fn sel4_elf(sdk: impl AsRef<Path>, microkit_board: &str, config: &str) -> Pa
         .join(microkit_board)
         .join(config)
         .join("elf/sel4.elf")
-}
-
-/// Microkit 32-bit kernel ELF. QEMU `-kernel` still rejects ELF64 on x86_64.
-pub fn sel4_32_elf(sdk: impl AsRef<Path>, microkit_board: &str, config: &str) -> PathBuf {
-    sdk.as_ref()
-        .join("board")
-        .join(microkit_board)
-        .join(config)
-        .join("elf/sel4_32.elf")
 }
 
 pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
@@ -109,7 +99,7 @@ pub fn qmp_socket(ctx: &QemuContext) -> PathBuf {
 }
 
 /// Host-side mirror of `-serial mon:stdio` for x86 QMP smokes. QEMU 6.2 does not
-/// reload an x86 multiboot `-kernel` image on QMP `system_reset`, so the smoke harness
+/// reload an x86 OVMF+ISO guest on QMP `system_reset`, so the smoke harness
 /// restarts the process and appends to this file for the second boot.
 pub fn stdio_smoke_log(ctx: &QemuContext) -> PathBuf {
     board_build_dir(&ctx.root, &ctx.board_name, &ctx.build_dir).join("smoke.stdio.log")
@@ -261,18 +251,17 @@ fn x86_block_disk_device(board_name: &str) -> Result<String> {
 fn x86_command(
     ctx: &QemuContext,
     qemu: &QemuConfig,
-    loader: &Path,
+    _loader: &Path,
     disk: &Path,
 ) -> Result<Command> {
-    let sdk = sdk_path(&ctx.root)?;
-    let kernel = sel4_32_elf(&sdk, &ctx.board.microkit_board, &ctx.config);
-    if !kernel.is_file() {
-        bail!(
-            "missing {}; run MICROKIT_BOARDS={} lerux build-sdk",
-            kernel.display(),
-            ctx.board.microkit_board
-        );
-    }
+    // QEMU `-kernel` rejects ELF64. Boot the same Limine ISO as metal under OVMF.
+    let ovmf = crate::iso::require_ovmf()?;
+    let iso = crate::iso::ensure_iso_for_qemu(
+        &ctx.root,
+        &ctx.board_name,
+        &ctx.build_dir,
+        &ctx.config,
+    )?;
 
     let mut c = Command::new("qemu-system-x86_64");
     c.args([
@@ -286,8 +275,9 @@ fn x86_command(
         "none",
     ]);
     c.args(headless_serial());
-    c.args(["-kernel", &path_str(&kernel), "-initrd", &path_str(loader)]);
+    crate::iso::append_ovmf_iso_boot(&mut c, &ovmf, &iso);
     // Fixed PCI slots: blk at 0x3, net at 0x4 (match system_vars BAR addresses).
+    // AHCI data disks use ide.0 unit 0; the ISO sits on unit 1 (bootindex 0).
     if let Some(blockdev) = blockdev_arg(qemu.disk, disk) {
         c.args([
             "-device",

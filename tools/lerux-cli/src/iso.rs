@@ -29,10 +29,11 @@ use crate::{
 ///
 /// The Multiboot 2 kernel is `mb2-stub.elf` (32 MiB). Modules are the 64-bit
 /// seL4 kernel ELF and the Microkit loader. See `support/mb2-stub/`.
+/// `timeout: 0` boots immediately so QEMU smokes do not wait on the menu.
 pub fn limine_conf() -> String {
     "\
 # Multiboot 2 via mb2-stub (UEFI). `serial` is BIOS-only.
-timeout: 3
+timeout: 0
 serial: yes
 serial_baudrate: 115200
 
@@ -51,6 +52,7 @@ serial_baudrate: 115200
 /// Builds the Microkit image when `loader.img` or `sel4.elf` is missing and
 /// `build_if_missing` is set. When `verify` is set, both SHA-256 sidecars must
 /// match before anything is packed. Sidecars are not copied onto the ISO.
+/// When `announce` is set, print the USB flash instructions after packing.
 pub fn build_iso(
     root: &Path,
     board: &str,
@@ -59,6 +61,7 @@ pub fn build_iso(
     output: Option<&Path>,
     build_if_missing: bool,
     verify: bool,
+    announce: bool,
 ) -> Result<PathBuf> {
     require_single_normal_segment(board, "--board")?;
     require_relative_under_root(build_dir, "--build-dir")?;
@@ -92,15 +95,63 @@ pub fn build_iso(
 
     let size = fs::metadata(&out).map(|m| m.len()).unwrap_or(0);
     println!("==> Wrote ISO ({size} bytes) → {}", out.display());
-    print_usb_instructions(&out);
+    if announce {
+        print_usb_instructions(&out);
+    }
     Ok(out)
+}
+
+/// Pack `build/<board>/lerux.iso` for a QEMU smoke (no USB flash text).
+///
+/// Skips rebuild when the ISO is newer than `sel4.elf` and `loader.img`.
+pub fn ensure_iso_for_qemu(
+    root: &Path,
+    board: &str,
+    build_dir: &str,
+    config: &str,
+) -> Result<PathBuf> {
+    let out = root.join(build_dir).join(board).join("lerux.iso");
+    let board_build = root.join(build_dir).join(board);
+    let loader = board_build.join("loader.img");
+    let kernel = board_build.join("sel4.elf");
+    if out.is_file()
+        && loader.is_file()
+        && kernel.is_file()
+        && iso_inputs_fresh(&out, &[&loader, &kernel])
+    {
+        return Ok(out);
+    }
+    build_iso(
+        root,
+        board,
+        build_dir,
+        config,
+        None,
+        /* build_if_missing */ false,
+        /* verify */ true,
+        /* announce */ false,
+    )
+}
+
+fn iso_inputs_fresh(iso: &Path, inputs: &[&Path]) -> bool {
+    let Ok(iso_meta) = fs::metadata(iso) else {
+        return false;
+    };
+    let Ok(iso_mtime) = iso_meta.modified() else {
+        return false;
+    };
+    inputs.iter().all(|input| {
+        fs::metadata(input)
+            .and_then(|m| m.modified())
+            .map(|t| t <= iso_mtime)
+            .unwrap_or(false)
+    })
 }
 
 /// Boot an existing ISO in QEMU as a raw disk under OVMF (UEFI).
 ///
 /// Matches the metal USB path: Limine `BOOTX64.EFI` → `mb2-stub` → seL4.
 /// Requires a combined OVMF firmware (`OVMF_PATH` or a packaged `OVMF.fd`).
-/// Local check; not a CI job.
 pub fn boot_test(root: &Path, iso: &Path, board: &str, build_dir: &str) -> Result<()> {
     let ovmf = require_ovmf()?;
     println!("==> ISO boot test (OVMF UEFI, raw disk)");
@@ -115,8 +166,6 @@ fn boot_iso_ovmf(root: &Path, iso: &Path, board: &str, build_dir: &str, ovmf: &P
         bail!("qemu-system-x86_64 is not on PATH");
     }
 
-    // Guest CPU matches `qemu::x86_command`. `if=ide` is the dd-to-stick shape.
-    let drive = format!("file={},format=raw,if=ide", iso.display());
     let mut cmd = Command::new("qemu-system-x86_64");
     cmd.args([
         "-machine",
@@ -129,14 +178,9 @@ fn boot_iso_ovmf(root: &Path, iso: &Path, board: &str, build_dir: &str, ovmf: &P
         "none",
         "-serial",
         "mon:stdio",
-        "-bios",
-        &path_str(ovmf),
-        "-drive",
-        &drive,
-        "-boot",
-        "c",
         "-no-reboot",
     ]);
+    append_ovmf_iso_boot(&mut cmd, ovmf, iso);
     let mut test = crate::smoke_expects::smoke_test_for_board(root, board)?;
     test.curls.clear();
     let log = root
@@ -144,6 +188,24 @@ fn boot_iso_ovmf(root: &Path, iso: &Path, board: &str, build_dir: &str, ovmf: &P
         .join("smoke-logs")
         .join(format!("{board}.iso-uefi.serial.log"));
     crate::test::run_smoke_with_capture(cmd, &test, Some(&log))
+}
+
+/// Attach combined OVMF and the Limine ISO on ICH9 AHCI port 1.
+///
+/// Port 0 stays free for AHCI data disks (`ide-hd` unit 0). `bootindex=0`
+/// makes OVMF prefer the ISO over a data drive on the same controller.
+pub fn append_ovmf_iso_boot(cmd: &mut Command, ovmf: &Path, iso: &Path) {
+    let drive = format!(
+        "file={},format=raw,if=none,id=leruxboot,readonly=on",
+        path_str(iso)
+    );
+    cmd.args(["-bios", &path_str(ovmf)]);
+    cmd.args([
+        "-drive",
+        &drive,
+        "-device",
+        "ide-hd,drive=leruxboot,bus=ide.0,unit=1,bootindex=0",
+    ]);
 }
 
 /// Combined OVMF image for QEMU `-bios` (not a split CODE/VARS pair).
@@ -629,11 +691,29 @@ mod tests {
     fn limine_conf_is_multiboot2() {
         let cfg = limine_conf();
         assert!(cfg.contains("protocol: multiboot2"), "{cfg}");
+        assert!(cfg.contains("timeout: 0"), "{cfg}");
         assert!(cfg.contains("boot():/boot/mb2-stub.elf"), "{cfg}");
         assert!(cfg.contains("module_path: boot():/boot/sel4.elf"), "{cfg}");
         assert!(
             cfg.contains("module_path: boot():/boot/loader.img"),
             "{cfg}"
+        );
+    }
+
+    #[test]
+    fn ovmf_iso_boot_uses_ide_unit_one() {
+        let mut cmd = Command::new("qemu-system-x86_64");
+        append_ovmf_iso_boot(
+            &mut cmd,
+            Path::new("/usr/share/ovmf/OVMF.fd"),
+            Path::new("lerux.iso"),
+        );
+        let line = format!("{cmd:?}");
+        assert!(line.contains("\"-bios\""), "{line}");
+        assert!(line.contains("id=leruxboot"), "{line}");
+        assert!(
+            line.contains("ide-hd,drive=leruxboot,bus=ide.0,unit=1,bootindex=0"),
+            "{line}"
         );
     }
 

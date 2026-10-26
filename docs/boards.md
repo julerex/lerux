@@ -49,7 +49,7 @@ CI sets this via `MICROKIT_BOARDS` in the workflow env.
 
 ## Hardware boards (Phase 37+)
 
-Real (non-QEMU) boards have no `qemu` field. ARM/RISC-V produce `loader.img`; x86 stages `sel4.elf` (64-bit) beside it for Limine Multiboot 2, and still stages `sel4_32.elf` for QEMU `-kernel`.
+Real (non-QEMU) boards have no `qemu` field. ARM/RISC-V produce `loader.img`; x86 stages `sel4.elf` (64-bit) beside it for Limine Multiboot 2. QEMU x86 smokes pack that kernel into a Limine ISO and boot under OVMF.
 Use `lerux image --board <name>` (or `BOARD=<name> just image`).
 
 - `rpi4b_4gb`: Raspberry Pi 4 Model B (4 GB). Requires U-Boot on SD card. See seL4 docs for initial bring-up and `fatload` / `go`.
@@ -182,7 +182,7 @@ The desk-browser spec names `console-driver`, `serial-driver`, `log-server`, `br
 
 Before a metal boot, a separate QEMU image runs those browser protection domains with the existing x86 virtio network driver. It loads `https://host:8443/desk.html` from `lerux https-one`, follows the link to `https://host:8443/desk-link.html`, and submits `q=hi` to `https://host:8443/desk-form.html?q=hi`. COM1 records each address and the first non-white pixel. That boot is not the metal product.
 
-Use the USB boot entry that says UEFI (Limine `BOOTX64.EFI`). `sel4.elf` (64-bit) remains linked at 1 MiB; Limine loads `mb2-stub.elf` at 32 MiB and the stub places the kernel after `ExitBootServices`. The documented result is a blue screen with `hello lerux` on the first line and the menu `1 browser` / `2 maths` under it. A metal UEFI boot of this image has not been recorded on this machine yet. The QEMU proofs are `just test-x86-console` (`-kernel sel4_32.elf`, no firmware) and `just iso --boot-test` (OVMF UEFI with `sel4.elf`, the metal Limine path).
+Use the USB boot entry that says UEFI (Limine `BOOTX64.EFI`). `sel4.elf` (64-bit) remains linked at 1 MiB; Limine loads `mb2-stub.elf` at 32 MiB and the stub places the kernel after `ExitBootServices`. The documented result is a blue screen with `hello lerux` on the first line and the menu `1 browser` / `2 maths` under it. A metal UEFI boot of this image has not been recorded on this machine yet. The QEMU proofs are `just test-x86-console` and `just iso --boot-test` (both OVMF UEFI with `sel4.elf`, the metal Limine path).
 
 An AMD modesetting driver would matter only if lerux itself programmed this card (resolution, HDMI, a linear framebuffer) or had to bring the picture up when the firmware had not left VGA text mode. That work is still deferred. The QEMU `ramfb` display server does not drive this card.
 
@@ -194,9 +194,9 @@ lsblk
 sudo dd if=build/pc_z97_d3h/lerux.iso of=/dev/sdX bs=4M status=progress conv=fsync
 ```
 
-Replace `sdX` with the flash drive from `lsblk`. Do not use `sda` (Ubuntu SSD) or `sdb` (data disk). Reboot and open the firmware boot menu (F12). Choose the USB entry that says UEFI. The Limine menu counts down, then the screen is blue with `hello lerux` on the first line and the menu `1 browser` / `2 maths` under it. Type with a PS/2 keyboard in the rear combo port, or a USB HID boot keyboard on a root xHCI port (the Microsoft Wireless Desktop 900 dongle on this machine is one). Keyboards behind a hub are not seen. `1` or `browser` prints `browser unavailable` (this image has no network and no page painter). `2` or `maths` reads integer expressions until `quit`. The serial console is still COM1 at 115200 8N1 on the COMA header and shows the same menu. `console-driver: usb keyboard` means the USB boot keyboard was armed. Reboot and choose Ubuntu to return.
+Replace `sdX` with the flash drive from `lsblk`. Do not use `sda` (Ubuntu SSD) or `sdb` (data disk). Reboot and open the firmware boot menu (F12). Choose the USB entry that says UEFI. Limine boots immediately (`timeout: 0`), then the screen is blue with `hello lerux` on the first line and the menu `1 browser` / `2 maths` under it. Type with a PS/2 keyboard in the rear combo port, or a USB HID boot keyboard on a root xHCI port (the Microsoft Wireless Desktop 900 dongle on this machine is one). Keyboards behind a hub are not seen. `1` or `browser` prints `browser unavailable` (this image has no network and no page painter). `2` or `maths` reads integer expressions until `quit`. The serial console is still COM1 at 115200 8N1 on the COMA header and shows the same menu. `console-driver: usb keyboard` means the USB boot keyboard was armed. Reboot and choose Ubuntu to return.
 
-The ISO is a hybrid image. Limine Multiboot 2-boots `/boot/mb2-stub.elf` (linked at 32 MiB) with modules `/boot/sel4.elf` and `/boot/loader.img`. The stub ELF-loads the 64-bit kernel to 1 MiB after Limine has called `ExitBootServices`. `cargo run -p lerux-cli -- iso --board pc_z97_d3h --boot-test` boots that file in QEMU as a raw disk under **OVMF** (local check, not CI; needs the `ovmf` package or `OVMF_PATH`).
+The ISO is a hybrid image. Limine Multiboot 2-boots `/boot/mb2-stub.elf` (linked at 32 MiB) with modules `/boot/sel4.elf` and `/boot/loader.img`. The stub ELF-loads the 64-bit kernel to 1 MiB after Limine has called `ExitBootServices`. Every x86 QEMU smoke packs that ISO and boots it under **OVMF** (needs the `ovmf` package or `OVMF_PATH`). `cargo run -p lerux-cli -- iso --board pc_z97_d3h --boot-test` is the same path without QMP keys.
 
 **FAT volume that already has a bootloader** (after mounting it; not the Ubuntu ESP):
 
@@ -271,7 +271,7 @@ This board has no native disk or Ethernet driver. QEMU `workstation-x86` is virt
 | `riscv64_blk` | riscv blk | MMIO virtio-blk bus.0 + `disk.img` |
 | `riscv64_net` | riscv net | MMIO virtio-net bus.1 (no `disk.img`) |
 | `riscv64_http` | riscv http | MMIO virtio-net bus.1 + `hostfwd=tcp::18080-:8080` |
-| `x86_64` | x86 hello/echo | `-machine q35` + `-kernel sel4_32.elf` + `-initrd loader.img` |
+| `x86_64` | x86 hello/echo | `-machine q35` + OVMF + Limine ISO (`sel4.elf` via mb2-stub) |
 | `x86_64_virtio` | x86 virtio | q35 + PCI virtio-blk/net + `disk.img` |
 | `x86_64_blk` | x86 blk | q35 + PCI virtio-blk + `disk.img` |
 | `x86_64_net` | x86 net | q35 + PCI virtio-net (no `disk.img`) |

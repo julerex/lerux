@@ -131,7 +131,7 @@ jobs:
               [[ -n "${sdk}" ]] || return 1
               [[ -d "${sdk}/board/qemu_virt_aarch64/debug/include" ]] || return 1
               [[ -d "${sdk}/board/qemu_virt_riscv64/debug/include" ]] || return 1
-              [[ -f "${sdk}/board/x86_64_generic/debug/elf/sel4_32.elf" ]] || return 1
+              [[ -f "${sdk}/board/x86_64_generic/debug/elf/sel4.elf" ]] || return 1
               want="$(sed -n 's/.*microkit = {.*tag = "\([^"]*\)".*/\1/p' deps/versions.toml)"
               [[ -n "${want}" && -f "${sdk}/VERSION" ]] || return 1
               got="$(tr -d '[:space:]' < "${sdk}/VERSION")"

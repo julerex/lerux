@@ -1,10 +1,10 @@
 //! Hybrid BIOS+UEFI ISO for x86 Multiboot 2 boards.
 //!
-//! `lerux iso` packs `mb2-stub.elf`, `sel4_32.elf`, and `loader.img` into a
-//! hybrid ISO. Limine Multiboot 2-boots the stub (linked at 32 MiB). The stub
-//! ELF-loads `sel4_32.elf` to its 1 MiB link address after Limine has called
-//! `ExitBootServices`, so the UEFI entry works. The same path works under
-//! SeaBIOS/CSM. The image is a file. It does not write a USB device.
+//! `lerux iso` packs `mb2-stub.elf`, `sel4.elf` (64-bit), and `loader.img`
+//! into a hybrid ISO. Limine Multiboot 2-boots the stub (linked at 32 MiB).
+//! The stub ELF-loads `sel4.elf` to its 1 MiB link address after Limine has
+//! called `ExitBootServices`, so the UEFI entry works. The image is a file.
+//! It does not write a USB device.
 //!
 //! Limine 12.9.0 is pinned in `deps/versions.toml` and unpacked under
 //! `deps/limine/` (gitignored). `xorriso` comes from `PATH` when installed,
@@ -27,11 +27,11 @@ use crate::{
 
 /// Limine menu embedded in the ISO. Paths are on the boot volume.
 ///
-/// The Multiboot 2 kernel is `mb2-stub.elf` (32 MiB). Modules are the seL4
-/// kernel ELF and the Microkit loader. See `support/mb2-stub/`.
+/// The Multiboot 2 kernel is `mb2-stub.elf` (32 MiB). Modules are the 64-bit
+/// seL4 kernel ELF and the Microkit loader. See `support/mb2-stub/`.
 pub fn limine_conf() -> String {
     "\
-# Multiboot 2 via mb2-stub (UEFI and BIOS). `serial` is BIOS-only.
+# Multiboot 2 via mb2-stub (UEFI). `serial` is BIOS-only.
 timeout: 3
 serial: yes
 serial_baudrate: 115200
@@ -40,7 +40,7 @@ serial_baudrate: 115200
     comment: seL4 Microkit
     protocol: multiboot2
     path: boot():/boot/mb2-stub.elf
-    module_path: boot():/boot/sel4_32.elf
+    module_path: boot():/boot/sel4.elf
     module_path: boot():/boot/loader.img
 "
     .to_string()
@@ -48,7 +48,7 @@ serial_baudrate: 115200
 
 /// Build `build/<board>/lerux.iso` (or `--output`) for an x86_64 board.
 ///
-/// Builds the Microkit image when `loader.img` or `sel4_32.elf` is missing and
+/// Builds the Microkit image when `loader.img` or `sel4.elf` is missing and
 /// `build_if_missing` is set. When `verify` is set, both SHA-256 sidecars must
 /// match before anything is packed. Sidecars are not copied onto the ISO.
 pub fn build_iso(
@@ -69,7 +69,7 @@ pub fn build_iso(
     let out = resolve_iso_output(root, build_dir, board, output)?;
     let board_build = root.join(build_dir).join(board);
     let loader = board_build.join("loader.img");
-    let kernel = board_build.join("sel4_32.elf");
+    let kernel = board_build.join("sel4.elf");
     if !loader.is_file() || !kernel.is_file() {
         if build_if_missing {
             println!("==> boot image missing; building {board}…");
@@ -115,8 +115,7 @@ fn boot_iso_ovmf(root: &Path, iso: &Path, board: &str, build_dir: &str, ovmf: &P
         bail!("qemu-system-x86_64 is not on PATH");
     }
 
-    // Guest CPU matches `qemu::x86_command` so the ISO smoke exercises the same
-    // feature set as `-kernel sel4_32.elf`. `if=ide` is the dd-to-stick shape.
+    // Guest CPU matches `qemu::x86_command`. `if=ide` is the dd-to-stick shape.
     let drive = format!("file={},format=raw,if=ide", iso.display());
     let mut cmd = Command::new("qemu-system-x86_64");
     cmd.args([
@@ -190,7 +189,7 @@ fn stage_iso_root(
     }
     let stub = build_mb2_stub(root)?;
     copy_boot_file(&stub, &dest.join("boot/mb2-stub.elf"))?;
-    copy_boot_file(kernel, &dest.join("boot/sel4_32.elf"))?;
+    copy_boot_file(kernel, &dest.join("boot/sel4.elf"))?;
     copy_boot_file(loader, &dest.join("boot/loader.img"))?;
     process::write_file(&dest.join("boot/limine.conf"), &limine_conf())?;
     Ok(())
@@ -520,7 +519,7 @@ fn print_usb_instructions(iso: &Path) {
         "Replace sdX with the flash drive from lsblk. Do not use sda (Ubuntu SSD) or sdb (data disk)."
     );
     println!("Firmware boot menu (F12) → the USB entry that says UEFI (Limine BOOTX64.EFI).");
-    println!("mb2-stub loads sel4_32.elf at 1 MiB after ExitBootServices; CSM/legacy also works.");
+    println!("mb2-stub loads sel4.elf (64-bit) at 1 MiB after ExitBootServices.");
     println!("Screen: blue background, \"hello lerux\" on the first line, then \"1 browser\" and \"2 maths\".");
     println!(
         "Keyboard: PS/2 in the rear combo port, or a USB HID boot keyboard on a root xHCI port."
@@ -631,10 +630,7 @@ mod tests {
         let cfg = limine_conf();
         assert!(cfg.contains("protocol: multiboot2"), "{cfg}");
         assert!(cfg.contains("boot():/boot/mb2-stub.elf"), "{cfg}");
-        assert!(
-            cfg.contains("module_path: boot():/boot/sel4_32.elf"),
-            "{cfg}"
-        );
+        assert!(cfg.contains("module_path: boot():/boot/sel4.elf"), "{cfg}");
         assert!(
             cfg.contains("module_path: boot():/boot/loader.img"),
             "{cfg}"
@@ -657,7 +653,7 @@ mod tests {
             .canonicalize()
             .unwrap();
         let tmp = tempfile::tempdir().unwrap();
-        let kernel = tmp.path().join("sel4_32.elf");
+        let kernel = tmp.path().join("sel4.elf");
         let loader = tmp.path().join("loader.img");
         fs::write(&kernel, b"kernel-bytes").unwrap();
         fs::write(&loader, b"loader-bytes").unwrap();
@@ -669,17 +665,18 @@ mod tests {
 
         assert!(dest.join("boot/mb2-stub.elf").is_file());
         assert_eq!(
-            fs::read(dest.join("boot/sel4_32.elf")).unwrap(),
+            fs::read(dest.join("boot/sel4.elf")).unwrap(),
             b"kernel-bytes"
         );
         assert_eq!(
             fs::read(dest.join("boot/loader.img")).unwrap(),
             b"loader-bytes"
         );
-        assert!(!dest.join("boot/sel4_32.elf.sha256").exists());
+        assert!(!dest.join("boot/sel4.elf.sha256").exists());
         assert!(!dest.join("boot/loader.img.sha256").exists());
         let cfg = fs::read_to_string(dest.join("boot/limine.conf")).unwrap();
         assert!(cfg.contains("mb2-stub.elf"), "{cfg}");
+        assert!(cfg.contains("sel4.elf"), "{cfg}");
         assert!(
             cfg.contains("module_path: boot():/boot/loader.img"),
             "{cfg}"
@@ -693,7 +690,7 @@ mod tests {
             .canonicalize()
             .unwrap();
         let tmp = tempfile::tempdir().unwrap();
-        let kernel = tmp.path().join("sel4_32.elf");
+        let kernel = tmp.path().join("sel4.elf");
         let loader = tmp.path().join("loader.img");
         fs::write(&kernel, b"kernel-bytes").unwrap();
         fs::write(&loader, b"loader-bytes").unwrap();
@@ -704,7 +701,7 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("missing integrity sidecar"), "{err}");
-        assert!(!dest.join("boot/sel4_32.elf").exists());
+        assert!(!dest.join("boot/sel4.elf").exists());
         assert!(!dest.join("boot/loader.img").exists());
     }
 

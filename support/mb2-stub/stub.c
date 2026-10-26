@@ -1,15 +1,15 @@
 /*
  * Multiboot 2 trampoline for UEFI Limine.
  *
- * Limine refuses to place sel4_32.elf at its 1 MiB link address while UEFI
- * boot services still own that range. This stub is linked at 32 MiB so Limine
- * can load it. After ExitBootServices it ELF-loads sel4_32.elf to 1 MiB,
+ * Limine refuses to place sel4.elf at its 1 MiB link address while UEFI boot
+ * services still own that range. This stub is linked at 32 MiB so Limine can
+ * load it. After ExitBootServices it ELF-loads the 64-bit sel4.elf to 1 MiB,
  * parks loader.img above the kernel, rebuilds a Multiboot 2 info block, and
- * jumps to the kernel entry.
+ * jumps to the kernel entry (still Multiboot 2 / i386 machine state).
  *
  * Limine modules (order matters):
- *   0: sel4_32.elf (raw ELF file bytes)
- *   1: loader.img  (Microkit initial task)
+ *   0: sel4.elf   (x86-64 ELF file bytes)
+ *   1: loader.img (Microkit initial task)
  */
 
 #include <stdint.h>
@@ -23,17 +23,17 @@
 #define ELF_MAGIC 0x464c457fu
 #define PT_LOAD 1u
 #define EI_CLASS 4
-#define ELFCLASS32 1
-#define EM_386 3
+#define ELFCLASS64 2
+#define EM_X86_64 62
 
-struct elf32_ehdr {
+struct elf64_ehdr {
     uint8_t e_ident[16];
     uint16_t e_type;
     uint16_t e_machine;
     uint32_t e_version;
-    uint32_t e_entry;
-    uint32_t e_phoff;
-    uint32_t e_shoff;
+    uint64_t e_entry;
+    uint64_t e_phoff;
+    uint64_t e_shoff;
     uint32_t e_flags;
     uint16_t e_ehsize;
     uint16_t e_phentsize;
@@ -43,15 +43,15 @@ struct elf32_ehdr {
     uint16_t e_shstrndx;
 };
 
-struct elf32_phdr {
+struct elf64_phdr {
     uint32_t p_type;
-    uint32_t p_offset;
-    uint32_t p_vaddr;
-    uint32_t p_paddr;
-    uint32_t p_filesz;
-    uint32_t p_memsz;
     uint32_t p_flags;
-    uint32_t p_align;
+    uint64_t p_offset;
+    uint64_t p_vaddr;
+    uint64_t p_paddr;
+    uint64_t p_filesz;
+    uint64_t p_memsz;
+    uint64_t p_align;
 };
 
 /* Fresh Multiboot 2 info for seL4. Kept out of the 1 MiB kernel window. */
@@ -87,7 +87,6 @@ static uint32_t align_up(uint32_t v, uint32_t a) {
 }
 
 static void com1_write(const char *s) {
-    /* Optional debug; 0x3f8 is COM1 on the desk board. */
     while (*s) {
         __asm__ volatile("outb %0, %1" : : "a"((uint8_t)*s), "Nd"((uint16_t)0x3f8));
         s++;
@@ -136,45 +135,57 @@ static int find_modules(
 }
 
 static uint32_t elf_load_kernel(const uint8_t *file, uint32_t file_size, uint32_t *entry_out) {
-    if (file_size < sizeof(struct elf32_ehdr)) {
+    if (file_size < sizeof(struct elf64_ehdr)) {
         fail("kernel ELF truncated");
     }
-    const struct elf32_ehdr *eh = (const struct elf32_ehdr *)file;
+    const struct elf64_ehdr *eh = (const struct elf64_ehdr *)file;
     if (*(const uint32_t *)eh->e_ident != ELF_MAGIC) {
         fail("kernel not ELF");
     }
-    if (eh->e_ident[EI_CLASS] != ELFCLASS32 || eh->e_machine != EM_386) {
-        fail("kernel not i386 ELF32");
+    if (eh->e_ident[EI_CLASS] != ELFCLASS64 || eh->e_machine != EM_X86_64) {
+        fail("kernel not x86-64 ELF64");
     }
     if (eh->e_phoff == 0 || eh->e_phnum == 0) {
         fail("kernel has no program headers");
     }
+    if (eh->e_entry > 0xffffffffull) {
+        fail("kernel entry not 32-bit Multiboot reachable");
+    }
+    if (eh->e_phoff > file_size) {
+        fail("kernel phoff past file end");
+    }
 
     uint32_t kernel_end = 0;
-    const uint8_t *ph_base = file + eh->e_phoff;
+    const uint8_t *ph_base = file + (uint32_t)eh->e_phoff;
     for (uint16_t i = 0; i < eh->e_phnum; i++) {
-        const struct elf32_phdr *ph =
-            (const struct elf32_phdr *)(ph_base + (uint32_t)i * eh->e_phentsize);
+        const struct elf64_phdr *ph =
+            (const struct elf64_phdr *)(ph_base + (uint32_t)i * eh->e_phentsize);
         if (ph->p_type != PT_LOAD) {
             continue;
         }
-        if (ph->p_offset + ph->p_filesz > file_size) {
+        if (ph->p_paddr > 0xffffffffull || ph->p_filesz > 0xffffffffull
+            || ph->p_memsz > 0xffffffffull || ph->p_offset > 0xffffffffull) {
+            fail("kernel PHDR not in 32-bit physical range");
+        }
+        uint32_t paddr = (uint32_t)ph->p_paddr;
+        uint32_t filesz = (uint32_t)ph->p_filesz;
+        uint32_t memsz = (uint32_t)ph->p_memsz;
+        uint32_t offset = (uint32_t)ph->p_offset;
+        if (offset + filesz > file_size) {
             fail("kernel PHDR past file end");
         }
-        if (ph->p_paddr < KERNEL_LINK_FLOOR) {
+        if (paddr < KERNEL_LINK_FLOOR) {
             fail("kernel PHDR below 1MiB");
         }
-        /* Refuse to overwrite this trampoline. */
-        if (ph->p_paddr < STUB_LINK_BASE
-            && ph->p_paddr + ph->p_memsz > STUB_LINK_BASE) {
+        if (paddr < STUB_LINK_BASE && paddr + memsz > STUB_LINK_BASE) {
             fail("kernel overlaps stub");
         }
-        uint8_t *dest = (uint8_t *)(uintptr_t)ph->p_paddr;
-        memcpy(dest, file + ph->p_offset, ph->p_filesz);
-        if (ph->p_memsz > ph->p_filesz) {
-            memset(dest + ph->p_filesz, 0, ph->p_memsz - ph->p_filesz);
+        uint8_t *dest = (uint8_t *)(uintptr_t)paddr;
+        memcpy(dest, file + offset, filesz);
+        if (memsz > filesz) {
+            memset(dest + filesz, 0, memsz - filesz);
         }
-        uint32_t seg_end = ph->p_paddr + ph->p_memsz;
+        uint32_t seg_end = paddr + memsz;
         if (seg_end > kernel_end) {
             kernel_end = seg_end;
         }
@@ -182,7 +193,7 @@ static uint32_t elf_load_kernel(const uint8_t *file, uint32_t file_size, uint32_
     if (kernel_end == 0) {
         fail("kernel has no PT_LOAD");
     }
-    *entry_out = eh->e_entry;
+    *entry_out = (uint32_t)eh->e_entry;
     return align_up(kernel_end, PAGE_SIZE);
 }
 
@@ -227,7 +238,7 @@ void stub_main(uint32_t magic, struct multiboot2_header *mbi) {
 
     uint32_t k_start = 0, k_end = 0, l_start = 0, l_end = 0;
     if (find_modules(mbi, &k_start, &k_end, &l_start, &l_end) < 2) {
-        fail("need sel4_32.elf and loader.img modules");
+        fail("need sel4.elf and loader.img modules");
     }
     if (k_end <= k_start || l_end <= l_start) {
         fail("empty module");
@@ -243,7 +254,6 @@ void stub_main(uint32_t magic, struct multiboot2_header *mbi) {
         fail("loader dest wrap");
     }
     if (loader_dest + loader_size > STUB_LINK_BASE) {
-        /* Park the module above the trampoline if it would collide. */
         loader_dest = align_up(STUB_LINK_BASE + 0x100000u, PAGE_SIZE);
     }
     memcpy((void *)(uintptr_t)loader_dest, (const void *)(uintptr_t)l_start, loader_size);
@@ -251,7 +261,6 @@ void stub_main(uint32_t magic, struct multiboot2_header *mbi) {
     memset(new_mbi, 0, sizeof(new_mbi));
     uint32_t idx = sizeof(struct multiboot2_header);
 
-    /* Module tag first so seL4 sees module #0 as the initial task. */
     {
         const char *cmd = "";
         uint32_t cmd_len = strlen_local(cmd) + 1;

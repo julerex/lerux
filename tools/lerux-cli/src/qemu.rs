@@ -39,7 +39,16 @@ pub struct QemuContext {
 
 const HOSTFWD: &str = "user,id=netdev0,hostfwd=tcp::18080-:8080";
 
-/// Microkit `x86_64_generic` 32-bit kernel ELF (Multiboot / QEMU `-kernel`).
+/// Microkit `x86_64_generic` 64-bit kernel ELF (Limine / metal Multiboot 2).
+pub fn sel4_elf(sdk: impl AsRef<Path>, microkit_board: &str, config: &str) -> PathBuf {
+    sdk.as_ref()
+        .join("board")
+        .join(microkit_board)
+        .join(config)
+        .join("elf/sel4.elf")
+}
+
+/// Microkit 32-bit kernel ELF. QEMU `-kernel` still rejects ELF64 on x86_64.
 pub fn sel4_32_elf(sdk: impl AsRef<Path>, microkit_board: &str, config: &str) -> PathBuf {
     sdk.as_ref()
         .join("board")

@@ -1,7 +1,7 @@
 //! Phase 52: one-command host deploy of boot images onto mounted FAT media.
 //!
 //! ARM/RISC-V hardware (RPi4): copy `loader.img` and write U-Boot helpers.
-//! x86-64 hardware (PC99 / Z97): also copy `sel4_32.elf` and write Multiboot 2
+//! x86-64 hardware (PC99 / Z97): also copy `sel4.elf` and write Multiboot 2
 //! Limine/GRUB snippets. Phase 60 Track C: optional SHA-256 sidecar verify.
 
 use std::{
@@ -55,13 +55,13 @@ pub fn deploy_loader(
     let dest_loader = dest.join("loader.img");
     copy_file_and_sidecar(&loader, &dest_loader)?;
 
-    let kernel = board_build.join("sel4_32.elf");
+    let kernel = board_build.join("sel4.elf");
     let x86 = kernel.is_file();
     if x86 {
         if verify {
             crate::image_digest::verify_sidecar(&kernel)?;
         }
-        copy_file_and_sidecar(&kernel, &dest.join("sel4_32.elf"))?;
+        copy_file_and_sidecar(&kernel, &dest.join("sel4.elf"))?;
         let stub = crate::iso::build_mb2_stub(root)?;
         fs::copy(&stub, dest.join("mb2-stub.elf"))
             .with_context(|| format!("copy {} → {}", stub.display(), dest.display()))?;
@@ -131,7 +131,7 @@ fn limine_commands(board: &str) -> String {
     format!(
         "# lerux Limine stanza for {board} (Multiboot 2 via mb2-stub).\n\
          # Paste into limine.conf. Do not replace an existing OS menu.\n\
-         # USB FAT: mb2-stub.elf, sel4_32.elf, and loader.img at the volume root.\n\
+         # USB FAT: mb2-stub.elf, sel4.elf (64-bit), and loader.img at the volume root.\n\
          # Prefer the UEFI USB entry. The stub places sel4 at 1 MiB after ExitBootServices.\n\
          #\n\
          # Host golden path after boot (serial on a second machine):\n\
@@ -141,22 +141,23 @@ fn limine_commands(board: &str) -> String {
          \x20   comment: seL4 Microkit\n\
          \x20   protocol: multiboot2\n\
          \x20   path: boot():/mb2-stub.elf\n\
-         \x20   module_path: boot():/sel4_32.elf\n\
+         \x20   module_path: boot():/sel4.elf\n\
          \x20   module_path: boot():/loader.img\n"
     )
 }
 
 fn grub_commands(board: &str) -> String {
     format!(
-        "# lerux GRUB2 menuentry for {board} (Multiboot 2).\n\
+        "# lerux GRUB2 menuentry for {board} (Multiboot 2, 64-bit sel4.elf).\n\
          # Paste into a custom file (e.g. /etc/grub.d/40_custom) or a USB grub.cfg.\n\
          # Do not overwrite the Ubuntu /boot/grub/grub.cfg on sda.\n\
+         # UEFI GRUB may still need a free 1 MiB window; prefer Limine + mb2-stub.\n\
          #\n\
          menuentry \"lerux {board}\" {{\n\
          \x20   insmod fat\n\
          \x20   insmod multiboot2\n\
-         \x20   search --file --set=root /sel4_32.elf\n\
-         \x20   multiboot2 /sel4_32.elf\n\
+         \x20   search --file --set=root /sel4.elf\n\
+         \x20   multiboot2 /sel4.elf\n\
          \x20   module2 /loader.img\n\
          }}\n"
     )
@@ -170,7 +171,7 @@ fn print_x86_post_deploy_instructions(board: &str, dest_loader: &Path) {
     );
     println!("  3. Bootloader: Limine (lerux-limine.conf) Multiboot 2 via mb2-stub (prefer UEFI).");
     println!("       kernel  /mb2-stub.elf");
-    println!("       module  /sel4_32.elf");
+    println!("       module  /sel4.elf");
     println!("       module  /loader.img");
     println!("  4. Boot smoke (laptop, serial not held by screen):");
     println!("       LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD={board} just test-hw");
@@ -438,7 +439,7 @@ mod tests {
 
     fn setup_x86_image(tmp: &Path, loader: &[u8], kernel: &[u8]) -> PathBuf {
         let dest = setup_loader(tmp, loader);
-        let kernel_path = tmp.join("build/fake_board/sel4_32.elf");
+        let kernel_path = tmp.join("build/fake_board/sel4.elf");
         fs::write(&kernel_path, kernel).unwrap();
         crate::image_digest::write_sidecar(&kernel_path).unwrap();
         dest
@@ -463,10 +464,10 @@ mod tests {
         .unwrap();
 
         assert_eq!(
-            fs::read(dest_canon.join("sel4_32.elf")).unwrap(),
+            fs::read(dest_canon.join("sel4.elf")).unwrap(),
             b"fake-kernel"
         );
-        assert!(dest_canon.join("sel4_32.elf.sha256").is_file());
+        assert!(dest_canon.join("sel4.elf.sha256").is_file());
         assert_eq!(
             fs::read(dest_canon.join("mb2-stub.elf")).unwrap(),
             b"fake-stub"
@@ -474,11 +475,11 @@ mod tests {
         let limine = fs::read_to_string(dest_canon.join("lerux-limine.conf")).unwrap();
         assert!(limine.contains("multiboot2"), "{limine}");
         assert!(limine.contains("mb2-stub.elf"), "{limine}");
-        assert!(limine.contains("sel4_32.elf"), "{limine}");
+        assert!(limine.contains("sel4.elf"), "{limine}");
         assert!(limine.contains("loader.img"), "{limine}");
         let grub = fs::read_to_string(dest_canon.join("lerux-grub.cfg")).unwrap();
         assert!(grub.contains("multiboot2"), "{grub}");
-        assert!(grub.contains("sel4_32.elf"), "{grub}");
+        assert!(grub.contains("sel4.elf"), "{grub}");
         assert!(grub.contains("module2"), "{grub}");
         assert!(!dest_canon.join("lerux-uboot.txt").is_file());
     }
@@ -504,7 +505,7 @@ mod tests {
     fn deploy_refuses_tampered_x86_kernel() {
         let tmp = tempfile::tempdir().unwrap();
         let dest = setup_x86_image(tmp.path(), b"good-loader", b"good-kernel");
-        fs::write(tmp.path().join("build/fake_board/sel4_32.elf"), b"evil").unwrap();
+        fs::write(tmp.path().join("build/fake_board/sel4.elf"), b"evil").unwrap();
         let err = deploy_loader(
             tmp.path(),
             "fake_board",
@@ -517,6 +518,6 @@ mod tests {
         .unwrap_err()
         .to_string();
         assert!(err.contains("integrity check failed"), "{err}");
-        assert!(!dest.join("sel4_32.elf").exists());
+        assert!(!dest.join("sel4.elf").exists());
     }
 }

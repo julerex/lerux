@@ -219,7 +219,7 @@ enum Commands {
     },
     /// Copy board boot images onto a mounted FAT boot directory.
     ///
-    /// RPi4: `loader.img` + U-Boot helper. x86 PC: also `sel4_32.elf` + Multiboot 2 snippets.
+    /// RPi4: `loader.img` + U-Boot helper. x86 PC: also `sel4.elf` + Multiboot 2 snippets.
     ///
     /// Example: `lerux deploy --board rpi4b_4gb --dest /media/$USER/boot`
     ///
@@ -261,7 +261,7 @@ enum Commands {
         /// Relative paths stay under the build directory. Absolute paths must not contain `..`.
         #[arg(long)]
         output: Option<PathBuf>,
-        /// Build the image if `loader.img` or `sel4_32.elf` is missing.
+        /// Build the image if `loader.img` or `sel4.elf` is missing.
         #[arg(long, default_value_t = true)]
         build: bool,
         /// Skip building even if the boot files are missing (error instead).

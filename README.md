@@ -23,7 +23,7 @@ sudo dd if=build/pc_z97_d3h/lerux.iso of=/dev/sdX bs=4M status=progress conv=fsy
 
 Reboot and open the firmware boot menu (often F12). Choose the USB entry that says **UEFI** (Limine `BOOTX64.EFI`). Limine counts down, then the screen is blue with `hello lerux` and the menu `1 browser` / `2 maths`. Type with a PS/2 keyboard in the rear combo port, or a USB HID boot keyboard on a root xHCI port.
 
-`sel4_32.elf` is still linked at 1 MiB. Limine loads `mb2-stub.elf` at 32 MiB under UEFI; the stub places the kernel at 1 MiB after `ExitBootServices`. A legacy/CSM USB entry still works with the same ISO.
+The metal kernel is 64-bit `sel4.elf`, still linked at 1 MiB. Limine loads `mb2-stub.elf` at 32 MiB under UEFI; the stub places the kernel at 1 MiB after `ExitBootServices`.
 
 ## Quick start (QEMU)
 

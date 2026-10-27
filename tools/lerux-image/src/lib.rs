@@ -520,6 +520,18 @@ mod tests {
     }
 
     #[test]
+    fn e1000e_board_row_swaps_the_driver_and_stays_out_of_ci() {
+        let boards = fs::read_to_string(repo_root().join("support/boards.toml")).expect("boards");
+        let header = boards.split("\n[").next().expect("header");
+        assert!(header.contains("x86_64_generic_net_e1000e"));
+        let section = board_section(&boards, "x86_64_generic_net_e1000e");
+        assert!(section.contains("sddf-e1000e-driver"));
+        assert!(!section.contains("sddf-net-driver"));
+        assert!(section.contains("ci = false"));
+        assert!(section.contains("net = \"user\""));
+    }
+
+    #[test]
     fn x86_fetch_stays_on_the_virtio_net_driver() {
         let xml = render_board("x86_64_generic_fetch_sddf")
             .expect("render")

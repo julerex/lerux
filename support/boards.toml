@@ -12,7 +12,8 @@
 #                                   Every workflow board has ci = true. A ci = true
 #                                   board can stay out of that list; name it in
 #                                   docs/ci.md. For a board lerux-image renders
-#                                   (names ending in _sddf, and x86_64_generic_fs_ahci),
+#                                   (names ending in _sddf, x86_64_generic_fs_ahci,
+#                                   and x86_64_generic_net_e1000e),
 #                                   template is not a file and system_vars are not
 #                                   substituted. The system description is the Rust
 #                                   image renderer.
@@ -274,6 +275,16 @@ microkit_board = "x86_64_generic"
 target = "x86_64-sel4-microkit"
 template = "net-sddf.system.template"
 pds = ["sddf-net-driver", "sddf-net-virt-tx", "sddf-net-virt-rx", "sddf-net-copy", "sddf-serial-driver", "sddf-serial-virt-tx", "sddf-serial-virt-rx", "sddf-net-client"]
+qemu = { net = "user" }
+ci = false
+system_vars = {}
+
+[x86_64_generic_net_e1000e]
+arch = "x86_64"
+microkit_board = "x86_64_generic"
+target = "x86_64-sel4-microkit"
+template = "net-sddf.system.template"
+pds = ["sddf-e1000e-driver", "sddf-net-virt-tx", "sddf-net-virt-rx", "sddf-net-copy", "sddf-serial-driver", "sddf-serial-virt-tx", "sddf-serial-virt-rx", "sddf-net-client"]
 qemu = { net = "user" }
 ci = false
 system_vars = {}

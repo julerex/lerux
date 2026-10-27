@@ -129,6 +129,7 @@ These boards have `ci = false`. Milestone 16 added the QEMU RISC-V and QEMU x86 
 - `x86_64_generic_fetch_sddf`
 - `x86_64_generic_fs_ahci`
 - `x86_64_generic_fs_sddf`
+- `x86_64_generic_net_e1000e`
 - `x86_64_generic_net_sddf`
 - `x86_64_generic_program_sddf`
 - `x86_64_generic_serial_sddf`

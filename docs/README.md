@@ -17,6 +17,7 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [plan-interactive.md](plan-interactive.md) | Phases 71–80 record: QEMU interactive surface. Milestone 17 deleted those protection domains |
 | [../lerux-ladybird/PLAN.md](../lerux-ladybird/PLAN.md) | Ladybird-shaped browser libraries and protection domains. Milestone 1 adds the crates and an empty document on a page |
 | [desk-browser.md](desk-browser.md) | Desk browser spec: one public page on this Z97, from the typed address to the motherboard HDMI port |
+| [plan-qip.md](plan-qip.md) | Investigation: QIP component contracts and whether a host belongs in lerux. No decision yet. |
 | [config.md](config.md) | Phase 54: config key schema, secrets, boot policy |
 | [packages.md](packages.md) | Phase 55: package CLI, pins, profile recipes, out-of-tree “AUR” |
 | [plan-au-ts.md](plan-au-ts.md) | Phases 41–49: sDDF/LionsOS/sdfgen-inspired work |
@@ -56,3 +57,4 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 - [au-ts org](https://github.com/au-ts) — upstream Microkit / sDDF / LionsOS / rust-sel4 ecosystem (see [plan-au-ts.md](plan-au-ts.md))
 - [Ladybird](https://github.com/LadybirdBrowser/ladybird) — process topology inspiration for phases 71–80 (see [plan-interactive.md](plan-interactive.md)); not vendored
 - [Grok Build](https://github.com/xai-org/grok-build) — agent-loop / tool-taxonomy inspiration for phases 71–80; not vendored
+- [QIP](https://github.com/patrickgwsmith/qip) — Content and graphical WebAssembly contracts under investigation ([plan-qip.md](plan-qip.md)); not vendored

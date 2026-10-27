@@ -3,6 +3,7 @@
 #![no_std]
 
 pub mod ahci;
+pub mod e1000e;
 
 mod table;
 
@@ -11,9 +12,9 @@ pub mod description;
 
 #[cfg(feature = "system-description")]
 pub use description::{
-    ahci_msi, pci_config_port, qemu_plan, serial_node, virtio_node, IoApicPin, IoApicVector,
-    IoPort, Irq, LineIrq, MmioDevice, MmioWindow, MsiIrq, PciBar, Polarity, QemuDevice, QemuPlan,
-    SerialNode, SpelledAddr, Trigger, VirtioNode, X86Irq,
+    ahci_msi, e1000e_standalone_irq, pci_config_port, pci_net_config_port, qemu_plan, serial_node,
+    virtio_node, IoApicPin, IoApicVector, IoPort, Irq, LineIrq, MmioDevice, MmioWindow, MsiIrq,
+    PciBar, Polarity, QemuDevice, QemuPlan, SerialNode, SpelledAddr, Trigger, VirtioNode, X86Irq,
 };
 
 use table::{
@@ -198,6 +199,14 @@ mod tests {
             virtio(Arch::Aarch64, VirtioRole::Gpu),
             Some(VirtioAttach::Mmio { offset: 0xa00 })
         );
+    }
+
+    #[test]
+    fn e1000e_slot_matches_the_virtio_net_slot() {
+        let address = e1000e::UnclaimedNic::compiled().address();
+        assert_eq!(address.bus(), 0);
+        assert_eq!(address.device(), table::X86_NET_DEVICE);
+        assert_eq!(address.function(), table::X86_NET_FUNCTION);
     }
 
     #[test]

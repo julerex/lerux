@@ -67,6 +67,8 @@ userspace/pds/sddf-agent/src/tools.rs
 userspace/pds/sddf-blk-driver/src/main.rs
 userspace/pds/sddf-blk-driver/src/mmio.rs
 userspace/pds/sddf-blk-virt/src/main.rs
+userspace/pds/sddf-e1000e-driver/src/engine.rs
+userspace/pds/sddf-e1000e-driver/src/main.rs
 userspace/pds/sddf-fatfs/src/main.rs
 userspace/pds/sddf-fs-client/src/main.rs
 userspace/pds/sddf-gpu-driver/src/main.rs

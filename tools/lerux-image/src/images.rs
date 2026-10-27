@@ -7,9 +7,11 @@ use crate::model::render_forcing_end;
 use lerux_machine::{
     ahci_map,
     description::{
-        ahci_msi, pci_config_port, IoApicPin, IoApicVector, Irq, MmioDevice, MmioWindow, PciBar,
-        Polarity, SerialNode, Trigger, VirtioNode, X86Irq,
+        ahci_msi, e1000e_standalone_irq, pci_config_port, pci_net_config_port, IoApicPin,
+        IoApicVector, Irq, MmioDevice, MmioWindow, PciBar, Polarity, SerialNode, Trigger,
+        VirtioNode, X86Irq,
     },
+    e1000e::{self, e1000e_map},
     virtio_dma_guest, virtio_dma_phys_addr, virtio_node, Arch, VirtioRole, AHCI_PORT,
 };
 
@@ -27,11 +29,18 @@ pub enum DiskBackend {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NetBackend {
+    Virtio,
+    E1000e,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BoardId {
     pub kind: ImageKind,
     pub mode: Option<Mode>,
     pub arch: Arch,
     pub disk: DiskBackend,
+    pub net: NetBackend,
 }
 
 pub fn x86_disk_backend(board: &str) -> Result<DiskBackend, ImageError> {
@@ -39,6 +48,27 @@ pub fn x86_disk_backend(board: &str) -> Result<DiskBackend, ImageError> {
         Some(id) => Ok(id.disk),
         None => Ok(DiskBackend::Virtio),
     }
+}
+
+pub fn x86_net_backend(board: &str) -> Result<NetBackend, ImageError> {
+    match board_registration(board)? {
+        Some(id) => Ok(id.net),
+        None => Ok(NetBackend::Virtio),
+    }
+}
+
+pub fn e1000e_net_device() -> String {
+    let addr = e1000e::UnclaimedNic::compiled().address();
+    let mut device = format!(
+        "e1000e,id=net0,addr={}.{},netdev=netdev0",
+        addr.device(),
+        addr.function()
+    );
+    if e1000e::DISABLE_VNET_HDR {
+        // This QEMU types the property as uint8. The string `on` is rejected.
+        device.push_str(",disable_vnet_hdr=1");
+    }
+    device
 }
 
 pub fn ahci_disk_device(drive: &str) -> String {
@@ -56,12 +86,33 @@ pub fn render_kind(kind: ImageKind, arch: Arch) -> Result<String, ImageError> {
 const SDDF_SUFFIX: &str = "_sddf";
 
 pub fn board_registration(board: &str) -> Result<Option<BoardId>, ImageError> {
+    if board.ends_with("net_e1000e") {
+        if board == "x86_64_generic_net_e1000e" {
+            return Ok(Some(BoardId {
+                kind: ImageKind::Net,
+                mode: None,
+                arch: Arch::X86_64,
+                disk: DiskBackend::Virtio,
+                net: NetBackend::E1000e,
+            }));
+        }
+        if let Some((arch, _)) = Arch::split_prefix(board) {
+            return Err(ImageError::Unsupported {
+                kind: ImageKind::Net,
+                arch,
+            });
+        }
+        return Err(ImageError::UnknownBoard {
+            name: board.to_string(),
+        });
+    }
     if board == "x86_64_generic_fs_ahci" {
         return Ok(Some(BoardId {
             kind: ImageKind::Fs,
             mode: None,
             arch: Arch::X86_64,
             disk: DiskBackend::Ahci,
+            net: NetBackend::Virtio,
         }));
     }
     if let Some((arch, token)) = Arch::split_prefix(board)
@@ -87,6 +138,7 @@ pub fn board_registration(board: &str) -> Result<Option<BoardId>, ImageError> {
         mode,
         arch,
         disk: DiskBackend::Virtio,
+        net: NetBackend::Virtio,
     }))
 }
 
@@ -110,6 +162,7 @@ pub fn render_board(board: &str) -> Result<Option<String>, ImageError> {
     };
     let image = match id.kind {
         ImageKind::Fs => fs_image(id.arch, id.disk),
+        ImageKind::Net => net_image(id.arch, id.net),
         kind => image(kind, id.arch)?,
     };
     render_image(&image).map(Some)
@@ -153,7 +206,7 @@ fn image(kind: ImageKind, arch: Arch) -> Result<Image, ImageError> {
     Ok(match kind {
         ImageKind::Serial => serial_image(arch),
         ImageKind::Fs => fs_image(arch, DiskBackend::Virtio),
-        ImageKind::Net => net_image(arch),
+        ImageKind::Net => net_image(arch, NetBackend::Virtio),
         ImageKind::Fetch => fetch_image(arch, "shell", "sddf-shell.elf", fetch_client_slots()),
         ImageKind::Browser => browser_image(arch),
         ImageKind::Agent => agent_image(arch),
@@ -276,18 +329,24 @@ fn fs_image(arch: Arch, disk: DiskBackend) -> Image {
     }
 }
 
-fn net_image(arch: Arch) -> Image {
+fn net_image(arch: Arch, net: NetBackend) -> Image {
     let serial = serial_attachment(arch);
     let mut client = serial_client_slots();
     client.extend(net_client_slots());
-    Image {
-        groups: vec![
-            serial.regions,
+    let (device_regions, driver) = match net {
+        NetBackend::Virtio => (
             net_virtio_regions(arch, false),
-            net_regions(false),
-        ],
-        domains: vec![
             net_driver(arch, false, None, 4),
+        ),
+        NetBackend::E1000e => {
+            assert_eq!(arch, Arch::X86_64, "e1000e registration is x86 only");
+            (e1000e_regions(), e1000e_driver())
+        }
+    };
+    Image {
+        groups: vec![serial.regions, device_regions, net_regions(false)],
+        domains: vec![
+            driver,
             serial_driver(serial.slots, serial.irq, None),
             net_virt_tx(None),
             net_virt_rx(None),
@@ -913,6 +972,64 @@ fn net_virtio_regions(arch: Arch, net_pci_ecam: bool) -> Vec<Region> {
     net_virtio_attachment(arch, net_pci_ecam).regions
 }
 
+const E1000E_NET_PROGRAM: &str = "sddf-e1000e-driver.elf";
+
+fn e1000e_regions() -> Vec<Region> {
+    let map = e1000e_map();
+    vec![
+        phys(
+            map.regs_region,
+            map.regs_size,
+            map.regs_vaddr,
+            map.regs_paddr.text(),
+        ),
+        Region {
+            name: map.dma_region,
+            size: map.dma_size,
+            vaddr: map.dma_vaddr,
+            phys_addr: Some(map.dma_paddr.text()),
+            page_size: Some(map.dma_size),
+        },
+    ]
+}
+
+fn e1000e_driver() -> Domain {
+    let map = e1000e_map();
+    let mut slots = vec![
+        Slot::Map(Map {
+            region: map.regs_region,
+            cached: Some(false),
+            setvar: None,
+        }),
+        Slot::Map(Map {
+            region: map.dma_region,
+            cached: Some(true),
+            setvar: None,
+        }),
+        Slot::Port(pci_net_config_port()),
+    ];
+    slots.extend(driver_queue_slots());
+    domain(
+        "net_driver",
+        4,
+        None,
+        E1000E_NET_PROGRAM,
+        slots,
+        Some(Irq::X86(e1000e_standalone_irq())),
+    )
+}
+
+fn driver_queue_slots() -> Vec<Slot> {
+    cached(&[
+        "net_rx_drv_free",
+        "net_rx_drv_active",
+        "net_tx_drv_free",
+        "net_tx_drv_active",
+        "net_rx_data",
+        "net_tx_data",
+    ])
+}
+
 fn net_driver(arch: Arch, net_pci_ecam: bool, qos: Option<Qos>, priority: u8) -> Domain {
     let attachment = net_virtio_attachment(arch, net_pci_ecam);
     net_driver_with_irq(arch, net_pci_ecam, attachment.irq, qos, priority)
@@ -927,14 +1044,7 @@ fn net_driver_with_irq(
 ) -> Domain {
     let attachment = net_virtio_attachment(arch, net_pci_ecam);
     let mut slots = attachment.driver_slots;
-    slots.extend(cached(&[
-        "net_rx_drv_free",
-        "net_rx_drv_active",
-        "net_tx_drv_free",
-        "net_tx_drv_active",
-        "net_rx_data",
-        "net_tx_data",
-    ]));
+    slots.extend(driver_queue_slots());
     domain(
         "net_driver",
         priority,

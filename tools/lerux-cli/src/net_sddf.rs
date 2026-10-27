@@ -6,10 +6,18 @@
 use std::{fs, path::Path};
 
 use anyhow::{Context, Result};
+use lerux_image::{board_registration, BoardId, NetBackend};
 
-pub fn write_configs(dir: &Path) -> Result<()> {
+pub fn write_configs(dir: &Path, board: &str) -> Result<()> {
     fs::create_dir_all(dir).with_context(|| format!("mkdir {}", dir.display()))?;
-    bind(dir, "sddf-net-driver", "net_driver_config.bin")?;
+    let driver = match board_registration(board).map_err(|error| anyhow::anyhow!("{error}"))? {
+        Some(BoardId {
+            net: NetBackend::E1000e,
+            ..
+        }) => "sddf-e1000e-driver",
+        Some(_) | None => "sddf-net-driver",
+    };
+    bind(dir, driver, "net_driver_config.bin")?;
     bind(dir, "sddf-net-virt-tx", "net_virt_tx_config.bin")?;
     bind(dir, "sddf-net-virt-rx", "net_virt_rx_config.bin")?;
     bind(dir, "sddf-net-copy", "net_copy_config.bin")?;
@@ -55,7 +63,7 @@ mod tests {
     #[test]
     fn write_configs_starts_with_the_net_sddf_magic() {
         let dir = tempfile::tempdir().expect("tempdir");
-        write_configs(dir.path()).expect("write configs");
+        write_configs(dir.path(), "qemu_virt_aarch64_net_sddf").expect("write configs");
         check(dir.path(), "net_driver_config.bin", &driver_config());
         check(dir.path(), "net_virt_tx_config.bin", &virt_tx_config());
         check(dir.path(), "net_virt_rx_config.bin", &virt_rx_config());
@@ -69,6 +77,15 @@ mod tests {
         let mut net = vec![0u8; net_len];
         net_image::net_config_to_bytes(&net_image::client_config(), &mut net);
         assert_eq!(&client[serial_len..], net.as_slice());
+
+        let e1000e = tempfile::tempdir().expect("tempdir");
+        write_configs(e1000e.path(), "x86_64_generic_net_e1000e").expect("e1000e configs");
+        check(e1000e.path(), "net_driver_config.bin", &driver_config());
+        let rejected = tempfile::tempdir().expect("tempdir");
+        let error = write_configs(rejected.path(), "qemu_virt_aarch64_net_e1000e")
+            .expect_err("non-x86 e1000e");
+        assert!(format!("{error:#}").contains("unsupported"), "{error:#}");
+        assert!(!rejected.path().join("net_driver_config.bin").exists());
     }
 
     fn check<T>(dir: &Path, name: &str, value: &T) {

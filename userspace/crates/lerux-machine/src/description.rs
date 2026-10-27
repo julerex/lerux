@@ -75,6 +75,24 @@ pub fn pci_config_port() -> IoPort {
     }
 }
 
+/// Config port at `0xcf8` with the net symbol pair, distinct from AHCI's
+/// `pci_config_ioport_*`.
+pub fn pci_net_config_port() -> IoPort {
+    IoPort {
+        addr: X86_PCI_CONFIG_PORT,
+        size: X86_PCI_CONFIG_SIZE,
+        id_symbol: X86_PCI_NET_CONFIG_ID_SYMBOL,
+        addr_symbol: X86_PCI_NET_CONFIG_ADDR_SYMBOL,
+        element_id: None,
+    }
+}
+
+/// Pin for slot `00:04.0` on the standalone net image.
+/// Milestone 21's combined image uses the other pin and must not call this.
+pub fn e1000e_standalone_irq() -> X86Irq {
+    x86_level_low(X86_NET_PIN, X86_NET_VECTOR)
+}
+
 pub fn ahci_msi() -> MsiIrq {
     MsiIrq {
         pcidev: Unclaimed::compiled().address(),
@@ -242,13 +260,7 @@ pub fn virtio_node(arch: Arch, role: VirtioRole) -> Option<VirtioNode> {
                 bars: &X86_BLK_BARS,
             }),
             VirtioRole::Net => Some(VirtioNode::Pci {
-                config: IoPort {
-                    addr: X86_PCI_CONFIG_PORT,
-                    size: X86_PCI_CONFIG_SIZE,
-                    id_symbol: X86_PCI_NET_CONFIG_ID_SYMBOL,
-                    addr_symbol: X86_PCI_NET_CONFIG_ADDR_SYMBOL,
-                    element_id: None,
-                },
+                config: pci_net_config_port(),
                 device: X86_NET_DEVICE,
                 function: X86_NET_FUNCTION,
                 irq: x86_level_low(X86_NET_PIN, X86_NET_VECTOR),
@@ -390,6 +402,39 @@ mod tests {
                 offset: crate::table::AARCH64_VIRTIO_BLK_OFFSET,
             })
         );
+    }
+
+    #[test]
+    fn pci_net_config_port_is_not_the_ahci_port() {
+        let net = pci_net_config_port();
+        let ahci = pci_config_port();
+        assert_eq!(net.addr, ahci.addr);
+        assert_eq!(net.size, ahci.size);
+        assert_eq!(net.id_symbol, "pci_net_config_ioport_id");
+        assert_eq!(net.addr_symbol, "pci_net_config_ioport_addr");
+        assert_ne!(net.id_symbol, ahci.id_symbol);
+        assert_ne!(net.addr_symbol, ahci.addr_symbol);
+        assert_eq!(net.element_id, None);
+    }
+
+    #[test]
+    fn e1000e_standalone_irq_is_the_provisional_pin() {
+        let irq = e1000e_standalone_irq();
+        assert_eq!(irq.pin, IoApicPin(11));
+        assert_eq!(irq.vector, IoApicVector(50));
+        assert_eq!(irq.trigger, Trigger::Level);
+        assert_eq!(irq.polarity, Polarity::Low);
+        assert_eq!(irq, x86_level_low(X86_NET_PIN, X86_NET_VECTOR));
+    }
+
+    #[test]
+    fn x86_virtio_net_uses_the_shared_config_port() {
+        let Some(VirtioNode::Pci { config, irq, .. }) = virtio_node(Arch::X86_64, VirtioRole::Net)
+        else {
+            panic!("x86 virtio net");
+        };
+        assert_eq!(config, pci_net_config_port());
+        assert_eq!(irq, x86_level_low(X86_NET_PIN, X86_NET_VECTOR));
     }
 
     #[test]

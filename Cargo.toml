@@ -20,6 +20,7 @@ members = [
     "userspace/pds/sddf-program",
     "userspace/pds/sddf-timer-driver",
     "userspace/pds/sddf-net-driver",
+    "userspace/pds/sddf-e1000e-driver",
     "userspace/pds/sddf-net-virt-tx",
     "userspace/pds/sddf-net-virt-rx",
     "userspace/pds/sddf-net-copy",

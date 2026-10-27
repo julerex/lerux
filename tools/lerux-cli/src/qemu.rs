@@ -9,7 +9,9 @@ use std::{
 };
 
 use anyhow::{bail, Context, Result};
-use lerux_image::{ahci_disk_device, x86_disk_backend, DiskBackend};
+use lerux_image::{
+    ahci_disk_device, e1000e_net_device, x86_disk_backend, x86_net_backend, DiskBackend, NetBackend,
+};
 
 use crate::{
     board::{get_board, load_boards, Board, DiskMode, NetMode, QemuConfig},
@@ -240,6 +242,14 @@ fn riscv64_command(qemu: &QemuConfig, loader: &Path, disk: &Path) -> Command {
 }
 
 const X86_VIRTIO_BLK_PCI: &str = "virtio-blk-pci,id=blk0,addr=0x3.0x0,drive=blkdev0";
+const X86_VIRTIO_NET_PCI: &str = "virtio-net-pci,id=net0,addr=0x4.0x0,netdev=netdev0";
+
+fn x86_net_device(board: &str) -> Result<String> {
+    match x86_net_backend(board)? {
+        NetBackend::Virtio => Ok(X86_VIRTIO_NET_PCI.to_string()),
+        NetBackend::E1000e => Ok(e1000e_net_device()),
+    }
+}
 
 fn x86_block_disk_device(board_name: &str) -> Result<String> {
     match x86_disk_backend(board_name)? {
@@ -283,12 +293,8 @@ fn x86_command(
         ]);
     }
     if let Some(netdev) = netdev_arg(qemu.net) {
-        c.args([
-            "-device",
-            "virtio-net-pci,id=net0,addr=0x4.0x0,netdev=netdev0",
-            "-netdev",
-            netdev,
-        ]);
+        let device = x86_net_device(&ctx.board_name)?;
+        c.args(["-device", &device, "-netdev", netdev]);
     }
     append_usb_kbd(&mut c, qemu);
     Ok(c)
@@ -530,5 +536,22 @@ mod tests {
     fn x86_block_disk_sddf_uses_virtio_pci() {
         let dev = x86_block_disk_device("x86_64_generic_fs_sddf").unwrap();
         assert_eq!(dev, X86_VIRTIO_BLK_PCI);
+    }
+
+    #[test]
+    fn x86_net_device_e1000e_disables_vnet_headers() {
+        let dev = x86_net_device("x86_64_generic_net_e1000e").unwrap();
+        assert_eq!(
+            dev,
+            "e1000e,id=net0,addr=4.0,netdev=netdev0,disable_vnet_hdr=1"
+        );
+        assert!(!dev.contains("mac="));
+        assert!(!dev.contains("virtio"));
+    }
+
+    #[test]
+    fn x86_net_device_sddf_stays_virtio() {
+        let dev = x86_net_device("x86_64_generic_net_sddf").unwrap();
+        assert_eq!(dev, X86_VIRTIO_NET_PCI);
     }
 }

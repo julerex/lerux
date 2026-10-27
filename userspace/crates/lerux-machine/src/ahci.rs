@@ -25,6 +25,14 @@ pub struct PciAddress {
 }
 
 impl PciAddress {
+    pub(crate) const fn new(bus: u8, device: u8, function: u8) -> Self {
+        Self {
+            bus,
+            device,
+            function,
+        }
+    }
+
     pub const fn bus(self) -> u8 {
         self.bus
     }
@@ -51,11 +59,7 @@ pub struct RejectedClass {
 
 impl Unclaimed {
     pub const fn compiled() -> Self {
-        Self(PciAddress {
-            bus: 0,
-            device: 0x1f,
-            function: 2,
-        })
+        Self(PciAddress::new(0, 0x1f, 2))
     }
 
     pub const fn address(self) -> PciAddress {

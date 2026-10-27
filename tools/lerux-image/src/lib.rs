@@ -9,8 +9,8 @@ mod model;
 
 pub use binding::{emit_pd_binding, pd_binding_bytes};
 pub use images::{
-    ahci_disk_device, board_registration, render_board, render_kind, x86_disk_backend, BoardId,
-    DiskBackend,
+    ahci_disk_device, board_registration, e1000e_net_device, render_board, render_kind,
+    x86_disk_backend, x86_net_backend, BoardId, DiskBackend, NetBackend,
 };
 pub use model::{ImageError, ImageKind, Mode};
 
@@ -27,7 +27,7 @@ mod tests {
         path::PathBuf,
     };
 
-    use lerux_machine::Arch;
+    use lerux_machine::{e1000e::e1000e_map, e1000e_standalone_irq, Arch};
     use lerux_sddf::{
         fs_client_config_t, fs_config_check_magic, net_client_config_t, net_config_check_magic,
         serial_client_config_t, serial_config_check_magic, serial_connection_resource_t,
@@ -42,9 +42,10 @@ mod tests {
     use crate::{
         ahci_disk_device,
         binding::{bytes_for_pages, Page},
-        board_registration,
+        board_registration, e1000e_net_device,
         images::{render_with_extra_end, render_with_region_vaddr, BoardId},
-        pd_binding_bytes, render_board, x86_disk_backend, DiskBackend, ImageError, ImageKind, Mode,
+        pd_binding_bytes, render_board, x86_disk_backend, x86_net_backend, DiskBackend, ImageError,
+        ImageKind, Mode, NetBackend,
     };
 
     fn repo_root() -> PathBuf {
@@ -309,6 +310,7 @@ mod tests {
                 mode: None,
                 arch: Arch::X86_64,
                 disk: DiskBackend::Ahci,
+                net: NetBackend::Virtio,
             })
         );
         assert_eq!(
@@ -326,6 +328,7 @@ mod tests {
                 mode: None,
                 arch: Arch::X86_64,
                 disk: DiskBackend::Virtio,
+                net: NetBackend::Virtio,
             })
         );
     }
@@ -417,6 +420,127 @@ mod tests {
     }
 
     #[test]
+    fn e1000e_registration_is_x86_only() {
+        assert_eq!(
+            board_registration("x86_64_generic_net_e1000e").expect("register"),
+            Some(BoardId {
+                kind: ImageKind::Net,
+                mode: None,
+                arch: Arch::X86_64,
+                disk: DiskBackend::Virtio,
+                net: NetBackend::E1000e,
+            })
+        );
+        let unsupported =
+            board_registration("qemu_virt_aarch64_net_e1000e").expect_err("unsupported");
+        assert!(
+            matches!(
+                unsupported,
+                ImageError::Unsupported {
+                    kind: ImageKind::Net,
+                    arch: Arch::Aarch64
+                }
+            ),
+            "{unsupported:?}"
+        );
+        assert!(matches!(
+            board_registration("not_a_real_net_e1000e"),
+            Err(ImageError::UnknownBoard { .. })
+        ));
+        assert_eq!(
+            board_registration("x86_64_generic_net_sddf")
+                .expect("virtio net")
+                .map(|id| id.net),
+            Some(NetBackend::Virtio)
+        );
+        assert_eq!(
+            x86_net_backend("x86_64_generic").expect("default"),
+            NetBackend::Virtio
+        );
+    }
+
+    #[test]
+    fn e1000e_net_device_line_has_no_mac() {
+        let line = e1000e_net_device();
+        assert_eq!(
+            line,
+            "e1000e,id=net0,addr=4.0,netdev=netdev0,disable_vnet_hdr=1"
+        );
+        assert!(!line.contains("mac="));
+        assert!(!line.contains("virtio"));
+    }
+
+    #[test]
+    fn x86_e1000e_board_renders_the_82574_driver() {
+        let xml = render_board("x86_64_generic_net_e1000e")
+            .expect("render")
+            .expect("e1000e image");
+        let map = e1000e_map();
+        let irq = e1000e_standalone_irq();
+        assert_eq!(map.dma_vaddr, lerux_sddf::net_image::NET_DRIVER_DMA_VADDR);
+        assert!(xml.contains("sddf-e1000e-driver.elf"));
+        assert!(!xml.contains("sddf-net-driver.elf"));
+        assert!(xml.contains(&format!("phys_addr=\"{}\"", map.regs_paddr.text())));
+        assert!(xml.contains(&format!("phys_addr=\"{}\"", map.dma_paddr.text())));
+        assert!(xml.contains("e1000e_regs"));
+        assert!(xml.contains("e1000e_dma"));
+        assert!(xml.contains("pci_net_config_ioport_id"));
+        assert!(xml.contains(&format!(
+            "<irq pin=\"{}\" vector=\"{}\" id=\"0\" trigger=\"level\" polarity=\"low\" />",
+            irq.pin.0, irq.vector.0
+        )));
+        assert_eq!((irq.pin.0, irq.vector.0), (11, 50));
+        assert!(!xml.contains("virtio_net"));
+        assert!(!xml.contains("0xfed3_0000"));
+        assert!(!xml.contains("pcidev="));
+        assert!(!xml.contains("0x6400_0000"));
+        assert!(xml.contains(
+            "<protection_domain name=\"net_driver\" priority=\"4\" stack_size=\"0x10_000\">"
+        ));
+        assert!(!xml.contains("budget="));
+        assert!(xml.contains(&format!(
+            "<end pd=\"net_driver\" id=\"{}\" />",
+            lerux_sddf::net_image::DRIVER_RX_CHANNEL
+        )));
+        assert!(xml.contains(&format!(
+            "<end pd=\"net_driver\" id=\"{}\" />",
+            lerux_sddf::net_image::DRIVER_TX_CHANNEL
+        )));
+        let driver_at = xml.find("name=\"net_driver\"").expect("driver");
+        let driver_end = xml[driver_at..]
+            .find("</protection_domain>")
+            .expect("driver end")
+            + driver_at;
+        let driver = &xml[driver_at..driver_end];
+        assert!(!driver.contains("<setvar "));
+        assert_eq!(
+            pd_binding_bytes("sddf-e1000e-driver", &[]).expect("e1000e binding"),
+            pd_binding_bytes("sddf-net-driver", &[]).expect("virtio binding")
+        );
+    }
+
+    #[test]
+    fn e1000e_board_row_swaps_the_driver_and_stays_out_of_ci() {
+        let boards = fs::read_to_string(repo_root().join("support/boards.toml")).expect("boards");
+        let header = boards.split("\n[").next().expect("header");
+        assert!(header.contains("x86_64_generic_net_e1000e"));
+        let section = board_section(&boards, "x86_64_generic_net_e1000e");
+        assert!(section.contains("sddf-e1000e-driver"));
+        assert!(!section.contains("sddf-net-driver"));
+        assert!(section.contains("ci = false"));
+        assert!(section.contains("net = \"user\""));
+    }
+
+    #[test]
+    fn x86_fetch_stays_on_the_virtio_net_driver() {
+        let xml = render_board("x86_64_generic_fetch_sddf")
+            .expect("render")
+            .expect("fetch");
+        assert!(xml.contains("sddf-net-driver.elf"));
+        assert!(!xml.contains("sddf-e1000e-driver.elf"));
+    }
+
+    #[test]
     fn x86_fetch_board_renders_pci_virtio_and_serial_port() {
         let xml = render_board("x86_64_generic_fetch_sddf")
             .expect("render")
@@ -492,6 +616,7 @@ mod tests {
                 mode: Some(Mode::Web),
                 arch: Arch::X86_64,
                 disk: DiskBackend::Virtio,
+                net: NetBackend::Virtio,
             })
         );
         let boards = fs::read_to_string(repo_root().join("support/boards.toml")).expect("boards");
@@ -526,6 +651,7 @@ mod tests {
                 mode: Some(Mode::Fetch),
                 arch: Arch::Aarch64,
                 disk: DiskBackend::Virtio,
+                net: NetBackend::Virtio,
             })
         );
         assert_eq!(
@@ -535,6 +661,7 @@ mod tests {
                 mode: Some(Mode::Web),
                 arch: Arch::Aarch64,
                 disk: DiskBackend::Virtio,
+                net: NetBackend::Virtio,
             })
         );
         assert!(web.contains("sddf-shell.elf"));

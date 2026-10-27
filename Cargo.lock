@@ -2075,6 +2075,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "sddf-e1000e-driver"
+version = "0.1.0"
+dependencies = [
+ "lerux-image",
+ "lerux-logging",
+ "lerux-machine",
+ "lerux-sddf",
+ "sel4",
+ "sel4-microkit",
+]
+
+[[package]]
 name = "sddf-fatfs"
 version = "0.1.0"
 dependencies = [

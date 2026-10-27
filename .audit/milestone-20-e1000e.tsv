@@ -1,0 +1,16 @@
+ts	phase	decision	why	evidence	result
+2026-10-27T12:53:48Z	start	Milestone 20 e1000e under poteto Feature playbook	Milestone 19 done; next is QEMU Ethernet	docs/plan-lionsos.md#milestone-20	open
+2026-10-27T12:53:48Z	frame	ran how explorers on net driver, AHCI pattern, board wiring, PCI programming	Feature step 1 requires how before design	agents bc-6fa776e1,bc-be9a36aa,bc-4d81bbf7,bc-9826aaa0	in flight
+2026-10-27T12:58:51Z	how	harvested net-driver explorer report	port-and-smoke harvest rule	/tmp/how-m20-e1000e/01-net-driver.md	waiting on 3 explorers
+2026-10-27T12:59:46Z	how	harvested board-wiring explorer	port-and-smoke harvest	/tmp/how-m20-e1000e/02-board-wiring.md	waiting on ahci+pci explorers
+2026-10-27T13:00:39Z	how	harvested ahci-pattern explorer	port-and-smoke harvest	/tmp/how-m20-e1000e/03-ahci-pattern.md	waiting on pci explorer
+2026-10-27T13:01:08Z	how	harvested pci explorer; spawning explainer	all four angles in /tmp/how-m20-e1000e	/tmp/how-m20-e1000e/README.md	in flight
+2026-10-27T13:16:37Z	how	how synthesis complete	Feature step 1 done; Grok stood in for refused Opus	/tmp/how-m20-e1000e/explanation.md	done
+2026-10-27T13:16:37Z	decision	place e1000e at PCI 00:04.0 like virtio-net; keep pin 11 vector 50 pending guest proof	reuse measured virtio-net routing rather than unmeasured slot 1	/opt/cursor/artifacts/e1000e-slot4-pci.txt	provisional
+2026-10-27T13:16:37Z	decision	DMA phys 0x6000_0000 guest 0x8_000_000_000; BAR0 128KiB register window candidate 0xfed2_0000; include e1000e: ready in expects; accept by 8086:10d3; pin not MSI; assert MAC	AHCI pattern + plan text + explainer	explanation.md Open Decisions	provisional
+2026-10-27T13:17:29Z	architect	spawned arena runners Engine-shaped vs queue-first	exhaust design space before code	agents bc-2159b5e3 bc-10c399bf	in flight
+2026-10-27T13:37:32Z	arena	candidate-1 Engine sketch landed	AHCI-mirror Engine shape	/tmp/arena-m20-e1000e/candidate-1	waiting on candidate-2
+2026-10-27T13:41:07Z	arena	both candidates complete; starting cross-judge	Phase C	/tmp/arena-m20-e1000e	in flight
+2026-10-27T13:53:00Z	arena	picked candidate-1 Engine base; graft EEPROM rebar + DmaLayout	cross-judge 29 vs 24; deeper device surface	/tmp/arena-m20-e1000e/cross-judge.md	synthesized
+2026-10-27T13:53:21Z	impl	delegated feature owner on Engine base	single owner per checkpoint	agent pending	in flight
+2026-10-27T13:58:30Z	unit-1	lerux-machine e1000e facts and claim token	windows and 8086:10d3 claim before any register program	cargo test -p lerux-machine --features system-description: 20 passed	green

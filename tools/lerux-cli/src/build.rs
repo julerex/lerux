@@ -34,8 +34,9 @@ pub fn build(root: &Path, board: &str, build_dir: &str, config: &str) -> Result<
     if board == "qemu_virt_aarch64_net_sddf"
         || board == "qemu_virt_riscv64_net_sddf"
         || board == "x86_64_generic_net_sddf"
+        || board == "x86_64_generic_net_e1000e"
     {
-        crate::net_sddf::write_configs(&board_build_dir(root, board, build_dir))?;
+        crate::net_sddf::write_configs(&board_build_dir(root, board, build_dir), board)?;
     }
     if board == "qemu_virt_aarch64_fetch_sddf"
         || board == "qemu_virt_riscv64_fetch_sddf"

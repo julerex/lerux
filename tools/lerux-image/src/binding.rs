@@ -71,7 +71,7 @@ fn pages_for(crate_name: &str, board_features: &[&str]) -> Result<Vec<Page>, Ima
         "sddf-blk-virt" => vec![Page::BlkVirt],
         "sddf-fatfs" => vec![Page::BlkClient, Page::FsServer],
         "sddf-fs-client" => vec![Page::FsClient],
-        "sddf-net-driver" => vec![Page::NetDriver],
+        "sddf-net-driver" | "sddf-e1000e-driver" => vec![Page::NetDriver],
         "sddf-net-virt-tx" => vec![Page::NetVirtTx],
         "sddf-net-virt-rx" => vec![Page::NetVirtRx],
         "sddf-net-copy" => vec![Page::NetCopy],

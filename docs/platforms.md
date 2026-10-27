@@ -29,7 +29,7 @@ q35 and the Z97 desk share a kernel and do not share a chipset. Names that both 
 
 ### q35 devices
 
-QEMU machine `q35`. SeaBIOS leaves the standard VGA in text mode. The virtio boards stay. Milestones 19 and 20 add `ich9-ahci` and an 82574 on new boards.
+QEMU machine `q35` with OVMF and the Limine ISO (same path as metal UEFI). The virtio boards stay. Milestones 19 and 20 add `ich9-ahci` and an 82574 on new boards.
 
 | Category | Device | lerux driver | In the tree |
 |----------|--------|--------------|-------------|
@@ -69,7 +69,7 @@ The Gigabyte GA-Z97-D3H. Firmware scanout uses the HD Graphics 4600 when Initial
 just test-workstation          # Tier 1 aarch64 (SP804 QEMU)
 just test-workstation-riscv    # Tier 2 RISC-V
 just test-workstation-x86      # Tier 2 x86
-just iso                                 # Z97-D3H hybrid USB ISO (does not write a disk)
+just iso                                 # Z97-D3H hybrid USB ISO (UEFI Limine via mb2-stub; does not write a disk)
 just deploy-pc DEST=/path/to/usb-fat      # Z97-D3H VGA shell onto a FAT volume (Multiboot 2)
 
 lerux profile build workstation

@@ -5,6 +5,7 @@
 # lerux build output
 /build/
 /support/disk.img
+/support/mb2-stub/mb2-stub.elf
 /loader.img
 /sel4.elf
 /sel4_32.elf

@@ -184,28 +184,27 @@ fn assemble_image(root: &Path, board: &str, build_dir: &str, config: &str) -> Re
     Ok(())
 }
 
-/// Copy the SDK 32-bit kernel next to `loader.img` so `lerux deploy` can put
-/// both Multiboot 2 files on USB/ESP media.
+/// Copy the SDK 64-bit kernel next to `loader.img` for Limine / metal / QEMU ISO.
 pub fn stage_x86_kernel(
     sdk: &str,
     microkit_board: &str,
     config: &str,
     dest_dir: &Path,
 ) -> Result<PathBuf> {
-    let src = crate::qemu::sel4_32_elf(sdk, microkit_board, config);
-    if !src.is_file() {
+    fs::create_dir_all(dest_dir).with_context(|| format!("create {}", dest_dir.display()))?;
+    let src64 = crate::qemu::sel4_elf(sdk, microkit_board, config);
+    if !src64.is_file() {
         bail!(
             "missing {}; run MICROKIT_BOARDS={} lerux build-sdk",
-            src.display(),
+            src64.display(),
             microkit_board
         );
     }
-    fs::create_dir_all(dest_dir).with_context(|| format!("create {}", dest_dir.display()))?;
-    let dest = dest_dir.join("sel4_32.elf");
-    fs::copy(&src, &dest)
-        .with_context(|| format!("copy {} → {}", src.display(), dest.display()))?;
-    crate::image_digest::write_sidecar(&dest)?;
-    Ok(dest)
+    let dest64 = dest_dir.join("sel4.elf");
+    fs::copy(&src64, &dest64)
+        .with_context(|| format!("copy {} → {}", src64.display(), dest64.display()))?;
+    crate::image_digest::write_sidecar(&dest64)?;
+    Ok(dest64)
 }
 
 pub fn run(root: &Path, board: &str, build_dir: &str, config: &str) -> Result<()> {
@@ -282,15 +281,16 @@ mod tests {
         let sdk = tmp.path().join("sdk");
         let elf_dir = sdk.join("board/x86_64_generic/debug/elf");
         fs::create_dir_all(&elf_dir).unwrap();
-        fs::write(elf_dir.join("sel4_32.elf"), b"kernel-bytes").unwrap();
+        fs::write(elf_dir.join("sel4.elf"), b"kernel64").unwrap();
         let dest_dir = tmp.path().join("build/pc_z97_d3h");
 
         let dest =
             stage_x86_kernel(sdk.to_str().unwrap(), "x86_64_generic", "debug", &dest_dir).unwrap();
 
-        assert_eq!(dest, dest_dir.join("sel4_32.elf"));
-        assert_eq!(fs::read(&dest).unwrap(), b"kernel-bytes");
+        assert_eq!(dest, dest_dir.join("sel4.elf"));
+        assert_eq!(fs::read(&dest).unwrap(), b"kernel64");
         assert!(crate::image_digest::sidecar_path(&dest).is_file());
+        assert!(!dest_dir.join("sel4_32.elf").exists());
     }
 
     #[test]

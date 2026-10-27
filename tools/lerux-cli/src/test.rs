@@ -1162,9 +1162,9 @@ pub fn run_board_test_with_mode(
     result
 }
 
-/// QEMU 6.2 does not reload a multiboot `-kernel` guest on `system_reset`.
+/// QEMU 6.2 does not reload an x86 OVMF+ISO guest on `system_reset`.
 /// An x86 reboot script kills that process and starts a new one, which loads
-/// the kernel again. AArch64 and RISC-V stay on the QMP reset.
+/// the ISO again. AArch64 and RISC-V stay on the QMP reset.
 fn reboot_needs_new_process(arch: &str, script_reboots: bool) -> bool {
     script_reboots && arch == "x86_64"
 }

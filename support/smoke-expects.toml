@@ -59,6 +59,10 @@ timeout_secs = 120
 expects = ["ip 10.0.2.15", "ping ok"]
 timeout_secs = 120
 
+[boards.x86_64_generic_net_e1000e]
+expects = ["e1000e: ready", "ip 10.0.2.15", "ping ok"]
+timeout_secs = 120
+
 [boards.x86_64_generic_net_sddf]
 expects = ["ip 10.0.2.15", "ping ok"]
 timeout_secs = 120

@@ -149,6 +149,9 @@ test-fs-sddf-x86:
 test-x86-ahci:
     BOARD=x86_64_generic_fs_ahci just test
 
+test-x86-e1000e:
+    BOARD=x86_64_generic_net_e1000e just test
+
 # LionsOS network roles: driver, virtualisers, one copier, one smoltcp client
 test-net-sddf:
     BOARD=qemu_virt_aarch64_net_sddf just test

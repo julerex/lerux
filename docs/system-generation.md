@@ -29,7 +29,7 @@ support/boards.toml                 support/profiles/<name>.toml
 | Layout (MRs, PD maps, device IRQs) | `userspace/systems/templates/*.system.template` |
 | IPC topology (channel ids, `pp`) | `support/profiles/*.toml` `[[channel]]` |
 | PD `Channel::new(N)` drift | `lerux profile check-channels` |
-| Device-framework layout | `lerux_image::render_board` for names ending in `_sddf` and for `x86_64_generic_fs_ahci`. The `template` field is not a file, and `system_vars` are not substituted. |
+| Device-framework layout | `lerux_image::render_board` for names ending in `_sddf`, for `x86_64_generic_fs_ahci`, and for `x86_64_generic_net_e1000e`. The `template` field is not a file, and `system_vars` are not substituted. |
 
 Workstation and workstation-rpi4 templates are **channel-free**: channels exist only in the profile so they cannot drift from hand XML.
 

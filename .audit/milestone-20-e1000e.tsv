@@ -16,3 +16,4 @@ ts	phase	decision	why	evidence	result
 2026-10-27T13:58:30Z	unit-1	lerux-machine e1000e facts and claim token	windows and 8086:10d3 claim before any register program	cargo test -p lerux-machine --features system-description: 20 passed	green
 2026-10-27T14:06:10Z	unit-2	NetBackend on BoardId, e1000e attachment, QEMU device line	renderer and launcher share one backend; unknown net_e1000e fails closed	cargo test -p lerux-image 43 passed; cargo test -p lerux-cli 125 passed	green
 2026-10-27T14:17:28Z	unit-3	sddf-e1000e-driver skeleton, board row, waiting list	open still panics; ci stays false; census names the board	cargo test -p lerux-cli -- ci_lists: 4 passed; x86 clippy -D warnings on the crate	green
+2026-10-27T14:29:16Z	unit-4	Engine claim, EEPROM rebar, DmaLayout rings, submit_tx/copy_rx/ack	legacy descriptors; SECRC readback owns the FCS subtract	cargo clippy -p sddf-e1000e-driver x86_64-sel4-microkit -D warnings	green

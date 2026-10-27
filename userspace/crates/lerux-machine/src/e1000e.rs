@@ -10,7 +10,7 @@ pub const QEMU_82574: (u16, u16) = (0x8086, 0x10d3);
 
 pub const READY_LINE: &str = "e1000e: ready";
 
-/// The QEMU device line sets `disable_vnet_hdr=on` when this is true.
+/// The QEMU device line sets `disable_vnet_hdr=1` when this is true.
 pub const DISABLE_VNET_HDR: bool = true;
 
 /// PCI BAR0, memory, 128 KiB. Config-space dword at `0x10`.

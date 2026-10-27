@@ -543,7 +543,7 @@ mod tests {
         let dev = x86_net_device("x86_64_generic_net_e1000e").unwrap();
         assert_eq!(
             dev,
-            "e1000e,id=net0,addr=4.0,netdev=netdev0,disable_vnet_hdr=on"
+            "e1000e,id=net0,addr=4.0,netdev=netdev0,disable_vnet_hdr=1"
         );
         assert!(!dev.contains("mac="));
         assert!(!dev.contains("virtio"));

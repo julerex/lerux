@@ -464,7 +464,7 @@ mod tests {
         let line = e1000e_net_device();
         assert_eq!(
             line,
-            "e1000e,id=net0,addr=4.0,netdev=netdev0,disable_vnet_hdr=on"
+            "e1000e,id=net0,addr=4.0,netdev=netdev0,disable_vnet_hdr=1"
         );
         assert!(!line.contains("mac="));
         assert!(!line.contains("virtio"));

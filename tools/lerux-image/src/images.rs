@@ -65,7 +65,8 @@ pub fn e1000e_net_device() -> String {
         addr.function()
     );
     if e1000e::DISABLE_VNET_HDR {
-        device.push_str(",disable_vnet_hdr=on");
+        // This QEMU types the property as uint8. The string `on` is rejected.
+        device.push_str(",disable_vnet_hdr=1");
     }
     device
 }

@@ -63,11 +63,9 @@ pub(crate) struct HostFacts {
     pub cc: bool,
     pub need_cc: bool,
     pub xorriso: bool,
-    pub unpack_debs: bool,
     pub libclang: bool,
     pub fetch_libclang: bool,
     pub qemu_x86: bool,
-    pub ovmf: OvmfFact,
     pub distro: Distro,
 }
 
@@ -146,13 +144,10 @@ fn collect_host_facts(
         readelf: command_on_path("readelf"),
         cc: command_on_path("cc"),
         need_cc: !root.join("deps/limine/limine-binary/limine").is_file(),
-        xorriso: command_on_path("xorriso") || unpacked_xorriso_ready(root),
-        unpack_debs: command_on_path("dpkg-deb")
-            || (command_on_path("ar") && command_on_path("tar")),
+        xorriso: command_on_path("xorriso"),
         libclang: system_libclang_present(),
         fetch_libclang: command_on_path("dpkg-deb"),
         qemu_x86: command_on_path("qemu-system-x86_64"),
-        ovmf: find_ovmf(),
         distro: current_distro(),
     })
 }
@@ -200,16 +195,6 @@ fn rust_src_installed() -> bool {
     Path::new(sysroot.trim())
         .join("lib/rustlib/src/rust/library/Cargo.lock")
         .is_file()
-}
-
-fn unpacked_xorriso_ready(root: &Path) -> bool {
-    let prefix = root.join("deps/toolchains/xorriso");
-    let lib = prefix.join("usr/lib/x86_64-linux-gnu");
-    prefix.join("usr/bin/xorriso").is_file()
-        && lib.join("libisoburn.so.1").is_file()
-        && lib.join("libburn.so.4").is_file()
-        && lib.join("libisofs.so.6").is_file()
-        && lib.join("libjte.so.2").is_file()
 }
 
 fn same_file(left: &Path, right: &Path) -> bool {
@@ -297,41 +282,23 @@ Re-run just iso from this repository. rust-toolchain.toml selects nightly-2026-0
             ),
         });
     }
-    if !facts.xorriso && !facts.unpack_debs {
+    if !facts.xorriso {
         gaps.push(Gap {
-            title: "xorriso",
+            title: "libisoburn",
             detail: format!(
-                "xorriso is not on PATH, and this host cannot unpack the fallback Ubuntu packages (dpkg-deb, or ar and tar).\n{}",
-                package_hint(facts.distro, "xorriso", "xorriso")
+                "The ISO is packed by xorriso from the system libisoburn, libisofs, and libburn libraries.\n{}",
+                package_hint(facts.distro, "libisoburn", "xorriso")
             ),
         });
     }
-    if boot_test {
-        if !facts.qemu_x86 {
-            gaps.push(Gap {
-                title: "qemu-system-x86_64",
-                detail: format!(
-                    "The ISO boot test runs QEMU.\n{}",
-                    package_hint(facts.distro, "qemu-system-x86", "qemu-system-x86")
-                ),
-            });
-        }
-        match &facts.ovmf {
-            OvmfFact::Found(_) => {}
-            OvmfFact::BadPath(path) => gaps.push(Gap {
-                title: "OVMF",
-                detail: format!(
-                    "OVMF_PATH={path} is not a file.\nSet it to a combined OVMF.fd, or unset it and install the ovmf package."
-                ),
-            }),
-            OvmfFact::Missing => gaps.push(Gap {
-                title: "OVMF",
-                detail: format!(
-                    "A combined OVMF firmware file was not found.\nTried OVMF_PATH and {}.\nDebian/Ubuntu: sudo apt install ovmf\nArch's edk2-ovmf package ships split CODE and VARS images. This boot test uses one combined OVMF.fd. Set OVMF_PATH to that file.",
-                    OVMF_CANDIDATES.join(", ")
-                ),
-            }),
-        }
+    if boot_test && !facts.qemu_x86 {
+        gaps.push(Gap {
+            title: "qemu-system-x86_64",
+            detail: format!(
+                "The ISO boot test runs QEMU under SeaBIOS.\n{}",
+                package_hint(facts.distro, "qemu-system-x86", "qemu-system-x86")
+            ),
+        });
     }
     gaps
 }
@@ -450,11 +417,9 @@ mod tests {
             cc: true,
             need_cc: true,
             xorriso: true,
-            unpack_debs: true,
             libclang: true,
             fetch_libclang: false,
             qemu_x86: true,
-            ovmf: OvmfFact::Found(PathBuf::from("/usr/share/OVMF/OVMF.fd")),
             distro: Distro::Arch,
         }
     }
@@ -532,14 +497,23 @@ mod tests {
     }
 
     #[test]
-    fn boot_test_reports_qemu_and_ovmf_together() {
+    fn boot_test_reports_qemu_under_seabios() {
         let mut facts = ready();
         facts.qemu_x86 = false;
-        facts.ovmf = OvmfFact::Missing;
         let report = format_gaps(&host_gaps(&facts, false, true));
         assert!(report.contains("qemu-system-x86"), "{report}");
-        assert!(report.contains("OVMF_PATH"), "{report}");
-        assert!(report.contains("edk2-ovmf"), "{report}");
+        assert!(report.contains("SeaBIOS"), "{report}");
+        assert!(!report.contains("OVMF_PATH"), "{report}");
+    }
+
+    #[test]
+    fn missing_xorriso_on_arch_asks_for_libisoburn() {
+        let mut facts = ready();
+        facts.xorriso = false;
+        let report = format_gaps(&host_gaps(&facts, false, false));
+        assert!(report.contains("sudo pacman -S libisoburn"), "{report}");
+        assert!(!report.contains("Ubuntu"), "{report}");
+        assert!(!report.contains("archive.ubuntu.com"), "{report}");
     }
 
     #[test]

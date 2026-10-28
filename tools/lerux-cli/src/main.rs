@@ -262,7 +262,7 @@ enum Commands {
         /// Relative paths stay under the build directory. Absolute paths must not contain `..`.
         #[arg(long)]
         output: Option<PathBuf>,
-        /// Build the image if `loader.img` or `sel4.elf` is missing.
+        /// Build the image if `loader.img` or `sel4_32.elf` is missing.
         #[arg(long, default_value_t = true)]
         build: bool,
         /// Skip building even if the boot files are missing (error instead).
@@ -724,7 +724,7 @@ fn main() -> Result<()> {
             let board_build = root.join(&build_dir).join(&board);
             let need_image = build_if_missing
                 && (!board_build.join("loader.img").is_file()
-                    || !board_build.join("sel4.elf").is_file());
+                    || !board_build.join("sel4_32.elf").is_file());
             crate::iso_host::require_iso_host(&root, &board, &config, need_image, boot_test)?;
             let iso = crate::iso::build_iso(
                 &root,

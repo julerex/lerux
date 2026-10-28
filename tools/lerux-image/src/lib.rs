@@ -520,6 +520,29 @@ mod tests {
     }
 
     #[test]
+    fn x86_fetch_native_board_row_stays_out_of_ci() {
+        let root = repo_root();
+        let boards = fs::read_to_string(root.join("support/boards.toml")).expect("boards");
+        let header = boards.split("\n[").next().expect("header");
+        assert!(header.contains("x86_64_generic_fetch_native"));
+        let section = board_section(&boards, "x86_64_generic_fetch_native");
+        assert!(section.contains("sddf-ahci-driver"));
+        assert!(section.contains("sddf-e1000e-driver"));
+        assert!(!section.contains("sddf-blk-driver"));
+        assert!(!section.contains("sddf-net-driver"));
+        assert!(section.contains("ci = false"));
+        assert!(section.contains("disk = \"rw\""));
+        assert!(section.contains("https_one = true"));
+        let smokes = fs::read_to_string(root.join("support/smoke-expects.toml")).expect("smokes");
+        let native = board_section(&smokes, "boards.x86_64_generic_fetch_native");
+        let virtio = board_section(&smokes, "boards.x86_64_generic_fetch_sddf");
+        assert_eq!(native, virtio);
+        assert!(!native.contains("reboot"));
+        let docs = fs::read_to_string(root.join("docs/system-generation.md")).expect("docs");
+        assert!(docs.contains("x86_64_generic_fetch_native"));
+    }
+
+    #[test]
     fn e1000e_board_row_swaps_the_driver_and_stays_out_of_ci() {
         let boards = fs::read_to_string(repo_root().join("support/boards.toml")).expect("boards");
         let header = boards.split("\n[").next().expect("header");

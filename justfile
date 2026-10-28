@@ -172,6 +172,9 @@ test-fetch-sddf-riscv:
 test-fetch-sddf-x86:
     BOARD=x86_64_generic_fetch_sddf just test
 
+test-x86-fetch-native:
+    BOARD=x86_64_generic_fetch_native just test
+
 # Milestone 11: shell serves the seeded hostname file over hostfwd
 test-web-sddf:
     BOARD=qemu_virt_aarch64_web_sddf just test

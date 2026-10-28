@@ -41,6 +41,7 @@ pub fn build(root: &Path, board: &str, build_dir: &str, config: &str) -> Result<
     if board == "qemu_virt_aarch64_fetch_sddf"
         || board == "qemu_virt_riscv64_fetch_sddf"
         || board == "x86_64_generic_fetch_sddf"
+        || board == "x86_64_generic_fetch_native"
         || board == "x86_64_generic_web_sddf"
         || board == "qemu_virt_aarch64_web_sddf"
         || board == "qemu_virt_riscv64_web_sddf"

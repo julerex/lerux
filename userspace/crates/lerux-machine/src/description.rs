@@ -75,8 +75,9 @@ pub fn pci_config_port() -> IoPort {
     }
 }
 
-/// Config port at `0xcf8` with the net symbol pair, distinct from AHCI's
-/// `pci_config_ioport_*`.
+/// Config port at `0xcf8` with the net driver's symbol pair.
+/// The address range matches [`pci_config_port`]. Microkit rejects two
+/// protection domains that both map it.
 pub fn pci_net_config_port() -> IoPort {
     IoPort {
         addr: X86_PCI_CONFIG_PORT,
@@ -87,10 +88,16 @@ pub fn pci_net_config_port() -> IoPort {
     }
 }
 
-/// Pin for slot `00:04.0` on the standalone net image.
-/// Milestone 21's combined image uses the other pin and must not call this.
+/// Pin 11, vector 50 for slot `00:04.0` when e1000e is the only PCI device.
+/// The fetch image that also has ICH9 AHCI uses [`e1000e_fetch_irq`].
 pub fn e1000e_standalone_irq() -> X86Irq {
     x86_level_low(X86_NET_PIN, X86_NET_VECTOR)
+}
+
+/// Pin 10, vector 50, level, active-low for e1000e at `00:04.0` beside ICH9 AHCI.
+/// Standalone e1000e keeps [`e1000e_standalone_irq`].
+pub fn e1000e_fetch_irq() -> X86Irq {
+    x86_level_low(10, 50)
 }
 
 pub fn ahci_msi() -> MsiIrq {
@@ -425,6 +432,16 @@ mod tests {
         assert_eq!(irq.trigger, Trigger::Level);
         assert_eq!(irq.polarity, Polarity::Low);
         assert_eq!(irq, x86_level_low(X86_NET_PIN, X86_NET_VECTOR));
+    }
+
+    #[test]
+    fn e1000e_fetch_irq_is_pin_10_vector_50() {
+        let irq = e1000e_fetch_irq();
+        assert_eq!(irq.pin, IoApicPin(10));
+        assert_eq!(irq.vector, IoApicVector(50));
+        assert_eq!(irq.trigger, Trigger::Level);
+        assert_eq!(irq.polarity, Polarity::Low);
+        assert_ne!(irq, e1000e_standalone_irq());
     }
 
     #[test]

@@ -7,9 +7,9 @@ use crate::model::render_forcing_end;
 use lerux_machine::{
     ahci_map,
     description::{
-        ahci_msi, e1000e_standalone_irq, pci_config_port, pci_net_config_port, IoApicPin,
-        IoApicVector, Irq, MmioDevice, MmioWindow, PciBar, Polarity, SerialNode, Trigger,
-        VirtioNode, X86Irq,
+        ahci_msi, e1000e_fetch_irq, e1000e_standalone_irq, pci_config_port, pci_net_config_port,
+        IoApicPin, IoApicVector, Irq, MmioDevice, MmioWindow, PciBar, Polarity, SerialNode,
+        Trigger, VirtioNode, X86Irq,
     },
     e1000e::{self, e1000e_map},
     virtio_dma_guest, virtio_dma_phys_addr, virtio_node, Arch, VirtioRole, AHCI_PORT,
@@ -18,21 +18,9 @@ use lerux_machine::{
 use lerux_sddf::gpu_image;
 
 use crate::model::{
-    line_irq, render_image, Domain, Image, ImageError, ImageKind, Link, Map, Mode, Qos, Region,
-    Slot, REGION_SIZE, STACK_SIZE,
+    line_irq, render_image, DiskBackend, Domain, Image, ImageError, ImageKind, Link, Map, Mode,
+    NetBackend, Qos, Region, Slot, REGION_SIZE, STACK_SIZE,
 };
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DiskBackend {
-    Virtio,
-    Ahci,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NetBackend {
-    Virtio,
-    E1000e,
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BoardId {
@@ -123,6 +111,23 @@ pub fn board_registration(board: &str) -> Result<Option<BoardId>, ImageError> {
             arch,
         });
     }
+    if board == "x86_64_generic_fetch_native" {
+        return Ok(Some(BoardId {
+            kind: ImageKind::Fetch,
+            mode: Some(Mode::Fetch),
+            arch: Arch::X86_64,
+            disk: DiskBackend::Ahci,
+            net: NetBackend::E1000e,
+        }));
+    }
+    if let Some((arch, token)) = Arch::split_prefix(board)
+        && token == "fetch_native"
+    {
+        return Err(ImageError::Unsupported {
+            kind: ImageKind::Fetch,
+            arch,
+        });
+    }
     if !board.ends_with(SDDF_SUFFIX) {
         return Ok(None);
     }
@@ -163,6 +168,7 @@ pub fn render_board(board: &str) -> Result<Option<String>, ImageError> {
     let image = match id.kind {
         ImageKind::Fs => fs_image(id.arch, id.disk),
         ImageKind::Net => net_image(id.arch, id.net),
+        ImageKind::Fetch => fetch_for_board(id)?,
         kind => image(kind, id.arch)?,
     };
     render_image(&image).map(Some)
@@ -278,7 +284,7 @@ fn fs_image(arch: Arch, disk: DiskBackend) -> Image {
     let serial = serial_attachment(arch);
     let block = match disk {
         DiskBackend::Virtio => virtio_block(arch, false),
-        DiskBackend::Ahci => ahci_block(),
+        DiskBackend::Ahci => ahci_block(false),
     };
     let mut shell = serial_client_slots();
     shell.extend(fs_client_slots());
@@ -340,7 +346,7 @@ fn net_image(arch: Arch, net: NetBackend) -> Image {
         ),
         NetBackend::E1000e => {
             assert_eq!(arch, Arch::X86_64, "e1000e registration is x86 only");
-            (e1000e_regions(), e1000e_driver())
+            (e1000e_regions(), e1000e_domain(E1000ePlace::Standalone))
         }
     };
     Image {
@@ -410,8 +416,102 @@ fn fetch_x86_pci_irq(role: VirtioRole) -> Irq {
     })
 }
 
-fn fetch_image(arch: Arch, client: &'static str, program: &'static str, slots: Vec<Slot>) -> Image {
+/// Virtio fetch, including web, or the one q35 image with ICH9 AHCI and e1000e.
+#[derive(Clone, Copy)]
+enum FetchPair {
+    Virtio(Arch),
+    Q35Native,
+}
+
+/// Device regions plus the two driver domains.
+/// AArch64 virtio keeps one `virtio_mmio` window in `regions`.
+/// Splitting that window onto each driver would emit it twice.
+struct FetchDevices {
+    regions: Vec<Region>,
+    block: Domain,
+    net: Domain,
+}
+
+impl FetchPair {
+    fn arch(self) -> Arch {
+        match self {
+            FetchPair::Virtio(arch) => arch,
+            FetchPair::Q35Native => Arch::X86_64,
+        }
+    }
+
+    fn devices(self) -> FetchDevices {
+        match self {
+            FetchPair::Virtio(arch) => virtio_fetch_devices(arch),
+            FetchPair::Q35Native => q35_native_devices(),
+        }
+    }
+}
+
+fn fetch_for_board(id: BoardId) -> Result<Image, ImageError> {
+    match (id.disk, id.net, id.arch, id.mode) {
+        (DiskBackend::Virtio, NetBackend::Virtio, arch, _) => Ok(fetch_image(
+            arch,
+            "shell",
+            "sddf-shell.elf",
+            fetch_client_slots(),
+        )),
+        (DiskBackend::Ahci, NetBackend::E1000e, Arch::X86_64, Some(Mode::Fetch)) => {
+            Ok(fetch_fabric(
+                FetchPair::Q35Native,
+                "shell",
+                "sddf-shell.elf",
+                fetch_client_slots(),
+            ))
+        }
+        (disk, net, arch, mode) => Err(ImageError::FetchPairRejected {
+            disk,
+            net,
+            arch,
+            mode,
+        }),
+    }
+}
+
+fn fetch_fabric(
+    pair: FetchPair,
+    client: &'static str,
+    program: &'static str,
+    slots: Vec<Slot>,
+) -> Image {
+    let arch = pair.arch();
+    let devices = pair.devices();
     let serial = serial_attachment(arch);
+    Image {
+        groups: vec![
+            serial.regions,
+            devices.regions,
+            blk_regions(),
+            fs_regions(),
+            net_regions(false),
+        ],
+        domains: vec![
+            devices.block,
+            serial_driver(serial.slots, serial.irq, fetch_qos(arch, 4000)),
+            blk_virt(fetch_qos(arch, 3000)),
+            serial_virt_tx(fetch_qos(arch, 3000)),
+            serial_virt_rx(fetch_qos(arch, 3000)),
+            fatfs(fetch_qos(arch, 2000)),
+            devices.net,
+            net_virt_tx(fetch_qos(arch, 3000)),
+            net_virt_rx(fetch_qos(arch, 3000)),
+            net_copy(fetch_qos(arch, 2000)),
+            domain(client, 1, fetch_qos(arch, 1000), program, slots, None),
+        ],
+        links: fabric_links(client),
+    }
+}
+
+fn fetch_image(arch: Arch, client: &'static str, program: &'static str, slots: Vec<Slot>) -> Image {
+    fetch_fabric(FetchPair::Virtio(arch), client, program, slots)
+}
+
+fn virtio_fetch_devices(arch: Arch) -> FetchDevices {
     let blk = virtio_block(arch, arch == Arch::X86_64);
     let blk_irq = if arch == Arch::X86_64 {
         fetch_x86_pci_irq(VirtioRole::Blk)
@@ -423,40 +523,42 @@ fn fetch_image(arch: Arch, client: &'static str, program: &'static str, slots: V
     } else {
         net_virtio_attachment(arch, false).irq
     };
-    Image {
-        groups: vec![
-            serial.regions,
-            fetch_virtio_regions(arch),
-            blk_regions(),
-            fs_regions(),
-            net_regions(false),
-        ],
-        domains: vec![
-            blk_driver_domain(
-                blk.driver_slots,
-                blk_irq,
-                fetch_qos(arch, 4000),
-                4,
-                blk.program,
-            ),
-            serial_driver(serial.slots, serial.irq, fetch_qos(arch, 4000)),
-            blk_virt(fetch_qos(arch, 3000)),
-            serial_virt_tx(fetch_qos(arch, 3000)),
-            serial_virt_rx(fetch_qos(arch, 3000)),
-            fatfs(fetch_qos(arch, 2000)),
-            net_driver_with_irq(
-                arch,
-                false,
-                net_irq,
-                fetch_qos(arch, if arch == Arch::X86_64 { 2000 } else { 4000 }),
-                if arch == Arch::X86_64 { 2 } else { 4 },
-            ),
-            net_virt_tx(fetch_qos(arch, 3000)),
-            net_virt_rx(fetch_qos(arch, 3000)),
-            net_copy(fetch_qos(arch, 2000)),
-            domain(client, 1, fetch_qos(arch, 1000), program, slots, None),
-        ],
-        links: fabric_links(client),
+    FetchDevices {
+        regions: fetch_virtio_regions(arch),
+        block: blk_driver_domain(
+            blk.driver_slots,
+            blk_irq,
+            fetch_qos(arch, 4000),
+            4,
+            blk.program,
+        ),
+        net: net_driver_with_irq(
+            arch,
+            false,
+            net_irq,
+            fetch_qos(arch, if arch == Arch::X86_64 { 2000 } else { 4000 }),
+            if arch == Arch::X86_64 { 2 } else { 4 },
+        ),
+    }
+}
+
+fn q35_native_devices() -> FetchDevices {
+    // Both config-port setvars name [0xcf8, 0xd00). Microkit rejects that
+    // overlap, so AHCI takes the same ECAM window the virtio block driver
+    // uses on the combined x86 fetch image. e1000e keeps the net ports.
+    let block = ahci_block(true);
+    let mut regions = block.regions;
+    regions.extend(e1000e_regions());
+    FetchDevices {
+        regions,
+        block: blk_driver_domain(
+            block.driver_slots,
+            block.irq,
+            budget(4000),
+            4,
+            block.program,
+        ),
+        net: e1000e_domain(E1000ePlace::FetchNative),
     }
 }
 
@@ -734,18 +836,7 @@ fn virtio_block(arch: Arch, blk_pci_ecam: bool) -> BlockAttachment {
             regions.push(blk_driver_dma_region(arch));
             let mut driver_slots = Vec::new();
             if blk_pci_ecam {
-                use lerux_machine::{
-                    X86_PCI_ECAM_GUEST, X86_PCI_ECAM_PHYS, X86_PCI_ECAM_SETVAR, X86_PCI_ECAM_SIZE,
-                    X86_PCI_ECAM_WINDOW,
-                };
-                regions.push(Region {
-                    name: X86_PCI_ECAM_WINDOW,
-                    size: X86_PCI_ECAM_SIZE,
-                    vaddr: X86_PCI_ECAM_GUEST,
-                    phys_addr: Some(X86_PCI_ECAM_PHYS.text()),
-                    page_size: None,
-                });
-                driver_slots.push(mmio(X86_PCI_ECAM_WINDOW, X86_PCI_ECAM_SETVAR));
+                push_x86_pci_ecam(&mut regions, &mut driver_slots);
             } else {
                 driver_slots.push(Slot::Port(config));
             }
@@ -770,39 +861,60 @@ fn virtio_block(arch: Arch, blk_pci_ecam: bool) -> BlockAttachment {
     }
 }
 
-fn ahci_block() -> BlockAttachment {
+fn ahci_block(pci_ecam: bool) -> BlockAttachment {
     let map = ahci_map();
+    let mut regions = vec![
+        phys(
+            "ahci_abar",
+            map.abar_size,
+            map.abar_vaddr,
+            map.abar_paddr.text(),
+        ),
+        phys(
+            "ahci_dma",
+            map.dma_size,
+            map.dma_vaddr,
+            map.dma_paddr.text(),
+        ),
+    ];
+    let mut driver_slots = vec![
+        Slot::Map(Map {
+            region: "ahci_abar",
+            cached: Some(false),
+            setvar: None,
+        }),
+        Slot::Map(Map {
+            region: "ahci_dma",
+            cached: Some(true),
+            setvar: None,
+        }),
+    ];
+    if pci_ecam {
+        push_x86_pci_ecam(&mut regions, &mut driver_slots);
+    } else {
+        driver_slots.push(Slot::Port(pci_config_port()));
+    }
     BlockAttachment {
-        regions: vec![
-            phys(
-                "ahci_abar",
-                map.abar_size,
-                map.abar_vaddr,
-                map.abar_paddr.text(),
-            ),
-            phys(
-                "ahci_dma",
-                map.dma_size,
-                map.dma_vaddr,
-                map.dma_paddr.text(),
-            ),
-        ],
-        driver_slots: vec![
-            Slot::Map(Map {
-                region: "ahci_abar",
-                cached: Some(false),
-                setvar: None,
-            }),
-            Slot::Map(Map {
-                region: "ahci_dma",
-                cached: Some(true),
-                setvar: None,
-            }),
-            Slot::Port(pci_config_port()),
-        ],
+        regions,
+        driver_slots,
         irq: Irq::Msi(ahci_msi()),
         program: AHCI_BLK_PROGRAM,
     }
+}
+
+fn push_x86_pci_ecam(regions: &mut Vec<Region>, slots: &mut Vec<Slot>) {
+    use lerux_machine::{
+        X86_PCI_ECAM_GUEST, X86_PCI_ECAM_PHYS, X86_PCI_ECAM_SETVAR, X86_PCI_ECAM_SIZE,
+        X86_PCI_ECAM_WINDOW,
+    };
+    regions.push(Region {
+        name: X86_PCI_ECAM_WINDOW,
+        size: X86_PCI_ECAM_SIZE,
+        vaddr: X86_PCI_ECAM_GUEST,
+        phys_addr: Some(X86_PCI_ECAM_PHYS.text()),
+        page_size: None,
+    });
+    slots.push(mmio(X86_PCI_ECAM_WINDOW, X86_PCI_ECAM_SETVAR));
 }
 
 fn blk_driver_dma_region(arch: Arch) -> Region {
@@ -903,18 +1015,7 @@ fn net_virtio_attachment(arch: Arch, net_pci_ecam: bool) -> NetVirtioAttachment 
             regions.push(net_driver_dma_region(arch));
             let mut driver_slots = Vec::new();
             if net_pci_ecam {
-                use lerux_machine::{
-                    X86_PCI_ECAM_GUEST, X86_PCI_ECAM_PHYS, X86_PCI_ECAM_SETVAR, X86_PCI_ECAM_SIZE,
-                    X86_PCI_ECAM_WINDOW,
-                };
-                regions.push(Region {
-                    name: X86_PCI_ECAM_WINDOW,
-                    size: X86_PCI_ECAM_SIZE,
-                    vaddr: X86_PCI_ECAM_GUEST,
-                    phys_addr: Some(X86_PCI_ECAM_PHYS.text()),
-                    page_size: None,
-                });
-                driver_slots.push(mmio(X86_PCI_ECAM_WINDOW, X86_PCI_ECAM_SETVAR));
+                push_x86_pci_ecam(&mut regions, &mut driver_slots);
             } else {
                 driver_slots.push(Slot::Port(config));
             }
@@ -993,7 +1094,17 @@ fn e1000e_regions() -> Vec<Region> {
     ]
 }
 
-fn e1000e_driver() -> Domain {
+/// Standalone net image, or the x86 fetch image that also has ICH9 AHCI.
+enum E1000ePlace {
+    Standalone,
+    FetchNative,
+}
+
+fn e1000e_domain(place: E1000ePlace) -> Domain {
+    let (priority, qos, irq) = match place {
+        E1000ePlace::Standalone => (4, None, Irq::X86(e1000e_standalone_irq())),
+        E1000ePlace::FetchNative => (2, budget(2000), Irq::X86(e1000e_fetch_irq())),
+    };
     let map = e1000e_map();
     let mut slots = vec![
         Slot::Map(Map {
@@ -1011,11 +1122,11 @@ fn e1000e_driver() -> Domain {
     slots.extend(driver_queue_slots());
     domain(
         "net_driver",
-        4,
-        None,
+        priority,
+        qos,
         E1000E_NET_PROGRAM,
         slots,
-        Some(Irq::X86(e1000e_standalone_irq())),
+        Some(irq),
     )
 }
 
@@ -1402,4 +1513,76 @@ fn cached(names: &[&'static str]) -> Vec<Slot> {
             })
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{fetch_for_board, BoardId, DiskBackend, ImageError, ImageKind, Mode, NetBackend};
+    use lerux_machine::Arch;
+
+    fn rejected(disk: DiskBackend, net: NetBackend, arch: Arch, mode: Option<Mode>) -> ImageError {
+        match fetch_for_board(BoardId {
+            kind: ImageKind::Fetch,
+            mode,
+            arch,
+            disk,
+            net,
+        }) {
+            Err(err) => err,
+            Ok(_) => panic!("mixed fetch pair"),
+        }
+    }
+
+    #[test]
+    fn mixed_fetch_pairs_are_rejected_with_arch_and_mode() {
+        let cases = [
+            (
+                DiskBackend::Ahci,
+                NetBackend::Virtio,
+                Arch::X86_64,
+                Some(Mode::Fetch),
+            ),
+            (
+                DiskBackend::Virtio,
+                NetBackend::E1000e,
+                Arch::X86_64,
+                Some(Mode::Fetch),
+            ),
+            (
+                DiskBackend::Ahci,
+                NetBackend::E1000e,
+                Arch::Aarch64,
+                Some(Mode::Fetch),
+            ),
+            (
+                DiskBackend::Ahci,
+                NetBackend::E1000e,
+                Arch::X86_64,
+                Some(Mode::Web),
+            ),
+            (DiskBackend::Ahci, NetBackend::E1000e, Arch::X86_64, None),
+        ];
+        for (disk, net, arch, mode) in cases {
+            let err = rejected(disk, net, arch, mode);
+            let text = err.to_string();
+            match err {
+                ImageError::FetchPairRejected {
+                    disk: got_disk,
+                    net: got_net,
+                    arch: got_arch,
+                    mode: got_mode,
+                } => {
+                    assert_eq!(got_disk, disk);
+                    assert_eq!(got_net, net);
+                    assert_eq!(got_arch, arch);
+                    assert_eq!(got_mode, mode);
+                }
+                other => panic!("expected FetchPairRejected, got {other:?}"),
+            }
+            assert!(text.contains(&format!("{disk:?}")), "{text}");
+            assert!(text.contains(&format!("{net:?}")), "{text}");
+            assert!(text.contains(&format!("{arch:?}")), "{text}");
+            assert!(text.contains(&format!("{mode:?}")), "{text}");
+        }
+    }
 }

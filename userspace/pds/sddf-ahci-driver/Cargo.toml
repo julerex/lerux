@@ -7,6 +7,9 @@ license = "MIT"
 [lints]
 workspace = true
 
+[features]
+board-x86_64_generic_fetch_native = []
+
 [dependencies]
 lerux-logging = { path = "../../crates/lerux-logging" }
 lerux-machine = { path = "../../crates/lerux-machine" }

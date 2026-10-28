@@ -1,11 +1,15 @@
 use core::ptr;
 
 use lerux_machine::{msi_data, AhciMap, Claimed, Unclaimed, AHCI_IOAPIC_VECTOR, MSI_ADDRESS};
+#[cfg(not(feature = "board-x86_64_generic_fetch_native"))]
 use sel4::with_ipc_buffer_mut;
 use sel4_microkit::var;
 
+#[cfg(not(feature = "board-x86_64_generic_fetch_native"))]
 const BASE_IOPORT_CAP: u64 = 394;
+#[cfg(not(feature = "board-x86_64_generic_fetch_native"))]
 const PCI_CONFIG_ADDR_OFFSET: u16 = 0;
+#[cfg(not(feature = "board-x86_64_generic_fetch_native"))]
 const PCI_CONFIG_DATA_OFFSET: u16 = 4;
 
 const GHC: u32 = 0x04;
@@ -157,27 +161,60 @@ impl Engine {
 }
 
 struct Pci {
-    cap: u64,
-    base: u16,
     bus: u8,
     dev: u8,
     func: u8,
+    #[cfg(feature = "board-x86_64_generic_fetch_native")]
+    ecam: usize,
+    #[cfg(not(feature = "board-x86_64_generic_fetch_native"))]
+    cap: u64,
+    #[cfg(not(feature = "board-x86_64_generic_fetch_native"))]
+    base: u16,
 }
+
+/// Dword offset of one function in the mapped ECAM window.
+/// The register is masked to a dword, matching a configuration cycle.
+#[cfg(feature = "board-x86_64_generic_fetch_native")]
+const fn ecam_dword_offset(bus: u8, device: u8, function: u8, reg: u8) -> usize {
+    let bdf = ((bus as u32) << 8) | ((device as u32) << 3) | (function as u32);
+    let address = (bdf << 12) | ((reg & 0xfc) as u32);
+    address as usize
+}
+
+#[cfg(feature = "board-x86_64_generic_fetch_native")]
+const _: () = {
+    let addr = Unclaimed::compiled().address();
+    let last = ecam_dword_offset(addr.bus(), addr.device(), addr.function(), 0xfc);
+    assert!(last < lerux_machine::X86_PCI_ECAM_SIZE as usize);
+};
 
 impl Pci {
     fn new() -> Self {
-        let ioport_id = *var!(pci_config_ioport_id: usize = 0) as u32;
-        let base = *var!(pci_config_ioport_addr: usize = 0) as u16;
         let addr = Unclaimed::compiled().address();
-        Self {
-            cap: BASE_IOPORT_CAP + u64::from(ioport_id),
-            base,
-            bus: addr.bus(),
-            dev: addr.device(),
-            func: addr.function(),
+        #[cfg(feature = "board-x86_64_generic_fetch_native")]
+        {
+            Self {
+                ecam: *var!(pci_ecam_vaddr: usize = 0),
+                bus: addr.bus(),
+                dev: addr.device(),
+                func: addr.function(),
+            }
+        }
+        #[cfg(not(feature = "board-x86_64_generic_fetch_native"))]
+        {
+            let ioport_id = *var!(pci_config_ioport_id: usize = 0) as u32;
+            let base = *var!(pci_config_ioport_addr: usize = 0) as u16;
+            Self {
+                cap: BASE_IOPORT_CAP + u64::from(ioport_id),
+                base,
+                bus: addr.bus(),
+                dev: addr.device(),
+                func: addr.function(),
+            }
         }
     }
 
+    #[cfg(not(feature = "board-x86_64_generic_fetch_native"))]
     fn config_address(&self, reg: u8) -> u32 {
         0x8000_0000
             | (u32::from(self.bus) << 16)
@@ -186,6 +223,7 @@ impl Pci {
             | (u32::from(reg) & 0xfc)
     }
 
+    #[cfg(not(feature = "board-x86_64_generic_fetch_native"))]
     fn out32(&self, port: u16, value: u32) {
         with_ipc_buffer_mut(|ipc| {
             ipc.inner_mut()
@@ -193,6 +231,7 @@ impl Pci {
         });
     }
 
+    #[cfg(not(feature = "board-x86_64_generic_fetch_native"))]
     fn in32(&self, port: u16) -> u32 {
         with_ipc_buffer_mut(|ipc| {
             let ret = ipc.inner_mut().seL4_X86_IOPort_In32(self.cap, port);
@@ -200,14 +239,31 @@ impl Pci {
         })
     }
 
+    #[cfg(not(feature = "board-x86_64_generic_fetch_native"))]
     fn read_config(&self, reg: u8) -> u32 {
         self.out32(self.base + PCI_CONFIG_ADDR_OFFSET, self.config_address(reg));
         self.in32(self.base + PCI_CONFIG_DATA_OFFSET)
     }
 
+    #[cfg(not(feature = "board-x86_64_generic_fetch_native"))]
     fn write_config(&self, reg: u8, value: u32) {
         self.out32(self.base + PCI_CONFIG_ADDR_OFFSET, self.config_address(reg));
         self.out32(self.base + PCI_CONFIG_DATA_OFFSET, value);
+    }
+
+    #[cfg(feature = "board-x86_64_generic_fetch_native")]
+    fn read_config(&self, reg: u8) -> u32 {
+        let offset = ecam_dword_offset(self.bus, self.dev, self.func, reg);
+        // SAFETY: the protection domain maps the bus-0 ECAM window, and the
+        // compiled AHCI address keeps this dword inside that window.
+        unsafe { ptr::read_volatile((self.ecam + offset) as *const u32) }
+    }
+
+    #[cfg(feature = "board-x86_64_generic_fetch_native")]
+    fn write_config(&self, reg: u8, value: u32) {
+        let offset = ecam_dword_offset(self.bus, self.dev, self.func, reg);
+        // SAFETY: same window and bound as `read_config`.
+        unsafe { ptr::write_volatile((self.ecam + offset) as *mut u32, value) }
     }
 
     fn program(&self, map: &AhciMap) -> Result<(), OpenError> {

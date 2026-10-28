@@ -12,7 +12,9 @@ fn shell_board_feature(board: &str) -> &'static str {
     match board {
         "qemu_virt_riscv64_fetch_sddf" => "board-qemu_virt_riscv64_fetch_sddf",
         "qemu_virt_riscv64_web_sddf" => "board-qemu_virt_riscv64_web_sddf",
-        "x86_64_generic_fetch_sddf" => "board-x86_64_generic_fetch_sddf",
+        "x86_64_generic_fetch_sddf" | "x86_64_generic_fetch_native" => {
+            "board-x86_64_generic_fetch_sddf"
+        }
         "x86_64_generic_web_sddf" => "board-x86_64_generic_web_sddf",
         "qemu_virt_aarch64_web_sddf" => "board-qemu_virt_aarch64_web_sddf",
         _ => "board-qemu_virt_aarch64_fetch_sddf",
@@ -44,6 +46,26 @@ mod tests {
 
     fn repo_root() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
+    }
+
+    #[test]
+    fn native_fetch_reuses_the_x86_fetch_shell_pages() {
+        assert_eq!(
+            shell_board_feature("x86_64_generic_fetch_native"),
+            "board-x86_64_generic_fetch_sddf"
+        );
+        let manifest = fs::read_to_string(repo_root().join("userspace/pds/sddf-shell/Cargo.toml"))
+            .expect("shell manifest");
+        assert!(manifest
+            .contains("board-x86_64_generic_fetch_native = [\"board-x86_64_generic_fetch_sddf\"]"));
+        let native = tempfile::tempdir().expect("tempdir");
+        let virtio = tempfile::tempdir().expect("tempdir");
+        write_configs(native.path(), "x86_64_generic_fetch_native").expect("native configs");
+        write_configs(virtio.path(), "x86_64_generic_fetch_sddf").expect("virtio configs");
+        assert_eq!(
+            fs::read(native.path().join("shell_config.bin")).expect("native bytes"),
+            fs::read(virtio.path().join("shell_config.bin")).expect("virtio bytes")
+        );
     }
 
     #[test]

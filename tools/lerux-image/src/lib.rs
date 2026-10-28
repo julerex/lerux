@@ -648,6 +648,9 @@ mod tests {
         assert!(!xml.contains("sddf-net-driver.elf"));
         assert!(!xml.contains("pin=\"11\""));
         assert_eq!(xml.matches("name=\"pci_ecam\"").count(), 1);
+        assert!(xml.contains(
+            "name=\"pci_ecam\" size=\"0x100_000\" phys_addr=\"0xe0000000\""
+        ));
         assert!(xml.contains("setvar_id=\"pci_net_config_ioport_id\""));
         assert!(!xml.contains("pci_config_ioport_id"));
         assert!(!xml.contains("virtio"));
@@ -656,7 +659,7 @@ mod tests {
 
         let blk = pd_slice(&xml, "blk_driver");
         assert!(blk.contains("<irq pcidev=\"00:1f.2\" handle=\"99\" vector=\"51\" id=\"0\" />"));
-        assert!(blk.contains("mr=\"pci_ecam\""));
+        assert!(blk.contains("mr=\"pci_ecam\" vaddr=\"0xe0_000_000\""));
         assert!(blk.contains("setvar_vaddr=\"pci_ecam_vaddr\""));
         assert!(!blk.contains("pin="));
         assert!(!blk.contains("ioport"));

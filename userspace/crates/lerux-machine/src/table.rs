@@ -62,8 +62,11 @@ pub(crate) const RISCV64_VIRTIO_NET_DMA_GUEST: u64 = 0x40_000_000;
 pub(crate) const RISCV64_VIRTIO_BLK_DMA_GUEST: u64 = 0x41_000_000;
 pub(crate) const RISCV64_VIRTIO_GPU_DMA_GUEST: u64 = 0x42_000_000;
 
-pub const X86_PCI_ECAM_PHYS: SpelledAddr = SpelledAddr::new("0xb0000000");
-pub const X86_PCI_ECAM_GUEST: u64 = 0xb000_0000;
+// OVMF on Q35 writes PCIEXBAR `0xe0000001` before the payload starts.
+// QEMU's reset default `0xb0000000` is not decoded after that write.
+pub const X86_PCI_ECAM_PHYS: SpelledAddr = SpelledAddr::new("0xe0000000");
+pub const X86_PCI_ECAM_GUEST: u64 = 0xe000_0000;
+const _: () = assert!(X86_PCI_ECAM_PHYS.value() == X86_PCI_ECAM_GUEST);
 pub const X86_PCI_ECAM_SIZE: u64 = 0x100_000;
 pub const X86_PCI_ECAM_WINDOW: &str = "pci_ecam";
 pub const X86_PCI_ECAM_SETVAR: &str = "pci_ecam_vaddr";

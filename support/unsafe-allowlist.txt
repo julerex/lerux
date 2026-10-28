@@ -12,6 +12,7 @@ userspace/crates/lerux-cothread/src/lib.rs
 userspace/crates/lerux-cothread/src/switch.rs
 userspace/crates/lerux-gate/src/lib.rs
 userspace/crates/lerux-logging/src/debug.rs
+userspace/crates/lerux-logging/src/gap.rs
 userspace/crates/lerux-logging/src/linebuf.rs
 userspace/crates/lerux-logging/src/serial.rs
 userspace/crates/lerux-posix/src/lib.rs
@@ -44,6 +45,7 @@ userspace/crates/lerux-virtio-pci/src/ecam.rs
 userspace/crates/lerux-virtio-pci/src/ioport.rs
 userspace/crates/lerux-wasm/src/exec.rs
 userspace/pds/cmos-rtc-driver/src/main.rs
+userspace/pds/console-driver/src/boot_line.rs
 userspace/pds/console-driver/src/device.rs
 userspace/pds/console-driver/src/xhci.rs
 userspace/pds/console-shell/src/main.rs

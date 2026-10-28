@@ -79,7 +79,7 @@ fn init() -> HandlerImpl {
         len: 0,
         overflow: false,
     };
-    shell.emit(MENU);
+    shell.emit_boot(MENU);
     #[cfg(feature = "board-swift_sfx14_41g")]
     shell.emit_disk();
     shell
@@ -105,6 +105,19 @@ impl HandlerImpl {
             push(&mut self.screen, byte);
             #[cfg(not(feature = "board-swift_sfx14_41g"))]
             push(&mut self.com1, byte);
+        }
+    }
+
+    /// Boot menu only. Each finished line stays up before the next one is drawn.
+    fn emit_boot(&mut self, bytes: &[u8]) {
+        for &byte in bytes {
+            push(&mut self.screen, byte);
+            #[cfg(not(feature = "board-swift_sfx14_41g"))]
+            push(&mut self.com1, byte);
+            #[cfg(feature = "board-pc_z97_d3h")]
+            if byte == b'\n' {
+                lerux_logging::debug::after_boot_line();
+            }
         }
     }
 

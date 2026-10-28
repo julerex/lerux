@@ -17,6 +17,10 @@ Rules for a cross-architecture port and for a QEMU smoke in this repository. The
 
 A smoke is done when the serial log contains the expected lines. Read that file. A delegate summary, a completion notice, and a shell pipeline whose last command is `tail` or `echo` are not the result. The recipe status line is.
 
+The guest proof is that recipe's exit status plus the serial log that recipe wrote under `build/smoke-logs/` (or `$BUILD/smoke-logs/`). A workflow check count is a suite result for the boards the workflow builds. A `sibling smoke:` line from `support/check-sibling-smoke.py` is a recipe-name match. Neither is the guest proof for a board the workflow excludes (`ci = false`).
+
+When an interrupt binding is still provisional, keep it provisional in the milestone text until the success path records whether the guest took that interrupt. A measurement planned only on the failure branch never runs when the expect list matches. A green expect list alone does not prove the pin.
+
 A firmware port is done when that smoke is green and `just check` and `just check-pd` have both exited zero on the same tree. Mark the plan, or call the branch finished, only after both.
 
 A claim that a smoke passed, that a serial capture is intact, or that a reboot reloaded the guest is checked against the log file or the harness transcript.
@@ -66,6 +70,8 @@ Reconcile an explorer claim about how an image is generated against the function
 Harvest each explorer's final report into one scratch file and point the explainer at that file.
 
 When the unknown is operational, probe it on the host before a large delegated smoke. Reset behavior, interrupt routing, and capture plumbing are that kind of unknown. A QEMU device probe is a bounded headless machine (`-machine q35 -nodefaults -S`), then monitor `info qtree` and `quit`. Bare `-device <name>,help` can boot a full virtual machine and hang.
+
+When a device reset reloads nonvolatile configuration (EEPROM or equivalent), write the BAR and the command word again after that reload finishes, and clear message-signaled enables so the pin the system description listens on stays unmasked. Programming the window only on the way into reset is not enough.
 
 Jobs that share one build-driver target directory run one at a time. Host-only tests use `just test-host <crate>` or `just check-host <crate>`. Both set `CARGO_TARGET_DIR` to `build/host` and do not start `just check-pd`.
 

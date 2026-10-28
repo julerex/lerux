@@ -554,4 +554,24 @@ mod tests {
         let dev = x86_net_device("x86_64_generic_net_sddf").unwrap();
         assert_eq!(dev, X86_VIRTIO_NET_PCI);
     }
+
+    #[test]
+    fn x86_fetch_native_uses_ide_hd_and_e1000e() {
+        assert_eq!(
+            x86_block_disk_device("x86_64_generic_fetch_native").expect("disk"),
+            "ide-hd,bus=ide.0,drive=blkdev0,unit=0"
+        );
+        assert_eq!(
+            x86_net_device("x86_64_generic_fetch_native").expect("net"),
+            "e1000e,id=net0,addr=4.0,netdev=netdev0,disable_vnet_hdr=1"
+        );
+        assert_eq!(
+            x86_block_disk_device("x86_64_generic_fetch_sddf").expect("virtio disk"),
+            X86_VIRTIO_BLK_PCI
+        );
+        assert_eq!(
+            x86_net_device("x86_64_generic_fetch_sddf").expect("virtio net"),
+            X86_VIRTIO_NET_PCI
+        );
+    }
 }

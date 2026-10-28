@@ -35,17 +35,56 @@ pub enum Mode {
     Web,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DiskBackend {
+    Virtio,
+    Ahci,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NetBackend {
+    Virtio,
+    E1000e,
+}
+
 #[derive(Debug)]
 pub enum ImageError {
-    DuplicateEnd { pd: String, id: u8 },
-    UnknownRegion { name: String },
-    ChannelOverflow { pd: String },
-    MissingIrq { pd: String },
-    UnknownCrate { name: String },
-    ConflictingFeatures { crate_name: String },
-    WriteConfig { path: String, detail: String },
-    Unsupported { kind: ImageKind, arch: Arch },
-    UnknownBoard { name: String },
+    DuplicateEnd {
+        pd: String,
+        id: u8,
+    },
+    UnknownRegion {
+        name: String,
+    },
+    ChannelOverflow {
+        pd: String,
+    },
+    MissingIrq {
+        pd: String,
+    },
+    UnknownCrate {
+        name: String,
+    },
+    ConflictingFeatures {
+        crate_name: String,
+    },
+    WriteConfig {
+        path: String,
+        detail: String,
+    },
+    Unsupported {
+        kind: ImageKind,
+        arch: Arch,
+    },
+    UnknownBoard {
+        name: String,
+    },
+    FetchPairRejected {
+        disk: DiskBackend,
+        net: NetBackend,
+        arch: Arch,
+        mode: Option<Mode>,
+    },
 }
 
 impl fmt::Display for ImageError {
@@ -68,6 +107,15 @@ impl fmt::Display for ImageError {
                 write!(formatter, "unsupported {kind:?} on {arch:?}")
             }
             ImageError::UnknownBoard { name } => write!(formatter, "unknown board {name}"),
+            ImageError::FetchPairRejected {
+                disk,
+                net,
+                arch,
+                mode,
+            } => write!(
+                formatter,
+                "rejected fetch pair {disk:?} {net:?} on {arch:?} mode {mode:?}"
+            ),
         }
     }
 }

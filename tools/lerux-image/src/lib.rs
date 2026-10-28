@@ -10,9 +10,9 @@ mod model;
 pub use binding::{emit_pd_binding, pd_binding_bytes};
 pub use images::{
     ahci_disk_device, board_registration, e1000e_net_device, render_board, render_kind,
-    x86_disk_backend, x86_net_backend, BoardId, DiskBackend, NetBackend,
+    x86_disk_backend, x86_net_backend, BoardId,
 };
-pub use model::{ImageError, ImageKind, Mode};
+pub use model::{DiskBackend, ImageError, ImageKind, Mode, NetBackend};
 
 /// System description for the one-client serial image.
 pub fn render_serial_xml() -> Result<String, ImageError> {
@@ -27,7 +27,7 @@ mod tests {
         path::PathBuf,
     };
 
-    use lerux_machine::{e1000e::e1000e_map, e1000e_standalone_irq, Arch};
+    use lerux_machine::{ahci_msi, e1000e::e1000e_map, e1000e_standalone_irq, Arch, IoApicVector};
     use lerux_sddf::{
         fs_client_config_t, fs_config_check_magic, net_client_config_t, net_config_check_magic,
         serial_client_config_t, serial_config_check_magic, serial_connection_resource_t,
@@ -538,6 +538,113 @@ mod tests {
             .expect("fetch");
         assert!(xml.contains("sddf-net-driver.elf"));
         assert!(!xml.contains("sddf-e1000e-driver.elf"));
+        assert!(xml.contains("pin=\"11\""));
+    }
+
+    fn pd_slice<'a>(xml: &'a str, name: &str) -> &'a str {
+        let start = xml.find(&format!("name=\"{name}\"")).expect(name);
+        let end = xml[start..].find("</protection_domain>").expect("end") + start;
+        &xml[start..end]
+    }
+
+    #[test]
+    fn x86_fetch_native_registers_ahci_and_e1000e() {
+        assert_eq!(
+            board_registration("x86_64_generic_fetch_native").expect("register"),
+            Some(BoardId {
+                kind: ImageKind::Fetch,
+                mode: Some(Mode::Fetch),
+                arch: Arch::X86_64,
+                disk: DiskBackend::Ahci,
+                net: NetBackend::E1000e,
+            })
+        );
+        assert_eq!(
+            x86_disk_backend("x86_64_generic_fetch_native").expect("disk"),
+            DiskBackend::Ahci
+        );
+        assert_eq!(
+            x86_net_backend("x86_64_generic_fetch_native").expect("net"),
+            NetBackend::E1000e
+        );
+        let aarch64 =
+            board_registration("qemu_virt_aarch64_fetch_native").expect_err("unsupported");
+        assert!(
+            matches!(
+                aarch64,
+                ImageError::Unsupported {
+                    kind: ImageKind::Fetch,
+                    arch: Arch::Aarch64
+                }
+            ),
+            "{aarch64:?}"
+        );
+        let riscv = board_registration("qemu_virt_riscv64_fetch_native").expect_err("unsupported");
+        assert!(
+            matches!(
+                riscv,
+                ImageError::Unsupported {
+                    kind: ImageKind::Fetch,
+                    arch: Arch::Riscv64
+                }
+            ),
+            "{riscv:?}"
+        );
+        assert_eq!(
+            board_registration("fetch_native").expect("unregistered"),
+            None
+        );
+    }
+
+    #[test]
+    fn x86_fetch_native_renders_ahci_and_e1000e() {
+        let xml = render_board("x86_64_generic_fetch_native")
+            .expect("render")
+            .expect("native fetch image");
+        let virtio = render_board("x86_64_generic_fetch_sddf")
+            .expect("render")
+            .expect("virtio fetch image");
+        let msi = ahci_msi();
+        assert_eq!(msi.handle, 99);
+        assert_eq!(msi.vector, IoApicVector(51));
+        assert_eq!(
+            xml.matches("<protection_domain ").count(),
+            virtio.matches("<protection_domain ").count()
+        );
+        assert_eq!(
+            xml.matches("<channel>").count(),
+            virtio.matches("<channel>").count()
+        );
+
+        assert!(xml.contains("sddf-ahci-driver.elf"));
+        assert!(xml.contains("sddf-e1000e-driver.elf"));
+        assert!(xml.contains("sddf-shell.elf"));
+        assert!(!xml.contains("sddf-blk-driver.elf"));
+        assert!(!xml.contains("sddf-net-driver.elf"));
+        assert!(!xml.contains("pin=\"11\""));
+        assert!(xml.contains("setvar_id=\"pci_config_ioport_id\""));
+        assert!(xml.contains("setvar_id=\"pci_net_config_ioport_id\""));
+        assert!(!xml.contains("pci_ecam"));
+        assert!(!xml.contains("virtio"));
+        assert!(virtio.contains("sddf-net-driver.elf"));
+        assert!(virtio.contains("pin=\"11\""));
+
+        let blk = pd_slice(&xml, "blk_driver");
+        assert!(blk.contains("<irq pcidev=\"00:1f.2\" handle=\"99\" vector=\"51\" id=\"0\" />"));
+        assert!(!blk.contains("pin="));
+        assert!(
+            blk.contains("priority=\"4\" budget=\"4000\" period=\"4000\" stack_size=\"0x10_000\"")
+        );
+
+        let net = pd_slice(&xml, "net_driver");
+        assert!(net.contains(
+            "<irq pin=\"10\" vector=\"50\" id=\"0\" trigger=\"level\" polarity=\"low\" />"
+        ));
+        assert!(net.contains("sddf-e1000e-driver.elf"));
+        assert!(net.contains("pci_net_config_ioport_id"));
+        assert!(
+            net.contains("priority=\"2\" budget=\"2000\" period=\"2000\" stack_size=\"0x10_000\"")
+        );
     }
 
     #[test]

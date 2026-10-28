@@ -367,6 +367,8 @@ mod tests {
             irq.handle, irq.vector.0
         )));
         assert!(xml.contains("<end pd=\"blk_driver\" id=\"1\" />"));
+        assert!(xml.contains("setvar_id=\"pci_config_ioport_id\""));
+        assert!(!xml.contains("pci_ecam"));
         assert!(!xml.contains("virtio-blk"));
         assert!(!xml.contains("0x6200_0000"));
         assert_eq!(
@@ -645,16 +647,19 @@ mod tests {
         assert!(!xml.contains("sddf-blk-driver.elf"));
         assert!(!xml.contains("sddf-net-driver.elf"));
         assert!(!xml.contains("pin=\"11\""));
-        assert!(xml.contains("setvar_id=\"pci_config_ioport_id\""));
+        assert_eq!(xml.matches("name=\"pci_ecam\"").count(), 1);
         assert!(xml.contains("setvar_id=\"pci_net_config_ioport_id\""));
-        assert!(!xml.contains("pci_ecam"));
+        assert!(!xml.contains("pci_config_ioport_id"));
         assert!(!xml.contains("virtio"));
         assert!(virtio.contains("sddf-net-driver.elf"));
         assert!(virtio.contains("pin=\"11\""));
 
         let blk = pd_slice(&xml, "blk_driver");
         assert!(blk.contains("<irq pcidev=\"00:1f.2\" handle=\"99\" vector=\"51\" id=\"0\" />"));
+        assert!(blk.contains("mr=\"pci_ecam\""));
+        assert!(blk.contains("setvar_vaddr=\"pci_ecam_vaddr\""));
         assert!(!blk.contains("pin="));
+        assert!(!blk.contains("ioport"));
         assert!(
             blk.contains("priority=\"4\" budget=\"4000\" period=\"4000\" stack_size=\"0x10_000\"")
         );
@@ -665,6 +670,7 @@ mod tests {
         ));
         assert!(net.contains("sddf-e1000e-driver.elf"));
         assert!(net.contains("pci_net_config_ioport_id"));
+        assert!(!net.contains("pci_ecam"));
         assert!(
             net.contains("priority=\"2\" budget=\"2000\" period=\"2000\" stack_size=\"0x10_000\"")
         );

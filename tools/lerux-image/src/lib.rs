@@ -648,9 +648,7 @@ mod tests {
         assert!(!xml.contains("sddf-net-driver.elf"));
         assert!(!xml.contains("pin=\"11\""));
         assert_eq!(xml.matches("name=\"pci_ecam\"").count(), 1);
-        assert!(xml.contains(
-            "name=\"pci_ecam\" size=\"0x100_000\" phys_addr=\"0xe0000000\""
-        ));
+        assert!(xml.contains("name=\"pci_ecam\" size=\"0x100_000\" phys_addr=\"0xe0000000\""));
         assert!(xml.contains("setvar_id=\"pci_net_config_ioport_id\""));
         assert!(!xml.contains("pci_config_ioport_id"));
         assert!(!xml.contains("virtio"));

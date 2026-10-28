@@ -24,6 +24,7 @@ mod image_digest;
 mod image_sign;
 mod install;
 mod iso;
+mod iso_host;
 mod libclang;
 mod net_sddf;
 mod path;
@@ -720,6 +721,11 @@ fn main() -> Result<()> {
         } => {
             let build_if_missing = build && !no_build;
             let do_verify = verify && !no_verify;
+            let board_build = root.join(&build_dir).join(&board);
+            let need_image = build_if_missing
+                && (!board_build.join("loader.img").is_file()
+                    || !board_build.join("sel4.elf").is_file());
+            crate::iso_host::require_iso_host(&root, &board, &config, need_image, boot_test)?;
             let iso = crate::iso::build_iso(
                 &root,
                 &board,

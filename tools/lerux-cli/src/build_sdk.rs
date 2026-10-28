@@ -295,7 +295,12 @@ pub fn sdk_path(root: &Path) -> Result<String> {
     if file.is_file() {
         return Ok(std::fs::read_to_string(&file)?.trim().to_string());
     }
-    bail!("run `lerux build-sdk` or set MICROKIT_SDK")
+    bail!(
+        "Microkit SDK not found.\n\
+         Run: just fetch-sdk\n\
+         That downloads the prebuilt SDK. `just build-sdk` builds it from source instead.\n\
+         Or set MICROKIT_SDK to an existing SDK directory."
+    )
 }
 
 #[cfg(test)]

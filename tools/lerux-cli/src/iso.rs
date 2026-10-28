@@ -9,6 +9,8 @@
 //! Limine 12.9.0 is pinned in `deps/versions.toml` and unpacked under
 //! `deps/limine/` (gitignored). `xorriso` comes from `PATH` when installed,
 //! otherwise from Ubuntu packages unpacked under `deps/toolchains/xorriso/`.
+//! `dpkg-deb` extracts those packages when it is installed. Otherwise `ar`
+//! and `tar` extract the `data.tar` member.
 
 use std::{
     fs,
@@ -221,26 +223,15 @@ pub fn append_ovmf_iso_boot(cmd: &mut Command, ovmf: &Path, iso: &Path) {
 
 /// Combined OVMF image for QEMU `-bios` (not a split CODE/VARS pair).
 pub fn require_ovmf() -> Result<PathBuf> {
-    if let Ok(path) = std::env::var("OVMF_PATH") {
-        let p = PathBuf::from(&path);
-        if p.is_file() {
-            return Ok(p);
-        }
-        bail!("OVMF_PATH={path} is not a file");
+    match crate::iso_host::find_ovmf() {
+        crate::iso_host::OvmfFact::Found(path) => Ok(path),
+        crate::iso_host::OvmfFact::BadPath(path) => bail!("OVMF_PATH={path} is not a file"),
+        crate::iso_host::OvmfFact::Missing => bail!(
+            "OVMF firmware not found. Install the ovmf package or set OVMF_PATH to a combined OVMF.fd.\n\
+             Debian/Ubuntu: sudo apt install ovmf\n\
+             Arch's edk2-ovmf package ships split CODE and VARS images. This boot test uses one combined OVMF.fd."
+        ),
     }
-    for candidate in [
-        "/usr/share/ovmf/OVMF.fd",
-        "/usr/share/OVMF/OVMF.fd",
-        "/usr/share/qemu/OVMF.fd",
-    ] {
-        let p = PathBuf::from(candidate);
-        if p.is_file() {
-            return Ok(p);
-        }
-    }
-    bail!(
-        "OVMF firmware not found. Install the ovmf package or set OVMF_PATH to a combined OVMF.fd"
-    )
 }
 
 fn stage_iso_root(
@@ -276,7 +267,10 @@ pub fn build_mb2_stub(root: &Path) -> Result<PathBuf> {
         bail!("missing {}", script.display());
     }
     if !command_on_path("clang") {
-        bail!("clang is required to build support/mb2-stub (UEFI Limine trampoline)");
+        bail!(
+            "clang is required to build support/mb2-stub (UEFI Limine trampoline).\n{}",
+            crate::iso_host::package_hint(crate::iso_host::current_distro(), "clang", "clang")
+        );
     }
     eprintln!("==> Building mb2-stub (UEFI Multiboot 2 trampoline)");
     process::run_checked("bash", &[&path_str(&script), &path_str(&out)])
@@ -401,7 +395,10 @@ fn limine_tree_ready(extracted: &Path) -> bool {
 
 fn build_limine_tool(extracted: &Path) -> Result<()> {
     if !command_on_path("cc") {
-        bail!("cc is not on PATH; it is required to build the Limine host tool");
+        bail!(
+            "cc is not on PATH. The Limine host tool is compiled with cc.\n{}",
+            crate::iso_host::package_hint(crate::iso_host::current_distro(), "gcc", "gcc")
+        );
     }
     let source = extracted.join("limine.c");
     if !source.is_file() {
@@ -490,15 +487,7 @@ fn unpack_xorriso_debs(prefix: &Path) -> Result<()> {
         let url = process::apt_deb_url(package, fallback);
         let tmp = tempfile::NamedTempFile::new().context("deb temp file")?;
         process::download(&url, tmp.path())?;
-        process::run_checked(
-            "dpkg-deb",
-            &[
-                "-x",
-                &tmp.path().to_string_lossy(),
-                &prefix.to_string_lossy(),
-            ],
-        )
-        .with_context(|| format!("unpack {package}"))?;
+        extract_deb(tmp.path(), prefix).with_context(|| format!("unpack {package}"))?;
     }
     if !xorriso_prefix_ready(prefix) {
         bail!(
@@ -507,6 +496,39 @@ fn unpack_xorriso_debs(prefix: &Path) -> Result<()> {
         );
     }
     eprintln!("==> xorriso unpacked at {}", prefix.display());
+    Ok(())
+}
+
+/// Extract a `.deb` data archive into `prefix`.
+///
+/// Debian hosts use `dpkg-deb -x`. Other hosts use `ar` to read the
+/// `data.tar` member and `tar` to unpack it.
+fn extract_deb(deb: &Path, prefix: &Path) -> Result<()> {
+    if command_on_path("dpkg-deb") {
+        process::run_checked("dpkg-deb", &["-x", &path_str(deb), &path_str(prefix)])?;
+        return Ok(());
+    }
+    extract_deb_with_ar(deb, prefix)
+}
+
+fn extract_deb_with_ar(deb: &Path, prefix: &Path) -> Result<()> {
+    let listing = process::run_checked("ar", &["t", &path_str(deb)])
+        .context("list deb archive members (install binutils, or install the xorriso package)")?;
+    let names = String::from_utf8(listing.stdout).context("deb member names")?;
+    let data = names
+        .lines()
+        .map(str::trim)
+        .find(|name| name.starts_with("data.tar"))
+        .with_context(|| format!("{} has no data.tar member", deb.display()))?;
+    let member = process::run_checked("ar", &["p", &path_str(deb), data])
+        .with_context(|| format!("read {data} from {}", deb.display()))?;
+    let tmp = tempfile::NamedTempFile::new().context("data.tar temp file")?;
+    fs::write(tmp.path(), &member.stdout).context("write data.tar")?;
+    process::run_checked(
+        "tar",
+        &["-xf", &path_str(tmp.path()), "-C", &path_str(prefix)],
+    )
+    .context("unpack data.tar")?;
     Ok(())
 }
 
@@ -696,6 +718,43 @@ mod tests {
             curl_expect: None,
             system_vars: BTreeMap::new(),
         }
+    }
+
+    #[test]
+    fn ar_extracts_deb_data_archive() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let payload = dir.path().join("payload");
+        fs::create_dir(&payload).expect("payload dir");
+        fs::write(payload.join("hello.txt"), b"hi").expect("payload");
+        let data_tar = dir.path().join("data.tar.gz");
+        process::run_checked(
+            "tar",
+            &[
+                "-czf",
+                &path_str(&data_tar),
+                "-C",
+                &path_str(&payload),
+                "hello.txt",
+            ],
+        )
+        .expect("tar");
+        let debian_binary = dir.path().join("debian-binary");
+        fs::write(&debian_binary, b"2.0\n").expect("debian-binary");
+        let deb = dir.path().join("pkg.deb");
+        process::run_checked(
+            "ar",
+            &[
+                "r",
+                &path_str(&deb),
+                &path_str(&debian_binary),
+                &path_str(&data_tar),
+            ],
+        )
+        .expect("ar");
+        let dest = dir.path().join("out");
+        fs::create_dir(&dest).expect("dest");
+        extract_deb_with_ar(&deb, &dest).expect("extract");
+        assert_eq!(fs::read(dest.join("hello.txt")).expect("hello"), b"hi");
     }
 
     #[test]

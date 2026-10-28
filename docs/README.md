@@ -11,7 +11,7 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Dependency hierarchy and call graph across lerux, rust-sel4, Microkit, and seL4 |
 | [../GLOSSARY.md](../GLOSSARY.md) | x86 machine names: q35, the Z97 desk, and the parts those machines are not |
 | [plan.md](plan.md) | Roadmap and cross-arch smoke parity (phases 1–82, done); [Physical RPi4 lab](plan.md#physical-rpi4-lab-hardware-gated) |
-| [plan-lionsos.md](plan-lionsos.md) | LionsOS structures in a Rust guest (milestones 1–20 done; 21–22 are the combined q35 native image and the Z97 bind) |
+| [plan-lionsos.md](plan-lionsos.md) | LionsOS structures in a Rust guest (milestones 1–21 done; 22 is the Z97 bind) |
 | [plan-arch.md](plan-arch.md) | Phases 50–60 living checklist; [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated) (hardware-gated) |
 | [plan-qemu.md](plan-qemu.md) | Phases 61–70 living checklist (QEMU-only workstation deepening; done) |
 | [plan-interactive.md](plan-interactive.md) | Phases 71–80 record: QEMU interactive surface. Milestone 17 deleted those protection domains |

@@ -1,8 +1,8 @@
 # Lerux in Rust, on the LionsOS architecture
 
-Last updated: 2026-10-27
+Last updated: 2026-10-28
 
-**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is done and is the file-descriptor library. Milestone 6 is done and is the shell on that filesystem image. Milestone 7 is done and is the network-role image. Milestone 8 is done and is the socket and fetch image. Milestone 9 is done and is the timer and static status on the filesystem image. Milestone 10 is done and is the remaining shell commands on the fetch image. Milestone 11 is done and is the web image that serves the seeded hostname file. Milestone 12 is done and is the virtio graphics driver, virtualiser, and browser image. Milestone 13 is done and is the agent image. Milestone 14 is done and is the WebAssembly runtime protection domain. Milestone 15 is done and is package selection from the template. Milestone 16 is done and is the same protection-domain roles on QEMU RISC-V and QEMU x86. Milestone 17 is done and is the removal of the postcard guest model. Milestone 18 is done and is a real paint of the fetched fixture on the browser image. Milestone 19 is done and is the Advanced Host Controller Interface disk. Milestone 20 is done and is the QEMU 82574. Milestones 21 and 22 are not started. They put that disk and that Ethernet device on one q35 image, then bind those drivers on the Z97. Milestones run in order. Implement one milestone per pass, after the previous smoke is green.
+**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is done and is the file-descriptor library. Milestone 6 is done and is the shell on that filesystem image. Milestone 7 is done and is the network-role image. Milestone 8 is done and is the socket and fetch image. Milestone 9 is done and is the timer and static status on the filesystem image. Milestone 10 is done and is the remaining shell commands on the fetch image. Milestone 11 is done and is the web image that serves the seeded hostname file. Milestone 12 is done and is the virtio graphics driver, virtualiser, and browser image. Milestone 13 is done and is the agent image. Milestone 14 is done and is the WebAssembly runtime protection domain. Milestone 15 is done and is package selection from the template. Milestone 16 is done and is the same protection-domain roles on QEMU RISC-V and QEMU x86. Milestone 17 is done and is the removal of the postcard guest model. Milestone 18 is done and is a real paint of the fetched fixture on the browser image. Milestone 19 is done and is the Advanced Host Controller Interface disk. Milestone 20 is done and is the QEMU 82574. Milestone 21 is done and is that disk and that Ethernet device on one q35 image. Milestone 22 is not started. It binds those drivers on the Z97. Milestones run in order. Implement one milestone per pass, after the previous smoke is green.
 
 **Goal:** Every lerux guest protection domain stays Rust, and the queues, configuration pages, filesystem messages, and component graph are the same ones LionsOS uses.
 
@@ -353,11 +353,11 @@ Done. `just test-x86-e1000e` printed `e1000e: ready`, then `ip 10.0.2.15`, then 
 
 **Exit:** `just test-x86-fetch-native` boots the fetch roles with `ich9-ahci` and `e1000e` together and prints `fetch ok`. The host fixture check still expects `lerux-http-fixture`.
 
-Not started.
+Done. `just test-x86-fetch-native` printed `ahci: port 0`, `e1000e: ready`, and `fetch ok`. The saved file contains `lerux-http-fixture`.
 
-- Board `x86_64_generic_fetch_native` reuses the fetch template. The block interrupt keeps its pin. The network device uses the other pin, matching the combined virtio x86 image.
-- Serial stays the NS16550. No virtio device is attached.
-- After `just check`, `just check-pd`, and the three smokes pass, the workflow include list and the hand-written smoke counts move together. Until then the new boards stay out of continuous integration.
+- Board `x86_64_generic_fetch_native` reuses the fetch template. `blk_driver` maps the one ECAM window at `0xe0000000` and reads `00:1f.2` there. `net_driver` keeps `pci_net_config_ioport`. The block interrupt is MSI on `00:1f.2`, handle 99, vector 51. The network interrupt is I/O APIC pin 10, vector 50, level, active-low.
+- Serial stays the NS16550. No virtio device is attached. `x86_64_generic_fs_ahci` stays on `pci_config_ioport` and does not map ECAM.
+- `ci` stays false. The workflow include list and the hand-written smoke counts stay put until the board is explicitly promoted.
 
 ## Milestone 22 — Desk
 

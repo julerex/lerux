@@ -284,7 +284,7 @@ fn fs_image(arch: Arch, disk: DiskBackend) -> Image {
     let serial = serial_attachment(arch);
     let block = match disk {
         DiskBackend::Virtio => virtio_block(arch, false),
-        DiskBackend::Ahci => ahci_block(),
+        DiskBackend::Ahci => ahci_block(false),
     };
     let mut shell = serial_client_slots();
     shell.extend(fs_client_slots());
@@ -543,7 +543,10 @@ fn virtio_fetch_devices(arch: Arch) -> FetchDevices {
 }
 
 fn q35_native_devices() -> FetchDevices {
-    let block = ahci_block();
+    // Both config-port setvars name [0xcf8, 0xd00). Microkit rejects that
+    // overlap, so AHCI takes the same ECAM window the virtio block driver
+    // uses on the combined x86 fetch image. e1000e keeps the net ports.
+    let block = ahci_block(true);
     let mut regions = block.regions;
     regions.extend(e1000e_regions());
     FetchDevices {
@@ -833,18 +836,7 @@ fn virtio_block(arch: Arch, blk_pci_ecam: bool) -> BlockAttachment {
             regions.push(blk_driver_dma_region(arch));
             let mut driver_slots = Vec::new();
             if blk_pci_ecam {
-                use lerux_machine::{
-                    X86_PCI_ECAM_GUEST, X86_PCI_ECAM_PHYS, X86_PCI_ECAM_SETVAR, X86_PCI_ECAM_SIZE,
-                    X86_PCI_ECAM_WINDOW,
-                };
-                regions.push(Region {
-                    name: X86_PCI_ECAM_WINDOW,
-                    size: X86_PCI_ECAM_SIZE,
-                    vaddr: X86_PCI_ECAM_GUEST,
-                    phys_addr: Some(X86_PCI_ECAM_PHYS.text()),
-                    page_size: None,
-                });
-                driver_slots.push(mmio(X86_PCI_ECAM_WINDOW, X86_PCI_ECAM_SETVAR));
+                push_x86_pci_ecam(&mut regions, &mut driver_slots);
             } else {
                 driver_slots.push(Slot::Port(config));
             }
@@ -869,39 +861,60 @@ fn virtio_block(arch: Arch, blk_pci_ecam: bool) -> BlockAttachment {
     }
 }
 
-fn ahci_block() -> BlockAttachment {
+fn ahci_block(pci_ecam: bool) -> BlockAttachment {
     let map = ahci_map();
+    let mut regions = vec![
+        phys(
+            "ahci_abar",
+            map.abar_size,
+            map.abar_vaddr,
+            map.abar_paddr.text(),
+        ),
+        phys(
+            "ahci_dma",
+            map.dma_size,
+            map.dma_vaddr,
+            map.dma_paddr.text(),
+        ),
+    ];
+    let mut driver_slots = vec![
+        Slot::Map(Map {
+            region: "ahci_abar",
+            cached: Some(false),
+            setvar: None,
+        }),
+        Slot::Map(Map {
+            region: "ahci_dma",
+            cached: Some(true),
+            setvar: None,
+        }),
+    ];
+    if pci_ecam {
+        push_x86_pci_ecam(&mut regions, &mut driver_slots);
+    } else {
+        driver_slots.push(Slot::Port(pci_config_port()));
+    }
     BlockAttachment {
-        regions: vec![
-            phys(
-                "ahci_abar",
-                map.abar_size,
-                map.abar_vaddr,
-                map.abar_paddr.text(),
-            ),
-            phys(
-                "ahci_dma",
-                map.dma_size,
-                map.dma_vaddr,
-                map.dma_paddr.text(),
-            ),
-        ],
-        driver_slots: vec![
-            Slot::Map(Map {
-                region: "ahci_abar",
-                cached: Some(false),
-                setvar: None,
-            }),
-            Slot::Map(Map {
-                region: "ahci_dma",
-                cached: Some(true),
-                setvar: None,
-            }),
-            Slot::Port(pci_config_port()),
-        ],
+        regions,
+        driver_slots,
         irq: Irq::Msi(ahci_msi()),
         program: AHCI_BLK_PROGRAM,
     }
+}
+
+fn push_x86_pci_ecam(regions: &mut Vec<Region>, slots: &mut Vec<Slot>) {
+    use lerux_machine::{
+        X86_PCI_ECAM_GUEST, X86_PCI_ECAM_PHYS, X86_PCI_ECAM_SETVAR, X86_PCI_ECAM_SIZE,
+        X86_PCI_ECAM_WINDOW,
+    };
+    regions.push(Region {
+        name: X86_PCI_ECAM_WINDOW,
+        size: X86_PCI_ECAM_SIZE,
+        vaddr: X86_PCI_ECAM_GUEST,
+        phys_addr: Some(X86_PCI_ECAM_PHYS.text()),
+        page_size: None,
+    });
+    slots.push(mmio(X86_PCI_ECAM_WINDOW, X86_PCI_ECAM_SETVAR));
 }
 
 fn blk_driver_dma_region(arch: Arch) -> Region {
@@ -1002,18 +1015,7 @@ fn net_virtio_attachment(arch: Arch, net_pci_ecam: bool) -> NetVirtioAttachment 
             regions.push(net_driver_dma_region(arch));
             let mut driver_slots = Vec::new();
             if net_pci_ecam {
-                use lerux_machine::{
-                    X86_PCI_ECAM_GUEST, X86_PCI_ECAM_PHYS, X86_PCI_ECAM_SETVAR, X86_PCI_ECAM_SIZE,
-                    X86_PCI_ECAM_WINDOW,
-                };
-                regions.push(Region {
-                    name: X86_PCI_ECAM_WINDOW,
-                    size: X86_PCI_ECAM_SIZE,
-                    vaddr: X86_PCI_ECAM_GUEST,
-                    phys_addr: Some(X86_PCI_ECAM_PHYS.text()),
-                    page_size: None,
-                });
-                driver_slots.push(mmio(X86_PCI_ECAM_WINDOW, X86_PCI_ECAM_SETVAR));
+                push_x86_pci_ecam(&mut regions, &mut driver_slots);
             } else {
                 driver_slots.push(Slot::Port(config));
             }

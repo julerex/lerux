@@ -75,8 +75,9 @@ pub fn pci_config_port() -> IoPort {
     }
 }
 
-/// Config port at `0xcf8` with the net symbol pair, distinct from AHCI's
-/// `pci_config_ioport_*`.
+/// Config port at `0xcf8` with the net driver's symbol pair.
+/// The address range matches [`pci_config_port`]. Microkit rejects two
+/// protection domains that both map it.
 pub fn pci_net_config_port() -> IoPort {
     IoPort {
         addr: X86_PCI_CONFIG_PORT,

@@ -254,6 +254,14 @@ pub fn test_all(root: &Path, build_dir: &str, config: &str) -> Result<()> {
     Ok(())
 }
 
+pub(crate) fn iso_recipe(board: &str) -> String {
+    if board == "swift_sfx14_41g" {
+        "just iso".to_string()
+    } else {
+        format!("just iso {board}")
+    }
+}
+
 fn hardware_ready_message(board: &str, arch: &str) -> String {
     let docs = if arch == "x86_64" {
         "docs/boards.md#gigabyte-z97-d3h-install-path"
@@ -261,7 +269,11 @@ fn hardware_ready_message(board: &str, arch: &str) -> String {
         "docs/boards.md#rpi4-workstation-install-path-phase-52"
     };
     let iso = if arch == "x86_64" {
-        format!("\n   ISO: just iso  (build/{board}/lerux.iso)")
+        format!(
+            "\n   ISO: {}  (build/{board}/{})",
+            iso_recipe(board),
+            crate::iso::iso_file_name(board)
+        )
     } else {
         String::new()
     };

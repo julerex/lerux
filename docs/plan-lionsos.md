@@ -387,7 +387,7 @@ Not started.
 
 **Exit:** The panel shows `1 browser` and `2 maths`, and the built-in keyboard produces `maths 3`.
 
-Board `swift_sfx14_41g` uses Microkit `x86_64_generic` and `console-swift.system.template`. There is no `serial-driver`. The keyboard is the i8042, pin 1, vector 49. `console-driver` keeps the VGA text path for `pc_z97_d3h` and paints 32-bit pixels on this board. `just iso` packs the Z97 image; `just iso swift_sfx14_41g` packs this one. `browser` still prints `browser unavailable`. `ci = false`. No metal boot has been recorded.
+Board `swift_sfx14_41g` uses Microkit `x86_64_generic` and `console-swift.system.template`. There is no `serial-driver`. The keyboard is the i8042, pin 1, vector 49. `console-driver` keeps the VGA text path for `pc_z97_d3h` and paints 32-bit pixels on this board. `just iso` packs this image. `just iso pc_z97_d3h` packs the Z97 image. `browser` still prints `browser unavailable`. `ci = false`. No metal boot has been recorded.
 
 ## Milestone 26 — Swift PCI lines
 

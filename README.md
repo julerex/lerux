@@ -16,9 +16,9 @@ Build the desk image as a hybrid USB ISO, write it to a flash drive, and boot th
 just fetch          # clone seL4 + microkit into deps/workspace/
 just fetch-sdk      # download prebuilt Microkit SDK 2.3.0
 # or: just build-sdk   # build the SDK from source instead
-just iso            # build loader.img, mb2-stub, and pack build/pc_z97_d3h/lerux.iso
+just iso pc_z97_d3h  # pack build/pc_z97_d3h/lerux_pc_z97_d3h.iso (`just iso` packs build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso)
 lsblk               # find the flash drive (e.g. /dev/sdX) — not the OS disk
-sudo dd if=build/pc_z97_d3h/lerux.iso of=/dev/sdX bs=4M status=progress conv=fsync
+sudo dd if=build/pc_z97_d3h/lerux_pc_z97_d3h.iso of=/dev/sdX bs=4M status=progress conv=fsync
 ```
 
 Reboot and open the firmware boot menu (often F12). Choose the USB entry that says **UEFI** (Limine `BOOTX64.EFI`). Limine boots immediately, then the screen is blue with `hello lerux` and the menu `1 browser` / `2 maths`. Type with a PS/2 keyboard in the rear combo port, or a USB HID boot keyboard on a root xHCI port.

@@ -250,7 +250,7 @@ enum Commands {
     },
     /// Build a hybrid BIOS+UEFI ISO that Multiboot 2-boots an x86 board.
     ///
-    /// Writes `build/<board>/lerux.iso` for an x86 board. Does not write a disk.
+    /// Writes `build/<board>/lerux_<board>.iso` for an x86 board. Does not write a disk.
     Iso {
         #[arg(long, default_value = "x86_64_generic")]
         board: String,
@@ -258,7 +258,7 @@ enum Commands {
         build_dir: String,
         #[arg(long, default_value = "debug")]
         config: String,
-        /// ISO path. Default: `build/<board>/lerux.iso`.
+        /// ISO path. Default: `build/<board>/lerux_<board>.iso`.
         /// Relative paths stay under the build directory. Absolute paths must not contain `..`.
         #[arg(long)]
         output: Option<PathBuf>,

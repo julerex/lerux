@@ -49,7 +49,7 @@ serial_baudrate: 115200
     .to_string()
 }
 
-/// Build `build/<board>/lerux.iso` (or `--output`) for an x86_64 board.
+/// Build `build/<board>/lerux_<board>.iso` (or `--output`) for an x86_64 board.
 ///
 /// Builds the Microkit image when `loader.img` or `sel4.elf` is missing and
 /// `build_if_missing` is set. When `verify` is set, both SHA-256 sidecars must
@@ -77,7 +77,7 @@ pub fn build_iso(
     Ok(out)
 }
 
-/// Pack `build/<board>/lerux.iso` for a QEMU smoke (no USB flash text).
+/// Pack `build/<board>/lerux_<board>.iso` for a QEMU smoke (no USB flash text).
 ///
 /// Skips rebuild when the ISO is newer than `sel4.elf` and `loader.img`.
 pub fn ensure_iso_for_qemu(
@@ -86,7 +86,7 @@ pub fn ensure_iso_for_qemu(
     build_dir: &str,
     config: &str,
 ) -> Result<PathBuf> {
-    let out = root.join(build_dir).join(board).join("lerux.iso");
+    let out = resolve_iso_output(root, build_dir, board, None)?;
     let board_build = root.join(build_dir).join(board);
     let loader = board_build.join("loader.img");
     let kernel = board_build.join("sel4.elf");
@@ -551,6 +551,10 @@ fn print_usb_instructions(board: &str, iso: &Path) {
     println!("Full procedure: docs/boards.md#gigabyte-z97-d3h-install-path");
 }
 
+pub(crate) fn iso_file_name(board: &str) -> String {
+    format!("lerux_{board}.iso")
+}
+
 fn require_x86_iso_board(board: &Board) -> Result<()> {
     if board.arch == "x86_64" {
         Ok(())
@@ -569,7 +573,7 @@ fn resolve_iso_output(
     output: Option<&Path>,
 ) -> Result<PathBuf> {
     let Some(output) = output else {
-        return Ok(root.join(build_dir).join(board).join("lerux.iso"));
+        return Ok(root.join(build_dir).join(board).join(iso_file_name(board)));
     };
     if has_parent_dir(output) {
         bail!(
@@ -663,7 +667,7 @@ mod tests {
         append_ovmf_iso_boot(
             &mut cmd,
             Path::new("/usr/share/ovmf/OVMF.fd"),
-            Path::new("lerux.iso"),
+            Path::new("lerux_pc_z97_d3h.iso"),
         );
         let line = format!("{cmd:?}");
         assert!(line.contains("\"-bios\""), "{line}");
@@ -746,7 +750,16 @@ mod tests {
     fn resolve_output_default_and_guards() {
         let tmp = tempfile::tempdir().unwrap();
         let default = resolve_iso_output(tmp.path(), "build", "pc_z97_d3h", None).unwrap();
-        assert_eq!(default, tmp.path().join("build/pc_z97_d3h/lerux.iso"));
+        assert_eq!(
+            default,
+            tmp.path().join("build/pc_z97_d3h/lerux_pc_z97_d3h.iso")
+        );
+        let swift = resolve_iso_output(tmp.path(), "build", "swift_sfx14_41g", None).unwrap();
+        assert_eq!(
+            swift,
+            tmp.path()
+                .join("build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso")
+        );
 
         let custom = resolve_iso_output(
             tmp.path(),

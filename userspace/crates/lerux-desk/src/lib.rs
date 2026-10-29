@@ -19,7 +19,7 @@ pub use mode::{
     FRAMEBUFFER_BYTES, FRAMEBUFFER_HEIGHT, FRAMEBUFFER_PHYS, FRAMEBUFFER_PITCH, FRAMEBUFFER_WIDTH,
     MODE_RECORD_PHYS,
 };
-pub use pixel::{fill_background, paint_cell, paint_text_row, Pen};
+pub use pixel::{fill_background, paint_cell, paint_text_row, Pen, CELL_PX, CONSOLE_ROWS};
 pub use url::{HttpsUrl, NamePolicy};
 
 const LINE_CAP: usize = 256;

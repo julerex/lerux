@@ -8,11 +8,11 @@ use sel4::with_ipc_buffer_mut;
 use sel4_microkit::{memory_region_symbol, var};
 
 #[cfg(feature = "board-swift_sfx14_41g")]
-use lerux_desk::{fill_background, paint_cell, panel_mode, Pen, FRAMEBUFFER_BYTES};
+use lerux_desk::{fill_background, paint_cell, panel_mode, Pen, CELL_PX, FRAMEBUFFER_BYTES};
 
-#[cfg(feature = "board-swift_sfx14_41g")]
-use crate::screen::COLS;
 use crate::screen::{Screen, CELLS};
+#[cfg(feature = "board-swift_sfx14_41g")]
+use crate::screen::{COLS, ROWS};
 
 #[cfg(feature = "board-swift_sfx14_41g")]
 struct Panel {
@@ -257,6 +257,9 @@ impl Device {
 }
 
 #[cfg(feature = "board-swift_sfx14_41g")]
+const _: () = assert!(crate::screen::ROWS == lerux_desk::CONSOLE_ROWS);
+
+#[cfg(feature = "board-swift_sfx14_41g")]
 fn panel_from_system() -> Panel {
     let mode_ptr = memory_region_symbol!(mode_record_vaddr: *mut u8).as_ptr();
     let frame = memory_region_symbol!(fb_vaddr: *mut u8).as_ptr();
@@ -279,17 +282,17 @@ fn panel_from_system() -> Panel {
         // SAFETY: Microkit mapped `framebuffer` read-write for FRAMEBUFFER_BYTES
         // bytes. This runs once during init, before the handler borrows the panel.
         let frame = unsafe { core::slice::from_raw_parts_mut(frame, FRAMEBUFFER_BYTES as usize) };
-        fill_background(
-            frame,
-            Pen {
-                pitch,
-                width,
-                height,
-                red,
-                green,
-                blue,
-            },
-        );
+        let pen = Pen {
+            pitch,
+            width,
+            height,
+            red,
+            green,
+            blue,
+        };
+        let mut console = pen;
+        console.height = ROWS * CELL_PX;
+        fill_background(frame, console);
     }
     Panel {
         frame,

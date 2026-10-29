@@ -393,7 +393,7 @@ Board `swift_sfx14_41g` uses Microkit `x86_64_generic` and `console-swift.system
 
 **Exit:** The panel prints the vendor and device word, BAR, and interrupt for `01:00.0`, `02:00.0`, `03:00.0`, `04:00.0`, `04:00.3`, and `04:00.4`.
 
-`swift-pci-probe` is the only owner of `0xcf8`. Microkit rejects a second protection domain on that range. The probe writes the six headers to `pci_headers` at `0x01FB0000` and programs the NVMe and xHCI base addresses before the lower-priority domains start. A line that says `absent` is a location this boot did not find. No metal boot has been recorded.
+`swift-pci-probe` is the only owner of `0xcf8`. Microkit rejects a second protection domain on that range. The probe writes the six headers to `pci_headers` at `0x01FB0000` and programs the NVMe and xHCI base addresses before the lower-priority domains start. A line that says `absent` is a location this boot did not find. The six lines start at the first row below the 25-row console, so the console fill and keystrokes cannot clear them. No metal boot has been recorded.
 
 ## Milestone 27 — Swift Wi-Fi
 

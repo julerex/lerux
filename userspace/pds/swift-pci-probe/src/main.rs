@@ -18,7 +18,7 @@ use lerux_swift::{
 };
 
 const BASE_IOPORT_CAP: u64 = 394;
-const ROW: usize = 16;
+const ROW: usize = lerux_desk::CONSOLE_ROWS;
 const XHCI_BARS: [u32; 2] = [0xfa00_0000, 0xf900_0000];
 
 struct HandlerImpl;

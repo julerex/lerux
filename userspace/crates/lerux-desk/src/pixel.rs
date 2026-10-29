@@ -2,6 +2,10 @@
 
 const SCALE: usize = 2;
 
+pub const CELL_PX: usize = 8 * SCALE;
+
+pub const CONSOLE_ROWS: usize = 25;
+
 struct Glyph {
     ch: u8,
     row: [u8; 8],

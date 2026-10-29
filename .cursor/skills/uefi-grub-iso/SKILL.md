@@ -2,8 +2,9 @@
 name: uefi-grub-iso
 description: >
   Use when changing the x86 ISO, GRUB menu, FAT ESP, mb2-stub, or the Swift
-  panel mode line. Covers a GRUB warning, a lone underscore on the Acer, a
-  framebuffer above 4 GiB, and a QEMU hello line that does not prove the panel.
+  panel mode line. Covers a GRUB warning, a lone underscore on the Acer, an
+  underscore under the mode line, a framebuffer above 4 GiB, a newer ISO that
+  still maps the spare page, and a QEMU hello line that does not prove the panel.
 ---
 
 # UEFI GRUB ISO
@@ -16,7 +17,7 @@ GRUB Multiboot 2-loads `support/mb2-stub` (`/boot/mb2-stub.elf`). Module tag 0 i
 
 `sel4.elf` stays linked at 1 MiB. GRUB loads the stub, which is linked at 32 MiB. After `ExitBootServices` the stub copies the kernel to 1 MiB. [ADR-014](../../../docs/decisions/014-uefi-mb2-stub.md) records Limine's check, which runs before `ExitBootServices` and panics with "Could not find viable load address". It does not record a GRUB measurement. Upstream Microkit loads `sel4.elf` with GRUB, and GRUB's relocator copies into that address after boot services exit. This tree keeps the stub because it paints the GOP mode line and writes the mode record before seL4. A direct GRUB load of `sel4.elf` was not tried on the Acer.
 
-`just iso` packs the Swift image. `just iso pc_z97_d3h` packs the desk. The stub and `grub.cfg` are the same bytes on every board. UEFI only. There is no BIOS El Torito entry.
+`just iso` rebuilds the Swift image, then packs it. `just iso pc_z97_d3h` does the same for the desk. `--no-build` packs the `loader.img` already on disk. `just image` follows `BOARD`, which defaults to `qemu_virt_aarch64`, so it leaves the Swift loader untouched. The stub and `grub.cfg` are the same bytes on every board. UEFI only. There is no BIOS El Torito entry.
 
 A missing `grub-mkimage` fails before an older ISO is reused. The recipe stamp covers the menu and the module list. An ISO that is only newer than its payloads can still be the previous bootloader.
 
@@ -28,7 +29,17 @@ A lone underscore is the firmware text cursor. GRUB has left that console, and t
 
 The first metal success is the blue bar and the mode line. On 2026-10-29 the Swift X showed `fb 0x000000fc90000000 pitch 7680 1920x1080 r16 g8 b0`. The image maps `0xfc90000000` for `0x7E9000` bytes. The `1 browser` / `2 maths` menu paints when the mode record names that address. A boot that prints a different address leaves the menu off.
 
-An underscore under the first glyph is the firmware text cursor in the rows just below that 16-pixel bar. The clear covers 32 rows so it does not show through. A newer ISO file can still hold an older `loader.img`. `just iso` rebuilds the Microkit image before it packs. The 22:42 ISO was packed from the 16:29 loader, which still mapped the spare page `0x1fd0000`, so the menu stayed off.
+An underscore under the first glyph is the firmware text cursor in the rows just below that 16-pixel bar. The glyph is 16 pixels and the clear covers 32, so a stub built after that clear leaves those rows blue. Seeing the underscore under the “f” means the USB still has the earlier stub.
+
+## What counts as a new image
+
+The file to flash is `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`. Its mtime is not the check. Read `build/swift_sfx14_41g/system.system`. The framebuffer region is `phys_addr="0xfc90000000"`, `size="0x7e9000"`, and `page_size="0x1000"`. On 2026-10-29 a 22:42 ISO was packed from a 16:29 loader that still had `phys_addr="0x1fd0000"` and `size="0x1000"`. The panel showed the stub's mode line and the menu stayed off.
+
+The address is 2 MiB-aligned. `0x7e9000` is 2025 pages of 4 KiB and is not a multiple of 2 MiB. The template sets `page_size="0x1000"` so Microkit keeps 4 KiB pages. A Microkit assemble that accepts this region does not prove seL4 has a device untyped for it. The menu on the metal panel is the proof.
+
+`FRAMEBUFFER_PHYS` is `0x00FC_9000_0000`. That value equals `0xfc90000000` and the mode line prints `fb 0x000000fc90000000`. `0xFC90_0000_0000` is a different address and prints `fb 0x0000fc9000000000`. Clippy `unusual_byte_groupings` rejects uneven groups.
+
+When that `system.system` is the one inside the ISO and the panel still shows only the mode line, read the hex on the line. The same `0x000000fc90000000` means the protection domain did not paint. A different address means `panel_ready` left the menu off. The Swift console path does not program a VGA cursor.
 
 ## What QEMU does not prove
 

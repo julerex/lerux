@@ -308,7 +308,7 @@ A few results look like success and are not:
 - Take a QEMU `-device` property from that binary's `-device <name>,help`. The host kernel's interrupt mode is a different machine. `just test-x86-usb-kbd` covers qemu-xhci and QEMU's `usb-kbd`. The desk keyboard and the Intel xHCI path are the metal boot in `docs/boards.md`.
 - The exit status of a shell string is its last command. A redirected recipe that ends in `echo` reports that echo. Read the log for the recipe's own status line.
 - A QEMU smoke, a new architecture, system-description generation, a virtio image that combines devices, and a context-switch port follow `.cursor/skills/port-and-smoke/SKILL.md`. The serial log, plus a zero exit from both `just check` and `just check-pd` on that tree, is the completion check.
-- The x86 GRUB ISO, `mb2-stub`, and the Swift panel mode line follow `.cursor/skills/uefi-grub-iso/SKILL.md`. A QEMU hello line does not prove the panel.
+- The x86 GRUB ISO, `mb2-stub`, and the Swift panel mode line follow `.cursor/skills/uefi-grub-iso/SKILL.md`. A QEMU hello line does not prove the panel. A newer ISO file does not prove a new `loader.img`. `just iso` rebuilds the image before packing. `just image` follows `BOARD`, which defaults to `qemu_virt_aarch64`. Before another Swift metal boot, `build/swift_sfx14_41g/system.system` names `phys_addr="0xfc90000000"`, `size="0x7e9000"`, and `page_size="0x1000"`. `FRAMEBUFFER_PHYS` is `0x00FC_9000_0000`.
 
 ## What not to do
 

@@ -28,6 +28,8 @@ A lone underscore is the firmware text cursor. GRUB has left that console, and t
 
 The first metal success is the blue bar and the mode line. On 2026-10-29 the Swift X showed `fb 0x000000fc90000000 pitch 7680 1920x1080 r16 g8 b0`. The image maps `0xfc90000000` for `0x7E9000` bytes. The `1 browser` / `2 maths` menu paints when the mode record names that address. A boot that prints a different address leaves the menu off.
 
+An underscore under the first glyph is the firmware text cursor in the rows just below that 16-pixel bar. The clear covers 32 rows so it does not show through. A newer ISO file can still hold an older `loader.img`. `just iso` rebuilds the Microkit image before it packs. The 22:42 ISO was packed from the 16:29 loader, which still mapped the spare page `0x1fd0000`, so the menu stayed off.
+
 ## What QEMU does not prove
 
 OVMF's GOP buffer on `x86_64_generic` is below 4 GiB. The recorded address is `0x80000000`. `Got framebuffer info in multiboot2` and `lerux: Hello from Rust on seL4 Microkit!` prove the tag and COM1. They do not prove the high paint or the Swift panel. The metal boot of `just iso` is that proof. Read `build/smoke-logs/x86_64_generic.serial.log` for the QEMU half.

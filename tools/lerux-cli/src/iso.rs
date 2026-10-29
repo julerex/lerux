@@ -27,8 +27,8 @@ use crate::{
 
 /// Build `build/<board>/lerux_<board>.iso` (or `--output`) for an x86_64 board.
 ///
-/// Builds the Microkit image when `loader.img` or `sel4.elf` is missing and
-/// `build_if_missing` is set. When `verify` is set, both SHA-256 sidecars must
+/// Rebuilds the Microkit image when `build_if_missing` is set, including when
+/// an older `loader.img` is already on disk. When `verify` is set, both SHA-256 sidecars must
 /// match before anything is packed. Sidecars are not copied onto the ISO.
 /// Prints USB flash instructions after packing. Always packs, then writes the
 /// boot-recipe stamp.
@@ -104,17 +104,15 @@ fn pack_iso(
     let board_build = root.join(build_dir).join(board);
     let loader = board_build.join("loader.img");
     let kernel = board_build.join("sel4.elf");
-    if !loader.is_file() || !kernel.is_file() {
-        if build_if_missing {
-            println!("==> boot image missing; building {board}…");
-            crate::build::image(root, board, build_dir, config)?;
-        } else {
-            bail!(
-                "missing {} or {}; run `BOARD={board} just image` or omit --no-build",
-                loader.display(),
-                kernel.display()
-            );
-        }
+    if build_if_missing {
+        println!("==> building {board} before packing the ISO…");
+        crate::build::image(root, board, build_dir, config)?;
+    } else if !loader.is_file() || !kernel.is_file() {
+        bail!(
+            "missing {} or {}; run `BOARD={board} just image` or omit --no-build",
+            loader.display(),
+            kernel.display()
+        );
     }
 
     let image = uefi_boot_volume(root, &kernel, &loader, verify)?;

@@ -263,10 +263,10 @@ enum Commands {
         /// Relative paths stay under the build directory. Absolute paths must not contain `..`.
         #[arg(long)]
         output: Option<PathBuf>,
-        /// Build the image if `loader.img` or `sel4.elf` is missing.
+        /// Rebuild the Microkit image before packing, even when `loader.img` exists.
         #[arg(long, default_value_t = true)]
         build: bool,
-        /// Skip building even if the boot files are missing (error instead).
+        /// Pack the `loader.img` already on disk. A newer ISO can still hold an older image.
         #[arg(long, default_value_t = false)]
         no_build: bool,
         /// Verify SHA-256 sidecars before packing (default: true).

@@ -8,7 +8,7 @@
 -->
 <system>
     <memory_region name="mode_record" size="0x1000" phys_addr="0x1fe0000" />
-    <memory_region name="framebuffer" size="{fb_bytes}" phys_addr="{fb_phys}" />
+    <memory_region name="framebuffer" size="{fb_bytes}" phys_addr="{fb_phys}" page_size="0x1000" />
     <memory_region name="pci_headers" size="0x1000" phys_addr="0x1fb0000" />
     <memory_region name="mt7921_regs" size="0x200000" phys_addr="0xfd000000" />
     <memory_region name="nvme_regs" size="0x4000" phys_addr="0xfc000000" />

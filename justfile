@@ -77,8 +77,8 @@ build-pd crate:
 image: build
     {{lerux}} image --board {{board}} --build-dir {{build_dir}} --config {{config}}
 
-# Hybrid Limine ISO. `just iso` packs the Swift X. `just iso pc_z97_d3h` packs the Z97 desk.
-# Does not write a disk.
+# UEFI GRUB ISO. `just iso` rebuilds the Swift image, then packs it.
+# `just iso pc_z97_d3h` does the same for the Z97 desk. Does not write a disk.
 iso target="swift_sfx14_41g":
     {{lerux}} iso --board {{target}} --build-dir {{build_dir}} --config {{config}}
 

@@ -141,7 +141,9 @@ void fb_paint_line(
     if (pixels == 0 || text == 0 || pitch < 4 || width < 16 || height < 16) {
         return;
     }
-    for (y = 0; y < 16 && y < height; y++) {
+    /* The glyph is 16 pixels. The firmware cursor is the underscore just under
+       that bar, so the clear covers one more row. */
+    for (y = 0; y < 32 && y < height; y++) {
         uint8_t *row = pixels + (uint64_t)y * pitch;
         for (x = 0; x + 4 <= pitch && x / 4 < width; x += 4) {
             row[x] = (uint8_t)bg;

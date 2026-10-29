@@ -69,7 +69,7 @@ The Gigabyte GA-Z97-D3H. Firmware scanout uses the HD Graphics 4600 when Initial
 just test-workstation          # Tier 1 aarch64 (SP804 QEMU)
 just test-workstation-riscv    # Tier 2 RISC-V
 just test-workstation-x86      # Tier 2 x86
-just iso                                 # Z97-D3H hybrid USB ISO (UEFI Limine via mb2-stub; does not write a disk)
+just iso                                 # Z97-D3H hybrid USB ISO (BIOS/CSM Limine, sel4_32.elf; does not write a disk)
 just deploy-pc DEST=/path/to/usb-fat      # Z97-D3H VGA shell onto a FAT volume (Multiboot 2)
 
 lerux profile build workstation

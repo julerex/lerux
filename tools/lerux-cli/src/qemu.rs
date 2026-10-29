@@ -40,13 +40,23 @@ pub struct QemuContext {
 
 const HOSTFWD: &str = "user,id=netdev0,hostfwd=tcp::18080-:8080";
 
-/// Microkit `x86_64_generic` 64-bit kernel ELF (Limine / metal Multiboot 2).
+/// Microkit `x86_64_generic` 64-bit kernel ELF (QEMU UEFI ISO via `mb2-stub`).
 pub fn sel4_elf(sdk: impl AsRef<Path>, microkit_board: &str, config: &str) -> PathBuf {
     sdk.as_ref()
         .join("board")
         .join(microkit_board)
         .join(config)
         .join("elf/sel4.elf")
+}
+
+/// Microkit `x86_64_generic` 32-bit kernel ELF. `just iso` Multiboot 2-boots this
+/// file from the BIOS/CSM Limine entry. It is linked at 1 MiB.
+pub fn sel4_32_elf(sdk: impl AsRef<Path>, microkit_board: &str, config: &str) -> PathBuf {
+    sdk.as_ref()
+        .join("board")
+        .join(microkit_board)
+        .join(config)
+        .join("elf/sel4_32.elf")
 }
 
 pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {

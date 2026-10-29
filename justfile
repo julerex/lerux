@@ -78,7 +78,7 @@ image: build
     {{lerux}} image --board {{board}} --build-dir {{build_dir}} --config {{config}}
 
 # Hybrid Limine ISO for the desk board (does not write a disk).
-# Writes build/pc_z97_d3h/lerux.iso; see docs/boards.md for dd + boot.
+# Packs sel4_32.elf into build/pc_z97_d3h/lerux.iso. Boot the entry that does not say UEFI.
 iso:
     {{lerux}} iso --board pc_z97_d3h --build-dir {{build_dir}} --config {{config}}
 

@@ -8,26 +8,26 @@ The seL4 kernel is **not vendored** — it is cloned into `deps/workspace/` and 
 
 ## Quickstart
 
-Build the desk image as a hybrid USB ISO, write it to a flash drive, and boot that drive with **UEFI**. The documented metal board is `pc_z97_d3h` (Gigabyte GA-Z97-D3H). Full procedure: [`docs/boards.md`](docs/boards.md#gigabyte-z97-d3h-install-path).
+Build the desk image as a hybrid USB ISO, write it to a flash drive, and boot that drive from the firmware entry that does **not** say UEFI. The documented metal board is `pc_z97_d3h` (Gigabyte GA-Z97-D3H). Full procedure: [`docs/boards.md`](docs/boards.md#gigabyte-z97-d3h-install-path).
 
-**Prerequisites:** Linux, `git`, `just`, `rustup`, `cmake`, `ninja`, `libclang-dev`, `clang` (for the Multiboot 2 trampoline), and a USB flash drive. Do not overwrite the host OS disk.
+**Prerequisites:** Linux, `git`, `just`, `rustup`, `cmake`, `ninja`, `libclang-dev`, and a USB flash drive. Do not overwrite the host OS disk. `clang` is required for the QEMU UEFI trampoline, not for this ISO.
 
 ```bash
 just fetch          # clone seL4 + microkit into deps/workspace/
 just fetch-sdk      # download prebuilt Microkit SDK 2.3.0
 # or: just build-sdk   # build the SDK from source instead
-just iso            # build loader.img, mb2-stub, and pack build/pc_z97_d3h/lerux.iso
+just iso            # build loader.img and pack sel4_32.elf into build/pc_z97_d3h/lerux.iso
 lsblk               # find the flash drive (e.g. /dev/sdX) — not the OS disk
 sudo dd if=build/pc_z97_d3h/lerux.iso of=/dev/sdX bs=4M status=progress conv=fsync
 ```
 
-Reboot and open the firmware boot menu (often F12). Choose the USB entry that says **UEFI** (Limine `BOOTX64.EFI`). Limine boots immediately, then the screen is blue with `hello lerux` and the menu `1 browser` / `2 maths`. Type with a PS/2 keyboard in the rear combo port, or a USB HID boot keyboard on a root xHCI port.
+Reboot and open the firmware boot menu (often F12). Choose the USB entry that does **not** say UEFI. Enable CSM if that entry is missing. Limine waits 10 seconds, then the screen is blue with `hello lerux` and the menu `1 browser` / `2 maths`. Type with a PS/2 keyboard in the rear combo port, or a USB HID boot keyboard on a root xHCI port.
 
-The metal kernel is 64-bit `sel4.elf`, still linked at 1 MiB. Limine loads `mb2-stub.elf` at 32 MiB under UEFI; the stub places the kernel at 1 MiB after `ExitBootServices`.
+The metal kernel is 32-bit `sel4_32.elf`, linked at 1 MiB. Limine Multiboot 2-loads it directly. The UEFI entry stops in Limine because that address is still owned by firmware.
 
 ## Quick start (QEMU)
 
-**Prerequisites:** the same host tools as above, plus `qemu-system-aarch64`. x86 QEMU smokes also need `ovmf` and `xorriso`. Optionally the [ARM GNU bare-metal toolchain](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads) (`aarch64-none-elf-gcc`, 12.2.Rel1) for `just build-sdk`. Python 3 is only required for `just build-sdk` (upstream Microkit `build_sdk.py`).
+**Prerequisites:** the same host tools as above, plus `qemu-system-aarch64`. x86 QEMU smokes also need a combined OVMF firmware and `xorriso` (Arch package `libisoburn`, Debian package `xorriso`). Optionally the [ARM GNU bare-metal toolchain](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads) (`aarch64-none-elf-gcc`, 12.2.Rel1) for `just build-sdk`. Python 3 is only required for `just build-sdk` (upstream Microkit `build_sdk.py`).
 
 ```bash
 just fetch          # clone seL4 16.0.0 + microkit 2.3.0

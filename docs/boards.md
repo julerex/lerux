@@ -182,7 +182,7 @@ The desk-browser spec names `console-driver`, `serial-driver`, `log-server`, `br
 
 Before a metal boot, a separate QEMU image runs those browser protection domains with the existing x86 virtio network driver. It loads `https://host:8443/desk.html` from `lerux https-one`, follows the link to `https://host:8443/desk-link.html`, and submits `q=hi` to `https://host:8443/desk-form.html?q=hi`. COM1 records each address and the first non-white pixel. That boot is not the metal product.
 
-Use the USB boot entry that says UEFI (Limine `BOOTX64.EFI`). `sel4.elf` (64-bit) remains linked at 1 MiB; Limine loads `mb2-stub.elf` at 32 MiB and the stub places the kernel after `ExitBootServices`. The documented result is a blue screen with `hello lerux` on the first line and the menu `1 browser` / `2 maths` under it. A metal UEFI boot of this image has not been recorded on this machine yet. The QEMU proofs are `just test-x86-console` and `just iso --boot-test` (both OVMF UEFI with `sel4.elf`, the metal Limine path).
+Use the USB boot entry that does not say UEFI. `just iso` Multiboot 2-boots `sel4_32.elf`, linked at 1 MiB, with module `loader.img`. The UEFI entry stops in Limine because that address is still owned by firmware. The documented result is a blue screen with `hello lerux` on the first line and the menu `1 browser` / `2 maths` under it. `just iso --boot-test` is the same ISO under SeaBIOS. x86 QEMU smokes pack a separate `lerux-uefi.iso` and boot `sel4.elf` through `mb2-stub` under OVMF.
 
 An AMD modesetting driver would matter only if lerux itself programmed this card (resolution, HDMI, a linear framebuffer) or had to bring the picture up when the firmware had not left VGA text mode. That work is still deferred. The QEMU `ramfb` display server does not drive this card.
 
@@ -194,9 +194,9 @@ lsblk
 sudo dd if=build/pc_z97_d3h/lerux.iso of=/dev/sdX bs=4M status=progress conv=fsync
 ```
 
-Replace `sdX` with the flash drive from `lsblk`. Do not use `sda` (Ubuntu SSD) or `sdb` (data disk). Reboot and open the firmware boot menu (F12). Choose the USB entry that says UEFI. Limine boots immediately (`timeout: 0`), then the screen is blue with `hello lerux` on the first line and the menu `1 browser` / `2 maths` under it. Type with a PS/2 keyboard in the rear combo port, or a USB HID boot keyboard on a root xHCI port (the Microsoft Wireless Desktop 900 dongle on this machine is one). Keyboards behind a hub are not seen. `1` or `browser` prints `browser unavailable` (this image has no network and no page painter). `2` or `maths` reads integer expressions until `quit`. The serial console is still COM1 at 115200 8N1 on the COMA header and shows the same menu. `console-driver: usb keyboard` means the USB boot keyboard was armed. Reboot and choose Ubuntu to return.
+Replace `sdX` with the flash drive from `lsblk`. Do not use `sda` (Ubuntu SSD) or `sdb` (data disk). Reboot and open the firmware boot menu (F12). Choose the USB entry that does not say UEFI. Enable CSM if that entry is missing. Limine waits 10 seconds (`timeout: 10`), then the screen is blue with `hello lerux` on the first line and the menu `1 browser` / `2 maths` under it. Type with a PS/2 keyboard in the rear combo port, or a USB HID boot keyboard on a root xHCI port (the Microsoft Wireless Desktop 900 dongle on this machine is one). Keyboards behind a hub are not seen. `1` or `browser` prints `browser unavailable` (this image has no network and no page painter). `2` or `maths` reads integer expressions until `quit`. The serial console is still COM1 at 115200 8N1 on the COMA header and shows the same menu. `console-driver: usb keyboard` means the USB boot keyboard was armed. Reboot and choose Ubuntu to return.
 
-The ISO is a hybrid image. Limine Multiboot 2-boots `/boot/mb2-stub.elf` (linked at 32 MiB) with modules `/boot/sel4.elf` and `/boot/loader.img`. The stub ELF-loads the 64-bit kernel to 1 MiB after Limine has called `ExitBootServices`. Every x86 QEMU smoke packs that ISO and boots it under **OVMF** (needs the `ovmf` package or `OVMF_PATH`). `cargo run -p lerux-cli -- iso --board pc_z97_d3h --boot-test` is the same path without QMP keys.
+The ISO is a hybrid image. Limine Multiboot 2-boots `/boot/sel4_32.elf` with module `/boot/loader.img`. `cargo run -p lerux-cli -- iso --board pc_z97_d3h --boot-test` boots that file under SeaBIOS. x86 QEMU smokes pack `lerux-uefi.iso` and boot it under OVMF.
 
 **FAT volume that already has a bootloader** (after mounting it; not the Ubuntu ESP):
 
@@ -215,7 +215,7 @@ That copies `mb2-stub.elf` + `sel4.elf` + `loader.img` (and SHA-256 sidecars) an
 | 2. Serial hardware | Gigabyte **COMA** 9-pin header → DB9 cable → laptop USB-serial at **115200 8N1**. There is no rear DB9. Prove the link from Linux (`/dev/ttyS0` is `0x3F8` IRQ 4) before seL4. |
 | 3. Image | `BOARD=pc_z97_d3h just image` (or deploy builds it) |
 | 4. Media | `just iso`, then `dd` the ISO onto the flash drive (not `sda` or `sdb`). Or `DEST=/path/to/usb-fat just deploy-pc` when that volume already has a bootloader. |
-| 5. Boot | Firmware boot menu (F12) → the USB entry that says UEFI. Limine is Multiboot 2: kernel `/boot/mb2-stub.elf`, modules `/boot/sel4.elf` and `/boot/loader.img`. |
+| 5. Boot | Firmware boot menu (F12) → the USB entry that does not say UEFI. Limine is Multiboot 2: kernel `/boot/sel4_32.elf`, module `/boot/loader.img`. |
 | 6. Host smoke | From the **laptop**: `LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD=pc_z97_d3h just test-hw` |
 | 7. Back to Ubuntu | Reboot and pick the default Ubuntu EFI entry. |
 
@@ -242,7 +242,7 @@ That copies `mb2-stub.elf` + `sel4.elf` + `loader.img` (and SHA-256 sidecars) an
 |---------|----------------|
 | Limine menu, then a flashing cursor and no blue screen | The console PD did not run. Kernel output is still COM1 (COMA header, 115200 8N1). |
 | Prompt is visible, keys do nothing | Serial shows `xhci none` or `xhci no keyboard`, and the combo port has no PS/2 keyboard. A boot keyboard on a hub is not seen. If the log already says `usb keyboard`, the xHCI interrupt did not arrive. |
-| Limine says it could not find a load address | An old ISO that Multiboot 2-boots the kernel ELF directly at 1 MiB. Rebuild with `just iso` so the menu loads `mb2-stub.elf` then `sel4.elf`. |
+| Limine says it could not find a load address | The firmware entry is UEFI. `sel4_32.elf` is linked at 1 MiB, and that range is still firmware memory. Choose the USB entry that does not say UEFI. |
 | HDMI picture never changes | The cable is not on the firmware primary VGA device, or this was the UEFI entry. Until Initial Display Output is `IGFX`, that device is still the RX 560. This image does not modeset. See [VGA text on the RX 560](#vga-text-on-the-rx-560). |
 | Kernel on serial, no prompt | COM1 IRQ pin/polarity; try `trigger="edge"` on the serial irq in the SDF |
 | Silent serial | Cable on COMA header (TX/RX swapped); 115200 8N1; seL4 debug UART vs PD |

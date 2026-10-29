@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (Phase 43 complete for aarch64 virtio-net: unified DMA)
+Accepted (Phase 43 complete for aarch64 virtio-net: unified DMA) for the postcard network image. The trust rule stands: an untrusted protection domain does not map device DMA. New network connections use the LionsOS queues in [ADR-011](011-lionsos-structures.md).
 
 ## Date
 

@@ -26,12 +26,13 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [decisions/002-serial-virtualiser.md](decisions/002-serial-virtualiser.md) | ADR-002: serial-driver + serial-virt (sDDF-shaped) |
 | [decisions/003-net-virtualiser.md](decisions/003-net-virtualiser.md) | ADR-003: net trust map; unified-dma on aarch64 virtio |
 | [decisions/007-tls-proxy.md](decisions/007-tls-proxy.md) | ADR-007: superseded; rustls now lives in `lerux-tls` inside the client |
-| [decisions/008-host-backed-fs.md](decisions/008-host-backed-fs.md) | ADR-008: QEMU host FS inject (`/host`) |
+| [decisions/008-host-backed-fs.md](decisions/008-host-backed-fs.md) | ADR-008: no virtio-9p; the LERUXFS2 `/host` seed is gone |
 | [decisions/009-interactive-surface.md](decisions/009-interactive-surface.md) | ADR-009: QEMU software framebuffer; static Ladybird PDs; Grok-shaped agent |
-| [decisions/010-program-runtime.md](decisions/010-program-runtime.md) | ADR-010 / Phase 81: signed Wasm subset in `program-runtime` |
+| [decisions/010-program-runtime.md](decisions/010-program-runtime.md) | ADR-010: `LRW1` envelope; the postcard runtime PD is deleted |
 | [decisions/011-lionsos-structures.md](decisions/011-lionsos-structures.md) | ADR-011: LionsOS queue and filesystem structures in Rust |
-| [decisions/012-ordinary-webassembly.md](decisions/012-ordinary-webassembly.md) | ADR-012: ordinary WebAssembly in the LionsOS runtime role |
+| [decisions/012-ordinary-webassembly.md](decisions/012-ordinary-webassembly.md) | ADR-012: `wasmi` in `sddf-program`; postcard runtime deleted |
 | [decisions/013-desk-intel-scanout.md](decisions/013-desk-intel-scanout.md) | ADR-013: desk scanout through the Intel graphics |
+| [decisions/014-uefi-mb2-stub.md](decisions/014-uefi-mb2-stub.md) | ADR-014: GRUB loads `mb2-stub`; Limine could not place `sel4.elf` |
 | [decisions/004-service-async.md](decisions/004-service-async.md) | ADR-004: stackless coop async in service PDs |
 | [decisions/005-debug-pd.md](decisions/005-debug-pd.md) | ADR-005: fault parent + QEMU GDB (not libgdb fork) |
 | [debug.md](debug.md) | Phase 46: `test-debug` + gdb-multiarch workflow |

@@ -11,11 +11,15 @@ use sel4_microkit_simple_ipc as simple_ipc;
 
 use lerux_driver_protocols::serial::{NonBlocking, Request, Response, SuccessResponse};
 
+#[cfg(feature = "board-swift_sfx14_41g")]
+use crate::usb_off::UsbKbd;
+#[cfg(not(feature = "board-swift_sfx14_41g"))]
+use crate::xhci::UsbKbd;
+
 use crate::{
     device::Device,
     scancode::{decode, KeyState},
     screen::{Damage, Screen},
-    xhci::UsbKbd,
 };
 
 pub struct HandlerImpl {

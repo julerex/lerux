@@ -11,6 +11,7 @@ workspace = true
 [features]
 board-pc_z97_d3h = []
 board-x86_64_generic_console = []
+board-swift_sfx14_41g = []
 
 [dependencies]
 embedded-hal-nb = { workspace = true }

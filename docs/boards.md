@@ -28,6 +28,7 @@ Board names are the `BOARD=` value for `just run`, `just test`, and `just build`
 | `x86_64_generic` | x86_64 | `BOARD=x86_64_generic just test` | hello + serial (COM1) |
 | `x86_64_generic_console` | x86_64 | `just test-x86-console` | `serial_driver`, `console_driver`, `shell` (`console-shell.elf`) |
 | `pc_z97_d3h` | x86_64 | `BOARD=pc_z97_d3h just image` | same menu on the desk VGA text page (hardware only) |
+| `swift_sfx14_41g` | x86_64 | `just iso swift_sfx14_41g` | Swift X panel menu, PS/2, PCI lines, MT7921, read-only NVMe, Bluetooth (hardware only) |
 | `x86_64_generic_virtio` | x86_64 | `just test-x86-virtio` | hello + serial + virtio-pci blk/net |
 | `x86_64_generic_http` | x86_64 | `just test-x86-http` | serial + virtio-pci net + http-server |
 | `rpi4b_4gb` | aarch64 | `BOARD=rpi4b_4gb just image` | hello + serial (PL011; hardware only) |

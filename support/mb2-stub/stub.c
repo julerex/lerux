@@ -14,6 +14,7 @@
 
 #include <stdint.h>
 
+#include "fb_paint.h"
 #include "multiboot2.h"
 
 #define PAGE_SIZE 0x1000u
@@ -56,6 +57,33 @@ struct elf64_phdr {
 
 /* Fresh Multiboot 2 info for seL4. Kept out of the 1 MiB kernel window. */
 static uint8_t new_mbi[8192] __attribute__((aligned(8)));
+
+/* Swift panel driver maps this page. The linker places it at 0x01FE0000. */
+__attribute__((section(".swift_mode"), aligned(4096))) static uint8_t mode_page[4096];
+
+#define MODE_MAGIC 0x4D4F44454C525558ull
+#define PAE_WINDOW 0x10000000u
+
+static uint64_t pdpt[4] __attribute__((aligned(32)));
+static uint64_t pd[512] __attribute__((aligned(4096)));
+
+struct __attribute__((packed)) fb_tag {
+    uint32_t type;
+    uint32_t size;
+    uint64_t addr;
+    uint32_t pitch;
+    uint32_t width;
+    uint32_t height;
+    uint8_t bpp;
+    uint8_t fb_type;
+    uint16_t reserved;
+    uint8_t red_shift;
+    uint8_t red_width;
+    uint8_t green_shift;
+    uint8_t green_width;
+    uint8_t blue_shift;
+    uint8_t blue_width;
+};
 
 static void *memcpy(void *dst, const void *src, uint32_t n) {
     uint8_t *d = dst;
@@ -228,6 +256,153 @@ static void copy_forwarded_tags(struct multiboot2_header *src, uint32_t *idx) {
     }
 }
 
+static void store_u32(uint8_t *out, uint32_t value) {
+    out[0] = (uint8_t)value;
+    out[1] = (uint8_t)(value >> 8);
+    out[2] = (uint8_t)(value >> 16);
+    out[3] = (uint8_t)(value >> 24);
+}
+
+static void store_u64(uint8_t *out, uint64_t value) {
+    store_u32(out, (uint32_t)value);
+    store_u32(out + 4, (uint32_t)(value >> 32));
+}
+
+static void write_mode_record(const struct fb_tag *tag) {
+    memset(mode_page, 0, 64);
+    store_u64(mode_page, MODE_MAGIC);
+    store_u64(mode_page + 8, tag->addr);
+    store_u32(mode_page + 16, tag->pitch);
+    store_u32(mode_page + 20, tag->width);
+    store_u32(mode_page + 24, tag->height);
+    mode_page[28] = tag->bpp;
+    mode_page[29] = tag->red_shift;
+    mode_page[30] = tag->red_width;
+    mode_page[31] = tag->green_shift;
+    mode_page[32] = tag->green_width;
+    mode_page[33] = tag->blue_shift;
+    mode_page[34] = tag->blue_width;
+}
+
+static uint32_t read_cr(const char *which) {
+    uint32_t value;
+    if (which[2] == '0') {
+        __asm__ volatile("mov %%cr0, %0" : "=r"(value));
+    } else if (which[2] == '3') {
+        __asm__ volatile("mov %%cr3, %0" : "=r"(value));
+    } else {
+        __asm__ volatile("mov %%cr4, %0" : "=r"(value));
+    }
+    return value;
+}
+
+static void write_cr0(uint32_t value) {
+    __asm__ volatile("mov %0, %%cr0" : : "r"(value) : "memory");
+}
+
+static void write_cr3(uint32_t value) {
+    __asm__ volatile("mov %0, %%cr3" : : "r"(value) : "memory");
+}
+
+static void write_cr4(uint32_t value) {
+    __asm__ volatile("mov %0, %%cr4" : : "r"(value) : "memory");
+}
+
+static void paint_high(const struct fb_tag *tag, const char *line) {
+    uint64_t base = tag->addr & ~0x1fffffull;
+    uint32_t offset = (uint32_t)(tag->addr - base);
+    uint32_t i;
+    uint32_t cr0 = read_cr("cr0");
+    uint32_t cr3 = read_cr("cr3");
+    uint32_t cr4 = read_cr("cr4");
+    uint32_t cr0_off = cr0 & ~(1u << 31);
+    memset(pdpt, 0, sizeof(pdpt));
+    for (i = 0; i < 512; i++) {
+        pd[i] = ((uint64_t)i << 21) | 0x83u;
+    }
+    for (i = 0; i < 8; i++) {
+        pd[128 + i] = (base + ((uint64_t)i << 21)) | 0x83u;
+    }
+    pdpt[0] = ((uint64_t)(uint32_t)(uintptr_t)pd) | 0x1u;
+    write_cr0(cr0_off);
+    write_cr4(cr4 | (1u << 5));
+    write_cr3((uint32_t)(uintptr_t)pdpt);
+    write_cr0(cr0);
+    fb_paint_line(
+        (uint8_t *)(uintptr_t)(PAE_WINDOW + offset),
+        tag->pitch,
+        tag->width,
+        tag->height,
+        tag->red_shift,
+        tag->green_shift,
+        tag->blue_shift,
+        line
+    );
+    write_cr0(cr0_off);
+    write_cr4(cr4);
+    write_cr3(cr3);
+    write_cr0(cr0);
+}
+
+static const struct fb_tag *framebuffer_tag(struct multiboot2_header *mbi) {
+    uint8_t *p = (uint8_t *)(mbi + 1);
+    uint8_t *end = (uint8_t *)mbi + mbi->total_size;
+    while (p + sizeof(struct multiboot2_tag) <= end) {
+        struct multiboot2_tag *tag = (struct multiboot2_tag *)p;
+        if (tag->type == MULTIBOOT2_TAG_END) {
+            return 0;
+        }
+        if (tag->type == MULTIBOOT2_TAG_FRAMEBUFFER && tag->size >= sizeof(struct fb_tag)) {
+            return (const struct fb_tag *)tag;
+        }
+        p += align_up(tag->size, 8);
+    }
+    return 0;
+}
+
+static void paint_firmware_mode(struct multiboot2_header *mbi) {
+    const struct fb_tag *tag = framebuffer_tag(mbi);
+    struct fb_mode mode;
+    char line[80];
+    uint64_t bytes;
+    if (tag == 0 || tag->fb_type != 1 || tag->bpp != 32 || tag->width < 16 || tag->height < 16
+        || tag->pitch < tag->width * 4u || tag->pitch > 16384u) {
+        return;
+    }
+    bytes = (uint64_t)tag->pitch * tag->height;
+    if (bytes < tag->pitch || (tag->addr & 0xfff) != 0) {
+        return;
+    }
+    write_mode_record(tag);
+    mode.addr = tag->addr;
+    mode.pitch = tag->pitch;
+    mode.width = tag->width;
+    mode.height = tag->height;
+    mode.red_shift = tag->red_shift;
+    mode.green_shift = tag->green_shift;
+    mode.blue_shift = tag->blue_shift;
+    if (fb_mode_line(&mode, line, sizeof(line)) == 0) {
+        return;
+    }
+    if (tag->addr <= 0xffffffffull && tag->addr + 16ull * tag->pitch <= 0x100000000ull) {
+        fb_paint_line(
+            (uint8_t *)(uintptr_t)tag->addr,
+            tag->pitch,
+            tag->width,
+            tag->height,
+            tag->red_shift,
+            tag->green_shift,
+            tag->blue_shift,
+            line
+        );
+        return;
+    }
+    if (tag->addr + 16ull * tag->pitch < tag->addr) {
+        return;
+    }
+    paint_high(tag, line);
+}
+
 void stub_main(uint32_t magic, struct multiboot2_header *mbi) {
     if (magic != MULTIBOOT2_BOOTLOADER_MAGIC) {
         fail("bad multiboot magic");
@@ -235,6 +410,7 @@ void stub_main(uint32_t magic, struct multiboot2_header *mbi) {
     if (mbi == 0) {
         fail("null mbi");
     }
+    paint_firmware_mode(mbi);
 
     uint32_t k_start = 0, k_end = 0, l_start = 0, l_end = 0;
     if (find_modules(mbi, &k_start, &k_end, &l_start, &l_end) < 2) {

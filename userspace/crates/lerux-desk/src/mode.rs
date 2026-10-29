@@ -1,7 +1,97 @@
 //! Firmware scanout mode. The Multiboot tag and the mode record are different bytes.
 
 const ADDRESS_ROWS: u32 = 16;
-const FRAMEBUFFER_CAP: u64 = 0x80_0000;
+/// 16 MiB. A 1920×1080 Swift X panel with pitch 8192 is 8_847_360 bytes, past 8 MiB.
+const FRAMEBUFFER_CAP: u64 = 0x100_0000;
+
+/// Physical page the trampoline fills with a [`ScanoutMode`] record.
+pub const MODE_RECORD_PHYS: u64 = 0x01FE_0000;
+/// Mapped panel buffer. A spare page until the mode line replaces it.
+pub const FRAMEBUFFER_PHYS: u64 = 0x01FD_0000;
+pub const FRAMEBUFFER_BYTES: u64 = 0x1000;
+
+/// The recorded address is the buffer this image maps, and it is not the mode page.
+pub fn panel_ready(mode_address: u64, mapped_phys: u64) -> bool {
+    mode_address != 0
+        && mode_address != MODE_RECORD_PHYS
+        && mode_address == mapped_phys
+        && mode_address.is_multiple_of(4096)
+}
+
+/// Same spelling as `fb_mode_line` in `support/mb2-stub/fb_paint.c`.
+pub fn mode_line(
+    address: u64,
+    pitch: u32,
+    width: u32,
+    height: u32,
+    red: u8,
+    green: u8,
+    blue: u8,
+) -> Option<[u8; 80]> {
+    let mut out = [0u8; 80];
+    let mut len = 0usize;
+    fn push(out: &mut [u8; 80], len: &mut usize, bytes: &[u8]) -> bool {
+        let Some(next) = len.checked_add(bytes.len()) else {
+            return false;
+        };
+        if next >= out.len() {
+            return false;
+        }
+        out[*len..next].copy_from_slice(bytes);
+        *len = next;
+        true
+    }
+    fn push_u32(out: &mut [u8; 80], len: &mut usize, value: u32) -> bool {
+        let mut tmp = [0u8; 10];
+        let mut n = 0usize;
+        let mut rest = value;
+        if rest == 0 {
+            return push(out, len, b"0");
+        }
+        while rest > 0 {
+            tmp[n] = b'0' + (rest % 10) as u8;
+            n += 1;
+            rest /= 10;
+        }
+        while n > 0 {
+            n -= 1;
+            if !push(out, len, &tmp[n..=n]) {
+                return false;
+            }
+        }
+        true
+    }
+    if !push(&mut out, &mut len, b"fb 0x") {
+        return None;
+    }
+    for shift in (0..16).rev() {
+        let nibble = ((address >> (shift * 4)) & 0xf) as u8;
+        let byte = if nibble < 10 {
+            b'0' + nibble
+        } else {
+            b'a' + (nibble - 10)
+        };
+        if !push(&mut out, &mut len, &[byte]) {
+            return None;
+        }
+    }
+    if !push(&mut out, &mut len, b" pitch ")
+        || !push_u32(&mut out, &mut len, pitch)
+        || !push(&mut out, &mut len, b" ")
+        || !push_u32(&mut out, &mut len, width)
+        || !push(&mut out, &mut len, b"x")
+        || !push_u32(&mut out, &mut len, height)
+        || !push(&mut out, &mut len, b" r")
+        || !push_u32(&mut out, &mut len, u32::from(red))
+        || !push(&mut out, &mut len, b" g")
+        || !push_u32(&mut out, &mut len, u32::from(green))
+        || !push(&mut out, &mut len, b" b")
+        || !push_u32(&mut out, &mut len, u32::from(blue))
+    {
+        return None;
+    }
+    Some(out)
+}
 const RECORD_LEN: usize = 40;
 const MODE_MAGIC: u64 = 0x4D4F_4445_4C52_5558;
 
@@ -265,6 +355,61 @@ mod tests {
             mode_from_mb2_tag(&indexed).is_none(),
             "a text framebuffer type fails"
         );
+    }
+
+    #[test]
+    fn swift_pitch_fits() {
+        let mut tag = [0u8; TAG.len()];
+        tag.copy_from_slice(TAG);
+        tag[8..16].copy_from_slice(&0x8000_0000u64.to_le_bytes());
+        tag[16..20].copy_from_slice(&8192u32.to_le_bytes());
+        tag[20..24].copy_from_slice(&1920u32.to_le_bytes());
+        tag[24..28].copy_from_slice(&1080u32.to_le_bytes());
+        let mode = mode_from_mb2_tag(&tag).expect("1920x1080 pitch 8192 fits");
+        assert_eq!(mode.width(), 1920);
+        assert_eq!(mode.height(), 1080);
+        assert_eq!(mode.pitch(), 8192);
+    }
+
+    #[test]
+    fn mode_line_matches_the_stub() {
+        let line = mode_line(0xd000_0000, 4096, 1024, 768, 16, 8, 0).expect("line fits");
+        let rust = line.split(|byte| *byte == 0).next().expect("text");
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+        let out_dir = root.join("build/host");
+        std::fs::create_dir_all(&out_dir).expect("host build dir");
+        let bin = out_dir.join("fb-paint-test");
+        let status = std::process::Command::new("clang")
+            .current_dir(&root)
+            .args([
+                "-std=c11",
+                "-Wall",
+                "-Wextra",
+                "-Werror",
+                "support/mb2-stub/fb_paint.c",
+                "support/mb2-stub/fb_paint_test.c",
+                "-o",
+            ])
+            .arg(&bin)
+            .status();
+        let status = status.expect("clang");
+        assert!(status.success(), "fb paint host build");
+        let printed = std::process::Command::new(&bin)
+            .output()
+            .expect("run fb paint test");
+        assert!(printed.status.success(), "fb paint test failed");
+        let text = std::str::from_utf8(&printed.stdout).expect("utf8");
+        assert_eq!(
+            text.trim_end(),
+            std::str::from_utf8(rust).expect("line utf8")
+        );
+    }
+
+    #[test]
+    fn unrecorded_framebuffer_does_not_paint() {
+        assert!(!panel_ready(MODE_RECORD_PHYS, FRAMEBUFFER_PHYS));
+        assert!(!panel_ready(0, 0));
+        assert!(panel_ready(0x8000_0000, 0x8000_0000));
     }
 
     #[test]

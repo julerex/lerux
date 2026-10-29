@@ -77,10 +77,10 @@ build-pd crate:
 image: build
     {{lerux}} image --board {{board}} --build-dir {{build_dir}} --config {{config}}
 
-# Hybrid Limine ISO for the desk board (does not write a disk).
-# Writes build/pc_z97_d3h/lerux.iso; see docs/boards.md for dd + boot.
-iso:
-    {{lerux}} iso --board pc_z97_d3h --build-dir {{build_dir}} --config {{config}}
+# Hybrid Limine ISO. `just iso` packs the Z97 desk. `just iso swift_sfx14_41g` packs the Swift.
+# Does not write a disk.
+iso target="pc_z97_d3h":
+    {{lerux}} iso --board {{target}} --build-dir {{build_dir}} --config {{config}}
 
 # Boot in QEMU for the selected board
 run: image

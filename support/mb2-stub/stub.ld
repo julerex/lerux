@@ -5,6 +5,12 @@
 ENTRY(_start)
 
 SECTIONS {
+    /* Mode record the Swift panel driver reads. One page, below the stub. */
+    . = 0x01FE0000;
+    .swift_mode : {
+        KEEP(*(.swift_mode))
+    }
+
     . = 0x02000000;
 
     .mbh : {

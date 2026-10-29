@@ -1,7 +1,8 @@
 //! Start menu on the VGA text console.
 //!
 //! Channel 0 is `console_driver` (keyboard bytes in, screen bytes out).
-//! Channel 1 is `serial_driver` (the same output bytes on COM1). This image
+//! On the desk, channel 1 is `serial_driver` (the same output bytes on COM1).
+//! On the Swift X, channel 1 is the read-only NVMe result. This image
 //! has no page painter, so the browser choice reports that it is unavailable.
 
 #![no_std]
@@ -11,13 +12,18 @@ use embedded_hal_nb::{
     nb,
     serial::{Read, Write},
 };
+#[cfg(feature = "board-swift_sfx14_41g")]
+use sel4_microkit::memory_region_symbol;
 use sel4_microkit::{protection_domain, Channel, ChannelSet, Handler, Infallible, MessageInfo};
 use sel4_microkit_driver_adapters::serial::client::Client;
 
 use lerux_calc::{eval, write_i64, Error};
 
 const CONSOLE: Channel = Channel::new(0);
+#[cfg(not(feature = "board-swift_sfx14_41g"))]
 const SERIAL: Channel = Channel::new(1);
+#[cfg(feature = "board-swift_sfx14_41g")]
+const DISK: Channel = Channel::new(1);
 const LINE_MAX: usize = 80;
 const MENU: &[u8] = b"1 browser\n2 maths\n";
 
@@ -29,7 +35,10 @@ enum Mode {
 
 struct HandlerImpl {
     screen: Client,
+    #[cfg(not(feature = "board-swift_sfx14_41g"))]
     com1: Client,
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    disk_done: bool,
     mode: Mode,
     line: [u8; LINE_MAX],
     len: usize,
@@ -40,20 +49,40 @@ struct HandlerImpl {
 fn init() -> HandlerImpl {
     let mut shell = HandlerImpl {
         screen: Client::new(CONSOLE),
+        #[cfg(not(feature = "board-swift_sfx14_41g"))]
         com1: Client::new(SERIAL),
+        #[cfg(feature = "board-swift_sfx14_41g")]
+        disk_done: false,
         mode: Mode::Menu,
         line: [0; LINE_MAX],
         len: 0,
         overflow: false,
     };
     shell.emit(MENU);
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    shell.emit_disk();
     shell
 }
 
 impl HandlerImpl {
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    fn emit_disk(&mut self) {
+        if self.disk_done {
+            return;
+        }
+        let bytes = disk_payload();
+        if bytes.is_empty() {
+            return;
+        }
+        self.disk_done = true;
+        self.emit(bytes);
+        self.emit(b"\n");
+    }
+
     fn emit(&mut self, bytes: &[u8]) {
         for &byte in bytes {
             push(&mut self.screen, byte);
+            #[cfg(not(feature = "board-swift_sfx14_41g"))]
             push(&mut self.com1, byte);
         }
     }
@@ -162,6 +191,15 @@ fn push(client: &mut Client, byte: u8) {
     }
 }
 
+#[cfg(feature = "board-swift_sfx14_41g")]
+fn disk_payload() -> &'static [u8] {
+    let ptr = memory_region_symbol!(disk_result_vaddr: *mut u8).as_ptr();
+    let page = unsafe { core::slice::from_raw_parts(ptr, 0x1000) };
+    let n = u16::from_le_bytes([page[0], page[1]]) as usize;
+    let n = n.min(256).min(page.len().saturating_sub(2));
+    &page[2..2 + n]
+}
+
 fn trim(line: &[u8]) -> &[u8] {
     let mut start = 0;
     let mut end = line.len();
@@ -180,6 +218,10 @@ impl Handler for HandlerImpl {
     fn notified(&mut self, channels: ChannelSet) -> Result<(), Self::Error> {
         if channels.contains(CONSOLE) {
             self.drain();
+        }
+        #[cfg(feature = "board-swift_sfx14_41g")]
+        if channels.contains(DISK) {
+            self.emit_disk();
         }
         Ok(())
     }

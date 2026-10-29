@@ -23,13 +23,14 @@ CFLAGS=(
 )
 
 "$CC" "${CFLAGS[@]}" -c -o "$tmpdir/stub.o" "$root/stub.c"
+"$CC" "${CFLAGS[@]}" -c -o "$tmpdir/fb_paint.o" "$root/fb_paint.c"
 "$CC" "${CFLAGS[@]}" -c -o "$tmpdir/entry.o" "$root/entry.S"
 "$CC" "${CFLAGS[@]}" -nostdlib -static \
     -Wl,-T,"$root/stub.ld" \
     -Wl,-m,elf_i386 \
     -Wl,--build-id=none \
     -o "$out" \
-    "$tmpdir/entry.o" "$tmpdir/stub.o"
+    "$tmpdir/entry.o" "$tmpdir/stub.o" "$tmpdir/fb_paint.o"
 
 echo "built $out"
 readelf -l "$out" | head -20

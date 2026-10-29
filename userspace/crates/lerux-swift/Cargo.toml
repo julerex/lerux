@@ -1,0 +1,13 @@
+[package]
+name = "lerux-swift"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Swift X SFX14-41G PCI lines, WPA-Personal, read-only NVMe, and Bluetooth HCI"
+
+[dependencies]
+lerux-desk = { path = "../lerux-desk" }
+lerux-sddf = { path = "../lerux-sddf" }
+
+[lints]
+workspace = true

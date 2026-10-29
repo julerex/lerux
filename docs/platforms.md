@@ -10,6 +10,7 @@
 | **2** | RISC-V virt; x86_64 q35 | `workstation-riscv`, `workstation-x86` | CI: `workstation-riscv`, `workstation-x86` |
 | **3** | Other Microkit boards | Bring-up boards only (serial/echo/virtio slices) | Per-board |
 | **HW x86** | Gigabyte Z97-D3H (this desktop) | Phase 82: `pc_z97_d3h` VGA shell + PS/2 or USB boot keyboard + COM1; native disk and Ethernet are [Milestones 19–22](plan-lionsos.md#milestone-19--advanced-host-controller-interface-disk) | Optional `test-hw` |
+| **HW x86** | Acer Swift X SFX14-41G | [Milestones 24–29](plan-lionsos.md#milestone-24--swift-mode-line): panel menu, PCI lines, MT7921, read-only NVMe, Bluetooth HCI. No QEMU model | Metal only |
 
 ## Arch drivers
 
@@ -63,6 +64,22 @@ The Gigabyte GA-Z97-D3H. Firmware scanout uses the HD Graphics 4600 when Initial
 | Display | HD Graphics 4600, `8086:0412` at `00:02.0` | none | no |
 | Display | RX 560, `1002:67ff` at `01:00.0` | none | no |
 
+### Swift X devices
+
+The Acer Swift X SFX14-41G (Ryzen 5 5500U, Orion_CA). The panel belongs to the Radeon at `04:00.0`. The GTX 1650 at `01:00.0` stays unused. There is no COM port. Bus numbers are the Windows enumeration until a probe line says otherwise. `ci = false`.
+
+| Category | Device | lerux driver | In the tree |
+|----------|--------|--------------|-------------|
+| Linear framebuffer | Firmware GOP buffer. The mode line records the address, pitch, and shifts. The mapped page stays `0x1fd0000` until that line replaces it | `console-driver` paints 32-bit pixels when the record matches the map. `mb2-stub` paints the mode line before seL4 | yes |
+| Keyboard | i8042 PS/2, ports `0x60` and `0x64`, I/O APIC pin 1, vector 49 | `console-driver` | yes |
+| Text menu | `1 browser` / `2 maths` on the panel | `console-shell` | yes |
+| PCI | `01:00.0`, `02:00.0`, `03:00.0`, `04:00.0`, `04:00.3`, `04:00.4` | `swift-pci-probe` | yes |
+| Wireless | MediaTek MT7921 at `03:00.0` | `swift-mt7921`. WPA-Personal, DHCP, and ping. Firmware and the key file are not in git | yes |
+| Disk | SK hynix BC711 `HFM512GD3JX016N` NVMe at `02:00.0`, class `0x010802` | `swift-nvme`, read-only. The Windows volume is not formatted | yes |
+| Bluetooth | USB HCI `0xE0/0x01/0x01` behind `04:00.3` or `04:00.4` | `swift-bt`. Reset is acknowledged only after the Bluetooth firmware load | yes |
+| Display | AMD Radeon at `04:00.0` | none beyond the firmware framebuffer | no |
+| Display | NVIDIA GTX 1650 at `01:00.0` | none | no |
+
 ## Commands
 
 ```bash
@@ -70,6 +87,7 @@ just test-workstation          # Tier 1 aarch64 (SP804 QEMU)
 just test-workstation-riscv    # Tier 2 RISC-V
 just test-workstation-x86      # Tier 2 x86
 just iso                                 # Z97-D3H hybrid USB ISO (UEFI Limine via mb2-stub; does not write a disk)
+just iso swift_sfx14_41g                 # Swift X hybrid USB ISO (same loader; does not write a disk)
 just deploy-pc DEST=/path/to/usb-fat      # Z97-D3H VGA shell onto a FAT volume (Multiboot 2)
 
 lerux profile build workstation

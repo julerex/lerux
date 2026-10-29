@@ -376,3 +376,39 @@ Not started.
 Not started.
 
 - On QEMU RISC-V the virtio memory-mapped guest virtual address equals the physical page (`0x10_001_000`, `0x10_002_000`, `0x10_003_000`). AArch64 uses the high window `0x6_000_000_000` for the same role. Copying that window onto RISC-V stops the boot. Leave the identity map in place until Microkit can place a high guest map on this architecture. `riscv_virtio_guest_address_matches_the_physical_page` locks the rule.
+
+## Milestone 24 — Swift mode line
+
+**Exit:** The internal panel shows one line with the framebuffer address, pitch, width, height, and the red, green, and blue shifts.
+
+`mb2-stub` writes that line into the GOP buffer before seL4, and writes a `ScanoutMode` record at `0x01FE0000`. A 1920×1080 mode with pitch 8192 fits the 16 MiB cap. The Swift protection domains paint only when that record's address is the mapped framebuffer and is not the mode page. The mapped page stays `0x01FD0000` until the line is copied into the board. No metal boot of this line has been recorded.
+
+## Milestone 25 — Swift menu
+
+**Exit:** The panel shows `1 browser` and `2 maths`, and the built-in keyboard produces `maths 3`.
+
+Board `swift_sfx14_41g` uses Microkit `x86_64_generic` and `console-swift.system.template`. There is no `serial-driver`. The keyboard is the i8042, pin 1, vector 49. `console-driver` keeps the VGA text path for `pc_z97_d3h` and paints 32-bit pixels on this board. `just iso` packs the Z97 image; `just iso swift_sfx14_41g` packs this one. `browser` still prints `browser unavailable`. `ci = false`. No metal boot has been recorded.
+
+## Milestone 26 — Swift PCI lines
+
+**Exit:** The panel prints the vendor and device word, BAR, and interrupt for `01:00.0`, `02:00.0`, `03:00.0`, `04:00.0`, `04:00.3`, and `04:00.4`.
+
+`swift-pci-probe` reads those locations through `0xcf8`. The constants are the Windows bus numbers. A line that says `absent` is a location this boot did not find. No metal boot has been recorded.
+
+## Milestone 27 — Swift Wi-Fi
+
+**Exit:** The panel prints a Dynamic Host Configuration Protocol address, then `ping ok`, on the WPA-Personal network.
+
+`swift-mt7921` owns `03:00.0` (`14c3:7961` or `14c3:0608`). Association is PBKDF2-HMAC-SHA1 and an HMAC-MD5 MIC. Frames the radio accepts are enqueued on an sDDF transmit queue. The service set and passphrase are `support/swift-wifi.txt`, which is gitignored, and the firmware is `support/mt7921.bin`, also gitignored. An empty firmware blob paints `mt7921: firmware err`. The MAC program that would make the metal radio accept a frame is not in this tree, so a laptop boot does not print `ping ok` until that program exists. The host test drives a scripted radio to `ip 192.168.1.20 ping ok`.
+
+## Milestone 28 — Swift disk
+
+**Exit:** The shell reads one named file from the hynix SSD and prints its bytes. The volume is not formatted.
+
+`swift-nvme` accepts class `0x010802` at `02:00.0` and submits the read on the sDDF block queue. IO write `0x01` and admin format `0x80` are rejected. The named file is `LERUX.TXT`, read from a FAT root or an NTFS resident record. The shell prints the result page. No metal boot has been recorded.
+
+## Milestone 29 — Swift Bluetooth
+
+**Exit:** The panel prints that the MT7921 Bluetooth controller answered a reset after its firmware load.
+
+`swift-bt` programs the AMD xHCI controllers at `04:00.3` and `04:00.4` and selects USB class `0xE0` subclass `0x01` protocol `0x01`. HCI Reset is `01 03 0c 00`. `bt: reset ok` requires the command-complete event after `support/mt7921-bt.bin` is present. That file is gitignored and is not the Wi-Fi firmware. The personal-area-network profile is later and does not join the WPA-Personal access point. No metal boot has been recorded.

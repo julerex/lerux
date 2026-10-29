@@ -38,6 +38,7 @@ userspace/crates/lerux-sddf/tests/net_queue.rs
 userspace/crates/lerux-sddf/tests/serial_image.rs
 userspace/crates/lerux-sddf/tests/serial_queue.rs
 userspace/crates/lerux-serial-queue/src/lib.rs
+userspace/crates/lerux-swift/src/wifi.rs
 userspace/crates/lerux-virtio-hal/src/lib.rs
 userspace/crates/lerux-virtio-pci/src/ecam.rs
 userspace/crates/lerux-virtio-pci/src/ioport.rs
@@ -45,6 +46,7 @@ userspace/crates/lerux-wasm/src/exec.rs
 userspace/pds/cmos-rtc-driver/src/main.rs
 userspace/pds/console-driver/src/device.rs
 userspace/pds/console-driver/src/xhci.rs
+userspace/pds/console-shell/src/main.rs
 userspace/pds/cothread-client/src/main.rs
 userspace/pds/crash-demo/src/main.rs
 userspace/pds/emmc2-driver/src/emmc2.rs
@@ -99,6 +101,10 @@ userspace/pds/serial-driver/src/main.rs
 userspace/pds/serial-driver/src/ns16550.rs
 userspace/pds/serial-driver/src/ns16550_mmio.rs
 userspace/pds/sp804-driver/src/main.rs
+userspace/pds/swift-bt/src/main.rs
+userspace/pds/swift-mt7921/src/main.rs
+userspace/pds/swift-nvme/src/main.rs
+userspace/pds/swift-pci-probe/src/main.rs
 userspace/pds/tsc-timer-driver/src/main.rs
 userspace/pds/virtio-blk-driver/src/main.rs
 userspace/pds/virtio-blk-driver/src/mmio.rs

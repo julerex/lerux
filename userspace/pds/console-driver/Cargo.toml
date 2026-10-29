@@ -22,9 +22,11 @@ hardware = [
 board-pc_z97_d3h = ["hardware"]
 board-x86_64_generic_console = ["hardware"]
 board-x86_64_generic_usb_kbd = ["hardware"]
+board-swift_sfx14_41g = ["hardware", "dep:lerux-desk"]
 
 [dependencies]
 heapless = { workspace = true, optional = true }
+lerux-desk = { path = "../../crates/lerux-desk", optional = true }
 lerux-driver-protocols = { path = "../../crates/lerux-driver-protocols", optional = true }
 lerux-logging = { path = "../../crates/lerux-logging", optional = true }
 log = { workspace = true, optional = true }

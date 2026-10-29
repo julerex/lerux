@@ -387,28 +387,28 @@ Not started.
 
 **Exit:** The panel shows `1 browser` and `2 maths`, and the built-in keyboard produces `maths 3`.
 
-Board `swift_sfx14_41g` uses Microkit `x86_64_generic` and `console-swift.system.template`. There is no `serial-driver`. The keyboard is the i8042, pin 1, vector 49. `console-driver` keeps the VGA text path for `pc_z97_d3h` and paints 32-bit pixels on this board. `just iso` packs this image. `just iso pc_z97_d3h` packs the Z97 image. `browser` still prints `browser unavailable`. `ci = false`. No metal boot has been recorded.
+Board `swift_sfx14_41g` uses Microkit `x86_64_generic` and `console-swift.system.template`. There is no `serial-driver`. The keyboard is the i8042, pin 1, vector 49. `console-driver` keeps the VGA text path for `pc_z97_d3h` and paints 32-bit pixels on this board. `just iso` packs this image. `just iso pc_z97_d3h` packs the Z97 image. `browser` still prints `browser unavailable`. `ci = false`. On 2026-10-30 the panel showed `hello lerux`, `1 browser`, and `2 maths`. The shell copied the disk page onto that console as `nvme: absent`. That photo did not include `maths 3`.
 
 ## Milestone 26 — Swift PCI lines
 
 **Exit:** The panel prints the vendor and device word, BAR, and interrupt for `01:00.0`, `02:00.0`, `03:00.0`, `04:00.0`, `04:00.3`, and `04:00.4`.
 
-`swift-pci-probe` is the only owner of `0xcf8`. Microkit rejects a second protection domain on that range. The probe writes the six headers to `pci_headers` at `0x01FB0000` and programs the NVMe and xHCI base addresses before the lower-priority domains start. A line that says `absent` is a location this boot did not find. The six lines start at the first row below the 25-row console, so the console fill and keystrokes cannot clear them. No metal boot has been recorded.
+`swift-pci-probe` is the only owner of `0xcf8`. Microkit rejects a second protection domain on that range. The probe writes the six headers to `pci_headers` at `0x01FB0000` and sets bus master on the NVMe and xHCI functions. It leaves the firmware base addresses. On 2026-10-30 the lines were `01:00.0 10de:1f9d bar d0000000 irq ff`, `02:00.0 1c5c:174a bar d1500004 irq ff`, `03:00.0 14c3:7961 bar 8200000c irq ff`, `04:00.0 1002:164c bar 9000000c irq ff`, `04:00.3 1022:1639 bar d1100004 irq ff`, and `04:00.4 1022:1638 bar d1200004 irq ff`. `irq ff` is the interrupt line: firmware assigned no legacy IRQ, and the image uses MSI. The image maps the NVMe registers at `0xd1500000` and the xHCI registers at `0xd1100000` and `0xd1200000`. A line that says `absent` is a location this boot did not find. The six lines start at the first row below the 25-row console, so the console fill and keystrokes cannot clear them.
 
 ## Milestone 27 — Swift Wi-Fi
 
 **Exit:** The panel prints a Dynamic Host Configuration Protocol address, then `ping ok`, on the WPA-Personal network.
 
-`swift-mt7921` owns `03:00.0` (`14c3:7961` or `14c3:0608`). Association is PBKDF2-HMAC-SHA1 and an HMAC-MD5 MIC. Frames the radio accepts are enqueued on an sDDF transmit queue. The service set and passphrase are `support/swift-wifi.txt`, which is gitignored, and the firmware is `support/mt7921.bin`, also gitignored. An empty firmware blob paints `mt7921: firmware err`. The MAC program that would make the metal radio accept a frame is not in this tree, so a laptop boot does not print `ping ok` until that program exists. The host test drives a scripted radio to `ip 192.168.1.20 ping ok`.
+`swift-mt7921` owns `03:00.0` (`14c3:7961` or `14c3:0608`). Association is PBKDF2-HMAC-SHA1 and an HMAC-MD5 MIC. Frames the radio accepts are enqueued on an sDDF transmit queue. The service set and passphrase are `support/swift-wifi.txt`, which is gitignored, and the firmware is `support/mt7921.bin`, also gitignored. An empty firmware blob paints `mt7921: firmware err`, which is what the 2026-10-30 panel showed. The MAC program that would make the metal radio accept a frame is not in this tree, so a laptop boot does not print `ping ok` until that program exists. The host test drives a scripted radio to `ip 192.168.1.20 ping ok`.
 
 ## Milestone 28 — Swift disk
 
 **Exit:** The shell reads one named file from the hynix SSD and prints its bytes. The volume is not formatted.
 
-`swift-nvme` reads the header the probe stored, accepts class `0x010802` at `02:00.0`, and submits the read on the sDDF block queue. IO write `0x01` and admin format `0x80` are rejected. The named file is `LERUX.TXT`, read from a FAT root or an NTFS resident record. The shell prints the result page. No metal boot has been recorded.
+`swift-nvme` reads the header the probe stored, accepts class `0x010802` at `02:00.0`, and submits the read on the sDDF block queue. IO write `0x01` and admin format `0x80` are rejected. The named file is `LERUX.TXT`, read from a FAT root or an NTFS resident record. The shell prints the result page. Queue pages are `0x01f00000`. On 2026-10-30 both copies printed `nvme: absent`. A later boot paints `nvme: regs`, `nvme: enable`, `nvme: admin`, `nvme: raw`, or `nvme: missing` for those stages. The file bytes are still the exit.
 
 ## Milestone 29 — Swift Bluetooth
 
 **Exit:** The panel prints that the MT7921 Bluetooth controller answered a reset after its firmware load.
 
-`swift-bt` reads the headers the probe stored for `04:00.3` and `04:00.4` and selects USB class `0xE0` subclass `0x01` protocol `0x01`. HCI Reset is `01 03 0c 00`. `bt: reset ok` requires the command-complete event after `support/mt7921-bt.bin` is present. That file is gitignored and is not the Wi-Fi firmware. The personal-area-network profile is later and does not join the WPA-Personal access point. No metal boot has been recorded.
+`swift-bt` reads the headers the probe stored for `04:00.3` and `04:00.4` and selects USB class `0xE0` subclass `0x01` protocol `0x01`. HCI Reset is `01 03 0c 00`. `bt: reset ok` requires the command-complete event after `support/mt7921-bt.bin` is present. That file is gitignored and is not the Wi-Fi firmware. The personal-area-network profile is later and does not join the WPA-Personal access point. On 2026-10-30 the panel printed `bt: absent`. A capability word outside `0x0100..=0x0120` paints `bt: ver` and that word. `bt: reset ok` is still the exit.

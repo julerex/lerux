@@ -1,7 +1,8 @@
 //! Read-only view of one named file. Writes and format are rejected.
 //!
 //! The Windows volume on the hynix SSD is left as it is. A FAT root file and
-//! an NTFS resident file are both accepted. Anything else is a status line.
+//! an NTFS resident file are both accepted. A boot sector that is neither is
+//! `nvme: raw`. A sector read that does not return is `nvme: admin`.
 
 pub const NAMED_FILE: &[u8] = b"LERUX.TXT";
 
@@ -18,6 +19,10 @@ pub enum DiskReport {
     Bytes([u8; 256], usize),
     Missing,
     Absent,
+    Regs,
+    Enable,
+    Admin,
+    Raw,
 }
 
 pub fn io_allowed(opcode: u8) -> bool {
@@ -42,13 +47,20 @@ pub fn report_bytes(report: &DiskReport) -> &[u8] {
         DiskReport::Bytes(buf, len) => &buf[..*len],
         DiskReport::Missing => b"nvme: missing",
         DiskReport::Absent => b"nvme: absent",
+        DiskReport::Regs => b"nvme: regs",
+        DiskReport::Enable => b"nvme: enable",
+        DiskReport::Admin => b"nvme: admin",
+        DiskReport::Raw => b"nvme: raw",
     }
 }
 
 /// Read [`NAMED_FILE`] through `read`, which returns one 512-byte sector.
+///
+/// `None` from `read` is [`DiskReport::Admin`]. A boot sector that is neither
+/// NTFS nor a 512-byte FAT volume is [`DiskReport::Raw`].
 pub fn load_named(mut read: impl FnMut(u64) -> Option<[u8; 512]>) -> DiskReport {
     let Some(boot) = read(0) else {
-        return DiskReport::Absent;
+        return DiskReport::Admin;
     };
     if boot[3..11] == *b"NTFS    " {
         return load_ntfs(&boot, &mut read);
@@ -56,7 +68,7 @@ pub fn load_named(mut read: impl FnMut(u64) -> Option<[u8; 512]>) -> DiskReport 
     if boot[510] == 0x55 && boot[511] == 0xaa && u16::from_le_bytes([boot[11], boot[12]]) == 512 {
         return load_fat(&boot, &mut read);
     }
-    DiskReport::Absent
+    DiskReport::Raw
 }
 
 fn load_fat(boot: &[u8; 512], read: &mut impl FnMut(u64) -> Option<[u8; 512]>) -> DiskReport {
@@ -65,14 +77,14 @@ fn load_fat(boot: &[u8; 512], read: &mut impl FnMut(u64) -> Option<[u8; 512]>) -
     let root_entries = u16::from_le_bytes([boot[17], boot[18]]) as u64;
     let fat_sectors = u16::from_le_bytes([boot[22], boot[23]]) as u64;
     if fats == 0 || root_entries == 0 || fat_sectors == 0 {
-        return DiskReport::Absent;
+        return DiskReport::Raw;
     }
     let root_lba = reserved + fats * fat_sectors;
     let root_sectors = root_entries * 32 / 512;
     let want = fat_name(NAMED_FILE);
     for sector in 0..root_sectors {
         let Some(dir) = read(root_lba + sector) else {
-            return DiskReport::Absent;
+            return DiskReport::Admin;
         };
         for slot in 0..16 {
             let entry = &dir[slot * 32..slot * 32 + 32];
@@ -103,7 +115,7 @@ fn read_bytes(
         return DiskReport::Bytes([0; 256], 0);
     }
     let Some(sector) = read(lba) else {
-        return DiskReport::Absent;
+        return DiskReport::Admin;
     };
     let mut buf = [0u8; 256];
     let n = size.min(256).min(sector.len());
@@ -132,16 +144,16 @@ fn fat_name(name: &[u8]) -> [u8; 11] {
 fn load_ntfs(boot: &[u8; 512], read: &mut impl FnMut(u64) -> Option<[u8; 512]>) -> DiskReport {
     let bps = u16::from_le_bytes([boot[0x0b], boot[0x0c]]);
     if bps != 512 {
-        return DiskReport::Absent;
+        return DiskReport::Raw;
     }
     let spc = boot[0x0d] as u64;
     if spc == 0 {
-        return DiskReport::Absent;
+        return DiskReport::Raw;
     }
     let mft_lcn = u64::from_le_bytes(boot[0x30..0x38].try_into().unwrap());
     let record = mft_record_bytes(boot[0x40], spc);
     if record == 0 || record > 4096 {
-        return DiskReport::Absent;
+        return DiskReport::Raw;
     }
     let sectors = (record / 512) as u64;
     let encoded = utf16(NAMED_FILE);
@@ -151,7 +163,7 @@ fn load_ntfs(boot: &[u8; 512], read: &mut impl FnMut(u64) -> Option<[u8; 512]>) 
         let mut raw = [0u8; 4096];
         for s in 0..sectors {
             let Some(sector) = read(lba + s) else {
-                return DiskReport::Absent;
+                return DiskReport::Admin;
             };
             let at = s as usize * 512;
             raw[at..at + 512].copy_from_slice(&sector);
@@ -276,6 +288,26 @@ fn utf16(name: &[u8]) -> [u16; 16] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stage_lines_name_the_failure() {
+        assert_eq!(report_bytes(&DiskReport::Regs), b"nvme: regs");
+        assert_eq!(report_bytes(&DiskReport::Enable), b"nvme: enable");
+        assert_eq!(report_bytes(&DiskReport::Admin), b"nvme: admin");
+        assert_eq!(report_bytes(&DiskReport::Raw), b"nvme: raw");
+        assert_eq!(report_bytes(&DiskReport::Absent), b"nvme: absent");
+        assert_eq!(report_bytes(&DiskReport::Missing), b"nvme: missing");
+    }
+
+    #[test]
+    fn a_missed_sector_is_admin_and_a_protective_mbr_is_raw() {
+        assert_eq!(report_bytes(&load_named(|_| None)), b"nvme: admin");
+        let mut boot = [0u8; 512];
+        boot[510] = 0x55;
+        boot[511] = 0xaa;
+        let report = load_named(|lba| (lba == 0).then_some(boot));
+        assert_eq!(report_bytes(&report), b"nvme: raw");
+    }
 
     #[test]
     fn rejects_write_and_format() {

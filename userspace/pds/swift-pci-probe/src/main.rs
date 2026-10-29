@@ -1,7 +1,8 @@
 //! Paint vendor, device, BAR, and interrupt pin for the six recorded locations.
 //!
 //! Windows assigned these bus numbers. A line that reads `ffff` is a location
-//! this boot did not find; replace the constant before the driver milestones.
+//! this boot did not find. Firmware assigned the NVMe and xHCI base addresses.
+//! This domain sets bus master and does not move those addresses.
 
 #![no_std]
 #![no_main]
@@ -19,7 +20,6 @@ use lerux_swift::{
 
 const BASE_IOPORT_CAP: u64 = 394;
 const ROW: usize = lerux_desk::CONSOLE_ROWS;
-const XHCI_BARS: [u32; 2] = [0xfa00_0000, 0xf900_0000];
 
 struct HandlerImpl;
 
@@ -38,34 +38,24 @@ fn init() -> HandlerImpl {
         fallback[8..14].copy_from_slice(b"absent");
         let line = describe(bus, dev, func, &header).unwrap_or(fallback);
         paint(ROW + index, &line);
-        program_bar(cap, addr, bus, dev, func, &header);
+        enable_claimed(cap, addr, bus, dev, func, &header);
     }
     HandlerImpl
 }
 
-fn program_bar(cap: u64, port: u16, bus: u8, dev: u8, func: u8, header: &[u8]) {
+fn enable_claimed(cap: u64, port: u16, bus: u8, dev: u8, func: u8, header: &[u8]) {
     if vendor_device(header).is_none() {
         return;
     }
     let bdf = (bus, dev, func);
-    if bdf == NVME_BDF && class_code(header) == Some(NVME_CLASS) {
-        let data = port.wrapping_add(4);
-        out32(cap, port, config_address(bus, dev, func, 0x10));
-        out32(cap, data, 0xfc00_0000);
-        out32(cap, port, config_address(bus, dev, func, 0x14));
-        out32(cap, data, 0);
-        enable_mem(cap, port, bus, dev, func);
-    }
-    if let Some(index) = XHCI_BDFS.iter().position(|item| *item == bdf)
-        && class_code(header) == Some(XHCI_CLASS)
-    {
-        let data = port.wrapping_add(4);
-        out32(cap, port, config_address(bus, dev, func, 0x10));
-        out32(cap, data, XHCI_BARS[index]);
+    let nvme = bdf == NVME_BDF && class_code(header) == Some(NVME_CLASS);
+    let xhci = XHCI_BDFS.contains(&bdf) && class_code(header) == Some(XHCI_CLASS);
+    if nvme || xhci {
         enable_mem(cap, port, bus, dev, func);
     }
 }
 
+/// Memory space and bus master. The base address stays the firmware value.
 fn enable_mem(cap: u64, port: u16, bus: u8, dev: u8, func: u8) {
     let data = port.wrapping_add(4);
     out32(cap, port, config_address(bus, dev, func, 0x04));

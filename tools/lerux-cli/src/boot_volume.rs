@@ -313,9 +313,13 @@ impl StubBootImage {
 
 /// Menu GRUB's `normal` loads from `$prefix/grub.cfg`.
 ///
-/// `gfxpayload=keep` asks GRUB to forward the firmware GOP mode. Timeout is
-/// hidden and zero so QEMU smokes do not sit on a menu. The board name is
-/// not in the menu: one entry, same bytes on every board.
+/// `gfxpayload=keep` is the preference until `multiboot2` runs. The stub
+/// header asks for a framebuffer and gives no size, so GRUB replaces this
+/// with `auto` and keeps the firmware GOP mode. Without that header tag the
+/// default console is EGA text, EFI prints `WARNING: no console will be
+/// available to OS`, and the info block has no framebuffer for the mode
+/// line. Timeout is hidden and zero so QEMU smokes do not sit on a menu.
+/// The board name is not in the menu: one entry, same bytes on every board.
 fn grub_cfg() -> String {
     format!(
         "\

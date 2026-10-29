@@ -69,6 +69,10 @@ __attribute__((section(".swift_mode"))) static uint8_t mode_page[4096];
 
 static uint64_t pdpt[4] __attribute__((aligned(32)));
 static uint64_t pd[512] __attribute__((aligned(4096)));
+/* GRUB's stack is not in the identity map. Paging on for a high
+   framebuffer has to run on this one. */
+static uint8_t paint_stack[0x1000] __attribute__((aligned(16)));
+static uint32_t saved_esp;
 
 struct __attribute__((packed)) fb_tag {
     uint32_t type;
@@ -373,7 +377,14 @@ static void write_cr4(uint32_t value) {
     __asm__ volatile("mov %0, %%cr4" : : "r"(value) : "memory");
 }
 
-static void paint_high(const struct fb_tag *tag, const char *line) {
+static void flush_writes(void) {
+    __asm__ volatile("wbinvd" ::: "memory");
+}
+
+/* Paging is off on entry and on return. The stack is paint_stack. */
+__attribute__((noinline, used)) static void paint_high_body(
+    const struct fb_tag *tag, const char *line
+) {
     uint64_t base = tag->addr & ~0x1fffffull;
     uint32_t offset = (uint32_t)(tag->addr - base);
     uint32_t i;
@@ -385,14 +396,15 @@ static void paint_high(const struct fb_tag *tag, const char *line) {
     for (i = 0; i < 512; i++) {
         pd[i] = ((uint64_t)i << 21) | 0x83u;
     }
+    /* PCD. The panel scans this RAM without snooping a write-back cache. */
     for (i = 0; i < 8; i++) {
-        pd[128 + i] = (base + ((uint64_t)i << 21)) | 0x83u;
+        pd[128 + i] = (base + ((uint64_t)i << 21)) | 0x93u;
     }
     pdpt[0] = ((uint64_t)(uint32_t)(uintptr_t)pd) | 0x1u;
     write_cr0(cr0_off);
     write_cr4(cr4 | (1u << 5));
     write_cr3((uint32_t)(uintptr_t)pdpt);
-    write_cr0(cr0);
+    write_cr0(cr0_off | (1u << 31));
     fb_paint_line(
         (uint8_t *)(uintptr_t)(PAE_WINDOW + offset),
         tag->pitch,
@@ -403,10 +415,27 @@ static void paint_high(const struct fb_tag *tag, const char *line) {
         tag->blue_shift,
         line
     );
+    flush_writes();
     write_cr0(cr0_off);
     write_cr4(cr4);
     write_cr3(cr3);
     write_cr0(cr0);
+}
+
+static void paint_high(const struct fb_tag *tag, const char *line) {
+    uint32_t top = (uint32_t)(uintptr_t)(paint_stack + sizeof(paint_stack));
+    /* cdecl: push the last argument first. Restoring esp drops the slots. */
+    __asm__ volatile(
+        "movl %%esp, %0\n\t"
+        "movl %1, %%esp\n\t"
+        "pushl %2\n\t"
+        "pushl %3\n\t"
+        "call paint_high_body\n\t"
+        "movl %0, %%esp\n\t"
+        : "=m"(saved_esp)
+        : "r"(top), "r"(line), "r"(tag)
+        : "memory", "cc", "eax", "ecx", "edx"
+    );
 }
 
 static const struct fb_tag *framebuffer_tag(struct multiboot2_header *mbi) {
@@ -435,7 +464,7 @@ static void paint_firmware_mode(struct multiboot2_header *mbi) {
         return;
     }
     bytes = (uint64_t)tag->pitch * tag->height;
-    if (bytes < tag->pitch || (tag->addr & 0xfff) != 0) {
+    if (bytes < tag->pitch || tag->addr < 0x100000ull || (tag->addr & 0xfff) != 0) {
         return;
     }
     write_mode_record(tag);
@@ -460,6 +489,7 @@ static void paint_firmware_mode(struct multiboot2_header *mbi) {
             tag->blue_shift,
             line
         );
+        flush_writes();
         return;
     }
     if (tag->addr + 16ull * tag->pitch < tag->addr) {

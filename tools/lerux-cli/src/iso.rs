@@ -569,9 +569,14 @@ mod tests {
             .windows(4)
             .position(|window| window == magic)
             .expect("multiboot2 magic");
+        let header_len = mb2_header_len(&stub, at);
         assert!(
-            at + 20 <= 8192,
-            "multiboot header at {at} is outside GRUB's search"
+            at + header_len <= 8192,
+            "multiboot header at {at} length {header_len} is outside GRUB's search"
+        );
+        assert!(
+            mb2_requests_framebuffer(&stub, at),
+            "stub header does not request a framebuffer; EFI would warn and pass no mode"
         );
         let loads = elf32_load_segments(&stub);
         assert!(
@@ -592,6 +597,38 @@ mod tests {
     struct ElfLoad {
         vaddr: u32,
         paddr: u32,
+    }
+
+    fn mb2_header_len(elf: &[u8], at: usize) -> usize {
+        u32::from_le_bytes(elf[at + 8..at + 12].try_into().unwrap()) as usize
+    }
+
+    /// Header tag type 5, size 20, with width, height, and depth left at 0.
+    fn mb2_requests_framebuffer(elf: &[u8], at: usize) -> bool {
+        let len = mb2_header_len(elf, at);
+        if at + len > elf.len() || len < 24 {
+            return false;
+        }
+        let header = &elf[at..at + len];
+        let mut off = 16usize;
+        while off + 8 <= header.len() {
+            let kind = u16::from_le_bytes(header[off..off + 2].try_into().unwrap());
+            let size = u32::from_le_bytes(header[off + 4..off + 8].try_into().unwrap()) as usize;
+            if kind == 0 {
+                return false;
+            }
+            if kind == 5 && size == 20 && off + 20 <= header.len() {
+                let width = u32::from_le_bytes(header[off + 8..off + 12].try_into().unwrap());
+                let height = u32::from_le_bytes(header[off + 12..off + 16].try_into().unwrap());
+                let depth = u32::from_le_bytes(header[off + 16..off + 20].try_into().unwrap());
+                return width == 0 && height == 0 && depth == 0;
+            }
+            if size < 8 {
+                return false;
+            }
+            off += size.div_ceil(8) * 8;
+        }
+        false
     }
 
     fn elf32_load_segments(elf: &[u8]) -> Vec<ElfLoad> {

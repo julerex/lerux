@@ -22,7 +22,7 @@ pub use nvme::{
 };
 pub use panel::paint_row;
 pub use pci::{
-    class_code, config_address, describe, vendor_device, LOCATIONS, MT7921_BDF, MT7921_IDS,
-    NVME_BDF, NVME_CLASS, XHCI_BDFS, XHCI_CLASS,
+    class_code, config_address, describe, load_header, store_header, vendor_device, HEADER_BYTES,
+    LOCATIONS, MT7921_BDF, MT7921_IDS, NVME_BDF, NVME_CLASS, XHCI_BDFS, XHCI_CLASS,
 };
 pub use wifi::{bring_up, credentials, enqueue_frame, format_report, Nic, WifiReport};

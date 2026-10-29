@@ -6,18 +6,16 @@
 #![no_std]
 #![no_main]
 
-use sel4::with_ipc_buffer_mut;
 use sel4_microkit::{
-    memory_region_symbol, protection_domain, var, Channel, ChannelSet, Handler, Infallible,
+    memory_region_symbol, protection_domain, Channel, ChannelSet, Handler, Infallible,
 };
 
 use lerux_desk::FRAMEBUFFER_BYTES;
 use lerux_swift::{
-    bring_up, class_code, config_address, credentials, format_report, paint_row, vendor_device,
-    Nic, MT7921_BDF, MT7921_IDS,
+    bring_up, class_code, credentials, format_report, load_header, paint_row, vendor_device, Nic,
+    MT7921_BDF, MT7921_IDS,
 };
 
-const BASE_IOPORT_CAP: u64 = 394;
 const ROW: usize = 22;
 const WIFI: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/wifi.txt"));
 const FIRMWARE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/mt7921.bin"));
@@ -51,10 +49,10 @@ impl Nic for Radio {
 
 #[protection_domain]
 fn init() -> HandlerImpl {
-    let cap_id = *var!(pci_ioport_id: usize = usize::MAX) as u64;
-    let addr = *var!(pci_ioport_addr: usize = usize::MAX) as u16;
+    let page = memory_region_symbol!(pci_headers_vaddr: *mut u8).as_ptr();
+    let page = unsafe { core::slice::from_raw_parts(page, 0x1000) };
     let (bus, dev, func) = MT7921_BDF;
-    let header = read_header(BASE_IOPORT_CAP + cap_id, addr, bus, dev, func);
+    let header = load_header(page, bus, dev, func);
     let present = vendor_device(&header).is_some_and(|id| MT7921_IDS.contains(&id));
     let _ = class_code(&header);
     let (ssid, pass) = credentials(WIFI).unwrap_or((b"".as_slice(), b"".as_slice()));
@@ -78,32 +76,6 @@ fn paint(text: &[u8]) {
     let record = unsafe { core::slice::from_raw_parts(mode, 40) };
     let frame = unsafe { core::slice::from_raw_parts_mut(frame, FRAMEBUFFER_BYTES as usize) };
     paint_row(record, frame, ROW, text);
-}
-
-fn read_header(cap: u64, addr: u16, bus: u8, dev: u8, func: u8) -> [u8; 64] {
-    let mut header = [0u8; 64];
-    let data = addr.wrapping_add(4);
-    for reg in (0u8..64).step_by(4) {
-        out32(cap, addr, config_address(bus, dev, func, reg));
-        let word = in32(cap, data);
-        let offset = usize::from(reg);
-        header[offset..offset + 4].copy_from_slice(&word.to_le_bytes());
-    }
-    header
-}
-
-fn out32(cap: u64, port: u16, value: u32) {
-    with_ipc_buffer_mut(|ipc| {
-        ipc.inner_mut()
-            .seL4_X86_IOPort_Out32(cap, u64::from(port), u64::from(value));
-    });
-}
-
-fn in32(cap: u64, port: u16) -> u32 {
-    with_ipc_buffer_mut(|ipc| {
-        let ret = ipc.inner_mut().seL4_X86_IOPort_In32(cap, port);
-        ret.result
-    })
 }
 
 impl Handler for HandlerImpl {

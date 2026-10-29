@@ -201,6 +201,8 @@ mod tests {
         let xml = crate::system::render_system(&root, "swift_sfx14_41g").expect("swift sdf");
         assert!(xml.contains("phys_addr=\"0x1fe0000\""));
         assert!(xml.contains("phys_addr=\"0x1fd0000\""));
+        assert!(xml.contains("phys_addr=\"0x1fb0000\""));
+        assert_eq!(xml.matches("addr=\"0xcf8\"").count(), 1);
         assert!(xml.contains("addr=\"0x60\""));
         assert!(xml.contains("addr=\"0x64\""));
         assert!(xml.contains("pin=\"1\""));

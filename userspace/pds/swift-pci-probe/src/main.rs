@@ -12,10 +12,14 @@ use sel4_microkit::{
 };
 
 use lerux_desk::FRAMEBUFFER_BYTES;
-use lerux_swift::{config_address, describe, paint_row, LOCATIONS};
+use lerux_swift::{
+    class_code, config_address, describe, paint_row, store_header, vendor_device, LOCATIONS,
+    NVME_BDF, NVME_CLASS, XHCI_BDFS, XHCI_CLASS,
+};
 
 const BASE_IOPORT_CAP: u64 = 394;
 const ROW: usize = 16;
+const XHCI_BARS: [u32; 2] = [0xfa00_0000, 0xf900_0000];
 
 struct HandlerImpl;
 
@@ -24,15 +28,50 @@ fn init() -> HandlerImpl {
     let cap_id = *var!(pci_ioport_id: usize = usize::MAX) as u64;
     let addr = *var!(pci_ioport_addr: usize = usize::MAX) as u16;
     let cap = BASE_IOPORT_CAP + cap_id;
+    let page = memory_region_symbol!(pci_headers_vaddr: *mut u8).as_ptr();
+    let page = unsafe { core::slice::from_raw_parts_mut(page, 0x1000) };
     for (index, (bus, dev, func)) in LOCATIONS.iter().copied().enumerate() {
         let header = read_header(cap, addr, bus, dev, func);
+        store_header(page, index, &header);
         let mut fallback = [b' '; 40];
         write_bdf(&mut fallback, bus, dev, func);
         fallback[8..14].copy_from_slice(b"absent");
         let line = describe(bus, dev, func, &header).unwrap_or(fallback);
         paint(ROW + index, &line);
+        program_bar(cap, addr, bus, dev, func, &header);
     }
     HandlerImpl
+}
+
+fn program_bar(cap: u64, port: u16, bus: u8, dev: u8, func: u8, header: &[u8]) {
+    if vendor_device(header).is_none() {
+        return;
+    }
+    let bdf = (bus, dev, func);
+    if bdf == NVME_BDF && class_code(header) == Some(NVME_CLASS) {
+        let data = port.wrapping_add(4);
+        out32(cap, port, config_address(bus, dev, func, 0x10));
+        out32(cap, data, 0xfc00_0000);
+        out32(cap, port, config_address(bus, dev, func, 0x14));
+        out32(cap, data, 0);
+        enable_mem(cap, port, bus, dev, func);
+    }
+    if let Some(index) = XHCI_BDFS.iter().position(|item| *item == bdf) {
+        if class_code(header) == Some(XHCI_CLASS) {
+            let data = port.wrapping_add(4);
+            out32(cap, port, config_address(bus, dev, func, 0x10));
+            out32(cap, data, XHCI_BARS[index]);
+            enable_mem(cap, port, bus, dev, func);
+        }
+    }
+}
+
+fn enable_mem(cap: u64, port: u16, bus: u8, dev: u8, func: u8) {
+    let data = port.wrapping_add(4);
+    out32(cap, port, config_address(bus, dev, func, 0x04));
+    let command = in32(cap, data);
+    out32(cap, port, config_address(bus, dev, func, 0x04));
+    out32(cap, data, command | 0x06);
 }
 
 fn paint(row: usize, text: &[u8]) {

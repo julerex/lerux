@@ -7,9 +7,8 @@
 #![no_std]
 #![no_main]
 
-use sel4::with_ipc_buffer_mut;
 use sel4_microkit::{
-    memory_region_symbol, protection_domain, var, Channel, ChannelSet, Handler, Infallible,
+    memory_region_symbol, protection_domain, Channel, ChannelSet, Handler, Infallible,
 };
 
 use lerux_desk::FRAMEBUFFER_BYTES;
@@ -17,11 +16,10 @@ use lerux_sddf::{
     blk_dequeue_req, blk_enqueue_req, blk_queue_handle_t, blk_queue_init, blk_req_code_t,
 };
 use lerux_swift::{
-    class_code, config_address, io_allowed, load_named, paint_row, report_bytes, vendor_device,
+    class_code, io_allowed, load_header, load_named, paint_row, report_bytes, vendor_device,
     write_result, NVME_BDF, NVME_CLASS,
 };
 
-const BASE_IOPORT_CAP: u64 = 394;
 const ROW: usize = 23;
 const DMA_PHYS: u64 = 0xfb00_0000;
 const ADMIN_SQ: usize = 0;
@@ -40,15 +38,11 @@ struct HandlerImpl {
 
 #[protection_domain]
 fn init() -> HandlerImpl {
-    let cap_id = *var!(pci_ioport_id: usize = usize::MAX) as u64;
-    let port = *var!(pci_ioport_addr: usize = usize::MAX) as u16;
-    let cap = BASE_IOPORT_CAP + cap_id;
+    let headers = memory_region_symbol!(pci_headers_vaddr: *mut u8).as_ptr();
+    let headers = unsafe { core::slice::from_raw_parts(headers, 0x1000) };
     let (bus, dev, func) = NVME_BDF;
-    let header = read_header(cap, port, bus, dev, func);
+    let header = load_header(headers, bus, dev, func);
     let present = vendor_device(&header).is_some() && class_code(&header) == Some(NVME_CLASS);
-    if present {
-        program_bar(cap, port, bus, dev, func);
-    }
     let regs = memory_region_symbol!(nvme_regs_vaddr: *mut u8).as_ptr();
     let dma = memory_region_symbol!(nvme_dma_vaddr: *mut u8).as_ptr();
     let report = if present && queue_read(dma) {
@@ -327,50 +321,12 @@ fn wait_rdy(regs: *mut u8, ready: bool) -> bool {
     false
 }
 
-fn program_bar(cap: u64, port: u16, bus: u8, dev: u8, func: u8) {
-    let data = port.wrapping_add(4);
-    out32(cap, port, config_address(bus, dev, func, 0x10));
-    out32(cap, data, 0xfc00_0000);
-    out32(cap, port, config_address(bus, dev, func, 0x14));
-    out32(cap, data, 0);
-    out32(cap, port, config_address(bus, dev, func, 0x04));
-    let command = in32(cap, data);
-    out32(cap, port, config_address(bus, dev, func, 0x04));
-    out32(cap, data, command | 0x06);
-}
-
 fn paint(text: &[u8]) {
     let mode = memory_region_symbol!(mode_record_vaddr: *mut u8).as_ptr();
     let frame = memory_region_symbol!(fb_vaddr: *mut u8).as_ptr();
     let record = unsafe { core::slice::from_raw_parts(mode, 40) };
     let frame = unsafe { core::slice::from_raw_parts_mut(frame, FRAMEBUFFER_BYTES as usize) };
     paint_row(record, frame, ROW, text);
-}
-
-fn read_header(cap: u64, addr: u16, bus: u8, dev: u8, func: u8) -> [u8; 64] {
-    let mut header = [0u8; 64];
-    let data = addr.wrapping_add(4);
-    for reg in (0u8..64).step_by(4) {
-        out32(cap, addr, config_address(bus, dev, func, reg));
-        let word = in32(cap, data);
-        let offset = usize::from(reg);
-        header[offset..offset + 4].copy_from_slice(&word.to_le_bytes());
-    }
-    header
-}
-
-fn out32(cap: u64, port: u16, value: u32) {
-    with_ipc_buffer_mut(|ipc| {
-        ipc.inner_mut()
-            .seL4_X86_IOPort_Out32(cap, u64::from(port), u64::from(value));
-    });
-}
-
-fn in32(cap: u64, port: u16) -> u32 {
-    with_ipc_buffer_mut(|ipc| {
-        let ret = ipc.inner_mut().seL4_X86_IOPort_In32(cap, port);
-        ret.result
-    })
 }
 
 fn read32(base: *mut u8, off: usize) -> u32 {

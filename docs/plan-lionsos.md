@@ -393,7 +393,7 @@ Board `swift_sfx14_41g` uses Microkit `x86_64_generic` and `console-swift.system
 
 **Exit:** The panel prints the vendor and device word, BAR, and interrupt for `01:00.0`, `02:00.0`, `03:00.0`, `04:00.0`, `04:00.3`, and `04:00.4`.
 
-`swift-pci-probe` reads those locations through `0xcf8`. The constants are the Windows bus numbers. A line that says `absent` is a location this boot did not find. No metal boot has been recorded.
+`swift-pci-probe` is the only owner of `0xcf8`. Microkit rejects a second protection domain on that range. The probe writes the six headers to `pci_headers` at `0x01FB0000` and programs the NVMe and xHCI base addresses before the lower-priority domains start. A line that says `absent` is a location this boot did not find. No metal boot has been recorded.
 
 ## Milestone 27 — Swift Wi-Fi
 
@@ -405,10 +405,10 @@ Board `swift_sfx14_41g` uses Microkit `x86_64_generic` and `console-swift.system
 
 **Exit:** The shell reads one named file from the hynix SSD and prints its bytes. The volume is not formatted.
 
-`swift-nvme` accepts class `0x010802` at `02:00.0` and submits the read on the sDDF block queue. IO write `0x01` and admin format `0x80` are rejected. The named file is `LERUX.TXT`, read from a FAT root or an NTFS resident record. The shell prints the result page. No metal boot has been recorded.
+`swift-nvme` reads the header the probe stored, accepts class `0x010802` at `02:00.0`, and submits the read on the sDDF block queue. IO write `0x01` and admin format `0x80` are rejected. The named file is `LERUX.TXT`, read from a FAT root or an NTFS resident record. The shell prints the result page. No metal boot has been recorded.
 
 ## Milestone 29 — Swift Bluetooth
 
 **Exit:** The panel prints that the MT7921 Bluetooth controller answered a reset after its firmware load.
 
-`swift-bt` programs the AMD xHCI controllers at `04:00.3` and `04:00.4` and selects USB class `0xE0` subclass `0x01` protocol `0x01`. HCI Reset is `01 03 0c 00`. `bt: reset ok` requires the command-complete event after `support/mt7921-bt.bin` is present. That file is gitignored and is not the Wi-Fi firmware. The personal-area-network profile is later and does not join the WPA-Personal access point. No metal boot has been recorded.
+`swift-bt` reads the headers the probe stored for `04:00.3` and `04:00.4` and selects USB class `0xE0` subclass `0x01` protocol `0x01`. HCI Reset is `01 03 0c 00`. `bt: reset ok` requires the command-complete event after `support/mt7921-bt.bin` is present. That file is gitignored and is not the Wi-Fi firmware. The personal-area-network profile is later and does not join the WPA-Personal access point. No metal boot has been recorded.

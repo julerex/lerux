@@ -7,6 +7,8 @@
  * ELF-loads the 64-bit sel4.elf to 1 MiB, parks loader.img above the kernel,
  * rebuilds a Multiboot 2 info block, and jumps to the kernel entry (still
  * Multiboot 2 / i386 machine state).
+ * CR4 is 0 on entry. support/mb2-stub/build.sh passes -mgeneral-regs-only so
+ * the clear of new_mbi cannot become an SSE store.
  *
  * Modules (order matters):
  *   0: sel4.elf   (x86-64 ELF file bytes)

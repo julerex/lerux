@@ -40,7 +40,7 @@ pub struct QemuContext {
 
 const HOSTFWD: &str = "user,id=netdev0,hostfwd=tcp::18080-:8080";
 
-/// Microkit `x86_64_generic` 64-bit kernel ELF (Limine / metal Multiboot 2).
+/// Microkit `x86_64_generic` 64-bit kernel ELF (GRUB ISO via `mb2-stub`).
 pub fn sel4_elf(sdk: impl AsRef<Path>, microkit_board: &str, config: &str) -> PathBuf {
     sdk.as_ref()
         .join("board")

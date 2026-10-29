@@ -244,6 +244,7 @@ That copies `mb2-stub.elf` + `sel4.elf` + `loader.img` (and SHA-256 sidecars) an
 | Limine menu, then a flashing cursor and no blue screen | The console PD did not run. Kernel output is still COM1 (COMA header, 115200 8N1). |
 | Prompt is visible, keys do nothing | Serial shows `xhci none` or `xhci no keyboard`, and the combo port has no PS/2 keyboard. A boot keyboard on a hub is not seen. If the log already says `usb keyboard`, the xHCI interrupt did not arrive. |
 | Limine says it could not find a load address | An old ISO that Multiboot 2-boots the kernel ELF directly at 1 MiB. Rebuild with `just iso` so the menu loads `mb2-stub.elf` then `sel4.elf`. |
+| Limine stops on `Loading module` for `sel4.elf` | The module was only in the ISO9660 session. Rebuild with `just iso` and rewrite the USB stick. The EFI partition now contains `mb2-stub.elf`, `sel4.elf`, and `loader.img`. |
 | HDMI picture never changes | The cable is not on the firmware primary VGA device, or this was the UEFI entry. Until Initial Display Output is `IGFX`, that device is still the RX 560. This image does not modeset. See [VGA text on the RX 560](#vga-text-on-the-rx-560). |
 | Kernel on serial, no prompt | COM1 IRQ pin/polarity; try `trigger="edge"` on the serial irq in the SDF |
 | Silent serial | Cable on COMA header (TX/RX swapped); 115200 8N1; seL4 debug UART vs PD |

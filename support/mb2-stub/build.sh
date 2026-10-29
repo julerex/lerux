@@ -21,9 +21,19 @@ CFLAGS=(
     -Os
     -m32
 )
+# Limine enters this stub in 32-bit protected mode with SSE left off
+# (CR4.OSFXSR clear). A vector store is #UD, then a triple fault and a
+# reset, which is what a laptop shows as a hang after the module lines.
+INTEGER_ONLY=(
+    -mgeneral-regs-only
+    -mno-sse
+    -mno-sse2
+    -mno-mmx
+    -mno-80387
+)
 
-"$CC" "${CFLAGS[@]}" -c -o "$tmpdir/stub.o" "$root/stub.c"
-"$CC" "${CFLAGS[@]}" -c -o "$tmpdir/fb_paint.o" "$root/fb_paint.c"
+"$CC" "${CFLAGS[@]}" "${INTEGER_ONLY[@]}" -c -o "$tmpdir/stub.o" "$root/stub.c"
+"$CC" "${CFLAGS[@]}" "${INTEGER_ONLY[@]}" -c -o "$tmpdir/fb_paint.o" "$root/fb_paint.c"
 "$CC" "${CFLAGS[@]}" -c -o "$tmpdir/entry.o" "$root/entry.S"
 "$CC" "${CFLAGS[@]}" -nostdlib -static \
     -Wl,-T,"$root/stub.ld" \

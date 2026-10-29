@@ -87,7 +87,7 @@ just test-workstation          # Tier 1 aarch64 (SP804 QEMU)
 just test-workstation-riscv    # Tier 2 RISC-V
 just test-workstation-x86      # Tier 2 x86
 just iso                                 # Z97-D3H hybrid USB ISO (UEFI Limine via mb2-stub; does not write a disk)
-just iso swift_sfx14_41g                 # Swift X hybrid USB ISO (same loader; does not write a disk)
+just iso swift_sfx14_41g                 # Swift X hybrid USB ISO. The EFI partition holds sel4.elf.
 just deploy-pc DEST=/path/to/usb-fat      # Z97-D3H VGA shell onto a FAT volume (Multiboot 2)
 
 lerux profile build workstation

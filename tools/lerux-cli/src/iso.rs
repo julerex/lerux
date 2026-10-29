@@ -7,8 +7,10 @@
 //! It does not write a USB device.
 //!
 //! Limine 12.9.0 is pinned in `deps/versions.toml` and unpacked under
-//! `deps/limine/` (gitignored). `xorriso` comes from `PATH` when installed,
-//! otherwise from Ubuntu packages unpacked under `deps/toolchains/xorriso/`.
+//! `deps/limine/` (gitignored). `xorriso` is the system binary (`libisoburn`
+//! on Arch). The EFI system partition is a FAT16 volume that holds the same
+//! boot files as the ISO9660 tree, so a laptop firmware can read `sel4.elf`
+//! from the partition it loaded Limine from.
 
 use std::{
     fs,
@@ -71,7 +73,7 @@ pub fn build_iso(
         build_if_missing,
         verify,
     )?;
-    print_usb_instructions(&out);
+    print_usb_instructions(board, &out);
     Ok(out)
 }
 
@@ -137,7 +139,7 @@ fn pack_iso(
     let staging = tempfile::tempdir().context("iso staging directory")?;
     stage_iso_root(root, staging.path(), &kernel, &loader, verify)?;
     stage_limine_boot(staging.path(), &limine)?;
-    let xorriso = ensure_xorriso(root)?;
+    let xorriso = ensure_xorriso()?;
     write_iso(&xorriso, &limine, staging.path(), &out)?;
 
     let size = fs::metadata(&out).map(|m| m.len()).unwrap_or(0);
@@ -290,17 +292,38 @@ pub fn build_mb2_stub(root: &Path) -> Result<PathBuf> {
 struct LimineTool {
     install: PathBuf,
     bios_cd: PathBuf,
-    uefi_cd: PathBuf,
     bios_sys: PathBuf,
     bootx64: PathBuf,
 }
 
 fn stage_limine_boot(dest: &Path, limine: &LimineTool) -> Result<()> {
     copy_boot_file(&limine.bios_cd, &dest.join("boot/limine-bios-cd.bin"))?;
-    copy_boot_file(&limine.uefi_cd, &dest.join("boot/limine-uefi-cd.bin"))?;
     copy_boot_file(&limine.bios_sys, &dest.join("boot/limine-bios.sys"))?;
     copy_boot_file(&limine.bootx64, &dest.join("EFI/BOOT/BOOTX64.EFI"))?;
+    // Replace Limine's loader-only FAT. The laptop boots this partition and
+    // reads sel4.elf from it; the ISO9660 copy remains for the BIOS entry.
+    let image = crate::fat_esp::write_image(&[
+        (
+            "EFI/BOOT/BOOTX64.EFI",
+            &read_boot(dest, "EFI/BOOT/BOOTX64.EFI")?,
+        ),
+        ("boot/limine.conf", &read_boot(dest, "boot/limine.conf")?),
+        (
+            "boot/limine-bios.sys",
+            &read_boot(dest, "boot/limine-bios.sys")?,
+        ),
+        ("boot/mb2-stub.elf", &read_boot(dest, "boot/mb2-stub.elf")?),
+        ("boot/sel4.elf", &read_boot(dest, "boot/sel4.elf")?),
+        ("boot/loader.img", &read_boot(dest, "boot/loader.img")?),
+    ])?;
+    let uefi = dest.join("boot/limine-uefi-cd.bin");
+    fs::write(&uefi, image).with_context(|| format!("write {}", uefi.display()))?;
     Ok(())
+}
+
+fn read_boot(dest: &Path, rel: &str) -> Result<Vec<u8>> {
+    let path = dest.join(rel);
+    fs::read(&path).with_context(|| format!("read {}", path.display()))
 }
 
 fn copy_boot_file(src: &Path, dest: &Path) -> Result<()> {
@@ -379,7 +402,6 @@ fn ensure_limine(root: &Path) -> Result<LimineTool> {
     Ok(LimineTool {
         install: extracted.join("limine"),
         bios_cd: extracted.join("limine-bios-cd.bin"),
-        uefi_cd: extracted.join("limine-uefi-cd.bin"),
         bios_sys: extracted.join("limine-bios.sys"),
         bootx64: extracted.join("BOOTX64.EFI"),
     })
@@ -424,93 +446,13 @@ fn build_limine_tool(extracted: &Path) -> Result<()> {
     Ok(())
 }
 
-struct XorrisoTool {
-    /// Binary invoked as `xorriso -as mkisofs`.
-    bin: PathBuf,
-    /// Extra library directory for a locally unpacked `xorriso`.
-    lib_dir: Option<PathBuf>,
+fn ensure_xorriso() -> Result<PathBuf> {
+    which::which("xorriso").context(
+        "xorriso is not on PATH. Install this system's package (Arch: pacman -S libisoburn) and re-run.",
+    )
 }
 
-fn ensure_xorriso(root: &Path) -> Result<XorrisoTool> {
-    if let Ok(bin) = which::which("xorriso") {
-        return Ok(XorrisoTool { bin, lib_dir: None });
-    }
-    if std::env::consts::ARCH != "x86_64" {
-        bail!("xorriso is not on PATH. Install the xorriso package and re-run.");
-    }
-    let prefix = root.join("deps/toolchains/xorriso");
-    if !xorriso_prefix_ready(&prefix) {
-        unpack_xorriso_debs(&prefix)?;
-    }
-    Ok(XorrisoTool {
-        bin: prefix.join("usr/bin/xorriso"),
-        lib_dir: Some(prefix.join("usr/lib/x86_64-linux-gnu")),
-    })
-}
-
-fn xorriso_prefix_ready(prefix: &Path) -> bool {
-    let lib = prefix.join("usr/lib/x86_64-linux-gnu");
-    prefix.join("usr/bin/xorriso").is_file()
-        && lib.join("libisoburn.so.1").is_file()
-        && lib.join("libburn.so.4").is_file()
-        && lib.join("libisofs.so.6").is_file()
-        && lib.join("libjte.so.2").is_file()
-}
-
-fn unpack_xorriso_debs(prefix: &Path) -> Result<()> {
-    // Host archive names for Ubuntu 22.04. `apt_deb_url` prefers the live
-    // `apt-cache` filename when the package index has moved on.
-    let packages = [
-        (
-            "xorriso",
-            "http://archive.ubuntu.com/ubuntu/pool/universe/libi/libisoburn/xorriso_1.5.4-2_amd64.deb",
-        ),
-        (
-            "libisoburn1",
-            "http://archive.ubuntu.com/ubuntu/pool/universe/libi/libisoburn/libisoburn1_1.5.4-2_amd64.deb",
-        ),
-        (
-            "libburn4",
-            "http://archive.ubuntu.com/ubuntu/pool/universe/libb/libburn/libburn4_1.5.4-1_amd64.deb",
-        ),
-        (
-            "libisofs6",
-            "http://archive.ubuntu.com/ubuntu/pool/universe/libi/libisofs/libisofs6_1.5.4-1_amd64.deb",
-        ),
-        (
-            "libjte2",
-            "http://archive.ubuntu.com/ubuntu/pool/universe/j/jigit/libjte2_1.22-3build1_amd64.deb",
-        ),
-    ];
-    if prefix.exists() {
-        fs::remove_dir_all(prefix).with_context(|| format!("remove {}", prefix.display()))?;
-    }
-    process::ensure_dir(prefix)?;
-    for (package, fallback) in packages {
-        let url = process::apt_deb_url(package, fallback);
-        let tmp = tempfile::NamedTempFile::new().context("deb temp file")?;
-        process::download(&url, tmp.path())?;
-        process::run_checked(
-            "dpkg-deb",
-            &[
-                "-x",
-                &tmp.path().to_string_lossy(),
-                &prefix.to_string_lossy(),
-            ],
-        )
-        .with_context(|| format!("unpack {package}"))?;
-    }
-    if !xorriso_prefix_ready(prefix) {
-        bail!(
-            "xorriso unpack incomplete under {} (package xorriso and its libraries)",
-            prefix.display()
-        );
-    }
-    eprintln!("==> xorriso unpacked at {}", prefix.display());
-    Ok(())
-}
-
-fn write_iso(xorriso: &XorrisoTool, limine: &LimineTool, staging: &Path, out: &Path) -> Result<()> {
+fn write_iso(xorriso: &Path, limine: &LimineTool, staging: &Path, out: &Path) -> Result<()> {
     if let Some(parent) = out.parent() {
         fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
     }
@@ -525,15 +467,7 @@ fn write_iso(xorriso: &XorrisoTool, limine: &LimineTool, staging: &Path, out: &P
     }
 
     println!("==> xorriso → {}", out.display());
-    let mut cmd = Command::new(&xorriso.bin);
-    if let Some(lib) = &xorriso.lib_dir {
-        let mut ld = path_str(lib);
-        if let Some(existing) = std::env::var_os("LD_LIBRARY_PATH") {
-            ld.push(':');
-            ld.push_str(&existing.to_string_lossy());
-        }
-        cmd.env("LD_LIBRARY_PATH", ld);
-    }
+    let mut cmd = Command::new(xorriso);
     cmd.args([
         "-as",
         "mkisofs",
@@ -580,7 +514,7 @@ fn write_iso(xorriso: &XorrisoTool, limine: &LimineTool, staging: &Path, out: &P
     Ok(())
 }
 
-fn print_usb_instructions(iso: &Path) {
+fn print_usb_instructions(board: &str, iso: &Path) {
     println!();
     println!("USB flash drive (this command does not write a disk):");
     println!("  lsblk");
@@ -588,12 +522,24 @@ fn print_usb_instructions(iso: &Path) {
         "  sudo dd if={} of=/dev/sdX bs=4M status=progress conv=fsync",
         iso.display()
     );
+    if board == "swift_sfx14_41g" {
+        println!("Replace sdX with the flash drive from lsblk. Do not write the internal NVMe.");
+        println!("Firmware boot menu → the USB entry that says UEFI (Limine BOOTX64.EFI).");
+        println!("mb2-stub loads sel4.elf (64-bit) at 1 MiB after ExitBootServices.");
+        println!(
+            "Screen: the GOP mode line, then \"1 browser\" and \"2 maths\". This laptop has no COM port."
+        );
+        println!("Expect: 1 browser");
+        return;
+    }
     println!(
         "Replace sdX with the flash drive from lsblk. Do not use sda (Ubuntu SSD) or sdb (data disk)."
     );
     println!("Firmware boot menu (F12) → the USB entry that says UEFI (Limine BOOTX64.EFI).");
     println!("mb2-stub loads sel4.elf (64-bit) at 1 MiB after ExitBootServices.");
-    println!("Screen: blue background, \"hello lerux\" on the first line, then \"1 browser\" and \"2 maths\".");
+    println!(
+        "Screen: blue background, \"hello lerux\" on the first line, then \"1 browser\" and \"2 maths\"."
+    );
     println!(
         "Keyboard: PS/2 in the rear combo port, or a USB HID boot keyboard on a root xHCI port."
     );

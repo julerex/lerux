@@ -20,7 +20,8 @@ UEFI is the documented metal path. Every x86 QEMU smoke packs the same ISO and b
 
 ## Consequences
 
-- `clang` is required to build the stub when packing an ISO or deploying to FAT.
-- `ovmf` and `xorriso` are required for x86 QEMU smokes (and for `iso --boot-test`).
+- `clang` is required to build the stub when packing an ISO or deploying to FAT. The stub is compiled with `-mgeneral-regs-only` (no SSE, MMX, or x87). Limine enters it in 32-bit protected mode with `CR4.OSFXSR` clear, so a vector store is an invalid-opcode fault and a triple fault resets the machine.
+- `ovmf` and `xorriso` are required for x86 QEMU smokes (and for `iso --boot-test`). `xorriso` is the system package (`libisoburn` on Arch).
+- The hybrid ISO's EFI system partition is a FAT16 volume with `BOOTX64.EFI`, `limine.conf`, `mb2-stub.elf`, `sel4.elf`, and `loader.img`. UEFI firmware that boots that partition reads the modules from it. The ISO9660 tree keeps the same files for the BIOS El Torito entry.
 - The SDK still ships `sel4_32.elf`; lerux does not stage or boot it.
 - Limine `timeout: 0` so QEMU smokes do not wait on the menu.

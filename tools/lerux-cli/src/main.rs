@@ -12,6 +12,7 @@ mod config_cmd;
 mod deploy;
 mod dev_image;
 mod disk_img;
+mod fat_esp;
 mod fetch;
 mod fetch_sddf;
 mod fs_scaffold;

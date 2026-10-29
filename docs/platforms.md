@@ -30,7 +30,7 @@ q35 and the Z97 desk share a kernel and do not share a chipset. Names that both 
 
 ### q35 devices
 
-QEMU machine `q35` with OVMF and the Limine ISO (same path as metal UEFI). The virtio boards stay. Milestones 19 and 20 add `ich9-ahci` and an 82574 on new boards.
+QEMU machine `q35` with OVMF and the GRUB ISO (same path as metal UEFI). The virtio boards stay. Milestones 19 and 20 add `ich9-ahci` and an 82574 on new boards.
 
 | Category | Device | lerux driver | In the tree |
 |----------|--------|--------------|-------------|

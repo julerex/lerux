@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted for the Intel scanout on `pc_z97_d3h`. The ISO no longer boots Limine ([ADR-014](014-uefi-mb2-stub.md)). The 1024 by 768 mode below was read from a Limine legacy entry on 2026-10-22. The live desk image paints VGA text at `0xb8000`. GOP for this desk stays out.
 
 ## Date
 
@@ -36,7 +36,7 @@ That is the same class of driver, aimed at the other device. The Intel option RO
 
 ### Use the Unified Extensible Firmware Interface graphics output protocol
 
-`sel4.elf` is linked at 1 MB. Limine alone rejects that load on the firmware entry before it sets a mode. The metal path uses `mb2-stub` ([ADR-014](014-uefi-mb2-stub.md)) so UEFI Limine can boot the 64-bit kernel; GOP modeset for the desk browser remains a separate concern from this VGA-text shell image.
+`sel4.elf` is linked at 1 MB. Limine rejects that load on the firmware entry before it sets a mode. [ADR-014](014-uefi-mb2-stub.md) now boots that kernel with GRUB and `mb2-stub`. GOP modeset for the desk browser remains a separate concern from the VGA-text shell image, and this alternative stays rejected.
 
 ## Consequences
 

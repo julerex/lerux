@@ -1,9 +1,8 @@
-//! FAT16 image for the hybrid ISO's EFI system partition.
+//! FAT16 image for the ISO's EFI system partition.
 //!
-//! Laptop firmware boots `BOOTX64.EFI` from that partition. Limine then opens
-//! `boot():/boot/sel4.elf` on the same volume. The stock Limine FAT image only
-//! holds EFI loaders, so the module read falls through to the ISO9660 session
-//! and stalls on this machine.
+//! Firmware boots `EFI/BOOT/BOOTX64.EFI` from this volume. GRUB reads
+//! `boot/grub/grub.cfg` and the modules from it too. A module that lives only
+//! on the ISO9660 session stalls when firmware boots the partition.
 
 use std::collections::BTreeSet;
 
@@ -16,8 +15,10 @@ const NFATS: usize = 2;
 const ROOT_ENTRIES: usize = 512;
 const ROOT_BYTES: usize = ROOT_ENTRIES * 32;
 const CLUSTER_BYTES: usize = BPS * SPC;
-/// FAT16 needs at least this many clusters.
-const MIN_CLUSTERS: usize = 4085;
+/// GRUB counts the two reserved FAT entries, then treats `num_clusters <= 4087`
+/// as FAT12. A volume of exactly 4085 data clusters is FAT16 in the specification
+/// and FAT12 to GRUB, so the chain walk returns a short read. 4086 is FAT16 for both.
+const MIN_CLUSTERS: usize = 4086;
 
 /// Build a FAT16 volume whose root contains `files`.
 ///
@@ -520,5 +521,25 @@ mod tests {
         assert_eq!(read_file(&image, "boot/loader.img"), loader);
         assert_eq!(read_file(&image, "boot/limine.conf"), conf);
         assert_eq!(read_file(&image, "boot/mb2-stub.elf"), b"stub");
+        assert!(
+            grub_counts_fat16(&image),
+            "GRUB would probe this volume as FAT12"
+        );
+    }
+
+    /// GRUB's probe: data clusters plus the two reserved entries, FAT12 at `<= 4087`.
+    fn grub_counts_fat16(image: &[u8]) -> bool {
+        let bps = u16::from_le_bytes(image[11..13].try_into().unwrap()) as usize;
+        let spc = image[13] as usize;
+        let reserved = u16::from_le_bytes(image[14..16].try_into().unwrap()) as usize;
+        let nfats = image[16] as usize;
+        let root_ents = u16::from_le_bytes(image[17..19].try_into().unwrap()) as usize;
+        let total16 = u16::from_le_bytes(image[19..21].try_into().unwrap()) as usize;
+        let spf = u16::from_le_bytes(image[22..24].try_into().unwrap()) as usize;
+        let total32 = u32::from_le_bytes(image[32..36].try_into().unwrap()) as usize;
+        let total = if total16 != 0 { total16 } else { total32 };
+        let root_sectors = (root_ents * 32).div_ceil(bps);
+        let data_clusters = (total - (reserved + nfats * spf + root_sectors)) / spc;
+        data_clusters + 2 > 4085 + 2
     }
 }

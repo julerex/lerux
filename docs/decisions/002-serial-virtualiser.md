@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted for the postcard serial image. New serial connections use the LionsOS queues in [ADR-011](011-lionsos-structures.md).
 
 ## Date
 

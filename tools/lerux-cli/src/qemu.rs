@@ -264,7 +264,7 @@ fn x86_command(
     _loader: &Path,
     disk: &Path,
 ) -> Result<Command> {
-    // QEMU `-kernel` rejects ELF64. Boot the same Limine ISO as metal under OVMF.
+    // QEMU `-kernel` rejects ELF64. Boot the same GRUB ISO as metal under OVMF.
     let ovmf = crate::iso::require_ovmf()?;
     let iso =
         crate::iso::ensure_iso_for_qemu(&ctx.root, &ctx.board_name, &ctx.build_dir, &ctx.config)?;

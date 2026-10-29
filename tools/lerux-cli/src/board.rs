@@ -200,7 +200,8 @@ mod tests {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let xml = crate::system::render_system(&root, "swift_sfx14_41g").expect("swift sdf");
         assert!(xml.contains("phys_addr=\"0x1fe0000\""));
-        assert!(xml.contains("phys_addr=\"0x1fd0000\""));
+        assert!(xml.contains("phys_addr=\"0xfc90000000\""));
+        assert!(xml.contains("size=\"0x7e9000\""));
         assert!(xml.contains("phys_addr=\"0x1fb0000\""));
         assert_eq!(xml.matches("addr=\"0xcf8\"").count(), 1);
         assert!(xml.contains("addr=\"0x60\""));

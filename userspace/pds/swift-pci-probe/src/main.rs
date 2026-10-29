@@ -56,13 +56,13 @@ fn program_bar(cap: u64, port: u16, bus: u8, dev: u8, func: u8, header: &[u8]) {
         out32(cap, data, 0);
         enable_mem(cap, port, bus, dev, func);
     }
-    if let Some(index) = XHCI_BDFS.iter().position(|item| *item == bdf) {
-        if class_code(header) == Some(XHCI_CLASS) {
-            let data = port.wrapping_add(4);
-            out32(cap, port, config_address(bus, dev, func, 0x10));
-            out32(cap, data, XHCI_BARS[index]);
-            enable_mem(cap, port, bus, dev, func);
-        }
+    if let Some(index) = XHCI_BDFS.iter().position(|item| *item == bdf)
+        && class_code(header) == Some(XHCI_CLASS)
+    {
+        let data = port.wrapping_add(4);
+        out32(cap, port, config_address(bus, dev, func, 0x10));
+        out32(cap, data, XHCI_BARS[index]);
+        enable_mem(cap, port, bus, dev, func);
     }
 }
 

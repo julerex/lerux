@@ -478,15 +478,15 @@ template = "serial-hello.system.template"
 pds = ["hello", "serial-driver"]
 system_vars = { serial_mmio_phys_addr = "0xfe201000", serial_irq = 121 }
 
-# Acer Swift X SFX14-41G. Hardware only. The framebuffer address stays a spare
-# page until the mode line from mb2-stub replaces fb_phys and fb_bytes.
+# Acer Swift X SFX14-41G. Hardware only. The 2026-10-29 GOP line was
+# `fb 0x000000fc90000000 pitch 7680 1920x1080 r16 g8 b0` (0x7e9000 bytes).
 [swift_sfx14_41g]
 arch = "x86_64"
 microkit_board = "x86_64_generic"
 target = "x86_64-sel4-microkit"
 template = "console-swift.system.template"
 pds = ["console-shell", "console-driver", "swift-pci-probe", "swift-mt7921", "swift-nvme", "swift-bt"]
-system_vars = { fb_phys = "0x1fd0000", fb_bytes = "0x1000" }
+system_vars = { fb_phys = "0xfc90000000", fb_bytes = "0x7e9000" }
 ci = false
 
 # On-screen menu for this desk. Hardware only. QEMU coverage is x86_64_generic_console.

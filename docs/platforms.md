@@ -70,7 +70,7 @@ The Acer Swift X SFX14-41G (Ryzen 5 5500U, Orion_CA). The panel belongs to the R
 
 | Category | Device | lerux driver | In the tree |
 |----------|--------|--------------|-------------|
-| Linear framebuffer | Firmware GOP buffer. The mode line records the address, pitch, and shifts. The mapped page stays `0x1fd0000` until that line replaces it | `console-driver` paints 32-bit pixels when the record matches the map. `mb2-stub` paints the mode line before seL4 | yes |
+| Linear framebuffer | Firmware GOP buffer. The 2026-10-29 boot showed `fb 0x000000fc90000000 pitch 7680 1920x1080 r16 g8 b0` (`0x7E9000` bytes). The image maps that address | `console-driver` paints 32-bit pixels when the record matches the map. `mb2-stub` paints the mode line before seL4 | yes |
 | Keyboard | i8042 PS/2, ports `0x60` and `0x64`, I/O APIC pin 1, vector 49 | `console-driver` | yes |
 | Text menu | `1 browser` / `2 maths` on the panel | `console-shell` | yes |
 | PCI | `01:00.0`, `02:00.0`, `03:00.0`, `04:00.0`, `04:00.3`, `04:00.4` | `swift-pci-probe` | yes |

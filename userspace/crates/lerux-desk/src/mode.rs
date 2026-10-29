@@ -1,14 +1,15 @@
 //! Firmware scanout mode. The Multiboot tag and the mode record are different bytes.
 
 const ADDRESS_ROWS: u32 = 16;
-/// 16 MiB. A 1920×1080 Swift X panel with pitch 8192 is 8_847_360 bytes, past 8 MiB.
+/// 16 MiB. The 2026-10-29 Swift X panel is 1920 by 1080 with pitch 7680
+/// (8_294_400 bytes). Pitch 8192 at that size is 8_847_360 bytes and still fits.
 const FRAMEBUFFER_CAP: u64 = 0x100_0000;
 
 /// Physical page the trampoline fills with a [`ScanoutMode`] record.
 pub const MODE_RECORD_PHYS: u64 = 0x01FE_0000;
-/// Mapped panel buffer. A spare page until the mode line replaces it.
-pub const FRAMEBUFFER_PHYS: u64 = 0x01FD_0000;
-pub const FRAMEBUFFER_BYTES: u64 = 0x1000;
+/// Mapped panel buffer from the 2026-10-29 Swift X GOP line.
+pub const FRAMEBUFFER_PHYS: u64 = 0x00FC_9000_0000;
+pub const FRAMEBUFFER_BYTES: u64 = 0x7E_9000;
 
 /// The recorded address is the buffer this image maps, and it is not the mode page.
 pub fn panel_ready(mode_address: u64, mapped_phys: u64) -> bool {
@@ -365,10 +366,50 @@ mod tests {
         tag[16..20].copy_from_slice(&8192u32.to_le_bytes());
         tag[20..24].copy_from_slice(&1920u32.to_le_bytes());
         tag[24..28].copy_from_slice(&1080u32.to_le_bytes());
-        let mode = mode_from_mb2_tag(&tag).expect("1920x1080 pitch 8192 fits");
+        let mode = mode_from_mb2_tag(&tag).expect("1920x1080 pitch 8192 still fits");
         assert_eq!(mode.width(), 1920);
         assert_eq!(mode.height(), 1080);
         assert_eq!(mode.pitch(), 8192);
+        let bytes = u64::from(mode.pitch()) * u64::from(mode.height());
+        assert!(bytes <= FRAMEBUFFER_CAP);
+        assert!(bytes > FRAMEBUFFER_BYTES);
+    }
+
+    #[test]
+    fn swift_recorded_mode_fits() {
+        let mut tag = [0u8; TAG.len()];
+        tag.copy_from_slice(TAG);
+        tag[8..16].copy_from_slice(&FRAMEBUFFER_PHYS.to_le_bytes());
+        tag[16..20].copy_from_slice(&7680u32.to_le_bytes());
+        tag[20..24].copy_from_slice(&1920u32.to_le_bytes());
+        tag[24..28].copy_from_slice(&1080u32.to_le_bytes());
+        let mode = mode_from_mb2_tag(&tag).expect("the 2026-10-29 Swift mode fits");
+        assert_eq!(mode.address(), FRAMEBUFFER_PHYS);
+        assert_eq!(mode.pitch(), 7680);
+        assert_eq!(mode.width(), 1920);
+        assert_eq!(mode.height(), 1080);
+        assert_eq!(mode.red_shift(), 16);
+        assert_eq!(mode.green_shift(), 8);
+        assert_eq!(mode.blue_shift(), 0);
+        let bytes = u64::from(mode.pitch()) * u64::from(mode.height());
+        assert_eq!(bytes, 8_294_400);
+        assert_eq!(bytes, FRAMEBUFFER_BYTES);
+        assert!(panel_ready(mode.address(), FRAMEBUFFER_PHYS));
+        let line = mode_line(
+            mode.address(),
+            mode.pitch(),
+            mode.width(),
+            mode.height(),
+            mode.red_shift(),
+            mode.green_shift(),
+            mode.blue_shift(),
+        )
+        .expect("line fits");
+        let text = line.split(|byte| *byte == 0).next().expect("text");
+        assert_eq!(
+            std::str::from_utf8(text).expect("utf8"),
+            "fb 0x000000fc90000000 pitch 7680 1920x1080 r16 g8 b0"
+        );
     }
 
     #[test]

@@ -26,7 +26,7 @@ A missing `grub-mkimage` fails before an older ISO is reused. The recipe stamp c
 
 A lone underscore is the firmware text cursor. GRUB has left that console, and the mode line was not written to the buffer the panel scans. On the Swift X that buffer is above 4 GiB. Multiboot enters with CR0.PG clear. Restoring the original CR0 leaves paging off, and the stores hit the 256 MiB window. Turn paging on for that paint, run it on a stack inside the identity map, mark those pages uncached, and `wbinvd` before seL4 starts. GRUB's stack is not in that map.
 
-The first metal success is the blue bar and the `fb 0x…` line. The `1 browser` / `2 maths` menu stays off until that address is the page the console driver maps. The mapped page stays `0x01FD0000` until the line is copied into the board.
+The first metal success is the blue bar and the mode line. On 2026-10-29 the Swift X showed `fb 0x000000fc90000000 pitch 7680 1920x1080 r16 g8 b0`. The image maps `0xfc90000000` for `0x7E9000` bytes. The `1 browser` / `2 maths` menu paints when the mode record names that address. A boot that prints a different address leaves the menu off.
 
 ## What QEMU does not prove
 

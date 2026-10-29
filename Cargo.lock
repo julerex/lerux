@@ -398,6 +398,7 @@ name = "console-driver"
 version = "0.1.0"
 dependencies = [
  "heapless",
+ "lerux-desk",
  "lerux-driver-protocols",
  "lerux-logging",
  "log",
@@ -1278,6 +1279,14 @@ dependencies = [
 [[package]]
 name = "lerux-serial-queue"
 version = "0.1.0"
+
+[[package]]
+name = "lerux-swift"
+version = "0.1.0"
+dependencies = [
+ "lerux-desk",
+ "lerux-sddf",
+]
 
 [[package]]
 name = "lerux-tls"
@@ -2907,6 +2916,47 @@ name = "subtle"
 version = "2.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
+
+[[package]]
+name = "swift-bt"
+version = "0.1.0"
+dependencies = [
+ "lerux-desk",
+ "lerux-swift",
+ "sel4",
+ "sel4-microkit",
+]
+
+[[package]]
+name = "swift-mt7921"
+version = "0.1.0"
+dependencies = [
+ "lerux-desk",
+ "lerux-swift",
+ "sel4",
+ "sel4-microkit",
+]
+
+[[package]]
+name = "swift-nvme"
+version = "0.1.0"
+dependencies = [
+ "lerux-desk",
+ "lerux-sddf",
+ "lerux-swift",
+ "sel4",
+ "sel4-microkit",
+]
+
+[[package]]
+name = "swift-pci-probe"
+version = "0.1.0"
+dependencies = [
+ "lerux-desk",
+ "lerux-swift",
+ "sel4",
+ "sel4-microkit",
+]
 
 [[package]]
 name = "syn"

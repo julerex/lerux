@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (Phase 41 implemented 2026-07-12)
+Accepted (Phase 41 implemented 2026-07-12). The in-tree generator still builds the system description. New device and filesystem connections follow [ADR-011](011-lionsos-structures.md), not the postcard RPC this record assumed.
 
 ## Date
 

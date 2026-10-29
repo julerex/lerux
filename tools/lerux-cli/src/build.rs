@@ -186,10 +186,7 @@ fn assemble_image(root: &Path, board: &str, build_dir: &str, config: &str) -> Re
     Ok(())
 }
 
-/// Copy both SDK kernels next to `loader.img`.
-///
-/// `sel4_32.elf` is what `just iso` packs. `sel4.elf` is what the QEMU UEFI
-/// ISO and `lerux deploy` pack. Returns the 64-bit copy.
+/// Copy the SDK 64-bit kernel next to `loader.img` for Limine / metal / QEMU ISO.
 pub fn stage_x86_kernel(
     sdk: &str,
     microkit_board: &str,
@@ -197,30 +194,19 @@ pub fn stage_x86_kernel(
     dest_dir: &Path,
 ) -> Result<PathBuf> {
     fs::create_dir_all(dest_dir).with_context(|| format!("create {}", dest_dir.display()))?;
-    let dest64 = copy_sdk_kernel(
-        &crate::qemu::sel4_elf(sdk, microkit_board, config),
-        &dest_dir.join("sel4.elf"),
-        microkit_board,
-    )?;
-    copy_sdk_kernel(
-        &crate::qemu::sel4_32_elf(sdk, microkit_board, config),
-        &dest_dir.join("sel4_32.elf"),
-        microkit_board,
-    )?;
-    Ok(dest64)
-}
-
-fn copy_sdk_kernel(src: &Path, dest: &Path, microkit_board: &str) -> Result<PathBuf> {
-    if !src.is_file() {
+    let src64 = crate::qemu::sel4_elf(sdk, microkit_board, config);
+    if !src64.is_file() {
         bail!(
             "missing {}; run MICROKIT_BOARDS={} lerux build-sdk",
-            src.display(),
+            src64.display(),
             microkit_board
         );
     }
-    fs::copy(src, dest).with_context(|| format!("copy {} → {}", src.display(), dest.display()))?;
-    crate::image_digest::write_sidecar(dest)?;
-    Ok(dest.to_path_buf())
+    let dest64 = dest_dir.join("sel4.elf");
+    fs::copy(&src64, &dest64)
+        .with_context(|| format!("copy {} → {}", src64.display(), dest64.display()))?;
+    crate::image_digest::write_sidecar(&dest64)?;
+    Ok(dest64)
 }
 
 pub fn run(root: &Path, board: &str, build_dir: &str, config: &str) -> Result<()> {
@@ -268,6 +254,14 @@ pub fn test_all(root: &Path, build_dir: &str, config: &str) -> Result<()> {
     Ok(())
 }
 
+pub(crate) fn iso_recipe(board: &str) -> String {
+    if board == "swift_sfx14_41g" {
+        "just iso".to_string()
+    } else {
+        format!("just iso {board}")
+    }
+}
+
 fn hardware_ready_message(board: &str, arch: &str) -> String {
     let docs = if arch == "x86_64" {
         "docs/boards.md#gigabyte-z97-d3h-install-path"
@@ -275,7 +269,11 @@ fn hardware_ready_message(board: &str, arch: &str) -> String {
         "docs/boards.md#rpi4-workstation-install-path-phase-52"
     };
     let iso = if arch == "x86_64" {
-        format!("\n   ISO: just iso  (build/{board}/lerux.iso)")
+        format!(
+            "\n   ISO: {}  (build/{board}/{})",
+            iso_recipe(board),
+            crate::iso::iso_file_name(board)
+        )
     } else {
         String::new()
     };
@@ -298,7 +296,6 @@ mod tests {
         let elf_dir = sdk.join("board/x86_64_generic/debug/elf");
         fs::create_dir_all(&elf_dir).unwrap();
         fs::write(elf_dir.join("sel4.elf"), b"kernel64").unwrap();
-        fs::write(elf_dir.join("sel4_32.elf"), b"kernel32").unwrap();
         let dest_dir = tmp.path().join("build/pc_z97_d3h");
 
         let dest =
@@ -307,8 +304,7 @@ mod tests {
         assert_eq!(dest, dest_dir.join("sel4.elf"));
         assert_eq!(fs::read(&dest).unwrap(), b"kernel64");
         assert!(crate::image_digest::sidecar_path(&dest).is_file());
-        assert_eq!(fs::read(dest_dir.join("sel4_32.elf")).unwrap(), b"kernel32");
-        assert!(crate::image_digest::sidecar_path(&dest_dir.join("sel4_32.elf")).is_file());
+        assert!(!dest_dir.join("sel4_32.elf").exists());
     }
 
     #[test]

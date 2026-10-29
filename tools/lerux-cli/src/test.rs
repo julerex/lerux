@@ -1187,9 +1187,13 @@ pub fn run_board_test_with_mode(
             // unreachable: use_hw true
         }
         let iso_line = if ctx.board.arch == "x86_64" {
-            "   ISO: just iso\n"
+            format!(
+                "   ISO: {}  (build/{board}/{})\n",
+                crate::build::iso_recipe(board),
+                crate::iso::iso_file_name(board)
+            )
         } else {
-            ""
+            String::new()
         };
         println!(
             "==> Hardware board {board:?}: image built successfully.\n\

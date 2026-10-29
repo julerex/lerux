@@ -196,6 +196,37 @@ mod tests {
     }
 
     #[test]
+    fn swift_image_maps_the_panel_and_skips_serial() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let xml = crate::system::render_system(&root, "swift_sfx14_41g").expect("swift sdf");
+        assert!(xml.contains("phys_addr=\"0x1fe0000\""));
+        assert!(xml.contains("phys_addr=\"0xfc90000000\""));
+        assert!(xml.contains("size=\"0x7e9000\""));
+        assert!(xml.contains("page_size=\"0x1000\""));
+        assert!(xml.contains("phys_addr=\"0x1fb0000\""));
+        assert_eq!(xml.matches("addr=\"0xcf8\"").count(), 1);
+        assert!(xml.contains("addr=\"0x60\""));
+        assert!(xml.contains("addr=\"0x64\""));
+        assert!(xml.contains("pin=\"1\""));
+        assert!(xml.contains("vector=\"49\""));
+        assert!(xml.contains("console-driver.elf"));
+        assert!(xml.contains("console-shell.elf"));
+        assert!(xml.contains("swift-pci-probe.elf"));
+        assert!(xml.contains("swift-mt7921.elf"));
+        assert!(xml.contains("swift-nvme.elf"));
+        assert!(xml.contains("swift-bt.elf"));
+        assert!(xml.contains("pcidev=\"03:00.0\""));
+        assert!(xml.contains("pcidev=\"02:00.0\""));
+        assert!(xml.contains("pcidev=\"04:00.3\""));
+        assert!(xml.contains("pcidev=\"04:00.4\""));
+        assert!(!xml.contains("serial-driver"));
+        let boards = load_boards(&root).unwrap();
+        let board = boards.get("swift_sfx14_41g").unwrap();
+        assert!(!board.ci);
+        assert!(board.qemu.is_none());
+    }
+
+    #[test]
     fn rtl8852be_probe_board_is_hardware_only() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let boards = load_boards(&root).unwrap();

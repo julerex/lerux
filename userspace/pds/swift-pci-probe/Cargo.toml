@@ -1,0 +1,18 @@
+[package]
+name = "swift-pci-probe"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Paint the six recorded Swift X PCI locations"
+
+[lints]
+workspace = true
+
+[features]
+board-swift_sfx14_41g = []
+
+[dependencies]
+lerux-desk = { path = "../../crates/lerux-desk" }
+lerux-swift = { path = "../../crates/lerux-swift" }
+sel4 = { workspace = true }
+sel4-microkit = { workspace = true }

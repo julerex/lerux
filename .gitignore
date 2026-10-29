@@ -5,6 +5,9 @@
 # lerux build output
 /build/
 /support/disk.img
+/support/swift-wifi.txt
+/support/mt7921.bin
+/support/mt7921-bt.bin
 /support/mb2-stub/mb2-stub.elf
 /loader.img
 /sel4.elf

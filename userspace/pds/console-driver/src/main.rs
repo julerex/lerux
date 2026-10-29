@@ -6,16 +6,24 @@
 #![cfg_attr(not(test), no_std)]
 #![cfg_attr(not(test), no_main)]
 
+#[cfg(not(feature = "board-swift_sfx14_41g"))]
 mod hid;
 mod scancode;
 mod screen;
+#[cfg(not(feature = "board-swift_sfx14_41g"))]
 mod usb;
 
 #[cfg(all(not(test), feature = "hardware"))]
 mod device;
 #[cfg(all(not(test), feature = "hardware"))]
 mod handler;
-#[cfg(all(not(test), feature = "hardware"))]
+#[cfg(all(not(test), feature = "hardware", feature = "board-swift_sfx14_41g"))]
+mod usb_off;
+#[cfg(all(
+    not(test),
+    feature = "hardware",
+    not(feature = "board-swift_sfx14_41g")
+))]
 mod xhci;
 
 #[cfg(all(not(test), feature = "hardware"))]
@@ -36,14 +44,20 @@ fn init() -> handler::HandlerImpl {
     use crate::screen::Screen;
 
     debug::init().expect("debug log");
+    #[cfg(not(feature = "board-swift_sfx14_41g"))]
     log::info!("console-driver: vga text");
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    log::info!("console-driver: panel");
     let device = device::Device::from_system();
     if device.init_keyboard() {
         log::info!("console-driver: i8042 ready");
     } else {
         log::info!("console-driver: i8042 timeout");
     }
+    #[cfg(not(feature = "board-swift_sfx14_41g"))]
     let usb = xhci::UsbKbd::bring_up();
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    let usb = usb_off::UsbKbd::off();
     device.enable_cursor();
     let screen = Screen::with_banner();
     device.present_all(&screen);

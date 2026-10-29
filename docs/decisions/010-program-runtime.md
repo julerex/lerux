@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted for the envelope and the untrusted `program-runtime` role. Decision 2, the closed interpreter, is superseded by [ADR-012](012-ordinary-webassembly.md).
+Accepted for the `LRW1` envelope. Decision 2, the closed interpreter, is superseded by [ADR-012](012-ordinary-webassembly.md). Milestone 17 deleted the `program-runtime` protection domain. The live check is `sddf-program` on `qemu_virt_aarch64_program_sddf`.
 
 ## Date
 

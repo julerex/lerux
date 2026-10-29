@@ -77,10 +77,10 @@ build-pd crate:
 image: build
     {{lerux}} image --board {{board}} --build-dir {{build_dir}} --config {{config}}
 
-# Hybrid Limine ISO for the desk board (does not write a disk).
-# Packs sel4_32.elf into build/pc_z97_d3h/lerux.iso. Boot the entry that does not say UEFI.
-iso:
-    {{lerux}} iso --board pc_z97_d3h --build-dir {{build_dir}} --config {{config}}
+# UEFI GRUB ISO. `just iso` rebuilds the Swift image, then packs it.
+# `just iso pc_z97_d3h` does the same for the Z97 desk. Does not write a disk.
+iso target="swift_sfx14_41g":
+    {{lerux}} iso --board {{target}} --build-dir {{build_dir}} --config {{config}}
 
 # Boot in QEMU for the selected board
 run: image

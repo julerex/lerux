@@ -28,7 +28,7 @@ timeout_secs = 120
 qmp_keys = ["2", "ret", "6", "slash", "2", "ret"]
 qmp_expect = "maths 3"
 
-# Same console image as x86_64_generic_console; ISO/Limine smoke (no QMP).
+# Same console image as x86_64_generic_console; ISO smoke under OVMF (no QMP).
 [boards.pc_z97_d3h]
 expects = ["1 browser"]
 timeout_secs = 180

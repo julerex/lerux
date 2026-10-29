@@ -1,0 +1,19 @@
+[package]
+name = "swift-nvme"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Read-only NVMe client for the Swift X hynix SSD"
+
+[lints]
+workspace = true
+
+[features]
+board-swift_sfx14_41g = []
+
+[dependencies]
+lerux-desk = { path = "../../crates/lerux-desk" }
+lerux-sddf = { path = "../../crates/lerux-sddf" }
+lerux-swift = { path = "../../crates/lerux-swift" }
+sel4 = { workspace = true }
+sel4-microkit = { workspace = true }

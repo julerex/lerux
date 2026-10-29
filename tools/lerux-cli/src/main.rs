@@ -2,6 +2,7 @@ mod agent_sddf;
 mod analyze;
 mod bench;
 mod board;
+mod boot_volume;
 mod build;
 mod build_sdk;
 mod channel_consts;
@@ -12,6 +13,7 @@ mod config_cmd;
 mod deploy;
 mod dev_image;
 mod disk_img;
+mod fat_esp;
 mod fetch;
 mod fetch_sddf;
 mod fs_scaffold;
@@ -248,9 +250,9 @@ enum Commands {
         #[arg(long, default_value_t = false)]
         no_verify: bool,
     },
-    /// Build a hybrid BIOS+UEFI ISO that Multiboot 2-boots an x86 board.
+    /// Build a UEFI ISO that Multiboot 2-boots an x86 board.
     ///
-    /// Writes `build/<board>/lerux.iso` for an x86 board. Does not write a disk.
+    /// Writes `build/<board>/lerux_<board>.iso` for an x86 board. Does not write a disk.
     Iso {
         #[arg(long, default_value = "x86_64_generic")]
         board: String,
@@ -258,14 +260,14 @@ enum Commands {
         build_dir: String,
         #[arg(long, default_value = "debug")]
         config: String,
-        /// ISO path. Default: `build/<board>/lerux.iso`.
+        /// ISO path. Default: `build/<board>/lerux_<board>.iso`.
         /// Relative paths stay under the build directory. Absolute paths must not contain `..`.
         #[arg(long)]
         output: Option<PathBuf>,
-        /// Build the image if `loader.img` or `sel4_32.elf` is missing.
+        /// Rebuild the Microkit image before packing, even when `loader.img` exists.
         #[arg(long, default_value_t = true)]
         build: bool,
-        /// Skip building even if the boot files are missing (error instead).
+        /// Pack the `loader.img` already on disk. A newer ISO can still hold an older image.
         #[arg(long, default_value_t = false)]
         no_build: bool,
         /// Verify SHA-256 sidecars before packing (default: true).
@@ -274,7 +276,7 @@ enum Commands {
         /// Skip integrity check (not recommended for field media).
         #[arg(long, default_value_t = false)]
         no_verify: bool,
-        /// After writing the ISO, boot it in QEMU as a raw disk under SeaBIOS.
+        /// After writing the ISO, boot it in QEMU as a raw disk under OVMF.
         #[arg(long, default_value_t = false)]
         boot_test: bool,
     },
@@ -721,11 +723,7 @@ fn main() -> Result<()> {
         } => {
             let build_if_missing = build && !no_build;
             let do_verify = verify && !no_verify;
-            let board_build = root.join(&build_dir).join(&board);
-            let need_image = build_if_missing
-                && (!board_build.join("loader.img").is_file()
-                    || !board_build.join("sel4_32.elf").is_file());
-            crate::iso_host::require_iso_host(&root, &board, &config, need_image, boot_test)?;
+            crate::iso_host::require_iso_host(&root, &board, &config, build_if_missing, boot_test)?;
             let iso = crate::iso::build_iso(
                 &root,
                 &board,

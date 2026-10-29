@@ -71,6 +71,7 @@ impl Screen {
     }
 
     /// Hardware cursor index, clamped to the last cell.
+    #[cfg(not(feature = "board-swift_sfx14_41g"))]
     pub fn cursor_index(&self) -> usize {
         (self.row * COLS + self.col).min(CELLS - 1)
     }

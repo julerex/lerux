@@ -7,7 +7,25 @@
 use sel4::with_ipc_buffer_mut;
 use sel4_microkit::{memory_region_symbol, var};
 
+#[cfg(feature = "board-swift_sfx14_41g")]
+use lerux_desk::{fill_background, paint_cell, panel_mode, Pen, FRAMEBUFFER_BYTES};
+
+#[cfg(feature = "board-swift_sfx14_41g")]
+use crate::screen::COLS;
 use crate::screen::{Screen, CELLS};
+
+#[cfg(feature = "board-swift_sfx14_41g")]
+struct Panel {
+    frame: *mut u8,
+    len: usize,
+    pitch: usize,
+    width: usize,
+    height: usize,
+    red: u8,
+    green: u8,
+    blue: u8,
+    live: bool,
+}
 
 /// Microkit assigns IOPort caps from this CNode slot (same base as COM1).
 const BASE_IOPORT_CAP: u64 = 394;
@@ -29,8 +47,13 @@ const SPIN: u32 = 100_000;
 
 /// CRTC index/data and the two i8042 ports. Each range has its own cap.
 pub struct Device {
+    #[cfg(not(feature = "board-swift_sfx14_41g"))]
     vga: *mut u16,
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    panel: Panel,
+    #[cfg(not(feature = "board-swift_sfx14_41g"))]
     crtc_cap: u64,
+    #[cfg(not(feature = "board-swift_sfx14_41g"))]
     crtc_port: u16,
     data_cap: u64,
     data_port: u16,
@@ -42,17 +65,26 @@ unsafe impl Send for Device {}
 
 impl Device {
     pub fn from_system() -> Self {
-        // The map is one uncached 4 KiB page. 80×25 cells use the first 4000 bytes.
-        let vga = memory_region_symbol!(vga_text_vaddr: *mut u16).as_ptr();
-        let crtc_id = *var!(crtc_ioport_id: usize = usize::MAX) as u64;
-        let crtc_port = *var!(crtc_ioport_addr: usize = usize::MAX) as u16;
         let data_id = *var!(kbd_data_ioport_id: usize = usize::MAX) as u64;
         let data_port = *var!(kbd_data_ioport_addr: usize = usize::MAX) as u16;
         let status_id = *var!(kbd_cmd_ioport_id: usize = usize::MAX) as u64;
         let status_port = *var!(kbd_cmd_ioport_addr: usize = usize::MAX) as u16;
+        #[cfg(not(feature = "board-swift_sfx14_41g"))]
+        let vga = memory_region_symbol!(vga_text_vaddr: *mut u16).as_ptr();
+        #[cfg(not(feature = "board-swift_sfx14_41g"))]
+        let crtc_id = *var!(crtc_ioport_id: usize = usize::MAX) as u64;
+        #[cfg(not(feature = "board-swift_sfx14_41g"))]
+        let crtc_port = *var!(crtc_ioport_addr: usize = usize::MAX) as u16;
+        #[cfg(feature = "board-swift_sfx14_41g")]
+        let panel = panel_from_system();
         Self {
+            #[cfg(not(feature = "board-swift_sfx14_41g"))]
             vga,
+            #[cfg(feature = "board-swift_sfx14_41g")]
+            panel,
+            #[cfg(not(feature = "board-swift_sfx14_41g"))]
             crtc_cap: BASE_IOPORT_CAP + crtc_id,
+            #[cfg(not(feature = "board-swift_sfx14_41g"))]
             crtc_port,
             data_cap: BASE_IOPORT_CAP + data_id,
             data_port,
@@ -74,15 +106,25 @@ impl Device {
     }
 
     pub fn enable_cursor(&self) {
-        // Start line 0, end line 15, disable-bit clear: a block cursor.
-        self.crtc(0x0a, 0x00);
-        self.crtc(0x0b, 0x0f);
+        #[cfg(not(feature = "board-swift_sfx14_41g"))]
+        {
+            // Start line 0, end line 15, disable-bit clear: a block cursor.
+            self.crtc(0x0a, 0x00);
+            self.crtc(0x0b, 0x0f);
+        }
     }
 
     pub fn sync_cursor(&self, screen: &Screen) {
-        let pos = screen.cursor_index() as u16;
-        self.crtc(0x0e, (pos >> 8) as u8);
-        self.crtc(0x0f, (pos & 0xff) as u8);
+        #[cfg(not(feature = "board-swift_sfx14_41g"))]
+        {
+            let pos = screen.cursor_index() as u16;
+            self.crtc(0x0e, (pos >> 8) as u8);
+            self.crtc(0x0f, (pos & 0xff) as u8);
+        }
+        #[cfg(feature = "board-swift_sfx14_41g")]
+        {
+            let _ = screen;
+        }
     }
 
     /// Enable scan set 1 and IRQ1. A missing controller still leaves the banner up.
@@ -118,11 +160,35 @@ impl Device {
     }
 
     fn write_cell(&self, index: usize, value: u16) {
+        #[cfg(not(feature = "board-swift_sfx14_41g"))]
         unsafe {
             self.vga.add(index).write_volatile(value);
         }
+        #[cfg(feature = "board-swift_sfx14_41g")]
+        {
+            if !self.panel.live || index >= CELLS {
+                return;
+            }
+            let frame =
+                unsafe { core::slice::from_raw_parts_mut(self.panel.frame, self.panel.len) };
+            paint_cell(
+                frame,
+                Pen {
+                    pitch: self.panel.pitch,
+                    width: self.panel.width,
+                    height: self.panel.height,
+                    red: self.panel.red,
+                    green: self.panel.green,
+                    blue: self.panel.blue,
+                },
+                index % COLS,
+                index / COLS,
+                (value & 0xff) as u8,
+            );
+        }
     }
 
+    #[cfg(not(feature = "board-swift_sfx14_41g"))]
     fn crtc(&self, index: u8, value: u8) {
         self.out8(self.crtc_cap, self.crtc_port, index);
         self.out8(self.crtc_cap, self.crtc_port.wrapping_add(1), value);
@@ -187,5 +253,53 @@ impl Device {
             let ret = ipc.inner_mut().seL4_X86_IOPort_In8(cap, port);
             ret.result
         })
+    }
+}
+
+#[cfg(feature = "board-swift_sfx14_41g")]
+fn panel_from_system() -> Panel {
+    let mode_ptr = memory_region_symbol!(mode_record_vaddr: *mut u8).as_ptr();
+    let frame = memory_region_symbol!(fb_vaddr: *mut u8).as_ptr();
+    let record = unsafe { core::slice::from_raw_parts(mode_ptr, 40) };
+    let mode = panel_mode(record);
+    let live = mode.is_some();
+    let (pitch, width, height, red, green, blue) = if let Some(mode) = mode {
+        (
+            mode.pitch() as usize,
+            mode.width() as usize,
+            mode.height() as usize,
+            mode.red_shift(),
+            mode.green_shift(),
+            mode.blue_shift(),
+        )
+    } else {
+        (0, 0, 0, 0, 0, 0)
+    };
+    if live {
+        // SAFETY: Microkit mapped `framebuffer` read-write for FRAMEBUFFER_BYTES
+        // bytes. This runs once during init, before the handler borrows the panel.
+        let frame = unsafe { core::slice::from_raw_parts_mut(frame, FRAMEBUFFER_BYTES as usize) };
+        fill_background(
+            frame,
+            Pen {
+                pitch,
+                width,
+                height,
+                red,
+                green,
+                blue,
+            },
+        );
+    }
+    Panel {
+        frame,
+        len: FRAMEBUFFER_BYTES as usize,
+        pitch,
+        width,
+        height,
+        red,
+        green,
+        blue,
+        live,
     }
 }

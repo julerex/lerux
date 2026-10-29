@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (Phase 63)
+Accepted as a rejection of virtio-9p. The LERUXFS2 `/host` seed and `lerux fs-host seed` are gone. `lerux config seed-disk` writes a raw image, and the device-framework guest formats that volume.
 
 ## Date
 

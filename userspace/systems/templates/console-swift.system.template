@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Swift X SFX14-41G. The panel is the firmware framebuffer. The mode record
+  page is filled by mb2-stub before seL4. There is no COM port. The built-in
+  keyboard is the i8042. PCI locations are the Windows enumeration.
+  Microkit allows 0xcf8 in one protection domain. The probe writes the six
+  headers and programs the device BARs. The other domains read that page.
+-->
+<system>
+    <memory_region name="mode_record" size="0x1000" phys_addr="0x1fe0000" />
+    <memory_region name="framebuffer" size="{fb_bytes}" phys_addr="{fb_phys}" page_size="0x1000" />
+    <memory_region name="pci_headers" size="0x1000" phys_addr="0x1fb0000" />
+    <memory_region name="mt7921_regs" size="0x200000" phys_addr="0xfd000000" />
+    <memory_region name="nvme_regs" size="0x4000" phys_addr="0xfc000000" />
+    <memory_region name="nvme_dma" size="0x20000" phys_addr="0xfb000000" />
+    <memory_region name="xhci0_regs" size="0x10000" phys_addr="0xfa000000" />
+    <memory_region name="xhci1_regs" size="0x10000" phys_addr="0xf9000000" />
+    <memory_region name="xhci_dma" size="0x40000" phys_addr="0xf8000000" />
+    <memory_region name="disk_result" size="0x1000" phys_addr="0x1fc0000" />
+
+    <protection_domain name="console_driver" priority="6" stack_size="0x10_000">
+        <program_image path="console-driver.elf" />
+        <map mr="mode_record" vaddr="0x3fff0000" perms="r" cached="false" setvar_vaddr="mode_record_vaddr" />
+        <map mr="framebuffer" vaddr="0x40000000" perms="rw" cached="false" setvar_vaddr="fb_vaddr" />
+        <ioport id="0" addr="0x60" size="1" setvar_id="kbd_data_ioport_id" setvar_addr="kbd_data_ioport_addr" />
+        <ioport id="1" addr="0x64" size="1" setvar_id="kbd_cmd_ioport_id" setvar_addr="kbd_cmd_ioport_addr" />
+        <irq pin="1" vector="49" id="0" trigger="edge" polarity="high" />
+    </protection_domain>
+
+    <protection_domain name="swift_pci_probe" priority="5" stack_size="0x10_000">
+        <program_image path="swift-pci-probe.elf" />
+        <map mr="mode_record" vaddr="0x3fff0000" perms="r" cached="false" setvar_vaddr="mode_record_vaddr" />
+        <map mr="framebuffer" vaddr="0x40000000" perms="rw" cached="false" setvar_vaddr="fb_vaddr" />
+        <map mr="pci_headers" vaddr="0x3ffd0000" perms="rw" cached="false" setvar_vaddr="pci_headers_vaddr" />
+        <ioport id="0" addr="0xcf8" size="8" setvar_id="pci_ioport_id" setvar_addr="pci_ioport_addr" />
+    </protection_domain>
+
+    <protection_domain name="swift_mt7921" priority="4" stack_size="0x10_000">
+        <program_image path="swift-mt7921.elf" />
+        <map mr="mode_record" vaddr="0x3fff0000" perms="r" cached="false" setvar_vaddr="mode_record_vaddr" />
+        <map mr="framebuffer" vaddr="0x40000000" perms="rw" cached="false" setvar_vaddr="fb_vaddr" />
+        <map mr="pci_headers" vaddr="0x3ffd0000" perms="r" cached="false" setvar_vaddr="pci_headers_vaddr" />
+        <map mr="mt7921_regs" vaddr="0xfd000000" perms="rw" cached="false" setvar_vaddr="mt7921_regs_vaddr" />
+        <irq id="0" pcidev="03:00.0" handle="1" vector="51" />
+    </protection_domain>
+
+    <protection_domain name="swift_nvme" priority="3" stack_size="0x10_000">
+        <program_image path="swift-nvme.elf" />
+        <map mr="mode_record" vaddr="0x3fff0000" perms="r" cached="false" setvar_vaddr="mode_record_vaddr" />
+        <map mr="framebuffer" vaddr="0x40000000" perms="rw" cached="false" setvar_vaddr="fb_vaddr" />
+        <map mr="pci_headers" vaddr="0x3ffd0000" perms="r" cached="false" setvar_vaddr="pci_headers_vaddr" />
+        <map mr="nvme_regs" vaddr="0xfc000000" perms="rw" cached="false" setvar_vaddr="nvme_regs_vaddr" />
+        <map mr="nvme_dma" vaddr="0xfb000000" perms="rw" cached="false" setvar_vaddr="nvme_dma_vaddr" />
+        <map mr="disk_result" vaddr="0x3ffe0000" perms="rw" cached="true" setvar_vaddr="disk_result_vaddr" />
+        <irq id="0" pcidev="02:00.0" handle="1" vector="52" />
+    </protection_domain>
+
+    <protection_domain name="swift_bt" priority="2" stack_size="0x10_000">
+        <program_image path="swift-bt.elf" />
+        <map mr="mode_record" vaddr="0x3fff0000" perms="r" cached="false" setvar_vaddr="mode_record_vaddr" />
+        <map mr="framebuffer" vaddr="0x40000000" perms="rw" cached="false" setvar_vaddr="fb_vaddr" />
+        <map mr="pci_headers" vaddr="0x3ffd0000" perms="r" cached="false" setvar_vaddr="pci_headers_vaddr" />
+        <map mr="xhci0_regs" vaddr="0xfa000000" perms="rw" cached="false" setvar_vaddr="xhci0_regs_vaddr" />
+        <map mr="xhci1_regs" vaddr="0xf9000000" perms="rw" cached="false" setvar_vaddr="xhci1_regs_vaddr" />
+        <map mr="xhci_dma" vaddr="0xf8000000" perms="rw" cached="false" setvar_vaddr="xhci_dma_vaddr" />
+        <irq id="0" pcidev="04:00.3" handle="1" vector="53" />
+        <irq id="1" pcidev="04:00.4" handle="2" vector="54" />
+    </protection_domain>
+
+    <protection_domain name="shell" priority="1" stack_size="0x10_000">
+        <program_image path="console-shell.elf" />
+        <map mr="disk_result" vaddr="0x3ffe0000" perms="r" cached="true" setvar_vaddr="disk_result_vaddr" />
+    </protection_domain>
+
+    <channel>
+        <end pd="console_driver" id="1" />
+        <end pd="shell" id="0" pp="true" />
+    </channel>
+    <channel>
+        <end pd="swift_nvme" id="1" />
+        <end pd="shell" id="1" />
+    </channel>
+</system>

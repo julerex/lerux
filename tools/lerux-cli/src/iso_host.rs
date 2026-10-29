@@ -22,7 +22,10 @@ const OVMF_CANDIDATES: &[&str] = &[
     "/usr/share/ovmf/OVMF.fd",
     "/usr/share/OVMF/OVMF.fd",
     "/usr/share/qemu/OVMF.fd",
+    "/usr/share/edk2/x64/OVMF.4m.fd",
 ];
+
+const GRUB_PLATFORM_DIR: &str = "/usr/lib/grub/x86_64-efi";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Distro {
@@ -60,9 +63,10 @@ pub(crate) struct HostFacts {
     pub sdk: SdkFact,
     pub clang: bool,
     pub readelf: bool,
-    pub cc: bool,
-    pub need_cc: bool,
+    pub objdump: bool,
+    pub grub: bool,
     pub xorriso: bool,
+    pub ovmf: OvmfFact,
     pub libclang: bool,
     pub fetch_libclang: bool,
     pub qemu_x86: bool,
@@ -142,9 +146,10 @@ fn collect_host_facts(
         sdk,
         clang: command_on_path("clang"),
         readelf: command_on_path("readelf"),
-        cc: command_on_path("cc"),
-        need_cc: !root.join("deps/limine/limine-binary/limine").is_file(),
+        objdump: command_on_path("objdump"),
+        grub: grub_ready(),
         xorriso: command_on_path("xorriso"),
+        ovmf: find_ovmf(),
         libclang: system_libclang_present(),
         fetch_libclang: command_on_path("dpkg-deb"),
         qemu_x86: command_on_path("qemu-system-x86_64"),
@@ -264,21 +269,21 @@ Re-run just iso from this repository. rust-toolchain.toml selects nightly-2026-0
             ),
         });
     }
-    if !facts.readelf {
+    if !facts.readelf || !facts.objdump {
         gaps.push(Gap {
-            title: "readelf",
+            title: "binutils",
             detail: format!(
-                "support/mb2-stub/build.sh runs readelf after it links the trampoline.\n{}",
+                "support/mb2-stub/build.sh runs readelf and objdump after it links the trampoline.\n{}",
                 package_hint(facts.distro, "binutils", "binutils")
             ),
         });
     }
-    if facts.need_cc && !facts.cc {
+    if !facts.grub {
         gaps.push(Gap {
-            title: "cc",
+            title: "grub",
             detail: format!(
-                "The Limine host tool is compiled with cc.\n{}",
-                package_hint(facts.distro, "gcc", "gcc")
+                "GRUB builds EFI/BOOT/BOOTX64.EFI with grub-mkimage and the modules in {GRUB_PLATFORM_DIR}.\n{}",
+                package_hint(facts.distro, "grub", "grub-efi-amd64-bin")
             ),
         });
     }
@@ -295,12 +300,34 @@ Re-run just iso from this repository. rust-toolchain.toml selects nightly-2026-0
         gaps.push(Gap {
             title: "qemu-system-x86_64",
             detail: format!(
-                "The ISO boot test runs QEMU under SeaBIOS.\n{}",
+                "The ISO boot test runs QEMU under OVMF.\n{}",
                 package_hint(facts.distro, "qemu-system-x86", "qemu-system-x86")
             ),
         });
     }
+    if boot_test {
+        match &facts.ovmf {
+            OvmfFact::Found(_) => {}
+            OvmfFact::BadPath(path) => gaps.push(Gap {
+                title: "OVMF",
+                detail: format!("OVMF_PATH={path} is not a file"),
+            }),
+            OvmfFact::Missing => gaps.push(Gap {
+                title: "OVMF",
+                detail: format!(
+                    "The ISO boot test needs a combined OVMF firmware.\n\
+                     Install the ovmf package or set OVMF_PATH to a combined OVMF.fd.\n\
+                     Arch's edk2-ovmf package ships one at /usr/share/edk2/x64/OVMF.4m.fd.\n{}",
+                    package_hint(facts.distro, "edk2-ovmf", "ovmf")
+                ),
+            }),
+        }
+    }
     gaps
+}
+
+fn grub_ready() -> bool {
+    command_on_path("grub-mkimage") && Path::new(GRUB_PLATFORM_DIR).is_dir()
 }
 
 fn rust_src_gap(facts: &HostFacts) -> Gap {
@@ -414,9 +441,10 @@ mod tests {
             sdk: SdkFact::Ready,
             clang: true,
             readelf: true,
-            cc: true,
-            need_cc: true,
+            objdump: true,
+            grub: true,
             xorriso: true,
+            ovmf: OvmfFact::Found(PathBuf::from("/usr/share/ovmf/OVMF.fd")),
             libclang: true,
             fetch_libclang: false,
             qemu_x86: true,
@@ -497,13 +525,24 @@ mod tests {
     }
 
     #[test]
-    fn boot_test_reports_qemu_under_seabios() {
+    fn boot_test_reports_qemu_under_ovmf() {
         let mut facts = ready();
         facts.qemu_x86 = false;
         let report = format_gaps(&host_gaps(&facts, false, true));
         assert!(report.contains("qemu-system-x86"), "{report}");
-        assert!(report.contains("SeaBIOS"), "{report}");
+        assert!(report.contains("OVMF"), "{report}");
+        assert!(!report.contains("SeaBIOS"), "{report}");
         assert!(!report.contains("OVMF_PATH"), "{report}");
+    }
+
+    #[test]
+    fn boot_test_reports_a_missing_ovmf_firmware() {
+        let mut facts = ready();
+        facts.ovmf = OvmfFact::Missing;
+        let report = format_gaps(&host_gaps(&facts, false, true));
+        assert!(report.contains("OVMF_PATH"), "{report}");
+        assert!(report.contains("edk2-ovmf"), "{report}");
+        assert!(host_gaps(&facts, false, false).is_empty());
     }
 
     #[test]
@@ -517,10 +556,15 @@ mod tests {
     }
 
     #[test]
-    fn cached_limine_tool_does_not_require_cc() {
+    fn missing_grub_names_the_package() {
         let mut facts = ready();
-        facts.cc = false;
-        facts.need_cc = false;
-        assert!(host_gaps(&facts, false, false).is_empty());
+        facts.grub = false;
+        facts.distro = Distro::Debian;
+        let report = format_gaps(&host_gaps(&facts, false, false));
+        assert!(report.contains("grub-mkimage"), "{report}");
+        assert!(
+            report.contains("sudo apt install grub-efi-amd64-bin"),
+            "{report}"
+        );
     }
 }

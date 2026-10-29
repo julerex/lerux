@@ -1,4 +1,4 @@
-/* Multiboot 2 header + 32-bit entry for Limine UEFI/BIOS. */
+/* Multiboot 2 header and 32-bit entry. */
 
 .section .mbh, "a"
 .align 8
@@ -16,7 +16,7 @@ mbh_end:
 .global _start
 .code32
 _start:
-    /* Limine leaves us in 32-bit protected mode: eax=magic, ebx=mbi. */
+    /* Multiboot 2 machine state: 32-bit protected mode, eax=magic, ebx=mbi. */
     push %ebx
     push %eax
     call stub_main

@@ -1,8 +1,8 @@
 //! Phase 52: one-command host deploy of boot images onto mounted FAT media.
 //!
 //! ARM/RISC-V hardware (RPi4): copy `loader.img` and write U-Boot helpers.
-//! x86-64 hardware (PC99 / Z97): also copy `sel4.elf` and write Multiboot 2
-//! Limine/GRUB snippets. Phase 60 Track C: optional SHA-256 sidecar verify.
+//! x86-64 hardware (PC99 / Z97): write the GRUB EFI layout. Phase 60 Track C:
+//! optional SHA-256 sidecar verify.
 
 use std::{
     fs,
@@ -52,61 +52,62 @@ pub fn deploy_loader(
         crate::image_digest::verify_sidecar(&loader)?;
     }
 
-    let dest_loader = dest.join("loader.img");
-    copy_file_and_sidecar(&loader, &dest_loader)?;
-
     let kernel = board_build.join("sel4.elf");
     let x86 = kernel.is_file();
+
     if x86 {
         if verify {
             crate::image_digest::verify_sidecar(&kernel)?;
         }
-        copy_file_and_sidecar(&kernel, &dest.join("sel4.elf"))?;
-        let stub = crate::iso::build_mb2_stub(root)?;
-        fs::copy(&stub, dest.join("mb2-stub.elf"))
-            .with_context(|| format!("copy {} → {}", stub.display(), dest.display()))?;
+        let image = crate::iso::uefi_boot_volume(root, &kernel, &loader, verify)?;
+        image.write_to(&dest)?;
+        copy_sidecar_beside(&kernel, &dest.join("boot/sel4.elf"))?;
+        copy_sidecar_beside(&loader, &dest.join("boot/loader.img"))?;
+        // Best-effort sync so unplug is safer.
+        let _ = Command::new("sync").status();
+        let deployed = dest.join("boot/loader.img");
+        let size = fs::metadata(&deployed).map(|m| m.len()).unwrap_or(0);
+        println!(
+            "==> Deployed loader.img ({} bytes) → {}",
+            size,
+            deployed.display()
+        );
+        println!();
+        print_x86_deploy_notice(board, &dest);
+        return Ok(deployed);
     }
 
+    let dest_loader = dest.join("loader.img");
+    copy_file_and_sidecar(&loader, &dest_loader)?;
     // Best-effort sync so unplug is safer.
     let _ = Command::new("sync").status();
-
     let size = fs::metadata(&dest_loader).map(|m| m.len()).unwrap_or(0);
     println!(
         "==> Deployed loader.img ({} bytes) → {}",
         size,
         dest_loader.display()
     );
-
-    if x86 {
-        let limine_txt = dest.join("lerux-limine.conf");
-        fs::write(&limine_txt, limine_commands(board))
-            .with_context(|| format!("write {}", limine_txt.display()))?;
-        let grub_txt = dest.join("lerux-grub.cfg");
-        fs::write(&grub_txt, grub_commands(board))
-            .with_context(|| format!("write {}", grub_txt.display()))?;
-        println!(
-            "==> Wrote Multiboot 2 helpers → {} and {}",
-            limine_txt.display(),
-            grub_txt.display()
-        );
-        println!();
-        print_x86_post_deploy_instructions(board, &dest_loader);
-    } else {
-        let uboot_txt = dest.join("lerux-uboot.txt");
-        fs::write(&uboot_txt, uboot_commands(board))
-            .with_context(|| format!("write {}", uboot_txt.display()))?;
-        println!("==> Wrote U-Boot helper → {}", uboot_txt.display());
-        println!();
-        print_post_deploy_instructions(board, &dest_loader);
-    }
+    let uboot_txt = dest.join("lerux-uboot.txt");
+    fs::write(&uboot_txt, uboot_commands(board))
+        .with_context(|| format!("write {}", uboot_txt.display()))?;
+    println!("==> Wrote U-Boot helper → {}", uboot_txt.display());
+    println!();
+    print_post_deploy_instructions(board, &dest_loader);
     Ok(dest_loader)
 }
 
 fn copy_file_and_sidecar(src: &Path, dest: &Path) -> Result<()> {
     fs::copy(src, dest).with_context(|| format!("copy {} → {}", src.display(), dest.display()))?;
+    copy_sidecar_beside(src, dest)
+}
+
+fn copy_sidecar_beside(src: &Path, dest_file: &Path) -> Result<()> {
     let side = crate::image_digest::sidecar_path(src);
     if side.is_file() {
-        let dest_side = crate::image_digest::sidecar_path(dest);
+        let dest_side = crate::image_digest::sidecar_path(dest_file);
+        if let Some(parent) = dest_side.parent() {
+            fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
+        }
         fs::copy(&side, &dest_side)
             .with_context(|| format!("copy {} → {}", side.display(), dest_side.display()))?;
         println!("==> Copied integrity sidecar → {}", dest_side.display());
@@ -127,56 +128,19 @@ fn uboot_commands(board: &str) -> String {
     )
 }
 
-fn limine_commands(board: &str) -> String {
-    format!(
-        "# lerux Limine stanza for {board} (Multiboot 2 via mb2-stub).\n\
-         # Paste into limine.conf. Do not replace an existing OS menu.\n\
-         # USB FAT: mb2-stub.elf, sel4.elf (64-bit), and loader.img at the volume root.\n\
-         # Prefer the UEFI USB entry. The stub places sel4 at 1 MiB after ExitBootServices.\n\
-         #\n\
-         # Host golden path after boot (serial on a second machine):\n\
-         #   LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD={board} just test-hw\n\
-         #\n\
-         /lerux ({board})\n\
-         \x20   comment: seL4 Microkit\n\
-         \x20   protocol: multiboot2\n\
-         \x20   path: boot():/mb2-stub.elf\n\
-         \x20   module_path: boot():/sel4.elf\n\
-         \x20   module_path: boot():/loader.img\n"
-    )
-}
-
-fn grub_commands(board: &str) -> String {
-    format!(
-        "# lerux GRUB2 menuentry for {board} (Multiboot 2, 64-bit sel4.elf).\n\
-         # Paste into a custom file (e.g. /etc/grub.d/40_custom) or a USB grub.cfg.\n\
-         # Do not overwrite the Ubuntu /boot/grub/grub.cfg on sda.\n\
-         # UEFI GRUB may still need a free 1 MiB window; prefer Limine + mb2-stub.\n\
-         #\n\
-         menuentry \"lerux {board}\" {{\n\
-         \x20   insmod fat\n\
-         \x20   insmod multiboot2\n\
-         \x20   search --file --set=root /sel4.elf\n\
-         \x20   multiboot2 /sel4.elf\n\
-         \x20   module2 /loader.img\n\
-         }}\n"
-    )
-}
-
-fn print_x86_post_deploy_instructions(board: &str, dest_loader: &Path) {
+fn print_x86_deploy_notice(board: &str, dest: &Path) {
     println!("Next steps:");
-    println!("  1. Keep Ubuntu on sda. Boot this USB/ESP entry only from the firmware boot menu.");
+    println!("  1. Keep Ubuntu on sda. Boot this volume only from the firmware menu.");
     println!(
         "  2. Serial: 115200 8N1 on the board COMA header (no rear DB9) via a laptop USB-serial."
     );
-    println!("  3. Bootloader: Limine (lerux-limine.conf) Multiboot 2 via mb2-stub (prefer UEFI).");
-    println!("       kernel  /mb2-stub.elf");
-    println!("       module  /sel4.elf");
-    println!("       module  /loader.img");
+    println!(
+        "  3. Firmware loads EFI/BOOT/BOOTX64.EFI. GRUB reads /boot/grub/grub.cfg on this volume."
+    );
     println!("  4. Boot smoke (laptop, serial not held by screen):");
     println!("       LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD={board} just test-hw");
     println!();
-    println!("Image on media: {}", dest_loader.display());
+    println!("Image on media: {}", dest.display());
     println!("Full procedure: docs/boards.md#gigabyte-z97-d3h-install-path");
 }
 
@@ -451,6 +415,11 @@ mod tests {
         let dest = setup_x86_image(tmp.path(), b"fake-loader", b"fake-kernel");
         plant_fake_mb2_stub(tmp.path());
         let dest_canon = dest.canonicalize().unwrap();
+        fs::write(dest_canon.join("lerux-limine.conf"), b"old-limine").unwrap();
+        fs::write(dest_canon.join("lerux-grub.cfg"), b"multiboot2 /sel4.elf\n").unwrap();
+        fs::write(dest_canon.join("sel4.elf"), b"old-root-kernel").unwrap();
+        fs::write(dest_canon.join("loader.img"), b"old-root-loader").unwrap();
+        fs::write(dest_canon.join("mb2-stub.elf"), b"old-root-stub").unwrap();
 
         deploy_loader(
             tmp.path(),
@@ -464,23 +433,31 @@ mod tests {
         .unwrap();
 
         assert_eq!(
-            fs::read(dest_canon.join("sel4.elf")).unwrap(),
+            fs::read(dest_canon.join("boot/sel4.elf")).unwrap(),
             b"fake-kernel"
         );
-        assert!(dest_canon.join("sel4.elf.sha256").is_file());
+        assert!(dest_canon.join("boot/sel4.elf.sha256").is_file());
+        assert!(dest_canon.join("boot/loader.img.sha256").is_file());
         assert_eq!(
-            fs::read(dest_canon.join("mb2-stub.elf")).unwrap(),
+            fs::read(dest_canon.join("boot/loader.img")).unwrap(),
+            b"fake-loader"
+        );
+        assert_eq!(
+            fs::read(dest_canon.join("boot/mb2-stub.elf")).unwrap(),
             b"fake-stub"
         );
-        let limine = fs::read_to_string(dest_canon.join("lerux-limine.conf")).unwrap();
-        assert!(limine.contains("multiboot2"), "{limine}");
-        assert!(limine.contains("mb2-stub.elf"), "{limine}");
-        assert!(limine.contains("sel4.elf"), "{limine}");
-        assert!(limine.contains("loader.img"), "{limine}");
-        let grub = fs::read_to_string(dest_canon.join("lerux-grub.cfg")).unwrap();
-        assert!(grub.contains("multiboot2"), "{grub}");
-        assert!(grub.contains("sel4.elf"), "{grub}");
-        assert!(grub.contains("module2"), "{grub}");
+        let cfg = fs::read_to_string(dest_canon.join("boot/grub/grub.cfg")).unwrap();
+        let stub_at = cfg.find("multiboot2 /boot/mb2-stub.elf").expect("stub");
+        let kernel_at = cfg.find("module2 /boot/sel4.elf").expect("kernel");
+        let loader_at = cfg.find("module2 /boot/loader.img").expect("loader");
+        assert!(stub_at < kernel_at && kernel_at < loader_at, "{cfg}");
+        assert!(!cfg.contains("multiboot2 /boot/sel4.elf"), "{cfg}");
+        assert!(!cfg.contains("multiboot2 /sel4.elf"), "{cfg}");
+        assert!(!dest_canon.join("lerux-limine.conf").exists());
+        assert!(!dest_canon.join("lerux-grub.cfg").exists());
+        assert!(!dest_canon.join("sel4.elf").exists());
+        assert!(!dest_canon.join("loader.img").exists());
+        assert!(!dest_canon.join("mb2-stub.elf").exists());
         assert!(!dest_canon.join("lerux-uboot.txt").is_file());
     }
 

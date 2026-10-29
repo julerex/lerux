@@ -21,7 +21,7 @@ CFLAGS=(
     -Os
     -m32
 )
-# Limine enters this stub in 32-bit protected mode with SSE left off
+# Multiboot 2 enters this stub in 32-bit protected mode with SSE left off
 # (CR4.OSFXSR clear). A vector store is #UD, then a triple fault and a
 # reset, which is what a laptop shows as a hang after the module lines.
 INTEGER_ONLY=(
@@ -39,6 +39,7 @@ INTEGER_ONLY=(
     -Wl,-T,"$root/stub.ld" \
     -Wl,-m,elf_i386 \
     -Wl,--build-id=none \
+    -Wl,-z,max-page-size=8 \
     -o "$out" \
     "$tmpdir/entry.o" "$tmpdir/stub.o" "$tmpdir/fb_paint.o"
 

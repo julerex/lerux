@@ -1,6 +1,10 @@
-/* Linked at 32 MiB so Limine finds a free load address under UEFI.
-   seL4 itself stays linked at 1 MiB; this trampoline copies it there
-   after Limine has already called ExitBootServices. */
+/* Linked at 32 MiB. seL4 stays at 1 MiB; this trampoline copies it there
+   after the loader has called ExitBootServices.
+   The mode page is the lower address, so it is stored first in the file.
+   A 4096-byte segment alignment ends that page at file offset 8192, and
+   GRUB's header scan stops before the multiboot header. build.sh sets
+   -z max-page-size=8 so the header stays inside the scan. Load addresses
+   stay equal to these virtual addresses. */
 
 ENTRY(_start)
 

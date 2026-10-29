@@ -1,60 +1,37 @@
-//! Hybrid BIOS+UEFI ISO for x86 Multiboot 2 boards.
+//! UEFI ISO for x86 Multiboot 2 boards.
 //!
 //! `lerux iso` packs `mb2-stub.elf`, `sel4.elf` (64-bit), and `loader.img`
-//! into a hybrid ISO. Limine Multiboot 2-boots the stub (linked at 32 MiB).
-//! The stub ELF-loads `sel4.elf` to its 1 MiB link address after Limine has
-//! called `ExitBootServices`, so the UEFI entry works. The image is a file.
+//! into one FAT, then publishes that FAT as `boot/esp.img` on an ISO9660
+//! image. GRUB Multiboot 2-boots the stub. The stub ELF-loads `sel4.elf` to
+//! its 1 MiB link address after `ExitBootServices`. The image is a file.
 //! It does not write a USB device.
 //!
-//! Limine 12.9.0 is pinned in `deps/versions.toml` and unpacked under
-//! `deps/limine/` (gitignored). `xorriso` is the system binary (`libisoburn`
-//! on Arch). The EFI system partition is a FAT16 volume that holds the same
-//! boot files as the ISO9660 tree, so a laptop firmware can read `sel4.elf`
-//! from the partition it loaded Limine from.
+//! `grub-mkimage` comes from the distro (`grub-efi-amd64-bin` on Debian,
+//! `grub` on Arch). `xorriso` is the system binary (`libisoburn` on Arch).
 
 use std::{
     fs,
     path::{Component, Path, PathBuf},
     process::Command,
+    time::SystemTime,
 };
 
 use anyhow::{bail, Context, Result};
-use serde::Deserialize;
 
 use crate::{
     board::{get_board, load_boards, Board},
+    boot_volume::{recipe_stamp, GrubEfi, GrubHost, StubBootImage, StubPayloads, XORRISO_BOOT},
     image_digest,
     process::{self, command_on_path, path_str},
 };
-
-/// Limine menu embedded in the ISO. Paths are on the boot volume.
-///
-/// The Multiboot 2 kernel is `mb2-stub.elf` (32 MiB). Modules are the 64-bit
-/// seL4 kernel ELF and the Microkit loader. See `support/mb2-stub/`.
-/// `timeout: 0` boots immediately so QEMU smokes do not wait on the menu.
-pub fn limine_conf() -> String {
-    "\
-# Multiboot 2 via mb2-stub (UEFI). `serial` is BIOS-only.
-timeout: 0
-serial: yes
-serial_baudrate: 115200
-
-/lerux
-    comment: seL4 Microkit
-    protocol: multiboot2
-    path: boot():/boot/mb2-stub.elf
-    module_path: boot():/boot/sel4.elf
-    module_path: boot():/boot/loader.img
-"
-    .to_string()
-}
 
 /// Build `build/<board>/lerux_<board>.iso` (or `--output`) for an x86_64 board.
 ///
 /// Builds the Microkit image when `loader.img` or `sel4.elf` is missing and
 /// `build_if_missing` is set. When `verify` is set, both SHA-256 sidecars must
 /// match before anything is packed. Sidecars are not copied onto the ISO.
-/// Prints USB flash instructions after packing.
+/// Prints USB flash instructions after packing. Always packs, then writes the
+/// boot-recipe stamp.
 pub fn build_iso(
     root: &Path,
     board: &str,
@@ -79,7 +56,10 @@ pub fn build_iso(
 
 /// Pack `build/<board>/lerux_<board>.iso` for a QEMU smoke (no USB flash text).
 ///
-/// Skips rebuild when the ISO is newer than `sel4.elf` and `loader.img`.
+/// Repacks unless `lerux_<board>.iso.boot-recipe` matches [`recipe_stamp`] and
+/// the ISO is at least as new as the kernel, the loader, the stub sources, and
+/// the host GRUB files. A missing GRUB install fails here, before an older ISO
+/// is reused.
 pub fn ensure_iso_for_qemu(
     root: &Path,
     board: &str,
@@ -87,14 +67,16 @@ pub fn ensure_iso_for_qemu(
     config: &str,
 ) -> Result<PathBuf> {
     let out = resolve_iso_output(root, build_dir, board, None)?;
+    let host = GrubHost::discover()?;
     let board_build = root.join(build_dir).join(board);
     let loader = board_build.join("loader.img");
     let kernel = board_build.join("sel4.elf");
-    if out.is_file()
-        && loader.is_file()
-        && kernel.is_file()
-        && iso_inputs_fresh(&out, &[&loader, &kernel])
-    {
+    let mut inputs = vec![kernel, loader];
+    for rel in StubPayloads::SOURCES {
+        inputs.push(root.join(rel));
+    }
+    inputs.extend(host.freshness_inputs()?);
+    if iso_is_current(&out, &recipe_path(&out), &recipe_stamp(), &inputs) {
         return Ok(out);
     }
     pack_iso(
@@ -135,36 +117,148 @@ fn pack_iso(
         }
     }
 
-    let limine = ensure_limine(root)?;
-    let staging = tempfile::tempdir().context("iso staging directory")?;
-    stage_iso_root(root, staging.path(), &kernel, &loader, verify)?;
-    stage_limine_boot(staging.path(), &limine)?;
+    let image = uefi_boot_volume(root, &kernel, &loader, verify)?;
     let xorriso = ensure_xorriso()?;
-    write_iso(&xorriso, &limine, staging.path(), &out)?;
+    write_uefi_iso(&xorriso, &image, &out)?;
 
     let size = fs::metadata(&out).map(|m| m.len()).unwrap_or(0);
     println!("==> Wrote ISO ({size} bytes) → {}", out.display());
     Ok(out)
 }
 
-fn iso_inputs_fresh(iso: &Path, inputs: &[&Path]) -> bool {
+/// Read the three payloads and build the GRUB EFI image.
+pub(crate) fn uefi_boot_volume(
+    root: &Path,
+    kernel: &Path,
+    loader: &Path,
+    verify: bool,
+) -> Result<StubBootImage> {
+    if verify {
+        image_digest::verify_sidecar(kernel)?;
+        image_digest::verify_sidecar(loader)?;
+    } else if !kernel.is_file() || !loader.is_file() {
+        bail!(
+            "missing boot files {} and {}",
+            kernel.display(),
+            loader.display()
+        );
+    }
+    let kernel_bytes = fs::read(kernel).with_context(|| format!("read {}", kernel.display()))?;
+    let loader_bytes = fs::read(loader).with_context(|| format!("read {}", loader.display()))?;
+    let stub_path = build_mb2_stub(root)?;
+    let stub_bytes =
+        fs::read(&stub_path).with_context(|| format!("read {}", stub_path.display()))?;
+    let payloads = StubPayloads::new(stub_bytes, kernel_bytes, loader_bytes)?;
+    let efi = efi_image()?;
+    Ok(StubBootImage::assemble(efi, payloads))
+}
+
+fn efi_image() -> Result<GrubEfi> {
+    #[cfg(test)]
+    {
+        Ok(GrubEfi::from_bytes_for_test(b"test-efi".to_vec()))
+    }
+    #[cfg(not(test))]
+    {
+        GrubEfi::build(&GrubHost::discover()?)
+    }
+}
+
+fn iso_is_current(
+    iso: &Path,
+    recipe_path: &Path,
+    expected_recipe: &str,
+    inputs: &[PathBuf],
+) -> bool {
     let Ok(iso_meta) = fs::metadata(iso) else {
         return false;
     };
     let Ok(iso_mtime) = iso_meta.modified() else {
         return false;
     };
-    inputs.iter().all(|input| {
-        fs::metadata(input)
-            .and_then(|m| m.modified())
-            .map(|t| t <= iso_mtime)
-            .unwrap_or(false)
-    })
+    let Ok(stored) = fs::read_to_string(recipe_path) else {
+        return false;
+    };
+    if stored != expected_recipe {
+        return false;
+    }
+    inputs
+        .iter()
+        .all(|input| mtime_at_or_before(input, iso_mtime))
+}
+
+fn mtime_at_or_before(path: &Path, iso_mtime: SystemTime) -> bool {
+    fs::metadata(path)
+        .and_then(|meta| meta.modified())
+        .map(|mtime| mtime <= iso_mtime)
+        .unwrap_or(false)
+}
+
+fn recipe_path(iso: &Path) -> PathBuf {
+    let mut name = iso
+        .file_name()
+        .map(|name| name.to_os_string())
+        .unwrap_or_default();
+    name.push(".boot-recipe");
+    iso.with_file_name(name)
+}
+
+fn write_uefi_iso(xorriso: &Path, image: &StubBootImage, out: &Path) -> Result<()> {
+    let esp = image.fat_image()?;
+    let staging = tempfile::tempdir().context("iso staging directory")?;
+    let esp_path = staging.path().join("boot/esp.img");
+    if let Some(parent) = esp_path.parent() {
+        fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
+    }
+    fs::write(&esp_path, &esp).with_context(|| format!("write {}", esp_path.display()))?;
+
+    if let Some(parent) = out.parent() {
+        fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
+    }
+    let partial = sibling_partial(out)?;
+    if partial.exists() {
+        fs::remove_file(&partial).with_context(|| format!("remove {}", partial.display()))?;
+    }
+
+    println!("==> xorriso → {}", out.display());
+    let mut cmd = Command::new(xorriso);
+    cmd.args(XORRISO_BOOT);
+    cmd.arg(staging.path());
+    cmd.arg("-o");
+    cmd.arg(&partial);
+    let status = cmd.status().context("failed to run xorriso")?;
+    if !status.success() {
+        let _ = fs::remove_file(&partial);
+        bail!("xorriso exited with {status} (package xorriso)");
+    }
+
+    fs::rename(&partial, out)
+        .with_context(|| format!("rename {} → {}", partial.display(), out.display()))?;
+    write_recipe_stamp(out)?;
+    Ok(())
+}
+
+fn write_recipe_stamp(iso: &Path) -> Result<()> {
+    let dest = recipe_path(iso);
+    let partial = sibling_partial(&dest)?;
+    fs::write(&partial, recipe_stamp()).with_context(|| format!("write {}", partial.display()))?;
+    fs::rename(&partial, &dest)
+        .with_context(|| format!("rename {} → {}", partial.display(), dest.display()))?;
+    Ok(())
+}
+
+fn sibling_partial(path: &Path) -> Result<PathBuf> {
+    let mut name = path
+        .file_name()
+        .context("path has no file name")?
+        .to_os_string();
+    name.push(".partial");
+    Ok(path.with_file_name(name))
 }
 
 /// Boot an existing ISO in QEMU as a raw disk under OVMF (UEFI).
 ///
-/// Matches the metal USB path: Limine `BOOTX64.EFI` → `mb2-stub` → seL4.
+/// Matches the metal USB path: GRUB `EFI/BOOT/BOOTX64.EFI` → `mb2-stub` → seL4.
 /// Requires a combined OVMF firmware (`OVMF_PATH` or a packaged `OVMF.fd`).
 pub fn boot_test(root: &Path, iso: &Path, board: &str, build_dir: &str) -> Result<()> {
     let ovmf = require_ovmf()?;
@@ -204,7 +298,7 @@ fn boot_iso_ovmf(root: &Path, iso: &Path, board: &str, build_dir: &str, ovmf: &P
     crate::test::run_smoke_with_capture(cmd, &test, Some(&log))
 }
 
-/// Attach combined OVMF and the Limine ISO on ICH9 AHCI bus `ide.1`.
+/// Attach combined OVMF and the ISO on ICH9 AHCI bus `ide.1`.
 ///
 /// q35 AHCI ports are one-unit buses (`ide.0`, `ide.1`, …). Data disks that
 /// use port 0 stay on `ide.0`; the ISO uses `ide.1` with `bootindex=0` so
@@ -234,6 +328,7 @@ pub fn require_ovmf() -> Result<PathBuf> {
         "/usr/share/ovmf/OVMF.fd",
         "/usr/share/OVMF/OVMF.fd",
         "/usr/share/qemu/OVMF.fd",
+        "/usr/share/edk2/x64/OVMF.4m.fd",
     ] {
         let p = PathBuf::from(candidate);
         if p.is_file() {
@@ -245,31 +340,6 @@ pub fn require_ovmf() -> Result<PathBuf> {
     )
 }
 
-fn stage_iso_root(
-    root: &Path,
-    dest: &Path,
-    kernel: &Path,
-    loader: &Path,
-    verify: bool,
-) -> Result<()> {
-    if verify {
-        image_digest::verify_sidecar(kernel)?;
-        image_digest::verify_sidecar(loader)?;
-    } else if !kernel.is_file() || !loader.is_file() {
-        bail!(
-            "missing boot files {} and {}",
-            kernel.display(),
-            loader.display()
-        );
-    }
-    let stub = build_mb2_stub(root)?;
-    copy_boot_file(&stub, &dest.join("boot/mb2-stub.elf"))?;
-    copy_boot_file(kernel, &dest.join("boot/sel4.elf"))?;
-    copy_boot_file(loader, &dest.join("boot/loader.img"))?;
-    process::write_file(&dest.join("boot/limine.conf"), &limine_conf())?;
-    Ok(())
-}
-
 /// Build `support/mb2-stub/mb2-stub.elf` with clang (`support/mb2-stub/build.sh`).
 pub fn build_mb2_stub(root: &Path) -> Result<PathBuf> {
     let script = root.join("support/mb2-stub/build.sh");
@@ -278,7 +348,7 @@ pub fn build_mb2_stub(root: &Path) -> Result<PathBuf> {
         bail!("missing {}", script.display());
     }
     if !command_on_path("clang") {
-        bail!("clang is required to build support/mb2-stub (UEFI Limine trampoline)");
+        bail!("clang is required to build support/mb2-stub (UEFI Multiboot 2 trampoline)");
     }
     eprintln!("==> Building mb2-stub (UEFI Multiboot 2 trampoline)");
     process::run_checked("bash", &[&path_str(&script), &path_str(&out)])
@@ -289,229 +359,10 @@ pub fn build_mb2_stub(root: &Path) -> Result<PathBuf> {
     Ok(out)
 }
 
-struct LimineTool {
-    install: PathBuf,
-    bios_cd: PathBuf,
-    bios_sys: PathBuf,
-    bootx64: PathBuf,
-}
-
-fn stage_limine_boot(dest: &Path, limine: &LimineTool) -> Result<()> {
-    copy_boot_file(&limine.bios_cd, &dest.join("boot/limine-bios-cd.bin"))?;
-    copy_boot_file(&limine.bios_sys, &dest.join("boot/limine-bios.sys"))?;
-    copy_boot_file(&limine.bootx64, &dest.join("EFI/BOOT/BOOTX64.EFI"))?;
-    // Replace Limine's loader-only FAT. The laptop boots this partition and
-    // reads sel4.elf from it; the ISO9660 copy remains for the BIOS entry.
-    let image = crate::fat_esp::write_image(&[
-        (
-            "EFI/BOOT/BOOTX64.EFI",
-            &read_boot(dest, "EFI/BOOT/BOOTX64.EFI")?,
-        ),
-        ("boot/limine.conf", &read_boot(dest, "boot/limine.conf")?),
-        (
-            "boot/limine-bios.sys",
-            &read_boot(dest, "boot/limine-bios.sys")?,
-        ),
-        ("boot/mb2-stub.elf", &read_boot(dest, "boot/mb2-stub.elf")?),
-        ("boot/sel4.elf", &read_boot(dest, "boot/sel4.elf")?),
-        ("boot/loader.img", &read_boot(dest, "boot/loader.img")?),
-    ])?;
-    let uefi = dest.join("boot/limine-uefi-cd.bin");
-    fs::write(&uefi, image).with_context(|| format!("write {}", uefi.display()))?;
-    Ok(())
-}
-
-fn read_boot(dest: &Path, rel: &str) -> Result<Vec<u8>> {
-    let path = dest.join(rel);
-    fs::read(&path).with_context(|| format!("read {}", path.display()))
-}
-
-fn copy_boot_file(src: &Path, dest: &Path) -> Result<()> {
-    if let Some(parent) = dest.parent() {
-        fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
-    }
-    fs::copy(src, dest).with_context(|| format!("copy {} → {}", src.display(), dest.display()))?;
-    Ok(())
-}
-
-#[derive(Debug, Deserialize)]
-struct VersionsToml {
-    limine: PinnedLimine,
-}
-
-#[derive(Debug, Deserialize)]
-struct PinnedLimine {
-    version: String,
-    url: String,
-    sha256: String,
-}
-
-fn load_limine_pin(root: &Path) -> Result<PinnedLimine> {
-    let path = root.join("deps/versions.toml");
-    let text = fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
-    let parsed: VersionsToml =
-        toml::from_str(&text).with_context(|| format!("parse {}", path.display()))?;
-    if parsed.limine.sha256.len() != 64 {
-        bail!(
-            "deps/versions.toml [limine].sha256 must be 64 hex chars, got {}",
-            parsed.limine.sha256.len()
-        );
-    }
-    Ok(parsed.limine)
-}
-
-fn ensure_limine(root: &Path) -> Result<LimineTool> {
-    let pin = load_limine_pin(root)?;
-    let dir = root.join("deps/limine");
-    let extracted = dir.join("limine-binary");
-    let stamp = dir.join("sha256");
-    let ready = stamp_matches(&stamp, &pin.sha256) && limine_tree_ready(&extracted);
-    if !ready {
-        process::ensure_dir(&dir)?;
-        let tarball = dir.join("limine-binary.tar.xz");
-        let have_tarball = tarball.is_file() && image_digest::sha256_file(&tarball)? == pin.sha256;
-        if !have_tarball {
-            if tarball.exists() {
-                fs::remove_file(&tarball)
-                    .with_context(|| format!("remove {}", tarball.display()))?;
-            }
-            process::download(&pin.url, &tarball)?;
-            let got = image_digest::sha256_file(&tarball)?;
-            if got != pin.sha256 {
-                let _ = fs::remove_file(&tarball);
-                bail!(
-                    "Limine tarball sha256 mismatch\n  expected {}\n  actual   {got}",
-                    pin.sha256
-                );
-            }
-        }
-        if extracted.exists() {
-            fs::remove_dir_all(&extracted)
-                .with_context(|| format!("remove {}", extracted.display()))?;
-        }
-        crate::install::extract_tar_xz(&tarball, &dir)?;
-        build_limine_tool(&extracted)?;
-        fs::write(&stamp, format!("{}\n", pin.sha256))
-            .with_context(|| format!("write {}", stamp.display()))?;
-        eprintln!(
-            "==> Limine {} ready at {}",
-            pin.version,
-            extracted.display()
-        );
-    }
-    Ok(LimineTool {
-        install: extracted.join("limine"),
-        bios_cd: extracted.join("limine-bios-cd.bin"),
-        bios_sys: extracted.join("limine-bios.sys"),
-        bootx64: extracted.join("BOOTX64.EFI"),
-    })
-}
-
-fn stamp_matches(stamp: &Path, sha256: &str) -> bool {
-    fs::read_to_string(stamp)
-        .map(|text| text.trim() == sha256)
-        .unwrap_or(false)
-}
-
-fn limine_tree_ready(extracted: &Path) -> bool {
-    extracted.join("limine").is_file()
-        && extracted.join("limine-bios-cd.bin").is_file()
-        && extracted.join("limine-uefi-cd.bin").is_file()
-        && extracted.join("limine-bios.sys").is_file()
-        && extracted.join("BOOTX64.EFI").is_file()
-}
-
-fn build_limine_tool(extracted: &Path) -> Result<()> {
-    if !command_on_path("cc") {
-        bail!("cc is not on PATH; it is required to build the Limine host tool");
-    }
-    let source = extracted.join("limine.c");
-    if !source.is_file() {
-        bail!("missing {} in the Limine binary release", source.display());
-    }
-    eprintln!("==> Building Limine host tool");
-    process::run_checked(
-        "cc",
-        &[
-            "-std=c99",
-            "-D_FILE_OFFSET_BITS=64",
-            "-O2",
-            &format!("-I{}", extracted.display()),
-            &path_str(&source),
-            "-o",
-            &path_str(&extracted.join("limine")),
-        ],
-    )
-    .context("compile Limine host tool (limine.c)")?;
-    Ok(())
-}
-
 fn ensure_xorriso() -> Result<PathBuf> {
     which::which("xorriso").context(
         "xorriso is not on PATH. Install this system's package (Arch: pacman -S libisoburn) and re-run.",
     )
-}
-
-fn write_iso(xorriso: &Path, limine: &LimineTool, staging: &Path, out: &Path) -> Result<()> {
-    if let Some(parent) = out.parent() {
-        fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
-    }
-    let mut partial_name = out
-        .file_name()
-        .context("ISO output has no file name")?
-        .to_os_string();
-    partial_name.push(".partial");
-    let partial = out.with_file_name(partial_name);
-    if partial.exists() {
-        fs::remove_file(&partial).with_context(|| format!("remove {}", partial.display()))?;
-    }
-
-    println!("==> xorriso → {}", out.display());
-    let mut cmd = Command::new(xorriso);
-    cmd.args([
-        "-as",
-        "mkisofs",
-        "-R",
-        "-r",
-        "-J",
-        "-b",
-        "boot/limine-bios-cd.bin",
-        "-no-emul-boot",
-        "-boot-load-size",
-        "4",
-        "-boot-info-table",
-        "-hfsplus",
-        "-apm-block-size",
-        "2048",
-        "--efi-boot",
-        "boot/limine-uefi-cd.bin",
-        "-efi-boot-part",
-        "--efi-boot-image",
-        "--protective-msdos-label",
-    ]);
-    cmd.arg(staging);
-    cmd.arg("-o");
-    cmd.arg(&partial);
-    let status = cmd.status().context("failed to run xorriso")?;
-    if !status.success() {
-        let _ = fs::remove_file(&partial);
-        bail!("xorriso exited with {status} (package xorriso)");
-    }
-
-    println!("==> limine bios-install");
-    let status = Command::new(&limine.install)
-        .arg("bios-install")
-        .arg(&partial)
-        .status()
-        .context("failed to run limine bios-install")?;
-    if !status.success() {
-        let _ = fs::remove_file(&partial);
-        bail!("limine bios-install exited with {status}");
-    }
-
-    fs::rename(&partial, out)
-        .with_context(|| format!("rename {} → {}", partial.display(), out.display()))?;
-    Ok(())
 }
 
 fn print_usb_instructions(board: &str, iso: &Path) {
@@ -524,7 +375,7 @@ fn print_usb_instructions(board: &str, iso: &Path) {
     );
     if board == "swift_sfx14_41g" {
         println!("Replace sdX with the flash drive from lsblk. Do not write the internal NVMe.");
-        println!("Firmware boot menu → the USB entry that says UEFI (Limine BOOTX64.EFI).");
+        println!("Firmware boot menu → the USB entry that says UEFI (GRUB EFI/BOOT/BOOTX64.EFI).");
         println!("mb2-stub loads sel4.elf (64-bit) at 1 MiB after ExitBootServices.");
         println!(
             "Screen: the GOP mode line, then \"1 browser\" and \"2 maths\". This laptop has no COM port."
@@ -535,7 +386,9 @@ fn print_usb_instructions(board: &str, iso: &Path) {
     println!(
         "Replace sdX with the flash drive from lsblk. Do not use sda (Ubuntu SSD) or sdb (data disk)."
     );
-    println!("Firmware boot menu (F12) → the USB entry that says UEFI (Limine BOOTX64.EFI).");
+    println!(
+        "Firmware boot menu (F12) → the USB entry that says UEFI (GRUB EFI/BOOT/BOOTX64.EFI)."
+    );
     println!("mb2-stub loads sel4.elf (64-bit) at 1 MiB after ExitBootServices.");
     println!(
         "Screen: blue background, \"hello lerux\" on the first line, then \"1 browser\" and \"2 maths\"."
@@ -649,19 +502,6 @@ mod tests {
     }
 
     #[test]
-    fn limine_conf_is_multiboot2() {
-        let cfg = limine_conf();
-        assert!(cfg.contains("protocol: multiboot2"), "{cfg}");
-        assert!(cfg.contains("timeout: 0"), "{cfg}");
-        assert!(cfg.contains("boot():/boot/mb2-stub.elf"), "{cfg}");
-        assert!(cfg.contains("module_path: boot():/boot/sel4.elf"), "{cfg}");
-        assert!(
-            cfg.contains("module_path: boot():/boot/loader.img"),
-            "{cfg}"
-        );
-    }
-
-    #[test]
     fn ovmf_iso_boot_uses_ide_bus_one() {
         let mut cmd = Command::new("qemu-system-x86_64");
         append_ovmf_iso_boot(
@@ -688,7 +528,7 @@ mod tests {
     }
 
     #[test]
-    fn stage_copies_stub_kernel_and_loader_without_sidecars() {
+    fn volume_copies_stub_kernel_and_loader_without_sidecars() {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../..")
             .canonicalize()
@@ -701,8 +541,9 @@ mod tests {
         image_digest::write_sidecar(&kernel).unwrap();
         image_digest::write_sidecar(&loader).unwrap();
 
-        let dest = tmp.path().join("iso-root");
-        stage_iso_root(&root, &dest, &kernel, &loader, true).unwrap();
+        let image = uefi_boot_volume(&root, &kernel, &loader, true).unwrap();
+        let dest = tmp.path().join("esp");
+        image.write_to(&dest).unwrap();
 
         assert!(dest.join("boot/mb2-stub.elf").is_file());
         assert_eq!(
@@ -715,17 +556,63 @@ mod tests {
         );
         assert!(!dest.join("boot/sel4.elf.sha256").exists());
         assert!(!dest.join("boot/loader.img.sha256").exists());
-        let cfg = fs::read_to_string(dest.join("boot/limine.conf")).unwrap();
-        assert!(cfg.contains("mb2-stub.elf"), "{cfg}");
-        assert!(cfg.contains("sel4.elf"), "{cfg}");
+        let cfg = fs::read_to_string(dest.join("boot/grub/grub.cfg")).unwrap();
+        let stub_at = cfg.find("multiboot2 /boot/mb2-stub.elf").expect("stub");
+        let kernel_at = cfg.find("module2 /boot/sel4.elf").expect("kernel");
+        let loader_at = cfg.find("module2 /boot/loader.img").expect("loader");
+        assert!(stub_at < kernel_at && kernel_at < loader_at, "{cfg}");
+        assert!(!cfg.contains("multiboot2 /boot/sel4.elf"), "{cfg}");
+        assert!(!dest.join("boot/limine.conf").exists());
+        let stub = fs::read(dest.join("boot/mb2-stub.elf")).unwrap();
+        let magic = 0xe85250d6u32.to_le_bytes();
+        let at = stub
+            .windows(4)
+            .position(|window| window == magic)
+            .expect("multiboot2 magic");
         assert!(
-            cfg.contains("module_path: boot():/boot/loader.img"),
-            "{cfg}"
+            at + 20 <= 8192,
+            "multiboot header at {at} is outside GRUB's search"
+        );
+        let loads = elf32_load_segments(&stub);
+        assert!(
+            loads
+                .iter()
+                .any(|seg| seg.vaddr == 0x01FE_0000 && seg.paddr == seg.vaddr),
+            "mode page load address changed: {loads:?}"
+        );
+        assert!(
+            loads
+                .iter()
+                .any(|seg| seg.vaddr == 0x0200_0000 && seg.paddr == seg.vaddr),
+            "stub load address changed: {loads:?}"
         );
     }
 
+    #[derive(Debug)]
+    struct ElfLoad {
+        vaddr: u32,
+        paddr: u32,
+    }
+
+    fn elf32_load_segments(elf: &[u8]) -> Vec<ElfLoad> {
+        let phoff = u32::from_le_bytes(elf[28..32].try_into().unwrap()) as usize;
+        let phentsize = u16::from_le_bytes(elf[42..44].try_into().unwrap()) as usize;
+        let phnum = u16::from_le_bytes(elf[44..46].try_into().unwrap()) as usize;
+        let mut loads = Vec::new();
+        for i in 0..phnum {
+            let off = phoff + i * phentsize;
+            let kind = u32::from_le_bytes(elf[off..off + 4].try_into().unwrap());
+            if kind == 1 {
+                let vaddr = u32::from_le_bytes(elf[off + 8..off + 12].try_into().unwrap());
+                let paddr = u32::from_le_bytes(elf[off + 12..off + 16].try_into().unwrap());
+                loads.push(ElfLoad { vaddr, paddr });
+            }
+        }
+        loads
+    }
+
     #[test]
-    fn stage_refuses_missing_sidecar() {
+    fn volume_refuses_missing_sidecar() {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join("../..")
             .canonicalize()
@@ -737,13 +624,70 @@ mod tests {
         fs::write(&loader, b"loader-bytes").unwrap();
         image_digest::write_sidecar(&loader).unwrap();
 
-        let dest = tmp.path().join("iso-root");
-        let err = stage_iso_root(&root, &dest, &kernel, &loader, true)
-            .unwrap_err()
-            .to_string();
+        let dest = tmp.path().join("esp");
+        let err = match uefi_boot_volume(&root, &kernel, &loader, true) {
+            Ok(_) => panic!("missing sidecar must fail before a boot image exists"),
+            Err(err) => err.to_string(),
+        };
         assert!(err.contains("missing integrity sidecar"), "{err}");
         assert!(!dest.join("boot/sel4.elf").exists());
         assert!(!dest.join("boot/loader.img").exists());
+    }
+
+    #[test]
+    fn missing_recipe_is_not_current() {
+        let tmp = tempfile::tempdir().unwrap();
+        let iso = tmp.path().join("lerux_board.iso");
+        fs::write(&iso, b"iso").unwrap();
+        let kernel = tmp.path().join("sel4.elf");
+        fs::write(&kernel, b"kernel").unwrap();
+        assert!(!iso_is_current(
+            &iso,
+            &recipe_path(&iso),
+            &recipe_stamp(),
+            &[kernel],
+        ));
+    }
+
+    #[test]
+    fn matching_recipe_and_older_input_is_current() {
+        let tmp = tempfile::tempdir().unwrap();
+        let kernel = tmp.path().join("sel4.elf");
+        fs::write(&kernel, b"kernel").unwrap();
+        let iso = tmp.path().join("lerux_board.iso");
+        fs::write(&iso, b"iso").unwrap();
+        let stamp = recipe_stamp();
+        fs::write(recipe_path(&iso), &stamp).unwrap();
+        assert!(iso_is_current(&iso, &recipe_path(&iso), &stamp, &[kernel]));
+    }
+
+    #[test]
+    fn newer_input_is_not_current() {
+        let tmp = tempfile::tempdir().unwrap();
+        let kernel = tmp.path().join("sel4.elf");
+        fs::write(&kernel, b"kernel").unwrap();
+        let iso = tmp.path().join("lerux_board.iso");
+        fs::write(&iso, b"iso").unwrap();
+        let stamp = recipe_stamp();
+        fs::write(recipe_path(&iso), &stamp).unwrap();
+        let later =
+            fs::metadata(&iso).unwrap().modified().unwrap() + std::time::Duration::from_secs(2);
+        fs::File::options()
+            .write(true)
+            .open(&kernel)
+            .unwrap()
+            .set_modified(later)
+            .unwrap();
+        assert!(!iso_is_current(&iso, &recipe_path(&iso), &stamp, &[kernel],));
+    }
+
+    #[test]
+    fn recipe_path_is_iso_sibling() {
+        let path = recipe_path(Path::new("build/pc_z97_d3h/lerux_pc_z97_d3h.iso"));
+        assert_eq!(
+            path,
+            Path::new("build/pc_z97_d3h/lerux_pc_z97_d3h.iso.boot-recipe")
+        );
     }
 
     #[test]

@@ -6,7 +6,7 @@ RUN apt-get update -q && apt-get install -y --no-install-recommends \
     cmake ninja-build device-tree-compiler libxml2-utils \
     python3 python3-venv python3-pip \
     qemu-system-arm qemu-system-x86 qemu-system-misc qemu-utils ipxe-qemu \
-    ovmf xorriso clang \
+    ovmf xorriso clang grub-efi-amd64-bin \
     libglib2.0-dev libpixman-1-dev pkg-config \
     libclang-dev \
     xz-utils \

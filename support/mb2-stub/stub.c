@@ -1,13 +1,14 @@
 /*
- * Multiboot 2 trampoline for UEFI Limine.
+ * Multiboot 2 trampoline for UEFI.
  *
- * Limine refuses to place sel4.elf at its 1 MiB link address while UEFI boot
- * services still own that range. This stub is linked at 32 MiB so Limine can
- * load it. After ExitBootServices it ELF-loads the 64-bit sel4.elf to 1 MiB,
- * parks loader.img above the kernel, rebuilds a Multiboot 2 info block, and
- * jumps to the kernel entry (still Multiboot 2 / i386 machine state).
+ * sel4.elf is linked at 1 MiB. A loader that checks that address before
+ * ExitBootServices cannot place it: firmware still owns the range. This stub
+ * is linked at 32 MiB so the loader can place it. After ExitBootServices it
+ * ELF-loads the 64-bit sel4.elf to 1 MiB, parks loader.img above the kernel,
+ * rebuilds a Multiboot 2 info block, and jumps to the kernel entry (still
+ * Multiboot 2 / i386 machine state).
  *
- * Limine modules (order matters):
+ * Modules (order matters):
  *   0: sel4.elf   (x86-64 ELF file bytes)
  *   1: loader.img (Microkit initial task)
  */
@@ -58,8 +59,10 @@ struct elf64_phdr {
 /* Fresh Multiboot 2 info for seL4. Kept out of the 1 MiB kernel window. */
 static uint8_t new_mbi[8192] __attribute__((aligned(8)));
 
-/* Swift panel driver maps this page. The linker places it at 0x01FE0000. */
-__attribute__((section(".swift_mode"), aligned(4096))) static uint8_t mode_page[4096];
+/* Swift panel driver maps this page. The linker places it at 0x01FE0000.
+   A 4096-byte alignment here raises the segment alignment and pushes the
+   multiboot header to file offset 8192, past GRUB's scan. */
+__attribute__((section(".swift_mode"))) static uint8_t mode_page[4096];
 
 #define MODE_MAGIC 0x4D4F44454C525558ull
 #define PAE_WINDOW 0x10000000u
@@ -92,6 +95,25 @@ static void *memcpy(void *dst, const void *src, uint32_t n) {
         *d++ = *s++;
     }
     return dst;
+}
+
+static void memmove_bytes(void *dst, const void *src, uint32_t n) {
+    uint8_t *d = dst;
+    const uint8_t *s = src;
+    if (d == s || n == 0) {
+        return;
+    }
+    if ((uintptr_t)d < (uintptr_t)s) {
+        while (n--) {
+            *d++ = *s++;
+        }
+        return;
+    }
+    d += n;
+    s += n;
+    while (n--) {
+        *--d = *--s;
+    }
 }
 
 static void *memset(void *dst, int c, uint32_t n) {
@@ -222,6 +244,49 @@ static uint32_t elf_load_kernel(const uint8_t *file, uint32_t file_size, uint32_
         fail("kernel has no PT_LOAD");
     }
     *entry_out = (uint32_t)eh->e_entry;
+    return align_up(kernel_end, PAGE_SIZE);
+}
+
+/* Highest physical address the kernel image will occupy, page aligned.
+   Used to park the module files above that image before any segment is
+   copied. GRUB places those files at 1 MiB, which is also seL4's load
+   address. Zeroing the first segment then erases the file, and the higher
+   segments are copied as zeros. */
+static uint32_t kernel_image_end(const uint8_t *file, uint32_t file_size) {
+    if (file_size < sizeof(struct elf64_ehdr)) {
+        fail("kernel ELF truncated");
+    }
+    const struct elf64_ehdr *eh = (const struct elf64_ehdr *)file;
+    if (*(const uint32_t *)eh->e_ident != ELF_MAGIC) {
+        fail("kernel not ELF");
+    }
+    if (eh->e_phoff > file_size || eh->e_phnum == 0) {
+        fail("kernel has no program headers");
+    }
+    uint32_t kernel_end = 0;
+    const uint8_t *ph_base = file + (uint32_t)eh->e_phoff;
+    for (uint16_t i = 0; i < eh->e_phnum; i++) {
+        const struct elf64_phdr *ph =
+            (const struct elf64_phdr *)(ph_base + (uint32_t)i * eh->e_phentsize);
+        if (ph->p_type != PT_LOAD) {
+            continue;
+        }
+        if (ph->p_paddr > 0xffffffffull || ph->p_memsz > 0xffffffffull) {
+            fail("kernel PHDR not in 32-bit physical range");
+        }
+        uint32_t paddr = (uint32_t)ph->p_paddr;
+        uint32_t memsz = (uint32_t)ph->p_memsz;
+        if (memsz > 0xffffffffu - paddr) {
+            fail("kernel image end wrap");
+        }
+        uint32_t seg_end = paddr + memsz;
+        if (seg_end > kernel_end) {
+            kernel_end = seg_end;
+        }
+    }
+    if (kernel_end == 0) {
+        fail("kernel has no PT_LOAD");
+    }
     return align_up(kernel_end, PAGE_SIZE);
 }
 
@@ -420,19 +485,33 @@ void stub_main(uint32_t magic, struct multiboot2_header *mbi) {
         fail("empty module");
     }
 
-    uint32_t entry = 0;
-    uint32_t kernel_phys_end =
-        elf_load_kernel((const uint8_t *)(uintptr_t)k_start, k_end - k_start, &entry);
-
+    uint32_t kernel_size = k_end - k_start;
     uint32_t loader_size = l_end - l_start;
-    uint32_t loader_dest = kernel_phys_end;
+    uint32_t image_end = kernel_image_end((const uint8_t *)(uintptr_t)k_start, kernel_size);
+    uint32_t top = image_end;
+    if (k_end > top) {
+        top = align_up(k_end, PAGE_SIZE);
+    }
+    if (l_end > top) {
+        top = align_up(l_end, PAGE_SIZE);
+    }
+    uint32_t loader_dest = top;
     if (loader_size > 0xffffffffu - loader_dest) {
         fail("loader dest wrap");
     }
-    if (loader_dest + loader_size > STUB_LINK_BASE) {
-        loader_dest = align_up(STUB_LINK_BASE + 0x100000u, PAGE_SIZE);
+    uint32_t kernel_park = align_up(loader_dest + loader_size, PAGE_SIZE);
+    if (kernel_size > 0xffffffffu - kernel_park || kernel_park + kernel_size > STUB_LINK_BASE) {
+        fail("kernel park");
     }
-    memcpy((void *)(uintptr_t)loader_dest, (const void *)(uintptr_t)l_start, loader_size);
+    memmove_bytes(
+        (void *)(uintptr_t)loader_dest, (const void *)(uintptr_t)l_start, loader_size
+    );
+    memmove_bytes(
+        (void *)(uintptr_t)kernel_park, (const void *)(uintptr_t)k_start, kernel_size
+    );
+
+    uint32_t entry = 0;
+    elf_load_kernel((const uint8_t *)(uintptr_t)kernel_park, kernel_size, &entry);
 
     memset(new_mbi, 0, sizeof(new_mbi));
     uint32_t idx = sizeof(struct multiboot2_header);

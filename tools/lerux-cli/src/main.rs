@@ -2,6 +2,7 @@ mod agent_sddf;
 mod analyze;
 mod bench;
 mod board;
+mod boot_volume;
 mod build;
 mod build_sdk;
 mod channel_consts;
@@ -248,7 +249,7 @@ enum Commands {
         #[arg(long, default_value_t = false)]
         no_verify: bool,
     },
-    /// Build a hybrid BIOS+UEFI ISO that Multiboot 2-boots an x86 board.
+    /// Build a UEFI ISO that Multiboot 2-boots an x86 board.
     ///
     /// Writes `build/<board>/lerux_<board>.iso` for an x86 board. Does not write a disk.
     Iso {
@@ -274,7 +275,7 @@ enum Commands {
         /// Skip integrity check (not recommended for field media).
         #[arg(long, default_value_t = false)]
         no_verify: bool,
-        /// After writing the ISO, boot it in QEMU as a raw disk under SeaBIOS.
+        /// After writing the ISO, boot it in QEMU as a raw disk under OVMF.
         #[arg(long, default_value_t = false)]
         boot_test: bool,
     },

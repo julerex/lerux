@@ -15,10 +15,11 @@ mod url;
 use lerux_input::{Key, KeyEvent};
 
 pub use mode::{
-    mode_from_mb2_tag, mode_line, panel_ready, ScanoutMode, FRAMEBUFFER_BYTES, FRAMEBUFFER_PHYS,
+    mode_from_mb2_tag, mode_line, panel_mode, panel_ready, swift_recorded_mode, ScanoutMode,
+    FRAMEBUFFER_BYTES, FRAMEBUFFER_HEIGHT, FRAMEBUFFER_PHYS, FRAMEBUFFER_PITCH, FRAMEBUFFER_WIDTH,
     MODE_RECORD_PHYS,
 };
-pub use pixel::{paint_cell, paint_text_row, Pen};
+pub use pixel::{fill_background, paint_cell, paint_text_row, Pen};
 pub use url::{HttpsUrl, NamePolicy};
 
 const LINE_CAP: usize = 256;

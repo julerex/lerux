@@ -199,6 +199,22 @@ pub struct Pen {
     pub blue: u8,
 }
 
+/// Fill the mapped frame with the console blue. Cells paint over this.
+pub fn fill_background(frame: &mut [u8], pen: Pen) {
+    if pen.pitch < 4 {
+        return;
+    }
+    let bg = pack(pen.red, pen.green, pen.blue, false).to_le_bytes();
+    let rows = pen.height.min(frame.len() / pen.pitch);
+    for y in 0..rows {
+        let start = y * pen.pitch;
+        let row = &mut frame[start..start + pen.pitch];
+        for pixel in row.chunks_exact_mut(4) {
+            pixel.copy_from_slice(&bg);
+        }
+    }
+}
+
 /// Draw `text` on one cell row. Bytes past the row are skipped.
 pub fn paint_text_row(frame: &mut [u8], pen: Pen, row: usize, text: &[u8]) {
     for (col, &ch) in text.iter().enumerate() {
@@ -238,6 +254,24 @@ pub fn paint_cell(frame: &mut [u8], pen: Pen, col: usize, row: usize, ch: u8) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fill_background_paints_console_blue() {
+        let mut frame = [0u8; 16];
+        fill_background(
+            &mut frame,
+            Pen {
+                pitch: 8,
+                width: 2,
+                height: 2,
+                red: 16,
+                green: 8,
+                blue: 0,
+            },
+        );
+        assert_eq!(&frame[..4], &0xaau32.to_le_bytes());
+        assert_eq!(&frame[12..16], &0xaau32.to_le_bytes());
+    }
 
     #[test]
     fn letter_f_has_ink() {

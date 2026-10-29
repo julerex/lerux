@@ -8,7 +8,7 @@ use sel4::with_ipc_buffer_mut;
 use sel4_microkit::{memory_region_symbol, var};
 
 #[cfg(feature = "board-swift_sfx14_41g")]
-use lerux_desk::{paint_cell, panel_ready, Pen, ScanoutMode, FRAMEBUFFER_BYTES, FRAMEBUFFER_PHYS};
+use lerux_desk::{fill_background, paint_cell, panel_mode, Pen, FRAMEBUFFER_BYTES};
 
 #[cfg(feature = "board-swift_sfx14_41g")]
 use crate::screen::COLS;
@@ -261,12 +261,9 @@ fn panel_from_system() -> Panel {
     let mode_ptr = memory_region_symbol!(mode_record_vaddr: *mut u8).as_ptr();
     let frame = memory_region_symbol!(fb_vaddr: *mut u8).as_ptr();
     let record = unsafe { core::slice::from_raw_parts(mode_ptr, 40) };
-    let mode = ScanoutMode::parse(record);
-    let live = mode.is_some_and(|mode| {
-        let bytes = u64::from(mode.pitch()).saturating_mul(u64::from(mode.height()));
-        panel_ready(mode.address(), FRAMEBUFFER_PHYS) && bytes <= FRAMEBUFFER_BYTES
-    });
-    let (pitch, width, height, red, green, blue) = if let Some(mode) = mode.filter(|_| live) {
+    let mode = panel_mode(record);
+    let live = mode.is_some();
+    let (pitch, width, height, red, green, blue) = if let Some(mode) = mode {
         (
             mode.pitch() as usize,
             mode.width() as usize,
@@ -278,6 +275,22 @@ fn panel_from_system() -> Panel {
     } else {
         (0, 0, 0, 0, 0, 0)
     };
+    if live {
+        // SAFETY: Microkit mapped `framebuffer` read-write for FRAMEBUFFER_BYTES
+        // bytes. This runs once during init, before the handler borrows the panel.
+        let frame = unsafe { core::slice::from_raw_parts_mut(frame, FRAMEBUFFER_BYTES as usize) };
+        fill_background(
+            frame,
+            Pen {
+                pitch,
+                width,
+                height,
+                red,
+                green,
+                blue,
+            },
+        );
+    }
     Panel {
         frame,
         len: FRAMEBUFFER_BYTES as usize,

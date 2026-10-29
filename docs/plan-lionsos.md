@@ -381,7 +381,7 @@ Not started.
 
 **Exit:** The internal panel shows one line with the framebuffer address, pitch, width, height, and the red, green, and blue shifts.
 
-`mb2-stub` writes that line into the GOP buffer before seL4, and writes a `ScanoutMode` record at `0x01FE0000`. On 2026-10-29 the Swift X panel showed `fb 0x000000fc90000000 pitch 7680 1920x1080 r16 g8 b0`. The mode is 1920 by 1080, pitch 7680, 8_294_400 bytes (`0x7E9000`), with red at shift 16, green at shift 8, and blue at shift 0. The Swift protection domains paint only when that record's address is the mapped framebuffer and is not the mode page. The image maps `0xfc90000000` for `0x7E9000` bytes. A boot whose line names a different address leaves the menu off.
+`mb2-stub` writes that line into the GOP buffer before seL4, and writes a `ScanoutMode` record at `0x01FE0000`. On 2026-10-29 the Swift X panel showed `fb 0x000000fc90000000 pitch 7680 1920x1080 r16 g8 b0`. The mode is 1920 by 1080, pitch 7680, 8_294_400 bytes (`0x7E9000`), with red at shift 16, green at shift 8, and blue at shift 0. seL4 clears that RAM frame on retype, so a zero record paints the recorded geometry: 1920 by 1080, pitch 7680. A record that names a different address leaves the menu off. The image maps `0xfc90000000` for `0x7E9000` bytes.
 
 ## Milestone 25 — Swift menu
 

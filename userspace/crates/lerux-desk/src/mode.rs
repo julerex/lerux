@@ -10,6 +10,41 @@ pub const MODE_RECORD_PHYS: u64 = 0x01FE_0000;
 /// Mapped panel buffer from the 2026-10-29 Swift X GOP line.
 pub const FRAMEBUFFER_PHYS: u64 = 0x00FC_9000_0000;
 pub const FRAMEBUFFER_BYTES: u64 = 0x7E_9000;
+/// Pitch, width, and height of that line. `pitch * height` is [`FRAMEBUFFER_BYTES`].
+pub const FRAMEBUFFER_PITCH: u32 = 7680;
+pub const FRAMEBUFFER_WIDTH: u32 = 1920;
+pub const FRAMEBUFFER_HEIGHT: u32 = 1080;
+
+const _: () = assert!(FRAMEBUFFER_PITCH as u64 * FRAMEBUFFER_HEIGHT as u64 == FRAMEBUFFER_BYTES);
+
+/// Geometry this image maps. seL4 clears the RAM frame at [`MODE_RECORD_PHYS`]
+/// on retype, so a missing record still describes the panel.
+pub fn swift_recorded_mode() -> ScanoutMode {
+    ScanoutMode {
+        address: FRAMEBUFFER_PHYS,
+        pitch: FRAMEBUFFER_PITCH,
+        width: FRAMEBUFFER_WIDTH,
+        height: FRAMEBUFFER_HEIGHT,
+        bpp: 32,
+        red: Mask {
+            shift: 16,
+            width: 8,
+        },
+        green: Mask { shift: 8, width: 8 },
+        blue: Mask { shift: 0, width: 8 },
+    }
+}
+
+/// Mode to paint. A record that names another address stays off. A cleared
+/// record uses [`swift_recorded_mode`].
+pub fn panel_mode(record: &[u8]) -> Option<ScanoutMode> {
+    if let Some(mode) = ScanoutMode::parse(record) {
+        let bytes = u64::from(mode.pitch()).saturating_mul(u64::from(mode.height()));
+        return (panel_ready(mode.address(), FRAMEBUFFER_PHYS) && bytes <= FRAMEBUFFER_BYTES)
+            .then_some(mode);
+    }
+    Some(swift_recorded_mode())
+}
 
 /// The recorded address is the buffer this image maps, and it is not the mode page.
 pub fn panel_ready(mode_address: u64, mapped_phys: u64) -> bool {
@@ -451,6 +486,20 @@ mod tests {
         assert!(!panel_ready(MODE_RECORD_PHYS, FRAMEBUFFER_PHYS));
         assert!(!panel_ready(0, 0));
         assert!(panel_ready(0x8000_0000, 0x8000_0000));
+    }
+
+    #[test]
+    fn cleared_mode_record_paints_the_mapped_panel() {
+        let mode = panel_mode(&[0; RECORD_LEN]).expect("a cleared record still paints");
+        assert_eq!(mode, swift_recorded_mode());
+        assert_eq!(mode.address(), FRAMEBUFFER_PHYS);
+        assert_eq!(mode.pitch(), FRAMEBUFFER_PITCH);
+        let mut record = [0u8; RECORD_LEN];
+        mode.write_record(&mut record)
+            .expect("the mode record is 40 bytes");
+        assert_eq!(panel_mode(&record), Some(mode));
+        record[8..16].copy_from_slice(&0x8000_0000u64.to_le_bytes());
+        assert!(panel_mode(&record).is_none());
     }
 
     #[test]

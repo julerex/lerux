@@ -39,7 +39,9 @@ The address is 2 MiB-aligned. `0x7e9000` is 2025 pages of 4 KiB and is not a mul
 
 `FRAMEBUFFER_PHYS` is `0x00FC_9000_0000`. That value equals `0xfc90000000` and the mode line prints `fb 0x000000fc90000000`. `0xFC90_0000_0000` is a different address and prints `fb 0x0000fc9000000000`. Clippy `unusual_byte_groupings` rejects uneven groups.
 
-When that `system.system` is the one inside the ISO and the panel still shows only the mode line, read the hex on the line. The same `0x000000fc90000000` means the protection domain did not paint. A different address means `panel_ready` left the menu off. The Swift console path does not program a VGA cursor.
+seL4 clears the RAM frame at `0x01FE0000` when it retypes that page, so the mode record is gone by the time the console starts. A cleared record paints the recorded geometry and fills the mapped buffer with the console blue. A record that still names a different address leaves the menu off. The Swift console path does not program a VGA cursor.
+
+When that `system.system` is the one inside the ISO and the panel still shows only the mode line, the protection domain did not run. Read the hex on the line. A different address means the mapped buffer is not the one the panel scans.
 
 ## What QEMU does not prove
 

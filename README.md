@@ -10,7 +10,7 @@ The seL4 kernel is **not vendored** — it is cloned into `deps/workspace/` and 
 
 Build the desk image as a UEFI USB ISO, write it to a flash drive, and boot that drive with **UEFI**. The documented metal board is `pc_z97_d3h` (Gigabyte GA-Z97-D3H). Full procedure: [`docs/boards.md`](docs/boards.md#gigabyte-z97-d3h-install-path).
 
-**Prerequisites:** Linux, `git`, `just`, `rustup`, `cmake`, `ninja`, `libclang-dev`, `clang` (for the Multiboot 2 trampoline), and a USB flash drive. Do not overwrite the host OS disk.
+**Prerequisites:** Linux, `git`, `just`, `rustup`, `cmake`, `ninja`, `libclang-dev`, `clang` (for the Multiboot 2 trampoline), and a USB flash drive. Packing the ISO needs `xorriso` and `grub-mkimage`. On Arch those packages are `libisoburn` and `grub` (`sudo pacman -S libisoburn grub`). Do not overwrite the host OS disk.
 
 ```bash
 just fetch          # clone seL4 + microkit into deps/workspace/
@@ -27,7 +27,7 @@ The metal kernel is 64-bit `sel4.elf`, still linked at 1 MiB. GRUB Multiboot 2-l
 
 ## Quick start (QEMU)
 
-**Prerequisites:** the same host tools as above, plus `qemu-system-aarch64`. x86 QEMU smokes also need `ovmf`, `xorriso`, and `grub-efi-amd64-bin` (Arch: `grub`). Optionally the [ARM GNU bare-metal toolchain](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads) (`aarch64-none-elf-gcc`, 12.2.Rel1) for `just build-sdk`. Python 3 is only required for `just build-sdk` (upstream Microkit `build_sdk.py`).
+**Prerequisites:** the same host tools as above, plus `qemu-system-aarch64`. x86 QEMU smokes also need `ovmf`, `xorriso`, and `grub-mkimage` (Arch: `libisoburn` and `grub`. Debian: `xorriso` and `grub-efi-amd64-bin`). Optionally the [ARM GNU bare-metal toolchain](https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads) (`aarch64-none-elf-gcc`, 12.2.Rel1) for `just build-sdk`. Python 3 is only required for `just build-sdk` (upstream Microkit `build_sdk.py`).
 
 ```bash
 just fetch          # clone seL4 16.0.0 + microkit 2.3.0

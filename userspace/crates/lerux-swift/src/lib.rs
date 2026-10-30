@@ -15,7 +15,7 @@ mod wifi;
 
 pub use bt::{
     acknowledge_reset, bring_up as bt_bring_up, find_bluetooth_interface, format_report as bt_line,
-    hci_reset, is_bluetooth_interface, BtReport,
+    hci_reset, is_bluetooth_interface, version_line, BtReport,
 };
 pub use nvme::{
     io_allowed, io_rejected, load_named, report_bytes, write_result, DiskReport, NAMED_FILE,

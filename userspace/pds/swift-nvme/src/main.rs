@@ -17,11 +17,13 @@ use lerux_sddf::{
 };
 use lerux_swift::{
     class_code, io_allowed, load_header, load_named, paint_row, report_bytes, vendor_device,
-    write_result, NVME_BDF, NVME_CLASS,
+    write_result, DiskReport, NVME_BDF, NVME_CLASS,
 };
 
 const ROW: usize = 23;
-const DMA_PHYS: u64 = 0xfb00_0000;
+/// Matches `nvme_dma` in the Swift template. The window ends at `0x01f20000`,
+/// below the header pages and below the stub linked at 32 MiB.
+const DMA_PHYS: u64 = 0x01f0_0000;
 const ADMIN_SQ: usize = 0;
 const ADMIN_CQ: usize = 0x1000;
 const IO_SQ: usize = 0x2000;
@@ -31,6 +33,22 @@ const BLK_REQ: usize = 0x5000;
 const BLK_RESP: usize = 0x6000;
 const SPIN: u32 = 200_000;
 const SHELL: Channel = Channel::new(1);
+
+enum OpenError {
+    Regs,
+    Enable,
+    Admin,
+}
+
+impl OpenError {
+    fn report(self) -> DiskReport {
+        match self {
+            Self::Regs => DiskReport::Regs,
+            Self::Enable => DiskReport::Enable,
+            Self::Admin => DiskReport::Admin,
+        }
+    }
+}
 
 struct HandlerImpl {
     irq: Channel,
@@ -46,13 +64,12 @@ fn init() -> HandlerImpl {
     let regs = memory_region_symbol!(nvme_regs_vaddr: *mut u8).as_ptr();
     let dma = memory_region_symbol!(nvme_dma_vaddr: *mut u8).as_ptr();
     let report = if present && queue_read(dma) {
-        if let Some(mut ctrl) = Ctrl::enable(regs, dma) {
-            load_named(|lba| ctrl.read_lba(lba))
-        } else {
-            lerux_swift::DiskReport::Absent
+        match Ctrl::open(regs, dma) {
+            Ok(mut ctrl) => load_named(|lba| ctrl.read_lba(lba)),
+            Err(stage) => stage.report(),
         }
     } else {
-        lerux_swift::DiskReport::Absent
+        DiskReport::Absent
     };
     let payload = report_bytes(&report);
     let result = memory_region_symbol!(disk_result_vaddr: *mut u8).as_ptr();
@@ -124,14 +141,14 @@ struct Ctrl {
 }
 
 impl Ctrl {
-    fn enable(regs: *mut u8, dma: *mut u8) -> Option<Self> {
+    fn open(regs: *mut u8, dma: *mut u8) -> Result<Self, OpenError> {
         let vs = read32(regs, 0x08);
         if vs == 0 || vs == 0xffff_ffff {
-            return None;
+            return Err(OpenError::Regs);
         }
         write32(regs, 0x14, 0);
         if !wait_rdy(regs, false) {
-            return None;
+            return Err(OpenError::Enable);
         }
         let cap = read64(regs, 0);
         let dstrd = ((cap >> 32) & 0xf) as u32;
@@ -147,7 +164,7 @@ impl Ctrl {
         write64(regs, 0x30, DMA_PHYS + ADMIN_CQ as u64);
         write32(regs, 0x14, 1 | (6 << 16) | (4 << 20));
         if !wait_rdy(regs, true) {
-            return None;
+            return Err(OpenError::Enable);
         }
         let mut ctrl = Self {
             regs,
@@ -162,7 +179,7 @@ impl Ctrl {
             cid: 1,
         };
         if ctrl.admin(0x05, 0, DMA_PHYS + IO_CQ as u64, 1 | (1 << 16), 1) != Some(0) {
-            return None;
+            return Err(OpenError::Admin);
         }
         if ctrl.admin(
             0x01,
@@ -172,9 +189,9 @@ impl Ctrl {
             1 | (1 << 16),
         ) != Some(0)
         {
-            return None;
+            return Err(OpenError::Admin);
         }
-        Some(ctrl)
+        Ok(ctrl)
     }
 
     fn dma_at(&self, off: usize) -> *mut u8 {

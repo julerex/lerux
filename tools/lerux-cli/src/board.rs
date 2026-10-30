@@ -204,6 +204,14 @@ mod tests {
         assert!(xml.contains("size=\"0x7e9000\""));
         assert!(xml.contains("page_size=\"0x1000\""));
         assert!(xml.contains("phys_addr=\"0x1fb0000\""));
+        assert!(xml.contains("phys_addr=\"0xd1500000\""));
+        assert!(xml.contains("phys_addr=\"0xd1100000\""));
+        assert!(xml.contains("phys_addr=\"0xd1200000\""));
+        assert!(xml.contains("phys_addr=\"0x1f00000\""));
+        assert!(!xml.contains("phys_addr=\"0xfc000000\""));
+        assert!(!xml.contains("phys_addr=\"0xfa000000\""));
+        assert!(!xml.contains("phys_addr=\"0xf9000000\""));
+        assert!(!xml.contains("phys_addr=\"0xfb000000\""));
         assert_eq!(xml.matches("addr=\"0xcf8\"").count(), 1);
         assert!(xml.contains("addr=\"0x60\""));
         assert!(xml.contains("addr=\"0x64\""));

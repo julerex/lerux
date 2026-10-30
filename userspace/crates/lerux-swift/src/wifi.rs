@@ -15,6 +15,8 @@ pub enum WifiReport {
     FirmwareErr,
     KeyErr,
     RadioErr,
+    /// The header BAR is not the address this image maps.
+    Bar,
     PingOk([u8; 4]),
 }
 
@@ -120,6 +122,7 @@ pub fn format_report(report: &WifiReport, out: &mut [u8]) -> usize {
         WifiReport::FirmwareErr => b"mt7921: firmware err",
         WifiReport::KeyErr => b"mt7921: key err",
         WifiReport::RadioErr => b"mt7921: radio err",
+        WifiReport::Bar => b"mt7921: bar",
         WifiReport::PingOk(addr) => {
             return write_ping(out, *addr);
         }

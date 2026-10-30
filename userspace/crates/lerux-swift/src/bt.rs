@@ -29,6 +29,101 @@ pub fn hci_reset() -> [u8; 4] {
     HCI_RESET
 }
 
+/// USB control payload for HCI Reset. The H4 type byte is not on this pipe.
+pub const USB_HCI_RESET: [u8; 3] = [0x03, 0x0c, 0x00];
+
+pub fn usb_hci_reset() -> [u8; 3] {
+    USB_HCI_RESET
+}
+
+/// Interrupt IN endpoint on the Bluetooth interface.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct HciIntr {
+    pub config_value: u8,
+    pub interface: u8,
+    pub ep_addr: u8,
+    pub max_packet: u16,
+    pub interval: u8,
+}
+
+pub enum XferFail {
+    Halt,
+    Port,
+    Event,
+}
+
+pub fn xfer_line(fail: &XferFail) -> &'static [u8] {
+    match fail {
+        XferFail::Halt => b"bt: halt",
+        XferFail::Port => b"bt: port",
+        XferFail::Event => b"bt: event",
+    }
+}
+
+/// Prefer the attempt that got further: an event, then a running host, then a halt.
+pub fn further(left: XferFail, right: XferFail) -> XferFail {
+    match (&left, &right) {
+        (XferFail::Event, _) | (_, XferFail::Event) => XferFail::Event,
+        (XferFail::Port, _) | (_, XferFail::Port) => XferFail::Port,
+        (XferFail::Halt, XferFail::Halt) => XferFail::Halt,
+    }
+}
+
+/// Prefix a USB HCI event with the H4 event type so [`acknowledge_reset`] can read it.
+pub fn frame_usb_event(usb: &[u8], out: &mut [u8]) -> usize {
+    if usb.is_empty() || out.len() < 2 {
+        return 0;
+    }
+    let n = usb.len().min(out.len() - 1);
+    out[0] = 0x04;
+    out[1..1 + n].copy_from_slice(&usb[..n]);
+    1 + n
+}
+
+/// Last interrupt-IN endpoint on a Bluetooth HCI interface.
+pub fn find_hci_interrupt(config: &[u8]) -> Option<HciIntr> {
+    if config.len() < 4 || config[1] != 0x02 {
+        return None;
+    }
+    let total = u16::from_le_bytes([config[2], config[3]]) as usize;
+    let mut config_value = 0u8;
+    let mut interface = None;
+    let mut found = None;
+    let mut at = 0;
+    while at + 2 <= config.len() && at < total {
+        let len = config[at] as usize;
+        if len < 2 || at + len > config.len() {
+            return found;
+        }
+        let kind = config[at + 1];
+        if kind == 0x02 && len >= 6 {
+            config_value = config[at + 5];
+        } else if kind == 0x04 && len >= 9 {
+            interface = is_bluetooth_interface(config[at + 5], config[at + 6], config[at + 7])
+                .then_some(config[at + 2]);
+        } else if kind == 0x05
+            && len >= 7
+            && let Some(iface) = interface
+        {
+            let addr = config[at + 2];
+            let attr = config[at + 3];
+            if addr & 0x80 != 0 && attr & 0x03 == 3 {
+                let max_packet = u16::from(config[at + 4]) | (u16::from(config[at + 5]) << 8);
+                found = Some(HciIntr {
+                    config_value,
+                    interface: iface,
+                    ep_addr: addr,
+                    max_packet,
+                    interval: config[at + 6],
+                });
+                interface = None;
+            }
+        }
+        at += len;
+    }
+    found
+}
+
 /// Firmware must already be loaded. `event` is the controller's answer.
 pub fn bring_up(controller_present: bool, firmware_loaded: bool, event: Option<&[u8]>) -> BtReport {
     if !controller_present {
@@ -124,6 +219,26 @@ mod tests {
     }
 
     #[test]
+    fn usb_reset_event_is_the_h4_acknowledgement() {
+        assert_eq!(usb_hci_reset(), [0x03, 0x0c, 0x00]);
+        let usb = [0x0e, 0x04, 0x01, 0x03, 0x0c, 0x00];
+        let mut framed = [0u8; 8];
+        let n = frame_usb_event(&usb, &mut framed);
+        assert!(acknowledge_reset(&framed[..n]));
+        assert_eq!(xfer_line(&XferFail::Halt), b"bt: halt");
+        assert_eq!(xfer_line(&XferFail::Port), b"bt: port");
+        assert_eq!(xfer_line(&XferFail::Event), b"bt: event");
+        assert!(matches!(
+            further(XferFail::Halt, XferFail::Port),
+            XferFail::Port
+        ));
+        assert!(matches!(
+            further(XferFail::Port, XferFail::Event),
+            XferFail::Event
+        ));
+    }
+
+    #[test]
     fn selects_the_hci_interface() {
         let mut config = [0u8; 18];
         config[0] = 9;
@@ -137,5 +252,33 @@ mod tests {
         assert!(find_bluetooth_interface(&config));
         config[14] = 0x03;
         assert!(!find_bluetooth_interface(&config));
+    }
+
+    #[test]
+    fn selects_the_interrupt_endpoint() {
+        let mut config = [0u8; 25];
+        config[0] = 9;
+        config[1] = 2;
+        config[2] = 25;
+        config[5] = 1;
+        config[9] = 9;
+        config[10] = 4;
+        config[11] = 0;
+        config[14] = 0xe0;
+        config[15] = 0x01;
+        config[16] = 0x01;
+        config[18] = 7;
+        config[19] = 5;
+        config[20] = 0x81;
+        config[21] = 3;
+        config[22] = 16;
+        config[24] = 1;
+        let ep = find_hci_interrupt(&config).unwrap();
+        assert_eq!(ep.config_value, 1);
+        assert_eq!(ep.ep_addr, 0x81);
+        assert_eq!(ep.max_packet, 16);
+        assert_eq!(ep.interval, 1);
+        config[14] = 0x03;
+        assert!(find_hci_interrupt(&config).is_none());
     }
 }

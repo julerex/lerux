@@ -4,7 +4,9 @@
 //! is a different file. `bt: reset ok` is painted only when that interface's
 //! command-complete event acknowledges HCI Reset. An empty blob paints
 //! `bt: firmware err`. A controller that will not run paints `bt: halt`. No
-//! Bluetooth interface paints `bt: port`. A reset that does not complete paints
+//! addressed device paints `bt: port` and how many ports reported a connection.
+//! An addressed device that is not the HCI interface paints `bt: id` with the
+//! vendor, product, and class. A reset that does not complete paints
 //! `bt: event`. A capability word outside `0x0100..=0x0120` paints `bt: ver`
 //! and that word.
 
@@ -17,7 +19,7 @@ use sel4_microkit::{
 
 use lerux_desk::FRAMEBUFFER_BYTES;
 use lerux_swift::{
-    bt_bring_up, bt_line, class_code, further, load_header, vendor_device, version_line, xfer_line,
+    bt_bring_up, bt_line, class_code, fail_line, further, load_header, vendor_device, version_line,
     BtReport, XferFail, XHCI_BDFS, XHCI_CLASS,
 };
 
@@ -69,7 +71,7 @@ fn init() -> HandlerImpl {
                 &mut line,
                 bt_line(&bt_bring_up(true, true, Some(&event[..n]))),
             ),
-            Err(fail) => copy_line(&mut line, xfer_line(&fail)),
+            Err(fail) => fail_line(&fail, &mut line),
         }
     };
     paint(&line[..n]);

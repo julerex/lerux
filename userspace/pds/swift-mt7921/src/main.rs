@@ -2,7 +2,8 @@
 //!
 //! `bring_up` prints `ping ok` only after association, DHCP, and an echo reply.
 //! An empty firmware blob paints `mt7921: firmware err`. The image maps
-//! `0x82000000`. A header that names another address paints `mt7921: bar`.
+//! `0x82000000`. A header that names another address paints `mt7921: bar`
+//! and sixteen hex digits of that address.
 //! This window still has no MediaTek MAC program, so a present blob does not
 //! accept a frame.
 
@@ -15,8 +16,8 @@ use sel4_microkit::{
 
 use lerux_desk::FRAMEBUFFER_BYTES;
 use lerux_swift::{
-    bring_up, class_code, credentials, format_report, load_header, memory_bar, paint_row,
-    vendor_device, Nic, WifiReport, MT7921_BAR, MT7921_BDF, MT7921_IDS,
+    bar_line, bring_up, class_code, credentials, format_report, load_header, memory_bar, paint_row,
+    vendor_device, Nic, MT7921_BAR, MT7921_BDF, MT7921_IDS,
 };
 
 const ROW: usize = 22;
@@ -63,13 +64,14 @@ fn init() -> HandlerImpl {
         present,
         firmware: !FIRMWARE.is_empty(),
     };
-    let report = if present && memory_bar(&header) != Some(MT7921_BAR) {
-        WifiReport::Bar
-    } else {
-        bring_up(&mut radio, ssid, pass)
-    };
     let mut line = [0u8; 40];
-    let n = format_report(&report, &mut line);
+    let bar = memory_bar(&header);
+    let n = if present && bar != Some(MT7921_BAR) {
+        bar_line(bar, &mut line)
+    } else {
+        let report = bring_up(&mut radio, ssid, pass);
+        format_report(&report, &mut line)
+    };
     paint(&line[..n]);
     let _regs = memory_region_symbol!(mt7921_regs_vaddr: *mut u8).as_ptr();
     HandlerImpl {

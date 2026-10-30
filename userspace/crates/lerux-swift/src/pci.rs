@@ -68,6 +68,31 @@ pub fn config_address(bus: u8, dev: u8, func: u8, reg: u8) -> u32 {
         | u32::from(reg & 0xfc)
 }
 
+/// `mt7921: bar` and sixteen hex digits. `None` is an I/O BAR.
+pub fn bar_line(addr: Option<u64>, out: &mut [u8]) -> usize {
+    let prefix = b"mt7921: bar ";
+    if out.len() < prefix.len() {
+        return 0;
+    }
+    out[..prefix.len()].copy_from_slice(prefix);
+    let Some(addr) = addr else {
+        let io = b"io";
+        if out.len() < prefix.len() + io.len() {
+            return prefix.len();
+        }
+        out[prefix.len()..prefix.len() + io.len()].copy_from_slice(io);
+        return prefix.len() + io.len();
+    };
+    if out.len() < prefix.len() + 16 {
+        return prefix.len();
+    }
+    for (i, byte) in out[prefix.len()..prefix.len() + 16].iter_mut().enumerate() {
+        let shift = (15 - i) * 4;
+        *byte = hex(((addr >> shift) & 0xf) as u8);
+    }
+    prefix.len() + 16
+}
+
 /// First memory BAR. A 64-bit BAR includes the following dword. Type bits are cleared.
 pub fn memory_bar(header: &[u8]) -> Option<u64> {
     if header.len() < 0x18 {
@@ -189,6 +214,16 @@ mod tests {
         assert_eq!(memory_bar(&header), Some(0x1_8200_0000));
         header[0x10] = 1;
         assert_eq!(memory_bar(&header), None);
+    }
+
+    #[test]
+    fn bar_line_prints_the_upper_dword() {
+        let mut line = [0u8; 40];
+        let n = bar_line(Some(0x00FC_8200_0000), &mut line);
+        assert_eq!(&line[..n], b"mt7921: bar 000000fc82000000");
+        let n = bar_line(None, &mut line);
+        assert_eq!(&line[..n], b"mt7921: bar io");
+        assert_eq!(bar_line(Some(0), &mut [0u8; 4]), 0);
     }
 
     #[test]

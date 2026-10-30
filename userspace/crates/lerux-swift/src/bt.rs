@@ -46,25 +46,103 @@ pub struct HciIntr {
     pub interval: u8,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum XferFail {
     Halt,
-    Port,
+    /// How many ports reported a device. Zero means none did.
+    Port(u8),
+    /// Vendor, product, and the first interface class, or the device class.
+    Id(u16, u16, u8),
     Event,
 }
 
 pub fn xfer_line(fail: &XferFail) -> &'static [u8] {
     match fail {
         XferFail::Halt => b"bt: halt",
-        XferFail::Port => b"bt: port",
+        XferFail::Port(_) => b"bt: port",
+        XferFail::Id(..) => b"bt: id",
         XferFail::Event => b"bt: event",
     }
 }
 
-/// Prefer the attempt that got further: an event, then a running host, then a halt.
+/// Panel line for [`XferFail`], including the port count or the device id.
+pub fn fail_line(fail: &XferFail, out: &mut [u8]) -> usize {
+    match *fail {
+        XferFail::Halt | XferFail::Event => {
+            let text = xfer_line(fail);
+            let n = text.len().min(out.len());
+            out[..n].copy_from_slice(&text[..n]);
+            n
+        }
+        XferFail::Port(count) => port_line(count, out),
+        XferFail::Id(vendor, product, class) => id_line(vendor, product, class, out),
+    }
+}
+
+fn port_line(count: u8, out: &mut [u8]) -> usize {
+    let prefix = b"bt: port ";
+    if out.len() < prefix.len() + 1 {
+        return 0;
+    }
+    out[..prefix.len()].copy_from_slice(prefix);
+    let mut n = prefix.len();
+    if count >= 10 {
+        out[n] = b'0' + (count / 10);
+        n += 1;
+        if n >= out.len() {
+            return prefix.len();
+        }
+    }
+    out[n] = b'0' + (count % 10);
+    n + 1
+}
+
+fn id_line(vendor: u16, product: u16, class: u8, out: &mut [u8]) -> usize {
+    let prefix = b"bt: id ";
+    if out.len() < prefix.len() + 4 + 1 + 4 + 1 + 2 {
+        return 0;
+    }
+    out[..prefix.len()].copy_from_slice(prefix);
+    let mut n = prefix.len();
+    n += write_hex16(&mut out[n..], vendor);
+    out[n] = b':';
+    n += 1;
+    n += write_hex16(&mut out[n..], product);
+    out[n] = b' ';
+    n += 1;
+    out[n] = hex(class >> 4);
+    out[n + 1] = hex(class);
+    n + 2
+}
+
+fn write_hex16(slot: &mut [u8], value: u16) -> usize {
+    for (i, byte) in slot.iter_mut().take(4).enumerate() {
+        let shift = (3 - i) * 4;
+        *byte = hex((value >> shift) as u8);
+    }
+    4
+}
+
+fn hex(nibble: u8) -> u8 {
+    let nibble = nibble & 0xf;
+    if nibble < 10 {
+        b'0' + nibble
+    } else {
+        b'a' + (nibble - 10)
+    }
+}
+
+/// Prefer the attempt that got further: an event, then a device id, then a port, then a halt.
+/// Two port counts keep the larger one. Two device ids keep the first.
 pub fn further(left: XferFail, right: XferFail) -> XferFail {
-    match (&left, &right) {
-        (XferFail::Event, _) | (_, XferFail::Event) => XferFail::Event,
-        (XferFail::Port, _) | (_, XferFail::Port) => XferFail::Port,
+    match (left, right) {
+        (kept @ XferFail::Event, _) | (_, kept @ XferFail::Event) => kept,
+        (kept @ XferFail::Id(..), _) => kept,
+        (_, kept @ XferFail::Id(..)) => kept,
+        (XferFail::Port(a), kept @ XferFail::Port(b)) if b > a => kept,
+        (kept @ XferFail::Port(_), XferFail::Port(_)) => kept,
+        (kept @ XferFail::Port(_), XferFail::Halt) => kept,
+        (XferFail::Halt, kept @ XferFail::Port(_)) => kept,
         (XferFail::Halt, XferFail::Halt) => XferFail::Halt,
     }
 }
@@ -78,6 +156,26 @@ pub fn frame_usb_event(usb: &[u8], out: &mut [u8]) -> usize {
     out[0] = 0x04;
     out[1..1 + n].copy_from_slice(&usb[..n]);
     1 + n
+}
+
+/// Class of the first interface descriptor, when the configuration names one.
+pub fn first_interface_class(config: &[u8]) -> Option<u8> {
+    if config.len() < 4 || config[1] != 0x02 {
+        return None;
+    }
+    let total = u16::from_le_bytes([config[2], config[3]]) as usize;
+    let mut at = 0;
+    while at + 2 <= config.len() && at < total {
+        let len = config[at] as usize;
+        if len < 2 || at + len > config.len() {
+            return None;
+        }
+        if config[at + 1] == 0x04 && len >= 6 {
+            return Some(config[at + 5]);
+        }
+        at += len;
+    }
+    None
 }
 
 /// Last interrupt-IN endpoint on a Bluetooth HCI interface.
@@ -226,16 +324,39 @@ mod tests {
         let n = frame_usb_event(&usb, &mut framed);
         assert!(acknowledge_reset(&framed[..n]));
         assert_eq!(xfer_line(&XferFail::Halt), b"bt: halt");
-        assert_eq!(xfer_line(&XferFail::Port), b"bt: port");
+        assert_eq!(xfer_line(&XferFail::Port(0)), b"bt: port");
         assert_eq!(xfer_line(&XferFail::Event), b"bt: event");
-        assert!(matches!(
-            further(XferFail::Halt, XferFail::Port),
-            XferFail::Port
-        ));
-        assert!(matches!(
-            further(XferFail::Port, XferFail::Event),
+        let mut line = [0u8; 24];
+        let n = fail_line(&XferFail::Port(0), &mut line);
+        assert_eq!(&line[..n], b"bt: port 0");
+        let n = fail_line(&XferFail::Port(12), &mut line);
+        assert_eq!(&line[..n], b"bt: port 12");
+        let n = fail_line(&XferFail::Id(0x0e8d, 0x7961, 0xe0), &mut line);
+        assert_eq!(&line[..n], b"bt: id 0e8d:7961 e0");
+        assert_eq!(fail_line(&XferFail::Port(0), &mut [0u8; 4]), 0);
+        assert_eq!(
+            further(XferFail::Halt, XferFail::Port(0)),
+            XferFail::Port(0)
+        );
+        assert_eq!(
+            further(XferFail::Port(0), XferFail::Port(2)),
+            XferFail::Port(2)
+        );
+        assert_eq!(
+            further(XferFail::Port(2), XferFail::Id(0x0e8d, 0x7961, 0xff)),
+            XferFail::Id(0x0e8d, 0x7961, 0xff)
+        );
+        assert_eq!(
+            further(
+                XferFail::Id(0x0e8d, 0x7961, 0xff),
+                XferFail::Id(0x1111, 0x2222, 0x00)
+            ),
+            XferFail::Id(0x0e8d, 0x7961, 0xff)
+        );
+        assert_eq!(
+            further(XferFail::Id(0x0e8d, 0x7961, 0xff), XferFail::Event),
             XferFail::Event
-        ));
+        );
     }
 
     #[test]

@@ -4,21 +4,27 @@
   page is filled by mb2-stub before seL4. There is no COM port. The built-in
   keyboard is the i8042. PCI locations are the Windows enumeration.
   Microkit allows 0xcf8 in one protection domain. The probe writes the six
-  headers and sets bus master on the NVMe and xHCI functions. Firmware
+  headers and sets bus master on the NVMe, xHCI, and MT7921 functions. Firmware
   assigned those base addresses. The other domains read that page.
 -->
 <system>
     <memory_region name="mode_record" size="0x1000" phys_addr="0x1fe0000" />
     <memory_region name="framebuffer" size="{fb_bytes}" phys_addr="{fb_phys}" page_size="0x1000" />
     <memory_region name="pci_headers" size="0x1000" phys_addr="0x1fb0000" />
-    <memory_region name="mt7921_regs" size="0x200000" phys_addr="0x82000000" />
+    <!-- 0xfc82000000 is the header address. It is not a canonical virtual address. -->
+    <memory_region name="mt7921_regs" size="0x200000" phys_addr="0xfc82000000" page_size="0x1000" />
     <memory_region name="nvme_regs" size="0x4000" phys_addr="0xd1500000" />
     <!-- 128 KiB below the header pages. The stub is linked at 32 MiB. -->
     <memory_region name="nvme_dma" size="0x20000" phys_addr="0x1f00000" />
     <memory_region name="xhci0_regs" size="0x10000" phys_addr="0xd1100000" />
     <memory_region name="xhci1_regs" size="0x10000" phys_addr="0xd1200000" />
-    <memory_region name="xhci_dma" size="0x40000" phys_addr="0xf8000000" />
+    <!-- Next to the NVMe buffer. 0xf8000000 is the firmware hole, not RAM. -->
+    <memory_region name="xhci_dma" size="0x40000" phys_addr="0x1f20000" />
+    <!-- WFDMA rings. The xHCI window ends here. The header page starts at 0x1fb0000. -->
+    <memory_region name="wifi_dma" size="0x40000" phys_addr="0x1f60000" />
     <memory_region name="disk_result" size="0x1000" phys_addr="0x1fc0000" />
+    <!-- Between the disk result and the mode record. The shell writes the network name and passphrase. -->
+    <memory_region name="wifi_key" size="0x1000" phys_addr="0x1fd0000" />
 
     <protection_domain name="console_driver" priority="6" stack_size="0x10_000">
         <program_image path="console-driver.elf" />
@@ -43,6 +49,8 @@
         <map mr="framebuffer" vaddr="0x40000000" perms="rw" cached="false" setvar_vaddr="fb_vaddr" />
         <map mr="pci_headers" vaddr="0x3ffd0000" perms="r" cached="false" setvar_vaddr="pci_headers_vaddr" />
         <map mr="mt7921_regs" vaddr="0x82000000" perms="rw" cached="false" setvar_vaddr="mt7921_regs_vaddr" />
+        <map mr="wifi_dma" vaddr="0x1f60000" perms="rw" cached="false" setvar_vaddr="wifi_dma_vaddr" />
+        <map mr="wifi_key" vaddr="0x1fd0000" perms="rw" cached="true" setvar_vaddr="wifi_key_vaddr" />
         <irq id="0" pcidev="03:00.0" handle="1" vector="51" />
     </protection_domain>
 
@@ -64,7 +72,7 @@
         <map mr="pci_headers" vaddr="0x3ffd0000" perms="r" cached="false" setvar_vaddr="pci_headers_vaddr" />
         <map mr="xhci0_regs" vaddr="0xd1100000" perms="rw" cached="false" setvar_vaddr="xhci0_regs_vaddr" />
         <map mr="xhci1_regs" vaddr="0xd1200000" perms="rw" cached="false" setvar_vaddr="xhci1_regs_vaddr" />
-        <map mr="xhci_dma" vaddr="0xf8000000" perms="rw" cached="false" setvar_vaddr="xhci_dma_vaddr" />
+        <map mr="xhci_dma" vaddr="0x1f20000" perms="rw" cached="false" setvar_vaddr="xhci_dma_vaddr" />
         <irq id="0" pcidev="04:00.3" handle="1" vector="53" />
         <irq id="1" pcidev="04:00.4" handle="2" vector="54" />
     </protection_domain>
@@ -72,6 +80,7 @@
     <protection_domain name="shell" priority="1" stack_size="0x10_000">
         <program_image path="console-shell.elf" />
         <map mr="disk_result" vaddr="0x3ffe0000" perms="r" cached="true" setvar_vaddr="disk_result_vaddr" />
+        <map mr="wifi_key" vaddr="0x1fd0000" perms="rw" cached="true" setvar_vaddr="wifi_key_vaddr" />
     </protection_domain>
 
     <channel>
@@ -81,5 +90,9 @@
     <channel>
         <end pd="swift_nvme" id="1" />
         <end pd="shell" id="1" />
+    </channel>
+    <channel>
+        <end pd="swift_mt7921" id="1" />
+        <end pd="shell" id="2" />
     </channel>
 </system>

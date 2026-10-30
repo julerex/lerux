@@ -1,8 +1,8 @@
 //! Paint vendor, device, BAR, and interrupt pin for the six recorded locations.
 //!
 //! Windows assigned these bus numbers. A line that reads `ffff` is a location
-//! this boot did not find. Firmware assigned the NVMe and xHCI base addresses.
-//! This domain sets bus master and does not move those addresses.
+//! this boot did not find. Firmware assigned the NVMe, xHCI, and MT7921 base
+//! addresses. This domain sets bus master and does not move those addresses.
 
 #![no_std]
 #![no_main]
@@ -15,7 +15,7 @@ use sel4_microkit::{
 use lerux_desk::FRAMEBUFFER_BYTES;
 use lerux_swift::{
     class_code, config_address, describe, paint_row, store_header, vendor_device, LOCATIONS,
-    NVME_BDF, NVME_CLASS, XHCI_BDFS, XHCI_CLASS,
+    MT7921_BDF, MT7921_IDS, NVME_BDF, NVME_CLASS, XHCI_BDFS, XHCI_CLASS,
 };
 
 const BASE_IOPORT_CAP: u64 = 394;
@@ -50,7 +50,9 @@ fn enable_claimed(cap: u64, port: u16, bus: u8, dev: u8, func: u8, header: &[u8]
     let bdf = (bus, dev, func);
     let nvme = bdf == NVME_BDF && class_code(header) == Some(NVME_CLASS);
     let xhci = XHCI_BDFS.contains(&bdf) && class_code(header) == Some(XHCI_CLASS);
-    if nvme || xhci {
+    let wifi =
+        bdf == MT7921_BDF && vendor_device(header).is_some_and(|id| MT7921_IDS.contains(&id));
+    if nvme || xhci || wifi {
         enable_mem(cap, port, bus, dev, func);
     }
 }

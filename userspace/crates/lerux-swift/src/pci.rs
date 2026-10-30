@@ -12,8 +12,8 @@ pub const LOCATIONS: [(u8, u8, u8); 6] = [
 ];
 
 pub const MT7921_BDF: (u8, u8, u8) = (3, 0, 0);
-/// Probe line `bar 8200000c` with the memory-type bits cleared.
-pub const MT7921_BAR: u64 = 0x8200_0000;
+/// Panel line `mt7921: bar 000000fc82000000`. The low dword is `8200000c`.
+pub const MT7921_BAR: u64 = 0x00FC_8200_0000;
 pub const NVME_BDF: (u8, u8, u8) = (2, 0, 0);
 pub const XHCI_BDFS: [(u8, u8, u8); 2] = [(4, 0, 3), (4, 0, 4)];
 
@@ -209,8 +209,13 @@ mod tests {
     fn mt7921_bar_drops_the_type_bits() {
         let mut header = [0u8; 64];
         header[0x10..0x14].copy_from_slice(&0x8200_000cu32.to_le_bytes());
+        assert_eq!(memory_bar(&header), Some(0x8200_0000));
+        header[0x14..0x18].copy_from_slice(&0xfcu32.to_le_bytes());
         assert_eq!(memory_bar(&header), Some(MT7921_BAR));
         header[0x14] = 1;
+        header[0x15] = 0;
+        header[0x16] = 0;
+        header[0x17] = 0;
         assert_eq!(memory_bar(&header), Some(0x1_8200_0000));
         header[0x10] = 1;
         assert_eq!(memory_bar(&header), None);

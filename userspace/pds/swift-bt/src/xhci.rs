@@ -4,15 +4,17 @@
 //! configuration port: firmware left the BARs, and the probe already enabled
 //! memory space and bus master. Events are polled. The keyboard on this image
 //! is the i8042, so resetting these controllers does not take the console.
+//! The command ring lives in RAM next to the NVMe buffer. `0xf8000000` is the
+//! firmware hole, and a slot enable never completes from there.
 
 use core::sync::atomic::{fence, Ordering};
 
 use lerux_swift::{
     acknowledge_reset, find_hci_interrupt, first_interface_class, frame_usb_event, usb_hci_reset,
-    HciIntr, XferFail,
+    HciIntr, PortStop, XferFail,
 };
 
-const DMA_PHYS: u64 = 0xf800_0000;
+const DMA_PHYS: u64 = 0x01f2_0000;
 const DMA_LEN: usize = 0x4_0000;
 const MMIO_LEN: u32 = 0x1_0000;
 
@@ -179,27 +181,36 @@ impl Host {
         self.power_ports();
         self.wait_connect();
         let mut connected = 0u8;
+        let mut stop = PortStop::Reset;
         for port in 1..=self.max_ports {
             if self.read32(self.portsc(port)) & 1 == 0 {
                 continue;
             }
             connected = connected.saturating_add(1);
             let Some(speed) = self.reset_port(port) else {
+                stop = stop.later(PortStop::Reset);
                 continue;
             };
             if !self.enable_slot() {
+                stop = stop.later(PortStop::Slot);
                 continue;
             }
-            if self.address(port, speed)
-                && let Some(radio) = self.bluetooth()
-            {
+            if !self.address(port, speed) {
+                stop = stop.later(PortStop::Addr);
+                self.disable_slot();
+                continue;
+            }
+            if let Some(radio) = self.bluetooth() {
                 return Ok(radio);
+            }
+            if self.seen.is_none() {
+                stop = stop.later(PortStop::Desc);
             }
             self.disable_slot();
         }
         Err(match self.seen {
             Some(seen) => XferFail::Id(seen.vendor, seen.product, seen.class),
-            None => XferFail::Port(connected),
+            None => XferFail::Port(connected, stop),
         })
     }
 
@@ -702,14 +713,25 @@ impl Host {
     }
 
     fn reset_port(&self, port: u8) -> Option<u8> {
+        self.pulse_reset(port, 1 << 4, 1 << 21)
+            .or_else(|| self.pulse_reset(port, 1 << 31, 1 << 19))
+    }
+
+    /// Clear a stale reset-change bit before starting. A set change bit would
+    /// otherwise look like a finished reset while the port is still disabled.
+    fn pulse_reset(&self, port: u8, start: u32, done: u32) -> Option<u8> {
         let off = self.portsc(port);
         let raw = self.read32(off);
-        self.write32(off, portsc_neutral(raw) | (1 << 9) | (1 << 4));
-        for _ in 0..SPIN {
+        self.write32(off, portsc_neutral(raw) | (raw & PORT_CHANGE));
+        let raw = self.read32(off);
+        self.write32(off, portsc_neutral(raw) | (1 << 9) | start);
+        let mut saw_start = false;
+        for _ in 0..CONNECT_SPIN {
             let cur = self.read32(off);
-            let resetting = cur & (1 << 4) != 0;
-            let done = cur & (1 << 21) != 0;
-            if resetting || !done {
+            if cur & start != 0 {
+                saw_start = true;
+            }
+            if !saw_start || cur & start != 0 || cur & done == 0 {
                 core::hint::spin_loop();
                 continue;
             }

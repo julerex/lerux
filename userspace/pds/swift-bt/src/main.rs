@@ -4,8 +4,9 @@
 //! is a different file. `bt: reset ok` is painted only when that interface's
 //! command-complete event acknowledges HCI Reset. An empty blob paints
 //! `bt: firmware err`. A controller that will not run paints `bt: halt`. No
-//! addressed device paints `bt: port` and how many ports reported a connection.
-//! An addressed device that is not the HCI interface paints `bt: id` with the
+//! addressed device paints `bt: port`, how many ports reported a connection, and
+//! the furthest stage: `reset`, `slot`, `addr`, or `desc`. An addressed device
+//! that is not the HCI interface paints `bt: id` with the
 //! vendor, product, and class. A reset that does not complete paints
 //! `bt: event`. A capability word outside `0x0100..=0x0120` paints `bt: ver`
 //! and that word.

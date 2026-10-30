@@ -46,11 +46,50 @@ pub struct HciIntr {
     pub interval: u8,
 }
 
+/// How far a connected port got. A later variant is further than an earlier one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PortStop {
+    Reset,
+    Slot,
+    Addr,
+    Desc,
+}
+
+impl PortStop {
+    fn rank(self) -> u8 {
+        match self {
+            PortStop::Reset => 0,
+            PortStop::Slot => 1,
+            PortStop::Addr => 2,
+            PortStop::Desc => 3,
+        }
+    }
+
+    fn label(self) -> &'static [u8] {
+        match self {
+            PortStop::Reset => b"reset",
+            PortStop::Slot => b"slot",
+            PortStop::Addr => b"addr",
+            PortStop::Desc => b"desc",
+        }
+    }
+
+    /// Keep whichever attempt got further.
+    pub fn later(self, other: Self) -> Self {
+        if other.rank() > self.rank() {
+            other
+        } else {
+            self
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum XferFail {
     Halt,
-    /// How many ports reported a device. Zero means none did.
-    Port(u8),
+    /// Connected-port count, and the furthest stage those ports reached.
+    /// A count of zero did not reach a stage.
+    Port(u8, PortStop),
     /// Vendor, product, and the first interface class, or the device class.
     Id(u16, u16, u8),
     Event,
@@ -59,7 +98,7 @@ pub enum XferFail {
 pub fn xfer_line(fail: &XferFail) -> &'static [u8] {
     match fail {
         XferFail::Halt => b"bt: halt",
-        XferFail::Port(_) => b"bt: port",
+        XferFail::Port(..) => b"bt: port",
         XferFail::Id(..) => b"bt: id",
         XferFail::Event => b"bt: event",
     }
@@ -74,12 +113,12 @@ pub fn fail_line(fail: &XferFail, out: &mut [u8]) -> usize {
             out[..n].copy_from_slice(&text[..n]);
             n
         }
-        XferFail::Port(count) => port_line(count, out),
+        XferFail::Port(count, stop) => port_line(count, stop, out),
         XferFail::Id(vendor, product, class) => id_line(vendor, product, class, out),
     }
 }
 
-fn port_line(count: u8, out: &mut [u8]) -> usize {
+fn port_line(count: u8, stop: PortStop, out: &mut [u8]) -> usize {
     let prefix = b"bt: port ";
     if out.len() < prefix.len() + 1 {
         return 0;
@@ -94,7 +133,18 @@ fn port_line(count: u8, out: &mut [u8]) -> usize {
         }
     }
     out[n] = b'0' + (count % 10);
-    n + 1
+    n += 1;
+    if count == 0 {
+        return n;
+    }
+    let label = stop.label();
+    if n + 1 + label.len() > out.len() {
+        return n;
+    }
+    out[n] = b' ';
+    n += 1;
+    out[n..n + label.len()].copy_from_slice(label);
+    n + label.len()
 }
 
 fn id_line(vendor: u16, product: u16, class: u8, out: &mut [u8]) -> usize {
@@ -139,10 +189,14 @@ pub fn further(left: XferFail, right: XferFail) -> XferFail {
         (kept @ XferFail::Event, _) | (_, kept @ XferFail::Event) => kept,
         (kept @ XferFail::Id(..), _) => kept,
         (_, kept @ XferFail::Id(..)) => kept,
-        (XferFail::Port(a), kept @ XferFail::Port(b)) if b > a => kept,
-        (kept @ XferFail::Port(_), XferFail::Port(_)) => kept,
-        (kept @ XferFail::Port(_), XferFail::Halt) => kept,
-        (XferFail::Halt, kept @ XferFail::Port(_)) => kept,
+        (XferFail::Port(a, sa), kept @ XferFail::Port(b, sb))
+            if sb.rank() > sa.rank() || (sb == sa && b > a) =>
+        {
+            kept
+        }
+        (kept @ XferFail::Port(..), XferFail::Port(..)) => kept,
+        (kept @ XferFail::Port(..), XferFail::Halt) => kept,
+        (XferFail::Halt, kept @ XferFail::Port(..)) => kept,
         (XferFail::Halt, XferFail::Halt) => XferFail::Halt,
     }
 }
@@ -324,26 +378,44 @@ mod tests {
         let n = frame_usb_event(&usb, &mut framed);
         assert!(acknowledge_reset(&framed[..n]));
         assert_eq!(xfer_line(&XferFail::Halt), b"bt: halt");
-        assert_eq!(xfer_line(&XferFail::Port(0)), b"bt: port");
+        assert_eq!(xfer_line(&XferFail::Port(0, PortStop::Reset)), b"bt: port");
         assert_eq!(xfer_line(&XferFail::Event), b"bt: event");
         let mut line = [0u8; 24];
-        let n = fail_line(&XferFail::Port(0), &mut line);
+        let n = fail_line(&XferFail::Port(0, PortStop::Reset), &mut line);
         assert_eq!(&line[..n], b"bt: port 0");
-        let n = fail_line(&XferFail::Port(12), &mut line);
-        assert_eq!(&line[..n], b"bt: port 12");
+        let n = fail_line(&XferFail::Port(3, PortStop::Reset), &mut line);
+        assert_eq!(&line[..n], b"bt: port 3 reset");
+        let n = fail_line(&XferFail::Port(12, PortStop::Addr), &mut line);
+        assert_eq!(&line[..n], b"bt: port 12 addr");
         let n = fail_line(&XferFail::Id(0x0e8d, 0x7961, 0xe0), &mut line);
         assert_eq!(&line[..n], b"bt: id 0e8d:7961 e0");
-        assert_eq!(fail_line(&XferFail::Port(0), &mut [0u8; 4]), 0);
         assert_eq!(
-            further(XferFail::Halt, XferFail::Port(0)),
-            XferFail::Port(0)
+            fail_line(&XferFail::Port(0, PortStop::Reset), &mut [0u8; 4]),
+            0
         );
         assert_eq!(
-            further(XferFail::Port(0), XferFail::Port(2)),
-            XferFail::Port(2)
+            further(XferFail::Halt, XferFail::Port(0, PortStop::Reset)),
+            XferFail::Port(0, PortStop::Reset)
         );
         assert_eq!(
-            further(XferFail::Port(2), XferFail::Id(0x0e8d, 0x7961, 0xff)),
+            further(
+                XferFail::Port(0, PortStop::Reset),
+                XferFail::Port(2, PortStop::Reset)
+            ),
+            XferFail::Port(2, PortStop::Reset)
+        );
+        assert_eq!(
+            further(
+                XferFail::Port(3, PortStop::Reset),
+                XferFail::Port(1, PortStop::Addr)
+            ),
+            XferFail::Port(1, PortStop::Addr)
+        );
+        assert_eq!(
+            further(
+                XferFail::Port(2, PortStop::Reset),
+                XferFail::Id(0x0e8d, 0x7961, 0xff)
+            ),
             XferFail::Id(0x0e8d, 0x7961, 0xff)
         );
         assert_eq!(

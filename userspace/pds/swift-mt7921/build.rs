@@ -1,16 +1,47 @@
-use std::{env, fs, path::PathBuf};
+use std::{env, fs, path::PathBuf, process::Command};
 
 fn main() {
     let out = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));
     let manifest = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
     let support = manifest.join("../../../support");
-    copy(&support.join("swift-wifi.txt"), &out.join("wifi.txt"));
-    copy(&support.join("mt7921.bin"), &out.join("mt7921.bin"));
+    let wifi = load(&support.join("swift-wifi.txt"), None);
+    let firmware = load(
+        &support.join("mt7921.bin"),
+        Some(PathBuf::from(
+            "/usr/lib/firmware/mediatek/WIFI_RAM_CODE_MT7961_1.bin.zst",
+        )),
+    );
+    fs::write(out.join("wifi.txt"), wifi).expect("wifi blob");
+    fs::write(out.join("mt7921.bin"), firmware).expect("wifi blob");
     println!("cargo:rerun-if-changed=../../../support/swift-wifi.txt");
     println!("cargo:rerun-if-changed=../../../support/mt7921.bin");
+    println!("cargo:rerun-if-changed=/usr/lib/firmware/mediatek/WIFI_RAM_CODE_MT7961_1.bin.zst");
 }
 
-fn copy(src: &std::path::Path, dest: &std::path::Path) {
-    let bytes = fs::read(src).unwrap_or_default();
-    fs::write(dest, bytes).expect("wifi blob");
+fn load(support_file: &std::path::Path, fallback: Option<PathBuf>) -> Vec<u8> {
+    if let Ok(bytes) = fs::read(support_file)
+        && !bytes.is_empty()
+    {
+        return bytes;
+    }
+    let Some(fallback) = fallback else {
+        return Vec::new();
+    };
+    decompress(&fallback).unwrap_or_default()
+}
+
+fn decompress(path: &std::path::Path) -> Option<Vec<u8>> {
+    if !path.exists() {
+        return None;
+    }
+    let output = Command::new("zstd")
+        .args(["-d", "-c", "--"])
+        .arg(path)
+        .output()
+        .ok()?;
+    if output.status.success() && !output.stdout.is_empty() {
+        Some(output.stdout)
+    } else {
+        None
+    }
 }

@@ -1,8 +1,10 @@
 //! Read-only view of one named file. Writes and format are rejected.
 //!
 //! The Windows volume on the hynix SSD is left as it is. A FAT root file and
-//! an NTFS resident file are both accepted. A boot sector that is neither is
-//! `nvme: raw`. A sector read that does not return is `nvme: admin`.
+//! an NTFS resident file are both accepted. Sector 0 of a GUID partition table
+//! is a protective master boot record, type `0xEE`, and the header is at LBA 1.
+//! Each partition is read at its starting LBA. A boot sector that is none of
+//! these is `nvme: raw`. A sector read that does not return is `nvme: admin`.
 
 pub const NAMED_FILE: &[u8] = b"LERUX.TXT";
 
@@ -56,19 +58,124 @@ pub fn report_bytes(report: &DiskReport) -> &[u8] {
 
 /// Read [`NAMED_FILE`] through `read`, which returns one 512-byte sector.
 ///
-/// `None` from `read` is [`DiskReport::Admin`]. A boot sector that is neither
-/// NTFS nor a 512-byte FAT volume is [`DiskReport::Raw`].
+/// `None` from `read` is [`DiskReport::Admin`]. A protective master boot record
+/// is followed to the partition table. A boot sector that is neither NTFS nor a
+/// 512-byte FAT volume, and not that record, is [`DiskReport::Raw`].
 pub fn load_named(mut read: impl FnMut(u64) -> Option<[u8; 512]>) -> DiskReport {
     let Some(boot) = read(0) else {
         return DiskReport::Admin;
     };
-    if boot[3..11] == *b"NTFS    " {
+    if is_ntfs(&boot) {
         return load_ntfs(&boot, &mut read);
     }
-    if boot[510] == 0x55 && boot[511] == 0xaa && u16::from_le_bytes([boot[11], boot[12]]) == 512 {
+    if is_fat(&boot) {
         return load_fat(&boot, &mut read);
     }
+    if is_protective_mbr(&boot) {
+        return load_gpt(&mut read);
+    }
     DiskReport::Raw
+}
+
+fn is_ntfs(boot: &[u8; 512]) -> bool {
+    boot[3..11] == *b"NTFS    "
+}
+
+fn is_fat(boot: &[u8; 512]) -> bool {
+    boot[510] == 0x55 && boot[511] == 0xaa && u16::from_le_bytes([boot[11], boot[12]]) == 512
+}
+
+/// Partition type `0xEE` in any of the four master-boot-record slots.
+fn is_protective_mbr(boot: &[u8; 512]) -> bool {
+    if boot[510] != 0x55 || boot[511] != 0xaa {
+        return false;
+    }
+    (0..4).any(|slot| boot[446 + slot * 16 + 4] == 0xee)
+}
+
+fn load_gpt(read: &mut impl FnMut(u64) -> Option<[u8; 512]>) -> DiskReport {
+    let Some(header) = read(1) else {
+        return DiskReport::Admin;
+    };
+    if &header[..8] != b"EFI PART" {
+        return DiskReport::Raw;
+    }
+    let header_size = u32_at(&header, 12);
+    let my_lba = u64_at(&header, 24);
+    let entry_lba = u64_at(&header, 72);
+    let count = u32_at(&header, 80);
+    let entry_size = u32_at(&header, 84);
+    if !(92..=512).contains(&header_size)
+        || my_lba != 1
+        || entry_lba == 0
+        || entry_size != 128
+        || count == 0
+    {
+        return DiskReport::Raw;
+    }
+    let count = count.min(128);
+    let mut saw_fs = false;
+    for index in 0..u64::from(count) {
+        let Some(entry) = read_gpt_entry(read, entry_lba, index) else {
+            return DiskReport::Admin;
+        };
+        if entry[..16] == [0; 16] {
+            continue;
+        }
+        let start = u64_at(&entry, 32);
+        if start == 0 {
+            continue;
+        }
+        match load_volume(start, read) {
+            DiskReport::Bytes(buf, len) => return DiskReport::Bytes(buf, len),
+            DiskReport::Missing => saw_fs = true,
+            DiskReport::Admin => return DiskReport::Admin,
+            DiskReport::Raw | DiskReport::Absent | DiskReport::Regs | DiskReport::Enable => {}
+        }
+    }
+    if saw_fs {
+        DiskReport::Missing
+    } else {
+        DiskReport::Raw
+    }
+}
+
+fn load_volume(start: u64, read: &mut impl FnMut(u64) -> Option<[u8; 512]>) -> DiskReport {
+    let Some(boot) = read(start) else {
+        return DiskReport::Admin;
+    };
+    let mut at = |lba: u64| {
+        let abs = start.checked_add(lba)?;
+        read(abs)
+    };
+    if is_ntfs(&boot) {
+        return load_ntfs(&boot, &mut at);
+    }
+    if is_fat(&boot) {
+        return load_fat(&boot, &mut at);
+    }
+    DiskReport::Raw
+}
+
+fn read_gpt_entry(
+    read: &mut impl FnMut(u64) -> Option<[u8; 512]>,
+    entry_lba: u64,
+    index: u64,
+) -> Option<[u8; 128]> {
+    let lba = entry_lba.checked_add(index / 4)?;
+    let sector = read(lba)?;
+    let at = (index % 4) as usize * 128;
+    let mut entry = [0u8; 128];
+    entry.copy_from_slice(&sector[at..at + 128]);
+    Some(entry)
+}
+
+fn u32_at(buf: &[u8], at: usize) -> u32 {
+    u32::from_le_bytes(buf[at..at + 4].try_into().unwrap())
+}
+
+fn u64_at(buf: &[u8], at: usize) -> u64 {
+    u64::from_le_bytes(buf[at..at + 8].try_into().unwrap())
 }
 
 fn load_fat(boot: &[u8; 512], read: &mut impl FnMut(u64) -> Option<[u8; 512]>) -> DiskReport {
@@ -300,13 +407,39 @@ mod tests {
     }
 
     #[test]
-    fn a_missed_sector_is_admin_and_a_protective_mbr_is_raw() {
+    fn a_missed_sector_is_admin_and_a_bare_signature_is_raw() {
         assert_eq!(report_bytes(&load_named(|_| None)), b"nvme: admin");
         let mut boot = [0u8; 512];
         boot[510] = 0x55;
         boot[511] = 0xaa;
         let report = load_named(|lba| (lba == 0).then_some(boot));
         assert_eq!(report_bytes(&report), b"nvme: raw");
+    }
+
+    #[test]
+    fn a_protective_mbr_without_a_gpt_header_is_raw_and_a_missed_header_is_admin() {
+        let mut disk = [[0u8; 512]; 2];
+        disk[0] = protective_mbr();
+        let report = load_named(|lba| disk.get(lba as usize).copied());
+        assert_eq!(report_bytes(&report), b"nvme: raw");
+        let report = load_named(|lba| (lba == 0).then_some(disk[0]));
+        assert_eq!(report_bytes(&report), b"nvme: admin");
+    }
+
+    #[test]
+    fn reads_the_ntfs_file_behind_the_efi_partition() {
+        let mut disk = [[0u8; 512]; 11];
+        disk[0] = protective_mbr();
+        disk[1] = gpt_header(2, 2);
+        write_entry(&mut disk[2][..128], 3);
+        write_entry(&mut disk[2][128..256], 8);
+        disk[3] = fat_boot();
+        disk[8] = ntfs_boot(1);
+        let record = file_record();
+        disk[9].copy_from_slice(&record[..512]);
+        disk[10].copy_from_slice(&record[512..]);
+        let report = load_named(|lba| disk.get(lba as usize).copied());
+        assert_eq!(report_bytes(&report), b"hello");
     }
 
     #[test]
@@ -351,6 +484,53 @@ mod tests {
         disk[2].copy_from_slice(&record[512..]);
         let report = load_named(|lba| disk.get(lba as usize).copied());
         assert_eq!(report_bytes(&report), b"hello");
+    }
+
+    fn protective_mbr() -> [u8; 512] {
+        let mut boot = [0u8; 512];
+        boot[450] = 0xee;
+        boot[510] = 0x55;
+        boot[511] = 0xaa;
+        boot
+    }
+
+    fn gpt_header(entry_lba: u64, count: u32) -> [u8; 512] {
+        let mut header = [0u8; 512];
+        header[..8].copy_from_slice(b"EFI PART");
+        header[12..16].copy_from_slice(&92u32.to_le_bytes());
+        header[24..32].copy_from_slice(&1u64.to_le_bytes());
+        header[72..80].copy_from_slice(&entry_lba.to_le_bytes());
+        header[80..84].copy_from_slice(&count.to_le_bytes());
+        header[84..88].copy_from_slice(&128u32.to_le_bytes());
+        header
+    }
+
+    fn write_entry(entry: &mut [u8], start: u64) {
+        entry[0] = 1;
+        entry[32..40].copy_from_slice(&start.to_le_bytes());
+    }
+
+    fn fat_boot() -> [u8; 512] {
+        let mut boot = [0u8; 512];
+        boot[12] = 2;
+        boot[13] = 1;
+        boot[14] = 1;
+        boot[16] = 2;
+        boot[17] = 16;
+        boot[22] = 1;
+        boot[510] = 0x55;
+        boot[511] = 0xaa;
+        boot
+    }
+
+    fn ntfs_boot(mft_lcn: u64) -> [u8; 512] {
+        let mut boot = [0u8; 512];
+        boot[3..11].copy_from_slice(b"NTFS    ");
+        boot[0x0c] = 0x02;
+        boot[0x0d] = 1;
+        boot[0x30..0x38].copy_from_slice(&mft_lcn.to_le_bytes());
+        boot[0x40] = (-10i8) as u8;
+        boot
     }
 
     fn file_record() -> [u8; 1024] {

@@ -11,7 +11,7 @@
     <memory_region name="mode_record" size="0x1000" phys_addr="0x1fe0000" />
     <memory_region name="framebuffer" size="{fb_bytes}" phys_addr="{fb_phys}" page_size="0x1000" />
     <memory_region name="pci_headers" size="0x1000" phys_addr="0x1fb0000" />
-    <memory_region name="mt7921_regs" size="0x200000" phys_addr="0xfd000000" />
+    <memory_region name="mt7921_regs" size="0x200000" phys_addr="0x82000000" />
     <memory_region name="nvme_regs" size="0x4000" phys_addr="0xd1500000" />
     <!-- 128 KiB below the header pages. The stub is linked at 32 MiB. -->
     <memory_region name="nvme_dma" size="0x20000" phys_addr="0x1f00000" />
@@ -42,7 +42,7 @@
         <map mr="mode_record" vaddr="0x3fff0000" perms="r" cached="false" setvar_vaddr="mode_record_vaddr" />
         <map mr="framebuffer" vaddr="0x40000000" perms="rw" cached="false" setvar_vaddr="fb_vaddr" />
         <map mr="pci_headers" vaddr="0x3ffd0000" perms="r" cached="false" setvar_vaddr="pci_headers_vaddr" />
-        <map mr="mt7921_regs" vaddr="0xfd000000" perms="rw" cached="false" setvar_vaddr="mt7921_regs_vaddr" />
+        <map mr="mt7921_regs" vaddr="0x82000000" perms="rw" cached="false" setvar_vaddr="mt7921_regs_vaddr" />
         <irq id="0" pcidev="03:00.0" handle="1" vector="51" />
     </protection_domain>
 

@@ -12,6 +12,8 @@ pub const LOCATIONS: [(u8, u8, u8); 6] = [
 ];
 
 pub const MT7921_BDF: (u8, u8, u8) = (3, 0, 0);
+/// Probe line `bar 8200000c` with the memory-type bits cleared.
+pub const MT7921_BAR: u64 = 0x8200_0000;
 pub const NVME_BDF: (u8, u8, u8) = (2, 0, 0);
 pub const XHCI_BDFS: [(u8, u8, u8); 2] = [(4, 0, 3), (4, 0, 4)];
 
@@ -64,6 +66,23 @@ pub fn config_address(bus: u8, dev: u8, func: u8, reg: u8) -> u32 {
         | (u32::from(dev) << 11)
         | (u32::from(func) << 8)
         | u32::from(reg & 0xfc)
+}
+
+/// First memory BAR. A 64-bit BAR includes the following dword. Type bits are cleared.
+pub fn memory_bar(header: &[u8]) -> Option<u64> {
+    if header.len() < 0x18 {
+        return None;
+    }
+    let lo = u32::from_le_bytes([header[0x10], header[0x11], header[0x12], header[0x13]]);
+    if lo & 1 != 0 {
+        return None;
+    }
+    let mut addr = u64::from(lo & 0xffff_fff0);
+    if lo & 0x4 != 0 {
+        let hi = u32::from_le_bytes([header[0x14], header[0x15], header[0x16], header[0x17]]);
+        addr |= u64::from(hi) << 32;
+    }
+    Some(addr)
 }
 
 pub fn vendor_device(header: &[u8]) -> Option<(u16, u16)> {
@@ -159,6 +178,17 @@ mod tests {
     #[test]
     fn mt7921_ids_are_the_recorded_chip() {
         assert!(MT7921_IDS.contains(&(0x14c3, 0x7961)));
+    }
+
+    #[test]
+    fn mt7921_bar_drops_the_type_bits() {
+        let mut header = [0u8; 64];
+        header[0x10..0x14].copy_from_slice(&0x8200_000cu32.to_le_bytes());
+        assert_eq!(memory_bar(&header), Some(MT7921_BAR));
+        header[0x14] = 1;
+        assert_eq!(memory_bar(&header), Some(0x1_8200_0000));
+        header[0x10] = 1;
+        assert_eq!(memory_bar(&header), None);
     }
 
     #[test]

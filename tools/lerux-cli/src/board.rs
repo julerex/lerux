@@ -207,6 +207,8 @@ mod tests {
         assert!(xml.contains("phys_addr=\"0xd1500000\""));
         assert!(xml.contains("phys_addr=\"0xd1100000\""));
         assert!(xml.contains("phys_addr=\"0xd1200000\""));
+        assert!(xml.contains("phys_addr=\"0x82000000\""));
+        assert!(!xml.contains("phys_addr=\"0xfd000000\""));
         assert!(xml.contains("phys_addr=\"0x1f00000\""));
         assert!(!xml.contains("phys_addr=\"0xfc000000\""));
         assert!(!xml.contains("phys_addr=\"0xfa000000\""));

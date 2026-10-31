@@ -209,7 +209,7 @@ impl Mac {
         self.own()?;
         let chip = self.chip();
         let Some((patch, ram)) = images.pick(chip) else {
-            return Err(Stage::Fw);
+            return Err(Stage::FwChip);
         };
         self.wfsys()?;
         self.wr(HOST_INT_ENA, 0);
@@ -345,12 +345,12 @@ impl Mac {
     }
 
     fn load_patch(&mut self, image: &[u8]) -> Result<(), Stage> {
-        let status = self.sem(true).ok_or(Stage::Fw)?;
+        let status = self.sem(true).ok_or(Stage::FwSem)?;
         if status == PATCH_IS_DL {
             return Ok(());
         }
         if status != PATCH_NOT_DL {
-            return Err(Stage::Fw);
+            return Err(Stage::FwSem);
         }
         let mut regions = [Region {
             addr: 0,
@@ -361,19 +361,19 @@ impl Mac {
             override_addr: false,
         }; 8];
         let Some(n) = patch_regions(image, &mut regions) else {
-            return Err(Stage::Fw);
+            return Err(Stage::FwPatch);
         };
         for region in regions.iter().take(n) {
-            self.download(image, region)?;
+            self.download(image, region, Stage::FwPatch)?;
         }
         if !self.command(PATCH_FINISH, &[0; 4], true) {
-            return Err(Stage::Fw);
+            return Err(Stage::FwPatch);
         }
         if patch_status(self.response()) != Some(0) {
-            return Err(Stage::Fw);
+            return Err(Stage::FwPatch);
         }
         if self.sem(false) != Some(PATCH_REL) {
-            return Err(Stage::Fw);
+            return Err(Stage::FwSem);
         }
         Ok(())
     }
@@ -388,13 +388,13 @@ impl Mac {
             override_addr: false,
         }; 8];
         let Some((n, addr, option)) = ram_regions(image, &mut regions) else {
-            return Err(Stage::Fw);
+            return Err(Stage::FwRam);
         };
         for region in regions.iter().take(n) {
             if region.skip {
                 continue;
             }
-            self.download(image, region)?;
+            self.download(image, region, Stage::FwRam)?;
         }
         let mut req = [0u8; 8];
         req[..4].copy_from_slice(&option.to_le_bytes());
@@ -402,26 +402,26 @@ impl Mac {
         if self.command(FW_START, &req, true) {
             Ok(())
         } else {
-            Err(Stage::Fw)
+            Err(Stage::FwStart)
         }
     }
 
-    fn download(&mut self, image: &[u8], region: &Region) -> Result<(), Stage> {
+    fn download(&mut self, image: &[u8], region: &Region, setup: Stage) -> Result<(), Stage> {
         let mut req = [0u8; 12];
         req[..4].copy_from_slice(&region.addr.to_le_bytes());
         req[4..8].copy_from_slice(&(region.len as u32).to_le_bytes());
         req[8..].copy_from_slice(&region.mode.to_le_bytes());
         if !self.command(download_cmd(region.addr), &req, true) {
-            return Err(Stage::Fw);
+            return Err(setup);
         }
         let mut off = 0;
         while off < region.len {
             let n = (region.len - off).min(BOUNCE);
             let chunk = image
                 .get(region.off + off..region.off + off + n)
-                .ok_or(Stage::Fw)?;
+                .ok_or(setup)?;
             if !self.scatter(chunk) {
-                return Err(Stage::Fw);
+                return Err(Stage::FwScatter);
             }
             off += n;
         }

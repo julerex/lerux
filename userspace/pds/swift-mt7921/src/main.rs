@@ -1,6 +1,7 @@
 //! MT7921 at `03:00.0`. The MAC follows the Linux v6.8 mt76 sequence.
 //!
-//! Init paints `own`, `fw`, or `mac` when that step fails, and `wait` when the
+//! Init paints `own`, `fw sem`, `fw patch`, `fw scatter`, `fw ram`, `fw start`,
+//! `fw chip`, or `mac` when that step fails, and `wait` when the
 //! firmware has reached the normal state. The shell then writes the network
 //! name and passphrase and notifies channel 1. Channel 0 stays the MSI.
 //! Association paints `scan`, `auth`, `assoc`, `eapol`, `dhcp`, and `ping`.

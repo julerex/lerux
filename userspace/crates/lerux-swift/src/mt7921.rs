@@ -23,7 +23,18 @@ pub fn firmware_kind(chip: u32) -> FirmwareKind {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Stage {
     Own,
-    Fw,
+    /// Patch semaphore got no reply, or a status other than held or released.
+    FwSem,
+    /// Patch header, a patch region setup, or patch-finish was rejected.
+    FwPatch,
+    /// A firmware chunk did not leave the download ring.
+    FwScatter,
+    /// RAM trailer, or a RAM region setup, was rejected.
+    FwRam,
+    /// The start command after the RAM image got no reply.
+    FwStart,
+    /// Chip id is not the MT7961 pair baked into this image.
+    FwChip,
     Mac,
     Wait,
     Scan,
@@ -39,7 +50,12 @@ impl Stage {
     pub fn paint(self, out: &mut [u8]) -> usize {
         let word: &[u8] = match self {
             Stage::Own => b"own",
-            Stage::Fw => b"fw",
+            Stage::FwSem => b"fw sem",
+            Stage::FwPatch => b"fw patch",
+            Stage::FwScatter => b"fw scatter",
+            Stage::FwRam => b"fw ram",
+            Stage::FwStart => b"fw start",
+            Stage::FwChip => b"fw chip",
             Stage::Mac => b"mac",
             Stage::Wait => b"wait",
             Stage::Scan => b"scan",
@@ -718,6 +734,10 @@ mod tests {
         let mut out = [0u8; 32];
         let n = Stage::Wait.paint(&mut out);
         assert_eq!(&out[..n], b"mt7921: wait");
+        let n = Stage::FwSem.paint(&mut out);
+        assert_eq!(&out[..n], b"mt7921: fw sem");
+        let n = Stage::FwScatter.paint(&mut out);
+        assert_eq!(&out[..n], b"mt7921: fw scatter");
         let n = Stage::PingOk([192, 168, 1, 20]).paint(&mut out);
         assert_eq!(&out[..n], b"ip 192.168.1.20 ping ok");
     }

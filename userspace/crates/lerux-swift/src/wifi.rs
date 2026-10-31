@@ -8,7 +8,7 @@ use lerux_sddf::{net_buff_desc_t, net_enqueue_active, net_queue_handle_t};
 
 use crate::crypto::{hmac_md5, wpa_psk};
 
-const CLIENT_MAC: [u8; 6] = [0x02, 0x14, 0xc3, 0x79, 0x21, 0x01];
+pub const CLIENT_MAC: [u8; 6] = [0x02, 0x14, 0xc3, 0x79, 0x21, 0x01];
 
 pub enum WifiReport {
     Absent,
@@ -79,7 +79,7 @@ pub fn bring_up(nic: &mut impl Nic, ssid: &[u8], pass: &[u8]) -> WifiReport {
         return WifiReport::RadioErr;
     }
     let mut discover = [0u8; 342];
-    let discover_len = write_discover(&mut discover);
+    let discover_len = write_discover(&mut discover, &CLIENT_MAC);
     if !nic.tx(&discover[..discover_len]) {
         return WifiReport::RadioErr;
     }
@@ -90,7 +90,7 @@ pub fn bring_up(nic: &mut impl Nic, ssid: &[u8], pass: &[u8]) -> WifiReport {
         return WifiReport::RadioErr;
     };
     let mut request = [0u8; 342];
-    let request_len = write_request(&mut request, yiaddr, server);
+    let request_len = write_request(&mut request, &CLIENT_MAC, yiaddr, server);
     if !nic.tx(&request[..request_len]) {
         return WifiReport::RadioErr;
     }
@@ -102,7 +102,7 @@ pub fn bring_up(nic: &mut impl Nic, ssid: &[u8], pass: &[u8]) -> WifiReport {
     };
     let gateway = dhcp_router(ack).unwrap_or([addr[0], addr[1], addr[2], 1]);
     let mut echo = [0u8; 64];
-    let echo_len = write_echo(&mut echo, addr, gateway);
+    let echo_len = write_echo(&mut echo, &CLIENT_MAC, addr, gateway);
     if !nic.tx(&echo[..echo_len]) {
         return WifiReport::RadioErr;
     }
@@ -189,17 +189,17 @@ fn write_eapol(out: &mut [u8], psk: &[u8; 32]) -> usize {
     50
 }
 
-fn write_discover(out: &mut [u8]) -> usize {
-    write_dhcp(out, [0; 4], [0; 4], 1)
+pub fn write_discover(out: &mut [u8], mac: &[u8; 6]) -> usize {
+    write_dhcp(out, mac, [0; 4], [0; 4], 1)
 }
 
-fn write_request(out: &mut [u8], yiaddr: [u8; 4], server: [u8; 4]) -> usize {
-    write_dhcp(out, yiaddr, server, 3)
+pub fn write_request(out: &mut [u8], mac: &[u8; 6], yiaddr: [u8; 4], server: [u8; 4]) -> usize {
+    write_dhcp(out, mac, yiaddr, server, 3)
 }
 
-fn write_dhcp(out: &mut [u8], yiaddr: [u8; 4], server: [u8; 4], kind: u8) -> usize {
+fn write_dhcp(out: &mut [u8], mac: &[u8; 6], yiaddr: [u8; 4], server: [u8; 4], kind: u8) -> usize {
     out[..6].fill(0xff);
-    out[6..12].copy_from_slice(&CLIENT_MAC);
+    out[6..12].copy_from_slice(mac);
     out[12..14].copy_from_slice(&0x0800u16.to_be_bytes());
     out[14] = 0x45;
     out[15] = 0;
@@ -225,7 +225,7 @@ fn write_dhcp(out: &mut [u8], yiaddr: [u8; 4], server: [u8; 4], kind: u8) -> usi
     boot[2] = 6;
     boot[4..8].copy_from_slice(&0x4c52_5558u32.to_be_bytes());
     boot[16..20].copy_from_slice(&yiaddr);
-    boot[28..34].copy_from_slice(&CLIENT_MAC);
+    boot[28..34].copy_from_slice(mac);
     boot[236..240].copy_from_slice(&0x6382_5363u32.to_be_bytes());
     boot[240] = 53;
     boot[241] = 1;
@@ -273,7 +273,7 @@ fn dhcp_ack(addr: [u8; 4], server: [u8; 4]) -> [u8; 320] {
     frame
 }
 
-fn dhcp_yiaddr(frame: &[u8], kind: u8) -> Option<([u8; 4], [u8; 4])> {
+pub fn dhcp_yiaddr(frame: &[u8], kind: u8) -> Option<([u8; 4], [u8; 4])> {
     if frame.len() < 42 + 243 || u16::from_be_bytes([frame[12], frame[13]]) != 0x0800 {
         return None;
     }
@@ -295,7 +295,7 @@ fn dhcp_yiaddr(frame: &[u8], kind: u8) -> Option<([u8; 4], [u8; 4])> {
     Some((addr, server))
 }
 
-fn dhcp_router(frame: &[u8]) -> Option<[u8; 4]> {
+pub fn dhcp_router(frame: &[u8]) -> Option<[u8; 4]> {
     let boot = frame.get(42..)?;
     let mut at = 240;
     while at + 1 < boot.len() {
@@ -314,9 +314,9 @@ fn dhcp_router(frame: &[u8]) -> Option<[u8; 4]> {
     None
 }
 
-fn write_echo(out: &mut [u8], src: [u8; 4], dst: [u8; 4]) -> usize {
+pub fn write_echo(out: &mut [u8], mac: &[u8; 6], src: [u8; 4], dst: [u8; 4]) -> usize {
     out[..6].fill(0xff);
-    out[6..12].copy_from_slice(&CLIENT_MAC);
+    out[6..12].copy_from_slice(mac);
     out[12..14].copy_from_slice(&0x0800u16.to_be_bytes());
     out[14] = 0x45;
     out[16..18].copy_from_slice(&28u16.to_be_bytes());
@@ -344,7 +344,7 @@ fn icmp_reply_frame(src: [u8; 4], dst: [u8; 4]) -> [u8; 42] {
     frame
 }
 
-fn icmp_reply(frame: &[u8]) -> bool {
+pub fn icmp_reply(frame: &[u8]) -> bool {
     frame.len() >= 35 && frame.get(23) == Some(&1) && frame.get(34) == Some(&0)
 }
 

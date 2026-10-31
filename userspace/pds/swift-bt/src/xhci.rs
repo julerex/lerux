@@ -4,14 +4,17 @@
 //! configuration port: firmware left the BARs, and the probe already enabled
 //! memory space and bus master. Events are polled. The keyboard on this image
 //! is the i8042, so resetting these controllers does not take the console.
+//! The command ring lives in RAM next to the NVMe buffer. `0xf8000000` is the
+//! firmware hole, and a slot enable never completes from there.
 
 use core::sync::atomic::{fence, Ordering};
 
 use lerux_swift::{
-    acknowledge_reset, find_hci_interrupt, frame_usb_event, usb_hci_reset, HciIntr, XferFail,
+    acknowledge_reset, find_hci_interrupt, first_interface_class, frame_usb_event, usb_hci_reset,
+    HciIntr, PortStop, XferFail,
 };
 
-const DMA_PHYS: u64 = 0xf800_0000;
+const DMA_PHYS: u64 = 0x01f2_0000;
 const DMA_LEN: usize = 0x4_0000;
 const MMIO_LEN: u32 = 0x1_0000;
 
@@ -32,6 +35,9 @@ const MAX_SCRATCH: u32 = 32;
 const RING_LAST: u8 = 31;
 const EV_LEN: u8 = 64;
 const SPIN: u32 = 500_000;
+/// USB attach debounce is 100 ms. Returning on the first connected port stops
+/// the wait before the radio appears, so this wait always runs the full spin.
+const CONNECT_SPIN: u32 = SPIN * 16;
 
 const TRB_NORMAL: u32 = 1;
 const TRB_SETUP: u32 = 2;
@@ -80,6 +86,13 @@ enum Intr {
     Failed,
 }
 
+#[derive(Clone, Copy)]
+struct Seen {
+    vendor: u16,
+    product: u16,
+    class: u8,
+}
+
 struct Host {
     regs: *mut u8,
     dma: *mut u8,
@@ -106,6 +119,7 @@ struct Host {
     intr_c: u8,
     ev_i: u8,
     ev_c: u8,
+    seen: Option<Seen>,
 }
 
 pub fn poll_reset(regs: *mut u8, dma: *mut u8, event: &mut [u8]) -> Result<usize, XferFail> {
@@ -143,6 +157,7 @@ impl Host {
             intr_c: 1,
             ev_i: 0,
             ev_c: 1,
+            seen: None,
         }
     }
 
@@ -157,38 +172,59 @@ impl Host {
         if !self.program_rings() || !self.run() {
             return Err(XferFail::Halt);
         }
-        let Some(radio) = self.find_radio() else {
-            return Err(XferFail::Port);
-        };
+        let radio = self.find_radio()?;
         self.arm_interrupt(&radio);
         self.send_reset(event)
     }
 
-    fn find_radio(&mut self) -> Option<HciIntr> {
+    fn find_radio(&mut self) -> Result<HciIntr, XferFail> {
         self.power_ports();
         self.wait_connect();
+        let mut connected = 0u8;
+        let mut stop = PortStop::Reset;
         for port in 1..=self.max_ports {
             if self.read32(self.portsc(port)) & 1 == 0 {
                 continue;
             }
+            connected = connected.saturating_add(1);
             let Some(speed) = self.reset_port(port) else {
+                stop = stop.later(PortStop::Reset);
                 continue;
             };
             if !self.enable_slot() {
+                stop = stop.later(PortStop::Slot);
                 continue;
             }
-            if self.address(port, speed)
-                && let Some(radio) = self.bluetooth()
-            {
-                return Some(radio);
+            if !self.address(port, speed) {
+                stop = stop.later(PortStop::Addr);
+                self.disable_slot();
+                continue;
+            }
+            if let Some(radio) = self.bluetooth() {
+                return Ok(radio);
+            }
+            if self.seen.is_none() {
+                stop = stop.later(PortStop::Desc);
             }
             self.disable_slot();
         }
-        None
+        Err(match self.seen {
+            Some(seen) => XferFail::Id(seen.vendor, seen.product, seen.class),
+            None => XferFail::Port(connected, stop),
+        })
     }
 
     fn bluetooth(&mut self) -> Option<HciIntr> {
-        self.device_descriptor()?;
+        let desc = self.device_descriptor()?;
+        let vendor = u16::from_le_bytes([desc[8], desc[9]]);
+        let product = u16::from_le_bytes([desc[10], desc[11]]);
+        let mut class = desc[4];
+        let radio = self.hci_config(&mut class);
+        self.note_device(vendor, product, class);
+        radio
+    }
+
+    fn hci_config(&mut self, class: &mut u8) -> Option<HciIntr> {
         let n = self.ctrl_in(0x0200, 9)?;
         if n < 9 {
             return None;
@@ -203,6 +239,9 @@ impl Host {
         let mut cfg = [0u8; 512];
         let take = n.min(cfg.len());
         self.read_dma(OFF_DATA, &mut cfg[..take]);
+        if let Some(iface) = first_interface_class(&cfg[..take]) {
+            *class = iface;
+        }
         let radio = find_hci_interrupt(&cfg[..take])?;
         if !matches!(
             self.control(0x00, 9, u16::from(radio.config_value), 0, 0),
@@ -211,6 +250,16 @@ impl Host {
             return None;
         }
         Some(radio)
+    }
+
+    fn note_device(&mut self, vendor: u16, product: u16, class: u8) {
+        if self.seen.is_none() {
+            self.seen = Some(Seen {
+                vendor,
+                product,
+                class,
+            });
+        }
     }
 
     fn arm_interrupt(&mut self, radio: &HciIntr) {
@@ -658,25 +707,31 @@ impl Host {
     }
 
     fn wait_connect(&self) {
-        for _ in 0..SPIN {
-            for port in 1..=self.max_ports {
-                if self.read32(self.portsc(port)) & 1 != 0 {
-                    return;
-                }
-            }
+        for _ in 0..CONNECT_SPIN {
             core::hint::spin_loop();
         }
     }
 
     fn reset_port(&self, port: u8) -> Option<u8> {
+        self.pulse_reset(port, 1 << 4, 1 << 21)
+            .or_else(|| self.pulse_reset(port, 1 << 31, 1 << 19))
+    }
+
+    /// Clear a stale reset-change bit before starting. A set change bit would
+    /// otherwise look like a finished reset while the port is still disabled.
+    fn pulse_reset(&self, port: u8, start: u32, done: u32) -> Option<u8> {
         let off = self.portsc(port);
         let raw = self.read32(off);
-        self.write32(off, portsc_neutral(raw) | (1 << 9) | (1 << 4));
-        for _ in 0..SPIN {
+        self.write32(off, portsc_neutral(raw) | (raw & PORT_CHANGE));
+        let raw = self.read32(off);
+        self.write32(off, portsc_neutral(raw) | (1 << 9) | start);
+        let mut saw_start = false;
+        for _ in 0..CONNECT_SPIN {
             let cur = self.read32(off);
-            let resetting = cur & (1 << 4) != 0;
-            let done = cur & (1 << 21) != 0;
-            if resetting || !done {
+            if cur & start != 0 {
+                saw_start = true;
+            }
+            if !saw_start || cur & start != 0 || cur & done == 0 {
                 core::hint::spin_loop();
                 continue;
             }

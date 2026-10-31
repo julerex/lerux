@@ -46,25 +46,157 @@ pub struct HciIntr {
     pub interval: u8,
 }
 
+/// How far a connected port got. A later variant is further than an earlier one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PortStop {
+    Reset,
+    Slot,
+    Addr,
+    Desc,
+}
+
+impl PortStop {
+    fn rank(self) -> u8 {
+        match self {
+            PortStop::Reset => 0,
+            PortStop::Slot => 1,
+            PortStop::Addr => 2,
+            PortStop::Desc => 3,
+        }
+    }
+
+    fn label(self) -> &'static [u8] {
+        match self {
+            PortStop::Reset => b"reset",
+            PortStop::Slot => b"slot",
+            PortStop::Addr => b"addr",
+            PortStop::Desc => b"desc",
+        }
+    }
+
+    /// Keep whichever attempt got further.
+    pub fn later(self, other: Self) -> Self {
+        if other.rank() > self.rank() {
+            other
+        } else {
+            self
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum XferFail {
     Halt,
-    Port,
+    /// Connected-port count, and the furthest stage those ports reached.
+    /// A count of zero did not reach a stage.
+    Port(u8, PortStop),
+    /// Vendor, product, and the first interface class, or the device class.
+    Id(u16, u16, u8),
     Event,
 }
 
 pub fn xfer_line(fail: &XferFail) -> &'static [u8] {
     match fail {
         XferFail::Halt => b"bt: halt",
-        XferFail::Port => b"bt: port",
+        XferFail::Port(..) => b"bt: port",
+        XferFail::Id(..) => b"bt: id",
         XferFail::Event => b"bt: event",
     }
 }
 
-/// Prefer the attempt that got further: an event, then a running host, then a halt.
+/// Panel line for [`XferFail`], including the port count or the device id.
+pub fn fail_line(fail: &XferFail, out: &mut [u8]) -> usize {
+    match *fail {
+        XferFail::Halt | XferFail::Event => {
+            let text = xfer_line(fail);
+            let n = text.len().min(out.len());
+            out[..n].copy_from_slice(&text[..n]);
+            n
+        }
+        XferFail::Port(count, stop) => port_line(count, stop, out),
+        XferFail::Id(vendor, product, class) => id_line(vendor, product, class, out),
+    }
+}
+
+fn port_line(count: u8, stop: PortStop, out: &mut [u8]) -> usize {
+    let prefix = b"bt: port ";
+    if out.len() < prefix.len() + 1 {
+        return 0;
+    }
+    out[..prefix.len()].copy_from_slice(prefix);
+    let mut n = prefix.len();
+    if count >= 10 {
+        out[n] = b'0' + (count / 10);
+        n += 1;
+        if n >= out.len() {
+            return prefix.len();
+        }
+    }
+    out[n] = b'0' + (count % 10);
+    n += 1;
+    if count == 0 {
+        return n;
+    }
+    let label = stop.label();
+    if n + 1 + label.len() > out.len() {
+        return n;
+    }
+    out[n] = b' ';
+    n += 1;
+    out[n..n + label.len()].copy_from_slice(label);
+    n + label.len()
+}
+
+fn id_line(vendor: u16, product: u16, class: u8, out: &mut [u8]) -> usize {
+    let prefix = b"bt: id ";
+    if out.len() < prefix.len() + 4 + 1 + 4 + 1 + 2 {
+        return 0;
+    }
+    out[..prefix.len()].copy_from_slice(prefix);
+    let mut n = prefix.len();
+    n += write_hex16(&mut out[n..], vendor);
+    out[n] = b':';
+    n += 1;
+    n += write_hex16(&mut out[n..], product);
+    out[n] = b' ';
+    n += 1;
+    out[n] = hex(class >> 4);
+    out[n + 1] = hex(class);
+    n + 2
+}
+
+fn write_hex16(slot: &mut [u8], value: u16) -> usize {
+    for (i, byte) in slot.iter_mut().take(4).enumerate() {
+        let shift = (3 - i) * 4;
+        *byte = hex((value >> shift) as u8);
+    }
+    4
+}
+
+fn hex(nibble: u8) -> u8 {
+    let nibble = nibble & 0xf;
+    if nibble < 10 {
+        b'0' + nibble
+    } else {
+        b'a' + (nibble - 10)
+    }
+}
+
+/// Prefer the attempt that got further: an event, then a device id, then a port, then a halt.
+/// Two port counts keep the larger one. Two device ids keep the first.
 pub fn further(left: XferFail, right: XferFail) -> XferFail {
-    match (&left, &right) {
-        (XferFail::Event, _) | (_, XferFail::Event) => XferFail::Event,
-        (XferFail::Port, _) | (_, XferFail::Port) => XferFail::Port,
+    match (left, right) {
+        (kept @ XferFail::Event, _) | (_, kept @ XferFail::Event) => kept,
+        (kept @ XferFail::Id(..), _) => kept,
+        (_, kept @ XferFail::Id(..)) => kept,
+        (XferFail::Port(a, sa), kept @ XferFail::Port(b, sb))
+            if sb.rank() > sa.rank() || (sb == sa && b > a) =>
+        {
+            kept
+        }
+        (kept @ XferFail::Port(..), XferFail::Port(..)) => kept,
+        (kept @ XferFail::Port(..), XferFail::Halt) => kept,
+        (XferFail::Halt, kept @ XferFail::Port(..)) => kept,
         (XferFail::Halt, XferFail::Halt) => XferFail::Halt,
     }
 }
@@ -78,6 +210,26 @@ pub fn frame_usb_event(usb: &[u8], out: &mut [u8]) -> usize {
     out[0] = 0x04;
     out[1..1 + n].copy_from_slice(&usb[..n]);
     1 + n
+}
+
+/// Class of the first interface descriptor, when the configuration names one.
+pub fn first_interface_class(config: &[u8]) -> Option<u8> {
+    if config.len() < 4 || config[1] != 0x02 {
+        return None;
+    }
+    let total = u16::from_le_bytes([config[2], config[3]]) as usize;
+    let mut at = 0;
+    while at + 2 <= config.len() && at < total {
+        let len = config[at] as usize;
+        if len < 2 || at + len > config.len() {
+            return None;
+        }
+        if config[at + 1] == 0x04 && len >= 6 {
+            return Some(config[at + 5]);
+        }
+        at += len;
+    }
+    None
 }
 
 /// Last interrupt-IN endpoint on a Bluetooth HCI interface.
@@ -226,16 +378,57 @@ mod tests {
         let n = frame_usb_event(&usb, &mut framed);
         assert!(acknowledge_reset(&framed[..n]));
         assert_eq!(xfer_line(&XferFail::Halt), b"bt: halt");
-        assert_eq!(xfer_line(&XferFail::Port), b"bt: port");
+        assert_eq!(xfer_line(&XferFail::Port(0, PortStop::Reset)), b"bt: port");
         assert_eq!(xfer_line(&XferFail::Event), b"bt: event");
-        assert!(matches!(
-            further(XferFail::Halt, XferFail::Port),
-            XferFail::Port
-        ));
-        assert!(matches!(
-            further(XferFail::Port, XferFail::Event),
+        let mut line = [0u8; 24];
+        let n = fail_line(&XferFail::Port(0, PortStop::Reset), &mut line);
+        assert_eq!(&line[..n], b"bt: port 0");
+        let n = fail_line(&XferFail::Port(3, PortStop::Reset), &mut line);
+        assert_eq!(&line[..n], b"bt: port 3 reset");
+        let n = fail_line(&XferFail::Port(12, PortStop::Addr), &mut line);
+        assert_eq!(&line[..n], b"bt: port 12 addr");
+        let n = fail_line(&XferFail::Id(0x0e8d, 0x7961, 0xe0), &mut line);
+        assert_eq!(&line[..n], b"bt: id 0e8d:7961 e0");
+        assert_eq!(
+            fail_line(&XferFail::Port(0, PortStop::Reset), &mut [0u8; 4]),
+            0
+        );
+        assert_eq!(
+            further(XferFail::Halt, XferFail::Port(0, PortStop::Reset)),
+            XferFail::Port(0, PortStop::Reset)
+        );
+        assert_eq!(
+            further(
+                XferFail::Port(0, PortStop::Reset),
+                XferFail::Port(2, PortStop::Reset)
+            ),
+            XferFail::Port(2, PortStop::Reset)
+        );
+        assert_eq!(
+            further(
+                XferFail::Port(3, PortStop::Reset),
+                XferFail::Port(1, PortStop::Addr)
+            ),
+            XferFail::Port(1, PortStop::Addr)
+        );
+        assert_eq!(
+            further(
+                XferFail::Port(2, PortStop::Reset),
+                XferFail::Id(0x0e8d, 0x7961, 0xff)
+            ),
+            XferFail::Id(0x0e8d, 0x7961, 0xff)
+        );
+        assert_eq!(
+            further(
+                XferFail::Id(0x0e8d, 0x7961, 0xff),
+                XferFail::Id(0x1111, 0x2222, 0x00)
+            ),
+            XferFail::Id(0x0e8d, 0x7961, 0xff)
+        );
+        assert_eq!(
+            further(XferFail::Id(0x0e8d, 0x7961, 0xff), XferFail::Event),
             XferFail::Event
-        ));
+        );
     }
 
     #[test]

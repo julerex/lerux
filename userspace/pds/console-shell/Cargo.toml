@@ -11,10 +11,11 @@ workspace = true
 [features]
 board-pc_z97_d3h = []
 board-x86_64_generic_console = []
-board-swift_sfx14_41g = []
+board-swift_sfx14_41g = ["dep:lerux-swift"]
 
 [dependencies]
 embedded-hal-nb = { workspace = true }
 lerux-calc = { path = "../../crates/lerux-calc" }
+lerux-swift = { path = "../../crates/lerux-swift", optional = true }
 sel4-microkit = { workspace = true }
 sel4-microkit-driver-adapters = { workspace = true }

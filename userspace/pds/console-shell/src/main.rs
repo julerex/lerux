@@ -18,19 +18,30 @@ use sel4_microkit::{protection_domain, Channel, ChannelSet, Handler, Infallible,
 use sel4_microkit_driver_adapters::serial::client::Client;
 
 use lerux_calc::{eval, write_i64, Error};
+#[cfg(feature = "board-swift_sfx14_41g")]
+use lerux_swift::{key_ok, write_key};
 
 const CONSOLE: Channel = Channel::new(0);
 #[cfg(not(feature = "board-swift_sfx14_41g"))]
 const SERIAL: Channel = Channel::new(1);
 #[cfg(feature = "board-swift_sfx14_41g")]
 const DISK: Channel = Channel::new(1);
+#[cfg(feature = "board-swift_sfx14_41g")]
+const WIFI: Channel = Channel::new(2);
 const LINE_MAX: usize = 80;
+#[cfg(not(feature = "board-swift_sfx14_41g"))]
 const MENU: &[u8] = b"1 browser\n2 maths\n";
+#[cfg(feature = "board-swift_sfx14_41g")]
+const MENU: &[u8] = b"1 browser\n2 maths\n3 wifi\n";
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Mode {
     Menu,
     Maths,
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    Ssid,
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    Psk,
 }
 
 struct HandlerImpl {
@@ -39,6 +50,10 @@ struct HandlerImpl {
     com1: Client,
     #[cfg(feature = "board-swift_sfx14_41g")]
     disk_done: bool,
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    ssid: [u8; 32],
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    ssid_len: usize,
     mode: Mode,
     line: [u8; LINE_MAX],
     len: usize,
@@ -53,6 +68,10 @@ fn init() -> HandlerImpl {
         com1: Client::new(SERIAL),
         #[cfg(feature = "board-swift_sfx14_41g")]
         disk_done: false,
+        #[cfg(feature = "board-swift_sfx14_41g")]
+        ssid: [0; 32],
+        #[cfg(feature = "board-swift_sfx14_41g")]
+        ssid_len: 0,
         mode: Mode::Menu,
         line: [0; LINE_MAX],
         len: 0,
@@ -151,8 +170,44 @@ impl HandlerImpl {
                     self.mode = Mode::Maths;
                     self.emit(b"maths> ");
                 }
+                #[cfg(feature = "board-swift_sfx14_41g")]
+                b"3" | b"wifi" => {
+                    self.mode = Mode::Ssid;
+                    self.ssid_len = 0;
+                    self.emit(b"ssid> ");
+                }
                 _ => self.reject(),
             },
+            #[cfg(feature = "board-swift_sfx14_41g")]
+            Mode::Ssid if line == b"quit" => {
+                self.mode = Mode::Menu;
+                self.emit(MENU);
+            }
+            #[cfg(feature = "board-swift_sfx14_41g")]
+            Mode::Ssid => {
+                if (1..=32).contains(&line.len()) {
+                    self.ssid[..line.len()].copy_from_slice(line);
+                    self.ssid_len = line.len();
+                    self.mode = Mode::Psk;
+                    self.emit(b"ssid ok\npsk> ");
+                } else {
+                    self.wifi_err();
+                }
+            }
+            #[cfg(feature = "board-swift_sfx14_41g")]
+            Mode::Psk if line == b"quit" => {
+                self.mode = Mode::Menu;
+                self.emit(MENU);
+            }
+            #[cfg(feature = "board-swift_sfx14_41g")]
+            Mode::Psk => {
+                let name_len = self.ssid_len;
+                if key_ok(&self.ssid[..name_len], line) {
+                    self.post_wifi(line);
+                } else {
+                    self.wifi_err();
+                }
+            }
             Mode::Maths if line == b"quit" => {
                 self.mode = Mode::Menu;
                 self.emit(MENU);
@@ -177,7 +232,33 @@ impl HandlerImpl {
                 self.emit(b"maths err\n");
                 self.emit(b"maths> ");
             }
+            #[cfg(feature = "board-swift_sfx14_41g")]
+            Mode::Ssid | Mode::Psk => self.wifi_err(),
         }
+    }
+
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    fn wifi_err(&mut self) {
+        self.mode = Mode::Menu;
+        self.emit(b"wifi err\n");
+        self.emit(MENU);
+    }
+
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    fn post_wifi(&mut self, psk: &[u8]) {
+        let name_len = self.ssid_len;
+        let mut name = [0u8; 32];
+        name[..name_len].copy_from_slice(&self.ssid[..name_len]);
+        let ptr = memory_region_symbol!(wifi_key_vaddr: *mut u8).as_ptr();
+        let page = unsafe { core::slice::from_raw_parts_mut(ptr, 0x1000) };
+        if !write_key(page, &name[..name_len], psk) {
+            self.wifi_err();
+            return;
+        }
+        WIFI.notify();
+        self.mode = Mode::Menu;
+        self.emit(b"psk ok\n");
+        self.emit(MENU);
     }
 }
 

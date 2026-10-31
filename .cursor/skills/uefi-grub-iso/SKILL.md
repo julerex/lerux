@@ -33,7 +33,9 @@ An underscore under the first glyph is the firmware text cursor in the rows just
 
 ## What counts as a new image
 
-The file to flash is `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`. Its mtime is not the check. Read `build/swift_sfx14_41g/system.system`. The framebuffer region is `phys_addr="0xfc90000000"`, `size="0x7e9000"`, and `page_size="0x1000"`. On 2026-10-29 a 22:42 ISO was packed from a 16:29 loader that still had `phys_addr="0x1fd0000"` and `size="0x1000"`. The panel showed the stub's mode line and the menu stayed off.
+The file to flash is `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`. Its mtime is not the check. Read `build/swift_sfx14_41g/system.system`. The framebuffer region is `phys_addr="0xfc90000000"`, `size="0x7e9000"`, and `page_size="0x1000"`. That region identifies the panel mapping. On 2026-10-29 a 22:42 ISO was packed from a 16:29 loader that still had `phys_addr="0x1fd0000"` and `size="0x1000"`. The panel showed the stub's mode line and the menu stayed off.
+
+`just iso` relinks `swift-mt7921` and decompresses the host firmware on that rebuild. `support/mt7921.bin` overrides the primary RAM image. An unchanged framebuffer line does not prove those blobs. Compare the linked blobs, and take the recipe's own status line, including past `Wrote ISO`.
 
 The address is 2 MiB-aligned. `0x7e9000` is 2025 pages of 4 KiB and is not a multiple of 2 MiB. The template sets `page_size="0x1000"` so Microkit keeps 4 KiB pages. A Microkit assemble that accepts this region does not prove seL4 has a device untyped for it. The menu on the metal panel is the proof.
 

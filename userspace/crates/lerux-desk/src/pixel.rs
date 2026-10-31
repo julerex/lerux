@@ -168,14 +168,115 @@ const GLYPHS: &[Glyph] = &[
         ch: b'-',
         row: [0x00, 0x00, 0x00, 0x7E, 0x00, 0x00, 0x00, 0],
     },
+    // Full-height capitals. The lowercase rows above sit in the lower half,
+    // so a shifted letter is visible on the panel.
+    Glyph {
+        ch: b'A',
+        row: [0x38, 0x44, 0x44, 0x7C, 0x44, 0x44, 0x44, 0],
+    },
+    Glyph {
+        ch: b'B',
+        row: [0x78, 0x44, 0x44, 0x78, 0x44, 0x44, 0x78, 0],
+    },
+    Glyph {
+        ch: b'C',
+        row: [0x38, 0x44, 0x40, 0x40, 0x40, 0x44, 0x38, 0],
+    },
+    Glyph {
+        ch: b'D',
+        row: [0x78, 0x44, 0x44, 0x44, 0x44, 0x44, 0x78, 0],
+    },
+    Glyph {
+        ch: b'E',
+        row: [0x7C, 0x40, 0x40, 0x78, 0x40, 0x40, 0x7C, 0],
+    },
+    Glyph {
+        ch: b'F',
+        row: [0x7C, 0x40, 0x40, 0x78, 0x40, 0x40, 0x40, 0],
+    },
+    Glyph {
+        ch: b'G',
+        row: [0x38, 0x44, 0x40, 0x5C, 0x44, 0x44, 0x38, 0],
+    },
+    Glyph {
+        ch: b'H',
+        row: [0x44, 0x44, 0x44, 0x7C, 0x44, 0x44, 0x44, 0],
+    },
+    Glyph {
+        ch: b'I',
+        row: [0x38, 0x10, 0x10, 0x10, 0x10, 0x10, 0x38, 0],
+    },
+    Glyph {
+        ch: b'J',
+        row: [0x1C, 0x08, 0x08, 0x08, 0x08, 0x48, 0x30, 0],
+    },
+    Glyph {
+        ch: b'K',
+        row: [0x44, 0x48, 0x50, 0x60, 0x50, 0x48, 0x44, 0],
+    },
+    Glyph {
+        ch: b'L',
+        row: [0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x7C, 0],
+    },
+    Glyph {
+        ch: b'M',
+        row: [0x44, 0x6C, 0x54, 0x54, 0x44, 0x44, 0x44, 0],
+    },
+    Glyph {
+        ch: b'N',
+        row: [0x44, 0x64, 0x54, 0x4C, 0x44, 0x44, 0x44, 0],
+    },
+    Glyph {
+        ch: b'O',
+        row: [0x38, 0x44, 0x44, 0x44, 0x44, 0x44, 0x38, 0],
+    },
+    Glyph {
+        ch: b'P',
+        row: [0x78, 0x44, 0x44, 0x78, 0x40, 0x40, 0x40, 0],
+    },
+    Glyph {
+        ch: b'Q',
+        row: [0x38, 0x44, 0x44, 0x44, 0x54, 0x48, 0x34, 0],
+    },
+    Glyph {
+        ch: b'R',
+        row: [0x78, 0x44, 0x44, 0x78, 0x50, 0x48, 0x44, 0],
+    },
+    Glyph {
+        ch: b'S',
+        row: [0x3C, 0x40, 0x40, 0x38, 0x04, 0x04, 0x78, 0],
+    },
+    Glyph {
+        ch: b'T',
+        row: [0x7C, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0],
+    },
+    Glyph {
+        ch: b'U',
+        row: [0x44, 0x44, 0x44, 0x44, 0x44, 0x44, 0x38, 0],
+    },
+    Glyph {
+        ch: b'V',
+        row: [0x44, 0x44, 0x44, 0x44, 0x44, 0x28, 0x10, 0],
+    },
+    Glyph {
+        ch: b'W',
+        row: [0x44, 0x44, 0x44, 0x54, 0x54, 0x54, 0x28, 0],
+    },
+    Glyph {
+        ch: b'X',
+        row: [0x44, 0x44, 0x28, 0x10, 0x28, 0x44, 0x44, 0],
+    },
+    Glyph {
+        ch: b'Y',
+        row: [0x44, 0x44, 0x28, 0x10, 0x10, 0x10, 0x10, 0],
+    },
+    Glyph {
+        ch: b'Z',
+        row: [0x7C, 0x04, 0x08, 0x10, 0x20, 0x40, 0x7C, 0],
+    },
 ];
 
 fn glyph(ch: u8) -> [u8; 8] {
-    let ch = if ch.is_ascii_uppercase() {
-        ch.to_ascii_lowercase()
-    } else {
-        ch
-    };
     for item in GLYPHS {
         if item.ch == ch {
             return item.row;
@@ -295,5 +396,25 @@ mod tests {
             b'f',
         );
         assert_eq!(frame[26], 0xff);
+    }
+
+    #[test]
+    fn capital_a_is_taller_than_lowercase() {
+        let pen = Pen {
+            pitch: 64,
+            width: 16,
+            height: 32,
+            red: 16,
+            green: 8,
+            blue: 0,
+        };
+        let mut upper = [0u8; 64 * 32];
+        let mut lower = [0u8; 64 * 32];
+        paint_cell(&mut upper, pen, 0, 0, b'A');
+        paint_cell(&mut lower, pen, 0, 0, b'a');
+        assert_ne!(upper, lower);
+        // First row of 'A' (0x38) lights pixel column 2. Lowercase 'a' is blank there.
+        assert_eq!(upper[16], 0xff);
+        assert_eq!(lower[16], 0xaa);
     }
 }

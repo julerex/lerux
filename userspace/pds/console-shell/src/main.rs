@@ -189,7 +189,7 @@ impl HandlerImpl {
                     self.ssid[..line.len()].copy_from_slice(line);
                     self.ssid_len = line.len();
                     self.mode = Mode::Psk;
-                    self.emit(b"psk> ");
+                    self.emit(b"ssid ok\npsk> ");
                 } else {
                     self.wifi_err();
                 }
@@ -257,6 +257,7 @@ impl HandlerImpl {
         }
         WIFI.notify();
         self.mode = Mode::Menu;
+        self.emit(b"psk ok\n");
         self.emit(MENU);
     }
 }

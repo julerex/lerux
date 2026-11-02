@@ -106,7 +106,7 @@ These hold for every milestone.
 - This image follows the other device-framework images. Channel identifiers live in the system template and in the configuration struct the protection domain reads. A number that the template does not contain is a bug. When the board has a profile, `lerux profile check-channels` is the check.
 - One `web_content`. The root holds assertions. A cothread does not panic. The protection-domain stack attribute stays `0x10_000`.
 - The HTML subset is named in `lerux-ladybird-html` and widens only when a milestone says so. The parser is a tokenizer plus insertion modes, so a new tag is a new state in that parser.
-- Host milestones exit on `cargo test -p <crate>`. From milestone 1 onward, `just check` names the new libraries. From milestone 9 onward, the milestone also passes `just check-pd` and `just test-ladybird`. `just test-browser-sddf` keeps passing. The workflow `include` list and the smoke counts in `docs/ci.md` and the README move together, and only after that milestone's smoke has passed.
+- Host milestones exit on `cargo test -p <crate>`. From milestone 1 onward, `just check` names the new libraries. From milestone 9 onward, the milestone also passes `just check-pd` and `just test-ladybird`. `just test-browser-sddf` keeps passing. The workflow `include` list and the smoke counts in `docs/ci.md` move together, and only after that milestone's smoke has passed.
 - `cargo fmt --all --check` covers this tree once the crates are workspace members. Milestone 1 is the one that adds the members.
 
 The first bitmap has to paint the tags in [`support/browser/fixture.html`](../support/browser/fixture.html): `html`, `head`, `body`, `title`, and `p`. The user-agent sheet hides `head` and `title` and lays the paragraph out as a block. That sheet lives in `lerux-ladybird-web` once milestone 6 writes it. The frame is 320 by 64. Bytes are tightly packed, stride `320 * 4`, little-endian B, G, R, A, with alpha set to `0xff` before the sample. The sample is the first pixel that is not opaque white, in row-major order. The serial line is `pixel ` , eight lowercase hex digits, and a newline. For this fixture that line is `pixel 000000ff`.
@@ -230,7 +230,7 @@ Out of scope: scroll, transforms, and shadows.
 - `browser_ui` copies the bitmap through the existing graphics client queues and prints the title line and the pixel line on the serial client. It does not parse HTML.
 - Priorities follow the browser image: drivers at 4 with budget 4000, virtualisers at 3 with budget 3000, `web_content` at 2 with budget 2000, `browser_ui` at 1 with budget 1000. The period equals the budget. A notify to the higher priority domain runs it before the caller waits, and the channel semaphore keeps the signal.
 - Heap on `web_content` is 1 MiB. Its worker stack is `0x4000`. Assertions stay on the root.
-- `support/smoke-expects.toml` gains the two lines. `ci` for the board stays false until the workflow `include` list and the counts in `docs/ci.md` and the README are updated in the same change that records a green smoke.
+- `support/smoke-expects.toml` gains the two lines. `ci` for the board stays false until the workflow `include` list and the counts in `docs/ci.md` are updated in the same change that records a green smoke.
 - Add an `AGENTS.md` section for this board, in the same style as the browser-image section, once the smoke is green.
 
 Out of scope: an address line, keyboard input, and any fetch.

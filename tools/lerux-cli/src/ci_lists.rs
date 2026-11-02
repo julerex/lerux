@@ -15,7 +15,6 @@ const WAITING_ON_SMOKE: &str = "Waiting on a smoke";
 
 struct SmokeCensus {
     include: Vec<String>,
-    readme_counts: Vec<usize>,
     ci_doc_counts: Vec<usize>,
     ci_doc: String,
     ci_true: BTreeSet<String>,
@@ -25,14 +24,12 @@ struct SmokeCensus {
 fn load_census(root: &Path) -> Result<SmokeCensus> {
     let workflow = fs::read_to_string(root.join(".github/workflows/rust.yml"))
         .context("read .github/workflows/rust.yml")?;
-    let readme = fs::read_to_string(root.join("README.md")).context("read README.md")?;
     let ci_doc = fs::read_to_string(root.join("docs/ci.md")).context("read docs/ci.md")?;
     let boards = load_boards(root)?;
     Ok(SmokeCensus {
         include: smoke_include_boards(&workflow)?,
-        readme_counts: readme_smoke_counts(&readme)?,
         ci_doc_counts: ci_doc_smoke_counts(&ci_doc)?,
-        ci_doc: ci_doc.clone(),
+        ci_doc,
         ci_true: boards
             .iter()
             .filter(|(_, board)| board.ci)
@@ -61,9 +58,12 @@ fn check_census(census: &SmokeCensus) -> Result<()> {
 }
 
 fn push_census_counts(errors: &mut Vec<String>, census: &SmokeCensus) {
-    let include_len = census.include.len();
-    push_count_errors(errors, "README.md", &census.readme_counts, include_len);
-    push_count_errors(errors, "docs/ci.md", &census.ci_doc_counts, include_len);
+    push_count_errors(
+        errors,
+        "docs/ci.md",
+        &census.ci_doc_counts,
+        census.include.len(),
+    );
 }
 
 fn push_census_membership(errors: &mut Vec<String>, census: &SmokeCensus) {
@@ -214,10 +214,6 @@ fn is_job_header(line: &str) -> bool {
     !name.is_empty() && !name.contains([' ', ':'])
 }
 
-fn readme_smoke_counts(text: &str) -> Result<Vec<usize>> {
-    counts_before(text, " smoke**", "README.md")
-}
-
 fn ci_doc_smoke_counts(text: &str) -> Result<Vec<usize>> {
     let mut counts = counts_before(text, " parallel matrix jobs", "docs/ci.md")?;
     counts.extend(counts_after(text, "smoke matrix x", "docs/ci.md")?);
@@ -302,39 +298,32 @@ mod tests {
             "docs/ci.md counts {:?} vs include {include_len}",
             census.ci_doc_counts
         );
-        assert!(
-            census
-                .readme_counts
-                .iter()
-                .all(|count| *count == include_len),
-            "README.md counts {:?} vs include {include_len}",
-            census.readme_counts
-        );
         check_census(&census).expect("smoke lists match");
     }
 
     #[test]
-    fn readme_count_52_fails_and_names_readme() {
+    fn ci_doc_count_mismatch_names_the_file() {
         let repo = root();
         let mut census = load_census(&repo).expect("load smoke lists");
-        let readme = fs::read_to_string(repo.join("README.md")).expect("read README.md");
         let include_len = census.include.len();
         let wrong = include_len.saturating_sub(1);
-        let readme = readme.replacen(
-            &format!("**{include_len} smoke**"),
-            &format!("**{wrong} smoke**"),
+        let ci_doc = census.ci_doc.replacen(
+            &format!("{include_len} parallel matrix jobs"),
+            &format!("{wrong} parallel matrix jobs"),
             1,
         );
         assert!(
-            readme.contains(&format!("**{wrong} smoke**")),
-            "README.md fixture did not adjust the smoke count"
+            ci_doc.contains(&format!("{wrong} parallel matrix jobs")),
+            "docs/ci.md fixture did not adjust the smoke count"
         );
-        census.readme_counts = readme_smoke_counts(&readme).expect("parse README.md fixture");
-        assert_eq!(census.readme_counts, vec![wrong]);
-        let err = check_census(&census).expect_err("README.md count mismatch");
+        census.ci_doc_counts = ci_doc_smoke_counts(&ci_doc).expect("parse docs/ci.md fixture");
+        assert_eq!(census.ci_doc_counts, vec![wrong, include_len]);
+        let err = check_census(&census).expect_err("docs/ci.md count mismatch");
         assert_eq!(
             err.to_string(),
-            format!("README.md count {wrong} does not match workflow include length {include_len}")
+            format!(
+                "docs/ci.md count {wrong} does not match workflow include length {include_len}"
+            )
         );
     }
 

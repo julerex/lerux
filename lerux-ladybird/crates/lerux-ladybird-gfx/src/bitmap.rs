@@ -39,10 +39,12 @@ impl Color {
         a: 0xff,
     };
 
+    #[must_use]
     pub const fn to_bytes(self) -> [u8; 4] {
         [self.b, self.g, self.r, self.a]
     }
 
+    #[must_use]
     pub const fn from_bytes(bytes: [u8; 4]) -> Self {
         Self {
             b: bytes[0],
@@ -63,6 +65,7 @@ pub struct Rect {
 }
 
 impl Rect {
+    #[must_use]
     pub const fn new(x: i32, y: i32, width: i32, height: i32) -> Self {
         Self {
             x,
@@ -102,14 +105,17 @@ impl<'a> Bitmap<'a> {
         Self::new(bytes, FRAME_WIDTH, FRAME_HEIGHT)
     }
 
+    #[must_use]
     pub fn width(&self) -> u32 {
         self.width
     }
 
+    #[must_use]
     pub fn height(&self) -> u32 {
         self.height
     }
 
+    #[must_use]
     pub fn bytes(&self) -> &[u8] {
         self.bytes
     }
@@ -129,6 +135,7 @@ impl<'a> Bitmap<'a> {
         self.bytes[off..off + 4].copy_from_slice(&color.to_bytes());
     }
 
+    #[must_use]
     pub fn pixel(&self, x: i32, y: i32) -> Option<Color> {
         let x = u32::try_from(x).ok()?;
         let y = u32::try_from(y).ok()?;
@@ -200,6 +207,7 @@ impl<'a> Bitmap<'a> {
     }
 
     /// First pixel that is not [`Color::WHITE`], in row-major order.
+    #[must_use]
     pub fn first_non_white(&self) -> Option<[u8; 4]> {
         let white = Color::WHITE.to_bytes();
         for chunk in self.bytes.chunks_exact(4) {
@@ -259,6 +267,7 @@ impl PixelLine {
         Self { bytes }
     }
 
+    #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
         &self.bytes
     }

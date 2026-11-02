@@ -1,6 +1,6 @@
 //! Phase 46: deliberate VM fault so the parent `debug-handler` receives it.
 //!
-//! Null-pointer store produces a data abort (VmFault) under aarch64 seL4.
+//! Null-pointer store produces a data abort (`VmFault`) under aarch64 seL4.
 
 #![no_std]
 #![no_main]

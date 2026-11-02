@@ -54,9 +54,10 @@ fn claim(start: usize, len: usize) {
     let table = unsafe { &mut *CLAIMS.0.get() };
     for i in 0..table.n {
         let (claimed_start, claimed_end) = table.ranges[i];
-        if start < claimed_end && claimed_start < end {
-            panic!("region claim overlaps");
-        }
+        assert!(
+            !(start < claimed_end && claimed_start < end),
+            "region claim overlaps"
+        );
     }
     assert!(table.n < MAX_CLAIMS, "region claim table is full");
     table.ranges[table.n] = (start, end);
@@ -108,10 +109,12 @@ impl Region {
         Self { ptr, len }
     }
 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.len
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len == 0
     }
@@ -142,6 +145,12 @@ impl Mmio {
         Self { ptr, len }
     }
 
+    /// Read one byte at `offset`.
+    ///
+    /// # Panics
+    ///
+    /// Panics with `mmio offset fits` when `offset` is outside this window.
+    #[must_use]
     pub fn read_u8(&self, offset: usize) -> u8 {
         assert!(offset < self.len, "mmio offset fits");
         // SAFETY: `offset` is inside the claimed window. The load is volatile
@@ -149,6 +158,11 @@ impl Mmio {
         unsafe { read_volatile(self.ptr.add(offset)) }
     }
 
+    /// Write one byte at `offset`.
+    ///
+    /// # Panics
+    ///
+    /// Panics with `mmio offset fits` when `offset` is outside this window.
     pub fn write_u8(&self, offset: usize, value: u8) {
         assert!(offset < self.len, "mmio offset fits");
         // SAFETY: `offset` is inside the claimed window.
@@ -175,6 +189,11 @@ impl<T> Shared<T> {
         }
     }
 
+    /// Run `f` with exclusive access to the value.
+    ///
+    /// # Panics
+    ///
+    /// Panics with `Shared::with re-entered` when a call is already on the stack.
     pub fn with<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
         let previous = BORROWS.fetch_add(1, Ordering::Acquire);
         assert!(previous == 0, "Shared::with re-entered");
@@ -222,9 +241,17 @@ pub enum QueueError {
 
 /// Builds both ends of one ring. `queue` must be zeroed and large enough for
 /// [`SerialQueue`]. `data.len()` must be at least `capacity`.
+///
+/// # Errors
+///
+/// Returns [`PairError::EmptyCapacity`] when `capacity` is zero.
+/// Returns [`PairError::ShortData`] when `data` is shorter than `capacity`
+/// or longer than `u32::MAX`.
+/// Returns [`PairError::ShortQueue`] when `queue` is smaller than the queue header.
+/// Returns [`PairError::UnalignedQueue`] when `queue` is not aligned for that header.
 pub fn serial_pair(
-    queue: Region,
-    data: Region,
+    queue: &Region,
+    data: &Region,
     capacity: u32,
 ) -> Result<(SerialProducer, SerialConsumer), PairError> {
     if capacity == 0 {
@@ -256,6 +283,11 @@ pub fn serial_pair(
 }
 
 impl SerialProducer {
+    /// Push `byte` onto the ring.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`QueueError::Full`] when `capacity` bytes are already queued.
     pub fn enqueue(&self, byte: u8) -> Result<(), QueueError> {
         // SAFETY: `serial_pair` checked the queue alignment and the data length.
         // This side is the only writer of `tail`.
@@ -276,6 +308,11 @@ impl SerialProducer {
 }
 
 impl SerialConsumer {
+    /// Pop the next byte.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`QueueError::Empty`] when the ring has no byte.
     pub fn dequeue(&self) -> Result<u8, QueueError> {
         // SAFETY: `serial_pair` checked the queue alignment and the data length.
         // This side is the only writer of `head`.

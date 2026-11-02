@@ -1,4 +1,4 @@
-//! NS16550 UART over MMIO (QEMU virt RISC-V at 0x1000_0000).
+//! NS16550 UART over MMIO (QEMU virt RISC-V at `0x1000_0000`).
 
 use core::{
     convert::Infallible,

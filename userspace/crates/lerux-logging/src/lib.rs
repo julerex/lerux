@@ -16,6 +16,7 @@ pub mod serial;
 pub mod debug;
 
 /// Filter out noisy `sel4_sys` targets (matches rust-sel4 http-server example).
+#[must_use]
 pub fn default_filter(meta: &Metadata) -> bool {
     !meta.target().starts_with("sel4_sys")
 }

@@ -52,7 +52,7 @@ fn init() -> HandlerImpl {
             u32::from(config.virt.num_buffers),
         );
     }
-    log::info!("{}", READY_LINE);
+    log::info!("{READY_LINE}");
     HandlerImpl {
         engine,
         queues,

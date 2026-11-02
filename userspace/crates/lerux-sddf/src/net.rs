@@ -37,6 +37,7 @@ pub struct net_buff_desc_t {
 }
 
 impl net_buff_desc_t {
+    #[must_use]
     pub const fn new(io_or_offset: u64, len: u16, oid: u8) -> Self {
         Self {
             io_or_offset,
@@ -47,6 +48,7 @@ impl net_buff_desc_t {
     }
 
     /// Ownership identifier. Only the low 6 bits are defined.
+    #[must_use]
     pub const fn oid(self) -> u8 {
         self.oid & 0x3f
     }
@@ -190,6 +192,7 @@ pub struct net_vswitch_config_t {
 }
 
 /// True when the configuration page starts with [`SDDF_NET_MAGIC`].
+#[must_use]
 pub fn net_config_check_magic(config: &[u8]) -> bool {
     config.len() >= SDDF_NET_MAGIC_LEN && config[..SDDF_NET_MAGIC_LEN] == SDDF_NET_MAGIC
 }

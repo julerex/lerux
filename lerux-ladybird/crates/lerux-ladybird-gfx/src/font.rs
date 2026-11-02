@@ -109,6 +109,7 @@ impl Glyph {
 }
 
 /// The glyph for `ch`, when the fixture set includes it.
+#[must_use]
 pub fn glyph(ch: char) -> Option<Glyph> {
     let Ok(ch) = u8::try_from(u32::from(ch)) else {
         return None;

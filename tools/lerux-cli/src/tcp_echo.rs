@@ -34,7 +34,7 @@ pub fn tcp_echo(port: u16) -> Result<()> {
         }
     });
 
-    let deadline = std::time::Instant::now() + Duration::from_secs(60);
+    let deadline = std::time::Instant::now() + Duration::from_mins(1);
     while !done.load(Ordering::SeqCst) {
         if std::time::Instant::now() >= deadline {
             break;

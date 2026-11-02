@@ -201,7 +201,7 @@ fn sockets() -> Result<&'static mut Sockets<Stack>, ()> {
     if !slot.is_null() {
         return Ok(unsafe { &mut **slot });
     }
-    let mut stack = Stack::new()?;
+    let mut stack = Stack::new();
     if !stack.bring_up() {
         return Err(());
     }
@@ -251,7 +251,7 @@ struct Stack {
 }
 
 impl Stack {
-    fn new() -> Result<Self, ()> {
+    fn new() -> Self {
         let map = map();
         let mut device = NetDevice::new(
             copy_queue(&map.rx),
@@ -278,7 +278,7 @@ impl Stack {
             SocketBuffer::new(rx),
             SocketBuffer::new(tx),
         ));
-        Ok(Self {
+        Self {
             device,
             iface,
             sockets,
@@ -290,7 +290,7 @@ impl Stack {
             local_ip: Ipv4Address::UNSPECIFIED,
             connecting: false,
             listening: false,
-        })
+        }
     }
 
     fn bring_up(&mut self) -> bool {

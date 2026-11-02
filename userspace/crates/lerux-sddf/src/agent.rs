@@ -1,6 +1,6 @@
 //! Tool argument page for the agent protection domain.
 //!
-//! LionsOS 0.4.0 has no agent header. Milestone 13 defines this page so `grok`
+//! `LionsOS` 0.4.0 has no agent header. Milestone 13 defines this page so `grok`
 //! can pass a tool without a postcard message. The shell and the agent both
 //! map it. Microkit zeroes the page. The shell fills [`agent_tool_t`] and
 //! notifies the agent. The agent writes the result and notifies the shell.
@@ -67,16 +67,22 @@ pub struct agent_tool_t {
     pub result: [u8; AGENT_RESULT_CAP],
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "the tool page is 0x1000 bytes and fits in usize"
+)]
 const _: () = assert!(core::mem::size_of::<agent_tool_t>() <= AGENT_TOOL_SIZE as usize);
 const _: () = assert!(core::mem::align_of::<agent_tool_t>() <= 8);
 
 /// A zeroed tool page. Padding stays zero because every field is assigned below.
+#[must_use]
 pub fn agent_tool_zeroed() -> agent_tool_t {
     // SAFETY: every field is an integer or a byte array.
     unsafe { core::mem::zeroed() }
 }
 
 /// The bytes `len` describes, when they sit inside `buf`.
+#[must_use]
 pub fn agent_bytes(buf: &[u8], len: u32) -> Option<&[u8]> {
     let len = usize::try_from(len).ok()?;
     buf.get(..len)
@@ -90,7 +96,9 @@ mod tests {
 
     #[test]
     fn tool_header_fits_in_one_page() {
-        assert!(size_of::<agent_tool_t>() <= AGENT_TOOL_SIZE as usize);
+        assert!(
+            size_of::<agent_tool_t>() <= usize::try_from(AGENT_TOOL_SIZE).expect("tool page fits")
+        );
         assert!(align_of::<agent_tool_t>() <= 8);
         assert_eq!(offset_of!(agent_tool_t, kind), 0);
         assert_eq!(

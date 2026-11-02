@@ -109,7 +109,7 @@ impl HandlerImpl {
         loop {
             let responses = self.forward_responses();
             let requests = self.forward_requests();
-            self.forward_events();
+            Self::forward_events();
             if !responses && !requests {
                 break;
             }
@@ -201,7 +201,7 @@ impl HandlerImpl {
         }
     }
 
-    fn forward_events(&mut self) {
+    fn forward_events() {
         // SAFETY: the template maps both event words.
         unsafe {
             let driver = GPU_DRIVER_EVENTS_VADDR as *mut gpu_events_t;

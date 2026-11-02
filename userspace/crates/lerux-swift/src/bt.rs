@@ -11,11 +11,13 @@ pub enum BtReport {
     ResetOk,
 }
 
+#[must_use]
 pub fn is_bluetooth_interface(class: u8, subclass: u8, protocol: u8) -> bool {
     class == 0xe0 && subclass == 0x01 && protocol == 0x01
 }
 
 /// Command-complete for Reset: event packet, event 0x0e, opcode 0x0c03, status 0.
+#[must_use]
 pub fn acknowledge_reset(event: &[u8]) -> bool {
     event.len() >= 7
         && event[0] == 0x04
@@ -25,6 +27,7 @@ pub fn acknowledge_reset(event: &[u8]) -> bool {
         && event[6] == 0
 }
 
+#[must_use]
 pub fn hci_reset() -> [u8; 4] {
     HCI_RESET
 }
@@ -32,6 +35,7 @@ pub fn hci_reset() -> [u8; 4] {
 /// USB control payload for HCI Reset. The H4 type byte is not on this pipe.
 pub const USB_HCI_RESET: [u8; 3] = [0x03, 0x0c, 0x00];
 
+#[must_use]
 pub fn usb_hci_reset() -> [u8; 3] {
     USB_HCI_RESET
 }
@@ -75,6 +79,7 @@ impl PortStop {
     }
 
     /// Keep whichever attempt got further.
+    #[must_use]
     pub fn later(self, other: Self) -> Self {
         if other.rank() > self.rank() {
             other
@@ -95,6 +100,7 @@ pub enum XferFail {
     Event,
 }
 
+#[must_use]
 pub fn xfer_line(fail: &XferFail) -> &'static [u8] {
     match fail {
         XferFail::Halt => b"bt: halt",
@@ -168,9 +174,13 @@ fn id_line(vendor: u16, product: u16, class: u8, out: &mut [u8]) -> usize {
 fn write_hex16(slot: &mut [u8], value: u16) -> usize {
     for (i, byte) in slot.iter_mut().take(4).enumerate() {
         let shift = (3 - i) * 4;
-        *byte = hex((value >> shift) as u8);
+        *byte = hex(low_byte(value >> shift));
     }
     4
+}
+
+fn low_byte(value: u16) -> u8 {
+    u8::try_from(value & 0xff).expect("hex byte")
 }
 
 fn hex(nibble: u8) -> u8 {
@@ -184,19 +194,25 @@ fn hex(nibble: u8) -> u8 {
 
 /// Prefer the attempt that got further: an event, then a device id, then a port, then a halt.
 /// Two port counts keep the larger one. Two device ids keep the first.
+#[must_use]
 pub fn further(left: XferFail, right: XferFail) -> XferFail {
+    #[expect(
+        clippy::unnested_or_patterns,
+        reason = "kept is bound on a different side of each pair"
+    )]
     match (left, right) {
-        (kept @ XferFail::Event, _) | (_, kept @ XferFail::Event) => kept,
-        (kept @ XferFail::Id(..), _) => kept,
-        (_, kept @ XferFail::Id(..)) => kept,
         (XferFail::Port(a, sa), kept @ XferFail::Port(b, sb))
             if sb.rank() > sa.rank() || (sb == sa && b > a) =>
         {
             kept
         }
-        (kept @ XferFail::Port(..), XferFail::Port(..)) => kept,
-        (kept @ XferFail::Port(..), XferFail::Halt) => kept,
-        (XferFail::Halt, kept @ XferFail::Port(..)) => kept,
+        (kept @ XferFail::Event, _)
+        | (_, kept @ XferFail::Event)
+        | (kept @ XferFail::Id(..), _)
+        | (_, kept @ XferFail::Id(..))
+        | (kept @ XferFail::Port(..), XferFail::Port(..))
+        | (kept @ XferFail::Port(..), XferFail::Halt)
+        | (XferFail::Halt, kept @ XferFail::Port(..)) => kept,
         (XferFail::Halt, XferFail::Halt) => XferFail::Halt,
     }
 }
@@ -208,11 +224,12 @@ pub fn frame_usb_event(usb: &[u8], out: &mut [u8]) -> usize {
     }
     let n = usb.len().min(out.len() - 1);
     out[0] = 0x04;
-    out[1..1 + n].copy_from_slice(&usb[..n]);
+    out[1..=n].copy_from_slice(&usb[..n]);
     1 + n
 }
 
 /// Class of the first interface descriptor, when the configuration names one.
+#[must_use]
 pub fn first_interface_class(config: &[u8]) -> Option<u8> {
     if config.len() < 4 || config[1] != 0x02 {
         return None;
@@ -233,6 +250,7 @@ pub fn first_interface_class(config: &[u8]) -> Option<u8> {
 }
 
 /// Last interrupt-IN endpoint on a Bluetooth HCI interface.
+#[must_use]
 pub fn find_hci_interrupt(config: &[u8]) -> Option<HciIntr> {
     if config.len() < 4 || config[1] != 0x02 {
         return None;
@@ -277,6 +295,7 @@ pub fn find_hci_interrupt(config: &[u8]) -> Option<HciIntr> {
 }
 
 /// Firmware must already be loaded. `event` is the controller's answer.
+#[must_use]
 pub fn bring_up(controller_present: bool, firmware_loaded: bool, event: Option<&[u8]>) -> BtReport {
     if !controller_present {
         return BtReport::Absent;
@@ -290,6 +309,7 @@ pub fn bring_up(controller_present: bool, firmware_loaded: bool, event: Option<&
     }
 }
 
+#[must_use]
 pub fn format_report(report: &BtReport) -> &'static [u8] {
     match report {
         BtReport::Absent => b"bt: absent",
@@ -319,6 +339,7 @@ pub fn version_line(version: u16, out: &mut [u8]) -> usize {
 }
 
 /// Walk a configuration descriptor for the Bluetooth interface.
+#[must_use]
 pub fn find_bluetooth_interface(config: &[u8]) -> bool {
     if config.len() < 4 || config[1] != 0x02 {
         return false;

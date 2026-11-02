@@ -264,8 +264,7 @@ fn digits_before(text: &str) -> &str {
         .char_indices()
         .rev()
         .find(|(_, ch)| !ch.is_ascii_digit())
-        .map(|(index, ch)| index + ch.len_utf8())
-        .unwrap_or(0);
+        .map_or(0, |(index, ch)| index + ch.len_utf8());
     &text[start..]
 }
 

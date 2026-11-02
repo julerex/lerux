@@ -26,6 +26,12 @@ unsafe impl<H> Sync for HostPtr<H> {}
 ///
 /// `host` is borrowed for this whole function. Imports run synchronously before
 /// it returns, so the pointer in the store stays valid.
+///
+/// # Errors
+///
+/// Returns [`Error::Module`] when `wasm` is not a module, an import cannot be
+/// linked, or `start` fails without a trap. Returns [`Error::Export`] when
+/// `start` is missing. Returns [`Error::Trap`] when `start` traps.
 pub fn run<H: Imports + 'static>(wasm: &[u8], host: &mut H) -> Result<(), Error> {
     let engine = Engine::default();
     let module = Module::new(&engine, wasm).map_err(|_| Error::Module)?;
@@ -76,13 +82,13 @@ fn read_import<H: Imports>(
     if buf_ptr < 0 || buf_len < 0 {
         return -1;
     }
-    let length = buf_len as usize;
+    let length = usize::try_from(buf_len).expect("buf_len is non-negative");
     let mut buf = vec![0; length];
     let n = host(&mut caller).read(&path, &mut buf);
     if n < 0 {
         return n;
     }
-    let count = n as usize;
+    let count = usize::try_from(n).expect("read count is non-negative");
     if count > buf.len() || !store_bytes(&mut caller, buf_ptr, &buf[..count]) {
         return -1;
     }

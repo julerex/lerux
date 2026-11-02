@@ -17,7 +17,7 @@ use sel4_shared_ring_buffer_block_io_types::{
     BlockIORequest, BlockIORequestStatus, BlockIORequestType,
 };
 use sel4_virtio_blk::GetBlockDeviceLayoutWrapper;
-use virtio_drivers::device::blk::*;
+use virtio_drivers::device::blk::{BlkReq, BlkResp, RespStatus, VirtIOBlk};
 
 mod config;
 

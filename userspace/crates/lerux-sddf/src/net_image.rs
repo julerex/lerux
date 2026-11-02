@@ -111,6 +111,7 @@ fn tx_region(vaddr: u64) -> net_virt_tx_data_region_t {
 }
 
 /// `net_driver_config_t` for the one-client image.
+#[must_use]
 pub fn driver_config() -> net_driver_config_t {
     let mut config: net_driver_config_t = zeroed_config();
     config.magic = SDDF_NET_MAGIC;
@@ -132,6 +133,7 @@ pub fn driver_config() -> net_driver_config_t {
 /// The header fixes the client array at 64, so this value is larger than a
 /// protection-domain stack (`0x10_000`). The build script calls this function.
 /// The domain copies the embedded bytes into static storage and does not call it.
+#[must_use]
 pub fn virt_tx_config() -> net_virt_tx_config_t {
     let mut config: net_virt_tx_config_t = zeroed_config();
     config.magic = SDDF_NET_MAGIC;
@@ -152,6 +154,7 @@ pub fn virt_tx_config() -> net_virt_tx_config_t {
 }
 
 /// `net_virt_rx_config_t` for the one-client image.
+#[must_use]
 pub fn virt_rx_config() -> net_virt_rx_config_t {
     let mut config: net_virt_rx_config_t = zeroed_config();
     config.magic = SDDF_NET_MAGIC;
@@ -183,6 +186,7 @@ fn rx_client() -> net_virt_rx_client_config_t {
 }
 
 /// `net_copy_config_t` for the one-client image.
+#[must_use]
 pub fn copy_config() -> net_copy_config_t {
     let mut config: net_copy_config_t = zeroed_config();
     config.magic = SDDF_NET_MAGIC;
@@ -202,6 +206,7 @@ pub fn copy_config() -> net_copy_config_t {
 }
 
 /// `net_client_config_t` for the one-client image.
+#[must_use]
 pub fn client_config() -> net_client_config_t {
     let mut config: net_client_config_t = zeroed_config();
     config.magic = SDDF_NET_MAGIC;
@@ -223,6 +228,7 @@ pub fn client_config() -> net_client_config_t {
 
 /// `net_client_config_t` for the shell, whose serial and filesystem channels
 /// already use 0, 1, and 2.
+#[must_use]
 pub fn shell_client_config() -> net_client_config_t {
     let mut config = client_config();
     config.rx.id = SHELL_NET_RX_CHANNEL;
@@ -234,6 +240,10 @@ pub fn shell_client_config() -> net_client_config_t {
 ///
 /// `dst` must be exactly `size_of::<T>()` bytes. Padding stays zero when
 /// `value` was built by the functions in this module.
+///
+/// # Panics
+///
+/// Panics when `dst` is not `size_of::<T>()` bytes.
 pub fn net_config_to_bytes<T>(value: &T, dst: &mut [u8]) {
     assert_eq!(dst.len(), core::mem::size_of::<T>());
     // SAFETY: `dst` is exactly one `T`, and the source is an initialized `T`.
@@ -252,6 +262,11 @@ pub fn net_config_to_bytes<T>(value: &T, dst: &mut [u8]) {
 ///
 /// `bytes` must be a valid representation of `T`. These configuration structs
 /// contain no `bool` fields.
+///
+/// # Panics
+///
+/// Panics when `bytes` is not `size_of::<T>()` bytes.
+#[must_use]
 pub unsafe fn net_config_from_bytes<T>(bytes: &[u8]) -> T {
     assert_eq!(bytes.len(), core::mem::size_of::<T>());
     let mut value = core::mem::MaybeUninit::<T>::uninit();
@@ -274,6 +289,10 @@ pub unsafe fn net_config_from_bytes<T>(bytes: &[u8]) -> T {
 ///
 /// `dst` must be valid for a `T` and suitably aligned. `bytes` must be a valid
 /// representation of `T`. These configuration structs contain no `bool` fields.
+///
+/// # Panics
+///
+/// Panics when `bytes` is not `size_of::<T>()` bytes.
 pub unsafe fn net_config_write_bytes<T>(bytes: &[u8], dst: *mut T) {
     assert_eq!(bytes.len(), core::mem::size_of::<T>());
     unsafe {

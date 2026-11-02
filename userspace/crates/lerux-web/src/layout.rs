@@ -197,8 +197,7 @@ fn is_block_child(doc: &Document, id: NodeId, cascade: &Cascade, parent: &Comput
             let d = cascade.compute(doc, id, parent).display;
             d == DisplayKind::Block || d == DisplayKind::None
         }
-        NodeKind::Text(_) => false,
-        NodeKind::Document => false,
+        NodeKind::Text(_) | NodeKind::Document => false,
     }
 }
 

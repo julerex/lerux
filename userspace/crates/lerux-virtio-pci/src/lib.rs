@@ -14,10 +14,12 @@ use ecam::EcamAccess;
 use ioport::IoPortCam;
 use lerux_virtio_hal::HalImpl;
 
+#[must_use]
 pub fn open_pci_root_ioport(ioport_id: u32, base_port: u16) -> PciRoot<IoPortCam> {
     PciRoot::new(IoPortCam::new(ioport_id, base_port))
 }
 
+#[must_use]
 pub fn open_pci_root_ecam(ecam_vaddr: usize) -> PciRoot<EcamAccess> {
     PciRoot::new(EcamAccess::new(ecam_vaddr))
 }
@@ -57,11 +59,19 @@ fn assign_memory_bar<C: ConfigurationAccess>(
             address_type: MemoryBarType::Width64,
             ..
         } => root.set_bar_64(device, bar_index, paddr),
-        BarInfo::Memory { .. } => root.set_bar_32(device, bar_index, paddr as u32),
-        BarInfo::IO { .. } => root.set_bar_32(device, bar_index, paddr as u32),
+        BarInfo::Memory { .. } | BarInfo::IO { .. } => {
+            let address = u32::try_from(paddr).expect("32-bit BAR address fits");
+            root.set_bar_32(device, bar_index, address);
+        }
     }
 }
 
+/// Program each non-empty memory BAR from `paddrs`, in order.
+///
+/// # Panics
+///
+/// Panics when a BAR type is invalid, when `paddrs` has fewer addresses than
+/// non-empty memory BARs, or when a 32-bit BAR address does not fit in `u32`.
 pub fn assign_memory_bars<C: ConfigurationAccess>(
     root: &mut PciRoot<C>,
     device: DeviceFunction,
@@ -81,7 +91,8 @@ pub fn assign_memory_bars<C: ConfigurationAccess>(
             continue;
         }
         let paddr = *paddr_iter.next().expect("not enough BAR paddrs");
-        assign_memory_bar(root, device, bar_index as u8, paddr, info);
+        let index = u8::try_from(bar_index).expect("BAR index fits in u8");
+        assign_memory_bar(root, device, index, paddr, info);
     }
     restore_decode(root, device, command);
 }
@@ -96,6 +107,12 @@ pub fn program_device_bars_ioport(
     assign_memory_bars(&mut root, device, paddrs);
 }
 
+/// Program memory BARs through I/O ports and build a virtio transport.
+///
+/// # Errors
+///
+/// Returns [`VirtioPciError`] when `device` is not a virtio device, a required
+/// capability is missing, or a BAR cannot be mapped.
 pub fn create_pci_transport_ioport(
     ioport_id: u32,
     base_port: u16,
@@ -107,6 +124,12 @@ pub fn create_pci_transport_ioport(
     PciTransport::new::<HalImpl, _>(&mut root, device)
 }
 
+/// Program memory BARs through ECAM and build a virtio transport.
+///
+/// # Errors
+///
+/// Returns [`VirtioPciError`] when `device` is not a virtio device, a required
+/// capability is missing, or a BAR cannot be mapped.
 pub fn create_pci_transport_ecam(
     ecam_vaddr: usize,
     device: DeviceFunction,
@@ -117,6 +140,12 @@ pub fn create_pci_transport_ecam(
     PciTransport::new::<HalImpl, _>(&mut root, device)
 }
 
+/// Build a virtio transport for a device whose BARs are already programmed.
+///
+/// # Errors
+///
+/// Returns [`VirtioPciError`] when `device` is not a virtio device, a required
+/// capability is missing, or a BAR cannot be mapped.
 pub fn create_pci_transport_ecam_bars_programmed(
     ecam_vaddr: usize,
     device: DeviceFunction,

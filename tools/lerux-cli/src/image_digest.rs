@@ -95,13 +95,8 @@ pub fn verify_sidecar(loader: &Path) -> Result<String> {
 }
 
 /// Resolve loader path from optional explicit path or board layout.
-pub fn resolve_loader(
-    root: &Path,
-    board: &str,
-    build_dir: &str,
-    path: Option<&Path>,
-) -> Result<PathBuf> {
-    let loader = match path {
+pub fn resolve_loader(root: &Path, board: &str, build_dir: &str, path: Option<&Path>) -> PathBuf {
+    match path {
         Some(p) => {
             if p.is_absolute() {
                 p.to_path_buf()
@@ -110,8 +105,7 @@ pub fn resolve_loader(
             }
         }
         None => loader_path(root, board, build_dir),
-    };
-    Ok(loader)
+    }
 }
 
 #[cfg(test)]

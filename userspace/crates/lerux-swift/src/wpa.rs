@@ -101,10 +101,11 @@ fn shift(block: &mut [u8; 16]) {
 
 fn xtime(x: u8) -> u8 {
     let x = u16::from(x) << 1;
+    let low = u8::try_from(x & 0xff).expect("xtime");
     if x & 0x100 == 0 {
-        x as u8
+        low
     } else {
-        (x as u8) ^ 0x1b
+        low ^ 0x1b
     }
 }
 
@@ -130,6 +131,7 @@ pub struct Ptk {
     pub tk: [u8; 16],
 }
 
+#[must_use]
 pub fn derive_ptk(
     pmk: &[u8; 32],
     ap: &[u8; 6],
@@ -189,7 +191,8 @@ const KEY_MIC: u16 = 1 << 8;
 const KEY_SECURE: u16 = 1 << 9;
 const MIC_AT: usize = 81;
 
-/// Message 1 of the four-way handshake: ANonce and the replay counter.
+/// Message 1 of the four-way handshake: `ANonce` and the replay counter.
+#[must_use]
 pub fn message1(eapol: &[u8]) -> Option<([u8; 32], [u8; 8])> {
     let info = key_info(eapol)?;
     if info & KEY_ACK == 0 || info & KEY_MIC != 0 || info & 7 != 2 {
@@ -210,13 +213,14 @@ pub fn message2(
     replay: &[u8; 8],
     kck: &[u8; 16],
 ) -> Option<usize> {
-    let n = write_eapol_key(out, KEY_PAIR | KEY_MIC, replay, snonce, &[])?;
+    let n = write_eapol_key(out, KEY_PAIR | KEY_MIC, *replay, snonce, &[])?;
     let _ = anonce;
     seal_mic(out, n, kck);
     Some(n)
 }
 
 /// Message 3 must carry a MIC that `kck` verifies. Returns the replay counter.
+#[must_use]
 pub fn message3(eapol: &[u8], kck: &[u8; 16]) -> Option<[u8; 8]> {
     let info = key_info(eapol)?;
     if info & KEY_ACK == 0 || info & KEY_MIC == 0 || info & KEY_INSTALL == 0 {
@@ -232,7 +236,7 @@ pub fn message3(eapol: &[u8], kck: &[u8; 16]) -> Option<[u8; 8]> {
 
 /// Message 4, the acknowledgement.
 pub fn message4(out: &mut [u8], replay: &[u8; 8], kck: &[u8; 16]) -> Option<usize> {
-    let n = write_eapol_key(out, KEY_PAIR | KEY_MIC | KEY_SECURE, replay, &[0; 32], &[])?;
+    let n = write_eapol_key(out, KEY_PAIR | KEY_MIC | KEY_SECURE, *replay, &[0; 32], &[])?;
     seal_mic(out, n, kck);
     Some(n)
 }
@@ -247,7 +251,7 @@ fn key_info(eapol: &[u8]) -> Option<u16> {
 fn write_eapol_key(
     out: &mut [u8],
     info: u16,
-    replay: &[u8; 8],
+    replay: [u8; 8],
     nonce: &[u8; 32],
     data: &[u8],
 ) -> Option<usize> {
@@ -258,14 +262,14 @@ fn write_eapol_key(
     out[..n].fill(0);
     out[0] = 1;
     out[1] = 3;
-    let body = (n - 4) as u16;
+    let body = low_u16(n - 4);
     out[2..4].copy_from_slice(&body.to_be_bytes());
     out[4] = 2;
     out[5..7].copy_from_slice(&(info | 2).to_be_bytes());
     out[7..9].copy_from_slice(&16u16.to_be_bytes());
-    out[9..17].copy_from_slice(replay);
+    out[9..17].copy_from_slice(&replay);
     out[17..49].copy_from_slice(nonce);
-    out[97..99].copy_from_slice(&(data.len() as u16).to_be_bytes());
+    out[97..99].copy_from_slice(&low_u16(data.len()).to_be_bytes());
     out[99..n].copy_from_slice(data);
     Some(n)
 }
@@ -307,13 +311,13 @@ pub fn ccmp_encrypt(
     nonce[0] = qos_tid(hdr);
     nonce[1..7].copy_from_slice(&hdr[10..16]);
     for i in 0..6 {
-        nonce[7 + i] = (pn >> (8 * (5 - i))) as u8;
+        nonce[7 + i] = u64_byte(pn, 8 * (5 - i));
     }
     let mut aad = [0u8; 32];
     let aad_len = ccmp_aad(hdr, &mut aad);
     let mut mic = [0u8; 8];
     ccm_mic(tk, &nonce, &aad[..aad_len], msdu, &mut mic);
-    ctr(tk, &nonce, msdu, &mic, &mut out[8..n]);
+    ctr(tk, &nonce, msdu, mic, &mut out[8..n]);
     Some(n)
 }
 
@@ -333,7 +337,7 @@ pub fn ccmp_decrypt(tk: &[u8; 16], hdr_len: usize, frame: &[u8], out: &mut [u8])
     nonce[0] = qos_tid(&frame[..hdr_len]);
     nonce[1..7].copy_from_slice(&frame[10..16]);
     for i in 0..6 {
-        nonce[7 + i] = (pn >> (8 * (5 - i))) as u8;
+        nonce[7 + i] = u64_byte(pn, 8 * (5 - i));
     }
     let mut aad = [0u8; 32];
     let aad_len = ccmp_aad(&frame[..hdr_len], &mut aad);
@@ -348,14 +352,14 @@ pub fn ccmp_decrypt(tk: &[u8; 16], hdr_len: usize, frame: &[u8], out: &mut [u8])
 }
 
 fn write_ccmp_hdr(out: &mut [u8], pn: u64) {
-    out[0] = pn as u8;
-    out[1] = (pn >> 8) as u8;
+    out[0] = u64_byte(pn, 0);
+    out[1] = u64_byte(pn, 8);
     out[2] = 0;
     out[3] = 0x20;
-    out[4] = (pn >> 16) as u8;
-    out[5] = (pn >> 24) as u8;
-    out[6] = (pn >> 32) as u8;
-    out[7] = (pn >> 40) as u8;
+    out[4] = u64_byte(pn, 16);
+    out[5] = u64_byte(pn, 24);
+    out[6] = u64_byte(pn, 32);
+    out[7] = u64_byte(pn, 40);
 }
 
 fn read_pn(hdr: &[u8]) -> u64 {
@@ -382,8 +386,9 @@ fn ccmp_aad(hdr: &[u8], out: &mut [u8]) -> usize {
     if hdr.len() < 26 {
         fc &= !0x8000;
     }
-    out[0] = fc as u8;
-    out[1] = (fc >> 8) as u8;
+    let fc_bytes = fc.to_le_bytes();
+    out[0] = fc_bytes[0];
+    out[1] = fc_bytes[1];
     out[2..8].copy_from_slice(&hdr[4..10]);
     out[8..14].copy_from_slice(&hdr[10..16]);
     out[14..20].copy_from_slice(&hdr[16..22]);
@@ -396,7 +401,7 @@ fn ccmp_aad(hdr: &[u8], out: &mut [u8]) -> usize {
         if hdr[24] & 0x80 != 0 {
             qc |= 0x0080;
         }
-        out[22] = qc as u8;
+        out[22] = u8::try_from(qc).expect("qos control");
         out[23] = 0;
         24
     } else {
@@ -408,12 +413,12 @@ fn ccm_mic(key: &[u8; 16], nonce: &[u8; 13], aad: &[u8], msdu: &[u8], mic: &mut 
     let mut block = [0u8; 16];
     block[0] = 0x59;
     block[1..14].copy_from_slice(nonce);
-    block[14] = (msdu.len() >> 8) as u8;
-    block[15] = msdu.len() as u8;
+    block[14] = usize_byte(msdu.len(), 8);
+    block[15] = usize_byte(msdu.len(), 0);
     aes128_encrypt_block(key, &mut block);
     let mut extra = [0u8; 16];
-    extra[0] = (aad.len() >> 8) as u8;
-    extra[1] = aad.len() as u8;
+    extra[0] = usize_byte(aad.len(), 8);
+    extra[1] = usize_byte(aad.len(), 0);
     let n = aad.len().min(14);
     extra[2..2 + n].copy_from_slice(&aad[..n]);
     xor_block(&mut block, &extra);
@@ -439,7 +444,7 @@ fn ccm_mic(key: &[u8; 16], nonce: &[u8; 13], aad: &[u8], msdu: &[u8], mic: &mut 
     mic.copy_from_slice(&block[..8]);
 }
 
-fn ctr(key: &[u8; 16], nonce: &[u8; 13], msdu: &[u8], mic: &[u8; 8], out: &mut [u8]) {
+fn ctr(key: &[u8; 16], nonce: &[u8; 13], msdu: &[u8], mic: [u8; 8], out: &mut [u8]) {
     let s0 = ctr_block(key, nonce, 0);
     let mut mic_mask = [0u8; 8];
     mic_mask.copy_from_slice(&s0[..8]);
@@ -488,8 +493,9 @@ fn ctr_block(key: &[u8; 16], nonce: &[u8; 13], counter: u16) -> [u8; 16] {
     let mut block = [0u8; 16];
     block[0] = 1;
     block[1..14].copy_from_slice(nonce);
-    block[14] = (counter >> 8) as u8;
-    block[15] = counter as u8;
+    let counter_bytes = counter.to_be_bytes();
+    block[14] = counter_bytes[0];
+    block[15] = counter_bytes[1];
     aes128_encrypt_block(key, &mut block);
     block
 }
@@ -500,6 +506,7 @@ fn xor_block(block: &mut [u8; 16], other: &[u8; 16]) {
     }
 }
 
+#[must_use]
 pub fn pmk(pass: &[u8], ssid: &[u8]) -> [u8; 32] {
     wpa_psk(pass, ssid)
 }
@@ -510,6 +517,7 @@ pub struct FoundAp {
     pub channel: u8,
 }
 
+#[must_use]
 pub fn match_beacon(frame: &[u8], ssid: &[u8]) -> Option<FoundAp> {
     if frame.len() < 36 || frame[0] & 0xfc != 0x80 {
         return None;
@@ -540,6 +548,7 @@ pub fn match_beacon(frame: &[u8], ssid: &[u8]) -> Option<FoundAp> {
     Some(FoundAp { bssid, channel })
 }
 
+#[must_use]
 pub fn auth_ok(frame: &[u8], sta: &[u8; 6]) -> bool {
     frame.len() >= 30
         && frame[0] & 0xfc == 0xb0
@@ -551,13 +560,14 @@ pub fn auth_ok(frame: &[u8], sta: &[u8; 6]) -> bool {
         && frame[29] == 0
 }
 
+#[must_use]
 pub fn assoc_ok(frame: &[u8], sta: &[u8; 6]) -> bool {
     frame.len() >= 30 && frame[0] & 0xfc == 0x10 && frame[4..10] == sta[..] && frame[26] == 0
 }
 
 /// Open-system authentication, sequence 1.
 pub fn write_auth(out: &mut [u8], bssid: &[u8; 6], sta: &[u8; 6], seq: u16) -> usize {
-    write_mgmt(out, 0xb0, bssid, sta, bssid, seq);
+    write_mgmt(out, 0xb0, *bssid, *sta, *bssid, seq);
     out[24] = 0;
     out[25] = 0;
     out[26] = 1;
@@ -578,14 +588,14 @@ pub fn write_assoc(
     if ssid.len() > SSID_MAX || out.len() < 36 + ssid.len() + 24 {
         return None;
     }
-    write_mgmt(out, 0x00, bssid, sta, bssid, seq);
+    write_mgmt(out, 0x00, *bssid, *sta, *bssid, seq);
     out[24] = 0x01;
     out[25] = 0x00;
     out[26] = 0x0a;
     out[27] = 0x00;
     let mut n = 28;
     out[n] = 0;
-    out[n + 1] = ssid.len() as u8;
+    out[n + 1] = fit_u8(ssid.len());
     out[n + 2..n + 2 + ssid.len()].copy_from_slice(ssid);
     n += 2 + ssid.len();
     out[n] = 1;
@@ -605,18 +615,18 @@ pub fn write_assoc(
     Some(n)
 }
 
-fn write_mgmt(out: &mut [u8], subtype: u8, a1: &[u8; 6], a2: &[u8; 6], a3: &[u8; 6], seq: u16) {
+fn write_mgmt(out: &mut [u8], subtype: u8, a1: [u8; 6], a2: [u8; 6], a3: [u8; 6], seq: u16) {
     out[..24].fill(0);
     out[0] = subtype;
-    out[4..10].copy_from_slice(a1);
-    out[10..16].copy_from_slice(a2);
-    out[16..22].copy_from_slice(a3);
-    let sc = seq << 4;
-    out[22] = sc as u8;
-    out[23] = (sc >> 8) as u8;
+    out[4..10].copy_from_slice(&a1);
+    out[10..16].copy_from_slice(&a2);
+    out[16..22].copy_from_slice(&a3);
+    let sc = (seq << 4).to_le_bytes();
+    out[22] = sc[0];
+    out[23] = sc[1];
 }
 
-/// QoS data, To DS. `msdu` is the LLC payload, already encrypted when `protect` is set.
+/// `QoS` data, To DS. `msdu` is the LLC payload, already encrypted when `protect` is set.
 pub fn write_qos_data(
     out: &mut [u8],
     bssid: &[u8; 6],
@@ -636,9 +646,9 @@ pub fn write_qos_data(
     out[4..10].copy_from_slice(bssid);
     out[10..16].copy_from_slice(sta);
     out[16..22].copy_from_slice(da);
-    let sc = seq << 4;
-    out[22] = sc as u8;
-    out[23] = (sc >> 8) as u8;
+    let sc = (seq << 4).to_le_bytes();
+    out[22] = sc[0];
+    out[23] = sc[1];
     out[26..n].copy_from_slice(msdu);
     Some(n)
 }
@@ -666,6 +676,7 @@ pub fn ethernet_from_msdu(msdu: &[u8], sta: &[u8; 6], out: &mut [u8]) -> Option<
     Some(12 + payload.len())
 }
 
+#[must_use]
 pub fn eapol_in_msdu(msdu: &[u8]) -> Option<&[u8]> {
     let rest = msdu.strip_prefix(&[0xaa, 0xaa, 0x03, 0x00, 0x00, 0x00])?;
     if rest.len() >= 2 && rest[0] == 0x88 && rest[1] == 0x8e {
@@ -675,8 +686,25 @@ pub fn eapol_in_msdu(msdu: &[u8]) -> Option<&[u8]> {
     }
 }
 
+#[must_use]
 pub fn key_ok(ssid: &[u8], psk: &[u8]) -> bool {
     !ssid.is_empty() && ssid.len() <= SSID_MAX && (PSK_MIN..=PSK_MAX).contains(&psk.len())
+}
+
+fn u64_byte(value: u64, shift: usize) -> u8 {
+    u8::try_from((value >> shift) & 0xff).expect("low byte")
+}
+
+fn usize_byte(value: usize, shift: usize) -> u8 {
+    u8::try_from((value >> shift) & 0xff).expect("low byte")
+}
+
+fn low_u16(value: usize) -> u16 {
+    u16::try_from(value & 0xffff).expect("low 16 bits")
+}
+
+fn fit_u8(value: usize) -> u8 {
+    u8::try_from(value).expect("length fits in a byte")
 }
 
 #[cfg(test)]
@@ -731,7 +759,7 @@ mod tests {
         let ptk = derive_ptk(&pmk, &ap, &sta, &anonce, &snonce);
         let replay = [0, 0, 0, 0, 0, 0, 0, 1];
         let mut m1 = [0u8; 99];
-        write_eapol_key(&mut m1, KEY_PAIR | KEY_ACK, &replay, &anonce, &[]).unwrap();
+        write_eapol_key(&mut m1, KEY_PAIR | KEY_ACK, replay, &anonce, &[]).unwrap();
         let (got_nonce, got_replay) = message1(&m1).unwrap();
         assert_eq!(got_nonce, anonce);
         assert_eq!(got_replay, replay);

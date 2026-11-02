@@ -104,13 +104,13 @@ fn compose_profile(name: &str, file: ProfileFile, bases: &Profiles) -> Result<Pr
         .with_context(|| format!("profile {name} missing template"))?;
 
     let (description, default_board, trust_class) = inherited_fields(
-        &file.body.description,
-        &file.body.default_board,
+        file.body.description.as_ref(),
+        file.body.default_board.as_ref(),
         file.body.trust_class,
         base,
     );
     let pds = overlay_pds(name, base, file.body.pds)?;
-    let base_channels = base.map(|b| b.channel.as_slice()).unwrap_or(&[]);
+    let base_channels = base.as_ref().map_or(&[][..], |b| b.channel.as_slice());
     let channel = merge_channels(base_channels, &file.body.channel);
 
     Ok(Profile {
@@ -138,16 +138,16 @@ fn overlay_pds(name: &str, base: Option<&Profile>, overlay: Vec<String>) -> Resu
 }
 
 fn inherited_fields(
-    description: &Option<String>,
-    default_board: &Option<String>,
+    description: Option<&String>,
+    default_board: Option<&String>,
     trust_class: Option<TrustClass>,
     base: Option<&Profile>,
 ) -> (Option<String>, Option<String>, Option<TrustClass>) {
     let description = description
-        .clone()
+        .cloned()
         .or_else(|| base.and_then(|b| b.description.clone()));
     let default_board = default_board
-        .clone()
+        .cloned()
         .or_else(|| base.and_then(|b| b.default_board.clone()));
     let trust_class = trust_class.or_else(|| base.and_then(|b| b.trust_class));
     (description, default_board, trust_class)
@@ -173,7 +173,7 @@ pub fn load_profiles(root: &Path) -> Result<Profiles> {
         return Ok(BTreeMap::new());
     }
     let raw = read_profile_files(&dir)?;
-    compose_extends(raw)
+    compose_extends(&raw)
 }
 
 fn read_profile_files(dir: &Path) -> Result<BTreeMap<String, ProfileFile>> {
@@ -201,13 +201,13 @@ fn read_profile_files(dir: &Path) -> Result<BTreeMap<String, ProfileFile>> {
     Ok(raw)
 }
 
-fn compose_extends(raw: BTreeMap<String, ProfileFile>) -> Result<Profiles> {
+fn compose_extends(raw: &BTreeMap<String, ProfileFile>) -> Result<Profiles> {
     // Compose `extends` in dependency order (bases before overlays).
     let mut profiles = BTreeMap::new();
     let mut pending: Vec<String> = raw.keys().cloned().collect();
     while !pending.is_empty() {
         let before = pending.len();
-        pending = compose_ready(&raw, &mut profiles, pending)?;
+        pending = compose_ready(raw, &mut profiles, pending)?;
         if pending.len() == before {
             anyhow::bail!(
                 "unresolved profile extends (cycle or missing base?): {}",
@@ -483,11 +483,11 @@ fn print_trust_note(tier: TrustClass) {
             "    note: admin-core — shell/services without bulk apps; install apps via package CLI"
         ),
         TrustClass::Appliance => {
-            println!("    note: appliance — no interactive shell; fixed PD set")
+            println!("    note: appliance — no interactive shell; fixed PD set");
         }
         TrustClass::Minimal => println!("    note: minimal bring-up layout"),
         TrustClass::Debug => {
-            println!("    note: debug/isolation only — not a production workstation default")
+            println!("    note: debug/isolation only — not a production workstation default");
         }
     }
 }
@@ -624,7 +624,7 @@ fn canonical_channel_key(ch: &ChannelSpec) -> String {
     ends.join("|")
 }
 
-/// Resolve a board name for a profile. Prefers explicit board, then profile.default_board.
+/// Resolve a board name for a profile. Prefers explicit board, then `profile.default_board`.
 pub fn resolve_board_for_profile(
     profiles: &Profiles,
     name: &str,

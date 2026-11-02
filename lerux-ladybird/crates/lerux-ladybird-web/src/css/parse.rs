@@ -61,7 +61,7 @@ impl<'a> Parser<'a> {
         loop {
             let saw_whitespace = self.skip_trivia()?;
             match self.peek() {
-                Some('{') | Some(',') | None => break,
+                Some('{' | ',') | None => break,
                 Some('>') => {
                     self.bump();
                     self.skip_trivia()?;

@@ -94,7 +94,7 @@ fn derive_entries(root: &Path, boards: &Boards, arch: &str) -> Vec<ClippyEntry> 
 }
 
 /// Portable shared crates are linted on the aarch64 pass.
-/// `lerux-virtio-pci` calls `seL4_X86_IOPort_*`, so it is linted on x86_64.
+/// `lerux-virtio-pci` calls `seL4_X86_IOPort_*`, so it is linted on `x86_64`.
 fn shared_on_arch(name: &str, arch: &str) -> bool {
     match name {
         "lerux-virtio-pci" => arch == "x86_64",

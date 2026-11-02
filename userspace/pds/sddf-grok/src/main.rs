@@ -138,7 +138,7 @@ fn answer_browse() {
         return;
     }
     tool.result[..name_len].copy_from_slice(&tool.name[..name_len]);
-    tool.result_len = name_len as u32;
+    tool.result_len = u32::try_from(name_len).expect("browse name");
     tool.state = AGENT_STATE_BROWSE_DONE;
     Channel::new(BROWSE_CH).notify();
 }
@@ -302,8 +302,8 @@ fn issue(kind: u32, name: &[u8], arg: &[u8]) -> bool {
         return false;
     }
     page.kind = kind;
-    page.name_len = name.len() as u32;
-    page.arg_len = arg.len() as u32;
+    page.name_len = u32::try_from(name.len()).expect("tool name");
+    page.arg_len = u32::try_from(arg.len()).expect("tool argument");
     page.name[..name.len()].copy_from_slice(name);
     page.arg[..arg.len()].copy_from_slice(arg);
     *tool = page;

@@ -33,6 +33,7 @@ pub struct PageAnchors<'a> {
 impl<'a> PageAnchors<'a> {
     pub const EMPTY: PageAnchors<'static> = PageAnchors { hrefs: &[] };
 
+    #[must_use]
     pub fn new(hrefs: &'a [&'a str]) -> Self {
         Self { hrefs }
     }
@@ -52,6 +53,7 @@ pub struct LoadId(u64);
 
 impl LoadId {
     /// Parse an id from outside this crate. Zero is rejected.
+    #[must_use]
     pub fn from_raw(raw: u64) -> Option<Self> {
         if raw == 0 {
             None
@@ -60,6 +62,7 @@ impl LoadId {
         }
     }
 
+    #[must_use]
     pub fn raw(self) -> u64 {
         self.0
     }
@@ -84,6 +87,7 @@ pub enum FetchFail {
 }
 
 impl FailLine {
+    #[must_use]
     pub fn text(self) -> &'static str {
         match self {
             Self::Fetch(FetchFail::NameLookup) => "name lookup failed",
@@ -111,6 +115,7 @@ pub enum Classify {
 /// A missing scheme becomes `https`. An empty string is [`Classify::Empty`].
 /// `http`, a literal address, an empty host, or a name this policy does not
 /// treat as public is [`FailLine::NotPublicHttps`].
+#[must_use]
 pub fn classify(text: &str, policy: NamePolicy) -> Classify {
     if text.is_empty() {
         return Classify::Empty;
@@ -163,7 +168,7 @@ impl LineEdit {
         }
     }
 
-    fn from_url(url: HttpsUrl, selection: Selection) -> Self {
+    fn from_url(url: &HttpsUrl, selection: Selection) -> Self {
         let mut edit = Self::empty();
         let bytes = url.as_str().as_bytes();
         let len = bytes.len().min(LINE_CAP);
@@ -279,9 +284,8 @@ enum LinkFocus {
 impl LinkFocus {
     fn clamp(self, count: usize) -> Self {
         match self {
-            Self::None => Self::None,
             Self::Index(i) if usize::from(i) < count => self,
-            _ => Self::None,
+            Self::None | Self::Index(_) => Self::None,
         }
     }
 
@@ -367,6 +371,7 @@ pub enum PaintOutcome {
 
 impl Chrome {
     /// Empty line, blank page, line focused, nothing in flight.
+    #[must_use]
     pub const fn fresh() -> Self {
         Self {
             inner: ChromeInner::Line {
@@ -382,6 +387,7 @@ impl Chrome {
     ///
     /// A committed URL focuses the page. [`Self::loaded_address`] stays empty
     /// until [`Self::accept`] of that id.
+    #[must_use]
     pub fn boot_load(text: &str, policy: NamePolicy) -> (Self, Effect) {
         match classify(text, policy) {
             Classify::Empty => (Self::fresh(), Effect::None),
@@ -392,7 +398,7 @@ impl Chrome {
                 }
                 chrome.reject_line()
             }
-            Classify::Url(url) => Self::fresh().start_load(url, Shown::Blank),
+            Classify::Url(url) => Self::fresh().start_load(&url, &Shown::Blank),
         }
     }
 
@@ -402,6 +408,7 @@ impl Chrome {
     /// in-flight load. Tab and Enter on a painted page cycle and activate links
     /// when `links` is non-empty. Any other key while the page is focused is
     /// [`Effect::PageKey`], except Tab and Enter during a load.
+    #[must_use]
     pub fn on_key(
         self,
         event: KeyEvent,
@@ -423,6 +430,7 @@ impl Chrome {
     }
 
     /// Index of the focused link in the caller's anchor slice while reading.
+    #[must_use]
     pub fn link_focus(&self) -> Option<u16> {
         match self.inner {
             ChromeInner::Reading {
@@ -434,18 +442,19 @@ impl Chrome {
     }
 
     /// Apply a paint for `id`. A different id leaves this value unchanged.
+    #[must_use]
     pub fn accept(self, id: LoadId, outcome: PaintOutcome) -> (Self, Present) {
         match self.inner {
             ChromeInner::Loading {
                 target,
                 id: inflight,
                 ..
-            } if inflight == id => self.land(None, target, outcome),
+            } if inflight == id => self.land(None, &target, &outcome),
             ChromeInner::Line {
                 edit,
                 flight: Flight::InFlight { url, id: inflight },
                 ..
-            } if inflight == id => self.land(Some(edit), url, outcome),
+            } if inflight == id => self.land(Some(&edit), &url, &outcome),
             _ => (self, Present::Hold),
         }
     }
@@ -454,6 +463,7 @@ impl Chrome {
     ///
     /// During a load the row shows that load's URL. The page area keeps the
     /// previous paint until [`Self::accept`].
+    #[must_use]
     pub fn line(&self) -> LineView<'_> {
         match &self.inner {
             ChromeInner::Line { edit, .. } => LineView {
@@ -474,6 +484,7 @@ impl Chrome {
         }
     }
 
+    #[must_use]
     pub fn page(&self) -> PageView<'_> {
         match &self.inner {
             ChromeInner::Reading { page, .. } => PageView::Page(page),
@@ -486,6 +497,7 @@ impl Chrome {
     }
 
     /// Final URL of the page on screen, after a paint has landed.
+    #[must_use]
     pub fn loaded_address(&self) -> Option<&HttpsUrl> {
         match self.page() {
             PageView::Page(url) => Some(url),
@@ -502,15 +514,15 @@ impl Chrome {
         LoadId(raw)
     }
 
-    fn start_load(mut self, url: HttpsUrl, shown: Shown) -> (Self, Effect) {
+    fn start_load(mut self, url: &HttpsUrl, shown: &Shown) -> (Self, Effect) {
         let id = self.alloc_id();
         self.inner = ChromeInner::Loading {
-            target: url,
+            target: *url,
             id,
-            shown,
+            shown: *shown,
             focus: LinkFocus::None,
         };
-        (self, Effect::Commit { url, id })
+        (self, Effect::Commit { url: *url, id })
     }
 
     fn reject_line(mut self) -> (Self, Effect) {
@@ -548,7 +560,7 @@ impl Chrome {
                     ChromeInner::Line { shown, .. } => shown,
                     _ => Shown::Blank,
                 };
-                self.start_load(url, shown)
+                self.start_load(&url, &shown)
             }
         }
     }
@@ -590,12 +602,12 @@ impl Chrome {
             ChromeInner::Loading {
                 target, id, shown, ..
             } => ChromeInner::Line {
-                edit: LineEdit::from_url(target, Selection::All),
+                edit: LineEdit::from_url(&target, Selection::All),
                 shown,
                 flight: Flight::InFlight { url: target, id },
             },
             ChromeInner::Reading { page, .. } => ChromeInner::Line {
-                edit: LineEdit::from_url(page, Selection::All),
+                edit: LineEdit::from_url(&page, Selection::All),
                 shown: Shown::Page(page),
                 flight: Flight::Idle,
             },
@@ -609,19 +621,19 @@ impl Chrome {
             ChromeInner::Loading {
                 target, id, shown, ..
             } => (
-                after_escape(shown, LineEdit::from_url(target, Selection::Caret)),
+                after_escape(&shown, &LineEdit::from_url(&target, Selection::Caret)),
                 Effect::Drop { id },
             ),
             ChromeInner::Line {
                 edit,
                 shown,
                 flight: Flight::InFlight { id, .. },
-            } => (after_escape(shown, edit), Effect::Drop { id }),
+            } => (after_escape(&shown, &edit), Effect::Drop { id }),
             ChromeInner::Line {
                 edit,
                 shown,
                 flight: Flight::Idle,
-            } => (after_escape(shown, edit), Effect::None),
+            } => (after_escape(&shown, &edit), Effect::None),
         };
         self.inner = next;
         (self, effect)
@@ -629,13 +641,13 @@ impl Chrome {
 
     fn land(
         mut self,
-        edit: Option<LineEdit>,
-        flight_url: HttpsUrl,
-        outcome: PaintOutcome,
+        edit: Option<&LineEdit>,
+        flight_url: &HttpsUrl,
+        outcome: &PaintOutcome,
     ) -> (Self, Present) {
-        match outcome {
+        match *outcome {
             PaintOutcome::Painted(url) => {
-                self.inner = if let Some(edit) = edit {
+                self.inner = if let Some(edit) = edit.copied() {
                     ChromeInner::Line {
                         edit,
                         shown: Shown::Page(url),
@@ -651,7 +663,7 @@ impl Chrome {
             }
             PaintOutcome::Failed(fail) => {
                 let reason = FailLine::Fetch(fail);
-                let edit = match edit {
+                let edit = match edit.copied() {
                     Some(mut edit) => {
                         edit.set_text(flight_url.as_str());
                         edit
@@ -669,14 +681,14 @@ impl Chrome {
     }
 }
 
-fn after_escape(shown: Shown, edit: LineEdit) -> ChromeInner {
-    match shown {
+fn after_escape(shown: &Shown, edit: &LineEdit) -> ChromeInner {
+    match *shown {
         Shown::Page(page) => ChromeInner::Reading {
             page,
             focus: LinkFocus::None,
         },
         other => ChromeInner::Line {
-            edit,
+            edit: *edit,
             shown: other,
             flight: Flight::Idle,
         },
@@ -706,7 +718,7 @@ impl Chrome {
                         let Some(href) = links.get(i) else {
                             return (self, Effect::None);
                         };
-                        self.activate_focused_link(page, href, Shown::Page(page), policy)
+                        self.activate_focused_link(&page, href, &Shown::Page(page), policy)
                     }
                 },
                 _ => (self, Effect::PageKey(event)),
@@ -726,13 +738,13 @@ impl Chrome {
 
     fn activate_focused_link(
         mut self,
-        base: HttpsUrl,
+        base: &HttpsUrl,
         href: &str,
-        shown: Shown,
+        shown: &Shown,
         policy: NamePolicy,
     ) -> (Self, Effect) {
         let trimmed = href.trim_matches(|c: char| c.is_ascii_whitespace());
-        match url::resolve_href(&base, href) {
+        match url::resolve_href(base, href) {
             url::HrefIntent::Script | url::HrefIntent::Already => (self, Effect::None),
             url::HrefIntent::Rejected => self.reject_from_page(trimmed),
             url::HrefIntent::Fetch(url) => match url::normalize(url.as_str(), policy) {
@@ -741,7 +753,7 @@ impl Chrome {
                     if url.as_str() == base.as_str() {
                         return (self, Effect::None);
                     }
-                    self.start_load(url, shown)
+                    self.start_load(&url, shown)
                 }
             },
             url::HrefIntent::Fragment(url) => match url::normalize(url.as_str(), policy) {
@@ -822,7 +834,7 @@ mod tests {
         chrome.accept(id, PaintOutcome::Painted(url)).0
     }
 
-    fn tab(chrome: Chrome, links: PageAnchors<'_>) -> (Chrome, Effect) {
+    fn tab(chrome: &Chrome, links: PageAnchors<'_>) -> (Chrome, Effect) {
         chrome.on_key(
             KeyEvent {
                 key: Key::Tab,
@@ -833,7 +845,7 @@ mod tests {
         )
     }
 
-    fn enter(chrome: Chrome, links: PageAnchors<'_>) -> (Chrome, Effect) {
+    fn enter(chrome: &Chrome, links: PageAnchors<'_>) -> (Chrome, Effect) {
         chrome.on_key(
             KeyEvent {
                 key: Key::Enter,
@@ -1064,7 +1076,7 @@ mod tests {
     #[test]
     fn tab_with_no_links_does_not_commit() {
         let chrome = reading_fixture();
-        let (chrome, effect) = tab(chrome, PageAnchors::EMPTY);
+        let (chrome, effect) = tab(&chrome, PageAnchors::EMPTY);
         assert!(matches!(effect, Effect::None));
         assert!(chrome.link_focus().is_none());
         assert_eq!(chrome.loaded_address().map(HttpsUrl::as_str), Some(FIXTURE));
@@ -1095,7 +1107,7 @@ mod tests {
     fn enter_before_tab_does_not_commit() {
         let chrome = reading_fixture();
         let links = PageAnchors::new(&["desk-link.html"]);
-        let (chrome, effect) = enter(chrome, links);
+        let (chrome, effect) = enter(&chrome, links);
         assert!(matches!(effect, Effect::None));
         assert!(chrome.link_focus().is_none());
         assert_eq!(chrome.line().text, FIXTURE);
@@ -1106,10 +1118,10 @@ mod tests {
     fn tab_then_enter_follows_desk_link() {
         let chrome = reading_fixture();
         let links = PageAnchors::new(&["desk-link.html"]);
-        let (chrome, effect) = tab(chrome, links);
+        let (chrome, effect) = tab(&chrome, links);
         assert!(matches!(effect, Effect::None));
         assert_eq!(chrome.link_focus(), Some(0));
-        let (chrome, effect) = enter(chrome, links);
+        let (chrome, effect) = enter(&chrome, links);
         let Effect::Commit { url, id } = effect else {
             panic!("enter on a focused link commits");
         };
@@ -1123,11 +1135,11 @@ mod tests {
     fn tab_wraps_among_links() {
         let links = PageAnchors::new(&["a", "b"]);
         let chrome = reading_fixture();
-        let (chrome, _) = tab(chrome, links);
+        let (chrome, _) = tab(&chrome, links);
         assert_eq!(chrome.link_focus(), Some(0));
-        let (chrome, _) = tab(chrome, links);
+        let (chrome, _) = tab(&chrome, links);
         assert_eq!(chrome.link_focus(), Some(1));
-        let (chrome, _) = tab(chrome, links);
+        let (chrome, _) = tab(&chrome, links);
         assert_eq!(chrome.link_focus(), Some(0));
     }
 
@@ -1135,8 +1147,8 @@ mod tests {
     fn fragment_link_updates_line_without_commit() {
         let links = PageAnchors::new(&["#section"]);
         let chrome = reading_fixture();
-        let (chrome, _) = tab(chrome, links);
-        let (chrome, effect) = enter(chrome, links);
+        let (chrome, _) = tab(&chrome, links);
+        let (chrome, effect) = enter(&chrome, links);
         assert!(matches!(effect, Effect::None));
         assert_eq!(chrome.line().text, "https://host:8443/fixture.html#section");
         assert_eq!(
@@ -1151,8 +1163,8 @@ mod tests {
     fn javascript_href_does_not_commit() {
         let links = PageAnchors::new(&["javascript:void(0)"]);
         let chrome = reading_fixture();
-        let (chrome, _) = tab(chrome, links);
-        let (chrome, effect) = enter(chrome, links);
+        let (chrome, _) = tab(&chrome, links);
+        let (chrome, effect) = enter(&chrome, links);
         assert!(matches!(effect, Effect::None));
         assert_eq!(chrome.line().text, FIXTURE);
         assert_eq!(chrome.loaded_address().map(HttpsUrl::as_str), Some(FIXTURE));
@@ -1163,8 +1175,8 @@ mod tests {
     fn http_href_shows_not_public_https() {
         let links = PageAnchors::new(&["http://host/no"]);
         let chrome = reading_fixture();
-        let (chrome, _) = tab(chrome, links);
-        let (chrome, effect) = enter(chrome, links);
+        let (chrome, _) = tab(&chrome, links);
+        let (chrome, effect) = enter(&chrome, links);
         assert!(matches!(effect, Effect::None));
         assert_eq!(chrome.line().text, "http://host/no");
         assert!(chrome.line().cursor.is_some());
@@ -1177,10 +1189,10 @@ mod tests {
     #[test]
     fn enter_while_loading_does_not_allocate_another_id() {
         let (chrome, _url, id) = boot_fixture();
-        let (chrome, effect) = enter(chrome, PageAnchors::EMPTY);
+        let (chrome, effect) = enter(&chrome, PageAnchors::EMPTY);
         assert!(matches!(effect, Effect::None));
         assert!(matches!(chrome.inner, ChromeInner::Loading { .. }));
-        let (chrome, effect) = enter(chrome, PageAnchors::EMPTY);
+        let (chrome, effect) = enter(&chrome, PageAnchors::EMPTY);
         assert!(matches!(effect, Effect::None));
         match chrome.inner {
             ChromeInner::Loading { id: still, .. } => assert_eq!(still, id),

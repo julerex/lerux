@@ -214,6 +214,7 @@ pub struct gpu_queue_handle_t {
 }
 
 /// Zero the request, then set the code and id. The payload stays zero until the caller assigns it.
+#[must_use]
 pub fn gpu_req_new(code: gpu_req_code_t, id: u32) -> gpu_req_t {
     let mut req: gpu_req_t = unsafe { core::mem::zeroed() };
     req.code = code;
@@ -248,6 +249,7 @@ pub unsafe fn gpu_events_clear_display_info(events: *mut gpu_events_t) {
 /// # Safety
 ///
 /// `events` must point at a mapped `gpu_events_t`.
+#[must_use]
 pub unsafe fn gpu_events_check_display_info(events: *const gpu_events_t) -> bool {
     unsafe {
         (*(&raw const (*events).display_info).cast::<AtomicU8>()).load(Ordering::Acquire) != 0

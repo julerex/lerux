@@ -2,7 +2,7 @@ use std::{
     collections::VecDeque,
     fs::OpenOptions,
     io::{BufRead, BufReader, Read, Seek, SeekFrom, Write},
-    path::{Path, PathBuf},
+    path::Path,
     process::{Child, ChildStdin, Command, Stdio},
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -342,7 +342,7 @@ fn attach_stdio_log(
         std::fs::create_dir_all(parent).with_context(|| format!("mkdir {}", parent.display()))?;
     }
     let start_offset = if append_stdio {
-        std::fs::metadata(path).map(|m| m.len()).unwrap_or(0)
+        std::fs::metadata(path).map_or(0, |m| m.len())
     } else {
         let _ = std::fs::remove_file(path);
         0
@@ -362,7 +362,7 @@ fn attach_stdio_log(
     let sink = Arc::clone(&capture.output);
     let stop = Arc::clone(&capture.stdio_stop);
     capture.stdio_thread = Some(std::thread::spawn(move || {
-        pump_stdio_log_file(path, sink, stop, start_offset);
+        pump_stdio_log_file(&path, &sink, &stop, start_offset);
     }));
     Ok(())
 }
@@ -373,26 +373,26 @@ fn spawn_piped_pumps(child: &mut Child, capture: &mut SmokeCapture) -> Result<()
     let out_clone = Arc::clone(&capture.output);
     let err_clone = Arc::clone(&capture.output);
     capture.out_thread = Some(std::thread::spawn(move || {
-        pump_reader(BufReader::new(stdout), out_clone);
+        pump_reader(BufReader::new(stdout), &out_clone);
     }));
     capture.err_thread = Some(std::thread::spawn(move || {
-        pump_reader(BufReader::new(stderr), err_clone);
+        pump_reader(BufReader::new(stderr), &err_clone);
     }));
     Ok(())
 }
 
 fn pump_stdio_log_file(
-    path: PathBuf,
-    sink: Arc<Mutex<String>>,
-    stop: Arc<AtomicBool>,
+    path: &Path,
+    sink: &Arc<Mutex<String>>,
+    stop: &Arc<AtomicBool>,
     start_offset: u64,
 ) {
     let mut offset = start_offset;
     while !stop.load(Ordering::Relaxed) {
-        drain_stdio_log(&path, &mut offset, &sink);
+        drain_stdio_log(path, &mut offset, sink);
         std::thread::sleep(Duration::from_millis(50));
     }
-    drain_stdio_log(&path, &mut offset, &sink);
+    drain_stdio_log(path, &mut offset, sink);
 }
 
 fn drain_stdio_log(path: &Path, offset: &mut u64, sink: &Arc<Mutex<String>>) {
@@ -426,12 +426,12 @@ fn drain_stdio_log(path: &Path, offset: &mut u64, sink: &Arc<Mutex<String>>) {
     *offset = offset.saturating_add(u64::try_from(n).unwrap_or(0));
 }
 
-fn pump_reader<R: Read>(mut reader: BufReader<R>, sink: Arc<Mutex<String>>) {
+fn pump_reader<R: Read>(mut reader: BufReader<R>, sink: &Arc<Mutex<String>>) {
     let mut line = String::new();
     loop {
         line.clear();
         match reader.read_line(&mut line) {
-            Ok(0) => break,
+            Ok(0) | Err(_) => break,
             Ok(_) => {
                 print!("{line}");
                 let _ = std::io::Write::flush(&mut std::io::stdout());
@@ -439,7 +439,6 @@ fn pump_reader<R: Read>(mut reader: BufReader<R>, sink: Arc<Mutex<String>>) {
                     buf.push_str(&line);
                 }
             }
-            Err(_) => break,
         }
     }
 }
@@ -505,10 +504,9 @@ fn wait_for_mark(
     deadline: Instant,
 ) -> Result<()> {
     loop {
-        let found = output
-            .lock()
-            .map(|capture| capture.len() > mark && capture_contains(&capture[mark..], needle))
-            .unwrap_or(false);
+        let found = output.lock().is_ok_and(|capture| {
+            capture.len() > mark && capture_contains(&capture[mark..], needle)
+        });
         if found {
             return Ok(());
         }
@@ -726,7 +724,7 @@ pub fn run_hw_serial_smoke(test: &SmokeTest) -> Result<()> {
     let output = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
     let out_clone = std::sync::Arc::clone(&output);
     let reader_thread = std::thread::spawn(move || {
-        pump_reader(BufReader::new(reader), out_clone);
+        pump_reader(BufReader::new(reader), &out_clone);
     });
     if let Err(e) = await_boot_expects(&output, test) {
         drop(reader_thread);
@@ -794,7 +792,7 @@ fn run_script_steps(
 ) -> Result<()> {
     println!("==> running {} scripted serial step(s)…", script.len());
     for (i, step) in script.iter().enumerate() {
-        let mut mark = output.lock().map(|s| s.len()).unwrap_or(0);
+        let mut mark = output.lock().map_or(0, |s| s.len());
         print!(
             "    [{}] send {:?} expect {:?}… ",
             i + 1,
@@ -802,7 +800,7 @@ fn run_script_steps(
             step.expect
         );
         let _ = std::io::Write::flush(&mut std::io::stdout());
-        deliver_script_step(step, i, &mut send, guest_stdin.as_mut())?;
+        deliver_script_step(step, i, &mut send, guest_stdin.as_deref_mut())?;
         let mut step_deadline = Instant::now() + Duration::from_secs(timeout_secs);
         if step.send.starts_with("reboot") {
             (mark, step_deadline) = handle_script_reboot(
@@ -811,8 +809,8 @@ fn run_script_steps(
                 i,
                 timeout_secs,
                 qmp_socket,
-                guest_stdin.as_mut(),
-                host_restart.as_mut(),
+                guest_stdin.as_deref_mut(),
+                host_restart.as_deref_mut(),
             )?;
         }
         wait_script_expect(output, step, i, mark, step_deadline)?;
@@ -825,7 +823,7 @@ fn deliver_script_step(
     step: &ScriptStep,
     index: usize,
     send: &mut impl FnMut(&[u8]) -> Result<()>,
-    guest_stdin: Option<&mut &mut Option<ChildStdin>>,
+    guest_stdin: Option<&mut Option<ChildStdin>>,
 ) -> Result<()> {
     if let Some(stdin) = guest_stdin.and_then(|slot| slot.as_mut()) {
         stdin
@@ -844,8 +842,8 @@ fn handle_script_reboot(
     index: usize,
     timeout_secs: u64,
     qmp_socket: Option<&Path>,
-    mut guest_stdin: Option<&mut &mut Option<ChildStdin>>,
-    mut host_restart: Option<&mut &mut HostRestart<'_>>,
+    mut guest_stdin: Option<&mut Option<ChildStdin>>,
+    host_restart: Option<&mut HostRestart<'_>>,
 ) -> Result<(usize, Instant)> {
     let step_deadline = Instant::now() + Duration::from_secs(timeout_secs);
     wait_for_mark(output, mark, "reboot", step_deadline).with_context(|| {
@@ -857,7 +855,7 @@ fn handle_script_reboot(
     if let Some(slot) = guest_stdin.as_mut() {
         slot.take();
     }
-    if let Some(restart) = host_restart.as_mut() {
+    if let Some(restart) = host_restart {
         let stdin_slot = guest_stdin
             .as_mut()
             .context("host restart needs guest stdin")?;
@@ -868,7 +866,7 @@ fn handle_script_reboot(
         let socket = qmp_socket.context("a reboot step needs a QMP socket")?;
         qmp_system_reset(socket).context("QMP system_reset")?;
     }
-    let mark = output.lock().map(|s| s.len()).unwrap_or(mark);
+    let mark = output.lock().map_or(mark, |s| s.len());
     Ok((mark, Instant::now() + Duration::from_secs(timeout_secs)))
 }
 
@@ -882,8 +880,7 @@ fn wait_script_expect(
     loop {
         let found = output
             .lock()
-            .map(|s| s.len() > mark && capture_contains(&s[mark..], &step.expect))
-            .unwrap_or(false);
+            .is_ok_and(|s| s.len() > mark && capture_contains(&s[mark..], &step.expect));
         if found {
             println!("ok");
             return Ok(());
@@ -1032,12 +1029,12 @@ fn rest_of_line(s: &str) -> &str {
 fn trailing_alnum_len(s: &str) -> usize {
     s.bytes()
         .rev()
-        .take_while(|b| b.is_ascii_alphanumeric())
+        .take_while(u8::is_ascii_alphanumeric)
         .count()
 }
 
 fn leading_alnum_len(s: &str) -> usize {
-    s.bytes().take_while(|b| b.is_ascii_alphanumeric()).count()
+    s.bytes().take_while(u8::is_ascii_alphanumeric).count()
 }
 
 fn mid_word_join(left: &str, right: &str) -> bool {
@@ -1227,7 +1224,7 @@ fn apply_traced_char(
 ) {
     if let Some(mut cur) = current.take() {
         if ch == '\n' {
-            close_traced_line(haystack, *i, ch_at, cur, completed, incomplete, current);
+            close_traced_line(haystack, *i, ch_at, &cur, completed, incomplete, current);
         } else {
             cur.push_char(ch, ch_at);
             *current = Some(cur);
@@ -1250,18 +1247,18 @@ fn close_traced_line(
     haystack: &str,
     i: usize,
     ch_at: usize,
-    cur: Traced,
+    cur: &Traced,
     completed: &mut Traced,
     incomplete: &mut VecDeque<Traced>,
     current: &mut Option<Traced>,
 ) {
     if let Some(oldest) = incomplete.back() {
         let after = rest_of_line(&haystack[i..]);
-        for line in resumed_outer_lines(oldest, &cur, after, i, ch_at) {
+        for line in resumed_outer_lines(oldest, cur, after, i, ch_at) {
             completed.append(&line);
         }
     }
-    if let Some((inner, outer_tail)) = steal_preempted_outer_payload(&cur, incomplete.front()) {
+    if let Some((inner, outer_tail)) = steal_preempted_outer_payload(cur, incomplete.front()) {
         if let Some(front) = incomplete.front_mut() {
             if !front.text.ends_with(' ') && !outer_tail.text.starts_with(' ') {
                 front.push_inserted(' ');
@@ -1274,7 +1271,7 @@ fn close_traced_line(
         }
         *current = Some(inner);
     } else {
-        completed.append(&cur);
+        completed.append(cur);
         completed.push_char('\n', ch_at);
     }
 }
@@ -1480,7 +1477,7 @@ fn launch_qemu_smoke(
 
 /// QEMU 6.2 does not reload an x86 OVMF+ISO guest on `system_reset`.
 /// An x86 reboot script kills that process and starts a new one, which loads
-/// the ISO again. AArch64 and RISC-V stay on the QMP reset.
+/// the ISO again. `AArch64` and RISC-V stay on the QMP reset.
 fn reboot_needs_new_process(arch: &str, script_reboots: bool) -> bool {
     script_reboots && arch == "x86_64"
 }

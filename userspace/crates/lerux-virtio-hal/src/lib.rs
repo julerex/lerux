@@ -1,4 +1,4 @@
-//! VirtIO HAL for lerux with PCI BAR lookup support.
+//! `VirtIO` HAL for lerux with PCI BAR lookup support.
 //!
 //! Wraps the DMA bounce-buffer pattern from upstream `sel4-virtio-hal-impl` and
 //! implements `mmio_phys_to_virt` for PCI virtio BAR regions.
@@ -63,22 +63,24 @@ impl State {
 pub struct HalImpl;
 
 impl HalImpl {
+    /// Install the DMA bounce buffer and the PCI BAR windows.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `virt_addr` is 0, or when the HAL is already initialized.
     pub fn init(
         dma_region_size: usize,
-        dma_region_vaddr: usize,
-        dma_region_paddr: usize,
+        virt_addr: usize,
+        phys_addr: usize,
         bars: &'static [BarRegion],
     ) {
         let dma_region_ptr = NonNull::new(ptr::slice_from_raw_parts_mut(
-            dma_region_vaddr as *mut _,
+            virt_addr as *mut _,
             dma_region_size,
         ))
         .unwrap();
         let dma_region = unsafe { SharedMemoryRef::new(dma_region_ptr) };
-        let max_alignment = 1
-            << dma_region_vaddr
-                .trailing_zeros()
-                .min(dma_region_paddr.trailing_zeros());
+        let max_alignment = 1 << virt_addr.trailing_zeros().min(phys_addr.trailing_zeros());
         let bounce_buffer_allocator = ByRange::new(WithAlignmentBound::new(
             BasicAllocator::new(dma_region_size),
             max_alignment,
@@ -86,7 +88,7 @@ impl HalImpl {
         GLOBAL_STATE
             .set(OneShotMutex::new(State {
                 dma_region,
-                dma_region_paddr,
+                dma_region_paddr: phys_addr,
                 bounce_buffer_allocator,
                 bars,
             }))

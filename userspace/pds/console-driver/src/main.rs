@@ -58,9 +58,15 @@ fn init() -> handler::HandlerImpl {
     let usb = xhci::UsbKbd::bring_up();
     #[cfg(feature = "board-swift_sfx14_41g")]
     let usb = usb_off::UsbKbd::off();
+    #[cfg(not(feature = "board-swift_sfx14_41g"))]
     device.enable_cursor();
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    device::Device::enable_cursor();
     let screen = Screen::with_banner();
     device.present_all(&screen);
+    #[cfg(not(feature = "board-swift_sfx14_41g"))]
     device.sync_cursor(&screen);
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    device::Device::sync_cursor(&screen);
     handler::HandlerImpl::new(device, screen, usb, IRQ, USB_IRQ, SHELL)
 }

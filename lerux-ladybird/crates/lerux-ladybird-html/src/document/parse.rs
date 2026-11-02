@@ -22,7 +22,7 @@ struct TreeBuilder<'a> {
     after_doctype: bool,
 }
 
-impl<'a> TreeBuilder<'a> {
+impl TreeBuilder<'_> {
     fn mode(&self) -> InsertionMode {
         if let Some(known) = self.nearest_known() {
             return known.mode;
@@ -57,7 +57,7 @@ impl<'a> TreeBuilder<'a> {
                         break;
                     };
                     if !matches!(token, DataToken::Doctype) {
-                        self.consume_ordinary(token);
+                        self.consume_ordinary(&token);
                     }
                     self.after_doctype = true;
                 }
@@ -68,14 +68,14 @@ impl<'a> TreeBuilder<'a> {
                     let Some(token) = self.tokenizer.next_data() else {
                         break;
                     };
-                    self.consume_ordinary(token);
+                    self.consume_ordinary(&token);
                 }
             }
         }
         self.document
     }
 
-    fn consume_ordinary(&mut self, token: DataToken<'_>) {
+    fn consume_ordinary(&mut self, token: &DataToken<'_>) {
         match token {
             DataToken::Doctype => {}
             DataToken::StartTag { name } => {

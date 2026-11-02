@@ -40,7 +40,7 @@ where
         self.clients.iter().position(|c| *c == channel)
     }
 
-    fn handle_request(&mut self, req: Request) -> Response {
+    fn handle_request(&mut self, req: &Request) -> Response {
         match req {
             Request::Read => {
                 let v = self.buffer.pop_front();
@@ -49,7 +49,7 @@ where
                 }
                 Ok(SuccessResponse::Read(v.into()))
             }
-            Request::Write(c) => NonBlocking::from_nb_result(self.driver.write(c))
+            Request::Write(c) => NonBlocking::from_nb_result(self.driver.write(*c))
                 .map(SuccessResponse::Write)
                 .map_err(|_| ErrorResponse::WriteError),
             Request::Flush => NonBlocking::from_nb_result(self.driver.flush())
@@ -102,7 +102,7 @@ where
         }
 
         Ok(match simple_ipc::recv::<Request>(msg_info) {
-            Ok(req) => simple_ipc::send(self.handle_request(req)),
+            Ok(req) => simple_ipc::send(self.handle_request(&req)),
             Err(_) => simple_ipc::send_unspecified_error(),
         })
     }

@@ -71,6 +71,7 @@ fn device_data() -> device_region_resource_t {
 }
 
 /// `blk_driver_config_t` for the one-client image.
+#[must_use]
 pub fn driver_config() -> blk_driver_config_t {
     let mut config: blk_driver_config_t = zeroed_config();
     config.magic = SDDF_BLK_MAGIC;
@@ -83,6 +84,7 @@ pub fn driver_config() -> blk_driver_config_t {
 }
 
 /// `blk_virt_config_t` for one client on partition 0.
+#[must_use]
 pub fn virt_config() -> blk_virt_config_t {
     let mut config: blk_virt_config_t = zeroed_config();
     config.magic = SDDF_BLK_MAGIC;
@@ -108,6 +110,7 @@ pub fn virt_config() -> blk_virt_config_t {
 }
 
 /// `blk_client_config_t` for the filesystem server.
+#[must_use]
 pub fn client_config() -> blk_client_config_t {
     let mut config: blk_client_config_t = zeroed_config();
     config.magic = SDDF_BLK_MAGIC;
@@ -121,6 +124,10 @@ pub fn client_config() -> blk_client_config_t {
 }
 
 /// Copy a configuration struct into `dst`.
+///
+/// # Panics
+///
+/// Panics when `dst` is not `size_of::<T>()` bytes.
 pub fn blk_config_to_bytes<T>(value: &T, dst: &mut [u8]) {
     assert_eq!(dst.len(), core::mem::size_of::<T>());
     // SAFETY: `dst` is exactly one `T`, and the source is an initialised `T`.
@@ -138,6 +145,11 @@ pub fn blk_config_to_bytes<T>(value: &T, dst: &mut [u8]) {
 /// # Safety
 ///
 /// `bytes` must be a valid representation of `T`. Each `bool` field must be 0 or 1.
+///
+/// # Panics
+///
+/// Panics when `bytes` is not `size_of::<T>()` bytes.
+#[must_use]
 pub unsafe fn blk_config_from_bytes<T>(bytes: &[u8]) -> T {
     assert_eq!(bytes.len(), core::mem::size_of::<T>());
     let mut value = core::mem::MaybeUninit::<T>::uninit();
@@ -157,6 +169,10 @@ pub unsafe fn blk_config_from_bytes<T>(bytes: &[u8]) -> T {
 ///
 /// `dst` must be valid for a `T` and suitably aligned. `bytes` must be a valid
 /// representation of `T`. Each `bool` field must be 0 or 1.
+///
+/// # Panics
+///
+/// Panics when `bytes` is not `size_of::<T>()` bytes.
 pub unsafe fn blk_config_write_bytes<T>(bytes: &[u8], dst: *mut T) {
     assert_eq!(bytes.len(), core::mem::size_of::<T>());
     unsafe {

@@ -1,6 +1,6 @@
 //! Windows recorded these bus numbers. A metal probe replaces them if they differ.
 
-/// `01:00.0` NVIDIA, `02:00.0` NVMe, `03:00.0` MT7921, `04:00.0` Radeon,
+/// `01:00.0` NVIDIA, `02:00.0` `NVMe`, `03:00.0` MT7921, `04:00.0` Radeon,
 /// `04:00.3` and `04:00.4` AMD xHCI.
 pub const LOCATIONS: [(u8, u8, u8); 6] = [
     (1, 0, 0),
@@ -47,6 +47,7 @@ pub fn store_header(page: &mut [u8], index: usize, header: &[u8]) {
 }
 
 /// Header the probe stored for this location. Missing slots read as zeros.
+#[must_use]
 pub fn load_header(page: &[u8], bus: u8, dev: u8, func: u8) -> [u8; HEADER_BYTES] {
     let mut header = [0u8; HEADER_BYTES];
     let Some(start) = header_offset(bus, dev, func) else {
@@ -60,6 +61,7 @@ pub fn load_header(page: &[u8], bus: u8, dev: u8, func: u8) -> [u8; HEADER_BYTES
     header
 }
 
+#[must_use]
 pub fn config_address(bus: u8, dev: u8, func: u8, reg: u8) -> u32 {
     0x8000_0000
         | (u32::from(bus) << 16)
@@ -94,6 +96,7 @@ pub fn bar_line(addr: Option<u64>, out: &mut [u8]) -> usize {
 }
 
 /// First memory BAR. A 64-bit BAR includes the following dword. Type bits are cleared.
+#[must_use]
 pub fn memory_bar(header: &[u8]) -> Option<u64> {
     if header.len() < 0x18 {
         return None;
@@ -110,6 +113,7 @@ pub fn memory_bar(header: &[u8]) -> Option<u64> {
     Some(addr)
 }
 
+#[must_use]
 pub fn vendor_device(header: &[u8]) -> Option<(u16, u16)> {
     if header.len() < 4 || header[0] == 0xff {
         return None;
@@ -122,6 +126,7 @@ pub fn vendor_device(header: &[u8]) -> Option<(u16, u16)> {
     Some((vendor, device))
 }
 
+#[must_use]
 pub fn class_code(header: &[u8]) -> Option<u32> {
     if header.len() < 12 {
         return None;
@@ -130,6 +135,7 @@ pub fn class_code(header: &[u8]) -> Option<u32> {
 }
 
 /// `01:00.0 10de:1f99 bar 00000000 irq 00`
+#[must_use]
 pub fn describe(bus: u8, dev: u8, func: u8, header: &[u8]) -> Option<[u8; 40]> {
     let (vendor, device) = vendor_device(header)?;
     if header.len() < 0x3d {
@@ -165,15 +171,19 @@ fn write_hex8(slot: &mut [u8], value: u8) {
 fn write_hex16(slot: &mut [u8], value: u16) {
     for (i, byte) in slot.iter_mut().enumerate() {
         let shift = (3 - i) * 4;
-        *byte = hex((value >> shift) as u8);
+        *byte = hex(hex_byte(u32::from(value >> shift)));
     }
 }
 
 fn write_hex32(slot: &mut [u8], value: u32) {
     for (i, byte) in slot.iter_mut().enumerate() {
         let shift = (7 - i) * 4;
-        *byte = hex((value >> shift) as u8);
+        *byte = hex(hex_byte(value >> shift));
     }
+}
+
+fn hex_byte(value: u32) -> u8 {
+    u8::try_from(value & 0xff).expect("hex byte")
 }
 
 fn hex(nibble: u8) -> u8 {

@@ -1,6 +1,6 @@
 //! Host check for the agent image system description.
 //!
-//! The agent header is defined by Milestone 13. LionsOS 0.4.0 has no agent
+//! The agent header is defined by Milestone 13. `LionsOS` 0.4.0 has no agent
 //! configuration struct. `grok` embeds the serial client page. The agent embeds
 //! the filesystem shell page and then the network shell page.
 
@@ -55,7 +55,9 @@ mod tests {
         let net_len = size_of::<net_client_config_t>();
         assert_eq!(agent.len(), fs_len + net_len);
         assert!(net_config_check_magic(&agent[fs_len..]));
-        assert!(size_of::<agent_tool_t>() <= AGENT_TOOL_SIZE as usize);
+        assert!(
+            size_of::<agent_tool_t>() <= usize::try_from(AGENT_TOOL_SIZE).expect("address fits")
+        );
 
         // SAFETY: `write_configs` filled each page with the image constructors.
         let serial =

@@ -17,6 +17,10 @@ use sel4_microkit::var;
 pub(crate) const BUF_SIZE: usize = 2048;
 
 const RING_LEN: usize = 32;
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "the receive ring length is 32 and fits u16"
+)]
 const RING_MASK: u16 = (RING_LEN as u16) - 1;
 
 const CTRL: u32 = 0x0000;
@@ -498,8 +502,10 @@ struct Pci {
 
 impl Pci {
     fn new() -> Self {
-        let ioport_id = *var!(pci_net_config_ioport_id: usize = 0) as u32;
-        let base = *var!(pci_net_config_ioport_addr: usize = 0) as u16;
+        let ioport_id =
+            u32::try_from(*var!(pci_net_config_ioport_id: usize = 0)).expect("ioport id");
+        let base =
+            u16::try_from(*var!(pci_net_config_ioport_addr: usize = 0)).expect("ioport addr");
         let addr = UnclaimedNic::compiled().address();
         Self {
             cap: BASE_IOPORT_CAP + u64::from(ioport_id),

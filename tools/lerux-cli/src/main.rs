@@ -134,7 +134,7 @@ enum Commands {
         build_dir: String,
         #[arg(long, default_value = "debug")]
         config: String,
-        /// Phase 70: QEMU gdbstub on tcp::1234 (`-s`).
+        /// Phase 70: QEMU gdbstub on `tcp::1234` (`-s`).
         #[arg(long, default_value_t = false)]
         gdb: bool,
         /// Phase 70: QEMU `-snapshot` (do not persist disk.img writes).
@@ -225,7 +225,7 @@ enum Commands {
     },
     /// Copy board boot images onto a mounted FAT boot directory.
     ///
-    /// RPi4: `loader.img` + U-Boot helper. x86 PC: also `sel4.elf` + Multiboot 2 snippets.
+    /// `RPi4`: `loader.img` + U-Boot helper. x86 PC: also `sel4.elf` + Multiboot 2 snippets.
     ///
     /// Example: `lerux deploy --board rpi4b_4gb --dest /media/$USER/boot`
     ///
@@ -351,7 +351,7 @@ enum ConfigCommands {
 enum ProfileCommands {
     /// List available system profiles (e.g. minimal, workstation).
     List,
-    /// Build a loader.img for the named profile (uses default_board or --board override).
+    /// Build a loader.img for the named profile (uses `default_board` or --board override).
     Build {
         name: String,
         #[arg(long)]
@@ -403,7 +403,7 @@ enum ProfileCommands {
     /// priority than its callee; admin/admin-core profiles also get
     /// service-class band checks (docs/qos.md).
     CheckQos {
-        /// Profile name; omit to check all profiles with a default_board.
+        /// Profile name; omit to check all profiles with a `default_board`.
         name: Option<String>,
     },
 }
@@ -477,7 +477,10 @@ fn dispatch_source(root: &Path, command: Commands) -> Result<()> {
         Commands::SdkPath => print_sdk_path(root),
         Commands::Board { name, field } => show_board(root, &name, field.as_deref()),
         Commands::System { board, output } => system::generate_system(root, &board, &output),
-        Commands::HostPath => print_host_path(root),
+        Commands::HostPath => {
+            print_host_path(root);
+            Ok(())
+        }
         Commands::LibclangEnv => {
             libclang::print_libclang_env(root);
             Ok(())
@@ -557,7 +560,7 @@ fn dispatch_session(root: &Path, command: Commands) -> Result<()> {
             unordered,
             timeout,
             cmd,
-        } => smoke_command(expect, curl, unordered, timeout, cmd),
+        } => smoke_command(expect, &curl, unordered, timeout, cmd),
         Commands::Profile { command } => profile_command(root, command),
         Commands::Prog { command } => prog_command(command),
         _ => unreachable!("session command"),
@@ -581,7 +584,7 @@ fn dispatch_ship_boot(root: &Path, command: Commands) -> Result<()> {
             board,
             build_dir,
             path,
-        } => digest_command(root, &board, &build_dir, path),
+        } => digest_command(root, &board, &build_dir, path.as_deref()),
         _ => unreachable!("ship boot command"),
     }
 }
@@ -606,7 +609,10 @@ fn deploy_from(root: &Path, command: Commands) -> Result<()> {
         &dest,
         &build_dir,
         &config,
-        image_flags(build, no_build, verify, no_verify),
+        &ImageFlags {
+            build_if_missing: build && !no_build,
+            verify: verify && !no_verify,
+        },
     )
 }
 
@@ -630,17 +636,13 @@ fn iso_from(root: &Path, command: Commands) -> Result<()> {
         &board,
         &build_dir,
         &config,
-        output,
-        image_flags(build, no_build, verify, no_verify),
+        output.as_deref(),
+        &ImageFlags {
+            build_if_missing: build && !no_build,
+            verify: verify && !no_verify,
+        },
         boot_test,
     )
-}
-
-fn image_flags(build: bool, no_build: bool, verify: bool, no_verify: bool) -> ImageFlags {
-    ImageFlags {
-        build_if_missing: build && !no_build,
-        verify: verify && !no_verify,
-    }
 }
 
 fn dispatch_ship_keys(root: &Path, command: Commands) -> Result<()> {
@@ -651,14 +653,14 @@ fn dispatch_ship_keys(root: &Path, command: Commands) -> Result<()> {
             path,
             key,
             require_sig,
-        } => verify_image_command(root, &board, &build_dir, path, key, require_sig),
+        } => verify_image_command(root, &board, &build_dir, path.as_deref(), key, require_sig),
         Commands::Keygen { out } => keygen_command(root, out),
         Commands::Sign {
             board,
             build_dir,
             path,
             key,
-        } => sign_command(root, &board, &build_dir, path, key),
+        } => sign_command(root, &board, &build_dir, path.as_deref(), key),
         Commands::Config { command } => config_command(root, command),
         _ => unreachable!("ship command"),
     }
@@ -675,9 +677,8 @@ fn show_board(root: &Path, name: &str, field: Option<&str>) -> Result<()> {
     print_board_field(board, field)
 }
 
-fn print_host_path(root: &Path) -> Result<()> {
+fn print_host_path(root: &Path) {
     println!("{}", path::host_path(root));
-    Ok(())
 }
 
 fn print_install(root: &Path, tool: InstallTool) -> Result<()> {
@@ -692,11 +693,7 @@ fn print_fs_scaffold(root: &Path, from: &str, board: &str) -> Result<()> {
 }
 
 fn probe_tcp_echo(port: u16) -> Result<()> {
-    let code = if tcp_echo::port_is_listening(port) {
-        0
-    } else {
-        1
-    };
+    let code = i32::from(!tcp_echo::port_is_listening(port));
     std::process::exit(code);
 }
 
@@ -738,7 +735,7 @@ fn test_command(
     test::run_board_test_with_mode(root, board, build_dir, config, mode)
 }
 
-fn smoke_curls(curl: Vec<String>) -> Vec<(String, String)> {
+fn smoke_curls(curl: &[String]) -> Vec<(String, String)> {
     curl.chunks(2)
         .filter_map(|c| {
             if c.len() == 2 {
@@ -752,7 +749,7 @@ fn smoke_curls(curl: Vec<String>) -> Vec<(String, String)> {
 
 fn smoke_command(
     expect: Vec<String>,
-    curl: Vec<String>,
+    curl: &[String],
     unordered: bool,
     timeout: u64,
     mut cmd: Vec<String>,
@@ -762,8 +759,7 @@ fn smoke_command(
     }
     let (program, program_args) = cmd
         .split_first()
-        .map(|(p, a)| (p.clone(), a.to_vec()))
-        .unwrap_or_else(|| ("true".into(), vec![]));
+        .map_or_else(|| ("true".into(), vec![]), |(p, a)| (p.clone(), a.to_vec()));
     let mut command = Command::new(program);
     command.args(program_args);
     let smoke = test::SmokeTest {
@@ -952,7 +948,7 @@ fn deploy_command(
     dest: &Path,
     build_dir: &str,
     config: &str,
-    flags: ImageFlags,
+    flags: &ImageFlags,
 ) -> Result<()> {
     crate::deploy::deploy_loader(
         root,
@@ -971,8 +967,8 @@ fn iso_command(
     board: &str,
     build_dir: &str,
     config: &str,
-    output: Option<PathBuf>,
-    flags: ImageFlags,
+    output: Option<&Path>,
+    flags: &ImageFlags,
     boot_test: bool,
 ) -> Result<()> {
     crate::iso_host::require_iso_host(root, board, config, flags.build_if_missing, boot_test)?;
@@ -981,7 +977,7 @@ fn iso_command(
         board,
         build_dir,
         config,
-        output.as_deref(),
+        output,
         flags.build_if_missing,
         flags.verify,
     )?;
@@ -991,8 +987,8 @@ fn iso_command(
     Ok(())
 }
 
-fn digest_command(root: &Path, board: &str, build_dir: &str, path: Option<PathBuf>) -> Result<()> {
-    let loader = crate::image_digest::resolve_loader(root, board, build_dir, path.as_deref())?;
+fn digest_command(root: &Path, board: &str, build_dir: &str, path: Option<&Path>) -> Result<()> {
+    let loader = crate::image_digest::resolve_loader(root, board, build_dir, path);
     crate::image_digest::write_sidecar(&loader)?;
     Ok(())
 }
@@ -1001,11 +997,11 @@ fn verify_image_command(
     root: &Path,
     board: &str,
     build_dir: &str,
-    path: Option<PathBuf>,
+    path: Option<&Path>,
     key: Option<PathBuf>,
     require_sig: bool,
 ) -> Result<()> {
-    let loader = crate::image_digest::resolve_loader(root, board, build_dir, path.as_deref())?;
+    let loader = crate::image_digest::resolve_loader(root, board, build_dir, path);
     let key = key.map(|k| if k.is_absolute() { k } else { root.join(k) });
     crate::image_sign::verify_image(&loader, key.as_deref(), require_sig)
 }
@@ -1023,10 +1019,10 @@ fn sign_command(
     root: &Path,
     board: &str,
     build_dir: &str,
-    path: Option<PathBuf>,
+    path: Option<&Path>,
     key: PathBuf,
 ) -> Result<()> {
-    let loader = crate::image_digest::resolve_loader(root, board, build_dir, path.as_deref())?;
+    let loader = crate::image_digest::resolve_loader(root, board, build_dir, path);
     let key = if key.is_absolute() {
         key
     } else {

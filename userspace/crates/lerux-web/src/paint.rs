@@ -79,8 +79,8 @@ impl<'a> Bitmap<'a> {
         if x < 0 || y < 0 {
             return;
         }
-        let x = x as u32;
-        let y = y as u32;
+        let x = u32::try_from(x).expect("x is non-negative");
+        let y = u32::try_from(y).expect("y is non-negative");
         if x >= self.width || y >= self.height {
             return;
         }
@@ -88,6 +88,10 @@ impl<'a> Bitmap<'a> {
         self.data[off..off + 4].copy_from_slice(&color.to_le_bytes());
     }
 
+    #[expect(
+        clippy::cast_possible_wrap,
+        reason = "a bitmap side above i32::MAX wraps; the fill keeps that range"
+    )]
     fn fill(&mut self, color: u32) {
         for y in 0..self.height as i32 {
             for x in 0..self.width as i32 {
@@ -116,7 +120,8 @@ impl<'a> Bitmap<'a> {
             let g = glyph(if ch.is_ascii() { ch as u8 } else { b'?' });
             for gy in 0i32..8 {
                 for gx in 0i32..8 {
-                    if g[gy as usize] & (0x80 >> gx) == 0 {
+                    let row = usize::try_from(gy).expect("glyph row is non-negative");
+                    if g[row] & (0x80 >> gx) == 0 {
                         continue;
                     }
                     let px0 = gx * size / 8;

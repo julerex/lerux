@@ -60,38 +60,50 @@ impl Url {
     ///
     /// `Some` resolves a relative reference, including an empty input, a query,
     /// or a fragment.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ParseError`] when `input` is empty and `base` is `None`, when
+    /// the scheme is not `https`, or when the authority, port, or path is rejected.
     pub fn parse(input: &str, base: Option<&Url>) -> Result<Self, ParseError> {
         parse::basic_parse(input, base)
     }
 
+    #[must_use]
     pub fn scheme(&self) -> &str {
         &self.scheme
     }
 
+    #[must_use]
     pub fn host(&self) -> &str {
         &self.host
     }
 
     /// Port stored for this URL. An omitted `https` port and an explicit `:443` are both 443.
+    #[must_use]
     pub fn port(&self) -> u16 {
         self.port
     }
 
+    #[must_use]
     pub fn path(&self) -> &str {
         &self.path
     }
 
     /// Bytes after `?`, when a query is present. The `?` is not included.
+    #[must_use]
     pub fn query(&self) -> Option<&str> {
         self.query.as_deref()
     }
 
     /// Bytes after `#`, when a fragment is present. The `#` is not included.
+    #[must_use]
     pub fn fragment(&self) -> Option<&str> {
         self.fragment.as_deref()
     }
 
     /// Path and query borrowed from this URL.
+    #[must_use]
     pub fn request_target(&self) -> RequestTarget<'_> {
         RequestTarget {
             path: &self.path,

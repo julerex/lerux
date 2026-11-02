@@ -24,10 +24,16 @@ pub struct StyleSheet {
 
 impl StyleSheet {
     /// Parse `input` into rules, selectors, and declarations.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ParseError`] when `input` has an at-rule, an unclosed comment
+    /// or string, or a rule that is not a selector list inside `{` `}`.
     pub fn parse(input: &str) -> Result<Self, ParseError> {
         parse::sheet(input)
     }
 
+    #[must_use]
     pub fn rules(&self) -> &[StyleRule] {
         &self.rules
     }
@@ -41,10 +47,12 @@ pub struct StyleRule {
 }
 
 impl StyleRule {
+    #[must_use]
     pub fn selectors(&self) -> &[Selector] {
         &self.selectors
     }
 
+    #[must_use]
     pub fn declarations(&self) -> &[Declaration] {
         &self.declarations
     }
@@ -57,6 +65,7 @@ pub struct Selector {
 }
 
 impl Selector {
+    #[must_use]
     pub fn compounds(&self) -> &[CompoundSelector] {
         &self.compounds
     }
@@ -81,10 +90,12 @@ pub struct CompoundSelector {
 }
 
 impl CompoundSelector {
+    #[must_use]
     pub fn combinator(&self) -> Combinator {
         self.combinator
     }
 
+    #[must_use]
     pub fn simples(&self) -> &[SimpleSelector] {
         &self.simples
     }
@@ -106,10 +117,12 @@ pub struct Declaration {
 }
 
 impl Declaration {
+    #[must_use]
     pub fn property(&self) -> &Property {
         &self.property
     }
 
+    #[must_use]
     pub fn value(&self) -> &Value {
         &self.value
     }

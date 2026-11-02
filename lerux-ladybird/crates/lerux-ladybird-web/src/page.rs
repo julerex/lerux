@@ -11,12 +11,14 @@ impl Page {
         clippy::new_without_default,
         reason = "Default would be a second constructor for the same page"
     )]
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             document: Document::empty(),
         }
     }
 
+    #[must_use]
     pub const fn document(&self) -> &Document {
         &self.document
     }

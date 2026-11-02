@@ -76,14 +76,14 @@ impl Engine {
         pci.program(&map)?;
         let abar = usize::try_from(map.abar_vaddr).expect("abar vaddr");
         let dma_vaddr = usize::try_from(map.dma_vaddr).expect("dma vaddr");
-        let dma_paddr = map.dma_paddr.value();
-        init_host(abar, dma_paddr)?;
-        let capacity_sectors = identify_device(abar, dma_vaddr, dma_paddr)?;
+        let dma_phys = map.dma_paddr.value();
+        init_host(abar, dma_phys)?;
+        let capacity_sectors = identify_device(abar, dma_vaddr, dma_phys)?;
         let capacity_blocks = capacity_sectors / SECTORS_PER_TRANSFER_BLOCK;
         Ok(Self {
             abar,
             dma_vaddr,
-            dma_paddr,
+            dma_paddr: dma_phys,
             capacity_blocks,
         })
     }
@@ -197,7 +197,12 @@ const fn ecam_dword_offset(bus: u8, device: u8, function: u8, reg: u8) -> usize 
 const _: () = {
     let addr = Unclaimed::compiled().address();
     let last = ecam_dword_offset(addr.bus(), addr.device(), addr.function(), 0xfc);
-    assert!(last < lerux_machine::X86_PCI_ECAM_SIZE as usize);
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "the ECAM window is 1 MiB and fits usize"
+    )]
+    let ecam_bytes = lerux_machine::X86_PCI_ECAM_SIZE as usize;
+    assert!(last < ecam_bytes);
 };
 
 impl Pci {
@@ -214,8 +219,9 @@ impl Pci {
         }
         #[cfg(not(feature = "board-x86_64_generic_fetch_native"))]
         {
-            let ioport_id = *var!(pci_config_ioport_id: usize = 0) as u32;
-            let base = *var!(pci_config_ioport_addr: usize = 0) as u16;
+            let ioport_id =
+                u32::try_from(*var!(pci_config_ioport_id: usize = 0)).expect("pci ioport id");
+            let base = u16::try_from(*var!(pci_config_ioport_addr: usize = 0)).expect("pci ioport");
             Self {
                 cap: BASE_IOPORT_CAP + u64::from(ioport_id),
                 base,
@@ -347,8 +353,8 @@ fn init_host(abar: usize, dma_paddr: u64) -> Result<(), OpenError> {
         return Err(OpenError);
     }
     stop_port(abar);
-    let clb = u32::try_from(dma_paddr + CMD_LIST_OFF as u64).expect("clb paddr");
-    let fb = u32::try_from(dma_paddr + RX_FIS_OFF as u64).expect("fb paddr");
+    let clb = u32::try_from(dma_paddr + u64::from(CMD_LIST_OFF)).expect("clb paddr");
+    let fb = u32::try_from(dma_paddr + u64::from(RX_FIS_OFF)).expect("fb paddr");
     write_u32(abar, PX_CLB, clb);
     write_u32(abar, PX_CLBU, 0);
     write_u32(abar, PX_FB, fb);
@@ -402,8 +408,8 @@ fn stop_port(abar: usize) {
     }
 }
 
-fn identify_device(abar: usize, dma_vaddr: usize, dma_paddr: u64) -> Result<u64, OpenError> {
-    if run_dma(abar, dma_vaddr, dma_paddr, false, 0, 1, ATA_CMD_IDENTIFY).is_err() {
+fn identify_device(abar: usize, dma_vaddr: usize, dma_phys: u64) -> Result<u64, OpenError> {
+    if run_dma(abar, dma_vaddr, dma_phys, false, 0, 1, ATA_CMD_IDENTIFY).is_err() {
         return Err(OpenError);
     }
     let words = dma_vaddr + BOUNCE_OFF as usize;
@@ -430,7 +436,7 @@ fn identify_device(abar: usize, dma_vaddr: usize, dma_paddr: u64) -> Result<u64,
 fn run_dma(
     abar: usize,
     dma_vaddr: usize,
-    dma_paddr: u64,
+    dma_phys: u64,
     write: bool,
     lba: u64,
     sectors: u16,
@@ -441,7 +447,7 @@ fn run_dma(
     }
     let byte_count = usize::from(sectors) * 512;
     build_command(
-        dma_vaddr, dma_paddr, write, lba, sectors, command, byte_count,
+        dma_vaddr, dma_phys, write, lba, sectors, command, byte_count,
     );
     write_u32(abar, PX_CI, 1);
     if !poll_pxci(abar) {
@@ -457,7 +463,7 @@ fn run_dma(
 
 fn build_command(
     dma_vaddr: usize,
-    dma_paddr: u64,
+    dma_phys: u64,
     write: bool,
     lba: u64,
     sectors: u16,
@@ -466,8 +472,8 @@ fn build_command(
 ) {
     let hdr_addr = dma_vaddr + CMD_LIST_OFF as usize;
     let tbl_addr = dma_vaddr + CMD_TBL_OFF as usize;
-    let bounce_paddr = dma_paddr + BOUNCE_OFF as u64;
-    let tbl_paddr = dma_paddr + CMD_TBL_OFF as u64;
+    let bounce_paddr = dma_phys + u64::from(BOUNCE_OFF);
+    let table_phys = dma_phys + u64::from(CMD_TBL_OFF);
 
     // SAFETY: command list and table live in the mapped DMA window.
     unsafe {
@@ -478,7 +484,7 @@ fn build_command(
         let w = u32::from(write);
         let prdtl = 1u32;
         (*hdr).flags = cfl | (w << 6) | (prdtl << 16);
-        (*hdr).ctba = u32::try_from(tbl_paddr).expect("table paddr");
+        (*hdr).ctba = u32::try_from(table_phys).expect("table paddr");
         (*hdr).ctbau = 0;
 
         ptr::write_bytes(

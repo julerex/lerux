@@ -17,6 +17,10 @@ pub const FS_COMPLETION_QUEUE_VADDR: u64 = 0x4_028_000;
 pub const FS_SHARE_VADDR: u64 = 0x4_030_000;
 pub const FS_REGION_SIZE: u64 = 0x8000;
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "the filesystem queue capacity is 511 and fits in u16"
+)]
 pub const FS_QUEUE_LEN: u16 = FS_QUEUE_CAPACITY as u16;
 
 /// Channel ids. Each value is the id on that protection domain.
@@ -48,6 +52,7 @@ fn connection(id: u8) -> fs_connection_resource_t {
 }
 
 /// `fs_server_config_t` for the one client.
+#[must_use]
 pub fn server_config() -> fs_server_config_t {
     let mut config: fs_server_config_t = zeroed_config();
     config.magic = LIONS_FS_MAGIC;
@@ -56,6 +61,7 @@ pub fn server_config() -> fs_server_config_t {
 }
 
 /// `fs_client_config_t` for the one client.
+#[must_use]
 pub fn client_config() -> fs_client_config_t {
     let mut config: fs_client_config_t = zeroed_config();
     config.magic = LIONS_FS_MAGIC;
@@ -64,6 +70,7 @@ pub fn client_config() -> fs_client_config_t {
 }
 
 /// `fs_client_config_t` for the shell, whose serial channels already use 0 and 1.
+#[must_use]
 pub fn shell_client_config() -> fs_client_config_t {
     let mut config: fs_client_config_t = zeroed_config();
     config.magic = LIONS_FS_MAGIC;
@@ -72,6 +79,10 @@ pub fn shell_client_config() -> fs_client_config_t {
 }
 
 /// Copy a configuration struct into `dst`.
+///
+/// # Panics
+///
+/// Panics when `dst` is not `size_of::<T>()` bytes.
 pub fn fs_config_to_bytes<T>(value: &T, dst: &mut [u8]) {
     assert_eq!(dst.len(), core::mem::size_of::<T>());
     // SAFETY: `dst` is exactly one `T`, and the source is an initialised `T`.
@@ -89,6 +100,11 @@ pub fn fs_config_to_bytes<T>(value: &T, dst: &mut [u8]) {
 /// # Safety
 ///
 /// `bytes` must be a valid representation of `T`. Each `bool` field must be 0 or 1.
+///
+/// # Panics
+///
+/// Panics when `bytes` is not `size_of::<T>()` bytes.
+#[must_use]
 pub unsafe fn fs_config_from_bytes<T>(bytes: &[u8]) -> T {
     assert_eq!(bytes.len(), core::mem::size_of::<T>());
     let mut value = core::mem::MaybeUninit::<T>::uninit();

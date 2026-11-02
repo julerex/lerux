@@ -2,7 +2,7 @@
 //!
 //! Channel 0 is `console_driver` (keyboard bytes in, screen bytes out).
 //! On the desk, channel 1 is `serial_driver` (the same output bytes on COM1).
-//! On the Swift X, channel 1 is the read-only NVMe result. This image
+//! On the Swift X, channel 1 is the read-only `NVMe` result. This image
 //! has no page painter, so the browser choice reports that it is unavailable.
 
 #![no_std]
@@ -162,11 +162,11 @@ impl HandlerImpl {
         let line = trim(raw);
         match self.mode {
             Mode::Menu => self.dispatch_menu(line),
-            Mode::Maths => self.dispatch_maths(line),
             #[cfg(feature = "board-swift_sfx14_41g")]
             Mode::Ssid => self.dispatch_ssid(line),
             #[cfg(feature = "board-swift_sfx14_41g")]
             Mode::Psk => self.dispatch_psk(line),
+            Mode::Maths => self.dispatch_maths(line),
         }
     }
 
@@ -188,19 +188,6 @@ impl HandlerImpl {
             }
             _ => self.reject(),
         }
-    }
-
-    fn dispatch_maths(&mut self, line: &[u8]) {
-        if line == b"quit" {
-            self.mode = Mode::Menu;
-            self.emit(MENU);
-            return;
-        }
-        match eval(line) {
-            Ok(value) => self.emit_value(b"maths ", value),
-            Err(Error) => self.emit(b"maths err\n"),
-        }
-        self.emit(b"maths> ");
     }
 
     #[cfg(feature = "board-swift_sfx14_41g")]
@@ -233,6 +220,19 @@ impl HandlerImpl {
         } else {
             self.wifi_err();
         }
+    }
+
+    fn dispatch_maths(&mut self, line: &[u8]) {
+        if line == b"quit" {
+            self.mode = Mode::Menu;
+            self.emit(MENU);
+            return;
+        }
+        match eval(line) {
+            Ok(value) => self.emit_value(b"maths ", value),
+            Err(Error) => self.emit(b"maths err\n"),
+        }
+        self.emit(b"maths> ");
     }
 
     fn reject(&mut self) {

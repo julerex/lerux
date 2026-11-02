@@ -31,6 +31,11 @@ pub struct BoardId {
     pub net: NetBackend,
 }
 
+/// Disk backend named by `board`. An unregistered name is [`DiskBackend::Virtio`].
+///
+/// # Errors
+///
+/// Returns the same [`ImageError`] values as [`board_registration`].
 pub fn x86_disk_backend(board: &str) -> Result<DiskBackend, ImageError> {
     match board_registration(board)? {
         Some(id) => Ok(id.disk),
@@ -38,6 +43,11 @@ pub fn x86_disk_backend(board: &str) -> Result<DiskBackend, ImageError> {
     }
 }
 
+/// Net backend named by `board`. An unregistered name is [`NetBackend::Virtio`].
+///
+/// # Errors
+///
+/// Returns the same [`ImageError`] values as [`board_registration`].
 pub fn x86_net_backend(board: &str) -> Result<NetBackend, ImageError> {
     match board_registration(board)? {
         Some(id) => Ok(id.net),
@@ -45,6 +55,7 @@ pub fn x86_net_backend(board: &str) -> Result<NetBackend, ImageError> {
     }
 }
 
+#[must_use]
 pub fn e1000e_net_device() -> String {
     let addr = e1000e::UnclaimedNic::compiled().address();
     let mut device = format!(
@@ -59,6 +70,7 @@ pub fn e1000e_net_device() -> String {
     device
 }
 
+#[must_use]
 pub fn ahci_disk_device(drive: &str) -> String {
     format!("ide-hd,bus=ide.0,drive={drive},unit={AHCI_PORT}")
 }
@@ -67,12 +79,27 @@ pub(crate) fn render_serial() -> Result<String, ImageError> {
     render_kind(ImageKind::Serial, Arch::Aarch64)
 }
 
+/// Render `kind` for `arch` with virtio disk and net.
+///
+/// # Errors
+///
+/// Returns [`ImageError::Unsupported`] when that pair is not built. A duplicate
+/// channel end, a missing region, or a channel id past `u8` fails while the
+/// description is written.
 pub fn render_kind(kind: ImageKind, arch: Arch) -> Result<String, ImageError> {
     render_image(&image(kind, arch)?)
 }
 
 const SDDF_SUFFIX: &str = "_sddf";
 
+/// Registration for a device-framework board name. `Ok(None)` is not one of these images.
+///
+/// # Errors
+///
+/// Returns [`ImageError::Unsupported`] for `net_e1000e`, `fs_ahci`, or
+/// `fetch_native` on an architecture other than x86. Returns
+/// [`ImageError::UnknownBoard`] when an `_sddf` or `net_e1000e` suffix does not
+/// name a known architecture and image.
 pub fn board_registration(board: &str) -> Result<Option<BoardId>, ImageError> {
     if let Some(id) = net_e1000e_registration(board)? {
         return Ok(Some(id));
@@ -186,6 +213,16 @@ fn kind_from_token(token: &str) -> Option<(ImageKind, Option<Mode>)> {
     }
 }
 
+/// System description for one registered board. `Ok(None)` is a name with no image.
+///
+/// # Errors
+///
+/// Returns [`ImageError::UnknownBoard`] or [`ImageError::Unsupported`] when
+/// `board` names a token this table rejects. Returns
+/// [`ImageError::FetchPairRejected`] when a fetch board is neither the virtio
+/// pair nor q35 AHCI plus 82574.
+/// A duplicate channel end, a missing region, or a channel id past `u8` fails
+/// while the description is written.
 pub fn render_board(board: &str) -> Result<Option<String>, ImageError> {
     let Some(id) = board_registration(board)? else {
         return Ok(None);
@@ -341,12 +378,12 @@ fn fs_domains(
     shell: Vec<Slot>,
 ) -> Vec<Domain> {
     vec![
-        blk_driver_domain(block_slots, block_irq, budget(4000), 4, program),
-        serial_driver(serial_slots, serial_irq, budget(4000)),
-        blk_virt(budget(3000)),
-        serial_virt_tx(budget(3000)),
-        serial_virt_rx(budget(3000)),
-        fatfs(budget(2000)),
+        blk_driver_domain(block_slots, block_irq, Some(budget(4000)), 4, program),
+        serial_driver(serial_slots, serial_irq, Some(budget(4000))),
+        blk_virt(Some(budget(3000))),
+        serial_virt_tx(Some(budget(3000))),
+        serial_virt_rx(Some(budget(3000))),
+        fatfs(Some(budget(2000))),
         domain(
             "timer_driver",
             5,
@@ -358,7 +395,14 @@ fn fs_domains(
             Vec::new(),
             None,
         ),
-        domain("shell", 1, budget(1000), "sddf-shell.elf", shell, None),
+        domain(
+            "shell",
+            1,
+            Some(budget(1000)),
+            "sddf-shell.elf",
+            shell,
+            None,
+        ),
     ]
 }
 
@@ -392,7 +436,7 @@ fn net_image(arch: Arch, net: NetBackend) -> Image {
         ),
         NetBackend::E1000e => {
             assert_eq!(arch, Arch::X86_64, "e1000e registration is x86 only");
-            (e1000e_regions(), e1000e_domain(E1000ePlace::Standalone))
+            (e1000e_regions(), e1000e_domain(&E1000ePlace::Standalone))
         }
     };
     Image {
@@ -441,7 +485,7 @@ fn fetch_virtio_regions(arch: Arch) -> Vec<Region> {
 /// network domains cannot starve `fatfs`.
 fn fetch_qos(arch: Arch, value: u32) -> Option<Qos> {
     if arch == Arch::X86_64 {
-        budget(value)
+        Some(budget(value))
     } else {
         None
     }
@@ -470,7 +514,7 @@ enum FetchPair {
 }
 
 /// Device regions plus the two driver domains.
-/// AArch64 virtio keeps one `virtio_mmio` window in `regions`.
+/// `AArch64` virtio keeps one `virtio_mmio` window in `regions`.
 /// Splitting that window onto each driver would emit it twice.
 struct FetchDevices {
     regions: Vec<Region>,
@@ -600,11 +644,11 @@ fn q35_native_devices() -> FetchDevices {
         block: blk_driver_domain(
             block.driver_slots,
             block.irq,
-            budget(4000),
+            Some(budget(4000)),
             4,
             block.program,
         ),
-        net: e1000e_domain(E1000ePlace::FetchNative),
+        net: e1000e_domain(&E1000ePlace::FetchNative),
     }
 }
 
@@ -1214,10 +1258,10 @@ enum E1000ePlace {
     FetchNative,
 }
 
-fn e1000e_domain(place: E1000ePlace) -> Domain {
+fn e1000e_domain(place: &E1000ePlace) -> Domain {
     let (priority, qos, irq) = match place {
         E1000ePlace::Standalone => (4, None, Irq::X86(e1000e_standalone_irq())),
-        E1000ePlace::FetchNative => (2, budget(2000), Irq::X86(e1000e_fetch_irq())),
+        E1000ePlace::FetchNative => (2, Some(budget(2000)), Irq::X86(e1000e_fetch_irq())),
     };
     let map = e1000e_map();
     let mut slots = vec![
@@ -1539,11 +1583,11 @@ fn domain(
     }
 }
 
-fn budget(budget: u32) -> Option<Qos> {
-    Some(Qos {
+fn budget(budget: u32) -> Qos {
+    Qos {
         budget,
         passive: false,
-    })
+    }
 }
 
 fn link_rows(rows: &[(&'static str, &'static str, u8)]) -> Vec<Link> {

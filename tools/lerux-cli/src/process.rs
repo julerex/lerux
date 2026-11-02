@@ -41,13 +41,13 @@ pub fn run_checked(program: impl AsRef<OsStr>, args: &[impl AsRef<OsStr>]) -> Re
     let output = Command::new(program.as_ref())
         .args(args.iter().map(AsRef::as_ref))
         .output()
-        .with_context(|| format!("failed to run {:?}", program.as_ref()))?;
+        .with_context(|| format!("failed to run {}", program.as_ref().to_string_lossy()))?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let stdout = String::from_utf8_lossy(&output.stdout);
         bail!(
-            "command {:?} {:?} failed ({})\nstdout: {}\nstderr: {}",
-            program.as_ref(),
+            "command {} {:?} failed ({})\nstdout: {}\nstderr: {}",
+            program.as_ref().to_string_lossy(),
             args.iter()
                 .map(|a| a.as_ref().to_string_lossy())
                 .collect::<Vec<_>>(),
@@ -66,9 +66,13 @@ pub fn run_inherit(program: impl AsRef<OsStr>, args: &[impl AsRef<OsStr>]) -> Re
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .status()
-        .with_context(|| format!("failed to run {:?}", program.as_ref()))?;
+        .with_context(|| format!("failed to run {}", program.as_ref().to_string_lossy()))?;
     if !status.success() {
-        bail!("command {:?} exited with {}", program.as_ref(), status);
+        bail!(
+            "command {} exited with {}",
+            program.as_ref().to_string_lossy(),
+            status
+        );
     }
     Ok(())
 }

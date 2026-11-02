@@ -19,7 +19,7 @@ const QEMU_DEFAULTS: &[(&str, &str)] = &[
 
 pub fn print_schema() {
     println!(
-        r#"lerux config schema
+        r"lerux config schema
 
 Well-known keys are documented in docs/config.md. Device-framework shells read
 files such as /config/hostname from the File Allocation Table volume.
@@ -29,7 +29,7 @@ Host:
   lerux config defaults
   lerux config seed-disk   # ensure support/disk.img exists (raw MBR; no LERUXFS)
   lerux disk-img           # same raw image helper
-"#
+"
     );
 }
 

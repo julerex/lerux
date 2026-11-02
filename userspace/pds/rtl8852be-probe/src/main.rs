@@ -139,7 +139,10 @@ fn init() -> HandlerImpl {
         return HandlerImpl;
     }
 
-    probe(BASE_IOPORT_CAP + id as u64, addr as u16);
+    probe(
+        BASE_IOPORT_CAP + id as u64,
+        u16::try_from(addr).expect("port fits"),
+    );
     HandlerImpl
 }
 

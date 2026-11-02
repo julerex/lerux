@@ -27,6 +27,10 @@ use lerux_machine::{virtio, Arch, VirtioAttach, VirtioRole};
 use lerux_sddf::net_image::{NET_DRIVER_DMA_SIZE, NET_VIRTIO_MMIO_SIZE};
 
 #[cfg(not(target_arch = "x86_64"))]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "virtio-mmio offset fits a guest address"
+)]
 const fn net_virtio_mmio_offset() -> usize {
     match virtio(Arch::TARGET, VirtioRole::Net) {
         Some(VirtioAttach::Mmio { offset }) => offset as usize,

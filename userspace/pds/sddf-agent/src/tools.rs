@@ -26,8 +26,8 @@ use crate::{net, tool_page};
 const NAME_MAX: usize = 12;
 const LIST_MAX: usize = 32;
 const FILE_MAX: usize = 512;
-const S_IFMT: u64 = 0o170000;
-const S_IFDIR: u64 = 0o040000;
+const S_IFMT: u64 = 0o170_000;
+const S_IFDIR: u64 = 0o040_000;
 
 struct FilesCell(UnsafeCell<MaybeUninit<Files>>);
 
@@ -54,7 +54,7 @@ pub fn bind() {
             commands,
             completions,
             share,
-            fs_image::FS_REGION_SIZE as usize,
+            usize::try_from(fs_image::FS_REGION_SIZE).expect("fs region"),
             wake_fs,
             core::ptr::null_mut(),
         )
@@ -278,13 +278,11 @@ fn collect_names(path: &[u8]) -> Option<([Name; LIST_MAX], usize)> {
     let mut buf = [0u8; NAME_MAX];
     let mut failed = false;
     loop {
-        let read = match files() {
-            Some(files) => files.read_dir(dir, &mut buf),
-            None => {
-                failed = true;
-                break;
-            }
+        let Some(files) = files() else {
+            failed = true;
+            break;
         };
+        let read = files.read_dir(dir, &mut buf);
         match read {
             Ok(None) => break,
             Ok(Some(0)) => {}

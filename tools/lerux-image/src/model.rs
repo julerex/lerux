@@ -6,7 +6,7 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    fmt,
+    fmt::{self, Write},
 };
 
 use lerux_machine::{
@@ -199,7 +199,7 @@ struct Assigned {
 }
 
 pub(crate) fn render_image(image: &Image) -> Result<String, ImageError> {
-    render_assigned(image, assign(image)?)
+    render_assigned(image, &assign(image)?)
 }
 
 #[cfg(test)]
@@ -210,12 +210,12 @@ pub(crate) fn render_forcing_end(
 ) -> Result<String, ImageError> {
     let mut assigned = assign(image)?;
     assigned.ends.push(AssignedEnd { pd, id });
-    render_assigned(image, assigned)
+    render_assigned(image, &assigned)
 }
 
-fn render_assigned(image: &Image, assigned: Assigned) -> Result<String, ImageError> {
+fn render_assigned(image: &Image, assigned: &Assigned) -> Result<String, ImageError> {
     validate(&assigned.ends)?;
-    write_xml(image, &assigned)
+    write_xml(image, assigned)
 }
 
 fn assign(image: &Image) -> Result<Assigned, ImageError> {
@@ -376,9 +376,10 @@ fn domain_block(image: &Image, domain: &Domain, assigned: &Assigned) -> Result<S
                 out.push('\n');
             }
             Slot::Setvar { symbol, region } => {
-                out.push_str(&format!(
-                    "        <setvar symbol=\"{symbol}\" region_paddr=\"{region}\" />\n"
-                ));
+                let _ = writeln!(
+                    out,
+                    "        <setvar symbol=\"{symbol}\" region_paddr=\"{region}\" />"
+                );
             }
             Slot::Port(port) => {
                 let id = port.element_id.unwrap_or(port_index);
@@ -421,10 +422,10 @@ fn map_line(region: &Region, map: &Map) -> String {
         map.region
     );
     if let Some(cached) = map.cached {
-        line.push_str(&format!(" cached=\"{cached}\""));
+        let _ = write!(line, " cached=\"{cached}\"");
     }
     if let Some(setvar) = map.setvar {
-        line.push_str(&format!(" setvar_vaddr=\"{setvar}\""));
+        let _ = write!(line, " setvar_vaddr=\"{setvar}\"");
     }
     line.push_str(" />");
     line

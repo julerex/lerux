@@ -12,6 +12,7 @@
 
 use std::{
     collections::BTreeSet,
+    fmt::Write,
     path::{Path, PathBuf},
 };
 
@@ -177,10 +178,10 @@ pub fn generate_system(root: &Path, board_name: &str, output: &Path) -> Result<(
     {
         // Prefer writing next to system.system under build/<board>/.
         let build_dir = board_dir.parent().unwrap_or(board_dir);
-        let build_dir_str = build_dir
-            .strip_prefix(root)
-            .map(|p| p.to_string_lossy().into_owned())
-            .unwrap_or_else(|_| build_dir.to_string_lossy().into_owned());
+        let build_dir_str = build_dir.strip_prefix(root).map_or_else(
+            |_| build_dir.to_string_lossy().into_owned(),
+            |p| p.to_string_lossy().into_owned(),
+        );
         let _ = write_channel_consts(root, board_name, &build_dir_str, profile_name, profile);
     }
     Ok(())
@@ -259,13 +260,15 @@ pub fn sdf_diff_summary(a_label: &str, a: &str, b_label: &str, b: &str) -> Strin
     let a_lines: Vec<&str> = a.lines().collect();
     let b_lines: Vec<&str> = b.lines().collect();
     let mut out = String::new();
-    out.push_str(&format!(
-        "SDF {a_label} ({} lines, {} channels) vs {b_label} ({} lines, {} channels)\n",
+    writeln!(
+        out,
+        "SDF {a_label} ({} lines, {} channels) vs {b_label} ({} lines, {} channels)",
         a_lines.len(),
         a.matches("<channel>").count(),
         b_lines.len(),
         b.matches("<channel>").count(),
-    ));
+    )
+    .expect("format into string");
     append_channel_diff(&mut out, a, b);
     append_line_diffs(&mut out, &a_lines, &b_lines);
     out
@@ -282,10 +285,10 @@ fn append_channel_diff(out: &mut String, a: &str, b: &str) {
     let a_set: BTreeSet<&str> = a_ch.lines().filter(|l| l.contains("pd=")).collect();
     let b_set: BTreeSet<&str> = b_ch.lines().filter(|l| l.contains("pd=")).collect();
     for line in a_set.difference(&b_set) {
-        out.push_str(&format!("  ch - {line}\n"));
+        writeln!(out, "  ch - {line}").expect("format into string");
     }
     for line in b_set.difference(&a_set) {
-        out.push_str(&format!("  ch + {line}\n"));
+        writeln!(out, "  ch + {line}").expect("format into string");
     }
 }
 
@@ -301,16 +304,15 @@ fn append_line_diffs(out: &mut String, a_lines: &[&str], b_lines: &[&str]) {
                 out.push_str("First SDF line diffs:\n");
             }
             if shown < 12 {
-                out.push_str(&format!("  @@ line {} @@\n", i + 1));
-                out.push_str(&format!("  - {al}\n"));
-                out.push_str(&format!("  + {bl}\n"));
+                writeln!(out, "  @@ line {} @@\n  - {al}\n  + {bl}", i + 1)
+                    .expect("format into string");
                 shown += 1;
             }
             total_diff += 1;
         }
     }
     if total_diff > 12 {
-        out.push_str(&format!("  … {} more differing lines\n", total_diff - 12));
+        writeln!(out, "  … {} more differing lines", total_diff - 12).expect("format into string");
     } else if total_diff == 0 {
         out.push_str("Full SDF: identical\n");
     }

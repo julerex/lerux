@@ -93,6 +93,10 @@ struct PciFn {
 }
 
 /// Armed boot keyboard, or a cold controller when [`Self::ready`] is false.
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "attached, ready, online, and broken are independent controller flags"
+)]
 pub struct UsbKbd {
     regs: *mut u8,
     dma: *mut u8,
@@ -216,7 +220,7 @@ impl UsbKbd {
             regs,
             dma,
             pci_cap: BASE_IOPORT_CAP + pci_id as u64,
-            pci_port: pci_port as u16,
+            pci_port: low_u16(pci_port),
             attached,
             op: 0,
             db: 0,
@@ -342,10 +346,10 @@ impl UsbKbd {
         let Some(kbd) = self.config_keyboard() else {
             return false;
         };
-        if !self.set_boot_protocol(&kbd) {
+        if !self.set_boot_protocol(kbd) {
             return false;
         }
-        if !self.configure_interrupt(&kbd, speed) {
+        if !self.configure_interrupt(kbd, speed) {
             return false;
         }
         self.dci = usb::endpoint_dci(kbd.ep_addr);
@@ -393,7 +397,7 @@ impl UsbKbd {
         usb::find_boot_keyboard(&cfg[..take])
     }
 
-    fn set_boot_protocol(&mut self, kbd: &BootKeyboard) -> bool {
+    fn set_boot_protocol(&mut self, kbd: BootKeyboard) -> bool {
         let iface = u16::from(kbd.interface);
         if !matches!(
             self.control(0x00, 9, u16::from(kbd.config_value), 0, 0),
@@ -411,7 +415,7 @@ impl UsbKbd {
         )
     }
 
-    fn configure_interrupt(&mut self, kbd: &BootKeyboard, speed: u8) -> bool {
+    fn configure_interrupt(&mut self, kbd: BootKeyboard, speed: u8) -> bool {
         let dci = usb::endpoint_dci(kbd.ep_addr);
         if dci == 0 || kbd.max_packet < 8 {
             return false;
@@ -488,7 +492,7 @@ impl UsbKbd {
     fn command_ok(&mut self, kind: u32) -> bool {
         let ptr = DMA_PHYS + OFF_IN as u64;
         let d3 = trb_type(kind) | (u32::from(self.slot) << 24);
-        let Some(ev) = self.submit_cmd(ptr as u32, (ptr >> 32) as u32, 0, d3) else {
+        let Some(ev) = self.submit_cmd(low_u32(ptr), (ptr >> 32) as u32, 0, d3) else {
             return false;
         };
         completion(ev) == CC_SUCCESS
@@ -529,7 +533,7 @@ impl UsbKbd {
             let data_d3 = isp | CHAIN | trb_type(TRB_DATA) | dir;
             data_trb = self.push_trb(
                 Ring::Ep0,
-                buf as u32,
+                low_u32(buf),
                 (buf >> 32) as u32,
                 u32::from(len),
                 data_d3,
@@ -604,8 +608,8 @@ impl UsbKbd {
         }
         let index = self.ring_index(ring);
         let cycle = u32::from(self.ring_cycle(ring));
-        let ptr = self.ring_phys(ring) + u64::from(index) * 16;
-        let d0 = (ptr as u32 & !0xf) | cycle;
+        let ptr = Self::ring_phys(ring) + u64::from(index) * 16;
+        let d0 = (low_u32(ptr) & !0xf) | cycle;
         let d3 = trb_type(TRB_SET_DEQ) | ep | slot;
         let _ = self.submit_cmd(d0, (ptr >> 32) as u32, 0, d3);
     }
@@ -615,7 +619,7 @@ impl UsbKbd {
         self.zero_range(OFF_REPORT, 8);
         let buf = DMA_PHYS + OFF_REPORT as u64;
         let d3 = ISP | IOC | trb_type(TRB_NORMAL);
-        self.push_trb(Ring::Intr, buf as u32, (buf >> 32) as u32, 8, d3);
+        self.push_trb(Ring::Intr, low_u32(buf), (buf >> 32) as u32, 8, d3);
         self.doorbell(self.slot, self.dci);
     }
 
@@ -666,7 +670,7 @@ impl UsbKbd {
                     return Some(PciFn {
                         dev,
                         func,
-                        vendor: id as u16,
+                        vendor: low_u16_from_u32(id),
                     });
                 }
             }
@@ -973,7 +977,7 @@ impl UsbKbd {
         self.write_ctx(true, index, 0, u32::from(interval) << 16);
         let dw1 = (3 << 1) | (u32::from(kind) << 3) | (u32::from(mps) << 16);
         self.write_ctx(true, index, 1, dw1);
-        self.write_ctx(true, index, 2, (phys as u32 & !0xf) | 1);
+        self.write_ctx(true, index, 2, (low_u32(phys) & !0xf) | 1);
         self.write_ctx(true, index, 3, (phys >> 32) as u32);
         self.write_ctx(true, index, 4, u32::from(avg) | (u32::from(mps) << 16));
     }
@@ -1017,7 +1021,7 @@ impl UsbKbd {
         }
         let index = self.ring_index(ring);
         let cycle = u32::from(self.ring_cycle(ring));
-        let phys = self.ring_phys(ring) + u64::from(index) * 16;
+        let phys = Self::ring_phys(ring) + u64::from(index) * 16;
         write_trb(self.trb_ptr(ring, index), d0, d1, d2, d3 | cycle);
         self.set_ring_index(ring, index + 1);
         phys
@@ -1026,11 +1030,11 @@ impl UsbKbd {
     fn write_link(&mut self, ring: Ring) {
         let index = self.ring_index(ring);
         let cycle = u32::from(self.ring_cycle(ring));
-        let base = self.ring_phys(ring);
+        let base = Self::ring_phys(ring);
         let d3 = cycle | TC | trb_type(TRB_LINK);
         write_trb(
             self.trb_ptr(ring, index),
-            base as u32,
+            low_u32(base),
             (base >> 32) as u32,
             0,
             d3,
@@ -1039,6 +1043,7 @@ impl UsbKbd {
         self.set_ring_cycle(ring, self.ring_cycle(ring) ^ 1);
     }
 
+    #[expect(clippy::cast_ptr_alignment, reason = "16-byte event ring")]
     fn pop_event(&mut self) -> Option<[u32; 4]> {
         let ptr = self.dma.wrapping_add(OFF_EV + usize::from(self.ev_i) * 16);
         let d3 = unsafe { ptr.cast::<u32>().add(3).read_volatile() };
@@ -1089,11 +1094,11 @@ impl UsbKbd {
         }
     }
 
-    fn ring_phys(&self, ring: Ring) -> u64 {
-        DMA_PHYS + self.ring_off(ring) as u64
+    fn ring_phys(ring: Ring) -> u64 {
+        DMA_PHYS + Self::ring_off(ring) as u64
     }
 
-    fn ring_off(&self, ring: Ring) -> usize {
+    fn ring_off(ring: Ring) -> usize {
         match ring {
             Ring::Cmd => OFF_CMD,
             Ring::Ep0 => OFF_EP0,
@@ -1103,7 +1108,7 @@ impl UsbKbd {
 
     fn trb_ptr(&self, ring: Ring, index: u8) -> *mut u8 {
         self.dma
-            .wrapping_add(self.ring_off(ring) + usize::from(index) * 16)
+            .wrapping_add(Self::ring_off(ring) + usize::from(index) * 16)
     }
 
     fn doorbell(&self, slot: u8, target: u8) {
@@ -1135,6 +1140,7 @@ impl UsbKbd {
         })
     }
 
+    #[expect(clippy::cast_ptr_alignment, reason = "4-byte MMIO register")]
     fn read32(&self, off: u32) -> u32 {
         unsafe {
             self.regs
@@ -1144,6 +1150,7 @@ impl UsbKbd {
         }
     }
 
+    #[expect(clippy::cast_ptr_alignment, reason = "4-byte MMIO register")]
     fn write32(&self, off: u32, value: u32) {
         unsafe {
             self.regs
@@ -1154,7 +1161,7 @@ impl UsbKbd {
     }
 
     fn write64(&self, off: u32, value: u64) {
-        self.write32(off, value as u32);
+        self.write32(off, low_u32(value));
         self.write32(off + 4, (value >> 32) as u32);
     }
 
@@ -1180,10 +1187,12 @@ impl UsbKbd {
         }
     }
 
+    #[expect(clippy::cast_ptr_alignment, reason = "4-byte DMA word")]
     fn read_dma_u32(&self, off: usize) -> u32 {
         unsafe { self.dma.wrapping_add(off).cast::<u32>().read_volatile() }
     }
 
+    #[expect(clippy::cast_ptr_alignment, reason = "4-byte DMA word")]
     fn write_dma_u32(&self, off: usize, value: u32) {
         unsafe {
             self.dma
@@ -1194,9 +1203,21 @@ impl UsbKbd {
     }
 
     fn write_dma_u64(&self, off: usize, value: u64) {
-        self.write_dma_u32(off, value as u32);
+        self.write_dma_u32(off, low_u32(value));
         self.write_dma_u32(off + 4, (value >> 32) as u32);
     }
+}
+
+fn low_u32(value: u64) -> u32 {
+    u32::try_from(value & 0xffff_ffff).expect("low half")
+}
+
+fn low_u16(value: usize) -> u16 {
+    u16::try_from(value & 0xffff).expect("low half")
+}
+
+fn low_u16_from_u32(value: u32) -> u16 {
+    u16::try_from(value & 0xffff).expect("low half")
 }
 
 fn trb_type(kind: u32) -> u32 {
@@ -1230,6 +1251,7 @@ fn pci_addr(dev: u8, func: u8, reg: u8) -> u32 {
     0x8000_0000 | (u32::from(dev) << 11) | (u32::from(func) << 8) | (u32::from(reg) & 0xfc)
 }
 
+#[expect(clippy::cast_ptr_alignment, reason = "16-byte transfer ring")]
 fn write_trb(ptr: *mut u8, d0: u32, d1: u32, d2: u32, d3: u32) {
     unsafe {
         let words = ptr.cast::<u32>();
@@ -1242,6 +1264,7 @@ fn write_trb(ptr: *mut u8, d0: u32, d1: u32, d2: u32, d3: u32) {
     }
 }
 
+#[expect(clippy::cast_ptr_alignment, reason = "16-byte transfer ring")]
 fn read_trb(ptr: *mut u8) -> [u32; 4] {
     unsafe {
         let words = ptr.cast::<u32>();

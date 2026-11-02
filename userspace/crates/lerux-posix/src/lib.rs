@@ -1,4 +1,4 @@
-//! File-descriptor client for the LionsOS filesystem queue.
+//! File-descriptor client for the `LionsOS` filesystem queue.
 //!
 //! One [`Files`] value issues `open`, `read`, `write`, `mkdir`, `unlink`,
 //! `rename`, `stat`, `open_dir`, `read_dir`, and `close_dir`. Paths and file
@@ -103,6 +103,7 @@ pub struct Fd(u8);
 
 impl Fd {
     /// Descriptor number in `3..=127`.
+    #[must_use]
     pub fn number(self) -> i32 {
         i32::from(self.0)
     }
@@ -207,6 +208,11 @@ pub struct Files {
 impl Files {
     /// Bind the rings, the share, and the wake.
     ///
+    /// # Errors
+    ///
+    /// Returns [`Errno::EINVAL`] when `commands`, `completions`, or `share` is
+    /// null, or when `share_len` is below `0x8000`.
+    ///
     /// # Safety
     ///
     /// `commands`, `completions`, and `share` must outlive `self` and be valid
@@ -240,6 +246,18 @@ impl Files {
     }
 
     /// Send `FS_CMD_FILE_OPEN`. The first success returns descriptor 3.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Errno::EBUSY`] while a command is in flight, [`Errno::EMFILE`]
+    /// when every slot is in use, [`Errno::ENAMETOOLONG`] when `path` is longer
+    /// than 4095 bytes, [`Errno::EINVAL`] when the path does not fit the share,
+    /// [`Errno::ENOMEM`] when the command ring is full, and [`Errno::FILE_ERR`]
+    /// when the completion does not arrive. A server status is mapped to an errno.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the descriptor number does not fit in `u8`.
     pub fn open(&mut self, path: &[u8], how: Open) -> Result<Fd, Errno> {
         self.idle()?;
         let index = self
@@ -256,10 +274,22 @@ impl Files {
             access: access_of(how),
             cursor: 0,
         };
-        Ok(Fd((index + 3) as u8))
+        Ok(Fd(u8::try_from(index + 3).expect("descriptor fits")))
     }
 
     /// Send `FS_CMD_DIR_OPEN`. The first success returns descriptor 3.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Errno::EBUSY`] while a command is in flight, [`Errno::EMFILE`]
+    /// when every slot is in use, [`Errno::ENAMETOOLONG`] when `path` is longer
+    /// than 4095 bytes, [`Errno::EINVAL`] when the path does not fit the share,
+    /// [`Errno::ENOMEM`] when the command ring is full, and [`Errno::FILE_ERR`]
+    /// when the completion does not arrive. A server status is mapped to an errno.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the descriptor number does not fit in `u8`.
     pub fn open_dir(&mut self, path: &[u8]) -> Result<Fd, Errno> {
         self.idle()?;
         let index = self
@@ -272,13 +302,21 @@ impl Files {
         map_status(cmpl.status)?;
         let server = unsafe { cmpl.data.dir_open.fd };
         self.slots[index] = Slot::Dir { server };
-        Ok(Fd((index + 3) as u8))
+        Ok(Fd(u8::try_from(index + 3).expect("descriptor fits")))
     }
 
     /// Send `FS_CMD_DIR_READ` and copy one name out.
     ///
     /// `Ok(None)` is `FS_STATUS_END_OF_DIRECTORY`. That status is not errno 1
     /// for a directory read.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Errno::EBUSY`] while a command is in flight, [`Errno::EBADF`]
+    /// when `fd` is not an open directory, [`Errno::EINVAL`] when `buf` is empty,
+    /// [`Errno::ENOMEM`] when the command ring is full, and [`Errno::FILE_ERR`]
+    /// when the completion does not arrive or the returned length exceeds the
+    /// copy. Another server status is mapped to an errno.
     pub fn read_dir(&mut self, fd: Fd, buf: &mut [u8]) -> Result<Option<usize>, Errno> {
         self.idle()?;
         let server = self.dir_live(fd)?;
@@ -306,6 +344,14 @@ impl Files {
     }
 
     /// Send `FS_CMD_FILE_READ` at the cursor and copy the completed bytes out.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Errno::EBUSY`] while a command is in flight, [`Errno::EBADF`]
+    /// when `fd` is not an open file, and [`Errno::EACCES`] when the descriptor
+    /// is not readable. A failed transfer returns [`Errno::ENOMEM`],
+    /// [`Errno::FILE_ERR`], or the mapped server status when no byte has been
+    /// copied yet.
     pub fn read(&mut self, fd: Fd, buf: &mut [u8]) -> Result<usize, Errno> {
         self.idle()?;
         let (server, access, mut cursor) = self.live(fd)?;
@@ -352,6 +398,14 @@ impl Files {
     }
 
     /// Copy bytes into the share and send `FS_CMD_FILE_WRITE` at the cursor.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Errno::EBUSY`] while a command is in flight, [`Errno::EBADF`]
+    /// when `fd` is not an open file, and [`Errno::EACCES`] when the descriptor
+    /// is not writable. A failed transfer returns [`Errno::ENOMEM`],
+    /// [`Errno::FILE_ERR`], or the mapped server status when no byte has been
+    /// copied yet.
     pub fn write(&mut self, fd: Fd, buf: &[u8]) -> Result<usize, Errno> {
         self.idle()?;
         let (server, access, mut cursor) = self.live(fd)?;
@@ -394,6 +448,14 @@ impl Files {
     }
 
     /// Send `FS_CMD_DIR_CREATE`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Errno::EBUSY`] while a command is in flight, [`Errno::ENAMETOOLONG`]
+    /// when `path` is longer than 4095 bytes, [`Errno::EINVAL`] when the path does
+    /// not fit the share, [`Errno::ENOMEM`] when the command ring is full,
+    /// [`Errno::FILE_ERR`] when the completion does not arrive, or the errno for
+    /// the server status.
     pub fn mkdir(&mut self, path: &[u8]) -> Result<(), Errno> {
         self.idle()?;
         let path = self.place(path, PATH_A)?;
@@ -402,6 +464,14 @@ impl Files {
     }
 
     /// Send `FS_CMD_FILE_REMOVE`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Errno::EBUSY`] while a command is in flight, [`Errno::ENAMETOOLONG`]
+    /// when `path` is longer than 4095 bytes, [`Errno::EINVAL`] when the path does
+    /// not fit the share, [`Errno::ENOMEM`] when the command ring is full,
+    /// [`Errno::FILE_ERR`] when the completion does not arrive, or the errno for
+    /// the server status.
     pub fn unlink(&mut self, path: &[u8]) -> Result<(), Errno> {
         self.idle()?;
         let path = self.place(path, PATH_A)?;
@@ -410,6 +480,14 @@ impl Files {
     }
 
     /// Send `FS_CMD_RENAME` with both paths.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Errno::EBUSY`] while a command is in flight, [`Errno::ENAMETOOLONG`]
+    /// when either path is longer than 4095 bytes, [`Errno::EINVAL`] when a path
+    /// does not fit the share, [`Errno::ENOMEM`] when the command ring is full,
+    /// [`Errno::FILE_ERR`] when the completion does not arrive, or the errno for
+    /// the server status.
     pub fn rename(&mut self, from: &[u8], to: &[u8]) -> Result<(), Errno> {
         self.idle()?;
         let old_path = self.place(from, PATH_A)?;
@@ -419,6 +497,14 @@ impl Files {
     }
 
     /// Send `FS_CMD_STAT` and copy the object the server wrote.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Errno::EBUSY`] while a command is in flight, [`Errno::ENAMETOOLONG`]
+    /// when `path` is longer than 4095 bytes, [`Errno::EINVAL`] when the path does
+    /// not fit the share, [`Errno::ENOMEM`] when the command ring is full,
+    /// [`Errno::FILE_ERR`] when the completion does not arrive, or the errno for
+    /// the server status.
     pub fn stat(&mut self, path: &[u8]) -> Result<Stat, Errno> {
         self.idle()?;
         let path = self.place(path, PATH_A)?;
@@ -434,6 +520,13 @@ impl Files {
     /// A retry then returns [`Errno::EBADF`] instead of sending `FILE_CLOSE`
     /// again for a descriptor this table has already dropped. A missing
     /// completion leaves the slot open.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Errno::EBUSY`] while a command is in flight and [`Errno::EBADF`]
+    /// when `fd` is not an open file. After a completion, a failed server status
+    /// is returned and the slot is already free. A missing completion returns
+    /// [`Errno::FILE_ERR`]. A full command ring returns [`Errno::ENOMEM`].
     pub fn close(&mut self, fd: Fd) -> Result<(), Errno> {
         self.idle()?;
         let Slot::File { server, .. } = self.slots[index(fd)] else {
@@ -447,6 +540,13 @@ impl Files {
     /// Send `FS_CMD_DIR_CLOSE`.
     ///
     /// A completion frees the local slot even when the status is not success.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Errno::EBUSY`] while a command is in flight and [`Errno::EBADF`]
+    /// when `fd` is not an open directory. After a completion, a failed server
+    /// status is returned and the slot is already free. A missing completion
+    /// returns [`Errno::FILE_ERR`]. A full command ring returns [`Errno::ENOMEM`].
     pub fn close_dir(&mut self, fd: Fd) -> Result<(), Errno> {
         self.idle()?;
         let Slot::Dir { server } = self.slots[index(fd)] else {

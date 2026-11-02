@@ -95,7 +95,7 @@ fn deploy_x86(
     // Best-effort sync so unplug is safer.
     let _ = Command::new("sync").status();
     let deployed = dest.join("boot/loader.img");
-    let size = fs::metadata(&deployed).map(|m| m.len()).unwrap_or(0);
+    let size = fs::metadata(&deployed).map_or(0, |m| m.len());
     println!(
         "==> Deployed loader.img ({} bytes) → {}",
         size,
@@ -111,7 +111,7 @@ fn deploy_uboot(board: &str, dest: &Path, loader: &Path) -> Result<PathBuf> {
     copy_file_and_sidecar(loader, &dest_loader)?;
     // Best-effort sync so unplug is safer.
     let _ = Command::new("sync").status();
-    let size = fs::metadata(&dest_loader).map(|m| m.len()).unwrap_or(0);
+    let size = fs::metadata(&dest_loader).map_or(0, |m| m.len());
     println!(
         "==> Deployed loader.img ({} bytes) → {}",
         size,

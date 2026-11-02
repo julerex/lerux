@@ -4,7 +4,7 @@
 //! configuration port: firmware left the BARs, and the probe already enabled
 //! memory space and bus master. Events are polled. The keyboard on this image
 //! is the i8042, so resetting these controllers does not take the console.
-//! The command ring lives in RAM next to the NVMe buffer. `0xf8000000` is the
+//! The command ring lives in RAM next to the `NVMe` buffer. `0xf8000000` is the
 //! firmware hole, and a slot enable never completes from there.
 
 use core::sync::atomic::{fence, Ordering};
@@ -173,13 +173,13 @@ impl Host {
             return Err(XferFail::Halt);
         }
         let radio = self.find_radio()?;
-        self.arm_interrupt(&radio);
+        self.arm_interrupt(radio);
         self.send_reset(event)
     }
 
     fn find_radio(&mut self) -> Result<HciIntr, XferFail> {
         self.power_ports();
-        self.wait_connect();
+        Self::wait_connect();
         let mut connected = 0u8;
         let mut stop = PortStop::Reset;
         for port in 1..=self.max_ports {
@@ -262,7 +262,7 @@ impl Host {
         }
     }
 
-    fn arm_interrupt(&mut self, radio: &HciIntr) {
+    fn arm_interrupt(&mut self, radio: HciIntr) {
         let dci = endpoint_dci(radio.ep_addr);
         if dci == 0 || radio.max_packet == 0 {
             return;
@@ -293,7 +293,13 @@ impl Host {
         let payload = usb_hci_reset();
         self.write_dma(OFF_DATA, &payload);
         if !matches!(
-            self.control(0x20, 0, 0, 0, payload.len() as u16),
+            self.control(
+                0x20,
+                0,
+                0,
+                0,
+                u16::try_from(payload.len()).expect("payload fits")
+            ),
             Ctl::Done(_)
         ) {
             return Err(XferFail::Event);
@@ -319,7 +325,7 @@ impl Host {
         let d3 = ISP | IOC | trb_type(TRB_NORMAL);
         let phys = self.push_trb(
             Ring::Intr,
-            buf as u32,
+            low_u32(buf),
             (buf >> 32) as u32,
             u32::from(packet),
             d3,
@@ -329,8 +335,8 @@ impl Host {
     }
 
     fn wait_intr(&mut self) -> Option<usize> {
-        if let Some(n) = self.intr_bytes() {
-            return n;
+        if !matches!(self.intr, Intr::Wait) {
+            return self.intr_result();
         }
         for _ in 0..SPIN {
             let Some(ev) = self.pop_event() else {
@@ -343,7 +349,7 @@ impl Host {
             }
             if trb_kind(ev) == TRB_TRANSFER && event_ptr(ev) & !0xf == self.intr_trb & !0xf {
                 self.note_intr(ev);
-                return self.intr_bytes().unwrap_or(None);
+                return self.intr_result();
             }
         }
         None
@@ -361,11 +367,10 @@ impl Host {
         };
     }
 
-    fn intr_bytes(&self) -> Option<Option<usize>> {
+    fn intr_result(&self) -> Option<usize> {
         match self.intr {
-            Intr::Wait => None,
-            Intr::Bytes(n) => Some(Some(n)),
-            Intr::Failed => Some(None),
+            Intr::Bytes(n) => Some(n),
+            Intr::Wait | Intr::Failed => None,
         }
     }
 
@@ -515,14 +520,13 @@ impl Host {
     }
 
     fn control(&mut self, bm: u8, req: u8, value: u16, index: u16, len: u16) -> Ctl {
-        let trbs = if len == 0 { 2 } else { 3 };
-        self.ensure_room(Ring::Ep0, trbs);
-        let (data_trb, status_trb) = self.stage_control(bm, req, value, index, len);
-        self.doorbell(self.slot, 1);
-        self.finish_control(data_trb, status_trb, len)
+        let (data_trb, status_trb) = self.queue_control(bm, req, value, index, len);
+        self.await_control(len, data_trb, status_trb)
     }
 
-    fn stage_control(&mut self, bm: u8, req: u8, value: u16, index: u16, len: u16) -> (u64, u64) {
+    fn queue_control(&mut self, bm: u8, req: u8, value: u16, index: u16, len: u16) -> (u64, u64) {
+        let trbs = if len == 0 { 2 } else { 3 };
+        self.ensure_room(Ring::Ep0, trbs);
         let setup_d0 = u32::from(bm) | (u32::from(req) << 8) | (u32::from(value) << 16);
         let setup_d1 = u32::from(index) | (u32::from(len) << 16);
         let trt = if len == 0 {
@@ -534,7 +538,20 @@ impl Host {
         };
         let setup_d3 = CHAIN | IDT | trb_type(TRB_SETUP) | (trt << 16);
         self.push_trb(Ring::Ep0, setup_d0, setup_d1, 8, setup_d3);
-        let data_trb = self.stage_data(bm, len);
+        let mut data_trb = 0u64;
+        if len > 0 {
+            let buf = DMA_PHYS + OFF_DATA as u64;
+            let dir = if bm & 0x80 != 0 { 1 << 16 } else { 0 };
+            let isp = if bm & 0x80 != 0 { ISP } else { 0 };
+            let data_d3 = isp | CHAIN | trb_type(TRB_DATA) | dir;
+            data_trb = self.push_trb(
+                Ring::Ep0,
+                low_u32(buf),
+                (buf >> 32) as u32,
+                u32::from(len),
+                data_d3,
+            );
+        }
         let status_dir = if len > 0 && bm & 0x80 != 0 {
             0
         } else {
@@ -542,27 +559,11 @@ impl Host {
         };
         let status_d3 = IOC | trb_type(TRB_STATUS) | status_dir;
         let status_trb = self.push_trb(Ring::Ep0, 0, 0, 0, status_d3);
+        self.doorbell(self.slot, 1);
         (data_trb, status_trb)
     }
 
-    fn stage_data(&mut self, bm: u8, len: u16) -> u64 {
-        if len == 0 {
-            return 0;
-        }
-        let buf = DMA_PHYS + OFF_DATA as u64;
-        let dir = if bm & 0x80 != 0 { 1 << 16 } else { 0 };
-        let isp = if bm & 0x80 != 0 { ISP } else { 0 };
-        let data_d3 = isp | CHAIN | trb_type(TRB_DATA) | dir;
-        self.push_trb(
-            Ring::Ep0,
-            buf as u32,
-            (buf >> 32) as u32,
-            u32::from(len),
-            data_d3,
-        )
-    }
-
-    fn finish_control(&mut self, data_trb: u64, status_trb: u64, len: u16) -> Ctl {
+    fn await_control(&mut self, len: u16, data_trb: u64, status_trb: u64) -> Ctl {
         let mut actual = usize::from(len);
         for _ in 0..SPIN {
             let Some(ev) = self.pop_event() else {
@@ -576,44 +577,56 @@ impl Host {
             if trb_kind(ev) != TRB_TRANSFER {
                 continue;
             }
-            let ptr = event_ptr(ev) & !0xf;
-            if self.intr_trb != 0 && ptr == self.intr_trb & !0xf {
-                self.note_intr(ev);
-                continue;
-            }
-            if data_trb != 0 && ptr == data_trb & !0xf {
-                if let Some(done) = self.take_data(ev, len, &mut actual) {
-                    return done;
-                }
-                continue;
-            }
-            if ptr == status_trb & !0xf {
-                return self.status_result(ev, actual);
+            if let Some(done) = self.take_control(ev, len, data_trb, status_trb, &mut actual) {
+                return done;
             }
         }
         Ctl::Fail
     }
 
-    fn take_data(&mut self, ev: [u32; 4], len: u16, actual: &mut usize) -> Option<Ctl> {
-        match completion(ev) {
-            CC_SHORT => {
-                let residual = usize::try_from(ev[2] & 0x00ff_ffff).unwrap_or(0);
-                *actual = usize::from(len).saturating_sub(residual);
-                None
-            }
-            CC_SUCCESS => None,
-            code => Some(self.transfer_failed(code)),
+    fn take_control(
+        &mut self,
+        ev: [u32; 4],
+        len: u16,
+        data_trb: u64,
+        status_trb: u64,
+        actual: &mut usize,
+    ) -> Option<Ctl> {
+        let ptr = event_ptr(ev) & !0xf;
+        let code = completion(ev);
+        if self.intr_trb != 0 && ptr == self.intr_trb & !0xf {
+            self.note_intr(ev);
+            return None;
+        }
+        if data_trb != 0 && ptr == data_trb & !0xf {
+            return self.data_stage(code, len, ev, actual);
+        }
+        if ptr == status_trb & !0xf {
+            return Some(self.status_stage(code, *actual));
+        }
+        None
+    }
+
+    fn data_stage(&mut self, code: u32, len: u16, ev: [u32; 4], actual: &mut usize) -> Option<Ctl> {
+        if code == CC_SHORT {
+            let residual = usize::try_from(ev[2] & 0x00ff_ffff).unwrap_or(0);
+            *actual = usize::from(len).saturating_sub(residual);
+            None
+        } else if code != CC_SUCCESS {
+            Some(self.transfer_failed(code))
+        } else {
+            None
         }
     }
 
-    fn status_result(&mut self, ev: [u32; 4], actual: usize) -> Ctl {
-        match completion(ev) {
-            CC_STALL => {
-                self.recover_endpoint(1);
-                Ctl::Stall
-            }
-            CC_SUCCESS | CC_SHORT => Ctl::Done(actual),
-            _ => Ctl::Fail,
+    fn status_stage(&mut self, code: u32, actual: usize) -> Ctl {
+        if code == CC_STALL {
+            self.recover_endpoint(1);
+            Ctl::Stall
+        } else if code == CC_SUCCESS || code == CC_SHORT {
+            Ctl::Done(actual)
+        } else {
+            Ctl::Fail
         }
     }
 
@@ -635,8 +648,8 @@ impl Host {
         }
         let index = self.ring_index(Ring::Ep0);
         let cycle = u32::from(self.ring_cycle(Ring::Ep0));
-        let ptr = self.ring_phys(Ring::Ep0) + u64::from(index) * 16;
-        let d0 = (ptr as u32 & !0xf) | cycle;
+        let ptr = Self::ring_phys(Ring::Ep0) + u64::from(index) * 16;
+        let d0 = (low_u32(ptr) & !0xf) | cycle;
         let d3 = trb_type(TRB_SET_DEQ) | ep | slot;
         let _ = self.submit_cmd(d0, (ptr >> 32) as u32, 0, d3);
     }
@@ -688,7 +701,7 @@ impl Host {
     fn command_ok(&mut self, kind: u32) -> bool {
         let ptr = DMA_PHYS + OFF_IN as u64;
         let d3 = trb_type(kind) | (u32::from(self.slot) << 24);
-        let Some(ev) = self.submit_cmd(ptr as u32, (ptr >> 32) as u32, 0, d3) else {
+        let Some(ev) = self.submit_cmd(low_u32(ptr), (ptr >> 32) as u32, 0, d3) else {
             return false;
         };
         completion(ev) == CC_SUCCESS
@@ -723,17 +736,17 @@ impl Host {
         self.command_ok(TRB_EVALUATE)
     }
 
+    fn wait_connect() {
+        for _ in 0..CONNECT_SPIN {
+            core::hint::spin_loop();
+        }
+    }
+
     fn power_ports(&self) {
         for port in 1..=self.max_ports {
             let off = self.portsc(port);
             let raw = self.read32(off);
             self.write32(off, portsc_neutral(raw) | (1 << 9));
-        }
-    }
-
-    fn wait_connect(&self) {
-        for _ in 0..CONNECT_SPIN {
-            core::hint::spin_loop();
         }
     }
 
@@ -799,7 +812,7 @@ impl Host {
         self.write_ctx(true, index, 0, u32::from(interval) << 16);
         let dw1 = (3 << 1) | (u32::from(kind) << 3) | (u32::from(mps) << 16);
         self.write_ctx(true, index, 1, dw1);
-        self.write_ctx(true, index, 2, (phys as u32 & !0xf) | 1);
+        self.write_ctx(true, index, 2, (low_u32(phys) & !0xf) | 1);
         self.write_ctx(true, index, 3, (phys >> 32) as u32);
         self.write_ctx(true, index, 4, u32::from(avg) | (u32::from(mps) << 16));
     }
@@ -843,7 +856,7 @@ impl Host {
         }
         let index = self.ring_index(ring);
         let cycle = u32::from(self.ring_cycle(ring));
-        let phys = self.ring_phys(ring) + u64::from(index) * 16;
+        let phys = Self::ring_phys(ring) + u64::from(index) * 16;
         write_trb(self.trb_ptr(ring, index), d0, d1, d2, d3 | cycle);
         self.set_ring_index(ring, index + 1);
         phys
@@ -852,11 +865,11 @@ impl Host {
     fn write_link(&mut self, ring: Ring) {
         let index = self.ring_index(ring);
         let cycle = u32::from(self.ring_cycle(ring));
-        let base = self.ring_phys(ring);
+        let base = Self::ring_phys(ring);
         let d3 = cycle | TC | trb_type(TRB_LINK);
         write_trb(
             self.trb_ptr(ring, index),
-            base as u32,
+            low_u32(base),
             (base >> 32) as u32,
             0,
             d3,
@@ -865,6 +878,7 @@ impl Host {
         self.set_ring_cycle(ring, self.ring_cycle(ring) ^ 1);
     }
 
+    #[expect(clippy::cast_ptr_alignment, reason = "16-byte event ring")]
     fn pop_event(&mut self) -> Option<[u32; 4]> {
         let ptr = self.dma.wrapping_add(OFF_EV + usize::from(self.ev_i) * 16);
         let d3 = unsafe { ptr.cast::<u32>().add(3).read_volatile() };
@@ -915,11 +929,11 @@ impl Host {
         }
     }
 
-    fn ring_phys(&self, ring: Ring) -> u64 {
-        DMA_PHYS + self.ring_off(ring) as u64
+    fn ring_phys(ring: Ring) -> u64 {
+        DMA_PHYS + Self::ring_off(ring) as u64
     }
 
-    fn ring_off(&self, ring: Ring) -> usize {
+    fn ring_off(ring: Ring) -> usize {
         match ring {
             Ring::Cmd => OFF_CMD,
             Ring::Ep0 => OFF_EP0,
@@ -929,7 +943,7 @@ impl Host {
 
     fn trb_ptr(&self, ring: Ring, index: u8) -> *mut u8 {
         self.dma
-            .wrapping_add(self.ring_off(ring) + usize::from(index) * 16)
+            .wrapping_add(Self::ring_off(ring) + usize::from(index) * 16)
     }
 
     fn doorbell(&self, slot: u8, target: u8) {
@@ -937,6 +951,7 @@ impl Host {
         self.write32(self.db + u32::from(slot) * 4, u32::from(target));
     }
 
+    #[expect(clippy::cast_ptr_alignment, reason = "4-byte MMIO register")]
     fn read32(&self, off: u32) -> u32 {
         unsafe {
             self.regs
@@ -946,6 +961,7 @@ impl Host {
         }
     }
 
+    #[expect(clippy::cast_ptr_alignment, reason = "4-byte MMIO register")]
     fn write32(&self, off: u32, value: u32) {
         unsafe {
             self.regs
@@ -956,7 +972,7 @@ impl Host {
     }
 
     fn write64(&self, off: u32, value: u64) {
-        self.write32(off, value as u32);
+        self.write32(off, low_u32(value));
         self.write32(off + 4, (value >> 32) as u32);
     }
 
@@ -991,10 +1007,12 @@ impl Host {
         fence(Ordering::SeqCst);
     }
 
+    #[expect(clippy::cast_ptr_alignment, reason = "4-byte DMA word")]
     fn read_dma_u32(&self, off: usize) -> u32 {
         unsafe { self.dma.wrapping_add(off).cast::<u32>().read_volatile() }
     }
 
+    #[expect(clippy::cast_ptr_alignment, reason = "4-byte DMA word")]
     fn write_dma_u32(&self, off: usize, value: u32) {
         unsafe {
             self.dma
@@ -1005,7 +1023,7 @@ impl Host {
     }
 
     fn write_dma_u64(&self, off: usize, value: u64) {
-        self.write_dma_u32(off, value as u32);
+        self.write_dma_u32(off, low_u32(value));
         self.write_dma_u32(off + 4, (value >> 32) as u32);
     }
 }
@@ -1032,6 +1050,10 @@ fn scratchpad_count(hcsparams2: u32) -> u32 {
     ((hcsparams2 >> 16) & 0x3e0) | ((hcsparams2 >> 27) & 0x1f)
 }
 
+fn low_u32(value: u64) -> u32 {
+    u32::try_from(value & 0xffff_ffff).expect("low half")
+}
+
 fn trb_type(kind: u32) -> u32 {
     kind << 10
 }
@@ -1054,6 +1076,7 @@ fn portsc_neutral(raw: u32) -> u32 {
     (raw & RO) | (raw & RWS)
 }
 
+#[expect(clippy::cast_ptr_alignment, reason = "16-byte transfer ring")]
 fn write_trb(ptr: *mut u8, d0: u32, d1: u32, d2: u32, d3: u32) {
     unsafe {
         let words = ptr.cast::<u32>();
@@ -1065,6 +1088,7 @@ fn write_trb(ptr: *mut u8, d0: u32, d1: u32, d2: u32, d3: u32) {
     }
 }
 
+#[expect(clippy::cast_ptr_alignment, reason = "16-byte transfer ring")]
 fn read_trb(ptr: *mut u8) -> [u32; 4] {
     unsafe {
         let words = ptr.cast::<u32>();

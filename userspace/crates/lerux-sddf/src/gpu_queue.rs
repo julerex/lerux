@@ -27,16 +27,24 @@ fn req_slot(queue: *mut gpu_req_queue_t, index: u32, capacity: u32) -> *mut gpu_
     let base = queue
         .cast::<u8>()
         .wrapping_add(core::mem::size_of::<gpu_req_queue_t>());
-    base.cast::<gpu_req_t>()
-        .wrapping_add(word32::index(index, capacity) as usize)
+    #[expect(
+        clippy::cast_ptr_alignment,
+        reason = "the request queue is page-aligned and the prefix ends on an 8-byte boundary"
+    )]
+    let slots = base.cast::<gpu_req_t>();
+    slots.wrapping_add(word32::index(index, capacity) as usize)
 }
 
 fn resp_slot(queue: *mut gpu_resp_queue_t, index: u32, capacity: u32) -> *mut gpu_resp_t {
     let base = queue
         .cast::<u8>()
         .wrapping_add(core::mem::size_of::<gpu_resp_queue_t>());
-    base.cast::<gpu_resp_t>()
-        .wrapping_add(word32::index(index, capacity) as usize)
+    #[expect(
+        clippy::cast_ptr_alignment,
+        reason = "the response queue is page-aligned and the prefix ends on a 4-byte boundary"
+    )]
+    let slots = base.cast::<gpu_resp_t>();
+    slots.wrapping_add(word32::index(index, capacity) as usize)
 }
 
 /// # Safety
@@ -57,6 +65,7 @@ pub unsafe fn gpu_queue_init(
 /// # Safety
 ///
 /// Same pointer rules as [`gpu_queue_init`]. The caller is the producer of requests.
+#[must_use]
 pub unsafe fn gpu_queue_full_req(handle: &gpu_queue_handle_t) -> bool {
     unsafe {
         let queue = handle.req_queue;
@@ -69,6 +78,7 @@ pub unsafe fn gpu_queue_full_req(handle: &gpu_queue_handle_t) -> bool {
 /// # Safety
 ///
 /// Same pointer rules as [`gpu_queue_init`]. The caller is the producer of responses.
+#[must_use]
 pub unsafe fn gpu_queue_full_resp(handle: &gpu_queue_handle_t) -> bool {
     unsafe {
         let queue = handle.resp_queue;
@@ -86,6 +96,7 @@ pub unsafe fn gpu_queue_full_resp(handle: &gpu_queue_handle_t) -> bool {
 /// # Safety
 ///
 /// Same pointer rules as [`gpu_queue_init`]. The caller is the producer of requests.
+#[must_use]
 pub unsafe fn gpu_enqueue_req(handle: &gpu_queue_handle_t, req: gpu_req_t) -> i32 {
     unsafe {
         let queue = handle.req_queue;
@@ -127,6 +138,7 @@ pub unsafe fn gpu_dequeue_req(handle: &gpu_queue_handle_t, req: &mut gpu_req_t) 
 /// # Safety
 ///
 /// Same pointer rules as [`gpu_queue_init`]. The caller is the producer of responses.
+#[must_use]
 pub unsafe fn gpu_enqueue_resp(handle: &gpu_queue_handle_t, resp: gpu_resp_t) -> i32 {
     unsafe {
         let queue = handle.resp_queue;

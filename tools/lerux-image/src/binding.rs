@@ -31,6 +31,13 @@ pub(crate) enum Page {
     FsSchedule,
 }
 
+/// Configuration bytes for `crate_name` under `board_features`.
+///
+/// # Errors
+///
+/// Returns [`ImageError::UnknownCrate`] when `crate_name` has no page list.
+/// Returns [`ImageError::ConflictingFeatures`] when `sddf-shell` enables a
+/// filesystem board feature and `net-client` together.
 pub fn pd_binding_bytes(crate_name: &str, board_features: &[&str]) -> Result<Vec<u8>, ImageError> {
     let mut bytes = Vec::new();
     for page in pages_for(crate_name, board_features)? {
@@ -39,6 +46,12 @@ pub fn pd_binding_bytes(crate_name: &str, board_features: &[&str]) -> Result<Vec
     Ok(bytes)
 }
 
+/// Write [`pd_binding_bytes`] to `config_path`.
+///
+/// # Errors
+///
+/// Returns the errors of [`pd_binding_bytes`]. Returns [`ImageError::WriteConfig`]
+/// when the file cannot be created.
 pub fn emit_pd_binding(
     crate_name: &str,
     board_features: &[&str],
@@ -65,9 +78,8 @@ fn pages_for(crate_name: &str, board_features: &[&str]) -> Result<Vec<Page>, Ima
         "sddf-serial-driver" => vec![Page::SerialDriver],
         "sddf-serial-virt-tx" => vec![Page::SerialVirtTx],
         "sddf-serial-virt-rx" => vec![Page::SerialVirtRx],
-        "sddf-serial-client" => vec![Page::SerialClient],
-        "sddf-blk-driver" => vec![Page::BlkDriver],
-        "sddf-ahci-driver" => vec![Page::BlkDriver],
+        "sddf-serial-client" | "sddf-grok" => vec![Page::SerialClient],
+        "sddf-blk-driver" | "sddf-ahci-driver" => vec![Page::BlkDriver],
         "sddf-blk-virt" => vec![Page::BlkVirt],
         "sddf-fatfs" => vec![Page::BlkClient, Page::FsServer],
         "sddf-fs-client" => vec![Page::FsClient],
@@ -76,7 +88,6 @@ fn pages_for(crate_name: &str, board_features: &[&str]) -> Result<Vec<Page>, Ima
         "sddf-net-virt-rx" => vec![Page::NetVirtRx],
         "sddf-net-copy" => vec![Page::NetCopy],
         "sddf-net-client" => vec![Page::SerialClient, Page::NetClient],
-        "sddf-grok" => vec![Page::SerialClient],
         "sddf-agent" => vec![Page::FsShell, Page::NetShell],
         "sddf-program" => vec![Page::SerialClient, Page::FsShell, Page::NetShell],
         "sddf-shell" => shell_pages(board_features)?,

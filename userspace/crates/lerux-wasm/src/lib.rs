@@ -98,6 +98,11 @@ pub trait Imports {
 /// Check the signature and instantiate the payload.
 ///
 /// [`Error::Signature`] means the module was not instantiated.
+///
+/// # Errors
+///
+/// Returns the errors of [`verify`] when the blob is rejected, and the errors
+/// of [`run`] when the payload does not start.
 pub fn run_signed<H: Imports + 'static>(
     blob: &[u8],
     verifying_key: &[u8; 32],
@@ -108,6 +113,15 @@ pub fn run_signed<H: Imports + 'static>(
 }
 
 /// Write the bytes that the signature covers: magic, version, length, WebAssembly.
+///
+/// # Errors
+///
+/// Returns [`Error::WasmLen`] when `wasm` is empty or longer than [`MAX_WASM_LEN`].
+/// Returns [`Error::Truncated`] when `out` is shorter than the header plus `wasm`.
+///
+/// # Panics
+///
+/// Panics if the checked payload length does not fit in a `u16`.
 pub fn signing_message(wasm: &[u8], out: &mut [u8]) -> Result<usize, Error> {
     let wasm_len = wasm_len(wasm)?;
     let n = HEADER_LEN + wasm_len;
@@ -116,12 +130,21 @@ pub fn signing_message(wasm: &[u8], out: &mut [u8]) -> Result<usize, Error> {
     }
     out[0..4].copy_from_slice(MAGIC);
     out[4] = VERSION;
-    out[5..7].copy_from_slice(&(wasm_len as u16).to_le_bytes());
+    out[5..7].copy_from_slice(
+        &u16::try_from(wasm_len)
+            .expect("wasm length fits in u16")
+            .to_le_bytes(),
+    );
     out[HEADER_LEN..n].copy_from_slice(wasm);
     Ok(n)
 }
 
 /// Write a complete blob: [`signing_message`] plus the 64-byte signature.
+///
+/// # Errors
+///
+/// Returns [`Error::WasmLen`] when `wasm` is empty or longer than [`MAX_WASM_LEN`].
+/// Returns [`Error::Truncated`] when `out` cannot hold the signed blob.
 pub fn encode(wasm: &[u8], signature: &[u8; SIG_LEN], out: &mut [u8]) -> Result<usize, Error> {
     let n = signing_message(wasm, out)?;
     let total = n + SIG_LEN;
@@ -136,6 +159,15 @@ pub fn encode(wasm: &[u8], signature: &[u8; SIG_LEN], out: &mut [u8]) -> Result<
 ///
 /// The signature covers [`signing_message`] (header and payload), not the payload alone.
 /// Failure does not instantiate a module.
+///
+/// # Errors
+///
+/// Returns [`Error::Truncated`] when `blob` is shorter than a header and a
+/// signature, or its length does not match the header. Returns [`Error::Magic`]
+/// when the first four bytes are not `LRW1`. Returns [`Error::Version`] when
+/// the version byte is not [`VERSION`]. Returns [`Error::WasmLen`] when the
+/// payload length is zero or above [`MAX_WASM_LEN`]. Returns [`Error::Signature`]
+/// when the key or the signature check fails.
 pub fn verify<'a>(blob: &'a [u8], verifying_key: &[u8; 32]) -> Result<&'a [u8], Error> {
     if blob.len() < HEADER_LEN + SIG_LEN {
         return Err(Error::Truncated);

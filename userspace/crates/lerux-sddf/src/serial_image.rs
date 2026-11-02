@@ -88,6 +88,7 @@ fn write_name(dst: &mut [u8], text: &str) {
 }
 
 /// `serial_driver_config_t` for the one-client image.
+#[must_use]
 pub fn driver_config() -> serial_driver_config_t {
     let mut config: serial_driver_config_t = zeroed_config();
     config.magic = SDDF_SERIAL_MAGIC;
@@ -111,6 +112,7 @@ pub fn driver_config() -> serial_driver_config_t {
 /// Colour is off. The colour transfer in the header is not part of this image.
 /// `enable_rx` is off, so this virtualiser does not write `begin_str`. The
 /// client writes the smoke string itself.
+#[must_use]
 pub fn virt_tx_config() -> serial_virt_tx_config_t {
     let mut config: serial_virt_tx_config_t = zeroed_config();
     config.magic = SDDF_SERIAL_MAGIC;
@@ -134,6 +136,7 @@ pub fn virt_tx_config() -> serial_virt_tx_config_t {
 }
 
 /// `serial_virt_rx_config_t` for the one-client image.
+#[must_use]
 pub fn virt_rx_config() -> serial_virt_rx_config_t {
     let mut config: serial_virt_rx_config_t = zeroed_config();
     config.magic = SDDF_SERIAL_MAGIC;
@@ -154,6 +157,7 @@ pub fn virt_rx_config() -> serial_virt_rx_config_t {
 }
 
 /// `serial_client_config_t` for the one client.
+#[must_use]
 pub fn client_config() -> serial_client_config_t {
     let mut config: serial_client_config_t = zeroed_config();
     config.magic = SDDF_SERIAL_MAGIC;
@@ -174,6 +178,10 @@ pub fn client_config() -> serial_client_config_t {
 ///
 /// `dst` must be exactly `size_of::<T>()` bytes. Padding bytes stay zero when
 /// `value` was built by the functions in this module.
+///
+/// # Panics
+///
+/// Panics when `dst` is not `size_of::<T>()` bytes.
 pub fn serial_config_to_bytes<T>(value: &T, dst: &mut [u8]) {
     assert_eq!(dst.len(), core::mem::size_of::<T>());
     // SAFETY: `dst` is exactly one `T`, and the source is an initialized `T`.
@@ -191,6 +199,11 @@ pub fn serial_config_to_bytes<T>(value: &T, dst: &mut [u8]) {
 /// # Safety
 ///
 /// `bytes` must be a valid representation of `T`. Each `bool` field must be 0 or 1.
+///
+/// # Panics
+///
+/// Panics when `bytes` is not `size_of::<T>()` bytes.
+#[must_use]
 pub unsafe fn serial_config_from_bytes<T>(bytes: &[u8]) -> T {
     assert_eq!(bytes.len(), core::mem::size_of::<T>());
     let mut value = core::mem::MaybeUninit::<T>::uninit();
@@ -205,11 +218,13 @@ pub unsafe fn serial_config_from_bytes<T>(bytes: &[u8]) -> T {
 }
 
 /// Client name stored in [`virt_tx_config`], as the fixed field without the trailing zeros.
+#[must_use]
 pub fn client_name_bytes() -> &'static [u8] {
     CLIENT_NAME.as_bytes()
 }
 
 /// The fixed name field is `SDDF_NAME_LENGTH` bytes.
+#[must_use]
 pub const fn client_name_field_len() -> usize {
     SDDF_NAME_LENGTH
 }

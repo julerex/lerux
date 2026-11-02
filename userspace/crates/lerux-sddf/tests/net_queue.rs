@@ -161,6 +161,10 @@ fn buffers_init_enqueues_one_offset_per_slot() {
 #[test]
 fn zeroed_queue_already_requests_a_signal() {
     let mut region = Box::new(Region([0; 4096]));
+    #[expect(
+        clippy::cast_ptr_alignment,
+        reason = "the queue region is 8-byte aligned"
+    )]
     let queue = region.0.as_mut_ptr().cast::<net_queue_t>();
     let mut handle = net_queue_handle_t {
         free: core::ptr::null_mut(),

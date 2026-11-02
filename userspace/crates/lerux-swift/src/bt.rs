@@ -377,6 +377,10 @@ mod tests {
         let mut framed = [0u8; 8];
         let n = frame_usb_event(&usb, &mut framed);
         assert!(acknowledge_reset(&framed[..n]));
+    }
+
+    #[test]
+    fn failure_lines_name_the_stop() {
         assert_eq!(xfer_line(&XferFail::Halt), b"bt: halt");
         assert_eq!(xfer_line(&XferFail::Port(0, PortStop::Reset)), b"bt: port");
         assert_eq!(xfer_line(&XferFail::Event), b"bt: event");
@@ -393,6 +397,10 @@ mod tests {
             fail_line(&XferFail::Port(0, PortStop::Reset), &mut [0u8; 4]),
             0
         );
+    }
+
+    #[test]
+    fn further_prefers_the_attempt_that_got_further() {
         assert_eq!(
             further(XferFail::Halt, XferFail::Port(0, PortStop::Reset)),
             XferFail::Port(0, PortStop::Reset)

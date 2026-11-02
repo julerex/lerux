@@ -196,7 +196,7 @@ mod tests {
     }
 
     #[test]
-    fn swift_image_maps_the_panel_and_skips_serial() {
+    fn swift_image_maps_the_panel() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let xml = crate::system::render_system(&root, "swift_sfx14_41g").expect("swift sdf");
         assert!(xml.contains("phys_addr=\"0x1fe0000\""));
@@ -209,8 +209,6 @@ mod tests {
         assert!(xml.contains("phys_addr=\"0xd1200000\""));
         assert!(xml.contains("phys_addr=\"0xfc82000000\""));
         assert!(xml.contains("vaddr=\"0x82000000\""));
-        assert!(!xml.contains("phys_addr=\"0x82000000\""));
-        assert!(!xml.contains("phys_addr=\"0xfd000000\""));
         assert!(xml.contains("phys_addr=\"0x1f00000\""));
         assert!(xml.contains("phys_addr=\"0x1f20000\""));
         assert!(xml.contains("name=\"wifi_dma\""));
@@ -219,11 +217,6 @@ mod tests {
         assert!(xml.contains("name=\"wifi_key\""));
         assert!(xml.contains("phys_addr=\"0x1fd0000\""));
         assert!(xml.contains("vaddr=\"0x1fd0000\""));
-        assert!(!xml.contains("phys_addr=\"0xf8000000\""));
-        assert!(!xml.contains("phys_addr=\"0xfc000000\""));
-        assert!(!xml.contains("phys_addr=\"0xfa000000\""));
-        assert!(!xml.contains("phys_addr=\"0xf9000000\""));
-        assert!(!xml.contains("phys_addr=\"0xfb000000\""));
         assert_eq!(xml.matches("addr=\"0xcf8\"").count(), 1);
         assert!(xml.contains("addr=\"0x60\""));
         assert!(xml.contains("addr=\"0x64\""));
@@ -239,6 +232,19 @@ mod tests {
         assert!(xml.contains("pcidev=\"02:00.0\""));
         assert!(xml.contains("pcidev=\"04:00.3\""));
         assert!(xml.contains("pcidev=\"04:00.4\""));
+    }
+
+    #[test]
+    fn swift_image_skips_serial() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let xml = crate::system::render_system(&root, "swift_sfx14_41g").expect("swift sdf");
+        assert!(!xml.contains("phys_addr=\"0x82000000\""));
+        assert!(!xml.contains("phys_addr=\"0xfd000000\""));
+        assert!(!xml.contains("phys_addr=\"0xf8000000\""));
+        assert!(!xml.contains("phys_addr=\"0xfc000000\""));
+        assert!(!xml.contains("phys_addr=\"0xfa000000\""));
+        assert!(!xml.contains("phys_addr=\"0xf9000000\""));
+        assert!(!xml.contains("phys_addr=\"0xfb000000\""));
         assert!(!xml.contains("serial-driver"));
         let boards = load_boards(&root).unwrap();
         let board = boards.get("swift_sfx14_41g").unwrap();

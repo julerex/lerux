@@ -1,8 +1,8 @@
 # lerux-ladybird
 
-Last updated: 2026-10-25
+Last updated: 2026-10-31
 
-**Status:** Milestone 4 has landed. Milestones 5 through 20 have not. Milestones run in order. Implement one milestone per pass, and only after the previous milestone's exit holds. This file is the plan. Milestone 1 adds the library crates. It adds no protection domain and no continuous-integration job. Milestone 2 parses an `https` URL in `lerux-ladybird-url`. Milestone 3 paints a frame bitmap and one glyph in `lerux-ladybird-gfx`. Milestone 4 parses the fixture in `lerux-ladybird-html` and the title text is `lerux`.
+**Status:** Milestone 5 has landed. Milestones 6 through 20 have not. Milestones run in order. Implement one milestone per pass, and only after the previous milestone's exit holds. This file is the plan. Milestone 1 adds the library crates. It adds no protection domain and no continuous-integration job. Milestone 2 parses an `https` URL in `lerux-ladybird-url`. Milestone 3 paints a frame bitmap and one glyph in `lerux-ladybird-gfx`. Milestone 4 parses the fixture in `lerux-ladybird-html` and the title text is `lerux`. Milestone 5 parses a style sheet into rules, selectors, and declarations in `lerux-ladybird-web`. There is no computed style.
 
 **Goal:** A browser named lerux-ladybird, written in Rust, `#![no_std]` plus `alloc`, that runs as lerux protection domains. Its process split and its path from a load to pixels follow [Ladybird](https://github.com/LadybirdBrowser/ladybird). The code is written in this tree.
 

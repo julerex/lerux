@@ -24,12 +24,16 @@ pub enum NetMode {
     None,
     /// virtio-net on QEMU user networking.
     User,
-    /// virtio-net with hostfwd tcp::18080-:8080.
+    /// virtio-net with hostfwd `tcp::18080-:8080`.
     Hostfwd,
 }
 
 /// Per-board QEMU launch description. Boards without a `qemu` key are
 /// hardware-only (image build + optional hw-serial smoke).
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "boards.toml qemu table uses one bool per launch flag"
+)]
 #[derive(Debug, Clone, Default, Deserialize, serde::Serialize)]
 pub struct QemuConfig {
     #[serde(default)]
@@ -71,6 +75,10 @@ pub struct QemuConfig {
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
 pub struct Board {
     pub arch: String,
+    #[expect(
+        clippy::struct_field_names,
+        reason = "microkit_board is the boards.toml key"
+    )]
     pub microkit_board: String,
     pub target: String,
     pub template: String,
@@ -81,7 +89,7 @@ pub struct Board {
     /// list in `.github/workflows/rust.yml`, not this flag.
     #[serde(default)]
     pub ci: bool,
-    /// Expected substring for a host curl of http://127.0.0.1:18080/ after boot.
+    /// Expected substring for a host curl of <http://127.0.0.1:18080>/ after boot.
     #[serde(default)]
     pub curl_expect: Option<String>,
     pub system_vars: BTreeMap<String, TomlValue>,

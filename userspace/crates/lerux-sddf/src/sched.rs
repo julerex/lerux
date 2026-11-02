@@ -1,4 +1,4 @@
-//! Protection-domain priority and budget for one LionsOS image.
+//! Protection-domain priority and budget for one `LionsOS` image.
 //!
 //! Microkit copies `priority`, `budget`, and `period` from the system
 //! description into each scheduling context. The shell prints the same
@@ -74,6 +74,7 @@ pub const FS_IMAGE_ROLES: [Role; 8] = [
 pub struct sched_entry_t {
     pub name: [u8; SCHED_NAME_LEN],
     pub priority: u8,
+    #[expect(clippy::pub_underscore_fields, reason = "matches the C header field")]
     pub _pad: [u8; 3],
     pub budget_us: u32,
 }
@@ -83,6 +84,7 @@ pub struct sched_entry_t {
 #[derive(Clone, Copy)]
 pub struct sched_config_t {
     pub count: u8,
+    #[expect(clippy::pub_underscore_fields, reason = "matches the C header field")]
     pub _pad: [u8; 7],
     pub entry: [sched_entry_t; FS_IMAGE_ROLES.len()],
 }
@@ -97,6 +99,12 @@ const _: () = {
 };
 
 /// Schedule page for `qemu_virt_aarch64_fs_sddf`.
+///
+/// # Panics
+///
+/// Panics when the role count does not fit in `u8`, or when a role name does
+/// not fit in [`SCHED_NAME_LEN`].
+#[must_use]
 pub fn fs_image_schedule() -> sched_config_t {
     let mut config: sched_config_t = unsafe { core::mem::zeroed() };
     config.count = u8::try_from(FS_IMAGE_ROLES.len()).expect("role count fits");
@@ -111,6 +119,10 @@ pub fn fs_image_schedule() -> sched_config_t {
 }
 
 /// Copy a schedule page into `dst`.
+///
+/// # Panics
+///
+/// Panics when `dst` is not `size_of::<sched_config_t>()` bytes.
 pub fn sched_to_bytes(value: &sched_config_t, dst: &mut [u8]) {
     assert_eq!(dst.len(), core::mem::size_of::<sched_config_t>());
     // SAFETY: `dst` is exactly one page, and `value` is initialised.
@@ -128,6 +140,11 @@ pub fn sched_to_bytes(value: &sched_config_t, dst: &mut [u8]) {
 /// # Safety
 ///
 /// `bytes` must be a valid `sched_config_t`.
+///
+/// # Panics
+///
+/// Panics when `bytes` is not `size_of::<sched_config_t>()` bytes.
+#[must_use]
 pub unsafe fn sched_from_bytes(bytes: &[u8]) -> sched_config_t {
     assert_eq!(bytes.len(), core::mem::size_of::<sched_config_t>());
     let mut value = core::mem::MaybeUninit::<sched_config_t>::uninit();

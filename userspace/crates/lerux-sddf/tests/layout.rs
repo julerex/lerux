@@ -1,10 +1,12 @@
-//! `MICROKIT_PD_NAME_LENGTH` is supplied by a stub. LionsOS 0.4.0 uses Microkit
+//! `MICROKIT_PD_NAME_LENGTH` is supplied by a stub. `LionsOS` 0.4.0 uses Microkit
 //! 2.3.0, which defines that length as 64. The stub exists so the driver-framework
 //! headers can be parsed without linking seL4.
 
 use std::{
     collections::BTreeMap,
-    env, fs,
+    env,
+    fmt::Write,
+    fs,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -346,9 +348,10 @@ fn apply_snapshot_assignment(
         panic!("snapshot assignment before a struct at line {line_number}");
     };
     if in_fields {
-        if structs[index].fields.iter().any(|(name, _)| name == key) {
-            panic!("duplicate snapshot field {key} at line {line_number}");
-        }
+        assert!(
+            !structs[index].fields.iter().any(|(name, _)| name == key),
+            "duplicate snapshot field {key} at line {line_number}"
+        );
         structs[index].fields.push((key.to_string(), value));
     } else if key == "size" {
         structs[index].size = Some(value);
@@ -378,12 +381,14 @@ fn structs_from_raw(structs: Vec<RawStruct>) -> Vec<SnapshotStruct> {
 fn render_snapshot(items: &[SnapshotStruct]) -> String {
     let mut out = String::new();
     for item in items {
-        out.push_str(&format!(
-            "[{}]\nsize = {}\nalign = {}\n\n[{}.field]\n",
+        writeln!(
+            out,
+            "[{}]\nsize = {}\nalign = {}\n\n[{}.field]",
             item.name, item.size, item.align, item.name
-        ));
+        )
+        .unwrap();
         for (field, offset) in &item.fields {
-            out.push_str(&format!("{field} = {offset}\n"));
+            writeln!(out, "{field} = {offset}").unwrap();
         }
         out.push('\n');
     }
@@ -430,24 +435,22 @@ fn compile_and_run_probe(root: &Path, dir: &Path, source: &Path) -> CReport {
         .arg(source)
         .output()
         .unwrap_or_else(|err| panic!("failed to spawn {cc}: {err}"));
-    if !compiled.status.success() {
-        panic!(
-            "{cc} failed\nstdout:\n{}\nstderr:\n{}",
-            String::from_utf8_lossy(&compiled.stdout),
-            String::from_utf8_lossy(&compiled.stderr)
-        );
-    }
+    assert!(
+        compiled.status.success(),
+        "{cc} failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&compiled.stdout),
+        String::from_utf8_lossy(&compiled.stderr)
+    );
 
     let ran = Command::new(&binary)
         .output()
         .unwrap_or_else(|err| panic!("failed to run layout probe: {err}"));
-    if !ran.status.success() {
-        panic!(
-            "layout probe failed\nstdout:\n{}\nstderr:\n{}",
-            String::from_utf8_lossy(&ran.stdout),
-            String::from_utf8_lossy(&ran.stderr)
-        );
-    }
+    assert!(
+        ran.status.success(),
+        "layout probe failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&ran.stdout),
+        String::from_utf8_lossy(&ran.stderr)
+    );
     parse_report(&String::from_utf8_lossy(&ran.stdout))
 }
 
@@ -1189,7 +1192,7 @@ fn gpu_constants() -> Vec<(&'static str, u64)> {
     ]
 }
 
-const MICROKIT_STUB: &str = r#"
+const MICROKIT_STUB: &str = r"
 #pragma once
 #include <stdint.h>
 /* Microkit 2.3.0, the kit LionsOS 0.4.0 builds with. */
@@ -1208,14 +1211,14 @@ static inline microkit_msginfo microkit_ppcall(microkit_channel ch, microkit_msg
     (void)ch;
     return msginfo;
 }
-"#;
+";
 
-const SEL4_STUB: &str = r#"
+const SEL4_STUB: &str = r"
 #pragma once
 #include <stdint.h>
 static inline uint64_t seL4_GetMR(unsigned int n) { (void)n; return 0; }
 static inline void seL4_SetMR(unsigned int n, uint64_t val) { (void)n; (void)val; }
-"#;
+";
 
 const LAYOUT_C: &str = r#"
 #include <stddef.h>

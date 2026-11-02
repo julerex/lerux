@@ -12,7 +12,12 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Error;
 
-/// Evaluate one expression. An empty input fails.
+/// Evaluate one expression.
+///
+/// # Errors
+///
+/// Returns [`Error`] when the input is empty, unbalanced, has a trailing
+/// character, or divides by zero.
 pub fn eval(input: &[u8]) -> Result<i64, Error> {
     let mut parser = Parser { s: input, i: 0 };
     let value = parser.parse_expr()?;
@@ -26,6 +31,10 @@ pub fn eval(input: &[u8]) -> Result<i64, Error> {
 /// Write the decimal form of `value` into `buf`.
 ///
 /// Returns the number of bytes written. `buf` has to hold the sign and the digits.
+///
+/// # Panics
+///
+/// Panics if `buf` is too small for the sign and the digits.
 pub fn write_i64(buf: &mut [u8], value: i64) -> usize {
     if value < 0 {
         buf[0] = b'-';

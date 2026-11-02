@@ -65,6 +65,7 @@ pub enum Irq {
     Msi(MsiIrq),
 }
 
+#[must_use]
 pub fn pci_config_port() -> IoPort {
     IoPort {
         addr: X86_PCI_CONFIG_PORT,
@@ -78,6 +79,7 @@ pub fn pci_config_port() -> IoPort {
 /// Config port at `0xcf8` with the net driver's symbol pair.
 /// The address range matches [`pci_config_port`]. Microkit rejects two
 /// protection domains that both map it.
+#[must_use]
 pub fn pci_net_config_port() -> IoPort {
     IoPort {
         addr: X86_PCI_CONFIG_PORT,
@@ -90,16 +92,19 @@ pub fn pci_net_config_port() -> IoPort {
 
 /// Pin 11, vector 50 for slot `00:04.0` when e1000e is the only PCI device.
 /// The fetch image that also has ICH9 AHCI uses [`e1000e_fetch_irq`].
+#[must_use]
 pub fn e1000e_standalone_irq() -> X86Irq {
     x86_level_low(X86_NET_PIN, X86_NET_VECTOR)
 }
 
 /// Pin 10, vector 50, level, active-low for e1000e at `00:04.0` beside ICH9 AHCI.
 /// Standalone e1000e keeps [`e1000e_standalone_irq`].
+#[must_use]
 pub fn e1000e_fetch_irq() -> X86Irq {
     x86_level_low(10, 50)
 }
 
+#[must_use]
 pub fn ahci_msi() -> MsiIrq {
     MsiIrq {
         pcidev: Unclaimed::compiled().address(),
@@ -140,6 +145,7 @@ pub enum SerialNode {
     Port { port: IoPort, irq: X86Irq },
 }
 
+#[must_use]
 pub fn serial_node(arch: Arch) -> SerialNode {
     match serial_kind(arch) {
         Serial::Pl011 => SerialNode::Mmio(MmioDevice {
@@ -217,6 +223,7 @@ static X86_NET_BARS: [PciBar; 2] = [
     },
 ];
 
+#[must_use]
 pub fn virtio_node(arch: Arch, role: VirtioRole) -> Option<VirtioNode> {
     match arch {
         Arch::Aarch64 => Some(VirtioNode::Mmio(aarch64_virtio_mmio(role))),
@@ -225,7 +232,7 @@ pub fn virtio_node(arch: Arch, role: VirtioRole) -> Option<VirtioNode> {
     }
 }
 
-/// Guest virtual address equals the physical page. The AArch64 high window
+/// Guest virtual address equals the physical page. The `AArch64` high window
 /// does not boot on QEMU RISC-V. Milestone 23 records the exit if Microkit can
 /// place a high guest map. Until then, keep the identity.
 const fn riscv64_virtio_mmio(role: VirtioRole) -> MmioDevice {
@@ -345,6 +352,7 @@ pub struct QemuPlan {
     pub devices: [Option<QemuDevice>; 4],
 }
 
+#[must_use]
 pub fn qemu_plan(arch: Arch, roles: &[VirtioRole]) -> QemuPlan {
     let mut devices = [None; 4];
     match arch {

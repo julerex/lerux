@@ -7,7 +7,7 @@
 
 extern crate alloc;
 
-use alloc::{sync::Arc, vec::Vec};
+use alloc::{sync::Arc, vec, vec::Vec};
 use core::time::Duration;
 
 use rustls::{
@@ -52,6 +52,11 @@ pub struct ClientSession {
 
 impl ClientSession {
     /// Start a client toward `server_name` (SNI), trusting the smoke CA.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TlsError`] when `server_name` is not a server name, or the
+    /// client config or connection cannot be built.
     pub fn new(server_name: &str) -> Result<Self, TlsError> {
         #[cfg(target_os = "none")]
         install_rng();
@@ -78,6 +83,7 @@ impl ClientSession {
         core::mem::take(&mut self.outgoing)
     }
 
+    #[must_use]
     pub fn has_outgoing(&self) -> bool {
         !self.outgoing.is_empty()
     }
@@ -90,6 +96,10 @@ impl ClientSession {
     }
 
     /// Encrypt application bytes into the outgoing TLS buffer.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TlsError`] when the connection cannot encrypt application data.
     pub fn write_plain(&mut self, data: &[u8]) -> Result<(), TlsError> {
         let UnbufferedStatus { discard, state } = self.conn.process_tls_records(&mut self.incoming);
         let result = match state.map_err(|_| TlsError)? {
@@ -113,6 +123,11 @@ impl ClientSession {
     }
 
     /// Advance handshake or drain readable records.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TlsError`] when a TLS record is invalid or the handshake
+    /// cannot be encoded.
     pub fn drive(&mut self) -> Result<Status, TlsError> {
         for _ in 0..16 {
             let UnbufferedStatus { mut discard, state } =
@@ -159,7 +174,7 @@ fn absorb_encoded<Data>(
     etd: &mut rustls::unbuffered::EncodeTlsData<'_, Data>,
     discard: usize,
 ) -> Result<Option<Status>, TlsError> {
-    let mut buf = [0u8; OUT_BUF];
+    let mut buf = vec![0u8; OUT_BUF];
     match etd.encode(&mut buf) {
         Ok(n) => outgoing.extend_from_slice(&buf[..n]),
         Err(EncodeError::AlreadyEncoded) => {}
@@ -209,7 +224,7 @@ fn encrypt_into<Data>(
     data: &[u8],
     outgoing: &mut Vec<u8>,
 ) -> Result<(), TlsError> {
-    let mut buf = [0u8; OUT_BUF];
+    let mut buf = vec![0u8; OUT_BUF];
     let n = wt.encrypt(data, &mut buf).map_err(|_| TlsError)?;
     outgoing.extend_from_slice(&buf[..n]);
     Ok(())
@@ -268,6 +283,10 @@ mod sel4_rng {
 
     static STATE: AtomicU64 = AtomicU64::new(0xC0FF_EE00_D15C_A11E);
 
+    #[expect(
+        clippy::unnecessary_wraps,
+        reason = "getrandom requires fn(&mut [u8]) -> Result<(), getrandom::Error>"
+    )]
     fn fill(buf: &mut [u8]) -> Result<(), getrandom::Error> {
         for chunk in buf.chunks_mut(8) {
             let mut x = STATE.load(Ordering::Relaxed);
@@ -336,7 +355,7 @@ mod tests {
                     }
                 }
                 Status::WantRecv => {
-                    let mut buf = [0u8; OUT_BUF];
+                    let mut buf = vec![0u8; OUT_BUF];
                     match server.write_tls(&mut buf.as_mut_slice()) {
                         Ok(0) => {}
                         Ok(n) => client.feed_incoming(&buf[..n]),
@@ -368,7 +387,7 @@ mod tests {
         assert_eq!(&plain[..n], b"ping");
 
         server.writer().write_all(b"pong").expect("server write");
-        let mut buf = [0u8; OUT_BUF];
+        let mut buf = vec![0u8; OUT_BUF];
         let n = server
             .write_tls(&mut buf.as_mut_slice())
             .expect("server tls out");

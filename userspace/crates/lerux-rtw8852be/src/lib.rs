@@ -84,6 +84,12 @@ pub struct NotBridge {
 /// Matching device ids still return [`BarMismatch`] unless BAR 0 is I/O and
 /// BAR 2 is a 64-bit, non-prefetchable memory window. That is the map
 /// `rtw89_pci_probe` iomaps (`bar_id = 2`).
+///
+/// # Errors
+///
+/// Returns [`CardError::Short`] when `config` is shorter than 64 bytes.
+/// Returns [`CardError::BarMismatch`] when the device id matches and BAR 0 is
+/// not I/O or BAR 2 is not a 64-bit non-prefetchable memory window.
 pub fn identify(config: &[u8]) -> Result<Identity, CardError> {
     let header = header64(config).map_err(CardError::Short)?;
     let vendor = VendorId(u16::from_le_bytes([header[0], header[1]]));
@@ -115,6 +121,11 @@ pub enum CardError {
 
 /// Decode a type-1 bridge. I/O upper bits apply only when the I/O base
 /// register's low nibble is 1 (32-bit I/O). A low nibble of 0 is a 16-bit window.
+///
+/// # Errors
+///
+/// Returns [`BridgeError::Short`] when `config` is shorter than 64 bytes.
+/// Returns [`BridgeError::NotBridge`] when the header type is not 1.
 pub fn decode_bridge(config: &[u8]) -> Result<Bridge, BridgeError> {
     let header = header64(config).map_err(BridgeError::Short)?;
     let header_type = header[0x0e] & 0x7f;
@@ -147,6 +158,7 @@ pub enum BridgeError {
 
 /// True when BAR 2's [`MMIO_LEN`] bytes sit inside the bridge memory window.
 /// rtw89 iomaps this range and does not use the I/O port.
+#[must_use]
 pub fn mmio_covered(bridge: &Bridge, card: &Card) -> bool {
     range_inside(
         card.mmio_phys,
@@ -157,6 +169,7 @@ pub fn mmio_covered(bridge: &Bridge, card: &Card) -> bool {
 }
 
 /// True when BAR 0's [`IO_LEN`] bytes sit inside the bridge I/O window.
+#[must_use]
 pub fn io_covered(bridge: &Bridge, card: &Card) -> bool {
     range_inside(
         u64::from(card.io_port),

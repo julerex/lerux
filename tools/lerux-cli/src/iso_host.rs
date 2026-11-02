@@ -56,19 +56,34 @@ pub(crate) enum OvmfFact {
 }
 
 #[derive(Clone, Debug)]
+pub(crate) struct PdToolchain {
+    rust_src: bool,
+    libclang: bool,
+    fetch_libclang: bool,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct StubTools {
+    clang: bool,
+    readelf: bool,
+    objdump: bool,
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct PackTools {
+    grub: bool,
+    xorriso: bool,
+}
+
+#[derive(Clone, Debug)]
 pub(crate) struct HostFacts {
     pub cargo: Option<PathBuf>,
     pub rustup_cargo: Option<PathBuf>,
-    pub rust_src: bool,
+    pub pd: PdToolchain,
     pub sdk: SdkFact,
-    pub clang: bool,
-    pub readelf: bool,
-    pub objdump: bool,
-    pub grub: bool,
-    pub xorriso: bool,
+    pub stub: StubTools,
+    pub pack: PackTools,
     pub ovmf: OvmfFact,
-    pub libclang: bool,
-    pub fetch_libclang: bool,
     pub qemu_x86: bool,
     pub distro: Distro,
 }
@@ -142,16 +157,22 @@ fn collect_host_facts(
     Ok(HostFacts {
         cargo: which("cargo"),
         rustup_cargo: rustup_cargo(),
-        rust_src: rust_src_installed(),
+        pd: PdToolchain {
+            rust_src: rust_src_installed(),
+            libclang: system_libclang_present(),
+            fetch_libclang: command_on_path("dpkg-deb"),
+        },
         sdk,
-        clang: command_on_path("clang"),
-        readelf: command_on_path("readelf"),
-        objdump: command_on_path("objdump"),
-        grub: grub_ready(),
-        xorriso: command_on_path("xorriso"),
+        stub: StubTools {
+            clang: command_on_path("clang"),
+            readelf: command_on_path("readelf"),
+            objdump: command_on_path("objdump"),
+        },
+        pack: PackTools {
+            grub: grub_ready(),
+            xorriso: command_on_path("xorriso"),
+        },
         ovmf: find_ovmf(),
-        libclang: system_libclang_present(),
-        fetch_libclang: command_on_path("dpkg-deb"),
         qemu_x86: command_on_path("qemu-system-x86_64"),
         distro: current_distro(),
     })
@@ -261,10 +282,10 @@ Install rustup from https://rustup.rs and open a new shell.
 Re-run just iso from this repository. rust-toolchain.toml selects nightly-2026-04-04, which includes rust-src."
                 .to_string(),
         });
-    } else if !facts.rust_src {
+    } else if !facts.pd.rust_src {
         gaps.push(rust_src_gap(facts));
     }
-    if !facts.libclang && !facts.fetch_libclang {
+    if !facts.pd.libclang && !facts.pd.fetch_libclang {
         gaps.push(Gap {
             title: "libclang",
             detail: format!(
@@ -276,7 +297,7 @@ Re-run just iso from this repository. rust-toolchain.toml selects nightly-2026-0
 }
 
 fn push_iso_tool_gaps(gaps: &mut Vec<Gap>, facts: &HostFacts) {
-    if !facts.clang {
+    if !facts.stub.clang {
         gaps.push(Gap {
             title: "clang",
             detail: format!(
@@ -285,7 +306,7 @@ fn push_iso_tool_gaps(gaps: &mut Vec<Gap>, facts: &HostFacts) {
             ),
         });
     }
-    if !facts.readelf || !facts.objdump {
+    if !facts.stub.readelf || !facts.stub.objdump {
         gaps.push(Gap {
             title: "binutils",
             detail: format!(
@@ -298,7 +319,7 @@ fn push_iso_tool_gaps(gaps: &mut Vec<Gap>, facts: &HostFacts) {
 }
 
 fn push_packer_gaps(gaps: &mut Vec<Gap>, facts: &HostFacts) {
-    if !facts.grub {
+    if !facts.pack.grub {
         gaps.push(Gap {
             title: "grub",
             detail: format!(
@@ -307,7 +328,7 @@ fn push_packer_gaps(gaps: &mut Vec<Gap>, facts: &HostFacts) {
             ),
         });
     }
-    if !facts.xorriso {
+    if !facts.pack.xorriso {
         gaps.push(Gap {
             title: "libisoburn",
             detail: format!(
@@ -354,8 +375,7 @@ fn rust_src_gap(facts: &HostFacts) -> Gap {
     let cargo = facts
         .cargo
         .as_ref()
-        .map(|path| path.display().to_string())
-        .unwrap_or_else(|| "cargo".to_string());
+        .map_or_else(|| "cargo".to_string(), |path| path.display().to_string());
     let using_rustup = facts.rustup_cargo.as_ref().is_some_and(|rustup| {
         facts
             .cargo
@@ -469,16 +489,22 @@ mod tests {
         HostFacts {
             cargo: Some(PathBuf::from("/usr/bin/cargo")),
             rustup_cargo: None,
-            rust_src: true,
+            pd: PdToolchain {
+                rust_src: true,
+                libclang: true,
+                fetch_libclang: false,
+            },
             sdk: SdkFact::Ready,
-            clang: true,
-            readelf: true,
-            objdump: true,
-            grub: true,
-            xorriso: true,
+            stub: StubTools {
+                clang: true,
+                readelf: true,
+                objdump: true,
+            },
+            pack: PackTools {
+                grub: true,
+                xorriso: true,
+            },
             ovmf: OvmfFact::Found(PathBuf::from("/usr/share/ovmf/OVMF.fd")),
-            libclang: true,
-            fetch_libclang: false,
             qemu_x86: true,
             distro: Distro::Arch,
         }
@@ -530,7 +556,7 @@ mod tests {
     #[test]
     fn system_cargo_with_rustup_installed_suggests_path_order() {
         let mut facts = ready();
-        facts.rust_src = false;
+        facts.pd.rust_src = false;
         facts.rustup_cargo = Some(PathBuf::from("/home/julian/.cargo/bin/cargo"));
         let report = format_gaps(&host_gaps(&facts, true, false));
         assert!(report.contains("export PATH="), "{report}");
@@ -541,7 +567,7 @@ mod tests {
     #[test]
     fn arch_without_rustup_mentions_the_rust_src_package() {
         let mut facts = ready();
-        facts.rust_src = false;
+        facts.pd.rust_src = false;
         let report = format_gaps(&host_gaps(&facts, true, false));
         assert!(report.contains("https://rustup.rs"), "{report}");
         assert!(report.contains("sudo pacman -S rust-src"), "{report}");
@@ -550,7 +576,7 @@ mod tests {
     #[test]
     fn debian_clang_hint_uses_apt() {
         let mut facts = ready();
-        facts.clang = false;
+        facts.stub.clang = false;
         facts.distro = Distro::Debian;
         let report = format_gaps(&host_gaps(&facts, false, false));
         assert!(report.contains("sudo apt install clang"), "{report}");
@@ -580,7 +606,7 @@ mod tests {
     #[test]
     fn missing_xorriso_on_arch_asks_for_libisoburn() {
         let mut facts = ready();
-        facts.xorriso = false;
+        facts.pack.xorriso = false;
         let report = format_gaps(&host_gaps(&facts, false, false));
         assert!(report.contains("sudo pacman -S libisoburn"), "{report}");
         assert!(!report.contains("Ubuntu"), "{report}");
@@ -590,7 +616,7 @@ mod tests {
     #[test]
     fn missing_grub_names_the_package() {
         let mut facts = ready();
-        facts.grub = false;
+        facts.pack.grub = false;
         facts.distro = Distro::Debian;
         let report = format_gaps(&host_gaps(&facts, false, false));
         assert!(report.contains("grub-mkimage"), "{report}");

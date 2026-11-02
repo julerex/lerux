@@ -40,7 +40,11 @@ pub fn write_image(files: &[(&str, &[u8])]) -> Result<Vec<u8>> {
     let total_sectors = RESERVED + NFATS * spf + root_sectors + clusters * SPC;
 
     let mut image = vec![0u8; total_sectors * BPS];
-    write_boot_sector(&mut image, spf as u16, total_sectors as u32);
+    write_boot_sector(
+        &mut image,
+        u16::try_from(spf).expect("fits in u16"),
+        u32::try_from(total_sectors).expect("sector count fits in u32"),
+    );
 
     let mut fat = vec![0u16; clusters + 2];
     fat[0] = 0xFFF8;
@@ -152,12 +156,16 @@ fn write_boot_sector(image: &mut [u8], spf: u16, total_sectors: u32) {
     image[2] = 0x90;
     image[3..11].copy_from_slice(b"LERUX   ");
     image[11..13].copy_from_slice(&512u16.to_le_bytes());
-    image[13] = SPC as u8;
-    image[14..16].copy_from_slice(&(RESERVED as u16).to_le_bytes());
-    image[16] = NFATS as u8;
-    image[17..19].copy_from_slice(&(ROOT_ENTRIES as u16).to_le_bytes());
-    if total_sectors <= u16::MAX as u32 {
-        image[19..21].copy_from_slice(&(total_sectors as u16).to_le_bytes());
+    image[13] = u8::try_from(SPC).expect("fits in u8");
+    image[14..16].copy_from_slice(&u16::try_from(RESERVED).expect("fits in u16").to_le_bytes());
+    image[16] = u8::try_from(NFATS).expect("fits in u8");
+    image[17..19].copy_from_slice(
+        &u16::try_from(ROOT_ENTRIES)
+            .expect("fits in u16")
+            .to_le_bytes(),
+    );
+    if let Ok(sectors) = u16::try_from(total_sectors) {
+        image[19..21].copy_from_slice(&sectors.to_le_bytes());
     }
     image[21] = 0xF8;
     image[22..24].copy_from_slice(&spf.to_le_bytes());
@@ -261,7 +269,7 @@ fn push_short(out: &mut Vec<u8>, name: &[u8; 11], attr: u8, cluster: u16, size: 
     ent[..11].copy_from_slice(name);
     ent[11] = attr;
     // 2026-10-29. The stamp is fixed so two builds of the same files match.
-    let date = (46u16 << 9) | (10 << 5) | 29;
+    let date = (0x2eu16 << 9) | (0x0a << 5) | 0x1d;
     ent[16..18].copy_from_slice(&date.to_le_bytes());
     ent[18..20].copy_from_slice(&date.to_le_bytes());
     ent[24..26].copy_from_slice(&date.to_le_bytes());
@@ -275,7 +283,8 @@ fn push_lfn(out: &mut Vec<u8>, name: &str, checksum: u8) {
     let nentries = units.len().div_ceil(13).max(1);
     for seq in (1..=nentries).rev() {
         let mut ent = [0u8; 32];
-        let ord = seq as u8 | if seq == nentries { 0x40 } else { 0 };
+        let ord = u8::try_from(seq).expect("lfn sequence fits in u8")
+            | if seq == nentries { 0x40 } else { 0 };
         ent[0] = ord;
         ent[11] = 0x0F;
         ent[13] = checksum;

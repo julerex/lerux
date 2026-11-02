@@ -1,7 +1,7 @@
 //! Context switch for one kernel thread.
 //!
 //! The register set and the first-entry stack match `libco` in the libmicrokitco
-//! pin LionsOS 0.4.0 records (`4bf88ee`). Callee-saved registers are stored in a
+//! pin `LionsOS` 0.4.0 records (`4bf88ee`). Callee-saved registers are stored in a
 //! caller-provided buffer. The root buffer is static because the root cothread
 //! already has the kernel stack.
 
@@ -23,15 +23,14 @@ pub fn install_root() -> *mut u8 {
 /// `to` is a handle from [`install_root`] or [`derive`], and the destination
 /// stack is live and exclusively owned by that context.
 pub unsafe fn co_switch(to: *mut u8) {
-    if to.is_null() {
-        panic!("lerux-cothread: switch to a null context");
-    }
+    assert!(!to.is_null(), "lerux-cothread: switch to a null context");
     let active = ACTIVE.get();
     // SAFETY: `install_root` ran, and this kernel thread is the only writer.
     let from = unsafe { *active };
-    if from.is_null() {
-        panic!("lerux-cothread: switch before the root context exists");
-    }
+    assert!(
+        !from.is_null(),
+        "lerux-cothread: switch before the root context exists"
+    );
     unsafe { *active = to };
     // SAFETY: caller upholds the handle invariant. The assembly preserves the
     // callee-saved registers across a round trip, matching the platform ABI.
@@ -64,12 +63,22 @@ unsafe fn plant(memory: *mut u8, size: usize) -> *mut u8 {
     // System V: the first pop in the swap loads the entry address. Leave the
     // stack 8 mod 16 so that entry's `call` presents the ABI alignment.
     let offset = (size & !15) - 32;
+    #[expect(
+        clippy::cast_ptr_alignment,
+        reason = "the caller stack is 16-byte aligned and the entry slot keeps that alignment"
+    )]
     let mut slot = unsafe { memory.add(offset).cast::<u64>() };
     slot = unsafe { slot.sub(1) };
     unsafe { slot.write(0) };
     slot = unsafe { slot.sub(1) };
     unsafe { slot.write(lerux_co_entry as *const () as u64) };
-    unsafe { memory.cast::<u64>().write(slot as u64) };
+    #[expect(
+        clippy::cast_ptr_alignment,
+        reason = "the caller stack base is 16-byte aligned"
+    )]
+    unsafe {
+        memory.cast::<u64>().write(slot as u64);
+    }
     memory
 }
 
@@ -136,6 +145,10 @@ fn root_handle() -> *mut u8 {
 #[cfg(target_arch = "aarch64")]
 unsafe fn plant(memory: *mut u8, size: usize) -> *mut u8 {
     let nwords = size / 8;
+    #[expect(
+        clippy::cast_ptr_alignment,
+        reason = "the caller stack is 16-byte aligned"
+    )]
     let bottom = memory.cast::<u64>();
     // SAFETY: `size` is at least a page, so the context words sit inside it.
     let top = unsafe { bottom.add(nwords - 1) };
@@ -230,6 +243,10 @@ fn root_handle() -> *mut u8 {
 #[cfg(target_arch = "riscv64")]
 unsafe fn plant(memory: *mut u8, size: usize) -> *mut u8 {
     let nwords = size / 8;
+    #[expect(
+        clippy::cast_ptr_alignment,
+        reason = "the caller stack is 16-byte aligned"
+    )]
     let bottom = memory.cast::<u64>();
     // SAFETY: `size` is at least a page, so the context words sit inside it.
     let top = unsafe { bottom.add(nwords - 1) };

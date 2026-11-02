@@ -23,7 +23,7 @@ pub const GPU_CLIENT_DATA_SIZE: u64 = 0x1_4000;
 /// Virtio ring direct-memory-access region for the graphics driver.
 pub const GPU_DRIVER_DMA_SIZE: u64 = 0x200_000;
 
-/// QEMU `virt` on AArch64 places the third virtio-mmio device at `+0xa00` in
+/// QEMU `virt` on `AArch64` places the third virtio-mmio device at `+0xa00` in
 /// the page at `0xa003000`, interrupt 77. Virtio-net occupies `+0xe00` and
 /// virtio-blk occupies `+0xc00`. The interrupt is not a header field.
 pub const GPU_VIRTIO_MMIO_OFFSET: usize = 0xa00;
@@ -49,6 +49,10 @@ pub const VIRT_CLIENT_CHANNEL: u8 = 1;
 /// The shell already uses channels 0 through 4 for serial, the filesystem, and the network.
 pub const SHELL_GPU_CHANNEL: u8 = 5;
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "a graphics region is one page and fits in usize"
+)]
 const _: () = {
     let req = core::mem::size_of::<gpu_req_queue_t>()
         + GPU_QUEUE_CAPACITY as usize * core::mem::size_of::<gpu_req_t>();

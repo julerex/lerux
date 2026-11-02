@@ -25,7 +25,7 @@ use crate::{
     process::{self, command_on_path, path_str},
 };
 
-/// Build `build/<board>/lerux_<board>.iso` (or `--output`) for an x86_64 board.
+/// Build `build/<board>/lerux_<board>.iso` (or `--output`) for an `x86_64` board.
 ///
 /// Rebuilds the Microkit image when `build_if_missing` is set, including when
 /// an older `loader.img` is already on disk. When `verify` is set, both SHA-256 sidecars must
@@ -119,7 +119,7 @@ fn pack_iso(
     let xorriso = ensure_xorriso()?;
     write_uefi_iso(&xorriso, &image, &out)?;
 
-    let size = fs::metadata(&out).map(|m| m.len()).unwrap_or(0);
+    let size = fs::metadata(&out).map_or(0, |m| m.len());
     println!("==> Wrote ISO ({size} bytes) → {}", out.display());
     Ok(out)
 }
@@ -151,6 +151,13 @@ pub(crate) fn uefi_boot_volume(
     Ok(StubBootImage::assemble(efi, payloads))
 }
 
+#[cfg_attr(
+    test,
+    expect(
+        clippy::unnecessary_wraps,
+        reason = "the non-test path returns the Result from GrubEfi::build"
+    )
+)]
 fn efi_image() -> Result<GrubEfi> {
     #[cfg(test)]
     {
@@ -188,14 +195,13 @@ fn iso_is_current(
 fn mtime_at_or_before(path: &Path, iso_mtime: SystemTime) -> bool {
     fs::metadata(path)
         .and_then(|meta| meta.modified())
-        .map(|mtime| mtime <= iso_mtime)
-        .unwrap_or(false)
+        .is_ok_and(|mtime| mtime <= iso_mtime)
 }
 
 fn recipe_path(iso: &Path) -> PathBuf {
     let mut name = iso
         .file_name()
-        .map(|name| name.to_os_string())
+        .map(std::ffi::OsStr::to_os_string)
         .unwrap_or_default();
     name.push(".boot-recipe");
     iso.with_file_name(name)
@@ -569,7 +575,7 @@ mod tests {
 
     fn assert_stub_header(dest: &Path) {
         let stub = fs::read(dest.join("boot/mb2-stub.elf")).unwrap();
-        let magic = 0xe85250d6u32.to_le_bytes();
+        let magic = 0xe852_50d6u32.to_le_bytes();
         let at = stub
             .windows(4)
             .position(|window| window == magic)

@@ -1,4 +1,4 @@
-//! PCIe ECAM access via a minimally mapped MMIO window.
+//! `PCIe` ECAM access via a minimally mapped MMIO window.
 
 use virtio_drivers::transport::pci::bus::{Cam, ConfigurationAccess, DeviceFunction};
 

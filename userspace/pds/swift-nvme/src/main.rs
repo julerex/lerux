@@ -1,7 +1,7 @@
-//! Read-only NVMe at the recorded `02:00.0`. The Windows volume is not formatted.
+//! Read-only `NVMe` at the recorded `02:00.0`. The Windows volume is not formatted.
 //!
 //! A read of [`NAMED_FILE`] is submitted on the sDDF block queue and, when the
-//! controller answers, issued as NVMe IO read `0x02`. IO write and format are
+//! controller answers, issued as `NVMe` IO read `0x02`. IO write and format are
 //! not submitted.
 
 #![no_std]
@@ -227,11 +227,11 @@ impl Ctrl {
         self.submit(
             self.dma_at(IO_SQ),
             self.io_tail,
-            Sqe {
+            &Sqe {
                 opcode: 0x02,
                 nsid: 1,
                 prp: DMA_PHYS + DATA as u64,
-                cdw10: lba as u32,
+                cdw10: u32::try_from(lba & 0xffff_ffff).expect("low half"),
                 cdw11: (lba >> 32) as u32,
                 cdw12: 0,
             },
@@ -256,7 +256,7 @@ impl Ctrl {
         self.submit(
             self.dma_at(ADMIN_SQ),
             self.admin_tail,
-            Sqe {
+            &Sqe {
                 opcode,
                 nsid,
                 prp,
@@ -281,18 +281,24 @@ impl Ctrl {
         }
     }
 
-    fn submit(&mut self, sq: *mut u8, slot: u16, cmd: Sqe) {
+    fn submit(&mut self, sq: *mut u8, slot: u16, cmd: &Sqe) {
         let cid = self.cid;
         self.cid = self.cid.wrapping_add(1);
         unsafe {
             let entry = sq.add(usize::from(slot) * 64);
             entry.write_bytes(0, 64);
             entry.write(cmd.opcode);
+            #[expect(clippy::cast_ptr_alignment, reason = "2-byte command id")]
             entry.add(2).cast::<u16>().write(cid);
+            #[expect(clippy::cast_ptr_alignment, reason = "4-byte command dword")]
             entry.add(4).cast::<u32>().write(cmd.nsid);
+            #[expect(clippy::cast_ptr_alignment, reason = "8-byte PRP")]
             entry.add(24).cast::<u64>().write(cmd.prp);
+            #[expect(clippy::cast_ptr_alignment, reason = "4-byte command dword")]
             entry.add(40).cast::<u32>().write(cmd.cdw10);
+            #[expect(clippy::cast_ptr_alignment, reason = "4-byte command dword")]
             entry.add(44).cast::<u32>().write(cmd.cdw11);
+            #[expect(clippy::cast_ptr_alignment, reason = "4-byte command dword")]
             entry.add(48).cast::<u32>().write(cmd.cdw12);
         }
     }
@@ -325,6 +331,7 @@ impl Ctrl {
 fn poll(cq: *mut u8, head: u16, phase: u32) -> Option<u16> {
     let slot = usize::from(head & 1) * 16;
     for _ in 0..SPIN {
+        #[expect(clippy::cast_ptr_alignment, reason = "4-byte completion dword")]
         let dw3 = unsafe { cq.add(slot + 12).cast::<u32>().read_volatile() };
         if (dw3 >> 16) & 1 == phase {
             return Some(((dw3 >> 17) & 0x7fff) as u16);
@@ -352,22 +359,27 @@ fn paint(text: &[u8]) {
     let mode = memory_region_symbol!(mode_record_vaddr: *mut u8).as_ptr();
     let frame = memory_region_symbol!(fb_vaddr: *mut u8).as_ptr();
     let record = unsafe { core::slice::from_raw_parts(mode, 40) };
-    let frame = unsafe { core::slice::from_raw_parts_mut(frame, FRAMEBUFFER_BYTES as usize) };
+    let bytes = usize::try_from(FRAMEBUFFER_BYTES).expect("framebuffer fits");
+    let frame = unsafe { core::slice::from_raw_parts_mut(frame, bytes) };
     paint_row(record, frame, ROW, text);
 }
 
+#[expect(clippy::cast_ptr_alignment, reason = "4-byte MMIO register")]
 fn read32(base: *mut u8, off: usize) -> u32 {
     unsafe { base.add(off).cast::<u32>().read_volatile() }
 }
 
+#[expect(clippy::cast_ptr_alignment, reason = "8-byte MMIO register")]
 fn read64(base: *mut u8, off: usize) -> u64 {
     unsafe { base.add(off).cast::<u64>().read_volatile() }
 }
 
+#[expect(clippy::cast_ptr_alignment, reason = "4-byte MMIO register")]
 fn write32(base: *mut u8, off: usize, value: u32) {
     unsafe { base.add(off).cast::<u32>().write_volatile(value) }
 }
 
+#[expect(clippy::cast_ptr_alignment, reason = "8-byte MMIO register")]
 fn write64(base: *mut u8, off: usize, value: u64) {
     unsafe { base.add(off).cast::<u64>().write_volatile(value) }
 }

@@ -34,6 +34,7 @@ pub const TIMER_CLIENT_CHANNEL: u8 = 0;
 const NS_PER_S: u64 = 1_000_000_000;
 
 /// `timer_client_config_t` for the shell.
+#[must_use]
 pub fn shell_client_config() -> timer_client_config_t {
     let mut config: timer_client_config_t = unsafe { core::mem::zeroed() };
     config.magic = SDDF_TIMER_MAGIC;
@@ -42,6 +43,10 @@ pub fn shell_client_config() -> timer_client_config_t {
 }
 
 /// Copy a configuration struct into `dst`.
+///
+/// # Panics
+///
+/// Panics when `dst` is not `size_of::<T>()` bytes.
 pub fn timer_config_to_bytes<T>(value: &T, dst: &mut [u8]) {
     assert_eq!(dst.len(), core::mem::size_of::<T>());
     // SAFETY: `dst` is exactly one `T`, and the source is an initialised `T`.
@@ -59,6 +64,11 @@ pub fn timer_config_to_bytes<T>(value: &T, dst: &mut [u8]) {
 /// # Safety
 ///
 /// `bytes` must be a valid representation of `T`.
+///
+/// # Panics
+///
+/// Panics when `bytes` is not `size_of::<T>()` bytes.
+#[must_use]
 pub unsafe fn timer_config_from_bytes<T>(bytes: &[u8]) -> T {
     assert_eq!(bytes.len(), core::mem::size_of::<T>());
     let mut value = core::mem::MaybeUninit::<T>::uninit();
@@ -76,6 +86,7 @@ pub unsafe fn timer_config_from_bytes<T>(bytes: &[u8]) -> T {
 ///
 /// This is `ticks_to_ns` from `include/sddf/timer/timer_common.h`. A zero
 /// frequency returns 0.
+#[must_use]
 pub fn ticks_to_ns(ticks: u64, freq: u64) -> u64 {
     if freq == 0 {
         return 0;
@@ -89,6 +100,7 @@ pub fn ticks_to_ns(ticks: u64, freq: u64) -> u64 {
 ///
 /// The timer client returns time since startup, so a guest that has been up
 /// for less than a day is still on the first day.
+#[must_use]
 pub fn date_from_ns(ns: u64) -> (u16, u8, u8) {
     civil_from_days(ns / 86_400 / NS_PER_S)
 }
@@ -105,7 +117,16 @@ fn civil_from_days(days: u64) -> (u16, u8, u8) {
     let day = doy - (153 * mp + 2) / 5 + 1;
     let month = if mp < 10 { mp + 3 } else { mp - 9 };
     let year = if month <= 2 { y + 1 } else { y };
-    (year as u16, month as u8, day as u8)
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a day count can name a year past u16::MAX"
+    )]
+    let year_bits = year as u16;
+    (
+        year_bits,
+        u8::try_from(month).expect("month fits"),
+        u8::try_from(day).expect("day fits"),
+    )
 }
 
 #[cfg(test)]

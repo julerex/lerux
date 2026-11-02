@@ -27,10 +27,12 @@ pub enum DiskReport {
     Raw,
 }
 
+#[must_use]
 pub fn io_allowed(opcode: u8) -> bool {
     opcode == IO_READ
 }
 
+#[must_use]
 pub fn io_rejected(opcode: u8) -> bool {
     opcode == IO_WRITE || opcode == ADMIN_FORMAT
 }
@@ -40,10 +42,15 @@ pub fn write_result(page: &mut [u8], payload: &[u8]) {
     if page.len() < 2 + n {
         return;
     }
-    page[0..2].copy_from_slice(&(n as u16).to_le_bytes());
+    page[0..2].copy_from_slice(&stored_len(n).to_le_bytes());
     page[2..2 + n].copy_from_slice(&payload[..n]);
 }
 
+fn stored_len(n: usize) -> u16 {
+    u16::try_from(n).expect("result length")
+}
+
+#[must_use]
 pub fn report_bytes(report: &DiskReport) -> &[u8] {
     match report {
         DiskReport::Bytes(buf, len) => &buf[..*len],
@@ -186,10 +193,10 @@ fn u64_at(buf: &[u8], at: usize) -> u64 {
 }
 
 fn load_fat(boot: &[u8; 512], read: &mut impl FnMut(u64) -> Option<[u8; 512]>) -> DiskReport {
-    let reserved = u16::from_le_bytes([boot[14], boot[15]]) as u64;
-    let fats = boot[16] as u64;
-    let root_entries = u16::from_le_bytes([boot[17], boot[18]]) as u64;
-    let fat_sectors = u16::from_le_bytes([boot[22], boot[23]]) as u64;
+    let reserved = u64::from(u16::from_le_bytes([boot[14], boot[15]]));
+    let fats = u64::from(boot[16]);
+    let root_entries = u64::from(u16::from_le_bytes([boot[17], boot[18]]));
+    let fat_sectors = u64::from(u16::from_le_bytes([boot[22], boot[23]]));
     if fats == 0 || root_entries == 0 || fat_sectors == 0 {
         return DiskReport::Raw;
     }
@@ -209,7 +216,7 @@ fn load_fat(boot: &[u8; 512], read: &mut impl FnMut(u64) -> Option<[u8; 512]>) -
                 continue;
             }
             if entry[..11] == want {
-                let cluster = u16::from_le_bytes([entry[26], entry[27]]) as u64;
+                let cluster = u64::from(u16::from_le_bytes([entry[26], entry[27]]));
                 let size =
                     u32::from_le_bytes([entry[28], entry[29], entry[30], entry[31]]) as usize;
                 let data_lba = root_lba + root_sectors + cluster.saturating_sub(2);
@@ -260,7 +267,7 @@ fn load_ntfs(boot: &[u8; 512], read: &mut impl FnMut(u64) -> Option<[u8; 512]>) 
     if bps != 512 {
         return DiskReport::Raw;
     }
-    let spc = boot[0x0d] as u64;
+    let spc = u64::from(boot[0x0d]);
     if spc == 0 {
         return DiskReport::Raw;
     }
@@ -279,7 +286,7 @@ fn load_ntfs(boot: &[u8; 512], read: &mut impl FnMut(u64) -> Option<[u8; 512]>) 
             let Some(sector) = read(lba + s) else {
                 return DiskReport::Admin;
             };
-            let at = s as usize * 512;
+            let at = usize::try_from(s).expect("mft sector") * 512;
             raw[at..at + 512].copy_from_slice(&sector);
         }
         if let Some(found) = file_in_record(&raw[..record], want) {
@@ -290,11 +297,12 @@ fn load_ntfs(boot: &[u8; 512], read: &mut impl FnMut(u64) -> Option<[u8; 512]>) 
 }
 
 fn mft_record_bytes(encoded: u8, spc: u64) -> usize {
-    let encoded = encoded as i8;
+    let encoded = i8::from_ne_bytes(encoded.to_ne_bytes());
     if encoded > 0 {
-        (encoded as u64 * spc * 512) as usize
+        let clusters = u64::try_from(encoded).expect("cluster count");
+        usize::try_from(clusters * spc * 512).expect("mft record bytes")
     } else {
-        1usize << (encoded.unsigned_abs())
+        1usize << encoded.unsigned_abs()
     }
 }
 
@@ -436,7 +444,7 @@ mod tests {
     fn a_protective_mbr_without_a_gpt_header_is_raw_and_a_missed_header_is_admin() {
         let mut disk = [[0u8; 512]; 2];
         disk[0] = protective_mbr();
-        let report = load_named(|lba| disk.get(lba as usize).copied());
+        let report = load_named(|lba| sector_at(&disk, lba));
         assert_eq!(report_bytes(&report), b"nvme: raw");
         let report = load_named(|lba| (lba == 0).then_some(disk[0]));
         assert_eq!(report_bytes(&report), b"nvme: admin");
@@ -454,7 +462,7 @@ mod tests {
         let record = file_record();
         disk[9].copy_from_slice(&record[..512]);
         disk[10].copy_from_slice(&record[512..]);
-        let report = load_named(|lba| disk.get(lba as usize).copied());
+        let report = load_named(|lba| sector_at(&disk, lba));
         assert_eq!(report_bytes(&report), b"hello");
     }
 
@@ -482,7 +490,7 @@ mod tests {
         entry[26] = 2;
         entry[28] = 5;
         disk[4][..5].copy_from_slice(b"hello");
-        let report = load_named(|lba| disk.get(lba as usize).copied());
+        let report = load_named(|lba| sector_at(&disk, lba));
         assert_eq!(report_bytes(&report), b"hello");
     }
 
@@ -494,11 +502,11 @@ mod tests {
         disk[0][0x0c] = 0x02;
         disk[0][0x0d] = 1;
         disk[0][0x30] = 1;
-        disk[0][0x40] = (-10i8) as u8;
+        disk[0][0x40] = u8::from_ne_bytes((-10i8).to_ne_bytes());
         let record = file_record();
         disk[1].copy_from_slice(&record[..512]);
         disk[2].copy_from_slice(&record[512..]);
-        let report = load_named(|lba| disk.get(lba as usize).copied());
+        let report = load_named(|lba| sector_at(&disk, lba));
         assert_eq!(report_bytes(&report), b"hello");
     }
 
@@ -545,7 +553,7 @@ mod tests {
         boot[0x0c] = 0x02;
         boot[0x0d] = 1;
         boot[0x30..0x38].copy_from_slice(&mft_lcn.to_le_bytes());
-        boot[0x40] = (-10i8) as u8;
+        boot[0x40] = u8::from_ne_bytes((-10i8).to_ne_bytes());
         boot
     }
 
@@ -582,13 +590,18 @@ mod tests {
         value
     }
 
+    fn sector_at(disk: &[[u8; 512]], lba: u64) -> Option<[u8; 512]> {
+        disk.get(usize::try_from(lba).expect("lba fits")).copied()
+    }
+
     fn write_attr(raw: &mut [u8], at: usize, kind: u32, value: &[u8]) {
         raw[at..at + 4].copy_from_slice(&kind.to_le_bytes());
-        let header = 0x18;
-        let len = header + value.len();
-        raw[at + 4..at + 8].copy_from_slice(&(len as u32).to_le_bytes());
-        raw[at + 0x10..at + 0x14].copy_from_slice(&(value.len() as u32).to_le_bytes());
-        raw[at + 0x14] = header as u8;
+        let header = 0x18usize;
+        let len = u32::try_from(header + value.len()).expect("attr length");
+        raw[at + 4..at + 8].copy_from_slice(&len.to_le_bytes());
+        let value_len = u32::try_from(value.len()).expect("value length");
+        raw[at + 0x10..at + 0x14].copy_from_slice(&value_len.to_le_bytes());
+        raw[at + 0x14] = u8::try_from(header).expect("attr header");
         raw[at + header..at + header + value.len()].copy_from_slice(value);
     }
 }

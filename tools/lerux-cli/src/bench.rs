@@ -5,8 +5,9 @@
 //! on stock configs).
 
 use std::{
+    fmt::Write,
     fs,
-    io::{BufRead, BufReader, Read, Write},
+    io::{BufRead, BufReader, Read},
     path::{Path, PathBuf},
     process::Command,
     sync::{Arc, Mutex},
@@ -56,9 +57,7 @@ pub fn run_bench(
     out_dir: Option<&Path>,
     check: bool,
 ) -> Result<()> {
-    let out = out_dir
-        .map(PathBuf::from)
-        .unwrap_or_else(|| root.join(build_dir).join("bench"));
+    let out = out_dir.map_or_else(|| root.join(build_dir).join("bench"), PathBuf::from);
     fs::create_dir_all(&out).with_context(|| format!("create {}", out.display()))?;
 
     let disk = root.join("support/disk.img");
@@ -126,8 +125,7 @@ fn bench_report(root: &Path, results: Vec<BenchResult>) -> BenchReport {
     BenchReport {
         generated_unix: SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0),
+            .map_or(0, |d| d.as_secs()),
         host: HostInfo {
             uname: capture_cmd(&["uname", "-a"]).unwrap_or_else(|_| "unknown".into()),
             qemu_version: capture_qemu_version(root),
@@ -259,24 +257,24 @@ where
 {
     let sink = Arc::clone(output);
     let wall_slot = Arc::clone(wall);
-    std::thread::spawn(move || pump_bench_reader(reader, sink, wall_slot))
+    std::thread::spawn(move || pump_bench_reader(reader, &sink, &wall_slot))
 }
 
 fn pump_bench_reader<R: Read>(
     reader: R,
-    sink: Arc<Mutex<String>>,
-    wall_slot: Arc<Mutex<Option<WallSpan>>>,
+    sink: &Arc<Mutex<String>>,
+    wall_slot: &Arc<Mutex<Option<WallSpan>>>,
 ) {
     let mut r = BufReader::new(reader);
     let mut line = String::new();
     let mut start_at: Option<(Instant, String, String, u64)> = None;
     while r.read_line(&mut line).unwrap_or(0) > 0 {
         print!("{line}");
-        let _ = Write::flush(&mut std::io::stdout());
+        let _ = std::io::Write::flush(&mut std::io::stdout());
         if let Ok(mut b) = sink.lock() {
             b.push_str(&line);
         }
-        observe_bench_line(&line, &mut start_at, &wall_slot);
+        observe_bench_line(&line, &mut start_at, wall_slot);
         line.clear();
     }
 }
@@ -357,7 +355,8 @@ fn derive_metrics(board: &str, _log: &str, wall: Option<WallSpan>) -> Result<Vec
     let Some(span) = wall else {
         bail!("missing start/done wall-clock span for {board}");
     };
-    let total_ns = span.elapsed.as_nanos().min(u128::from(u64::MAX)) as u64;
+    let total_ns = u64::try_from(span.elapsed.as_nanos().min(u128::from(u64::MAX)))
+        .expect("elapsed fits in u64");
     let total_ns = total_ns.max(1);
     let n = span.n.max(1);
     let (metric, value, unit) = match span.kind.as_str() {
@@ -423,24 +422,26 @@ fn capture_qemu_version(root: &Path) -> String {
 fn render_markdown(report: &BenchReport) -> String {
     let mut s = String::new();
     s.push_str("# lerux microbench results (Phase 49)\n\n");
-    s.push_str(&format!("Generated (unix): {}\n\n", report.generated_unix));
+    writeln!(s, "Generated (unix): {}\n", report.generated_unix).expect("format into string");
     s.push_str("## Host\n\n");
-    s.push_str(&format!("- **uname:** `{}`\n", report.host.uname));
-    s.push_str(&format!("- **QEMU:** `{}`\n", report.host.qemu_version));
-    s.push_str(&format!("- **Note:** {}\n\n", report.host.note));
+    writeln!(s, "- **uname:** `{}`", report.host.uname).expect("format into string");
+    writeln!(s, "- **QEMU:** `{}`", report.host.qemu_version).expect("format into string");
+    writeln!(s, "- **Note:** {}\n", report.host.note).expect("format into string");
     s.push_str("## Results\n\n");
     s.push_str("| Board | Metric | Value | Unit | n | total_ns |\n");
     s.push_str("|-------|--------|------:|------|--:|--------:|\n");
     for r in &report.results {
-        s.push_str(&format!(
-            "| `{}` | {} | {} | {} | {} | {} |\n",
+        writeln!(
+            s,
+            "| `{}` | {} | {} | {} | {} | {} |",
             r.board, r.metric, r.value, r.unit, r.n, r.total_ns
-        ));
+        )
+        .expect("format into string");
     }
     s.push_str("\n## Markers\n\n");
     for r in &report.results {
-        s.push_str(&format!("- start: `{}`\n", r.raw_start));
-        s.push_str(&format!("- done: `{}`\n", r.raw_done));
+        writeln!(s, "- start: `{}`", r.raw_start).expect("format into string");
+        writeln!(s, "- done: `{}`", r.raw_done).expect("format into string");
     }
     s.push_str(
         "\n## Repro\n\n```bash\njust bench\n# or: cargo run -q -p lerux-cli -- bench\n```\n",

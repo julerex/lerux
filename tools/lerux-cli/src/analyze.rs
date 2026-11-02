@@ -18,20 +18,30 @@ pub fn analyze_log(path: &str) -> Result<()> {
     };
     let report = analyze_text(&text);
     print_report(&report);
-    if report.faults > 0 || report.watchdog_fail || report.errors > 0 {
+    if report.faults > 0 || report.watchdog.fail || report.errors > 0 {
         bail!("diagnose found problems (see summary above)");
     }
     Ok(())
 }
 
 #[derive(Debug, Default)]
+struct WatchdogSeen {
+    ok: bool,
+    fail: bool,
+}
+
+#[derive(Debug, Default)]
+struct BootSeen {
+    init_ok: bool,
+    ready: bool,
+}
+
+#[derive(Debug, Default)]
 struct Report {
     lines: usize,
     faults: usize,
-    watchdog_ok: bool,
-    watchdog_fail: bool,
-    init_ok: bool,
-    ready: bool,
+    watchdog: WatchdogSeen,
+    boot: BootSeen,
     errors: usize,
     warns: usize,
     service_errors: Vec<String>,
@@ -60,16 +70,16 @@ fn classify_line(r: &mut Report, l: &str) {
         push_cap(&mut r.fault_lines, l, 12);
     }
     if l.contains("lerux-supervisor: watchdog ok") {
-        r.watchdog_ok = true;
+        r.watchdog.ok = true;
     }
     if l.contains("lerux-supervisor: watchdog fail") {
-        r.watchdog_fail = true;
+        r.watchdog.fail = true;
     }
     if l.contains("lerux-supervisor: init ok") {
-        r.init_ok = true;
+        r.boot.init_ok = true;
     }
     if l.contains("lerux-supervisor: ready") || l.contains("lerux-shell: ready") {
-        r.ready = true;
+        r.boot.ready = true;
     }
     note_error_line(r, l);
     if l.contains(" WARN ") || l.starts_with("W[") || l.contains(" degraded") {
@@ -103,10 +113,10 @@ fn push_cap(v: &mut Vec<String>, line: &str, cap: usize) {
 fn print_report(r: &Report) {
     println!("==> lerux diagnose (Phase 57)");
     println!("lines:           {}", r.lines);
-    println!("init ok:         {}", r.init_ok);
-    println!("ready:           {}", r.ready);
-    println!("watchdog ok:     {}", r.watchdog_ok);
-    println!("watchdog fail:   {}", r.watchdog_fail);
+    println!("init ok:         {}", r.boot.init_ok);
+    println!("ready:           {}", r.boot.ready);
+    println!("watchdog ok:     {}", r.watchdog.ok);
+    println!("watchdog fail:   {}", r.watchdog.fail);
     println!("fault markers:   {}", r.faults);
     println!("error markers:   {}", r.errors);
     println!("warn markers:    {}", r.warns);
@@ -136,7 +146,7 @@ fn print_report(r: &Report) {
             println!("{l}");
         }
     }
-    if r.faults == 0 && !r.watchdog_fail && r.errors == 0 {
+    if r.faults == 0 && !r.watchdog.fail && r.errors == 0 {
         println!("\n==> no crash/hang markers found");
     }
 }

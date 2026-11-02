@@ -44,8 +44,9 @@ pub fn init_hal() {
 
 pub fn ioport_config() -> (u32, u16) {
     (
-        *var!(pci_config_ioport_id: usize = 0) as u32,
-        *var!(pci_config_ioport_addr: usize = 0) as u16,
+        u32::try_from(*var!(pci_config_ioport_id: usize = 0)).expect("pci ioport id fits in u32"),
+        u16::try_from(*var!(pci_config_ioport_addr: usize = 0))
+            .expect("pci ioport addr fits in u16"),
     )
 }
 

@@ -259,8 +259,8 @@ const STACK_SIZE: usize = 0x4000;
 const LINE_MAX: usize = 80;
 const NAME_MAX: usize = 12;
 const LIST_MAX: usize = 32;
-const S_IFMT: u64 = 0o170000;
-const S_IFDIR: u64 = 0o040000;
+const S_IFMT: u64 = 0o170_000;
+const S_IFDIR: u64 = 0o040_000;
 
 #[cfg(any(
     feature = "board-qemu_virt_aarch64_browser_sddf",
@@ -414,7 +414,7 @@ fn bind_files() -> bool {
             commands,
             completions,
             share,
-            FS_REGION_SIZE as usize,
+            usize::try_from(FS_REGION_SIZE).expect("fs region"),
             wake_fs,
             core::ptr::null_mut(),
         )
@@ -465,18 +465,15 @@ fn serve_seeded_file() {
 ))]
 fn browse() {
     let mut body = [0u8; 512];
-    let html = match net::fetch_body(&mut body) {
-        Ok(n) => {
-            match page_title(&body[..n]) {
-                Some(title) => say_title(title),
-                None => say(b"title err\n"),
-            }
-            &body[..n]
+    let html = if let Ok(n) = net::fetch_body(&mut body) {
+        match page_title(&body[..n]) {
+            Some(title) => say_title(title),
+            None => say(b"title err\n"),
         }
-        Err(()) => {
-            say(b"title err\n");
-            &[][..]
-        }
+        &body[..n]
+    } else {
+        say(b"title err\n");
+        &[][..]
     };
     match gpu::show_page(html) {
         Ok(line) => say(line.as_bytes()),
@@ -730,12 +727,9 @@ fn cmd_config(rest: &[u8]) {
         say(b"config err\n");
         return;
     }
-    let fd = match files().open(b"/config/hostname", Open::Read) {
-        Ok(fd) => fd,
-        Err(_) => {
-            say(b"config err\n");
-            return;
-        }
+    let Ok(fd) = files().open(b"/config/hostname", Open::Read) else {
+        say(b"config err\n");
+        return;
     };
     let mut buf = [0u8; 64];
     let read = files().read(fd, &mut buf);
@@ -938,12 +932,9 @@ fn cmd_fetch(rest: &[u8]) {
         say(b"fetch err\n");
         return;
     }
-    let fd = match files().open(name, Open::CreateWrite) {
-        Ok(fd) => fd,
-        Err(_) => {
-            say(b"fetch err\n");
-            return;
-        }
+    let Ok(fd) = files().open(name, Open::CreateWrite) else {
+        say(b"fetch err\n");
+        return;
     };
     let wrote = files().write(fd, &body[..n]);
     let _ = files().close(fd);
@@ -1002,12 +993,9 @@ fn cmd_backup(rest: &[u8]) {
         say(b"backup err\n");
         return;
     }
-    let fd = match files().open(src, Open::Read) {
-        Ok(fd) => fd,
-        Err(_) => {
-            say(b"backup err\n");
-            return;
-        }
+    let Ok(fd) = files().open(src, Open::Read) else {
+        say(b"backup err\n");
+        return;
     };
     let mut buf = [0u8; 512];
     let read = files().read(fd, &mut buf);
@@ -1020,12 +1008,9 @@ fn cmd_backup(rest: &[u8]) {
         say(b"backup err\n");
         return;
     }
-    let fd = match files().open(dest, Open::CreateWrite) {
-        Ok(fd) => fd,
-        Err(_) => {
-            say(b"backup err\n");
-            return;
-        }
+    let Ok(fd) = files().open(dest, Open::CreateWrite) else {
+        say(b"backup err\n");
+        return;
     };
     let wrote = files().write(fd, &buf[..n]);
     let _ = files().close(fd);
@@ -1062,9 +1047,8 @@ fn cmd_source(rest: &[u8]) {
     feature = "board-x86_64_generic_fetch_sddf"
 ))]
 fn source_file(name: &[u8]) -> bool {
-    let fd = match files().open(name, Open::Read) {
-        Ok(fd) => fd,
-        Err(_) => return false,
+    let Ok(fd) = files().open(name, Open::Read) else {
+        return false;
     };
     let mut buf = [0u8; 512];
     let read = files().read(fd, &mut buf);
@@ -1126,12 +1110,9 @@ fn cmd_edit(rest: &[u8]) {
         say(b"edit err\n");
         return;
     }
-    let fd = match files().open(name, Open::CreateWrite) {
-        Ok(fd) => fd,
-        Err(_) => {
-            say(b"edit err\n");
-            return;
-        }
+    let Ok(fd) = files().open(name, Open::CreateWrite) else {
+        say(b"edit err\n");
+        return;
     };
     let wrote = files().write(fd, text);
     let _ = files().close(fd);
@@ -1175,12 +1156,9 @@ fn cmd_write(rest: &[u8]) {
         say(b"write err\n");
         return;
     }
-    let fd = match files().open(name, Open::CreateWrite) {
-        Ok(fd) => fd,
-        Err(_) => {
-            say(b"write err\n");
-            return;
-        }
+    let Ok(fd) = files().open(name, Open::CreateWrite) else {
+        say(b"write err\n");
+        return;
     };
     let wrote = files().write(fd, payload);
     let _ = files().close(fd);
@@ -1193,12 +1171,9 @@ fn cmd_cat(rest: &[u8]) {
         say(b"cat err\n");
         return;
     };
-    let fd = match files().open(name, Open::Read) {
-        Ok(fd) => fd,
-        Err(_) => {
-            say(b"cat err\n");
-            return;
-        }
+    let Ok(fd) = files().open(name, Open::Read) else {
+        say(b"cat err\n");
+        return;
     };
     let mut buf = [0u8; 512];
     let read = files().read(fd, &mut buf);
@@ -1258,12 +1233,9 @@ fn cmd_stat(rest: &[u8]) {
 }
 
 fn list_dir(path: &[u8]) {
-    let dir = match files().open_dir(path) {
-        Ok(dir) => dir,
-        Err(_) => {
-            say(b"ls err\n");
-            return;
-        }
+    let Ok(dir) = files().open_dir(path) else {
+        say(b"ls err\n");
+        return;
     };
     let mut names = [Name {
         bytes: [0; NAME_MAX],
@@ -1302,7 +1274,7 @@ fn insert(names: &mut [Name], count: &mut usize, bytes: &[u8]) -> bool {
     }
     let mut entry = Name {
         bytes: [0; NAME_MAX],
-        len: bytes.len() as u8,
+        len: u8::try_from(bytes.len()).expect("directory name"),
     };
     entry.bytes[..bytes.len()].copy_from_slice(bytes);
     let mut index = *count;
@@ -1414,7 +1386,7 @@ fn init() -> HandlerImpl {
         feature = "board-x86_64_generic_fs_sddf"
     ))]
     install_status(serial_len + fs_len);
-    install_serial(serial);
+    install_serial(&serial);
     spawn_worker();
     HandlerImpl
 }
@@ -1446,7 +1418,7 @@ fn client_pages(serial_len: usize, fs_len: usize) -> serial_client_config_t {
     serial
 }
 
-fn install_serial(serial: serial_client_config_t) {
+fn install_serial(serial: &serial_client_config_t) {
     // SAFETY: the template maps this client's transmit and receive regions.
     let tx = unsafe { serial_handle_from_connection(&serial.tx) };
     let rx = unsafe { serial_handle_from_connection(&serial.rx) };

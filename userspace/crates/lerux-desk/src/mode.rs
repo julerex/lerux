@@ -2,7 +2,7 @@
 
 const ADDRESS_ROWS: u32 = 16;
 /// 16 MiB. The 2026-10-29 Swift X panel is 1920 by 1080 with pitch 7680
-/// (8_294_400 bytes). Pitch 8192 at that size is 8_847_360 bytes and still fits.
+/// (`8_294_400` bytes). Pitch 8192 at that size is `8_847_360` bytes and still fits.
 const FRAMEBUFFER_CAP: u64 = 0x100_0000;
 
 /// Physical page the trampoline fills with a [`ScanoutMode`] record.
@@ -19,6 +19,7 @@ const _: () = assert!(FRAMEBUFFER_PITCH as u64 * FRAMEBUFFER_HEIGHT as u64 == FR
 
 /// Geometry this image maps. seL4 clears the RAM frame at [`MODE_RECORD_PHYS`]
 /// on retype, so a missing record still describes the panel.
+#[must_use]
 pub fn swift_recorded_mode() -> ScanoutMode {
     ScanoutMode {
         address: FRAMEBUFFER_PHYS,
@@ -37,6 +38,7 @@ pub fn swift_recorded_mode() -> ScanoutMode {
 
 /// Mode to paint. A record that names another address stays off. A cleared
 /// record uses [`swift_recorded_mode`].
+#[must_use]
 pub fn panel_mode(record: &[u8]) -> Option<ScanoutMode> {
     if let Some(mode) = ScanoutMode::parse(record) {
         let bytes = u64::from(mode.pitch()).saturating_mul(u64::from(mode.height()));
@@ -47,6 +49,7 @@ pub fn panel_mode(record: &[u8]) -> Option<ScanoutMode> {
 }
 
 /// The recorded address is the buffer this image maps, and it is not the mode page.
+#[must_use]
 pub fn panel_ready(mode_address: u64, mapped_phys: u64) -> bool {
     mode_address != 0
         && mode_address != MODE_RECORD_PHYS
@@ -55,6 +58,7 @@ pub fn panel_ready(mode_address: u64, mapped_phys: u64) -> bool {
 }
 
 /// Same spelling as `fb_mode_line` in `support/mb2-stub/fb_paint.c`.
+#[must_use]
 pub fn mode_line(
     address: u64,
     pitch: u32,
@@ -155,12 +159,13 @@ pub struct ScanoutMode {
 
 impl ScanoutMode {
     /// Accept a 40-byte mode record written by [`Self::write_record`].
+    #[must_use]
     pub fn parse(record: &[u8]) -> Option<Self> {
         let record = record.get(..RECORD_LEN)?;
         if read_u64(record, 0)? != MODE_MAGIC {
             return None;
         }
-        validated(Parts {
+        validated(&Parts {
             address: read_u64(record, 8)?,
             pitch: read_u32(record, 16)?,
             width: read_u32(record, 20)?,
@@ -196,46 +201,57 @@ impl ScanoutMode {
         Some(())
     }
 
+    #[must_use]
     pub fn address(self) -> u64 {
         self.address
     }
 
+    #[must_use]
     pub fn pitch(self) -> u32 {
         self.pitch
     }
 
+    #[must_use]
     pub fn width(self) -> u32 {
         self.width
     }
 
+    #[must_use]
     pub fn height(self) -> u32 {
         self.height
     }
 
+    #[must_use]
     pub fn bits_per_pixel(self) -> u8 {
         self.bpp
     }
 
+    #[must_use]
     pub fn red_shift(self) -> u8 {
         self.red.shift
     }
 
+    #[must_use]
     pub fn green_shift(self) -> u8 {
         self.green.shift
     }
 
+    #[must_use]
     pub fn blue_shift(self) -> u8 {
         self.blue.shift
     }
 
+    #[must_use]
     pub fn red_width(self) -> u8 {
         self.red.width
     }
 
+    #[must_use]
     pub fn green_width(self) -> u8 {
         self.green.width
     }
 
+    #[must_use]
     pub fn blue_width(self) -> u8 {
         self.blue.width
     }
@@ -245,6 +261,7 @@ impl ScanoutMode {
 ///
 /// Framebuffer type 1 is the linear direct-color mode. A shorter slice or any
 /// other framebuffer type is rejected.
+#[must_use]
 pub fn mode_from_mb2_tag(tag: &[u8]) -> Option<ScanoutMode> {
     let kind = read_u32(tag, 0)?;
     let size = usize::try_from(read_u32(tag, 4)?).ok()?;
@@ -255,7 +272,7 @@ pub fn mode_from_mb2_tag(tag: &[u8]) -> Option<ScanoutMode> {
     if read_u8(tag, 29)? != 1 {
         return None;
     }
-    validated(Parts {
+    validated(&Parts {
         address: read_u64(tag, 8)?,
         pitch: read_u32(tag, 16)?,
         width: read_u32(tag, 20)?,
@@ -284,7 +301,7 @@ struct Parts {
     blue_width: u8,
 }
 
-fn validated(parts: Parts) -> Option<ScanoutMode> {
+fn validated(parts: &Parts) -> Option<ScanoutMode> {
     if parts.height < ADDRESS_ROWS || parts.bpp != 32 {
         return None;
     }

@@ -97,6 +97,7 @@ pub struct serial_client_config_t {
 }
 
 /// True when the configuration page starts with [`SDDF_SERIAL_MAGIC`].
+#[must_use]
 pub fn serial_config_check_magic(config: &[u8]) -> bool {
     config.len() >= SDDF_SERIAL_MAGIC_LEN && config[..SDDF_SERIAL_MAGIC_LEN] == SDDF_SERIAL_MAGIC
 }

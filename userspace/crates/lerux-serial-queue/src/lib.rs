@@ -29,6 +29,7 @@ pub struct SerialQueue {
 }
 
 impl SerialQueue {
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             head: AtomicUsize::new(0),
@@ -68,6 +69,7 @@ impl SerialQueueHandle {
         }
     }
 
+    #[must_use]
     pub fn capacity(&self) -> usize {
         self.capacity
     }
@@ -81,25 +83,30 @@ impl SerialQueueHandle {
         unsafe { &*self.queue }
     }
 
+    #[must_use]
     pub fn len(&self) -> usize {
         let head = self.q().head.load(Ordering::Acquire);
         let tail = self.q().tail.load(Ordering::Acquire);
         tail.wrapping_sub(head)
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
+    #[must_use]
     pub fn is_full(&self) -> bool {
         self.len() >= self.capacity
     }
 
+    #[must_use]
     pub fn free_space(&self) -> usize {
         self.capacity.saturating_sub(self.len())
     }
 
     /// Enqueue one byte (producer). Returns `false` if full.
+    #[must_use]
     pub fn enqueue(&self, byte: u8) -> bool {
         let q = self.q();
         let head = q.head.load(Ordering::Acquire);
@@ -117,6 +124,7 @@ impl SerialQueueHandle {
     }
 
     /// Dequeue one byte (consumer). Returns `None` if empty.
+    #[must_use]
     pub fn dequeue(&self) -> Option<u8> {
         let q = self.q();
         let head = q.head.load(Ordering::Relaxed);
@@ -137,6 +145,7 @@ impl SerialQueueHandle {
     }
 
     /// After consumer progress: return true if producer should be notified.
+    #[must_use]
     pub fn consumer_should_signal_producer(&self) -> bool {
         // Swap to true; if it was false, producer is waiting.
         !self.q().producer_signalled.swap(true, Ordering::AcqRel)
@@ -169,7 +178,7 @@ mod tests {
         assert!(cap.is_power_of_two());
         let mut q = Box::new(SerialQueue::new());
         let mut data = vec![0u8; cap];
-        let h = unsafe { SerialQueueHandle::new(&mut *q as *mut _, data.as_mut_ptr(), cap) };
+        let h = unsafe { SerialQueueHandle::new(&raw mut *q, data.as_mut_ptr(), cap) };
         h.init_shared();
         (h, q, data)
     }

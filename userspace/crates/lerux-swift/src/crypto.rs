@@ -38,6 +38,10 @@ impl Sha1 {
     }
 
     #[expect(
+        clippy::many_single_char_names,
+        reason = "names follow the cipher spec"
+    )]
+    #[expect(
         clippy::needless_range_loop,
         reason = "the index is the SHA-1 message schedule"
     )]
@@ -142,6 +146,10 @@ impl Md5 {
         }
     }
 
+    #[expect(
+        clippy::many_single_char_names,
+        reason = "names follow the cipher spec"
+    )]
     #[expect(
         clippy::needless_range_loop,
         reason = "the index selects the MD5 auxiliary function"

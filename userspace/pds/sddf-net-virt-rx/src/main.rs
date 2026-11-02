@@ -119,7 +119,7 @@ impl HandlerImpl {
         unsafe { self.refs.add(index) }
     }
 
-    fn destination(&self, buffer: &net_buff_desc_t) -> Dest {
+    fn destination(buffer: &net_buff_desc_t) -> Dest {
         if u32::from(buffer.len) > NET_BUFFER_SIZE
             || buffer.len < u16::try_from(MAC802_BYTES).expect("address length")
         {
@@ -184,9 +184,9 @@ impl HandlerImpl {
                 && buffer.io_or_offset < buf * u64::from(NET_QUEUE_CAPACITY),
             "offset fits"
         );
-        let dest = self.destination(&buffer);
+        let dest = Self::destination(&buffer);
         match dest {
-            Dest::Client | Dest::Broadcast => self.enqueue_copier(buffer, dest),
+            Dest::Client | Dest::Broadcast => self.enqueue_copier(buffer, &dest),
             Dest::Drop => {
                 self.return_driver(buffer, base);
                 false
@@ -194,7 +194,7 @@ impl HandlerImpl {
         }
     }
 
-    fn enqueue_copier(&mut self, buffer: net_buff_desc_t, dest: Dest) -> bool {
+    fn enqueue_copier(&mut self, buffer: net_buff_desc_t, dest: &Dest) -> bool {
         let cell = self.ref_cell(buffer.io_or_offset);
         // SAFETY: `cell` is one reference count in the metadata page.
         assert_eq!(unsafe { *cell }, 0, "offset fits");

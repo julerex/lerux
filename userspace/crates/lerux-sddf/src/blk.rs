@@ -141,6 +141,7 @@ pub struct blk_storage_info_t {
 }
 
 /// True when `config` starts with [`SDDF_BLK_MAGIC`].
+#[must_use]
 pub fn blk_config_check_magic(config: &[u8]) -> bool {
     config.len() >= SDDF_BLK_MAGIC_LEN && config[..SDDF_BLK_MAGIC_LEN] == SDDF_BLK_MAGIC
 }
@@ -164,6 +165,7 @@ pub unsafe fn blk_storage_set_ready(storage_info: *mut blk_storage_info_t, ready
 /// # Safety
 ///
 /// `storage_info` must point at a shared `blk_storage_info_t`.
+#[must_use]
 pub unsafe fn blk_storage_is_ready(storage_info: *const blk_storage_info_t) -> bool {
     unsafe {
         let ready_byte = &raw const (*storage_info).ready;

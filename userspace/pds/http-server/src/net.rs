@@ -121,6 +121,10 @@ fn create_net_device(
     caps.max_transmission_unit = 1500;
     caps.medium = Medium::Ethernet;
     DeviceImpl::new(
+        #[expect(
+            clippy::default_trait_access,
+            reason = "DeviceImpl defaults to private unsync RawOneShotMutex"
+        )]
         Default::default(),
         dma_region,
         bounce_buffer_allocator,
@@ -175,7 +179,7 @@ impl HttpNet {
         sockets.add(udp)
     }
 
-    fn prime_udp_tx(&mut self, sockets: &mut SocketSet<'static>) {
+    fn prime_udp_tx(sockets: &mut SocketSet<'static>) {
         let arena = unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_ARENA) };
         if arena.udp_primed {
             return;
@@ -208,7 +212,7 @@ impl HttpNet {
         }
     }
 
-    fn ensure_listening_socket(&mut self, sockets: &mut SocketSet<'static>) {
+    fn ensure_listening_socket(sockets: &mut SocketSet<'static>) {
         let arena = unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_ARENA) };
         if !arena.initialized {
             arena.udp_handle = Some(Self::init_udp_socket(sockets));
@@ -267,10 +271,10 @@ impl HttpNet {
                 self.device.poll();
                 let arena = unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_ARENA) };
                 let mut sockets = SocketSet::new(&mut arena.storage[..]);
-                self.ensure_listening_socket(&mut sockets);
+                Self::ensure_listening_socket(&mut sockets);
                 if arena.initialized {
                     self.log_listening();
-                    self.prime_udp_tx(&mut sockets);
+                    Self::prime_udp_tx(&mut sockets);
                     if !self.served {
                         self.serve_http_request(&mut sockets);
                     }

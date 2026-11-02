@@ -13,6 +13,7 @@ pub const AHCI_IOAPIC_VECTOR: u8 = 51;
 pub const MSI_ADDRESS: u32 = 0xfee0_0000;
 
 /// seL4 delivers SDF vector V as V + 0x30. The kernel does not rewrite the message.
+#[must_use]
 pub const fn msi_data(sdf_vector: u8) -> u32 {
     (sdf_vector as u32) + 0x30
 }
@@ -33,14 +34,17 @@ impl PciAddress {
         }
     }
 
+    #[must_use]
     pub const fn bus(self) -> u8 {
         self.bus
     }
 
+    #[must_use]
     pub const fn device(self) -> u8 {
         self.device
     }
 
+    #[must_use]
     pub const fn function(self) -> u8 {
         self.function
     }
@@ -58,14 +62,21 @@ pub struct RejectedClass {
 }
 
 impl Unclaimed {
+    #[must_use]
     pub const fn compiled() -> Self {
         Self(PciAddress::new(0, 0x1f, 2))
     }
 
+    #[must_use]
     pub const fn address(self) -> PciAddress {
         self.0
     }
 
+    /// Accept the compiled address when `class` is [`AHCI_CLASS`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RejectedClass`] when `class` is not [`AHCI_CLASS`].
     pub const fn claim(self, class: u32) -> Result<Claimed, RejectedClass> {
         if class == AHCI_CLASS {
             Ok(Claimed(self.0))
@@ -92,6 +103,7 @@ pub struct AhciMap {
 const ABAR_PADDR: SpelledAddr = SpelledAddr::new("0xfed8_0000");
 const DMA_PADDR: SpelledAddr = SpelledAddr::new("0x6400_0000");
 
+#[must_use]
 pub const fn ahci_map() -> AhciMap {
     AhciMap {
         abar_vaddr: ABAR_PADDR.value(),
@@ -124,8 +136,8 @@ mod tests {
     #[test]
     fn claim_rejects_other_class() {
         assert_eq!(
-            Unclaimed::compiled().claim(0x010600),
-            Err(RejectedClass { found: 0x010600 })
+            Unclaimed::compiled().claim(0x01_06_00),
+            Err(RejectedClass { found: 0x01_06_00 })
         );
     }
 

@@ -1,4 +1,4 @@
-//! Phase 60 Track D: host-side QoS / channel priority abuse checks.
+//! Phase 60 Track D: host-side `QoS` / channel priority abuse checks.
 //!
 //! Validates Microkit PPC priority rules and workstation service-class bands
 //! against the composed SDF (template priorities + profile channels). MCS
@@ -80,7 +80,7 @@ pub fn parse_pd_priorities(sdf: &str) -> Result<Vec<PdPriority>> {
 pub fn parse_ppc_edges(sdf: &str) -> Result<Vec<PpcEdge>> {
     let channel_re = Regex::new(r"(?s)<channel>(.*?)</channel>").context("compile channel re")?;
     // Match any self-closing end tag; detect pp from the full tag text.
-    let end_re = Regex::new(r#"<end\s+([^>]*?)/\s*>"#).context("compile end re")?;
+    let end_re = Regex::new(r"<end\s+([^>]*?)/\s*>").context("compile end re")?;
     let pd_re = Regex::new(r#"pd="([^"]+)""#).context("compile pd re")?;
 
     let mut edges = Vec::new();
@@ -100,12 +100,12 @@ pub fn parse_ppc_edges(sdf: &str) -> Result<Vec<PpcEdge>> {
         if ends.len() != 2 {
             continue;
         }
-        let callers: Vec<_> = ends.iter().filter(|(_, pp)| *pp).map(|(p, _)| p).collect();
-        let callees: Vec<_> = ends.iter().filter(|(_, pp)| !*pp).map(|(p, _)| p).collect();
-        if callers.len() == 1 && callees.len() == 1 {
+        let protected_ends: Vec<_> = ends.iter().filter(|(_, pp)| *pp).map(|(p, _)| p).collect();
+        let open_ends: Vec<_> = ends.iter().filter(|(_, pp)| !*pp).map(|(p, _)| p).collect();
+        if protected_ends.len() == 1 && open_ends.len() == 1 {
             edges.push(PpcEdge {
-                caller: callers[0].clone(),
-                callee: callees[0].clone(),
+                caller: protected_ends[0].clone(),
+                callee: open_ends[0].clone(),
             });
         }
     }
@@ -136,23 +136,23 @@ pub fn validate_qos_sdf(sdf: &str, enforce_workstation_bands: bool) -> Result<Qo
     }
 
     for edge in &report.ppc_edges {
-        let Some(&caller_p) = prio.get(&edge.caller) else {
+        let Some(&caller_priority) = prio.get(&edge.caller) else {
             report.errors.push(format!(
                 "PPC caller {} not found among protection domains",
                 edge.caller
             ));
             continue;
         };
-        let Some(&callee_p) = prio.get(&edge.callee) else {
+        let Some(&target_priority) = prio.get(&edge.callee) else {
             report.errors.push(format!(
                 "PPC callee {} not found among protection domains",
                 edge.callee
             ));
             continue;
         };
-        if caller_p >= callee_p {
+        if caller_priority >= target_priority {
             report.errors.push(format!(
-                "PPC priority abuse: {} (prio {caller_p}) must be < {} (prio {callee_p})",
+                "PPC priority abuse: {} (prio {caller_priority}) must be < {} (prio {target_priority})",
                 edge.caller, edge.callee
             ));
         }
@@ -265,7 +265,7 @@ fn should_enforce_bands(profile: &Profile) -> bool {
     )
 }
 
-/// Run QoS checks for one profile (renders composed SDF).
+/// Run `QoS` checks for one profile (renders composed SDF).
 pub fn check_profile_qos(root: &Path, name: &str, profile: &Profile) -> Result<QosReport> {
     let sdf = crate::system::render_profile_system(root, name, profile, None)
         .with_context(|| format!("render SDF for profile {name}"))?;
@@ -274,7 +274,7 @@ pub fn check_profile_qos(root: &Path, name: &str, profile: &Profile) -> Result<Q
     Ok(report)
 }
 
-/// Print and fail if any profile fails QoS checks.
+/// Print and fail if any profile fails `QoS` checks.
 pub fn check_profiles_qos(root: &Path, profiles: &Profiles, name: Option<&str>) -> Result<()> {
     match name {
         Some(n) => check_named_profile_qos(root, profiles, n),

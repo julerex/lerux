@@ -22,12 +22,12 @@ impl BoardLock {
     /// - `LERUX_HW_LOCK_DIR` — directory for lock files (default: `{tmp}/lerux-hw-locks`)
     /// - `LERUX_HW_LOCK_WAIT_SECS` — how long to wait for a busy lock (default 300)
     pub fn acquire(board: &str) -> Result<Self> {
-        Self::acquire_in(lock_dir()?, board, wait_secs())
+        Self::acquire_in(&lock_dir(), board, wait_secs())
     }
 
     /// Same as [`acquire`](Self::acquire) with explicit directory (for tests).
-    pub fn acquire_in(dir: PathBuf, board: &str, wait: u64) -> Result<Self> {
-        fs::create_dir_all(&dir).with_context(|| format!("create lock dir {}", dir.display()))?;
+    pub fn acquire_in(dir: &Path, board: &str, wait: u64) -> Result<Self> {
+        fs::create_dir_all(dir).with_context(|| format!("create lock dir {}", dir.display()))?;
         let path = dir.join(format!("{board}.lock"));
         let deadline = Instant::now() + Duration::from_secs(wait);
 
@@ -47,7 +47,7 @@ impl BoardLock {
                         );
                     }
                     // Stale lock: dead PID → steal.
-                    if is_stale(&path)? {
+                    if is_stale(&path) {
                         let _ = fs::remove_file(&path);
                         continue;
                     }
@@ -65,11 +65,11 @@ impl Drop for BoardLock {
     }
 }
 
-fn lock_dir() -> Result<PathBuf> {
+fn lock_dir() -> PathBuf {
     if let Ok(d) = std::env::var("LERUX_HW_LOCK_DIR") {
-        return Ok(PathBuf::from(d));
+        return PathBuf::from(d);
     }
-    Ok(std::env::temp_dir().join("lerux-hw-locks"))
+    std::env::temp_dir().join("lerux-hw-locks")
 }
 
 fn wait_secs() -> u64 {
@@ -86,26 +86,26 @@ fn try_create_lock(path: &Path) -> Result<()> {
     Ok(())
 }
 
-fn is_stale(path: &Path) -> Result<bool> {
+fn is_stale(path: &Path) -> bool {
     let text = fs::read_to_string(path).unwrap_or_default();
     let Some(pid_str) = text.split_whitespace().find_map(|t| t.strip_prefix("pid=")) else {
-        return Ok(true);
+        return true;
     };
     let Ok(pid) = pid_str.parse::<i32>() else {
-        return Ok(true);
+        return true;
     };
     if pid <= 0 {
-        return Ok(true);
+        return true;
     }
     // Linux: /proc/<pid> exists while the process is alive.
     #[cfg(target_os = "linux")]
     {
-        Ok(!Path::new(&format!("/proc/{pid}")).exists())
+        !Path::new(&format!("/proc/{pid}")).exists()
     }
     #[cfg(not(target_os = "linux"))]
     {
         let _ = pid;
-        Ok(false)
+        false
     }
 }
 
@@ -118,12 +118,12 @@ mod tests {
     fn exclusive_lock() {
         let dir = tempdir().unwrap();
         let board = "test_board_lock_unit";
-        let a = BoardLock::acquire_in(dir.path().to_path_buf(), board, 1).unwrap();
+        let a = BoardLock::acquire_in(dir.path(), board, 1).unwrap();
         let path = dir.path().join(format!("{board}.lock"));
         assert!(path.is_file());
         assert!(try_create_lock(&path).is_err());
         drop(a);
-        let b = BoardLock::acquire_in(dir.path().to_path_buf(), board, 1).unwrap();
+        let b = BoardLock::acquire_in(dir.path(), board, 1).unwrap();
         drop(b);
         assert!(!path.exists());
     }

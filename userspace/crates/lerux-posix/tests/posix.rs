@@ -261,10 +261,7 @@ impl Fake {
             self.complete_none(cmd.id, FS_STATUS_NO_FILE);
             return;
         };
-        let size = self.files[index]
-            .as_ref()
-            .map(|entry| entry.body_len)
-            .unwrap_or(0);
+        let size = self.files[index].as_ref().map_or(0, |entry| entry.body_len);
         let mut raw: fs_stat_t = unsafe { zeroed() };
         raw.size = size as u64;
         if !self.write_stat(params.buf, raw) {
@@ -324,7 +321,7 @@ impl Fake {
         }
         let found = self.files[start..]
             .iter()
-            .position(|slot| slot.is_some())
+            .position(std::option::Option::is_some)
             .map(|offset| start + offset);
         let Some(index) = found else {
             if let Some(listing) = self.listing.as_mut() {
@@ -381,7 +378,7 @@ impl Fake {
     }
 
     fn free_slot(&self) -> Option<usize> {
-        self.files.iter().position(|slot| slot.is_none())
+        self.files.iter().position(std::option::Option::is_none)
     }
 
     fn copy_name(&self, buf: fs_buffer_t) -> Option<Vec<u8>> {
@@ -430,41 +427,41 @@ impl Fake {
     }
 
     fn complete_fd(&mut self, id: u64, fd: u64) {
-        self.finish(id, FS_STATUS_SUCCESS, Complete::Fd(fd));
+        self.finish(id, FS_STATUS_SUCCESS, &Complete::Fd(fd));
     }
 
     fn complete_read(&mut self, id: u64, len: u64) {
-        self.finish(id, FS_STATUS_SUCCESS, Complete::Read(len));
+        self.finish(id, FS_STATUS_SUCCESS, &Complete::Read(len));
     }
 
     fn complete_write(&mut self, id: u64, len: u64) {
-        self.finish(id, FS_STATUS_SUCCESS, Complete::Write(len));
+        self.finish(id, FS_STATUS_SUCCESS, &Complete::Write(len));
     }
 
     fn complete_none(&mut self, id: u64, status: u64) {
-        self.finish(id, status, Complete::None);
+        self.finish(id, status, &Complete::None);
     }
 
     fn complete_path(&mut self, id: u64, len: u64) {
-        self.finish(id, FS_STATUS_SUCCESS, Complete::Path(len));
+        self.finish(id, FS_STATUS_SUCCESS, &Complete::Path(len));
     }
 
     fn complete_end(&mut self, id: u64) {
-        self.finish(id, FS_STATUS_END_OF_DIRECTORY, Complete::Path(0));
+        self.finish(id, FS_STATUS_END_OF_DIRECTORY, &Complete::Path(0));
     }
 
-    fn finish(&mut self, id: u64, status: u64, data: Complete) {
+    fn finish(&mut self, id: u64, status: u64, data: &Complete) {
         let mut cmpl: fs_cmpl_t = unsafe { zeroed() };
         cmpl.id = id;
         cmpl.status = status;
         match data {
             Complete::Fd(fd) => {
-                cmpl.data.file_open.fd = fd;
-                cmpl.data.dir_open.fd = fd;
+                cmpl.data.file_open.fd = *fd;
+                cmpl.data.dir_open.fd = *fd;
             }
-            Complete::Read(len) => cmpl.data.file_read.len_read = len,
-            Complete::Write(len) => cmpl.data.file_write.len_written = len,
-            Complete::Path(len) => cmpl.data.dir_read.path_len = len,
+            Complete::Read(len) => cmpl.data.file_read.len_read = *len,
+            Complete::Write(len) => cmpl.data.file_write.len_written = *len,
+            Complete::Path(len) => cmpl.data.dir_read.path_len = *len,
             Complete::None => {}
         }
         let _ = unsafe { fs_completion_enqueue(self.completion, cmpl) };
@@ -509,16 +506,16 @@ struct Harness {
     _fake: Box<Fake>,
     _command: Box<fs_queue_t>,
     _completion: Box<fs_queue_t>,
-    _share: Box<[u8; SHARE]>,
+    _share: Vec<u8>,
 }
 
 impl Harness {
     fn new() -> Self {
         let mut command = empty_queue();
         let mut completion = empty_queue();
-        let mut share = Box::new([0u8; SHARE]);
-        let command_ptr = command.as_mut() as *mut fs_queue_t;
-        let completion_ptr = completion.as_mut() as *mut fs_queue_t;
+        let mut share = vec![0u8; SHARE];
+        let command_ptr = std::ptr::from_mut::<fs_queue_t>(command.as_mut());
+        let completion_ptr = std::ptr::from_mut::<fs_queue_t>(completion.as_mut());
         let share_ptr = share.as_mut_ptr();
         let fake = Box::new(Fake {
             command: command_ptr,
@@ -529,7 +526,7 @@ impl Harness {
             next_server: 1,
             served: 0,
         });
-        let fake_ptr = &*fake as *const Fake as *mut Fake;
+        let fake_ptr = (&raw const *fake).cast_mut();
         let files = unsafe {
             Files::bind(
                 command_ptr,

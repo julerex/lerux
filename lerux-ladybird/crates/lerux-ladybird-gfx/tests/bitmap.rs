@@ -12,7 +12,12 @@ fn frame() -> Vec<u8> {
 
 fn white(bitmap: &mut Bitmap<'_>) {
     bitmap.fill_rect(
-        Rect::new(0, 0, FRAME_WIDTH as i32, FRAME_HEIGHT as i32),
+        Rect::new(
+            0,
+            0,
+            i32::try_from(FRAME_WIDTH).expect("frame width fits in i32"),
+            i32::try_from(FRAME_HEIGHT).expect("frame height fits in i32"),
+        ),
         Color::WHITE,
     );
 }
@@ -57,7 +62,11 @@ fn fill_rect_clips_and_set_pixel_ignores_the_outside() {
     assert_eq!(bitmap.pixel(2, 0), Some(Color::WHITE));
     bitmap.fill_rect(Rect::new(0, 0, 0, 8), Color::BLACK);
     bitmap.set_pixel(-1, 0, Color::BLACK);
-    bitmap.set_pixel(FRAME_WIDTH as i32, 0, Color::BLACK);
+    bitmap.set_pixel(
+        i32::try_from(FRAME_WIDTH).expect("frame width fits in i32"),
+        0,
+        Color::BLACK,
+    );
     assert_eq!(bitmap.pixel(2, 0), Some(Color::WHITE));
 }
 

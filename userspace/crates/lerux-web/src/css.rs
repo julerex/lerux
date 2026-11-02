@@ -350,7 +350,6 @@ pub(crate) fn parse_color(raw: &str) -> Option<u32> {
         "silver" => 0x00C0_C0C0,
         "gray" | "grey" => 0x0080_8080,
         "orange" => 0x00FF_A500,
-        "transparent" => return None,
         _ => return None,
     })
 }
@@ -376,9 +375,9 @@ fn parse_hex_color(hex: &str) -> Option<u32> {
 
 fn hex_nibble(b: u8) -> Option<u32> {
     match b {
-        b'0'..=b'9' => Some((b - b'0') as u32),
-        b'a'..=b'f' => Some((b - b'a' + 10) as u32),
-        b'A'..=b'F' => Some((b - b'A' + 10) as u32),
+        b'0'..=b'9' => Some(u32::from(b - b'0')),
+        b'a'..=b'f' => Some(u32::from(b - b'a' + 10)),
+        b'A'..=b'F' => Some(u32::from(b - b'A' + 10)),
         _ => None,
     }
 }

@@ -21,10 +21,10 @@ pub fn libclang_env(root: &Path) -> LibclangEnv {
     if llvm_lib.is_dir() {
         let ld = clang_root.join("usr/lib/x86_64-linux-gnu");
         let mut ld_path = std::env::var("LD_LIBRARY_PATH").unwrap_or_default();
-        if !ld_path.is_empty() {
-            ld_path = format!("{}:{}", ld.display(), ld_path);
-        } else {
+        if ld_path.is_empty() {
             ld_path = ld.display().to_string();
+        } else {
+            ld_path = format!("{}:{}", ld.display(), ld_path);
         }
         return LibclangEnv {
             libclang_path: Some(llvm_lib.display().to_string()),

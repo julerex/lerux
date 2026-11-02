@@ -35,23 +35,32 @@ pub struct KeyEvent {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+struct KeyPair {
+    left: bool,
+    right: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Set1State {
-    shift_l: bool,
-    shift_r: bool,
-    ctrl_l: bool,
-    ctrl_r: bool,
+    shift: KeyPair,
+    ctrl: KeyPair,
     caps: bool,
     extended: bool,
     skip: u8,
 }
 
 impl Set1State {
+    #[must_use]
     pub const fn new() -> Self {
         Self {
-            shift_l: false,
-            shift_r: false,
-            ctrl_l: false,
-            ctrl_r: false,
+            shift: KeyPair {
+                left: false,
+                right: false,
+            },
+            ctrl: KeyPair {
+                left: false,
+                right: false,
+            },
             caps: false,
             extended: false,
             skip: 0,
@@ -59,11 +68,11 @@ impl Set1State {
     }
 
     fn ctrl(self) -> bool {
-        self.ctrl_l || self.ctrl_r
+        self.ctrl.left || self.ctrl.right
     }
 
     fn shift(self) -> bool {
-        self.shift_l || self.shift_r
+        self.shift.left || self.shift.right
     }
 }
 
@@ -111,10 +120,10 @@ pub fn from_set1(state: &mut Set1State, byte: u8) -> Option<KeyEvent> {
 
 fn apply_modifier(state: &mut Set1State, extended: bool, code: u8, down: bool) -> bool {
     match (extended, code) {
-        (false, 0x2A) => state.shift_l = down,
-        (false, 0x36) => state.shift_r = down,
-        (false, 0x1D) => state.ctrl_l = down,
-        (true, 0x1D) => state.ctrl_r = down,
+        (false, 0x2A) => state.shift.left = down,
+        (false, 0x36) => state.shift.right = down,
+        (false, 0x1D) => state.ctrl.left = down,
+        (true, 0x1D) => state.ctrl.right = down,
         (false, 0x3A) if down => state.caps = !state.caps,
         _ => return false,
     }
@@ -246,6 +255,7 @@ pub struct KeyRing {
 }
 
 impl KeyRing {
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             slots: [KeyEvent {

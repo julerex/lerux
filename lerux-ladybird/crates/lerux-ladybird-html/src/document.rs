@@ -102,6 +102,7 @@ pub struct Document {
 }
 
 impl Document {
+    #[must_use]
     pub const fn empty() -> Self {
         Self {
             nodes: Vec::new(),
@@ -109,6 +110,7 @@ impl Document {
         }
     }
 
+    #[must_use]
     pub fn parse(html: &str) -> Self {
         parse::build(html)
     }
@@ -116,6 +118,7 @@ impl Document {
     /// Text of the first `title` element in tree order.
     ///
     /// A missing title, or a title with no text child, returns `""`.
+    #[must_use]
     pub fn title_text(&self) -> &str {
         let mut index = 0;
         while index < self.children.len() {
@@ -128,6 +131,7 @@ impl Document {
         ""
     }
 
+    #[must_use]
     pub fn children(&self) -> Children<'_> {
         Children {
             document: self,
@@ -225,14 +229,17 @@ pub struct Element<'a> {
 
 impl<'a> Element<'a> {
     /// Lowercase tag name.
+    #[must_use]
     pub fn name(&self) -> &'a str {
         self.document.tag(self.id).name()
     }
 
+    #[must_use]
     pub fn parent(&self) -> Parent<'a> {
         self.document.parent_of(self.id)
     }
 
+    #[must_use]
     pub fn children(&self) -> Children<'a> {
         Children {
             document: self.document,
@@ -248,10 +255,12 @@ pub struct Text<'a> {
 }
 
 impl<'a> Text<'a> {
+    #[must_use]
     pub fn data(&self) -> &'a str {
         self.document.text_data(self.id)
     }
 
+    #[must_use]
     pub fn parent(&self) -> Parent<'a> {
         self.document.parent_of(self.id)
     }

@@ -1,4 +1,4 @@
-//! LionsOS filesystem command queue.
+//! `LionsOS` filesystem command queue.
 //!
 //! `fs_cmd_t` and `fs_msg_t` are 64 bytes, which `include/lions/fs/protocol.h` asserts.
 
@@ -349,6 +349,7 @@ pub struct fs_client_config_t {
 }
 
 /// True when `config` starts with [`LIONS_FS_MAGIC`].
+#[must_use]
 pub fn fs_config_check_magic(config: &[u8]) -> bool {
     config.len() >= LIONS_FS_MAGIC_LEN && config[..LIONS_FS_MAGIC_LEN] == LIONS_FS_MAGIC
 }

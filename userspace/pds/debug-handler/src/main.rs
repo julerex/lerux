@@ -17,7 +17,7 @@ use sel4::Fault;
 use sel4_microkit::Channel;
 use sel4_microkit::{protection_domain, Child, Handler, Infallible, MessageInfo};
 
-/// Child PD index from the system description (`id="1"` on crash_demo).
+/// Child PD index from the system description (`id="1"` on `crash_demo`).
 const CRASH_DEMO: Child = Child::new(1);
 
 /// Isolation board: channel 0 → `fs_client` (notify after crash).

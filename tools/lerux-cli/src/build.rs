@@ -113,7 +113,7 @@ pub fn build_pd(
         &sdk,
         &board_cfg.microkit_board,
         config,
-        PdBuildPaths {
+        &PdBuildPaths {
             target_dir: &target_dir,
             target_spec: &target_spec,
         },
@@ -145,7 +145,7 @@ fn pd_cargo_command(
     sdk: &str,
     microkit_board: &str,
     config: &str,
-    paths: PdBuildPaths<'_>,
+    paths: &PdBuildPaths<'_>,
 ) -> Command {
     let mut cmd = Command::new("cargo");
     cmd.current_dir(root);
@@ -200,7 +200,7 @@ fn assemble_image(root: &Path, board: &str, build_dir: &str, config: &str) -> Re
     let sdk = sdk_path(root)?;
     let board_build = board_build_dir(root, board, build_dir);
     let system = system_file(root, board, build_dir);
-    let microkit = format!("{}/bin/microkit", sdk);
+    let microkit = format!("{sdk}/bin/microkit");
 
     let loader = board_build.join("loader.img");
     run_inherit(
@@ -271,7 +271,7 @@ pub fn run(root: &Path, board: &str, build_dir: &str, config: &str) -> Result<()
         let _ = child.kill();
     }
     if !status.success() {
-        bail!("qemu exited with {}", status);
+        bail!("qemu exited with {status}");
     }
     Ok(())
 }

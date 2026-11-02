@@ -175,7 +175,7 @@ impl Scanner<'_> {
         loop {
             self.skip_ws();
             match self.peek() {
-                None | Some(b'>') | Some(b'/') => break,
+                None | Some(b'>' | b'/') => break,
                 _ => {}
             }
             let Some(name) = self.take_attr_name() else {
@@ -208,29 +208,26 @@ impl Scanner<'_> {
     }
 
     fn take_attr_value(&mut self) -> String {
-        match self.peek() {
-            Some(q @ (b'"' | b'\'')) => {
+        if let Some(q @ (b'"' | b'\'')) = self.peek() {
+            self.pos += 1;
+            let start = self.pos;
+            while let Some(b) = self.peek() {
+                if b == q {
+                    break;
+                }
                 self.pos += 1;
-                let start = self.pos;
-                while let Some(b) = self.peek() {
-                    if b == q {
-                        break;
-                    }
-                    self.pos += 1;
-                }
-                let v = String::from_utf8_lossy(&self.input[start..self.pos]).into_owned();
-                if self.peek() == Some(q) {
-                    self.pos += 1;
-                }
-                v
             }
-            _ => {
-                let start = self.pos;
-                while matches!(self.peek(), Some(b) if !is_ws(b) && b != b'>' && b != b'/') {
-                    self.pos += 1;
-                }
-                String::from_utf8_lossy(&self.input[start..self.pos]).into_owned()
+            let v = String::from_utf8_lossy(&self.input[start..self.pos]).into_owned();
+            if self.peek() == Some(q) {
+                self.pos += 1;
             }
+            v
+        } else {
+            let start = self.pos;
+            while matches!(self.peek(), Some(b) if !is_ws(b) && b != b'>' && b != b'/') {
+                self.pos += 1;
+            }
+            String::from_utf8_lossy(&self.input[start..self.pos]).into_owned()
         }
     }
 

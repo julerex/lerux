@@ -227,6 +227,16 @@ The on-screen menu is `console-shell`. It is not the filesystem shell. `console-
 - `just test-x86-console` expects `1 browser`, then QMP keys `2`, Enter, `6`, `/`, `2`, Enter, and expects `maths 3`. `pc_z97_d3h` is the metal image and stays out of the workflow. The USB-keyboard QEMU board stays out. The template still maps the xHCI window at `0xf7e20000` and the DMA region at `0x62000000`.
 - Keep `1 browser`, `browser unavailable`, `maths 3`, and `maths err` out of `expect` and `assert` messages.
 
+## Swift panel (`swift_sfx14_41g`)
+
+- The i8042 path and the USB HID path emit an uppercase ASCII byte when Shift XOR Caps Lock is set. The shell echoes that byte. `lerux-desk` paints it. A byte with no glyph row is the hollow box. A stored capital that shows the lowercase shape is a bitmap change. `just check` is the glyph proof because it runs the `lerux-desk` tests. The QEMU desk console paints VGA cells.
+- `mt7921: firmware err` means the linked patch pair or RAM pair was empty. A `mt7921:` firmware word means host blobs were already baked in. `support/mt7921.bin` overrides only the primary RAM image, and the patch has no `support/` file. `fw chip` is a chip-id mismatch before the patch load. The live words are `own`, `fw sem`, `fw patch`, `fw scatter`, `fw ram`, `fw start`, `fw chip`, and `mac`, including when a plan sentence still says a single `fw`.
+- Treat each `mt7921:` word as every return site that paints it. Leave the download sequence unchanged until a boot shows that word. `fw scatter` is any chunk of the patch or the RAM image. `fw sem` is also the release after patch-finish has succeeded. `fw patch` or `fw ram` covers a header that did not parse as well as a setup command that got no reply.
+- `own` covers the opening host-own polls and `driver_own`. `mac` covers `wfsys`, `dma_disable`, and later `mac_init`. A boot that prints `mac` or `own` still includes those earlier returns.
+- `bt: port N STAGE` means no HCI interface was addressed, N ports reported a connection, and STAGE is the furthest of `reset`, `slot`, `addr`, or `desc`. Read it separately from the `mt7921:` line.
+- `ssid ok` is a stored name of 1 to 32 bytes followed by `psk>`. `psk ok` is a passphrase of 8 to 63 bytes written and notified before the menu returns. `wifi err` is the rejection. Association runs on the ready path. A not-ready notify repaints the current stage with no further notify and no key kept on the next boot.
+- `console_driver` (priority 6) paints from its cell buffer. `swift_mt7921` (priority 4, row 22), `swift_nvme` (priority 3, row 23), and `swift_bt` (priority 2, row 24) write the framebuffer after the banner. A scroll or full clear is `Damage::All`, so `present_all` replaces those rows from the console buffer.
+
 ## Agent image (`qemu_virt_aarch64_agent_sddf`)
 
 Read Milestone 13 in [docs/plan-lionsos.md](docs/plan-lionsos.md). `sddf-shell` stays on the other images. Milestone 17 deleted the postcard `agent`. LionsOS 0.4.0 has no agent header. The tool page is `agent_tool_t` in `lerux-sddf`.
@@ -269,6 +279,14 @@ Read Milestones 5, 6, 8, 11, 13, and 14 in [docs/plan-lionsos.md](docs/plan-lion
 - `open_dir`, `read_dir`, and `close_dir` use the directory commands. `read_dir` returns `Ok(None)` for `FS_STATUS_END_OF_DIRECTORY` before that status is mapped. The status map would turn it into errno 1.
 - `cargo test -p lerux-posix` is the host check. Keep `lerux shell ready` out of that crate.
 
+## Ladybird libraries (`lerux-ladybird`)
+
+- Keep every declaration in source order, including a property this subset does not resolve, and fail the whole parse on an at-rule or on a combinator other than descendant and child.
+- Fold ASCII case only for type selectors and ordinary property names. Keep the sheet's spelling for class selectors, id selectors, custom-property names (the leading `--` included), and values. Store a custom property, or a call whose name is `var` under ASCII case-fold, as unresolved source text.
+- Store the combinator on the compound it introduces, with none on the first compound. Treat only CSS whitespace between compounds as the descendant combinator, so a comment stays inside one compound.
+- Let the accepted-property list classify the declaration's name only, and store every value as the sheet's source text.
+- Store each compound's type, class, and id selectors as one source-ordered list. Omit comments from stored values. Keep a quoted value's quotes so an interior semicolon stays in that value.
+
 ## Host tooling (`tools/lerux-cli/**`)
 
 - Use `anyhow::Result` at the CLI boundary; add context with `.context("…")?`.
@@ -301,7 +319,8 @@ CI runs `just check` before the SDK pipeline and `just check-pd` after the SDK a
 A few results look like success and are not:
 
 - `lerux-cli` is a binary crate. Test it with `cargo test -p lerux-cli -- <filter>`. There is no `--lib` target. `--exact` needs the full path `module::tests::<name>`. A filter matches test function names, not the integration-test file name. Run a file with `cargo test -p <crate> --test <file stem>`. A filter that matches nothing still exits 0; `running 0 tests` is the result.
-- Do not run `just check`, `just check-pd`, and `just test-*` together. `just check` uses `build/host`. `just check-pd` and a smoke share `build/target`, and both invoke `cargo run -p lerux-cli` in the default target directory.
+- Ladybird CSS coverage is the host test of `lerux-ladybird-web`, which `support/host-check.sh` already runs, so a new `tests/` file needs no edit to that script, to `SHARED_CRATES`, or to the justfile, and `just test` stays the QEMU board smoke.
+- Do not run `just check`, `just check-pd`, `just test-*`, and `just iso` together. `just check` uses `build/host`. `just check-pd`, a smoke, and `just iso` share `build/target`, and both `just check-pd` and `just iso` invoke `cargo run -p lerux-cli` in the default target directory. `just iso` is `cargo run -p lerux-cli -- iso` and writes the Swift protection domains into that directory.
 - Update the milestone status, the board row, and the smoke counts in `docs/ci.md` and the README only after `just check`, `just check-pd`, and that milestone's smokes have passed. The workflow `include` list and those hand-written counts move together. Leave the historical job counts inside `docs/plan.md` as they were.
 - Lint protection domains with `just check-pd`. That command sets up libclang. `cargo clippy` on a PD target without it panics inside bindgen.
 - `ci = true` in `support/boards.toml` is the set `just test-all` runs. GitHub smoke is the `include` list in `.github/workflows/rust.yml`. The job count in `docs/ci.md` and the README is written by hand. A new board name is passed as `--features board-<name>` only when that key exists in the PD `Cargo.toml`.

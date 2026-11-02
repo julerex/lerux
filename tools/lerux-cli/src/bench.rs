@@ -6,8 +6,10 @@
 
 use std::{
     fs,
+    io::{BufRead, BufReader, Read, Write},
     path::{Path, PathBuf},
     process::Command,
+    sync::{Arc, Mutex},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -66,51 +68,10 @@ pub fn run_bench(
 
     let mut results = Vec::new();
     for board in BENCH_BOARDS {
-        println!("\n==> bench board {board}");
-        build::image(root, board, build_dir, config)?;
-        let (captured, wall) = run_board_capture(root, board, build_dir, config)?;
-        // Always keep raw serial for diagnose (Phase 57).
-        let log_path = out.join(format!("{board}.serial.log"));
-        fs::write(&log_path, &captured).with_context(|| format!("write {}", log_path.display()))?;
-        let parsed = derive_metrics(board, &captured, wall)?;
-        for r in &parsed {
-            println!(
-                "    {} {} {} (n={}, total_ns={})",
-                r.metric, r.value, r.unit, r.n, r.total_ns
-            );
-        }
-        results.extend(parsed);
+        results.extend(bench_board(root, board, build_dir, config, &out)?);
     }
-
-    let report = BenchReport {
-        generated_unix: SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0),
-        host: HostInfo {
-            uname: capture_cmd(&["uname", "-a"]).unwrap_or_else(|_| "unknown".into()),
-            qemu_version: capture_qemu_version(root),
-            note: "Host wall-clock between guest start/done markers on QEMU TCG; relative only."
-                .into(),
-        },
-        results,
-    };
-
-    let json_path = out.join("bench-results.json");
-    let md_path = out.join("bench-results.md");
-    let json = serde_json::to_string_pretty(&report).context("serialize bench json")?;
-    fs::write(&json_path, json).with_context(|| format!("write {}", json_path.display()))?;
-    fs::write(&md_path, render_markdown(&report))
-        .with_context(|| format!("write {}", md_path.display()))?;
-
-    let docs_snapshot = root.join("docs/bench-results.latest.md");
-    fs::write(&docs_snapshot, render_markdown(&report))
-        .with_context(|| format!("write {}", docs_snapshot.display()))?;
-
-    println!("\n==> bench complete");
-    println!("    {}", json_path.display());
-    println!("    {}", md_path.display());
-    println!("    {}", docs_snapshot.display());
+    let report = bench_report(root, results);
+    write_bench_report(root, &out, &report)?;
 
     if check {
         check_thresholds(root, &report)?;
@@ -136,6 +97,62 @@ struct MinMetric {
     min_iops: Option<u64>,
     #[serde(default)]
     min_pps: Option<u64>,
+}
+
+fn bench_board(
+    root: &Path,
+    board: &str,
+    build_dir: &str,
+    config: &str,
+    out: &Path,
+) -> Result<Vec<BenchResult>> {
+    println!("\n==> bench board {board}");
+    build::image(root, board, build_dir, config)?;
+    let (captured, wall) = run_board_capture(root, board, build_dir, config)?;
+    // Always keep raw serial for diagnose (Phase 57).
+    let log_path = out.join(format!("{board}.serial.log"));
+    fs::write(&log_path, &captured).with_context(|| format!("write {}", log_path.display()))?;
+    let parsed = derive_metrics(board, &captured, wall)?;
+    for r in &parsed {
+        println!(
+            "    {} {} {} (n={}, total_ns={})",
+            r.metric, r.value, r.unit, r.n, r.total_ns
+        );
+    }
+    Ok(parsed)
+}
+
+fn bench_report(root: &Path, results: Vec<BenchResult>) -> BenchReport {
+    BenchReport {
+        generated_unix: SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0),
+        host: HostInfo {
+            uname: capture_cmd(&["uname", "-a"]).unwrap_or_else(|_| "unknown".into()),
+            qemu_version: capture_qemu_version(root),
+            note: "Host wall-clock between guest start/done markers on QEMU TCG; relative only."
+                .into(),
+        },
+        results,
+    }
+}
+
+fn write_bench_report(root: &Path, out: &Path, report: &BenchReport) -> Result<()> {
+    let json_path = out.join("bench-results.json");
+    let md_path = out.join("bench-results.md");
+    let json = serde_json::to_string_pretty(report).context("serialize bench json")?;
+    fs::write(&json_path, json).with_context(|| format!("write {}", json_path.display()))?;
+    fs::write(&md_path, render_markdown(report))
+        .with_context(|| format!("write {}", md_path.display()))?;
+    let docs_snapshot = root.join("docs/bench-results.latest.md");
+    fs::write(&docs_snapshot, render_markdown(report))
+        .with_context(|| format!("write {}", docs_snapshot.display()))?;
+    println!("\n==> bench complete");
+    println!("    {}", json_path.display());
+    println!("    {}", md_path.display());
+    println!("    {}", docs_snapshot.display());
+    Ok(())
 }
 
 fn check_thresholds(root: &Path, report: &BenchReport) -> Result<()> {
@@ -208,11 +225,6 @@ struct WallSpan {
 }
 
 fn capture_smoke(mut cmd: Command, test: &SmokeTest) -> Result<(String, Option<WallSpan>)> {
-    use std::{
-        io::{BufRead, BufReader},
-        sync::{Arc, Mutex},
-    };
-
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());
     let mut child = cmd.spawn()?;
@@ -220,66 +232,11 @@ fn capture_smoke(mut cmd: Command, test: &SmokeTest) -> Result<(String, Option<W
     let stderr = child.stderr.take().context("stderr")?;
     let output = Arc::new(Mutex::new(String::new()));
     let wall = Arc::new(Mutex::new(None::<WallSpan>));
-    let o1 = Arc::clone(&output);
-    let o2 = Arc::clone(&output);
-    let w1 = Arc::clone(&wall);
-    let w2 = Arc::clone(&wall);
-
     // stdout
-    let t1 = std::thread::spawn({
-        let sink = o1;
-        let wall_slot = w1;
-        move || {
-            let mut r = BufReader::new(stdout);
-            let mut line = String::new();
-            let mut start_at: Option<(Instant, String, String, u64)> = None;
-            while r.read_line(&mut line).unwrap_or(0) > 0 {
-                print!("{line}");
-                let _ = std::io::Write::flush(&mut std::io::stdout());
-                if let Ok(mut b) = sink.lock() {
-                    b.push_str(&line);
-                }
-                observe_bench_line(&line, &mut start_at, &wall_slot);
-                line.clear();
-            }
-        }
-    });
+    let t1 = spawn_bench_pump(stdout, &output, &wall);
     // stderr (QEMU often merges)
-    let t2 = std::thread::spawn({
-        let sink = o2;
-        let wall_slot = w2;
-        move || {
-            let mut r = BufReader::new(stderr);
-            let mut line = String::new();
-            let mut start_at: Option<(Instant, String, String, u64)> = None;
-            while r.read_line(&mut line).unwrap_or(0) > 0 {
-                print!("{line}");
-                let _ = std::io::Write::flush(&mut std::io::stdout());
-                if let Ok(mut b) = sink.lock() {
-                    b.push_str(&line);
-                }
-                observe_bench_line(&line, &mut start_at, &wall_slot);
-                line.clear();
-            }
-        }
-    });
-    let deadline = Instant::now() + Duration::from_secs(test.timeout_secs);
-    let mut remaining = test.expects.clone();
-    let result = loop {
-        if remaining.is_empty() {
-            break Ok(());
-        }
-        if Instant::now() >= deadline {
-            break Err(anyhow::anyhow!(
-                "timed out waiting for: {}",
-                remaining.join(", ")
-            ));
-        }
-        if let Ok(buf) = output.lock() {
-            remaining.retain(|p| !buf.contains(p.as_str()));
-        }
-        std::thread::sleep(Duration::from_millis(50));
-    };
+    let t2 = spawn_bench_pump(stderr, &output, &wall);
+    let result = wait_bench_expects(&output, &test.expects, test.timeout_secs);
 
     let _ = child.kill();
     let _ = child.wait();
@@ -290,6 +247,59 @@ fn capture_smoke(mut cmd: Command, test: &SmokeTest) -> Result<(String, Option<W
     let buf = output.lock().map(|b| b.clone()).unwrap_or_default();
     let span = wall.lock().ok().and_then(|g| g.clone());
     Ok((buf, span))
+}
+
+fn spawn_bench_pump<R>(
+    reader: R,
+    output: &Arc<Mutex<String>>,
+    wall: &Arc<Mutex<Option<WallSpan>>>,
+) -> std::thread::JoinHandle<()>
+where
+    R: Read + Send + 'static,
+{
+    let sink = Arc::clone(output);
+    let wall_slot = Arc::clone(wall);
+    std::thread::spawn(move || pump_bench_reader(reader, sink, wall_slot))
+}
+
+fn pump_bench_reader<R: Read>(
+    reader: R,
+    sink: Arc<Mutex<String>>,
+    wall_slot: Arc<Mutex<Option<WallSpan>>>,
+) {
+    let mut r = BufReader::new(reader);
+    let mut line = String::new();
+    let mut start_at: Option<(Instant, String, String, u64)> = None;
+    while r.read_line(&mut line).unwrap_or(0) > 0 {
+        print!("{line}");
+        let _ = Write::flush(&mut std::io::stdout());
+        if let Ok(mut b) = sink.lock() {
+            b.push_str(&line);
+        }
+        observe_bench_line(&line, &mut start_at, &wall_slot);
+        line.clear();
+    }
+}
+
+fn wait_bench_expects(
+    output: &Arc<Mutex<String>>,
+    expects: &[String],
+    timeout_secs: u64,
+) -> Result<()> {
+    let deadline = Instant::now() + Duration::from_secs(timeout_secs);
+    let mut remaining = expects.to_vec();
+    loop {
+        if remaining.is_empty() {
+            return Ok(());
+        }
+        if Instant::now() >= deadline {
+            bail!("timed out waiting for: {}", remaining.join(", "));
+        }
+        if let Ok(buf) = output.lock() {
+            remaining.retain(|p| !buf.contains(p.as_str()));
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
 }
 
 fn observe_bench_line(

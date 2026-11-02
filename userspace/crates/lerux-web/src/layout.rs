@@ -136,39 +136,59 @@ fn layout_block(
         pad.top + pad.bottom,
         style.background,
     );
-    let mut cy = border_y + pad.top;
+    let mut place = ContentPlace {
+        x: content_x,
+        y: border_y + pad.top,
+        w: content_w,
+    };
     let children = doc.get(id).children.clone();
+    layout_block_children(doc, &children, cascade, &style, &mut place, &mut box_);
+    box_.height = (place.y - border_y) + pad.bottom;
+    if box_.height < pad.top + pad.bottom {
+        box_.height = pad.top + pad.bottom;
+    }
+    box_
+}
+
+struct ContentPlace {
+    x: i32,
+    y: i32,
+    w: i32,
+}
+
+fn layout_block_children(
+    doc: &Document,
+    children: &[NodeId],
+    cascade: &Cascade,
+    style: &ComputedStyle,
+    place: &mut ContentPlace,
+    box_: &mut LayoutBox,
+) {
     let mut i = 0;
     while i < children.len() {
-        if is_block_child(doc, children[i], cascade, &style) {
+        if is_block_child(doc, children[i], cascade, style) {
             if let Some(child) =
-                layout_node(doc, children[i], cascade, &style, content_x, cy, content_w)
+                layout_node(doc, children[i], cascade, style, place.x, place.y, place.w)
             {
-                let bottom = child.y
-                    + child.height
-                    + cascade.compute(doc, children[i], &style).margin.bottom;
-                cy = bottom;
+                let bottom =
+                    child.y + child.height + cascade.compute(doc, children[i], style).margin.bottom;
+                place.y = bottom;
                 box_.children.push(child);
             }
             i += 1;
         } else {
             let mut run_ids = Vec::new();
-            while i < children.len() && !is_block_child(doc, children[i], cascade, &style) {
+            while i < children.len() && !is_block_child(doc, children[i], cascade, style) {
                 run_ids.push(children[i]);
                 i += 1;
             }
             let (runs, replaced, h) =
-                layout_inline_run(doc, &run_ids, cascade, &style, content_x, cy, content_w);
+                layout_inline_run(doc, &run_ids, cascade, style, place.x, place.y, place.w);
             box_.runs.extend(runs);
             box_.replaced.extend(replaced);
-            cy += h;
+            place.y += h;
         }
     }
-    box_.height = (cy - border_y) + pad.bottom;
-    if box_.height < pad.top + pad.bottom {
-        box_.height = pad.top + pad.bottom;
-    }
-    box_
 }
 
 fn is_block_child(doc: &Document, id: NodeId, cascade: &Cascade, parent: &ComputedStyle) -> bool {

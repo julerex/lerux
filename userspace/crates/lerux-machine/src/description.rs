@@ -220,62 +220,75 @@ static X86_NET_BARS: [PciBar; 2] = [
 pub fn virtio_node(arch: Arch, role: VirtioRole) -> Option<VirtioNode> {
     match arch {
         Arch::Aarch64 => Some(VirtioNode::Mmio(aarch64_virtio_mmio(role))),
-        // Guest virtual address equals the physical page. The AArch64 high
-        // window does not boot on QEMU RISC-V. Milestone 23 records the exit
-        // if Microkit can place a high guest map. Until then, keep the identity.
-        Arch::Riscv64 => match role {
-            VirtioRole::Blk => Some(VirtioNode::Mmio(MmioDevice {
-                window: MmioWindow {
-                    name: "virtio_blk_mmio",
-                    phys: RISCV64_BLK_PHYS,
-                    vaddr: RISCV64_BLK_PHYS.value(),
-                    size: SERIAL_MMIO_SIZE,
-                },
-                offset: RISCV64_VIRTIO_MMIO_OFFSET,
-                irq: LineIrq(RISCV64_BLK_IRQ),
-                setvar: "virtio_blk_mmio_vaddr",
-            })),
-            VirtioRole::Net => Some(VirtioNode::Mmio(MmioDevice {
-                window: MmioWindow {
-                    name: "virtio_net_mmio",
-                    phys: RISCV64_NET_PHYS,
-                    vaddr: RISCV64_NET_PHYS.value(),
-                    size: SERIAL_MMIO_SIZE,
-                },
-                offset: RISCV64_VIRTIO_MMIO_OFFSET,
-                irq: LineIrq(RISCV64_NET_IRQ),
-                setvar: "virtio_net_mmio_vaddr",
-            })),
-            VirtioRole::Gpu => Some(VirtioNode::Mmio(MmioDevice {
-                window: MmioWindow {
-                    name: "virtio_gpu_mmio",
-                    phys: RISCV64_GPU_PHYS,
-                    vaddr: RISCV64_GPU_PHYS.value(),
-                    size: SERIAL_MMIO_SIZE,
-                },
-                offset: RISCV64_VIRTIO_MMIO_OFFSET,
-                irq: LineIrq(RISCV64_GPU_IRQ),
-                setvar: "virtio_gpu_mmio_vaddr",
-            })),
-        },
-        Arch::X86_64 => match role {
-            VirtioRole::Blk => Some(VirtioNode::Pci {
-                config: pci_config_port(),
-                device: X86_BLK_DEVICE,
-                function: X86_BLK_FUNCTION,
-                irq: x86_level_low(X86_BLK_PIN, X86_BLK_VECTOR),
-                bars: &X86_BLK_BARS,
-            }),
-            VirtioRole::Net => Some(VirtioNode::Pci {
-                config: pci_net_config_port(),
-                device: X86_NET_DEVICE,
-                function: X86_NET_FUNCTION,
-                irq: x86_level_low(X86_NET_PIN, X86_NET_VECTOR),
-                bars: &X86_NET_BARS,
-            }),
-            VirtioRole::Gpu => None,
-        },
+        Arch::Riscv64 => Some(VirtioNode::Mmio(riscv64_virtio_mmio(role))),
+        Arch::X86_64 => x86_virtio_pci(role),
     }
+}
+
+/// Guest virtual address equals the physical page. The AArch64 high window
+/// does not boot on QEMU RISC-V. Milestone 23 records the exit if Microkit can
+/// place a high guest map. Until then, keep the identity.
+const fn riscv64_virtio_mmio(role: VirtioRole) -> MmioDevice {
+    let (name, phys, irq, setvar) = match role {
+        VirtioRole::Blk => (
+            "virtio_blk_mmio",
+            RISCV64_BLK_PHYS,
+            RISCV64_BLK_IRQ,
+            "virtio_blk_mmio_vaddr",
+        ),
+        VirtioRole::Net => (
+            "virtio_net_mmio",
+            RISCV64_NET_PHYS,
+            RISCV64_NET_IRQ,
+            "virtio_net_mmio_vaddr",
+        ),
+        VirtioRole::Gpu => (
+            "virtio_gpu_mmio",
+            RISCV64_GPU_PHYS,
+            RISCV64_GPU_IRQ,
+            "virtio_gpu_mmio_vaddr",
+        ),
+    };
+    MmioDevice {
+        window: MmioWindow {
+            name,
+            phys,
+            vaddr: phys.value(),
+            size: SERIAL_MMIO_SIZE,
+        },
+        offset: RISCV64_VIRTIO_MMIO_OFFSET,
+        irq: LineIrq(irq),
+        setvar,
+    }
+}
+
+fn x86_virtio_pci(role: VirtioRole) -> Option<VirtioNode> {
+    let (config, device, function, pin, vector, bars) = match role {
+        VirtioRole::Blk => (
+            pci_config_port(),
+            X86_BLK_DEVICE,
+            X86_BLK_FUNCTION,
+            X86_BLK_PIN,
+            X86_BLK_VECTOR,
+            &X86_BLK_BARS[..],
+        ),
+        VirtioRole::Net => (
+            pci_net_config_port(),
+            X86_NET_DEVICE,
+            X86_NET_FUNCTION,
+            X86_NET_PIN,
+            X86_NET_VECTOR,
+            &X86_NET_BARS[..],
+        ),
+        VirtioRole::Gpu => return None,
+    };
+    Some(VirtioNode::Pci {
+        config,
+        device,
+        function,
+        irq: x86_level_low(pin, vector),
+        bars,
+    })
 }
 
 const fn aarch64_virtio_mmio(role: VirtioRole) -> MmioDevice {
@@ -334,64 +347,65 @@ pub struct QemuPlan {
 
 pub fn qemu_plan(arch: Arch, roles: &[VirtioRole]) -> QemuPlan {
     let mut devices = [None; 4];
-    let mut slot = 0usize;
-
     match arch {
-        Arch::Aarch64 => {
-            let wants_net = roles.contains(&VirtioRole::Net);
-            if !wants_net
-                && roles.iter().any(|role| *role != VirtioRole::Net)
-                && (roles.contains(&VirtioRole::Blk) || roles.contains(&VirtioRole::Gpu))
-            {
-                devices[slot] = Some(QemuDevice::UserNet);
-                slot += 1;
-            }
-            for role in roles {
-                if slot >= devices.len() {
-                    break;
-                }
-                devices[slot] = Some(QemuDevice::VirtioMmio {
-                    role: *role,
-                    bus: None,
-                });
-                slot += 1;
-            }
-        }
-        Arch::Riscv64 => {
-            for role in roles {
-                if slot >= devices.len() {
-                    break;
-                }
-                let bus = match role {
-                    VirtioRole::Blk => Some(RISCV64_BLK_BUS),
-                    VirtioRole::Net => Some(RISCV64_NET_BUS),
-                    VirtioRole::Gpu => Some(RISCV64_GPU_BUS),
-                };
-                devices[slot] = Some(QemuDevice::VirtioMmio { role: *role, bus });
-                slot += 1;
-            }
-        }
-        Arch::X86_64 => {
-            for role in roles {
-                if slot >= devices.len() {
-                    break;
-                }
-                let (device, function) = match role {
-                    VirtioRole::Blk => (X86_BLK_DEVICE, X86_BLK_FUNCTION),
-                    VirtioRole::Net => (X86_NET_DEVICE, X86_NET_FUNCTION),
-                    VirtioRole::Gpu => continue,
-                };
-                devices[slot] = Some(QemuDevice::VirtioPci {
-                    role: *role,
-                    device,
-                    function,
-                });
-                slot += 1;
-            }
-        }
+        Arch::Aarch64 => fill_aarch64_plan(&mut devices, roles),
+        Arch::Riscv64 => fill_riscv64_plan(&mut devices, roles),
+        Arch::X86_64 => fill_x86_plan(&mut devices, roles),
     }
-
     QemuPlan { devices }
+}
+
+fn fill_aarch64_plan(devices: &mut [Option<QemuDevice>; 4], roles: &[VirtioRole]) {
+    let mut slot = 0usize;
+    let wants_net = roles.contains(&VirtioRole::Net);
+    if !wants_net
+        && roles.iter().any(|role| *role != VirtioRole::Net)
+        && (roles.contains(&VirtioRole::Blk) || roles.contains(&VirtioRole::Gpu))
+    {
+        devices[slot] = Some(QemuDevice::UserNet);
+        slot += 1;
+    }
+    for role in roles {
+        if slot >= devices.len() {
+            break;
+        }
+        devices[slot] = Some(QemuDevice::VirtioMmio {
+            role: *role,
+            bus: None,
+        });
+        slot += 1;
+    }
+}
+
+fn fill_riscv64_plan(devices: &mut [Option<QemuDevice>; 4], roles: &[VirtioRole]) {
+    for (slot, role) in roles.iter().enumerate().take(devices.len()) {
+        let bus = match role {
+            VirtioRole::Blk => Some(RISCV64_BLK_BUS),
+            VirtioRole::Net => Some(RISCV64_NET_BUS),
+            VirtioRole::Gpu => Some(RISCV64_GPU_BUS),
+        };
+        devices[slot] = Some(QemuDevice::VirtioMmio { role: *role, bus });
+    }
+}
+
+fn fill_x86_plan(devices: &mut [Option<QemuDevice>; 4], roles: &[VirtioRole]) {
+    let mut slot = 0usize;
+    for role in roles {
+        if slot >= devices.len() {
+            break;
+        }
+        let (device, function) = match role {
+            VirtioRole::Blk => (X86_BLK_DEVICE, X86_BLK_FUNCTION),
+            VirtioRole::Net => (X86_NET_DEVICE, X86_NET_FUNCTION),
+            VirtioRole::Gpu => continue,
+        };
+        devices[slot] = Some(QemuDevice::VirtioPci {
+            role: *role,
+            device,
+            function,
+        });
+        slot += 1;
+    }
 }
 
 #[cfg(test)]

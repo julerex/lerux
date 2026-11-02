@@ -90,6 +90,11 @@ pub fn install_riscv_toolchain(root: &Path) -> Result<PathBuf> {
         .file_name()
         .and_then(|n| n.to_str())
         .context("xPack directory name")?;
+    write_riscv_wrappers(&wrapper_dir, xpack_leaf)?;
+    Ok(wrapper_dir)
+}
+
+fn write_riscv_wrappers(wrapper_dir: &Path, xpack_leaf: &str) -> Result<()> {
     let tools = [
         ("gcc", "-march=rv64imafdc -mabi=lp64d"),
         ("g++", "-march=rv64imafdc -mabi=lp64d"),
@@ -119,8 +124,7 @@ pub fn install_riscv_toolchain(root: &Path) -> Result<PathBuf> {
         std::fs::write(&wrapper, script)?;
         run_checked("chmod", &["+x", &wrapper.to_string_lossy()])?;
     }
-
-    Ok(wrapper_dir)
+    Ok(())
 }
 
 fn riscv_gcc_major_version() -> Result<u32> {
@@ -209,7 +213,15 @@ pub fn install_libclang(root: &Path) -> Result<()> {
         std::fs::remove_dir_all(&clang_root)?;
     }
     ensure_dir(&clang_root)?;
+    unpack_libclang_debs(&clang_root)?;
 
+    if !lib.is_file() {
+        bail!("libclang install failed");
+    }
+    Ok(())
+}
+
+fn unpack_libclang_debs(clang_root: &Path) -> Result<()> {
     let packages = [
         (
             "libllvm14",
@@ -224,7 +236,6 @@ pub fn install_libclang(root: &Path) -> Result<()> {
             "http://archive.ubuntu.com/ubuntu/pool/universe/l/llvm-toolchain-14/libclang-14-dev_14.0.0-1ubuntu1.1_amd64.deb",
         ),
     ];
-
     for (pkg, fallback) in packages {
         let url = process::apt_deb_url(pkg, fallback);
         let tmp = tempfile::NamedTempFile::new().context("temp file")?;
@@ -237,10 +248,6 @@ pub fn install_libclang(root: &Path) -> Result<()> {
                 &clang_root.to_string_lossy(),
             ],
         )?;
-    }
-
-    if !lib.is_file() {
-        bail!("libclang install failed");
     }
     Ok(())
 }
@@ -267,6 +274,19 @@ pub fn install_sp804_qemu(root: &Path, need_gtk: bool) -> Result<PathBuf> {
         return Ok(install_prefix.join("bin"));
     }
 
+    ensure_sp804_prereqs(need_gtk, &qemu_bin)?;
+    let src_dir = ensure_sp804_sources(root, &toolchains)?;
+    configure_sp804(&src_dir, &install_prefix, need_gtk)?;
+    build_sp804(&src_dir)?;
+
+    if !qemu_bin.is_file() {
+        bail!("SP804 QEMU build failed");
+    }
+    eprintln!("==> SP804 QEMU installed at {}", install_prefix.display());
+    Ok(install_prefix.join("bin"))
+}
+
+fn ensure_sp804_prereqs(need_gtk: bool, qemu_bin: &Path) -> Result<()> {
     if need_gtk && !gtk_dev_available() {
         bail!(
             "graphic QEMU needs GTK (apt install libgtk-3-dev), then retry `just qemu-interactive`"
@@ -275,24 +295,24 @@ pub fn install_sp804_qemu(root: &Path, need_gtk: bool) -> Result<PathBuf> {
     if need_gtk && qemu_bin.is_file() {
         eprintln!("==> Rebuilding SP804 QEMU with GTK for graphic windows (one-time)");
     }
-
     for tool in ["curl", "patch", "make"] {
         if !command_on_path(tool) {
             bail!("{tool} required to build SP804 QEMU");
         }
     }
-
     let pkg_config = run_checked("pkg-config", &["--exists", "glib-2.0"]);
     if pkg_config.is_err() {
         bail!("libglib2.0-dev required to build SP804 QEMU (apt install libglib2.0-dev libpixman-1-dev)");
     }
+    Ok(())
+}
 
+fn ensure_sp804_sources(root: &Path, toolchains: &Path) -> Result<PathBuf> {
     let qemu_version = "6.2.0";
     let src_dir = toolchains.join(format!("qemu-{qemu_version}-src"));
     let tarball = toolchains.join(format!("qemu-{qemu_version}.tar.xz"));
     let patch = root.join("support/qemu/arm-virt-sp804.patch");
-
-    ensure_dir(&toolchains)?;
+    ensure_dir(toolchains)?;
     if !tarball.is_file() {
         eprintln!("==> Downloading QEMU {qemu_version}");
         download(
@@ -300,14 +320,17 @@ pub fn install_sp804_qemu(root: &Path, need_gtk: bool) -> Result<PathBuf> {
             &tarball,
         )?;
     }
-
     if !src_dir.is_dir() {
         eprintln!("==> Extracting QEMU {qemu_version}");
-        extract_tar_xz(&tarball, &toolchains)?;
+        extract_tar_xz(&tarball, toolchains)?;
         let extracted = toolchains.join(format!("qemu-{qemu_version}"));
         std::fs::rename(extracted, &src_dir)?;
     }
+    apply_sp804_patch(&src_dir, &patch)?;
+    Ok(src_dir)
+}
 
+fn apply_sp804_patch(src_dir: &Path, patch: &Path) -> Result<()> {
     let virt_c = src_dir.join("hw/arm/virt.c");
     let virt_contents = std::fs::read_to_string(&virt_c).unwrap_or_default();
     if !virt_contents.contains("VIRT_TIMER1") {
@@ -323,46 +346,52 @@ pub fn install_sp804_qemu(root: &Path, need_gtk: bool) -> Result<PathBuf> {
             ],
         )?;
     }
+    Ok(())
+}
 
+fn configure_sp804(src_dir: &Path, install_prefix: &Path, need_gtk: bool) -> Result<()> {
     let config_status = src_dir.join("build/config.status");
     // After the early return, `need_gtk` means the installed binary cannot
     // open a GTK window — reconfigure even if a headless build tree exists.
     let need_reconfigure = need_gtk || !config_status.is_file();
-    if need_reconfigure {
-        eprintln!("==> Configuring SP804 QEMU (aarch64-softmmu only)");
-        let build_dir = src_dir.join("build");
-        if build_dir.exists() {
-            std::fs::remove_dir_all(&build_dir)?;
-        }
-        let mut configure = std::process::Command::new("./configure");
-        configure.current_dir(&src_dir).args([
-            &format!("--prefix={}", install_prefix.display()),
-            "--target-list=aarch64-softmmu",
-            "--disable-werror",
-            "--disable-docs",
-            "--disable-sdl",
-            "--disable-vnc",
-            "--disable-curses",
-            "--audio-drv-list=",
-            "--disable-capstone",
-            "--disable-libusb",
-            "--disable-usb-redir",
-            "--disable-vhost-user",
-            "--disable-vhost-vdpa",
-        ]);
-        if need_gtk {
-            configure.arg("--enable-gtk");
-        } else {
-            configure.arg("--disable-gtk");
-        }
-        let status = configure.status().context("configure SP804 QEMU")?;
-        if !status.success() {
-            bail!("SP804 QEMU configure failed");
-        }
-    } else {
+    if !need_reconfigure {
         eprintln!("==> Reusing existing SP804 QEMU build tree");
+        return Ok(());
     }
+    eprintln!("==> Configuring SP804 QEMU (aarch64-softmmu only)");
+    let build_dir = src_dir.join("build");
+    if build_dir.exists() {
+        std::fs::remove_dir_all(&build_dir)?;
+    }
+    let mut configure = std::process::Command::new("./configure");
+    configure.current_dir(src_dir).args([
+        &format!("--prefix={}", install_prefix.display()),
+        "--target-list=aarch64-softmmu",
+        "--disable-werror",
+        "--disable-docs",
+        "--disable-sdl",
+        "--disable-vnc",
+        "--disable-curses",
+        "--audio-drv-list=",
+        "--disable-capstone",
+        "--disable-libusb",
+        "--disable-usb-redir",
+        "--disable-vhost-user",
+        "--disable-vhost-vdpa",
+    ]);
+    if need_gtk {
+        configure.arg("--enable-gtk");
+    } else {
+        configure.arg("--disable-gtk");
+    }
+    let status = configure.status().context("configure SP804 QEMU")?;
+    if !status.success() {
+        bail!("SP804 QEMU configure failed");
+    }
+    Ok(())
+}
 
+fn build_sp804(src_dir: &Path) -> Result<()> {
     eprintln!("==> Building SP804 QEMU");
     let nproc = std::thread::available_parallelism()
         .map(|n| n.get().to_string())
@@ -375,12 +404,7 @@ pub fn install_sp804_qemu(root: &Path, need_gtk: bool) -> Result<PathBuf> {
         "make",
         &["-C", &src_dir.join("build").to_string_lossy(), "install"],
     )?;
-
-    if !qemu_bin.is_file() {
-        bail!("SP804 QEMU build failed");
-    }
-    eprintln!("==> SP804 QEMU installed at {}", install_prefix.display());
-    Ok(install_prefix.join("bin"))
+    Ok(())
 }
 
 fn gtk_dev_available() -> bool {

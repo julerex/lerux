@@ -72,6 +72,17 @@ mod tests {
     #[test]
     fn rendered_program_sddf_system_matches_the_config_constants() {
         let root = repo_root();
+        assert_program_manifest(&root);
+        let xml =
+            render_system(&root, "qemu_virt_aarch64_program_sddf").expect("render program image");
+        assert_program_image_shape(&xml);
+        assert_program_priorities(&xml);
+        assert_program_images(&xml);
+        assert_program_channels(&xml);
+        assert_program_regions(&xml);
+    }
+
+    fn assert_program_manifest(root: &std::path::Path) {
         let manifest = std::fs::read_to_string(root.join("userspace/pds/sddf-program/Cargo.toml"))
             .expect("program manifest");
         assert!(
@@ -82,10 +93,9 @@ mod tests {
             !manifest.contains("lerux-logging"),
             "manifest stays off the logging crate"
         );
+    }
 
-        let xml =
-            render_system(&root, "qemu_virt_aarch64_program_sddf").expect("render program image");
-
+    fn assert_program_image_shape(xml: &str) {
         assert_eq!(xml.matches("<protection_domain ").count(), 11);
         assert_eq!(xml.matches("<channel>").count(), 12);
         assert_eq!(xml.matches("program_image").count(), 11);
@@ -106,7 +116,9 @@ mod tests {
             "<irq irq=\"33\" id=\"{}\" />",
             serial_image::DRIVER_IRQ_CHANNEL
         )));
+    }
 
+    fn assert_program_priorities(xml: &str) {
         for (name, priority) in [
             ("blk_driver", 4),
             ("net_driver", 4),
@@ -127,7 +139,9 @@ mod tests {
                 "{name}"
             );
         }
+    }
 
+    fn assert_program_images(xml: &str) {
         for image in [
             "sddf-blk-driver.elf",
             "sddf-blk-virt.elf",
@@ -143,7 +157,9 @@ mod tests {
         ] {
             assert!(xml.contains(&format!("<program_image path=\"{image}\" />")));
         }
+    }
 
+    fn assert_program_channels(xml: &str) {
         for (pd, id) in [
             ("blk_driver", blk_image::BLK_DRIVER_VIRT_CHANNEL),
             ("blk_virt", blk_image::BLK_VIRT_DRIVER_CHANNEL),
@@ -175,7 +191,9 @@ mod tests {
                 "{pd} {id}"
             );
         }
+    }
 
+    fn assert_program_regions(xml: &str) {
         let program_at = xml.find("name=\"program\"").expect("program");
         let program_end = xml[program_at..]
             .find("</protection_domain>")

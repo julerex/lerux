@@ -82,10 +82,16 @@ mod tests {
         assert_eq!(hex_group(UART_VADDR), "0x2_000_000");
         assert_eq!(hex_group(TX_DRIVER_QUEUE_VADDR), "0x3_000_000");
         assert_eq!(hex_group(0x10_000), "0x10_000");
-
         let xml = render_system(&repo_root(), "qemu_virt_aarch64_serial_sddf")
             .expect("render serial image");
+        assert_serial_image_shape(&xml);
+        assert_serial_priorities_and_images(&xml);
+        assert_serial_channels(&xml);
+        assert_serial_region_maps(&xml);
+        assert_serial_driver_slice(&xml);
+    }
 
+    fn assert_serial_image_shape(xml: &str) {
         assert_eq!(xml.matches("<protection_domain ").count(), 4);
         assert_eq!(xml.matches("<channel>").count(), 4);
         assert_eq!(xml.matches("program_image").count(), 4);
@@ -97,7 +103,9 @@ mod tests {
         assert!(!xml.contains("hello.elf"));
         assert!(xml.contains("phys_addr=\"0x9_000_000\""));
         assert!(xml.contains(&format!("<irq irq=\"33\" id=\"{DRIVER_IRQ_CHANNEL}\" />")));
+    }
 
+    fn assert_serial_priorities_and_images(xml: &str) {
         for (name, priority) in [
             ("serial_driver", 4),
             ("serial_virt_tx", 3),
@@ -111,7 +119,6 @@ mod tests {
                 "{name}"
             );
         }
-
         for image in [
             "sddf-serial-driver.elf",
             "sddf-serial-virt-tx.elf",
@@ -120,7 +127,9 @@ mod tests {
         ] {
             assert!(xml.contains(&format!("<program_image path=\"{image}\" />")));
         }
+    }
 
+    fn assert_serial_channels(xml: &str) {
         for (pd, id) in [
             ("serial_driver", DRIVER_TX_CHANNEL),
             ("serial_virt_tx", VIRT_TX_DRIVER_CHANNEL),
@@ -136,7 +145,9 @@ mod tests {
                 "{pd} {id}"
             );
         }
+    }
 
+    fn assert_serial_region_maps(xml: &str) {
         let maps = [
             ("serial_mmio", UART_VADDR, 1),
             ("serial_tx_driver_queue", TX_DRIVER_QUEUE_VADDR, 2),
@@ -152,7 +163,9 @@ mod tests {
             let needle = format!("mr=\"{name}\" vaddr=\"{}\"", hex_group(vaddr));
             assert_eq!(xml.matches(&needle).count(), count, "{needle}");
         }
+    }
 
+    fn assert_serial_driver_slice(xml: &str) {
         let driver_at = xml.find("name=\"serial_driver\"").expect("driver");
         let driver_end = xml[driver_at..]
             .find("</protection_domain>")

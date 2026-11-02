@@ -106,6 +106,16 @@ mod tests {
     #[test]
     fn rendered_fetch_sddf_system_matches_the_config_constants() {
         let root = repo_root();
+        assert_fetch_shell_manifest(&root);
+        let xml = render_system(&root, "qemu_virt_aarch64_fetch_sddf").expect("render fetch image");
+        assert_fetch_image_shape(&xml);
+        assert_fetch_priorities(&xml);
+        assert_fetch_program_images(&xml);
+        assert_fetch_channels(&xml);
+        assert_fetch_shell_regions(&xml);
+    }
+
+    fn assert_fetch_shell_manifest(root: &std::path::Path) {
         let shell_manifest =
             std::fs::read_to_string(root.join("userspace/pds/sddf-shell/Cargo.toml"))
                 .expect("shell manifest");
@@ -117,9 +127,9 @@ mod tests {
             !shell_manifest.contains("lerux-logging"),
             "shell manifest stays off the logging crate"
         );
+    }
 
-        let xml = render_system(&root, "qemu_virt_aarch64_fetch_sddf").expect("render fetch image");
-
+    fn assert_fetch_image_shape(xml: &str) {
         assert_eq!(xml.matches("<protection_domain ").count(), 11);
         assert_eq!(xml.matches("<channel>").count(), 12);
         assert_eq!(xml.matches("program_image").count(), 11);
@@ -141,7 +151,9 @@ mod tests {
             "<irq irq=\"33\" id=\"{}\" />",
             serial_image::DRIVER_IRQ_CHANNEL
         )));
+    }
 
+    fn assert_fetch_priorities(xml: &str) {
         for (name, priority) in [
             ("blk_driver", 4),
             ("net_driver", 4),
@@ -162,7 +174,9 @@ mod tests {
                 "{name}"
             );
         }
+    }
 
+    fn assert_fetch_program_images(xml: &str) {
         for image in [
             "sddf-blk-driver.elf",
             "sddf-blk-virt.elf",
@@ -178,7 +192,9 @@ mod tests {
         ] {
             assert!(xml.contains(&format!("<program_image path=\"{image}\" />")));
         }
+    }
 
+    fn assert_fetch_channels(xml: &str) {
         for (pd, id) in [
             ("blk_driver", blk_image::BLK_DRIVER_VIRT_CHANNEL),
             ("blk_virt", blk_image::BLK_VIRT_DRIVER_CHANNEL),
@@ -210,7 +226,9 @@ mod tests {
                 "{pd} {id}"
             );
         }
+    }
 
+    fn assert_fetch_shell_regions(xml: &str) {
         let shell_at = xml.find("name=\"shell\"").expect("shell");
         let shell_end = xml[shell_at..]
             .find("</protection_domain>")

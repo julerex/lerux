@@ -12,21 +12,39 @@ use crate::{
 };
 
 pub fn build_sdk(root: &Path) -> Result<()> {
-    let workspace = root.join("deps/workspace");
-    let microkit = workspace.join("microkit");
-    let sel4 = workspace.join("seL4");
-
-    if !microkit.is_dir() || !sel4.is_dir() {
-        bail!("run `lerux fetch` first");
-    }
-
+    let (microkit, sel4) = require_sdk_sources(root)?;
     let boards = std::env::var("MICROKIT_BOARDS").unwrap_or_else(|_| "qemu_virt_aarch64".into());
     let configs = std::env::var("MICROKIT_CONFIGS").unwrap_or_else(|_| "debug".into());
-
     let needs_arm = boards_needs(&boards, &["qemu_virt_aarch64", "aarch64"]);
     let needs_riscv = boards_needs(&boards, &["qemu_virt_riscv64", "riscv"]);
     let needs_x86 = boards_needs(&boards, &["x86_64_generic", "x86"]);
 
+    install_cross_compilers(root, needs_arm, needs_riscv, needs_x86)?;
+    install_host_tools(root, needs_riscv)?;
+    require_build_tools(needs_arm, needs_riscv, needs_x86)?;
+    install_rustup_targets(needs_arm, needs_riscv, needs_x86);
+    prepare_libclang(root)?;
+    ensure_microkit_venv(&microkit)?;
+    run_microkit_sdk_build(&microkit, &sel4, &boards, &configs)?;
+    record_built_sdk(root, &microkit)
+}
+
+fn require_sdk_sources(root: &Path) -> Result<(std::path::PathBuf, std::path::PathBuf)> {
+    let workspace = root.join("deps/workspace");
+    let microkit = workspace.join("microkit");
+    let sel4 = workspace.join("seL4");
+    if !microkit.is_dir() || !sel4.is_dir() {
+        bail!("run `lerux fetch` first");
+    }
+    Ok((microkit, sel4))
+}
+
+fn install_cross_compilers(
+    root: &Path,
+    needs_arm: bool,
+    needs_riscv: bool,
+    needs_x86: bool,
+) -> Result<()> {
     if needs_arm {
         ensure_toolchain("aarch64-none-elf-gcc", || {
             eprintln!("==> Installing ARM GNU toolchain into deps/toolchains/");
@@ -35,50 +53,56 @@ pub fn build_sdk(root: &Path) -> Result<()> {
             Ok(())
         })?;
     }
-
     if needs_riscv {
-        if !riscv_gcc_ok() {
-            eprintln!("==> Installing RISC-V GNU toolchain into deps/toolchains/");
-            let bin = install_riscv_toolchain(root)?;
-            prepend_path(&bin);
-        }
-        if !riscv_gcc_ok() {
-            bail!(
-                "riscv64-unknown-elf-gcc 13+ not found after install attempt \
-                 (on PATH={})",
-                std::env::var("PATH").unwrap_or_default()
-            );
-        }
+        install_riscv_gcc(root)?;
     }
-
     if needs_x86 && !command_on_path("x86_64-linux-gnu-gcc") {
         bail!("x86_64-linux-gnu-gcc required for x86_64 boards");
     }
+    Ok(())
+}
 
+fn install_riscv_gcc(root: &Path) -> Result<()> {
+    if !riscv_gcc_ok() {
+        eprintln!("==> Installing RISC-V GNU toolchain into deps/toolchains/");
+        let bin = install_riscv_toolchain(root)?;
+        prepend_path(&bin);
+    }
+    if !riscv_gcc_ok() {
+        bail!(
+            "riscv64-unknown-elf-gcc 13+ not found after install attempt \
+             (on PATH={})",
+            std::env::var("PATH").unwrap_or_default()
+        );
+    }
+    Ok(())
+}
+
+fn install_host_tools(root: &Path, needs_riscv: bool) -> Result<()> {
     if !command_on_path("qemu-system-aarch64") {
         eprintln!("==> Installing QEMU (aarch64) into deps/toolchains/");
         let bin = install_qemu_aarch64(root)?;
         prepend_path(&bin);
     }
-
     if needs_riscv && !command_on_path("qemu-system-riscv64") {
         eprintln!("==> Installing QEMU (riscv64) into deps/toolchains/");
         let bin = install_qemu_riscv64(root)?;
         prepend_path(&bin);
     }
-
     if !command_on_path("dtc") {
         eprintln!("==> Installing device-tree-compiler into deps/toolchains/");
         let bin = install_dtc(root)?;
         prepend_path(&bin);
     }
-
     if !command_on_path("xmllint") {
         eprintln!("==> Installing xmllint into deps/toolchains/");
         let bin = install_xmllint(root)?;
         prepend_path(&bin);
     }
+    Ok(())
+}
 
+fn require_build_tools(needs_arm: bool, needs_riscv: bool, needs_x86: bool) -> Result<()> {
     let mut required = vec!["dtc", "xmllint", "cmake", "ninja", "python3"];
     if needs_arm {
         required.push("qemu-system-aarch64");
@@ -94,80 +118,61 @@ pub fn build_sdk(root: &Path) -> Result<()> {
             bail!("{tool} not found in PATH");
         }
     }
+    Ok(())
+}
 
-    if command_on_path("rustup") {
-        let _ = run_checked("rustup", &["target", "add", "x86_64-unknown-linux-musl"]);
-        let _ = run_checked(
-            "rustup",
-            &[
-                "toolchain",
-                "install",
-                "nightly-2026-04-04",
-                "-c",
-                "rust-src",
-            ],
-        );
-        let _ = run_checked(
-            "rustup",
-            &[
-                "target",
-                "add",
-                "x86_64-unknown-linux-musl",
-                "--toolchain",
-                "nightly-2026-04-04",
-            ],
-        );
-        if needs_arm {
-            let _ = run_checked("rustup", &["target", "add", "aarch64-unknown-none"]);
-            let _ = run_checked(
-                "rustup",
-                &[
-                    "target",
-                    "add",
-                    "aarch64-unknown-none",
-                    "--toolchain",
-                    "nightly-2026-04-04",
-                ],
-            );
-        }
-        if needs_riscv {
-            let _ = run_checked("rustup", &["target", "add", "riscv64gc-unknown-none-elf"]);
-            let _ = run_checked(
-                "rustup",
-                &[
-                    "target",
-                    "add",
-                    "riscv64gc-unknown-none-elf",
-                    "--toolchain",
-                    "nightly-2026-04-04",
-                ],
-            );
-        }
-        if needs_x86 {
-            let _ = run_checked("rustup", &["target", "add", "x86_64-unknown-none"]);
-            let _ = run_checked(
-                "rustup",
-                &[
-                    "target",
-                    "add",
-                    "x86_64-unknown-none",
-                    "--toolchain",
-                    "nightly-2026-04-04",
-                ],
-            );
-        }
+fn install_rustup_targets(needs_arm: bool, needs_riscv: bool, needs_x86: bool) {
+    if !command_on_path("rustup") {
+        return;
     }
+    rustup(&["target", "add", "x86_64-unknown-linux-musl"]);
+    rustup(&[
+        "toolchain",
+        "install",
+        "nightly-2026-04-04",
+        "-c",
+        "rust-src",
+    ]);
+    rustup(&[
+        "target",
+        "add",
+        "x86_64-unknown-linux-musl",
+        "--toolchain",
+        "nightly-2026-04-04",
+    ]);
+    if needs_arm {
+        rustup_target("aarch64-unknown-none");
+    }
+    if needs_riscv {
+        rustup_target("riscv64gc-unknown-none-elf");
+    }
+    if needs_x86 {
+        rustup_target("x86_64-unknown-none");
+    }
+}
 
+fn rustup_target(target: &str) {
+    rustup(&["target", "add", target]);
+    rustup(&["target", "add", target, "--toolchain", "nightly-2026-04-04"]);
+}
+
+fn rustup(args: &[&str]) {
+    let _ = run_checked("rustup", args);
+}
+
+fn prepare_libclang(root: &Path) -> Result<()> {
     if !crate::install::system_libclang_present() {
         install_libclang(root)?;
     }
     apply_libclang_env(root);
-
     // SAFETY: host build tooling mutates the current process environment only.
     unsafe {
         std::env::remove_var("CARGO_TARGET_DIR");
     }
+    Ok(())
+}
 
+fn ensure_microkit_venv(microkit: &Path) -> Result<()> {
     let pyenv = microkit.join("pyenv");
     if !pyenv.is_dir() {
         run_checked("python3", &["-m", "venv", &pyenv.to_string_lossy()])?;
@@ -176,27 +181,34 @@ pub fn build_sdk(root: &Path) -> Result<()> {
             &["install", "--upgrade", "pip", "setuptools", "wheel"],
         )?;
         let pip = pyenv.join("bin/pip");
-        install_microkit_python_deps(&pip, &microkit)?;
+        install_microkit_python_deps(&pip, microkit)?;
     }
+    Ok(())
+}
 
+fn run_microkit_sdk_build(microkit: &Path, sel4: &Path, boards: &str, configs: &str) -> Result<()> {
+    let pyenv = microkit.join("pyenv");
     let status = std::process::Command::new(pyenv.join("bin/python"))
-        .current_dir(&microkit)
+        .current_dir(microkit)
         .args([
             "build_sdk.py",
             &format!("--sel4={}", sel4.display()),
             "--skip-docs",
             "--skip-tar",
             "--boards",
-            &boards,
+            boards,
             "--configs",
-            &configs,
+            configs,
         ])
         .status()
         .context("microkit build_sdk.py")?;
     if !status.success() {
         bail!("microkit build_sdk.py failed");
     }
+    Ok(())
+}
 
+fn record_built_sdk(root: &Path, microkit: &Path) -> Result<()> {
     let release = microkit.join("release");
     let sdk = find_sdk(&release).context("SDK build produced no microkit-sdk-* directory")?;
     write_file(

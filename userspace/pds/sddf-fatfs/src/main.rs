@@ -380,33 +380,9 @@ fn create_file(id: u64, name: &[u8; 11]) -> bool {
     if file_busy() {
         return complete(id, FS_STATUS_TOO_MANY_OPEN_FILES, Completion::Empty);
     }
-    match find_name(name) {
-        Scan::Hit(_) => return complete(id, FS_STATUS_ALREADY_EXISTS, Completion::Empty),
-        Scan::Missing => {}
-        Scan::Failed => {
-            let _ = complete(id, FS_STATUS_ERROR, Completion::Empty);
-            return false;
-        }
-    }
-    let slot = match find_free() {
-        Scan::Hit(index) => index,
-        Scan::Missing => {
-            return complete(id, FS_STATUS_DIRECTORY_IS_FULL, Completion::Empty);
-        }
-        Scan::Failed => {
-            let _ = complete(id, FS_STATUS_ERROR, Completion::Empty);
-            return false;
-        }
-    };
-    let cluster = match alloc_cluster() {
-        Scan::Hit(cluster) => cluster,
-        Scan::Missing => {
-            return complete(id, FS_STATUS_DIRECTORY_IS_FULL, Completion::Empty);
-        }
-        Scan::Failed => {
-            let _ = complete(id, FS_STATUS_ERROR, Completion::Empty);
-            return false;
-        }
+    let (slot, cluster) = match reserve_file(id, name) {
+        Ok(pair) => pair,
+        Err(done) => return done,
     };
     if !set_fat(cluster, 0xFFFF)
         || !write_dir(slot, name, cluster, 0, ATTR_ARCHIVE)
@@ -424,6 +400,35 @@ fn create_file(id: u64, name: &[u8; 11]) -> bool {
         });
     }
     complete(id, FS_STATUS_SUCCESS, Completion::Fd(FD_FILE))
+}
+
+fn reserve_file(id: u64, name: &[u8; 11]) -> Result<(u16, u16), bool> {
+    match find_name(name) {
+        Scan::Hit(_) => return Err(complete(id, FS_STATUS_ALREADY_EXISTS, Completion::Empty)),
+        Scan::Missing => {}
+        Scan::Failed => {
+            let _ = complete(id, FS_STATUS_ERROR, Completion::Empty);
+            return Err(false);
+        }
+    }
+    let slot = match find_free() {
+        Scan::Hit(index) => index,
+        Scan::Missing => {
+            return Err(complete(id, FS_STATUS_DIRECTORY_IS_FULL, Completion::Empty));
+        }
+        Scan::Failed => {
+            let _ = complete(id, FS_STATUS_ERROR, Completion::Empty);
+            return Err(false);
+        }
+    };
+    match alloc_cluster() {
+        Scan::Hit(cluster) => Ok((slot, cluster)),
+        Scan::Missing => Err(complete(id, FS_STATUS_DIRECTORY_IS_FULL, Completion::Empty)),
+        Scan::Failed => {
+            let _ = complete(id, FS_STATUS_ERROR, Completion::Empty);
+            Err(false)
+        }
+    }
 }
 
 fn open_read(id: u64, name: &[u8; 11]) -> bool {
@@ -515,46 +520,52 @@ fn handle_read(id: u64, params: fs_cmd_params_file_read_t) -> bool {
     if params.offset != 0 {
         return complete(id, FS_STATUS_INVALID_READ, Completion::Empty);
     }
-    let Ok(buf_len) = usize::try_from(params.buf.size) else {
+    let Some((buf_off, buf_len)) = share_span(params.buf) else {
         return complete(id, FS_STATUS_INVALID_BUFFER, Completion::Empty);
     };
-    let Ok(buf_off) = usize::try_from(params.buf.offset) else {
-        return complete(id, FS_STATUS_INVALID_BUFFER, Completion::Empty);
-    };
-    let Ok(share_len) = usize::try_from(FS_REGION_SIZE) else {
-        return complete(id, FS_STATUS_INVALID_BUFFER, Completion::Empty);
-    };
-    if buf_off
-        .checked_add(buf_len)
-        .is_none_or(|end| end > share_len)
-    {
-        return complete(id, FS_STATUS_INVALID_BUFFER, Completion::Empty);
-    }
     let file_size = usize::try_from(file.size).unwrap_or(0);
     let copied = buf_len.min(file_size);
     if copied > 0 {
-        if file.cluster < 2 {
-            return complete(id, FS_STATUS_ERROR, Completion::Empty);
-        }
-        let lba = DATA_LBA + u32::from(file.cluster - 2);
-        if !load_block(u64::from(lba / SECTORS_PER_TRANSFER)) {
-            let _ = complete(id, FS_STATUS_ERROR, Completion::Empty);
-            return false;
-        }
-        let offset = ((lba % SECTORS_PER_TRANSFER) as usize) * SECTOR_BYTES;
-        // SAFETY: the share range was checked, and the sector sits inside the static block buffer.
-        unsafe {
-            core::ptr::copy_nonoverlapping(
-                (*block()).as_ptr().add(offset),
-                (*state()).share.add(buf_off),
-                copied,
-            );
+        if let Err(done) = stage_file_bytes(id, &file, buf_off, copied) {
+            return done;
         }
     }
     let Ok(len_read) = u64::try_from(copied) else {
         return complete(id, FS_STATUS_ERROR, Completion::Empty);
     };
     complete(id, FS_STATUS_SUCCESS, Completion::Read(len_read))
+}
+
+fn share_span(buf: fs_buffer_t) -> Option<(usize, usize)> {
+    let buf_len = usize::try_from(buf.size).ok()?;
+    let buf_off = usize::try_from(buf.offset).ok()?;
+    let share_len = usize::try_from(FS_REGION_SIZE).ok()?;
+    let end = buf_off.checked_add(buf_len)?;
+    if end > share_len {
+        return None;
+    }
+    Some((buf_off, buf_len))
+}
+
+fn stage_file_bytes(id: u64, file: &OpenFile, buf_off: usize, copied: usize) -> Result<(), bool> {
+    if file.cluster < 2 {
+        return Err(complete(id, FS_STATUS_ERROR, Completion::Empty));
+    }
+    let lba = DATA_LBA + u32::from(file.cluster - 2);
+    if !load_block(u64::from(lba / SECTORS_PER_TRANSFER)) {
+        let _ = complete(id, FS_STATUS_ERROR, Completion::Empty);
+        return Err(false);
+    }
+    let offset = ((lba % SECTORS_PER_TRANSFER) as usize) * SECTOR_BYTES;
+    // SAFETY: the share range was checked, and the sector sits inside the static block buffer.
+    unsafe {
+        core::ptr::copy_nonoverlapping(
+            (*block()).as_ptr().add(offset),
+            (*state()).share.add(buf_off),
+            copied,
+        );
+    }
+    Ok(())
 }
 
 fn find_name(name: &[u8; 11]) -> Scan<DirHit> {

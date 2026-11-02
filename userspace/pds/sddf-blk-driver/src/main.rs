@@ -145,40 +145,9 @@ impl HandlerImpl {
         count: u16,
     ) -> (blk_resp_status_t, u16) {
         let invalid = (blk_resp_status_t::BLK_RESP_ERR_INVALID_PARAM, 0);
-        if count == 0 {
-            return invalid;
-        }
-        let Ok(data_len) = usize::try_from(BLK_DATA_SIZE) else {
+        let Some((ptr, len, sector)) = self.transfer_span(offset, block, count) else {
             return invalid;
         };
-        let len = usize::from(count).saturating_mul(BLK_TRANSFER_SIZE as usize);
-        let Ok(offset_usize) = usize::try_from(offset) else {
-            return invalid;
-        };
-        if offset_usize
-            .checked_add(len)
-            .is_none_or(|end| end > data_len)
-        {
-            return invalid;
-        }
-        let Some(end_block) = block.checked_add(u64::from(count)) else {
-            return invalid;
-        };
-        if end_block > self.capacity_blocks {
-            return invalid;
-        }
-        let Some(sector) = block.checked_mul(VIRTIO_SECTORS_PER_BLOCK) else {
-            return invalid;
-        };
-        let Ok(sector) = usize::try_from(sector) else {
-            return invalid;
-        };
-        let Ok(base) = usize::try_from(BLK_DATA_VADDR) else {
-            return invalid;
-        };
-        // `io_or_offset` is a byte offset into the data region virtual address.
-        // `device_region_resource_t.io_addr` stays 0 because Microkit assigns RAM physical addresses at load time and this driver does not program that field.
-        let ptr = (base + offset_usize) as *mut u8;
         // SAFETY: the data region is mapped at `BLK_DATA_VADDR` for `BLK_DATA_SIZE` bytes, and `offset + len` is inside it.
         let result = unsafe {
             if read {
@@ -193,6 +162,36 @@ impl HandlerImpl {
             Ok(()) => (blk_resp_status_t::BLK_RESP_OK, count),
             Err(_) => (blk_resp_status_t::BLK_RESP_ERR_IO, 0),
         }
+    }
+
+    fn transfer_span(
+        &self,
+        offset: u64,
+        block: u64,
+        count: u16,
+    ) -> Option<(*mut u8, usize, usize)> {
+        if count == 0 {
+            return None;
+        }
+        let data_len = usize::try_from(BLK_DATA_SIZE).ok()?;
+        let len = usize::from(count).saturating_mul(BLK_TRANSFER_SIZE as usize);
+        let offset_usize = usize::try_from(offset).ok()?;
+        if offset_usize
+            .checked_add(len)
+            .is_none_or(|end| end > data_len)
+        {
+            return None;
+        }
+        let end_block = block.checked_add(u64::from(count))?;
+        if end_block > self.capacity_blocks {
+            return None;
+        }
+        let sector = block.checked_mul(VIRTIO_SECTORS_PER_BLOCK)?;
+        let sector = usize::try_from(sector).ok()?;
+        let base = usize::try_from(BLK_DATA_VADDR).ok()?;
+        // `io_or_offset` is a byte offset into the data region virtual address.
+        // `device_region_resource_t.io_addr` stays 0 because Microkit assigns RAM physical addresses at load time and this driver does not program that field.
+        Some(((base + offset_usize) as *mut u8, len, sector))
     }
 }
 

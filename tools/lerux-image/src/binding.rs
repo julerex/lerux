@@ -111,98 +111,52 @@ fn shell_pages(board_features: &[&str]) -> Result<Vec<Page>, ImageError> {
 
 fn append_page(bytes: &mut Vec<u8>, page: Page) {
     match page {
-        Page::SerialDriver => push(
-            bytes,
-            &serial_image::driver_config(),
-            serial_image::serial_config_to_bytes,
-        ),
-        Page::SerialVirtTx => push(
-            bytes,
-            &serial_image::virt_tx_config(),
-            serial_image::serial_config_to_bytes,
-        ),
-        Page::SerialVirtRx => push(
-            bytes,
-            &serial_image::virt_rx_config(),
-            serial_image::serial_config_to_bytes,
-        ),
-        Page::SerialClient => push(
-            bytes,
-            &serial_image::client_config(),
-            serial_image::serial_config_to_bytes,
-        ),
-        Page::BlkDriver => push(
-            bytes,
-            &blk_image::driver_config(),
-            blk_image::blk_config_to_bytes,
-        ),
-        Page::BlkVirt => push(
-            bytes,
-            &blk_image::virt_config(),
-            blk_image::blk_config_to_bytes,
-        ),
-        Page::BlkClient => push(
-            bytes,
-            &blk_image::client_config(),
-            blk_image::blk_config_to_bytes,
-        ),
-        Page::FsServer => push(
-            bytes,
-            &fs_image::server_config(),
-            fs_image::fs_config_to_bytes,
-        ),
-        Page::FsClient => push(
-            bytes,
-            &fs_image::client_config(),
-            fs_image::fs_config_to_bytes,
-        ),
-        Page::FsShell => push(
-            bytes,
-            &fs_image::shell_client_config(),
-            fs_image::fs_config_to_bytes,
-        ),
-        Page::NetDriver => push(
-            bytes,
-            &net_image::driver_config(),
-            net_image::net_config_to_bytes,
-        ),
-        Page::NetVirtTx => push(
-            bytes,
-            &net_image::virt_tx_config(),
-            net_image::net_config_to_bytes,
-        ),
-        Page::NetVirtRx => push(
-            bytes,
-            &net_image::virt_rx_config(),
-            net_image::net_config_to_bytes,
-        ),
-        Page::NetCopy => push(
-            bytes,
-            &net_image::copy_config(),
-            net_image::net_config_to_bytes,
-        ),
-        Page::NetClient => push(
-            bytes,
-            &net_image::client_config(),
-            net_image::net_config_to_bytes,
-        ),
-        Page::NetShell => push(
-            bytes,
-            &net_image::shell_client_config(),
-            net_image::net_config_to_bytes,
-        ),
-        Page::TimerShell => push(
-            bytes,
-            &timer::shell_client_config(),
-            timer::timer_config_to_bytes,
-        ),
-        Page::FsSchedule => {
-            let value = sched::fs_image_schedule();
-            let start = bytes.len();
-            bytes.resize(start + size_of::<sched::sched_config_t>(), 0);
-            sched::sched_to_bytes(&value, &mut bytes[start..]);
-        }
+        Page::SerialDriver => append_serial(bytes, &serial_image::driver_config()),
+        Page::SerialVirtTx => append_serial(bytes, &serial_image::virt_tx_config()),
+        Page::SerialVirtRx => append_serial(bytes, &serial_image::virt_rx_config()),
+        Page::SerialClient => append_serial(bytes, &serial_image::client_config()),
+        Page::BlkDriver => append_blk(bytes, &blk_image::driver_config()),
+        Page::BlkVirt => append_blk(bytes, &blk_image::virt_config()),
+        Page::BlkClient => append_blk(bytes, &blk_image::client_config()),
+        Page::FsServer => append_fs(bytes, &fs_image::server_config()),
+        Page::FsClient => append_fs(bytes, &fs_image::client_config()),
+        Page::FsShell => append_fs(bytes, &fs_image::shell_client_config()),
+        Page::NetDriver => append_net(bytes, &net_image::driver_config()),
+        Page::NetVirtTx => append_net(bytes, &net_image::virt_tx_config()),
+        Page::NetVirtRx => append_net(bytes, &net_image::virt_rx_config()),
+        Page::NetCopy => append_net(bytes, &net_image::copy_config()),
+        Page::NetClient => append_net(bytes, &net_image::client_config()),
+        Page::NetShell => append_net(bytes, &net_image::shell_client_config()),
+        Page::TimerShell => append_timer(bytes, &timer::shell_client_config()),
+        Page::FsSchedule => append_schedule(bytes),
     }
+}
+
+fn append_serial<T>(bytes: &mut Vec<u8>, value: &T) {
+    push(bytes, value, serial_image::serial_config_to_bytes);
+}
+
+fn append_blk<T>(bytes: &mut Vec<u8>, value: &T) {
+    push(bytes, value, blk_image::blk_config_to_bytes);
+}
+
+fn append_fs<T>(bytes: &mut Vec<u8>, value: &T) {
+    push(bytes, value, fs_image::fs_config_to_bytes);
+}
+
+fn append_net<T>(bytes: &mut Vec<u8>, value: &T) {
+    push(bytes, value, net_image::net_config_to_bytes);
+}
+
+fn append_timer<T>(bytes: &mut Vec<u8>, value: &T) {
+    push(bytes, value, timer::timer_config_to_bytes);
+}
+
+fn append_schedule(bytes: &mut Vec<u8>) {
+    let value = sched::fs_image_schedule();
+    let start = bytes.len();
+    bytes.resize(start + size_of::<sched::sched_config_t>(), 0);
+    sched::sched_to_bytes(&value, &mut bytes[start..]);
 }
 
 fn push<T>(bytes: &mut Vec<u8>, value: &T, encode: fn(&T, &mut [u8])) {

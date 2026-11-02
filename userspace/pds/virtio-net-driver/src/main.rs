@@ -88,9 +88,7 @@ fn create_net_ring_buffers(notify_client: fn()) -> NetRingBuffers {
     (rx_ring_buffers, tx_ring_buffers)
 }
 
-#[protection_domain(heap_size = 512 * 1024)]
-fn init() -> HandlerImpl<DeviceWrapper<DriverHal, NetTransport>> {
-    debug::init().unwrap();
+fn init_hal() {
     #[cfg(feature = "unified-dma")]
     {
         dma::init_hal_unified();
@@ -112,6 +110,12 @@ fn init() -> HandlerImpl<DeviceWrapper<DriverHal, NetTransport>> {
         ))
     ))]
     mmio::init_hal();
+}
+
+#[protection_domain(heap_size = 512 * 1024)]
+fn init() -> HandlerImpl<DeviceWrapper<DriverHal, NetTransport>> {
+    debug::init().unwrap();
+    init_hal();
     let mut dev = {
         #[cfg(any(
             feature = "board-x86_64_generic_virtio",

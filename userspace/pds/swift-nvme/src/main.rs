@@ -142,6 +142,24 @@ struct Ctrl {
 
 impl Ctrl {
     fn open(regs: *mut u8, dma: *mut u8) -> Result<Self, OpenError> {
+        let stride = Self::bring_up(regs, dma)?;
+        let mut ctrl = Self {
+            regs,
+            dma,
+            stride,
+            admin_tail: 0,
+            admin_head: 0,
+            admin_phase: 1,
+            io_tail: 0,
+            io_head: 0,
+            io_phase: 1,
+            cid: 1,
+        };
+        ctrl.create_io_queues()?;
+        Ok(ctrl)
+    }
+
+    fn bring_up(regs: *mut u8, dma: *mut u8) -> Result<u32, OpenError> {
         let vs = read32(regs, 0x08);
         if vs == 0 || vs == 0xffff_ffff {
             return Err(OpenError::Regs);
@@ -166,22 +184,14 @@ impl Ctrl {
         if !wait_rdy(regs, true) {
             return Err(OpenError::Enable);
         }
-        let mut ctrl = Self {
-            regs,
-            dma,
-            stride,
-            admin_tail: 0,
-            admin_head: 0,
-            admin_phase: 1,
-            io_tail: 0,
-            io_head: 0,
-            io_phase: 1,
-            cid: 1,
-        };
-        if ctrl.admin(0x05, 0, DMA_PHYS + IO_CQ as u64, 1 | (1 << 16), 1) != Some(0) {
+        Ok(stride)
+    }
+
+    fn create_io_queues(&mut self) -> Result<(), OpenError> {
+        if self.admin(0x05, 0, DMA_PHYS + IO_CQ as u64, 1 | (1 << 16), 1) != Some(0) {
             return Err(OpenError::Admin);
         }
-        if ctrl.admin(
+        if self.admin(
             0x01,
             0,
             DMA_PHYS + IO_SQ as u64,
@@ -191,7 +201,7 @@ impl Ctrl {
         {
             return Err(OpenError::Admin);
         }
-        Ok(ctrl)
+        Ok(())
     }
 
     fn dma_at(&self, off: usize) -> *mut u8 {

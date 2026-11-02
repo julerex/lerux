@@ -66,37 +66,6 @@ pub fn mode_line(
 ) -> Option<[u8; 80]> {
     let mut out = [0u8; 80];
     let mut len = 0usize;
-    fn push(out: &mut [u8; 80], len: &mut usize, bytes: &[u8]) -> bool {
-        let Some(next) = len.checked_add(bytes.len()) else {
-            return false;
-        };
-        if next >= out.len() {
-            return false;
-        }
-        out[*len..next].copy_from_slice(bytes);
-        *len = next;
-        true
-    }
-    fn push_u32(out: &mut [u8; 80], len: &mut usize, value: u32) -> bool {
-        let mut tmp = [0u8; 10];
-        let mut n = 0usize;
-        let mut rest = value;
-        if rest == 0 {
-            return push(out, len, b"0");
-        }
-        while rest > 0 {
-            tmp[n] = b'0' + (rest % 10) as u8;
-            n += 1;
-            rest /= 10;
-        }
-        while n > 0 {
-            n -= 1;
-            if !push(out, len, &tmp[n..=n]) {
-                return false;
-            }
-        }
-        true
-    }
     if !push(&mut out, &mut len, b"fb 0x") {
         return None;
     }
@@ -128,6 +97,40 @@ pub fn mode_line(
     }
     Some(out)
 }
+
+fn push(out: &mut [u8; 80], len: &mut usize, bytes: &[u8]) -> bool {
+    let Some(next) = len.checked_add(bytes.len()) else {
+        return false;
+    };
+    if next >= out.len() {
+        return false;
+    }
+    out[*len..next].copy_from_slice(bytes);
+    *len = next;
+    true
+}
+
+fn push_u32(out: &mut [u8; 80], len: &mut usize, value: u32) -> bool {
+    let mut tmp = [0u8; 10];
+    let mut n = 0usize;
+    let mut rest = value;
+    if rest == 0 {
+        return push(out, len, b"0");
+    }
+    while rest > 0 {
+        tmp[n] = b'0' + (rest % 10) as u8;
+        n += 1;
+        rest /= 10;
+    }
+    while n > 0 {
+        n -= 1;
+        if !push(out, len, &tmp[n..=n]) {
+            return false;
+        }
+    }
+    true
+}
+
 const RECORD_LEN: usize = 40;
 const MODE_MAGIC: u64 = 0x4D4F_4445_4C52_5558;
 

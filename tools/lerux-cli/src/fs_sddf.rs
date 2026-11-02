@@ -130,8 +130,18 @@ mod tests {
         assert_eq!(hex_group(BLK_VIRTIO_DMA_VADDR), "0x8_000_000_000");
         assert_eq!(hex_group(FS_REGION_SIZE), "0x8_000");
         assert_eq!(hex_group(BLK_DATA_SIZE), "0x10_000");
-
         let root = repo_root();
+        assert_fs_shell_manifest(&root);
+        let xml =
+            render_system(&root, "qemu_virt_aarch64_fs_sddf").expect("render filesystem image");
+        assert_fs_image_shape(&xml);
+        assert_fs_roles_and_images(&xml);
+        assert_fs_channels(&xml);
+        assert_fs_region_maps(&xml);
+        assert_fs_domain_slices(&xml);
+    }
+
+    fn assert_fs_shell_manifest(root: &std::path::Path) {
         let shell_manifest =
             std::fs::read_to_string(root.join("userspace/pds/sddf-shell/Cargo.toml"))
                 .expect("shell manifest");
@@ -143,10 +153,9 @@ mod tests {
             !shell_manifest.contains("lerux-logging"),
             "shell manifest stays off the logging crate"
         );
+    }
 
-        let xml =
-            render_system(&root, "qemu_virt_aarch64_fs_sddf").expect("render filesystem image");
-
+    fn assert_fs_image_shape(xml: &str) {
         assert_eq!(xml.matches("<protection_domain ").count(), 8);
         assert_eq!(xml.matches("<channel>").count(), 8);
         assert_eq!(xml.matches("program_image").count(), 8);
@@ -163,7 +172,9 @@ mod tests {
             "<irq irq=\"78\" id=\"{BLK_DRIVER_IRQ_CHANNEL}\" />"
         )));
         assert!(xml.contains(&format!("<irq irq=\"33\" id=\"{DRIVER_IRQ_CHANNEL}\" />")));
+    }
 
+    fn assert_fs_roles_and_images(xml: &str) {
         for role in FS_IMAGE_ROLES {
             let mut tag = format!(
                 "<protection_domain name=\"{}\" priority=\"{}\" budget=\"{}\" period=\"{}\"",
@@ -188,7 +199,9 @@ mod tests {
         ] {
             assert!(xml.contains(&format!("<program_image path=\"{image}\" />")));
         }
+    }
 
+    fn assert_fs_channels(xml: &str) {
         for (pd, id) in [
             ("blk_driver", BLK_DRIVER_VIRT_CHANNEL),
             ("blk_virt", BLK_VIRT_DRIVER_CHANNEL),
@@ -215,7 +228,9 @@ mod tests {
         assert!(xml.contains(&format!(
             "<end pd=\"shell\" id=\"{SHELL_TIMER_CHANNEL}\" pp=\"true\" />"
         )));
+    }
 
+    fn assert_fs_region_maps(xml: &str) {
         let maps = [
             ("virtio_mmio", BLK_VIRTIO_MMIO_VADDR, 1),
             ("virtio_blk_driver_dma", BLK_VIRTIO_DMA_VADDR, 1),
@@ -242,7 +257,9 @@ mod tests {
             let needle = format!("mr=\"{name}\" vaddr=\"{}\"", hex_group(vaddr));
             assert_eq!(xml.matches(&needle).count(), count, "{needle}");
         }
+    }
 
+    fn assert_fs_domain_slices(xml: &str) {
         let driver_at = xml.find("name=\"blk_driver\"").expect("driver");
         let driver_end = xml[driver_at..]
             .find("</protection_domain>")

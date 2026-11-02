@@ -42,7 +42,10 @@ mod system;
 mod tcp_echo;
 mod test;
 
-use std::{path::PathBuf, process::Command};
+use std::{
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
@@ -424,70 +427,114 @@ enum ProgCommands {
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let root = repo_root()?;
+    dispatch(&root, cli.command)
+}
 
-    match cli.command {
-        Commands::Fetch => fetch::fetch(&root)?,
-        Commands::FetchSdk => fetch::fetch_sdk(&root)?,
-        Commands::BuildSdk => build_sdk(&root)?,
-        Commands::SdkPath => println!("{}", sdk_path(&root)?),
-        Commands::Board { name, field } => {
-            let boards = load_boards(&root)?;
-            let board = get_board(&boards, &name)?;
-            print_board_field(board, field.as_deref())?;
+fn dispatch(root: &Path, command: Commands) -> Result<()> {
+    match command {
+        cmd @ (Commands::Fetch
+        | Commands::FetchSdk
+        | Commands::BuildSdk
+        | Commands::SdkPath
+        | Commands::Board { .. }
+        | Commands::System { .. }
+        | Commands::HostPath
+        | Commands::LibclangEnv
+        | Commands::Install { .. }
+        | Commands::DiskImg
+        | Commands::FsScaffold { .. }) => dispatch_source(root, cmd),
+        cmd @ (Commands::Clippy { .. }
+        | Commands::Build { .. }
+        | Commands::BuildPd { .. }
+        | Commands::Image { .. }
+        | Commands::TestAll { .. }
+        | Commands::Bench { .. }
+        | Commands::Diagnose { .. }
+        | Commands::TcpEcho { .. }
+        | Commands::HttpOne { .. }
+        | Commands::HttpsOne { .. }
+        | Commands::TcpEchoProbe { .. }) => dispatch_host(root, cmd),
+        cmd @ (Commands::Run { .. }
+        | Commands::Test { .. }
+        | Commands::Smoke { .. }
+        | Commands::Profile { .. }
+        | Commands::Prog { .. }) => dispatch_session(root, cmd),
+        cmd @ (Commands::Deploy { .. }
+        | Commands::Iso { .. }
+        | Commands::Digest { .. }
+        | Commands::VerifyImage { .. }
+        | Commands::Keygen { .. }
+        | Commands::Sign { .. }
+        | Commands::Config { .. }) => dispatch_ship(root, cmd),
+    }
+}
+
+fn dispatch_source(root: &Path, command: Commands) -> Result<()> {
+    match command {
+        Commands::Fetch => fetch::fetch(root),
+        Commands::FetchSdk => fetch::fetch_sdk(root),
+        Commands::BuildSdk => build_sdk(root),
+        Commands::SdkPath => print_sdk_path(root),
+        Commands::Board { name, field } => show_board(root, &name, field.as_deref()),
+        Commands::System { board, output } => system::generate_system(root, &board, &output),
+        Commands::HostPath => print_host_path(root),
+        Commands::LibclangEnv => {
+            libclang::print_libclang_env(root);
+            Ok(())
         }
-        Commands::System { board, output } => {
-            system::generate_system(&root, &board, &output)?;
-        }
-        Commands::HostPath => println!("{}", path::host_path(&root)),
-        Commands::LibclangEnv => libclang::print_libclang_env(&root),
-        Commands::Install { tool } => {
-            let bin = install_tool(&root, tool)?;
-            println!("{}", bin.display());
-        }
-        Commands::DiskImg => disk_img::disk_img(&root)?,
-        Commands::FsScaffold { from, board } => {
-            print!("{}", fs_scaffold::report(&root, &from, &board)?);
-        }
+        Commands::Install { tool } => print_install(root, tool),
+        Commands::DiskImg => disk_img::disk_img(root),
+        Commands::FsScaffold { from, board } => print_fs_scaffold(root, &from, &board),
+        _ => unreachable!("source command"),
+    }
+}
+
+fn dispatch_host(root: &Path, command: Commands) -> Result<()> {
+    match command {
         Commands::Clippy { build_dir, config } => {
-            clippy::clippy_workspace(&root, &build_dir, &config)?;
+            clippy::clippy_workspace(root, &build_dir, &config)
         }
         Commands::Build {
             board,
             build_dir,
             config,
-        } => {
-            build::build(&root, &board, &build_dir, &config)?;
-        }
+        } => build::build(root, &board, &build_dir, &config),
         Commands::BuildPd {
             crate_name,
             board,
             build_dir,
             config,
-        } => build::build_pd(&root, &board, &build_dir, &config, &crate_name)?,
+        } => build::build_pd(root, &board, &build_dir, &config, &crate_name),
         Commands::Image {
             board,
             build_dir,
             config,
-        } => {
-            build::image(&root, &board, &build_dir, &config)?;
-        }
+        } => build::image(root, &board, &build_dir, &config),
+        Commands::TestAll { build_dir, config } => build::test_all(root, &build_dir, &config),
+        Commands::Bench {
+            build_dir,
+            config,
+            out_dir,
+            check,
+        } => bench::run_bench(root, &build_dir, &config, out_dir.as_deref(), check),
+        Commands::Diagnose { path } => analyze::analyze_log(&path),
+        Commands::TcpEcho { port } => tcp_echo::tcp_echo(port),
+        Commands::HttpOne { port } => http_one::http_one(port),
+        Commands::HttpsOne { port } => https_one::https_one(port),
+        Commands::TcpEchoProbe { port } => probe_tcp_echo(port),
+        _ => unreachable!("host command"),
+    }
+}
+
+fn dispatch_session(root: &Path, command: Commands) -> Result<()> {
+    match command {
         Commands::Run {
             board,
             build_dir,
             config,
             gdb,
             snapshot,
-        } => {
-            if gdb {
-                // SAFETY: CLI is single-threaded here.
-                unsafe { std::env::set_var("LERUX_QEMU_GDB", "1") };
-            }
-            if snapshot {
-                // SAFETY: CLI is single-threaded here.
-                unsafe { std::env::set_var("LERUX_QEMU_SNAPSHOT", "1") };
-            }
-            build::run(&root, &board, &build_dir, &config)?;
-        }
+        } => run_command(root, &board, &build_dir, &config, gdb, snapshot),
         Commands::Test {
             board,
             build_dir,
@@ -495,300 +542,509 @@ fn main() -> Result<()> {
             mode,
             gdb,
             snapshot,
-        } => {
-            if gdb {
-                // SAFETY: CLI is single-threaded here.
-                unsafe { std::env::set_var("LERUX_QEMU_GDB", "1") };
-            }
-            if snapshot {
-                // SAFETY: CLI is single-threaded here.
-                unsafe { std::env::set_var("LERUX_QEMU_SNAPSHOT", "1") };
-            }
-            let mode = test::TestMode::from_env_or_flag(mode.as_deref())?;
-            build::image(&root, &board, &build_dir, &config)?;
-            test::run_board_test_with_mode(&root, &board, &build_dir, &config, mode)?;
-        }
-        Commands::TestAll { build_dir, config } => {
-            build::test_all(&root, &build_dir, &config)?;
-        }
-        Commands::Bench {
-            build_dir,
-            config,
-            out_dir,
-            check,
-        } => {
-            bench::run_bench(&root, &build_dir, &config, out_dir.as_deref(), check)?;
-        }
-        Commands::Diagnose { path } => {
-            analyze::analyze_log(&path)?;
-        }
-        Commands::TcpEcho { port } => tcp_echo::tcp_echo(port)?,
-        Commands::HttpOne { port } => http_one::http_one(port)?,
-        Commands::HttpsOne { port } => https_one::https_one(port)?,
-        Commands::TcpEchoProbe { port } => {
-            let code = if tcp_echo::port_is_listening(port) {
-                0
-            } else {
-                1
-            };
-            std::process::exit(code);
-        }
+        } => test_command(
+            root,
+            &board,
+            &build_dir,
+            &config,
+            mode.as_deref(),
+            gdb,
+            snapshot,
+        ),
         Commands::Smoke {
             expect,
             curl,
             unordered,
             timeout,
             cmd,
-        } => {
-            let mut args = cmd;
-            if args.first().is_some_and(|a| a == "--") {
-                args.remove(0);
-            }
-            let (program, program_args) = args
-                .split_first()
-                .map(|(p, a)| (p.clone(), a.to_vec()))
-                .unwrap_or_else(|| ("true".into(), vec![]));
-            let mut command = Command::new(program);
-            command.args(program_args);
-            let curls: Vec<(String, String)> = curl
-                .chunks(2)
-                .filter_map(|c| {
-                    if c.len() == 2 {
-                        Some((c[0].clone(), c[1].clone()))
-                    } else {
-                        None
-                    }
-                })
-                .collect();
-            let smoke = test::SmokeTest {
-                expects: if expect.is_empty() {
-                    vec!["lerux: Hello from Rust on seL4 Microkit!".into()]
-                } else {
-                    expect
-                },
-                curls,
-                unordered,
-                timeout_secs: timeout,
-                script: Vec::new(),
-                script_timeout_secs: 30,
-                qmp_keys: Vec::new(),
-                qmp_expect: None,
-            };
-            test::run_smoke(command, &smoke)?;
+        } => smoke_command(expect, curl, unordered, timeout, cmd),
+        Commands::Profile { command } => profile_command(root, command),
+        Commands::Prog { command } => prog_command(command),
+        _ => unreachable!("session command"),
+    }
+}
+
+fn dispatch_ship(root: &Path, command: Commands) -> Result<()> {
+    match command {
+        cmd @ (Commands::Deploy { .. } | Commands::Iso { .. } | Commands::Digest { .. }) => {
+            dispatch_ship_boot(root, cmd)
         }
-        Commands::Profile { command } => {
-            let profiles = crate::profile::load_profiles(&root)?;
-            match command {
-                ProfileCommands::List => {
-                    crate::profile::list_profiles(&profiles);
-                }
-                ProfileCommands::Build {
-                    name,
-                    board,
-                    build_dir,
-                    config,
-                } => {
-                    let profile = crate::profile::get_profile(&profiles, &name)?;
-                    let board_name = crate::profile::resolve_board_for_profile(
-                        &profiles,
-                        &name,
-                        board.as_deref(),
-                    )?;
-                    let sdf = crate::system::render_profile_system(
-                        &root,
-                        &name,
-                        profile,
-                        board.as_deref(),
-                    )?;
-                    let out = crate::system::system_file(&root, &board_name, &build_dir);
-                    if let Some(parent) = out.parent() {
-                        std::fs::create_dir_all(parent)
-                            .with_context(|| format!("mkdir {}", parent.display()))?;
-                    }
-                    std::fs::write(&out, sdf)
-                        .with_context(|| format!("write {}", out.display()))?;
-                    let boards = load_boards(&root)?;
-                    let board_cfg = get_board(&boards, &board_name)?;
-                    build::link_image(&root, &board_name, &build_dir, &config, &board_cfg.pds)?;
-                    println!("profile {name} -> board {board_name}: loader.img ready");
-                }
-                ProfileCommands::Diff {
-                    profile_a,
-                    profile_b,
-                } => {
-                    let pa = crate::profile::get_profile(&profiles, &profile_a)?;
-                    let pb = crate::profile::get_profile(&profiles, &profile_b)?;
-                    crate::profile::diff_profiles_with_sdf(&root, &profile_a, pa, &profile_b, pb)?;
-                }
-                ProfileCommands::Show { name } => {
-                    let p = crate::profile::get_profile(&profiles, &name)?;
-                    crate::profile::show_profile(&name, p);
-                }
-                ProfileCommands::Validate { name } => {
-                    if let Some(name) = name {
-                        let p = crate::profile::get_profile(&profiles, &name)?;
-                        crate::profile::validate_profile(&name, p)?;
-                    } else {
-                        crate::profile::validate_all_profiles(&profiles)?;
-                    }
-                }
-                ProfileCommands::Sdf {
-                    name,
-                    board,
-                    output,
-                } => {
-                    let p = crate::profile::get_profile(&profiles, &name)?;
-                    let sdf =
-                        crate::system::render_profile_system(&root, &name, p, board.as_deref())?;
-                    if let Some(path) = output {
-                        if let Some(parent) = path.parent() {
-                            std::fs::create_dir_all(parent)?;
-                        }
-                        std::fs::write(&path, &sdf)?;
-                        println!("wrote {} ({} bytes)", path.display(), sdf.len());
-                    } else {
-                        print!("{sdf}");
-                    }
-                }
-                ProfileCommands::EmitChannels { name, output } => {
-                    let p = crate::profile::get_profile(&profiles, &name)?;
-                    let body = crate::channel_consts::emit_channel_consts_rs(&name, &p.channel);
-                    if let Some(path) = output {
-                        if let Some(parent) = path.parent() {
-                            std::fs::create_dir_all(parent)?;
-                        }
-                        std::fs::write(&path, &body)?;
-                        println!("wrote {}", path.display());
-                    } else {
-                        print!("{body}");
-                    }
-                }
-                ProfileCommands::CheckChannels { name } => {
-                    if let Some(name) = name {
-                        let p = crate::profile::get_profile(&profiles, &name)?;
-                        crate::channel_consts::check_profile_channels(&root, &name, p)?;
-                        println!("profile {name}: channel consts ok");
-                    } else {
-                        for (name, p) in &profiles {
-                            crate::channel_consts::check_profile_channels(&root, name, p)?;
-                            println!("profile {name}: channel consts ok");
-                        }
-                    }
-                }
-                ProfileCommands::Audit { name } => {
-                    crate::profile::audit_profiles(&profiles, name.as_deref())?;
-                }
-                ProfileCommands::CheckQos { name } => {
-                    crate::qos_check::check_profiles_qos(&root, &profiles, name.as_deref())?;
-                }
-            }
-        }
-        Commands::Prog { command } => match command {
-            ProgCommands::Pack { key, out, src } => {
-                prog::pack_cli(&key, &out, src.as_deref())?;
-            }
-        },
-        Commands::Deploy {
-            board,
-            dest,
-            build_dir,
-            config,
-            build,
-            no_build,
-            verify,
-            no_verify,
-        } => {
-            let build_if_missing = build && !no_build;
-            let do_verify = verify && !no_verify;
-            crate::deploy::deploy_loader(
-                &root,
-                &board,
-                &build_dir,
-                &config,
-                &dest,
-                build_if_missing,
-                do_verify,
-            )?;
-        }
-        Commands::Iso {
-            board,
-            build_dir,
-            config,
-            output,
-            build,
-            no_build,
-            verify,
-            no_verify,
-            boot_test,
-        } => {
-            let build_if_missing = build && !no_build;
-            let do_verify = verify && !no_verify;
-            crate::iso_host::require_iso_host(&root, &board, &config, build_if_missing, boot_test)?;
-            let iso = crate::iso::build_iso(
-                &root,
-                &board,
-                &build_dir,
-                &config,
-                output.as_deref(),
-                build_if_missing,
-                do_verify,
-            )?;
-            if boot_test {
-                crate::iso::boot_test(&root, &iso, &board, &build_dir)?;
-            }
-        }
+        cmd => dispatch_ship_keys(root, cmd),
+    }
+}
+
+fn dispatch_ship_boot(root: &Path, command: Commands) -> Result<()> {
+    match command {
+        cmd @ Commands::Deploy { .. } => deploy_from(root, cmd),
+        cmd @ Commands::Iso { .. } => iso_from(root, cmd),
         Commands::Digest {
             board,
             build_dir,
             path,
-        } => {
-            let loader =
-                crate::image_digest::resolve_loader(&root, &board, &build_dir, path.as_deref())?;
-            crate::image_digest::write_sidecar(&loader)?;
-        }
+        } => digest_command(root, &board, &build_dir, path),
+        _ => unreachable!("ship boot command"),
+    }
+}
+
+fn deploy_from(root: &Path, command: Commands) -> Result<()> {
+    let Commands::Deploy {
+        board,
+        dest,
+        build_dir,
+        config,
+        build,
+        no_build,
+        verify,
+        no_verify,
+    } = command
+    else {
+        unreachable!("deploy command");
+    };
+    deploy_command(
+        root,
+        &board,
+        &dest,
+        &build_dir,
+        &config,
+        image_flags(build, no_build, verify, no_verify),
+    )
+}
+
+fn iso_from(root: &Path, command: Commands) -> Result<()> {
+    let Commands::Iso {
+        board,
+        build_dir,
+        config,
+        output,
+        build,
+        no_build,
+        verify,
+        no_verify,
+        boot_test,
+    } = command
+    else {
+        unreachable!("iso command");
+    };
+    iso_command(
+        root,
+        &board,
+        &build_dir,
+        &config,
+        output,
+        image_flags(build, no_build, verify, no_verify),
+        boot_test,
+    )
+}
+
+fn image_flags(build: bool, no_build: bool, verify: bool, no_verify: bool) -> ImageFlags {
+    ImageFlags {
+        build_if_missing: build && !no_build,
+        verify: verify && !no_verify,
+    }
+}
+
+fn dispatch_ship_keys(root: &Path, command: Commands) -> Result<()> {
+    match command {
         Commands::VerifyImage {
             board,
             build_dir,
             path,
             key,
             require_sig,
-        } => {
-            let loader =
-                crate::image_digest::resolve_loader(&root, &board, &build_dir, path.as_deref())?;
-            let key = key.map(|k| if k.is_absolute() { k } else { root.join(k) });
-            crate::image_sign::verify_image(&loader, key.as_deref(), require_sig)?;
-        }
-        Commands::Keygen { out } => {
-            let out = if out.is_absolute() {
-                out
-            } else {
-                root.join(out)
-            };
-            crate::image_sign::keygen(&out)?;
-        }
+        } => verify_image_command(root, &board, &build_dir, path, key, require_sig),
+        Commands::Keygen { out } => keygen_command(root, out),
         Commands::Sign {
             board,
             build_dir,
             path,
             key,
-        } => {
-            let loader =
-                crate::image_digest::resolve_loader(&root, &board, &build_dir, path.as_deref())?;
-            let key = if key.is_absolute() {
-                key
-            } else {
-                root.join(key)
-            };
-            crate::image_sign::sign(&loader, &key)?;
-        }
-        Commands::Config { command } => match command {
-            ConfigCommands::Schema => crate::config_cmd::print_schema(),
-            ConfigCommands::Defaults => crate::config_cmd::print_defaults(),
-            ConfigCommands::SeedDisk { disk } => {
-                crate::config_cmd::seed_disk(&root, disk.as_deref())?;
-            }
-        },
+        } => sign_command(root, &board, &build_dir, path, key),
+        Commands::Config { command } => config_command(root, command),
+        _ => unreachable!("ship command"),
     }
+}
 
+fn print_sdk_path(root: &Path) -> Result<()> {
+    println!("{}", sdk_path(root)?);
     Ok(())
+}
+
+fn show_board(root: &Path, name: &str, field: Option<&str>) -> Result<()> {
+    let boards = load_boards(root)?;
+    let board = get_board(&boards, name)?;
+    print_board_field(board, field)
+}
+
+fn print_host_path(root: &Path) -> Result<()> {
+    println!("{}", path::host_path(root));
+    Ok(())
+}
+
+fn print_install(root: &Path, tool: InstallTool) -> Result<()> {
+    let bin = install_tool(root, tool)?;
+    println!("{}", bin.display());
+    Ok(())
+}
+
+fn print_fs_scaffold(root: &Path, from: &str, board: &str) -> Result<()> {
+    print!("{}", fs_scaffold::report(root, from, board)?);
+    Ok(())
+}
+
+fn probe_tcp_echo(port: u16) -> Result<()> {
+    let code = if tcp_echo::port_is_listening(port) {
+        0
+    } else {
+        1
+    };
+    std::process::exit(code);
+}
+
+fn apply_qemu_session_flags(gdb: bool, snapshot: bool) {
+    if gdb {
+        // SAFETY: CLI is single-threaded here.
+        unsafe { std::env::set_var("LERUX_QEMU_GDB", "1") };
+    }
+    if snapshot {
+        // SAFETY: CLI is single-threaded here.
+        unsafe { std::env::set_var("LERUX_QEMU_SNAPSHOT", "1") };
+    }
+}
+
+fn run_command(
+    root: &Path,
+    board: &str,
+    build_dir: &str,
+    config: &str,
+    gdb: bool,
+    snapshot: bool,
+) -> Result<()> {
+    apply_qemu_session_flags(gdb, snapshot);
+    build::run(root, board, build_dir, config)
+}
+
+fn test_command(
+    root: &Path,
+    board: &str,
+    build_dir: &str,
+    config: &str,
+    mode: Option<&str>,
+    gdb: bool,
+    snapshot: bool,
+) -> Result<()> {
+    apply_qemu_session_flags(gdb, snapshot);
+    let mode = test::TestMode::from_env_or_flag(mode)?;
+    build::image(root, board, build_dir, config)?;
+    test::run_board_test_with_mode(root, board, build_dir, config, mode)
+}
+
+fn smoke_curls(curl: Vec<String>) -> Vec<(String, String)> {
+    curl.chunks(2)
+        .filter_map(|c| {
+            if c.len() == 2 {
+                Some((c[0].clone(), c[1].clone()))
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+fn smoke_command(
+    expect: Vec<String>,
+    curl: Vec<String>,
+    unordered: bool,
+    timeout: u64,
+    mut cmd: Vec<String>,
+) -> Result<()> {
+    if cmd.first().is_some_and(|a| a == "--") {
+        cmd.remove(0);
+    }
+    let (program, program_args) = cmd
+        .split_first()
+        .map(|(p, a)| (p.clone(), a.to_vec()))
+        .unwrap_or_else(|| ("true".into(), vec![]));
+    let mut command = Command::new(program);
+    command.args(program_args);
+    let smoke = test::SmokeTest {
+        expects: if expect.is_empty() {
+            vec!["lerux: Hello from Rust on seL4 Microkit!".into()]
+        } else {
+            expect
+        },
+        curls: smoke_curls(curl),
+        unordered,
+        timeout_secs: timeout,
+        script: Vec::new(),
+        script_timeout_secs: 30,
+        qmp_keys: Vec::new(),
+        qmp_expect: None,
+    };
+    test::run_smoke(command, &smoke)
+}
+
+fn profile_command(root: &Path, command: ProfileCommands) -> Result<()> {
+    let profiles = crate::profile::load_profiles(root)?;
+    match command {
+        ProfileCommands::List => {
+            crate::profile::list_profiles(&profiles);
+            Ok(())
+        }
+        ProfileCommands::Build {
+            name,
+            board,
+            build_dir,
+            config,
+        } => profile_build(
+            root,
+            &profiles,
+            &name,
+            board.as_deref(),
+            &build_dir,
+            &config,
+        ),
+        ProfileCommands::Diff {
+            profile_a,
+            profile_b,
+        } => profile_diff(root, &profiles, &profile_a, &profile_b),
+        ProfileCommands::Show { name } => profile_show(&profiles, &name),
+        ProfileCommands::Validate { name } => profile_validate(&profiles, name),
+        ProfileCommands::Sdf {
+            name,
+            board,
+            output,
+        } => profile_sdf(root, &profiles, &name, board.as_deref(), output),
+        ProfileCommands::EmitChannels { name, output } => {
+            profile_emit_channels(&profiles, &name, output)
+        }
+        ProfileCommands::CheckChannels { name } => profile_check_channels(root, &profiles, name),
+        ProfileCommands::Audit { name } => {
+            crate::profile::audit_profiles(&profiles, name.as_deref())
+        }
+        ProfileCommands::CheckQos { name } => {
+            crate::qos_check::check_profiles_qos(root, &profiles, name.as_deref())
+        }
+    }
+}
+
+fn profile_build(
+    root: &Path,
+    profiles: &crate::profile::Profiles,
+    name: &str,
+    board: Option<&str>,
+    build_dir: &str,
+    config: &str,
+) -> Result<()> {
+    let profile = crate::profile::get_profile(profiles, name)?;
+    let board_name = crate::profile::resolve_board_for_profile(profiles, name, board)?;
+    let sdf = crate::system::render_profile_system(root, name, profile, board)?;
+    let out = crate::system::system_file(root, &board_name, build_dir);
+    if let Some(parent) = out.parent() {
+        std::fs::create_dir_all(parent).with_context(|| format!("mkdir {}", parent.display()))?;
+    }
+    std::fs::write(&out, sdf).with_context(|| format!("write {}", out.display()))?;
+    let boards = load_boards(root)?;
+    let board_cfg = get_board(&boards, &board_name)?;
+    build::link_image(root, &board_name, build_dir, config, &board_cfg.pds)?;
+    println!("profile {name} -> board {board_name}: loader.img ready");
+    Ok(())
+}
+
+fn profile_diff(
+    root: &Path,
+    profiles: &crate::profile::Profiles,
+    profile_a: &str,
+    profile_b: &str,
+) -> Result<()> {
+    let pa = crate::profile::get_profile(profiles, profile_a)?;
+    let pb = crate::profile::get_profile(profiles, profile_b)?;
+    crate::profile::diff_profiles_with_sdf(root, profile_a, pa, profile_b, pb)
+}
+
+fn profile_show(profiles: &crate::profile::Profiles, name: &str) -> Result<()> {
+    let p = crate::profile::get_profile(profiles, name)?;
+    crate::profile::show_profile(name, p);
+    Ok(())
+}
+
+fn profile_validate(profiles: &crate::profile::Profiles, name: Option<String>) -> Result<()> {
+    if let Some(name) = name {
+        let p = crate::profile::get_profile(profiles, &name)?;
+        crate::profile::validate_profile(&name, p)?;
+    } else {
+        crate::profile::validate_all_profiles(profiles)?;
+    }
+    Ok(())
+}
+
+fn profile_sdf(
+    root: &Path,
+    profiles: &crate::profile::Profiles,
+    name: &str,
+    board: Option<&str>,
+    output: Option<PathBuf>,
+) -> Result<()> {
+    let p = crate::profile::get_profile(profiles, name)?;
+    let sdf = crate::system::render_profile_system(root, name, p, board)?;
+    if let Some(path) = output {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(&path, &sdf)?;
+        println!("wrote {} ({} bytes)", path.display(), sdf.len());
+    } else {
+        print!("{sdf}");
+    }
+    Ok(())
+}
+
+fn profile_emit_channels(
+    profiles: &crate::profile::Profiles,
+    name: &str,
+    output: Option<PathBuf>,
+) -> Result<()> {
+    let p = crate::profile::get_profile(profiles, name)?;
+    let body = crate::channel_consts::emit_channel_consts_rs(name, &p.channel);
+    if let Some(path) = output {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(&path, &body)?;
+        println!("wrote {}", path.display());
+    } else {
+        print!("{body}");
+    }
+    Ok(())
+}
+
+fn profile_check_channels(
+    root: &Path,
+    profiles: &crate::profile::Profiles,
+    name: Option<String>,
+) -> Result<()> {
+    if let Some(name) = name {
+        let p = crate::profile::get_profile(profiles, &name)?;
+        crate::channel_consts::check_profile_channels(root, &name, p)?;
+        println!("profile {name}: channel consts ok");
+    } else {
+        for (name, p) in profiles {
+            crate::channel_consts::check_profile_channels(root, name, p)?;
+            println!("profile {name}: channel consts ok");
+        }
+    }
+    Ok(())
+}
+
+fn prog_command(command: ProgCommands) -> Result<()> {
+    match command {
+        ProgCommands::Pack { key, out, src } => prog::pack_cli(&key, &out, src.as_deref()),
+    }
+}
+
+struct ImageFlags {
+    build_if_missing: bool,
+    verify: bool,
+}
+
+fn deploy_command(
+    root: &Path,
+    board: &str,
+    dest: &Path,
+    build_dir: &str,
+    config: &str,
+    flags: ImageFlags,
+) -> Result<()> {
+    crate::deploy::deploy_loader(
+        root,
+        board,
+        build_dir,
+        config,
+        dest,
+        flags.build_if_missing,
+        flags.verify,
+    )?;
+    Ok(())
+}
+
+fn iso_command(
+    root: &Path,
+    board: &str,
+    build_dir: &str,
+    config: &str,
+    output: Option<PathBuf>,
+    flags: ImageFlags,
+    boot_test: bool,
+) -> Result<()> {
+    crate::iso_host::require_iso_host(root, board, config, flags.build_if_missing, boot_test)?;
+    let iso = crate::iso::build_iso(
+        root,
+        board,
+        build_dir,
+        config,
+        output.as_deref(),
+        flags.build_if_missing,
+        flags.verify,
+    )?;
+    if boot_test {
+        crate::iso::boot_test(root, &iso, board, build_dir)?;
+    }
+    Ok(())
+}
+
+fn digest_command(root: &Path, board: &str, build_dir: &str, path: Option<PathBuf>) -> Result<()> {
+    let loader = crate::image_digest::resolve_loader(root, board, build_dir, path.as_deref())?;
+    crate::image_digest::write_sidecar(&loader)?;
+    Ok(())
+}
+
+fn verify_image_command(
+    root: &Path,
+    board: &str,
+    build_dir: &str,
+    path: Option<PathBuf>,
+    key: Option<PathBuf>,
+    require_sig: bool,
+) -> Result<()> {
+    let loader = crate::image_digest::resolve_loader(root, board, build_dir, path.as_deref())?;
+    let key = key.map(|k| if k.is_absolute() { k } else { root.join(k) });
+    crate::image_sign::verify_image(&loader, key.as_deref(), require_sig)
+}
+
+fn keygen_command(root: &Path, out: PathBuf) -> Result<()> {
+    let out = if out.is_absolute() {
+        out
+    } else {
+        root.join(out)
+    };
+    crate::image_sign::keygen(&out)
+}
+
+fn sign_command(
+    root: &Path,
+    board: &str,
+    build_dir: &str,
+    path: Option<PathBuf>,
+    key: PathBuf,
+) -> Result<()> {
+    let loader = crate::image_digest::resolve_loader(root, board, build_dir, path.as_deref())?;
+    let key = if key.is_absolute() {
+        key
+    } else {
+        root.join(key)
+    };
+    crate::image_sign::sign(&loader, &key)
+}
+
+fn config_command(root: &Path, command: ConfigCommands) -> Result<()> {
+    match command {
+        ConfigCommands::Schema => {
+            crate::config_cmd::print_schema();
+            Ok(())
+        }
+        ConfigCommands::Defaults => {
+            crate::config_cmd::print_defaults();
+            Ok(())
+        }
+        ConfigCommands::SeedDisk { disk } => crate::config_cmd::seed_disk(root, disk.as_deref()),
+    }
 }

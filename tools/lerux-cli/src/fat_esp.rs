@@ -367,6 +367,129 @@ fn pad_8_3(base: &str, ext: &str) -> [u8; 11] {
 mod tests {
     use super::*;
 
+    fn fat_next(image: &[u8], fat_off: usize, cluster: u16) -> u16 {
+        let off = fat_off + cluster as usize * 2;
+        u16::from_le_bytes(image[off..off + 2].try_into().unwrap())
+    }
+
+    fn read_chain(
+        image: &[u8],
+        fat_off: usize,
+        data_off: usize,
+        cluster_bytes: usize,
+        start: u16,
+        size: usize,
+    ) -> Vec<u8> {
+        let mut out = Vec::new();
+        let mut cluster = start;
+        while (2..0xFFF8).contains(&cluster) && out.len() < size.max(cluster_bytes) {
+            let off = data_off + (cluster as usize - 2) * cluster_bytes;
+            out.extend_from_slice(&image[off..off + cluster_bytes]);
+            cluster = fat_next(image, fat_off, cluster);
+        }
+        out.truncate(size);
+        out
+    }
+
+    fn lfn_name(entries: &[(u8, [u8; 32])]) -> String {
+        let mut units = Vec::new();
+        for (_, ent) in entries {
+            let mut chars = [0u16; 13];
+            for i in 0..5 {
+                chars[i] = u16::from_le_bytes(ent[1 + i * 2..3 + i * 2].try_into().unwrap());
+            }
+            for i in 0..6 {
+                chars[5 + i] = u16::from_le_bytes(ent[14 + i * 2..16 + i * 2].try_into().unwrap());
+            }
+            chars[11] = u16::from_le_bytes(ent[28..30].try_into().unwrap());
+            chars[12] = u16::from_le_bytes(ent[30..32].try_into().unwrap());
+            for ch in chars {
+                if ch == 0 || ch == 0xFFFF {
+                    break;
+                }
+                units.push(ch);
+            }
+        }
+        String::from_utf16(&units).unwrap()
+    }
+
+    fn entry_name(ent: &[u8; 32], lfns: &mut Vec<(u8, [u8; 32])>) -> String {
+        if lfns.is_empty() {
+            let text = std::str::from_utf8(&ent[..11]).unwrap().trim();
+            return text.to_string();
+        }
+        lfns.sort_by_key(|(ord, _)| *ord & 0x1F);
+        let got = lfn_name(lfns);
+        lfns.clear();
+        got
+    }
+
+    fn follow_dir_entry(
+        image: &[u8],
+        fat_off: usize,
+        data_off: usize,
+        cluster_bytes: usize,
+        ent: &[u8; 32],
+        parts: &[&str],
+    ) -> Vec<u8> {
+        let cluster = u16::from_le_bytes(ent[26..28].try_into().unwrap());
+        let size = u32::from_le_bytes(ent[28..32].try_into().unwrap()) as usize;
+        let body = if cluster == 0 {
+            Vec::new()
+        } else {
+            read_chain(
+                image,
+                fat_off,
+                data_off,
+                cluster_bytes,
+                cluster,
+                if ent[11] & 0x10 != 0 {
+                    cluster_bytes
+                } else {
+                    size
+                },
+            )
+        };
+        if parts.len() == 1 {
+            body
+        } else {
+            walk(image, fat_off, data_off, cluster_bytes, &body, &parts[1..])
+        }
+    }
+
+    fn walk(
+        image: &[u8],
+        fat_off: usize,
+        data_off: usize,
+        cluster_bytes: usize,
+        raw: &[u8],
+        parts: &[&str],
+    ) -> Vec<u8> {
+        let mut i = 0;
+        let mut lfns = Vec::new();
+        while i + 32 <= raw.len() {
+            let ent: [u8; 32] = raw[i..i + 32].try_into().unwrap();
+            i += 32;
+            if ent[0] == 0 {
+                break;
+            }
+            if ent[0] == 0xE5 {
+                lfns.clear();
+                continue;
+            }
+            if ent[11] == 0x0F {
+                lfns.push((ent[0], ent));
+                continue;
+            }
+            let name = entry_name(&ent, &mut lfns);
+            if name == "." || name == ".." || !name.eq_ignore_ascii_case(parts[0]) {
+                continue;
+            }
+            return follow_dir_entry(image, fat_off, data_off, cluster_bytes, &ent, parts);
+        }
+        panic!("missing {parts:?}");
+    }
+
     fn read_file(image: &[u8], path: &str) -> Vec<u8> {
         let bps = 512usize;
         let spc = image[13] as usize;
@@ -378,116 +501,6 @@ mod tests {
         let data_off = root_off + root_ents * 32;
         let fat_off = reserved * bps;
         let cluster_bytes = bps * spc;
-
-        fn next(image: &[u8], fat_off: usize, cluster: u16) -> u16 {
-            let off = fat_off + cluster as usize * 2;
-            u16::from_le_bytes(image[off..off + 2].try_into().unwrap())
-        }
-
-        fn read_chain(
-            image: &[u8],
-            fat_off: usize,
-            data_off: usize,
-            cluster_bytes: usize,
-            start: u16,
-            size: usize,
-        ) -> Vec<u8> {
-            let mut out = Vec::new();
-            let mut cluster = start;
-            while (2..0xFFF8).contains(&cluster) && out.len() < size.max(cluster_bytes) {
-                let off = data_off + (cluster as usize - 2) * cluster_bytes;
-                out.extend_from_slice(&image[off..off + cluster_bytes]);
-                cluster = next(image, fat_off, cluster);
-            }
-            out.truncate(size);
-            out
-        }
-
-        fn lfn_name(entries: &[(u8, [u8; 32])]) -> String {
-            let mut units = Vec::new();
-            for (_, ent) in entries {
-                let mut chars = [0u16; 13];
-                for i in 0..5 {
-                    chars[i] = u16::from_le_bytes(ent[1 + i * 2..3 + i * 2].try_into().unwrap());
-                }
-                for i in 0..6 {
-                    chars[5 + i] =
-                        u16::from_le_bytes(ent[14 + i * 2..16 + i * 2].try_into().unwrap());
-                }
-                chars[11] = u16::from_le_bytes(ent[28..30].try_into().unwrap());
-                chars[12] = u16::from_le_bytes(ent[30..32].try_into().unwrap());
-                for ch in chars {
-                    if ch == 0 || ch == 0xFFFF {
-                        break;
-                    }
-                    units.push(ch);
-                }
-            }
-            String::from_utf16(&units).unwrap()
-        }
-
-        fn walk(
-            image: &[u8],
-            fat_off: usize,
-            data_off: usize,
-            cluster_bytes: usize,
-            raw: &[u8],
-            parts: &[&str],
-        ) -> Vec<u8> {
-            let mut i = 0;
-            let mut lfns = Vec::new();
-            while i + 32 <= raw.len() {
-                let ent: [u8; 32] = raw[i..i + 32].try_into().unwrap();
-                i += 32;
-                if ent[0] == 0 {
-                    break;
-                }
-                if ent[0] == 0xE5 {
-                    lfns.clear();
-                    continue;
-                }
-                if ent[11] == 0x0F {
-                    lfns.push((ent[0], ent));
-                    continue;
-                }
-                let name = if lfns.is_empty() {
-                    let text = std::str::from_utf8(&ent[..11]).unwrap().trim();
-                    text.to_string()
-                } else {
-                    lfns.sort_by_key(|(ord, _)| *ord & 0x1F);
-                    let got = lfn_name(&lfns);
-                    lfns.clear();
-                    got
-                };
-                if name == "." || name == ".." || !name.eq_ignore_ascii_case(parts[0]) {
-                    continue;
-                }
-                let cluster = u16::from_le_bytes(ent[26..28].try_into().unwrap());
-                let size = u32::from_le_bytes(ent[28..32].try_into().unwrap()) as usize;
-                let body = if cluster == 0 {
-                    Vec::new()
-                } else {
-                    read_chain(
-                        image,
-                        fat_off,
-                        data_off,
-                        cluster_bytes,
-                        cluster,
-                        if ent[11] & 0x10 != 0 {
-                            cluster_bytes
-                        } else {
-                            size
-                        },
-                    )
-                };
-                if parts.len() == 1 {
-                    return body;
-                }
-                return walk(image, fat_off, data_off, cluster_bytes, &body, &parts[1..]);
-            }
-            panic!("missing {parts:?}");
-        }
-
         let root = &image[root_off..data_off];
         walk(
             image,

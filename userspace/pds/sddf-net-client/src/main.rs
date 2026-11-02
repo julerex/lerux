@@ -55,38 +55,9 @@ struct HandlerImpl;
 
 #[protection_domain(heap_size = 64 * 1024)]
 fn init() -> HandlerImpl {
-    let serial_len = size_of::<serial_client_config_t>();
-    let net_len = size_of::<net_client_config_t>();
-    assert_eq!(CONFIG.len(), serial_len + net_len);
-    // SAFETY: the build script wrote the serial client page, then the network client page.
-    let serial = unsafe {
-        serial_image::serial_config_from_bytes::<serial_client_config_t>(&CONFIG[..serial_len])
-    };
-    let net =
-        unsafe { net_image::net_config_from_bytes::<net_client_config_t>(&CONFIG[serial_len..]) };
-    assert_eq!(serial.magic, SDDF_SERIAL_MAGIC);
-    assert_eq!(net.magic, SDDF_NET_MAGIC);
-    // SAFETY: the template maps this client's serial transmit region.
-    let serial_tx = unsafe { serial_handle_from_connection(&serial.tx) };
-    let serial_ch = Channel::new(usize::from(serial.tx.id));
-
-    let rx = queue_from(&net.rx);
-    let tx = queue_from(&net.tx);
-    // SAFETY: this client produces the transmit free queue once. The transmit
-    // virtualiser is the producer after this returns.
-    unsafe { net_buffers_init(&tx, 0) };
-    let mut device = NetDevice::new(
-        rx,
-        tx,
-        net.rx_data.vaddr,
-        net.tx_data.vaddr,
-        Channel::new(usize::from(net.rx.id)),
-        Channel::new(usize::from(net.tx.id)),
-    );
+    let (serial_tx, serial_ch, mut device, mac) = open_links();
     let mut iface = Interface::new(
-        Config::new(HardwareAddress::Ethernet(EthernetAddress(
-            net.mac_addr.addr,
-        ))),
+        Config::new(HardwareAddress::Ethernet(EthernetAddress(mac))),
         &mut device,
         Instant::from_millis(0),
     );
@@ -113,6 +84,38 @@ fn init() -> HandlerImpl {
     };
     wait_for_ping(&mut guest, gateway, icmp_handle);
     HandlerImpl
+}
+
+fn open_links() -> (serial_queue_handle_t, Channel, NetDevice, [u8; 6]) {
+    let serial_len = size_of::<serial_client_config_t>();
+    let net_len = size_of::<net_client_config_t>();
+    assert_eq!(CONFIG.len(), serial_len + net_len);
+    // SAFETY: the build script wrote the serial client page, then the network client page.
+    let serial = unsafe {
+        serial_image::serial_config_from_bytes::<serial_client_config_t>(&CONFIG[..serial_len])
+    };
+    let net =
+        unsafe { net_image::net_config_from_bytes::<net_client_config_t>(&CONFIG[serial_len..]) };
+    assert_eq!(serial.magic, SDDF_SERIAL_MAGIC);
+    assert_eq!(net.magic, SDDF_NET_MAGIC);
+    // SAFETY: the template maps this client's serial transmit region.
+    let serial_tx = unsafe { serial_handle_from_connection(&serial.tx) };
+    let serial_ch = Channel::new(usize::from(serial.tx.id));
+    let rx = queue_from(&net.rx);
+    let tx = queue_from(&net.tx);
+    // SAFETY: this client produces the transmit free queue once. The transmit
+    // virtualiser is the producer after this returns.
+    unsafe { net_buffers_init(&tx, 0) };
+    let mac = net.mac_addr.addr;
+    let device = NetDevice::new(
+        rx,
+        tx,
+        net.rx_data.vaddr,
+        net.tx_data.vaddr,
+        Channel::new(usize::from(net.rx.id)),
+        Channel::new(usize::from(net.tx.id)),
+    );
+    (serial_tx, serial_ch, device, mac)
 }
 
 struct Guest<'a> {

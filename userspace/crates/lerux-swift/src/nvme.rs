@@ -307,13 +307,29 @@ fn file_in_record(raw: &[u8], want: &[u16]) -> Option<DiskReport> {
     if flags & 1 == 0 {
         return None;
     }
+    let (named, data) = resident_file(&fixed, raw.len(), want)?;
+    if !named {
+        return None;
+    }
+    let (start, len) = data?;
+    let n = len.min(256);
+    let mut buf = [0u8; 256];
+    buf[..n].copy_from_slice(&fixed[start..start + n]);
+    Some(DiskReport::Bytes(buf, n))
+}
+
+fn resident_file(
+    fixed: &[u8],
+    raw_len: usize,
+    want: &[u16],
+) -> Option<(bool, Option<(usize, usize)>)> {
     let mut attr = u16::from_le_bytes([fixed[0x14], fixed[0x15]]) as usize;
     let mut named = false;
     let mut data = None;
-    while attr + 8 <= raw.len() {
+    while attr + 8 <= raw_len {
         let kind = u32::from_le_bytes(fixed[attr..attr + 4].try_into().ok()?);
         let len = u32::from_le_bytes(fixed[attr + 4..attr + 8].try_into().ok()?) as usize;
-        if kind == 0xffff_ffff || len < 8 || attr + len > raw.len() {
+        if kind == 0xffff_ffff || len < 8 || attr + len > raw_len {
             break;
         }
         let nonresident = fixed[attr + 8];
@@ -336,14 +352,7 @@ fn file_in_record(raw: &[u8], want: &[u16]) -> Option<DiskReport> {
         }
         attr += len;
     }
-    if !named {
-        return None;
-    }
-    let (start, len) = data?;
-    let n = len.min(256);
-    let mut buf = [0u8; 256];
-    buf[..n].copy_from_slice(&fixed[start..start + n]);
-    Some(DiskReport::Bytes(buf, n))
+    Some((named, data))
 }
 
 fn filename_is(value: &[u8], want: &[u16]) -> bool {

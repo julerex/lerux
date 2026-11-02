@@ -152,44 +152,8 @@ impl HandlerImpl {
         let mut reprocess = true;
         while reprocess {
             while unsafe { !net_queue_empty_active(&self.driver) } {
-                let mut buffer = net_buff_desc_t::new(0, 0, 0);
-                // SAFETY: this protection domain consumes the driver receive active queue.
-                let err = unsafe { net_dequeue_active(&self.driver, &mut buffer) };
-                assert_eq!(err, 0, "active driver buffer is present");
-                let io_addr = io_addr();
-                assert!(buffer.io_or_offset >= io_addr, "offset fits");
-                buffer.io_or_offset -= io_addr;
-                let buf = u64::from(NET_BUFFER_SIZE);
-                assert!(
-                    buffer.io_or_offset.is_multiple_of(buf)
-                        && buffer.io_or_offset < buf * u64::from(NET_QUEUE_CAPACITY),
-                    "offset fits"
-                );
-                let dest = self.destination(&buffer);
-                match dest {
-                    Dest::Client | Dest::Broadcast => {
-                        let cell = self.ref_cell(buffer.io_or_offset);
-                        // SAFETY: `cell` is one reference count in the metadata page.
-                        assert_eq!(unsafe { *cell }, 0, "offset fits");
-                        let count = if matches!(dest, Dest::Broadcast) {
-                            config().num_clients
-                        } else {
-                            1
-                        };
-                        // SAFETY: same cell as the load above. This domain is the only writer.
-                        unsafe { *cell = count };
-                        // SAFETY: this protection domain produces the copier active queue.
-                        let err = unsafe { net_enqueue_active(&self.copier, buffer) };
-                        assert_eq!(err, 0, "copier queue accepts the buffer");
-                        notify_copier = true;
-                    }
-                    Dest::Drop => {
-                        buffer.io_or_offset += io_addr;
-                        // SAFETY: this protection domain produces the driver free queue.
-                        let err = unsafe { net_enqueue_free(&self.driver, buffer) };
-                        assert_eq!(err, 0, "driver free queue accepts the buffer");
-                        self.notify_driver = true;
-                    }
+                if self.forward_active() {
+                    notify_copier = true;
                 }
             }
             // SAFETY: this protection domain consumes the driver receive active queue.
@@ -204,6 +168,55 @@ impl HandlerImpl {
             unsafe { net_cancel_signal_active(&self.copier) };
             self.copier_ch.notify();
         }
+    }
+
+    fn forward_active(&mut self) -> bool {
+        let mut buffer = net_buff_desc_t::new(0, 0, 0);
+        // SAFETY: this protection domain consumes the driver receive active queue.
+        let err = unsafe { net_dequeue_active(&self.driver, &mut buffer) };
+        assert_eq!(err, 0, "active driver buffer is present");
+        let base = io_addr();
+        assert!(buffer.io_or_offset >= base, "offset fits");
+        buffer.io_or_offset -= base;
+        let buf = u64::from(NET_BUFFER_SIZE);
+        assert!(
+            buffer.io_or_offset.is_multiple_of(buf)
+                && buffer.io_or_offset < buf * u64::from(NET_QUEUE_CAPACITY),
+            "offset fits"
+        );
+        let dest = self.destination(&buffer);
+        match dest {
+            Dest::Client | Dest::Broadcast => self.enqueue_copier(buffer, dest),
+            Dest::Drop => {
+                self.return_driver(buffer, base);
+                false
+            }
+        }
+    }
+
+    fn enqueue_copier(&mut self, buffer: net_buff_desc_t, dest: Dest) -> bool {
+        let cell = self.ref_cell(buffer.io_or_offset);
+        // SAFETY: `cell` is one reference count in the metadata page.
+        assert_eq!(unsafe { *cell }, 0, "offset fits");
+        let count = if matches!(dest, Dest::Broadcast) {
+            config().num_clients
+        } else {
+            1
+        };
+        // SAFETY: same cell as the load above. This domain is the only writer.
+        unsafe { *cell = count };
+        // SAFETY: this protection domain produces the copier active queue.
+        let err = unsafe { net_enqueue_active(&self.copier, buffer) };
+        assert_eq!(err, 0, "copier queue accepts the buffer");
+        true
+    }
+
+    fn return_driver(&mut self, mut buffer: net_buff_desc_t, base: u64) {
+        buffer.io_or_offset += base;
+        // SAFETY: this protection domain produces the driver free queue.
+        let err = unsafe { net_enqueue_free(&self.driver, buffer) };
+        assert_eq!(err, 0, "driver free queue accepts the buffer");
+        self.notify_driver = true;
     }
 
     fn rx_provide(&mut self) {

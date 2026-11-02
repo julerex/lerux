@@ -3,7 +3,8 @@
 
 use lerux_logging::{log, serial};
 use lerux_rtw8852be::{
-    decode_bridge, identify, io_covered, mmio_covered, BridgeError, CardError, Identity, REALTEK,
+    decode_bridge, identify, io_covered, mmio_covered, Bridge, BridgeError, CardError, Identity,
+    REALTEK,
 };
 use sel4::with_ipc_buffer_mut;
 use sel4_microkit::{protection_domain, var, Channel, ChannelSet, Handler, Infallible};
@@ -57,7 +58,19 @@ fn probe(cap: u64, addr: u16) {
     let root = read_config(cap, addr, ROOT_BUS, ROOT_DEV, ROOT_FUNC);
     let bridge = match decode_bridge(&root) {
         Ok(bridge) => bridge,
-        Err(BridgeError::NotBridge(not_bridge)) => {
+        Err(err) => {
+            log_bridge_error(&root, err);
+            return;
+        }
+    };
+    log_bridge(&bridge);
+    let endpoint = read_config(cap, addr, bridge.secondary_bus, 0, 0);
+    log_card(&bridge, &endpoint);
+}
+
+fn log_bridge_error(root: &[u8], err: BridgeError) {
+    match err {
+        BridgeError::NotBridge(not_bridge) => {
             let vendor = u16::from_le_bytes([root[0], root[1]]);
             let device = u16::from_le_bytes([root[2], root[3]]);
             log::info!(
@@ -66,13 +79,14 @@ fn probe(cap: u64, addr: u16) {
                 device,
                 not_bridge.header_type,
             );
-            return;
         }
-        Err(BridgeError::Short(short)) => {
+        BridgeError::Short(short) => {
             log::info!("rtl8852be: root short {}", short.len);
-            return;
         }
-    };
+    }
+}
+
+fn log_bridge(bridge: &Bridge) {
     log::info!(
         "rtl8852be: root {:04x}:{:04x} secondary {} mem {:#x}-{:#x} io {:#x}-{:#x}",
         bridge.vendor.0,
@@ -83,9 +97,10 @@ fn probe(cap: u64, addr: u16) {
         bridge.io_base,
         bridge.io_limit_inclusive,
     );
+}
 
-    let endpoint = read_config(cap, addr, bridge.secondary_bus, 0, 0);
-    match identify(&endpoint) {
+fn log_card(bridge: &Bridge, endpoint: &[u8]) {
+    match identify(endpoint) {
         Ok(Identity::Rtl8852be(card)) => {
             log::info!(
                 "rtl8852be: card {:04x}:{:04x} rev {} subsystem {:04x}:{:04x} mmio {:#x} io {:#x} mmio_covered {} io_covered {}",
@@ -96,8 +111,8 @@ fn probe(cap: u64, addr: u16) {
                 card.subsystem_device,
                 card.mmio_phys,
                 card.io_port,
-                mmio_covered(&bridge, &card),
-                io_covered(&bridge, &card),
+                mmio_covered(bridge, &card),
+                io_covered(bridge, &card),
             );
         }
         Ok(Identity::Other { vendor, device }) => {

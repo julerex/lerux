@@ -76,6 +76,17 @@ mod tests {
     #[test]
     fn rendered_agent_sddf_system_gives_the_queues_to_the_agent() {
         let root = repo_root();
+        assert_agent_manifests(&root);
+        let xml = render_system(&root, "qemu_virt_aarch64_agent_sddf").expect("render agent image");
+        assert_agent_image_shape(&xml);
+        assert_agent_priorities(&xml);
+        assert_agent_program_images(&xml);
+        assert_agent_channels(&xml);
+        assert_agent_shell_regions(&xml);
+        assert_agent_regions(&xml);
+    }
+
+    fn assert_agent_manifests(root: &std::path::Path) {
         let grok = std::fs::read_to_string(root.join("userspace/pds/sddf-grok/Cargo.toml"))
             .expect("grok manifest");
         let agent = std::fs::read_to_string(root.join("userspace/pds/sddf-agent/Cargo.toml"))
@@ -90,8 +101,9 @@ mod tests {
                 "manifest stays off the logging crate"
             );
         }
+    }
 
-        let xml = render_system(&root, "qemu_virt_aarch64_agent_sddf").expect("render agent image");
+    fn assert_agent_image_shape(xml: &str) {
         assert_eq!(xml.matches("<protection_domain ").count(), 12);
         assert_eq!(xml.matches("<channel>").count(), 14);
         assert_eq!(xml.matches("program_image").count(), 12);
@@ -116,7 +128,9 @@ mod tests {
             "<irq irq=\"33\" id=\"{}\" />",
             serial_image::DRIVER_IRQ_CHANNEL
         )));
+    }
 
+    fn assert_agent_priorities(xml: &str) {
         for (name, priority) in [
             ("blk_driver", 4),
             ("net_driver", 4),
@@ -138,7 +152,9 @@ mod tests {
                 "{name}"
             );
         }
+    }
 
+    fn assert_agent_program_images(xml: &str) {
         for image in [
             "sddf-blk-driver.elf",
             "sddf-blk-virt.elf",
@@ -155,7 +171,9 @@ mod tests {
         ] {
             assert!(xml.contains(&format!("<program_image path=\"{image}\" />")));
         }
+    }
 
+    fn assert_agent_channels(xml: &str) {
         for (pd, id) in [
             ("blk_driver", blk_image::BLK_DRIVER_VIRT_CHANNEL),
             ("blk_virt", blk_image::BLK_VIRT_DRIVER_CHANNEL),
@@ -191,8 +209,10 @@ mod tests {
                 "{pd} {id}"
             );
         }
+    }
 
-        let shell = domain(&xml, "shell");
+    fn assert_agent_shell_regions(xml: &str) {
+        let shell = domain(xml, "shell");
         assert!(shell.contains("sddf-grok.elf"));
         assert!(!shell.contains("fs_share"));
         assert!(!shell.contains("net_rx_client"));
@@ -215,8 +235,10 @@ mod tests {
                 "{region}"
             );
         }
+    }
 
-        let agent_pd = domain(&xml, "agent");
+    fn assert_agent_regions(xml: &str) {
+        let agent_pd = domain(xml, "agent");
         assert!(agent_pd.contains("sddf-agent.elf"));
         assert!(!agent_pd.contains("serial_tx"));
         assert!(!agent_pd.contains("virtio"));

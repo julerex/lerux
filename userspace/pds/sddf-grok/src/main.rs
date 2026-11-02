@@ -205,60 +205,68 @@ fn dispatch(line: &[u8]) {
         return;
     };
     match verb {
-        b"write" => {
-            let Some((name, text)) = split_first(rest) else {
-                say(b"err\n");
-                return;
-            };
-            if text.is_empty() {
-                say(b"err\n");
-                return;
-            }
-            run_tool(AGENT_KIND_WRITE, name, text);
-        }
-        b"read" | b"ls" => {
-            let Some(name) = one_name(rest) else {
-                say(b"err\n");
-                return;
-            };
-            let kind = if verb == b"read" {
-                AGENT_KIND_READ
-            } else {
-                AGENT_KIND_LIST_DIR
-            };
-            run_tool(kind, name, b"");
-        }
-        b"edit" | b"search" => {
-            let Some((name, arg)) = split_first(rest) else {
-                say(b"err\n");
-                return;
-            };
-            if arg.is_empty() {
-                say(b"err\n");
-                return;
-            }
-            let kind = if verb == b"edit" {
-                AGENT_KIND_EDIT
-            } else {
-                AGENT_KIND_SEARCH
-            };
-            run_tool(kind, name, arg);
-        }
-        b"fetch" | b"browse" => {
-            let name = trim(rest);
-            if name.is_empty() {
-                say(b"err\n");
-                return;
-            }
-            let kind = if verb == b"fetch" {
-                AGENT_KIND_WEB_FETCH
-            } else {
-                AGENT_KIND_BROWSE
-            };
-            run_tool(kind, name, b"");
-        }
+        b"write" => dispatch_write(rest),
+        b"read" | b"ls" => dispatch_read_ls(verb, rest),
+        b"edit" | b"search" => dispatch_edit_search(verb, rest),
+        b"fetch" | b"browse" => dispatch_fetch_browse(verb, rest),
         _ => say(b"err\n"),
     }
+}
+
+fn dispatch_write(rest: &[u8]) {
+    let Some((name, text)) = split_first(rest) else {
+        say(b"err\n");
+        return;
+    };
+    if text.is_empty() {
+        say(b"err\n");
+        return;
+    }
+    run_tool(AGENT_KIND_WRITE, name, text);
+}
+
+fn dispatch_read_ls(verb: &[u8], rest: &[u8]) {
+    let Some(name) = one_name(rest) else {
+        say(b"err\n");
+        return;
+    };
+    let kind = if verb == b"read" {
+        AGENT_KIND_READ
+    } else {
+        AGENT_KIND_LIST_DIR
+    };
+    run_tool(kind, name, b"");
+}
+
+fn dispatch_edit_search(verb: &[u8], rest: &[u8]) {
+    let Some((name, arg)) = split_first(rest) else {
+        say(b"err\n");
+        return;
+    };
+    if arg.is_empty() {
+        say(b"err\n");
+        return;
+    }
+    let kind = if verb == b"edit" {
+        AGENT_KIND_EDIT
+    } else {
+        AGENT_KIND_SEARCH
+    };
+    run_tool(kind, name, arg);
+}
+
+fn dispatch_fetch_browse(verb: &[u8], rest: &[u8]) {
+    let name = trim(rest);
+    if name.is_empty() {
+        say(b"err\n");
+        return;
+    }
+    let kind = if verb == b"fetch" {
+        AGENT_KIND_WEB_FETCH
+    } else {
+        AGENT_KIND_BROWSE
+    };
+    run_tool(kind, name, b"");
 }
 
 fn run_tool(kind: u32, name: &[u8], arg: &[u8]) {

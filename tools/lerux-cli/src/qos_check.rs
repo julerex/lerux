@@ -167,25 +167,48 @@ pub fn validate_qos_sdf(sdf: &str, enforce_workstation_bands: bool) -> Result<Qo
 
 /// ADR-006 / docs/qos.md service-class floors for workstation-shaped systems.
 fn check_workstation_bands(prio: &BTreeMap<String, u32>, report: &mut QosReport) {
-    let require_min = |report: &mut QosReport, name: &str, min: u32| {
-        if let Some(&p) = prio.get(name)
-            && p < min
-        {
-            report.errors.push(format!(
-                "service-class band: {name} priority {p} < minimum {min} (docs/qos.md)"
-            ));
-        }
-    };
-    let require_exact = |report: &mut QosReport, name: &str, exact: u32| {
-        if let Some(&p) = prio.get(name)
-            && p != exact
-        {
-            report.errors.push(format!(
-                "service-class band: {name} priority {p} expected {exact} (docs/qos.md)"
-            ));
-        }
-    };
+    check_platform_band(prio, report);
+    check_service_band(prio, report);
+    check_interactive_band(prio, report);
+    if let Some(&shell_p) = prio.get("shell") {
+        report.notes.push(format!(
+            "shell priority={shell_p}; {} PPC edges checked",
+            report.ppc_edges.len()
+        ));
+    }
+}
 
+fn require_min_priority(
+    report: &mut QosReport,
+    prio: &BTreeMap<String, u32>,
+    name: &str,
+    min: u32,
+) {
+    if let Some(&p) = prio.get(name)
+        && p < min
+    {
+        report.errors.push(format!(
+            "service-class band: {name} priority {p} < minimum {min} (docs/qos.md)"
+        ));
+    }
+}
+
+fn require_exact_priority(
+    report: &mut QosReport,
+    prio: &BTreeMap<String, u32>,
+    name: &str,
+    exact: u32,
+) {
+    if let Some(&p) = prio.get(name)
+        && p != exact
+    {
+        report.errors.push(format!(
+            "service-class band: {name} priority {p} expected {exact} (docs/qos.md)"
+        ));
+    }
+}
+
+fn check_platform_band(prio: &BTreeMap<String, u32>, report: &mut QosReport) {
     // Platform (drivers): typically 6–10
     for name in [
         "serial_driver",
@@ -202,17 +225,21 @@ fn check_workstation_bands(prio: &BTreeMap<String, u32>, report: &mut QosReport)
         "cmos_rtc_driver",
         "tsc_timer_driver",
     ] {
-        require_min(report, name, 6);
+        require_min_priority(report, prio, name, 6);
     }
+}
 
+fn check_service_band(prio: &BTreeMap<String, u32>, report: &mut QosReport) {
     // Services
-    require_min(report, "log_server", 5);
-    require_min(report, "fs_server", 4);
-    require_min(report, "net_server", 4);
+    require_min_priority(report, prio, "log_server", 5);
+    require_min_priority(report, prio, "fs_server", 4);
+    require_min_priority(report, prio, "net_server", 4);
+}
 
+fn check_interactive_band(prio: &BTreeMap<String, u32>, report: &mut QosReport) {
     // Control / bulk / interactive
-    require_min(report, "config_server", 3);
-    require_min(report, "supervisor", 2);
+    require_min_priority(report, prio, "config_server", 3);
+    require_min_priority(report, prio, "supervisor", 2);
     for name in [
         "edit",
         "chat_client",
@@ -221,21 +248,14 @@ fn check_workstation_bands(prio: &BTreeMap<String, u32>, report: &mut QosReport)
         "agent",
         "browser_ui",
     ] {
-        require_min(report, name, 2);
+        require_min_priority(report, prio, name, 2);
     }
-    require_min(report, "web_content", 2);
-    require_min(report, "request_server", 3);
-    require_min(report, "tls_proxy", 4);
-    require_min(report, "display_server", 4);
+    require_min_priority(report, prio, "web_content", 2);
+    require_min_priority(report, prio, "request_server", 3);
+    require_min_priority(report, prio, "tls_proxy", 4);
+    require_min_priority(report, prio, "display_server", 4);
     // Shell must stay lowest among PPC clients (priority 1 on workstation).
-    require_exact(report, "shell", 1);
-
-    if let Some(&shell_p) = prio.get("shell") {
-        report.notes.push(format!(
-            "shell priority={shell_p}; {} PPC edges checked",
-            report.ppc_edges.len()
-        ));
-    }
+    require_exact_priority(report, prio, "shell", 1);
 }
 
 fn should_enforce_bands(profile: &Profile) -> bool {
@@ -257,52 +277,57 @@ pub fn check_profile_qos(root: &Path, name: &str, profile: &Profile) -> Result<Q
 /// Print and fail if any profile fails QoS checks.
 pub fn check_profiles_qos(root: &Path, profiles: &Profiles, name: Option<&str>) -> Result<()> {
     match name {
-        Some(n) => {
-            let p = crate::profile::get_profile(profiles, n)?;
-            let report = check_profile_qos(root, n, p)?;
-            print_report(n, &report);
-            if !report.ok() {
-                bail!(
-                    "profile {n}: QoS check failed ({} errors)",
-                    report.errors.len()
-                );
-            }
-            println!("profile {n}: qos ok");
+        Some(n) => check_named_profile_qos(root, profiles, n),
+        None => check_all_profiles_qos(root, profiles),
+    }
+}
+
+fn check_named_profile_qos(root: &Path, profiles: &Profiles, name: &str) -> Result<()> {
+    let p = crate::profile::get_profile(profiles, name)?;
+    let report = check_profile_qos(root, name, p)?;
+    print_report(name, &report);
+    if !report.ok() {
+        bail!(
+            "profile {name}: QoS check failed ({} errors)",
+            report.errors.len()
+        );
+    }
+    println!("profile {name}: qos ok");
+    Ok(())
+}
+
+fn check_all_profiles_qos(root: &Path, profiles: &Profiles) -> Result<()> {
+    let mut failed = 0usize;
+    let mut checked = 0usize;
+    for (n, p) in profiles {
+        // Skip pure bases with no default board (can't render alone).
+        if p.default_board.is_none() {
+            continue;
         }
-        None => {
-            let mut failed = 0usize;
-            let mut checked = 0usize;
-            for (n, p) in profiles {
-                // Skip pure bases with no default board (can't render alone).
-                if p.default_board.is_none() {
-                    continue;
-                }
-                checked += 1;
-                match check_profile_qos(root, n, p) {
-                    Ok(report) => {
-                        print_report(n, &report);
-                        if report.ok() {
-                            println!("profile {n}: qos ok");
-                        } else {
-                            eprintln!("profile {n}: qos FAILED ({} errors)", report.errors.len());
-                            failed += 1;
-                        }
-                    }
-                    Err(e) => {
-                        eprintln!("profile {n}: qos check error: {e:#}");
-                        failed += 1;
-                    }
+        checked += 1;
+        match check_profile_qos(root, n, p) {
+            Ok(report) => {
+                print_report(n, &report);
+                if report.ok() {
+                    println!("profile {n}: qos ok");
+                } else {
+                    eprintln!("profile {n}: qos FAILED ({} errors)", report.errors.len());
+                    failed += 1;
                 }
             }
-            if checked == 0 {
-                bail!("no profiles with default_board to check");
+            Err(e) => {
+                eprintln!("profile {n}: qos check error: {e:#}");
+                failed += 1;
             }
-            if failed > 0 {
-                bail!("{failed}/{checked} profile(s) failed QoS checks");
-            }
-            println!("==> qos: {checked} profile(s) ok");
         }
     }
+    if checked == 0 {
+        bail!("no profiles with default_board to check");
+    }
+    if failed > 0 {
+        bail!("{failed}/{checked} profile(s) failed QoS checks");
+    }
+    println!("==> qos: {checked} profile(s) ok");
     Ok(())
 }
 

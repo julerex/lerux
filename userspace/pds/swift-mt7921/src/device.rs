@@ -128,54 +128,62 @@ fn rx_byte(index: usize) -> u8 {
     unsafe { (&(*SCRATCH.0.get()).rx)[index] }
 }
 
+fn tx_rings() -> [TxRing; 3] {
+    [
+        TxRing {
+            regs: ring_regs(TX_RING_BASE, 0),
+            desc: OFF_TX0,
+            head: 0,
+            posted: 0,
+        },
+        TxRing {
+            regs: ring_regs(TX_RING_BASE, 16),
+            desc: OFF_TX16,
+            head: 0,
+            posted: 0,
+        },
+        TxRing {
+            regs: ring_regs(TX_RING_BASE, 17),
+            desc: OFF_TX17,
+            head: 0,
+            posted: 0,
+        },
+    ]
+}
+
+fn rx_rings() -> [RxRing; 3] {
+    [
+        RxRing {
+            regs: ring_regs(RX_EVENT_BASE, 0),
+            desc: OFF_RX_EVT,
+            bufs: OFF_RX0_BUFS,
+            head: 0,
+            tail: 0,
+        },
+        RxRing {
+            regs: ring_regs(RX_DATA_BASE, 0),
+            desc: OFF_RX_DATA,
+            bufs: OFF_RX_DATA_BUFS,
+            head: 0,
+            tail: 0,
+        },
+        RxRing {
+            regs: ring_regs(RX_WA_BASE, 0),
+            desc: OFF_RX_WA,
+            bufs: OFF_RX_WA_BUFS,
+            head: 0,
+            tail: 0,
+        },
+    ]
+}
+
 impl Mac {
     pub fn boot(regs: *mut u8, dma: *mut u8, images: Images) -> Self {
         let mut mac = Self {
             regs,
             dma,
-            tx: [
-                TxRing {
-                    regs: ring_regs(TX_RING_BASE, 0),
-                    desc: OFF_TX0,
-                    head: 0,
-                    posted: 0,
-                },
-                TxRing {
-                    regs: ring_regs(TX_RING_BASE, 16),
-                    desc: OFF_TX16,
-                    head: 0,
-                    posted: 0,
-                },
-                TxRing {
-                    regs: ring_regs(TX_RING_BASE, 17),
-                    desc: OFF_TX17,
-                    head: 0,
-                    posted: 0,
-                },
-            ],
-            rx: [
-                RxRing {
-                    regs: ring_regs(RX_EVENT_BASE, 0),
-                    desc: OFF_RX_EVT,
-                    bufs: OFF_RX0_BUFS,
-                    head: 0,
-                    tail: 0,
-                },
-                RxRing {
-                    regs: ring_regs(RX_DATA_BASE, 0),
-                    desc: OFF_RX_DATA,
-                    bufs: OFF_RX_DATA_BUFS,
-                    head: 0,
-                    tail: 0,
-                },
-                RxRing {
-                    regs: ring_regs(RX_WA_BASE, 0),
-                    desc: OFF_RX_WA,
-                    bufs: OFF_RX_WA_BUFS,
-                    head: 0,
-                    tail: 0,
-                },
-            ],
+            tx: tx_rings(),
+            rx: rx_rings(),
             seq: 0,
             n9: false,
             ready: false,

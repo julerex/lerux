@@ -161,64 +161,77 @@ impl HandlerImpl {
     fn dispatch(&mut self, raw: &[u8]) {
         let line = trim(raw);
         match self.mode {
-            Mode::Menu => match line {
-                b"1" | b"browser" => {
-                    self.emit(b"browser unavailable\n");
-                    self.emit(MENU);
-                }
-                b"2" | b"maths" => {
-                    self.mode = Mode::Maths;
-                    self.emit(b"maths> ");
-                }
-                #[cfg(feature = "board-swift_sfx14_41g")]
-                b"3" | b"wifi" => {
-                    self.mode = Mode::Ssid;
-                    self.ssid_len = 0;
-                    self.emit(b"ssid> ");
-                }
-                _ => self.reject(),
-            },
+            Mode::Menu => self.dispatch_menu(line),
+            Mode::Maths => self.dispatch_maths(line),
             #[cfg(feature = "board-swift_sfx14_41g")]
-            Mode::Ssid if line == b"quit" => {
-                self.mode = Mode::Menu;
+            Mode::Ssid => self.dispatch_ssid(line),
+            #[cfg(feature = "board-swift_sfx14_41g")]
+            Mode::Psk => self.dispatch_psk(line),
+        }
+    }
+
+    fn dispatch_menu(&mut self, line: &[u8]) {
+        match line {
+            b"1" | b"browser" => {
+                self.emit(b"browser unavailable\n");
                 self.emit(MENU);
             }
-            #[cfg(feature = "board-swift_sfx14_41g")]
-            Mode::Ssid => {
-                if (1..=32).contains(&line.len()) {
-                    self.ssid[..line.len()].copy_from_slice(line);
-                    self.ssid_len = line.len();
-                    self.mode = Mode::Psk;
-                    self.emit(b"ssid ok\npsk> ");
-                } else {
-                    self.wifi_err();
-                }
-            }
-            #[cfg(feature = "board-swift_sfx14_41g")]
-            Mode::Psk if line == b"quit" => {
-                self.mode = Mode::Menu;
-                self.emit(MENU);
-            }
-            #[cfg(feature = "board-swift_sfx14_41g")]
-            Mode::Psk => {
-                let name_len = self.ssid_len;
-                if key_ok(&self.ssid[..name_len], line) {
-                    self.post_wifi(line);
-                } else {
-                    self.wifi_err();
-                }
-            }
-            Mode::Maths if line == b"quit" => {
-                self.mode = Mode::Menu;
-                self.emit(MENU);
-            }
-            Mode::Maths => {
-                match eval(line) {
-                    Ok(value) => self.emit_value(b"maths ", value),
-                    Err(Error) => self.emit(b"maths err\n"),
-                }
+            b"2" | b"maths" => {
+                self.mode = Mode::Maths;
                 self.emit(b"maths> ");
             }
+            #[cfg(feature = "board-swift_sfx14_41g")]
+            b"3" | b"wifi" => {
+                self.mode = Mode::Ssid;
+                self.ssid_len = 0;
+                self.emit(b"ssid> ");
+            }
+            _ => self.reject(),
+        }
+    }
+
+    fn dispatch_maths(&mut self, line: &[u8]) {
+        if line == b"quit" {
+            self.mode = Mode::Menu;
+            self.emit(MENU);
+            return;
+        }
+        match eval(line) {
+            Ok(value) => self.emit_value(b"maths ", value),
+            Err(Error) => self.emit(b"maths err\n"),
+        }
+        self.emit(b"maths> ");
+    }
+
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    fn dispatch_ssid(&mut self, line: &[u8]) {
+        if line == b"quit" {
+            self.mode = Mode::Menu;
+            self.emit(MENU);
+            return;
+        }
+        if (1..=32).contains(&line.len()) {
+            self.ssid[..line.len()].copy_from_slice(line);
+            self.ssid_len = line.len();
+            self.mode = Mode::Psk;
+            self.emit(b"ssid ok\npsk> ");
+        } else {
+            self.wifi_err();
+        }
+    }
+
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    fn dispatch_psk(&mut self, line: &[u8]) {
+        if line == b"quit" {
+            self.mode = Mode::Menu;
+            self.emit(MENU);
+            return;
+        }
+        let name_len = self.ssid_len;
+        if key_ok(&self.ssid[..name_len], line) {
+            self.post_wifi(line);
+        } else {
+            self.wifi_err();
         }
     }
 

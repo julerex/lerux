@@ -517,6 +517,12 @@ impl Host {
     fn control(&mut self, bm: u8, req: u8, value: u16, index: u16, len: u16) -> Ctl {
         let trbs = if len == 0 { 2 } else { 3 };
         self.ensure_room(Ring::Ep0, trbs);
+        let (data_trb, status_trb) = self.stage_control(bm, req, value, index, len);
+        self.doorbell(self.slot, 1);
+        self.finish_control(data_trb, status_trb, len)
+    }
+
+    fn stage_control(&mut self, bm: u8, req: u8, value: u16, index: u16, len: u16) -> (u64, u64) {
         let setup_d0 = u32::from(bm) | (u32::from(req) << 8) | (u32::from(value) << 16);
         let setup_d1 = u32::from(index) | (u32::from(len) << 16);
         let trt = if len == 0 {
@@ -528,20 +534,7 @@ impl Host {
         };
         let setup_d3 = CHAIN | IDT | trb_type(TRB_SETUP) | (trt << 16);
         self.push_trb(Ring::Ep0, setup_d0, setup_d1, 8, setup_d3);
-        let mut data_trb = 0u64;
-        if len > 0 {
-            let buf = DMA_PHYS + OFF_DATA as u64;
-            let dir = if bm & 0x80 != 0 { 1 << 16 } else { 0 };
-            let isp = if bm & 0x80 != 0 { ISP } else { 0 };
-            let data_d3 = isp | CHAIN | trb_type(TRB_DATA) | dir;
-            data_trb = self.push_trb(
-                Ring::Ep0,
-                buf as u32,
-                (buf >> 32) as u32,
-                u32::from(len),
-                data_d3,
-            );
-        }
+        let data_trb = self.stage_data(bm, len);
         let status_dir = if len > 0 && bm & 0x80 != 0 {
             0
         } else {
@@ -549,7 +542,27 @@ impl Host {
         };
         let status_d3 = IOC | trb_type(TRB_STATUS) | status_dir;
         let status_trb = self.push_trb(Ring::Ep0, 0, 0, 0, status_d3);
-        self.doorbell(self.slot, 1);
+        (data_trb, status_trb)
+    }
+
+    fn stage_data(&mut self, bm: u8, len: u16) -> u64 {
+        if len == 0 {
+            return 0;
+        }
+        let buf = DMA_PHYS + OFF_DATA as u64;
+        let dir = if bm & 0x80 != 0 { 1 << 16 } else { 0 };
+        let isp = if bm & 0x80 != 0 { ISP } else { 0 };
+        let data_d3 = isp | CHAIN | trb_type(TRB_DATA) | dir;
+        self.push_trb(
+            Ring::Ep0,
+            buf as u32,
+            (buf >> 32) as u32,
+            u32::from(len),
+            data_d3,
+        )
+    }
+
+    fn finish_control(&mut self, data_trb: u64, status_trb: u64, len: u16) -> Ctl {
         let mut actual = usize::from(len);
         for _ in 0..SPIN {
             let Some(ev) = self.pop_event() else {
@@ -564,32 +577,44 @@ impl Host {
                 continue;
             }
             let ptr = event_ptr(ev) & !0xf;
-            let code = completion(ev);
             if self.intr_trb != 0 && ptr == self.intr_trb & !0xf {
                 self.note_intr(ev);
                 continue;
             }
             if data_trb != 0 && ptr == data_trb & !0xf {
-                if code == CC_SHORT {
-                    let residual = usize::try_from(ev[2] & 0x00ff_ffff).unwrap_or(0);
-                    actual = usize::from(len).saturating_sub(residual);
-                } else if code != CC_SUCCESS {
-                    return self.transfer_failed(code);
+                if let Some(done) = self.take_data(ev, len, &mut actual) {
+                    return done;
                 }
                 continue;
             }
             if ptr == status_trb & !0xf {
-                if code == CC_STALL {
-                    self.recover_endpoint(1);
-                    return Ctl::Stall;
-                }
-                if code == CC_SUCCESS || code == CC_SHORT {
-                    return Ctl::Done(actual);
-                }
-                return Ctl::Fail;
+                return self.status_result(ev, actual);
             }
         }
         Ctl::Fail
+    }
+
+    fn take_data(&mut self, ev: [u32; 4], len: u16, actual: &mut usize) -> Option<Ctl> {
+        match completion(ev) {
+            CC_SHORT => {
+                let residual = usize::try_from(ev[2] & 0x00ff_ffff).unwrap_or(0);
+                *actual = usize::from(len).saturating_sub(residual);
+                None
+            }
+            CC_SUCCESS => None,
+            code => Some(self.transfer_failed(code)),
+        }
+    }
+
+    fn status_result(&mut self, ev: [u32; 4], actual: usize) -> Ctl {
+        match completion(ev) {
+            CC_STALL => {
+                self.recover_endpoint(1);
+                Ctl::Stall
+            }
+            CC_SUCCESS | CC_SHORT => Ctl::Done(actual),
+            _ => Ctl::Fail,
+        }
     }
 
     fn transfer_failed(&mut self, code: u32) -> Ctl {

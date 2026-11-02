@@ -525,10 +525,10 @@ fn handle_read(id: u64, params: fs_cmd_params_file_read_t) -> bool {
     };
     let file_size = usize::try_from(file.size).unwrap_or(0);
     let copied = buf_len.min(file_size);
-    if copied > 0 {
-        if let Err(done) = stage_file_bytes(id, &file, buf_off, copied) {
-            return done;
-        }
+    if copied > 0
+        && let Err(done) = stage_file_bytes(id, &file, buf_off, copied)
+    {
+        return done;
     }
     let Ok(len_read) = u64::try_from(copied) else {
         return complete(id, FS_STATUS_ERROR, Completion::Empty);

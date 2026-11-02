@@ -279,6 +279,14 @@ Read Milestones 5, 6, 8, 11, 13, and 14 in [docs/plan-lionsos.md](docs/plan-lion
 - `open_dir`, `read_dir`, and `close_dir` use the directory commands. `read_dir` returns `Ok(None)` for `FS_STATUS_END_OF_DIRECTORY` before that status is mapped. The status map would turn it into errno 1.
 - `cargo test -p lerux-posix` is the host check. Keep `lerux shell ready` out of that crate.
 
+## Ladybird libraries (`lerux-ladybird`)
+
+- Keep every declaration in source order, including a property this subset does not resolve, and fail the whole parse on an at-rule or on a combinator other than descendant and child.
+- Fold ASCII case only for type selectors and ordinary property names. Keep the sheet's spelling for class selectors, id selectors, custom-property names (the leading `--` included), and values. Store a custom property, or a call whose name is `var` under ASCII case-fold, as unresolved source text.
+- Store the combinator on the compound it introduces, with none on the first compound. Treat only CSS whitespace between compounds as the descendant combinator, so a comment stays inside one compound.
+- Let the accepted-property list classify the declaration's name only, and store every value as the sheet's source text.
+- Store each compound's type, class, and id selectors as one source-ordered list. Omit comments from stored values. Keep a quoted value's quotes so an interior semicolon stays in that value.
+
 ## Host tooling (`tools/lerux-cli/**`)
 
 - Use `anyhow::Result` at the CLI boundary; add context with `.context("…")?`.
@@ -311,6 +319,7 @@ CI runs `just check` before the SDK pipeline and `just check-pd` after the SDK a
 A few results look like success and are not:
 
 - `lerux-cli` is a binary crate. Test it with `cargo test -p lerux-cli -- <filter>`. There is no `--lib` target. `--exact` needs the full path `module::tests::<name>`. A filter matches test function names, not the integration-test file name. Run a file with `cargo test -p <crate> --test <file stem>`. A filter that matches nothing still exits 0; `running 0 tests` is the result.
+- Ladybird CSS coverage is the host test of `lerux-ladybird-web`, which `support/host-check.sh` already runs, so a new `tests/` file needs no edit to that script, to `SHARED_CRATES`, or to the justfile, and `just test` stays the QEMU board smoke.
 - Do not run `just check`, `just check-pd`, `just test-*`, and `just iso` together. `just check` uses `build/host`. `just check-pd`, a smoke, and `just iso` share `build/target`, and both `just check-pd` and `just iso` invoke `cargo run -p lerux-cli` in the default target directory. `just iso` is `cargo run -p lerux-cli -- iso` and writes the Swift protection domains into that directory.
 - Update the milestone status, the board row, and the smoke counts in `docs/ci.md` and the README only after `just check`, `just check-pd`, and that milestone's smokes have passed. The workflow `include` list and those hand-written counts move together. Leave the historical job counts inside `docs/plan.md` as they were.
 - Lint protection domains with `just check-pd`. That command sets up libclang. `cargo clippy` on a PD target without it panics inside bindgen.

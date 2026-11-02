@@ -43,6 +43,35 @@ fn init() -> HandlerImpl {
         memory_region_symbol!(xhci1_regs_vaddr: *mut u8).as_ptr(),
     ];
     let dma = memory_region_symbol!(xhci_dma_vaddr: *mut u8).as_ptr();
+    let mut line = [0u8; 24];
+    let n = boot_line(page, &regs, dma, &mut line);
+    paint(&line[..n]);
+    HandlerImpl {
+        irq0: Channel::new(0),
+        irq1: Channel::new(1),
+    }
+}
+
+fn boot_line(page: &[u8], regs: &[*mut u8; 2], dma: *mut u8, line: &mut [u8]) -> usize {
+    let (live, foreign) = controller_state(page, regs);
+    if !live {
+        return if let Some(version) = foreign {
+            version_line(version, line)
+        } else {
+            copy_line(line, bt_line(&BtReport::Absent))
+        };
+    }
+    if FIRMWARE.is_empty() {
+        return copy_line(line, bt_line(&BtReport::FirmwareErr));
+    }
+    let mut event = [0u8; 16];
+    match reset_either(regs, dma, &mut event) {
+        Ok(n) => copy_line(line, bt_line(&bt_bring_up(true, true, Some(&event[..n])))),
+        Err(fail) => fail_line(&fail, line),
+    }
+}
+
+fn controller_state(page: &[u8], regs: &[*mut u8; 2]) -> (bool, Option<u16>) {
     let mut live = false;
     let mut foreign = None;
     for (index, (bus, dev, func)) in XHCI_BDFS.iter().copied().enumerate() {
@@ -56,30 +85,7 @@ fn init() -> HandlerImpl {
             }
         }
     }
-    let mut line = [0u8; 24];
-    let n = if !live {
-        if let Some(version) = foreign {
-            version_line(version, &mut line)
-        } else {
-            copy_line(&mut line, bt_line(&BtReport::Absent))
-        }
-    } else if FIRMWARE.is_empty() {
-        copy_line(&mut line, bt_line(&BtReport::FirmwareErr))
-    } else {
-        let mut event = [0u8; 16];
-        match reset_either(&regs, dma, &mut event) {
-            Ok(n) => copy_line(
-                &mut line,
-                bt_line(&bt_bring_up(true, true, Some(&event[..n]))),
-            ),
-            Err(fail) => fail_line(&fail, &mut line),
-        }
-    };
-    paint(&line[..n]);
-    HandlerImpl {
-        irq0: Channel::new(0),
-        irq1: Channel::new(1),
-    }
+    (live, foreign)
 }
 
 fn reset_either(regs: &[*mut u8; 2], dma: *mut u8, event: &mut [u8]) -> Result<usize, XferFail> {

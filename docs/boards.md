@@ -1,6 +1,8 @@
 # Boards
 
-Board names are the `BOARD=` value for `just run`, `just test`, and `just build`. Metadata lives in [`support/boards.toml`](../support/boards.toml).
+Board names are the `BOARD=` value for `just run`, `just test`, and `just build`. Metadata lives in [`support/boards.toml`](../support/boards.toml). `just build` and `just run` default to `qemu_virt_aarch64`. Bare `just test` boots `qemu_virt_aarch64_browser_sddf`. Bare `just iso` packs `swift_sfx14_41g`.
+
+aarch64 init and composed images need the patched SP804 QEMU in [`ci.md`](ci.md#patched-qemu); RISC-V init uses stock QEMU with the Goldfish RTC and `rdtime`, and x86 init uses stock QEMU with the CMOS RTC and TSC.
 
 **System profiles** (Phase 35) live in `support/profiles/*.toml` (e.g. `workstation`, `minimal`). They declare the PD list, template, and channel manifest. Use `lerux profile build <name>` (it resolves to a board via `default_board` or `--board`). Board entries in `boards.toml` still define hardware details + qemu config; profile tooling selects compositions on top of boards.
 
@@ -56,6 +58,7 @@ Use `lerux image --board <name>` (or `BOARD=<name> just image`).
 - `rpi4b_4gb`: Raspberry Pi 4 Model B (4 GB). Requires U-Boot on SD card. See seL4 docs for initial bring-up and `fatload` / `go`.
 - Serial: PL011 at 0xfe201000 (GPIO 14/15). Update IRQ in `boards.toml` if the platform IRQ mapping differs.
 - Full workstation (FS + net) on hardware requires native (non-virtio) block and network drivers; see `support/profiles/hardware-rpi4.toml`.
+- `swift_sfx14_41g`: Acer Swift X SFX14-41G. `just iso` packs the UEFI image. See [Acer Swift X install path](#acer-swift-x-install-path).
 - `pc_z97_d3h`: Gigabyte GA-Z97-D3H (Haswell). Microkit still uses `x86_64_generic`; deploy writes GRUB's `EFI/BOOT/BOOTX64.EFI`, `/boot/grub/grub.cfg`, and **`boot/mb2-stub.elf` + `boot/sel4.elf` + `boot/loader.img`** for UEFI Multiboot 2. The monitor shows the shell as VGA text on the firmware boot VGA card. The desk-browser spec makes that card the Intel HD Graphics 4600 on the motherboard HDMI port, with Initial Display Output set to `IGFX`. After the reboot on 2026-10-22, firmware reports that device as the boot VGA device. See [Gigabyte Z97-D3H install path](#gigabyte-z97-d3h-install-path) and [VGA text on the RX 560](#vga-text-on-the-rx-560).
 - `pc_z97_d3h_rtl8852be`: same motherboard, COM1 only. The probe reads root port `00:1c.6`, takes that port's secondary bus, and logs the endpoint vendor, device, and assigned BAR. It does not map the BAR, and it is not the shell ISO.
 
@@ -153,6 +156,27 @@ Living work list (what still needs a Pi): [`plan-arch.md` — Physical RPi4 lab]
 **QEMU dev substitute:** `just disk-img && just test-workstation` exercises the same REPL stack with virtio (not a substitute for the RPi4 gate).
 
 **Self-hosted CI:** optional workflow [`.github/workflows/hw-serial.yml`](../.github/workflows/hw-serial.yml); see [`ci.md`](ci.md#hardware-serial-smoke-phase-47).
+
+### Acer Swift X install path
+
+Board `swift_sfx14_41g` is the on-screen menu on the Acer Swift X SFX14-41G (Ryzen 5 5500U). It reuses Microkit `x86_64_generic` and `console-swift.system.template`. The panel is the firmware GOP buffer. The keyboard is the built-in i8042 (ports `0x60` and `0x64`, I/O APIC pin 1, vector 49). This machine has no COM port and no `serial-driver`. This image has no QEMU model. Device roles are in [platforms.md](platforms.md#swift-x-devices). `just iso pc_z97_d3h` packs the [Gigabyte Z97-D3H](#gigabyte-z97-d3h-install-path) image.
+
+**USB ISO** (writes `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso` and does not touch a disk):
+
+```bash
+just fetch
+just fetch-sdk
+# or: just build-sdk
+just iso
+lsblk
+sudo dd if=build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso of=/dev/sdX bs=4M status=progress conv=fsync
+```
+
+Replace `sdX` with the flash drive from `lsblk`. Do not overwrite the host OS disk. Reboot and open the firmware boot menu. Choose the USB entry that says UEFI (GRUB `EFI/BOOT/BOOTX64.EFI`). GRUB boots immediately. It Multiboot 2-loads `/boot/mb2-stub.elf` with modules `/boot/sel4.elf` and `/boot/loader.img`. The stub places the 64-bit kernel at 1 MiB after `ExitBootServices`.
+
+On 2026-10-29 the panel showed `fb 0x000000fc90000000 pitch 7680 1920x1080 r16 g8 b0`. On 2026-10-30 it then showed `hello lerux` and the menu `1 browser`, `2 maths`, and `3 wifi`. `1` or `browser` prints `browser unavailable`. `2` or `maths` reads integer expressions until `quit`, which returns the menu. A value prints `maths N`. A bad line prints `maths err`. `3` or `wifi` prompts `ssid>` and then `psk>`. The built-in keyboard types those lines.
+
+The ISO is UEFI only. Packing needs `xorriso` and `grub-mkimage` (Arch: `sudo pacman -S libisoburn grub`. Debian: `xorriso` and `grub-efi-amd64-bin`).
 
 ### Gigabyte Z97-D3H install path
 

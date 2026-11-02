@@ -44,18 +44,11 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [platforms.md](platforms.md) | Platform notes and hardware bring-up |
 | [bench-results.latest.md](bench-results.latest.md) | Latest `just bench` snapshot (regenerated) |
 | [net-topology.md](net-topology.md) | NIC paths: device-framework client vs remaining virtio boards |
-| [boards.md](boards.md) | Board names, PDs, QEMU profiles; [RPi4 install path](boards.md#rpi4-workstation-install-path-phase-52); [Z97-D3H install path](boards.md#gigabyte-z97-d3h-install-path) |
+| [boards.md](boards.md) | Board names, PDs, QEMU profiles; [Swift X install path](boards.md#acer-swift-x-install-path); [RPi4 install path](boards.md#rpi4-workstation-install-path-phase-52); [Z97-D3H install path](boards.md#gigabyte-z97-d3h-install-path) |
 | [ci.md](ci.md) | GitHub Actions pipeline, caches, troubleshooting |
+| [acknowledgements.md](acknowledgements.md) | Dependencies and inspirations |
 | [seL4-whitepaper.pdf](seL4-whitepaper.pdf) | seL4 high-level overview (reference) |
 
 ## External references
 
-- [seL4 documentation](https://docs.sel4.systems/)
-- [Microkit tutorial](https://docs.sel4.systems/projects/microkit/tutorial/welcome.html)
-- [Rust on seL4](https://docs.sel4.systems/projects/rust/)
-- [rust-sel4 crates](https://github.com/seL4/rust-sel4)
-- [rust-microkit-demo](https://github.com/seL4/rust-microkit-demo) — multi-PD IPC example
-- [au-ts org](https://github.com/au-ts) — upstream Microkit / sDDF / LionsOS / rust-sel4 ecosystem (see [plan-au-ts.md](plan-au-ts.md))
-- [Ladybird](https://github.com/LadybirdBrowser/ladybird) — process topology inspiration for phases 71–80 (see [plan-interactive.md](plan-interactive.md)); not vendored
-- [Grok Build](https://github.com/xai-org/grok-build) — agent-loop / tool-taxonomy inspiration for phases 71–80; not vendored
-- [QIP](https://github.com/patrickgwsmith/qip) — Content and graphical WebAssembly contracts under investigation ([plan-qip.md](plan-qip.md)); not vendored
+Dependencies and inspirations are in [acknowledgements.md](acknowledgements.md).

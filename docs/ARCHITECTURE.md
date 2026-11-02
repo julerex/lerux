@@ -6,6 +6,18 @@ lerux protection domains are `#![no_std]` Rust crates. They link [rust-sel4](htt
 
 `sel4-sync` is declared in the workspace dependencies. No member crate depends on it.
 
+## Layers
+
+| Layer | Where |
+|-------|--------|
+| Kernel | seL4 16.0.0, built by `just build-sdk` from `deps/workspace/` or taken from the prebuilt SDK |
+| System framework | Microkit 2.3.0 |
+| Protection domains | `userspace/pds/`, linked through `sel4-microkit` |
+| Shared crates | `userspace/crates/` |
+| Host tools | `tools/` |
+
+Pins are [`deps/versions.toml`](../deps/versions.toml). Device maps are in [platforms.md](platforms.md).
+
 ## Dependency hierarchy
 
 The host graph is how an image is assembled. The guest graph is which crates a protection domain links. `lerux-sddf`, `lerux-cothread`, and `lerux-posix` sit in the guest and have no rust-sel4 dependency. `lerux-cothread` is the Rust port of `libmicrokitco` and switches stacks inside the one kernel thread.

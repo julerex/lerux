@@ -1,6 +1,6 @@
 # CI and local smoke tests
 
-GitHub Actions workflow: [`.github/workflows/rust.yml`](../.github/workflows/rust.yml).
+GitHub Actions workflow: [`.github/workflows/rust.yml`](../.github/workflows/rust.yml). It runs on every push to `main` and on every pull request to `main`.
 
 ## Pipeline
 
@@ -23,7 +23,7 @@ flowchart LR
 
 Local mirror: `just check` (format + clippy for host crates, plus `lerux profile check-qos`); `just check-pd` after `just build-sdk` (or `just check-all` for both).
 
-`just test-all` runs every board with `ci = true`. The jobs in the table below are the workflow `include` list. Those two sets are not the same. `cargo test -p lerux-cli -- ci_lists` fails when a count on this page or in the README disagrees with the include list, when a workflow board has `ci = false`, or when a board in either set below is missing from this page. A new board name is compiled with `--features board-<name>` only when the PD crate declares that feature.
+`just test-all` runs every board with `ci = true`. The jobs in the table below are the workflow `include` list. Those two sets are not the same. `cargo test -p lerux-cli -- ci_lists` fails when a count on this page disagrees with the include list, when a workflow board has `ci = false`, or when a board in either set below is missing from this page. A new board name is compiled with `--features board-<name>` only when the PD crate declares that feature.
 
 **Security pin bumps** (seL4 / Microkit / rust-sel4): follow the Phase 60 Track B runbook in [`security.md`](security.md#dependency-pins-and-security-update-runbook-track-b) — pin edit → SDK refresh → check / check-pd → smoke matrix → rebuild images.
 

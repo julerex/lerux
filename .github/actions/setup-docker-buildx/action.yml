@@ -1,0 +1,32 @@
+# Retries docker/setup-buildx-action when Docker Hub returns a transient
+# error while pulling moby/buildkit (for example HTTP 502).
+name: Set up Docker Buildx
+description: Set up Docker Buildx with retries for transient registry failures
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Docker Buildx (attempt 1)
+      id: attempt1
+      continue-on-error: true
+      uses: docker/setup-buildx-action@v3
+
+    - name: Wait before Buildx retry
+      if: steps.attempt1.outcome == 'failure'
+      shell: bash
+      run: sleep 15
+
+    - name: Set up Docker Buildx (attempt 2)
+      id: attempt2
+      if: steps.attempt1.outcome == 'failure'
+      continue-on-error: true
+      uses: docker/setup-buildx-action@v3
+
+    - name: Wait before Buildx final retry
+      if: steps.attempt1.outcome == 'failure' && steps.attempt2.outcome == 'failure'
+      shell: bash
+      run: sleep 30
+
+    - name: Set up Docker Buildx (attempt 3)
+      if: steps.attempt1.outcome == 'failure' && steps.attempt2.outcome == 'failure'
+      uses: docker/setup-buildx-action@v3

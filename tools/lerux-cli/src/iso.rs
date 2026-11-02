@@ -376,9 +376,9 @@ fn print_usb_instructions(board: &str, iso: &Path) {
         println!("Firmware boot menu → the USB entry that says UEFI (GRUB EFI/BOOT/BOOTX64.EFI).");
         println!("mb2-stub loads sel4.elf (64-bit) at 1 MiB after ExitBootServices.");
         println!(
-            "Screen: the GOP mode line, then \"1 browser\", \"2 maths\", and \"3 wifi\". This laptop has no COM port."
+            "Screen: the GOP mode line, then \"enter wifi ssid and password\", \"wifi ssid>\", and \"wifi password>\". \"wifi ok\" is followed by \"1 browser\", \"2 maths\", and \"3 wifi\". This laptop has no COM port."
         );
-        println!("Expect: 1 browser");
+        println!("Expect: wifi ssid>");
         return;
     }
     println!(

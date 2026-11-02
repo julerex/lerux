@@ -4,6 +4,8 @@
 //! On the desk, channel 1 is `serial_driver` (the same output bytes on COM1).
 //! On the Swift X, channel 1 is the read-only NVMe result. This image
 //! has no page painter, so the browser choice reports that it is unavailable.
+//! The Swift shell asks for the Wi-Fi name and password before it paints
+//! the menu. The desk image paints the menu at once.
 
 #![no_std]
 #![no_main]
@@ -33,6 +35,12 @@ const LINE_MAX: usize = 80;
 const MENU: &[u8] = b"1 browser\n2 maths\n";
 #[cfg(feature = "board-swift_sfx14_41g")]
 const MENU: &[u8] = b"1 browser\n2 maths\n3 wifi\n";
+#[cfg(feature = "board-swift_sfx14_41g")]
+const WIFI_ASK: &[u8] = b"enter wifi ssid and password\n";
+#[cfg(feature = "board-swift_sfx14_41g")]
+const SSID_PROMPT: &[u8] = b"wifi ssid> ";
+#[cfg(feature = "board-swift_sfx14_41g")]
+const PASSWORD_PROMPT: &[u8] = b"wifi password> ";
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Mode {
@@ -54,6 +62,10 @@ struct HandlerImpl {
     ssid: [u8; 32],
     #[cfg(feature = "board-swift_sfx14_41g")]
     ssid_len: usize,
+    /// A pair has been written. Until then the menu stays off, and `quit`
+    /// returns to the SSID prompt.
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    wifi_ready: bool,
     mode: Mode,
     line: [u8; LINE_MAX],
     len: usize,
@@ -72,14 +84,22 @@ fn init() -> HandlerImpl {
         ssid: [0; 32],
         #[cfg(feature = "board-swift_sfx14_41g")]
         ssid_len: 0,
+        #[cfg(feature = "board-swift_sfx14_41g")]
+        wifi_ready: false,
         mode: Mode::Menu,
         line: [0; LINE_MAX],
         len: 0,
         overflow: false,
     };
+    #[cfg(not(feature = "board-swift_sfx14_41g"))]
     shell.emit(MENU);
     #[cfg(feature = "board-swift_sfx14_41g")]
-    shell.emit_disk();
+    {
+        shell.mode = Mode::Ssid;
+        shell.emit_disk();
+        shell.emit(WIFI_ASK);
+        shell.emit(SSID_PROMPT);
+    }
     shell
 }
 
@@ -174,30 +194,23 @@ impl HandlerImpl {
                 b"3" | b"wifi" => {
                     self.mode = Mode::Ssid;
                     self.ssid_len = 0;
-                    self.emit(b"ssid> ");
+                    self.emit(SSID_PROMPT);
                 }
                 _ => self.reject(),
             },
             #[cfg(feature = "board-swift_sfx14_41g")]
-            Mode::Ssid if line == b"quit" => {
-                self.mode = Mode::Menu;
-                self.emit(MENU);
-            }
+            Mode::Ssid | Mode::Psk if line == b"quit" => self.leave_wifi(),
             #[cfg(feature = "board-swift_sfx14_41g")]
             Mode::Ssid => {
                 if (1..=32).contains(&line.len()) {
                     self.ssid[..line.len()].copy_from_slice(line);
                     self.ssid_len = line.len();
                     self.mode = Mode::Psk;
-                    self.emit(b"ssid ok\npsk> ");
+                    self.emit(b"ssid ok\n");
+                    self.emit(PASSWORD_PROMPT);
                 } else {
                     self.wifi_err();
                 }
-            }
-            #[cfg(feature = "board-swift_sfx14_41g")]
-            Mode::Psk if line == b"quit" => {
-                self.mode = Mode::Menu;
-                self.emit(MENU);
             }
             #[cfg(feature = "board-swift_sfx14_41g")]
             Mode::Psk => {
@@ -238,10 +251,34 @@ impl HandlerImpl {
     }
 
     #[cfg(feature = "board-swift_sfx14_41g")]
+    fn leave_wifi(&mut self) {
+        if self.wifi_ready {
+            self.mode = Mode::Menu;
+            self.emit(MENU);
+            return;
+        }
+        self.mode = Mode::Ssid;
+        self.ssid_len = 0;
+        self.emit(SSID_PROMPT);
+    }
+
+    #[cfg(feature = "board-swift_sfx14_41g")]
     fn wifi_err(&mut self) {
-        self.mode = Mode::Menu;
+        let retry_password = self.mode == Mode::Psk && !self.wifi_ready;
         self.emit(b"wifi err\n");
-        self.emit(MENU);
+        if self.wifi_ready {
+            self.mode = Mode::Menu;
+            self.emit(MENU);
+            return;
+        }
+        if retry_password {
+            self.mode = Mode::Psk;
+            self.emit(PASSWORD_PROMPT);
+            return;
+        }
+        self.mode = Mode::Ssid;
+        self.ssid_len = 0;
+        self.emit(SSID_PROMPT);
     }
 
     #[cfg(feature = "board-swift_sfx14_41g")]
@@ -256,8 +293,9 @@ impl HandlerImpl {
             return;
         }
         WIFI.notify();
+        self.wifi_ready = true;
         self.mode = Mode::Menu;
-        self.emit(b"psk ok\n");
+        self.emit(b"wifi ok\n");
         self.emit(MENU);
     }
 }

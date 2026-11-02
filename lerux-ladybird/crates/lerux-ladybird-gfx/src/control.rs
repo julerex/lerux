@@ -9,7 +9,7 @@ use core::mem::{align_of, size_of};
 
 /// The page is idle. A zeroed region starts here.
 pub const CONTROL_STATE_IDLE: u32 = 0;
-/// WebContent has painted the bitmap and written the title.
+/// `WebContent` has painted the bitmap and written the title.
 pub const CONTROL_STATE_PAINTED: u32 = 1;
 
 /// Title bytes stored on the page. A longer title is truncated.
@@ -32,6 +32,7 @@ const _: () = assert!(align_of::<ControlPage>() <= 8);
 const _: () = assert!(size_of::<ControlPage>() == size_of::<u32>() + size_of::<u32>() + TITLE_CAP);
 
 /// A zeroed control page. Padding stays zero.
+#[must_use]
 pub const fn control_page_zeroed() -> ControlPage {
     // SAFETY: every field is an integer or a byte array, so the all-zero
     // pattern is a valid value. Zeroing also clears padding.
@@ -51,6 +52,7 @@ impl ControlPage {
     }
 
     /// The title bytes `title_len` names, clamped to the buffer.
+    #[must_use]
     pub fn title(&self) -> &[u8] {
         let len = usize::try_from(self.title_len).unwrap_or(TITLE_CAP);
         let len = len.min(TITLE_CAP);

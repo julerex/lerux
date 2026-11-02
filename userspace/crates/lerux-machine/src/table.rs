@@ -7,6 +7,11 @@ pub struct SpelledAddr {
 impl SpelledAddr {
     /// `text` is the system-description attribute, including its underscores.
     /// The integer is parsed from that text. A bad spelling fails const evaluation.
+    ///
+    /// # Panics
+    ///
+    /// Panics with `invalid spelled address` when `text` is not a `0x` hex spelling.
+    #[must_use]
     pub const fn new(text: &'static str) -> Self {
         match parse_hex_spelled(text) {
             Some(value) => Self { text, value },
@@ -14,10 +19,12 @@ impl SpelledAddr {
         }
     }
 
+    #[must_use]
     pub const fn text(self) -> &'static str {
         self.text
     }
 
+    #[must_use]
     pub const fn value(self) -> u64 {
         self.value
     }

@@ -2,7 +2,7 @@ use core::ptr::NonNull;
 
 use sel4_microkit::var;
 use virtio_drivers::{
-    device::net::*,
+    device::net::VirtIONet,
     transport::{
         mmio::{MmioTransport, VirtIOHeader},
         DeviceType, Transport,

@@ -1,6 +1,6 @@
 //! Stackful cothreads for one Microkit kernel thread.
 //!
-//! The operations match `libmicrokitco` at the commit LionsOS 0.4.0 pins
+//! The operations match `libmicrokitco` at the commit `LionsOS` 0.4.0 pins
 //! (`4bf88ee`): `microkit_cothread_init`, `spawn`, `yield`, `wait_on_channel`,
 //! `semaphore_wait`, and `semaphore_signal`. Each cothread has a caller-provided
 //! stack. The root cothread is the kernel thread: it runs `init` and
@@ -87,6 +87,7 @@ impl Default for Semaphore {
 
 impl Semaphore {
     /// Empty queue and a clear signal, which is what `semaphore_init` writes.
+    #[must_use]
     pub const fn new() -> Self {
         Self {
             set: false,
@@ -96,11 +97,13 @@ impl Semaphore {
     }
 
     /// True when a signal arrived and no cothread has waited for it yet.
+    #[must_use]
     pub fn is_set(&self) -> bool {
         self.set
     }
 
     /// True when no cothread is blocked on this semaphore.
+    #[must_use]
     pub fn is_queue_empty(&self) -> bool {
         self.head == NULL_HANDLE
     }
@@ -169,9 +172,10 @@ impl Queue {
     }
 
     fn push(&mut self, handle: i32) {
-        if self.items == MAX_COTHREADS {
-            panic!("lerux-cothread: scheduling queue is full");
-        }
+        assert!(
+            self.items != MAX_COTHREADS,
+            "lerux-cothread: scheduling queue is full"
+        );
         self.mem[self.tail] = handle;
         self.items += 1;
         self.tail = (self.tail + 1) % MAX_COTHREADS;
@@ -229,9 +233,10 @@ static CONTROL: Exclusive<Control> = Exclusive::new(Control::empty());
 fn with_control<R>(body: impl FnOnce(&mut Control) -> R) -> R {
     // SAFETY: one kernel thread. Callers drop this borrow before `co_switch`.
     let control = unsafe { &mut *CONTROL.get() };
-    if !control.initialised {
-        panic!("lerux-cothread: call init before using the runtime");
-    }
+    assert!(
+        control.initialised,
+        "lerux-cothread: call init before using the runtime"
+    );
     body(control)
 }
 
@@ -243,9 +248,10 @@ fn idx(handle: i32) -> usize {
 }
 
 fn channel_index(channel: usize) -> usize {
-    if channel >= MICROKIT_MAX_CHANNELS {
-        panic!("lerux-cothread: channel {channel} is outside 0..{MICROKIT_MAX_CHANNELS}");
-    }
+    assert!(
+        channel < MICROKIT_MAX_CHANNELS,
+        "lerux-cothread: channel {channel} is outside 0..{MICROKIT_MAX_CHANNELS}"
+    );
     channel
 }
 
@@ -255,20 +261,23 @@ fn channel_index(channel: usize) -> usize {
 /// that are 16-byte aligned, at least [`MIN_STACK_SIZE`], and a multiple of 16.
 /// The memory stays exclusive to that cothread for the rest of the protection domain.
 ///
+/// # Panics
+///
+/// Panics when `stack_size` is below [`MIN_STACK_SIZE`] or not a multiple of 16,
+/// when a stack is null, misaligned, overflowing, or overlapping, when the runtime
+/// is already initialised, or when a worker handle does not fit in `i32`.
+///
 /// # Safety
 /// The pointed-to bytes are writable, do not overlap, and outlive every cothread.
 pub unsafe fn microkit_cothread_init(stack_size: usize, stacks: &[*mut u8; STACK_SLOTS]) {
-    if stack_size < MIN_STACK_SIZE || !stack_size.is_multiple_of(16) {
-        panic!(
-            "lerux-cothread: stack size {stack_size:#x} is below {MIN_STACK_SIZE:#x} or not a multiple of 16"
-        );
-    }
+    assert!(
+        stack_size >= MIN_STACK_SIZE && stack_size.is_multiple_of(16),
+        "lerux-cothread: stack size {stack_size:#x} is below {MIN_STACK_SIZE:#x} or not a multiple of 16"
+    );
     validate_stacks(stack_size, stacks);
     // SAFETY: the static is the only controller, and init runs before other calls.
     let control = unsafe { &mut *CONTROL.get() };
-    if control.initialised {
-        panic!("lerux-cothread: already initialised");
-    }
+    assert!(!control.initialised, "lerux-cothread: already initialised");
     *control = Control::empty();
     control.stack_size = stack_size;
     control.running = ROOT_HANDLE;
@@ -277,16 +286,19 @@ pub unsafe fn microkit_cothread_init(stack_size: usize, stacks: &[*mut u8; STACK
     for (slot, stack) in stacks.iter().copied().enumerate() {
         let handle = slot + 1;
         control.tcbs[handle].stack = stack;
-        control.free.push(handle as i32);
+        control
+            .free
+            .push(i32::try_from(handle).expect("cothread handle fits"));
     }
     control.initialised = true;
 }
 
 fn validate_stacks(stack_size: usize, stacks: &[*mut u8; STACK_SLOTS]) {
     for stack in stacks {
-        if stack.is_null() || !(*stack as usize).is_multiple_of(16) {
-            panic!("lerux-cothread: stack is null or not 16-byte aligned");
-        }
+        assert!(
+            !stack.is_null() && (*stack as usize).is_multiple_of(16),
+            "lerux-cothread: stack is null or not 16-byte aligned"
+        );
         // A store faults when the caller named memory the protection domain cannot write.
         // SAFETY: `stack_size` is non-zero and the pointer is the caller's stack base.
         unsafe {
@@ -304,9 +316,10 @@ fn validate_stacks(stack_size: usize, stacks: &[*mut u8; STACK_SLOTS]) {
             let other_end = other_start
                 .checked_add(stack_size)
                 .unwrap_or_else(|| panic!("lerux-cothread: stack range overflows"));
-            if start < other_end && other_start < end {
-                panic!("lerux-cothread: stacks overlap");
-            }
+            assert!(
+                !(start < other_end && other_start < end),
+                "lerux-cothread: stacks overlap"
+            );
         }
     }
 }
@@ -339,21 +352,29 @@ pub fn microkit_cothread_spawn(entry: extern "C" fn(), private_arg: *mut u8) -> 
 }
 
 /// Handle of the cothread the kernel thread is executing.
+#[must_use]
 pub fn microkit_cothread_my_handle() -> i32 {
     with_control(|control| control.running)
 }
 
 /// Argument passed to [`microkit_cothread_spawn`] for the running worker.
+///
+/// # Panics
+///
+/// Panics when the runtime is not initialised, or when the caller is the root cothread.
+#[must_use]
 pub fn microkit_cothread_my_arg() -> *mut u8 {
     with_control(|control| {
-        if control.running == ROOT_HANDLE {
-            panic!("lerux-cothread: my_arg called from the root cothread");
-        }
+        assert!(
+            control.running != ROOT_HANDLE,
+            "lerux-cothread: my_arg called from the root cothread"
+        );
         control.tcbs[idx(control.running)].private_arg
     })
 }
 
 /// State of `handle`. A handle outside `0..MAX_COTHREADS` panics.
+#[must_use]
 pub fn microkit_cothread_query_state(handle: i32) -> State {
     with_control(|control| control.tcbs[idx(handle)].state)
 }
@@ -374,6 +395,12 @@ pub fn microkit_cothread_yield() {
 
 /// Release `handle`. Destroying a blocked cothread panics. Destroying the running
 /// cothread switches to whoever is ready, or back to the root.
+///
+/// # Panics
+///
+/// Panics when the runtime is not initialised, when `handle` is out of range,
+/// when `handle` is the root, inactive, or blocked, when it is marked running
+/// but is not the current cothread, or when a destroyed cothread resumes.
 pub fn microkit_cothread_destroy(handle: i32) {
     let switched = with_control(|control| release(control, handle));
     if let Some(next) = switched {
@@ -385,9 +412,10 @@ pub fn microkit_cothread_destroy(handle: i32) {
 
 fn release(control: &mut Control, handle: i32) -> Option<*mut u8> {
     let index = idx(handle);
-    if handle == ROOT_HANDLE {
-        panic!("lerux-cothread: cannot destroy the root cothread");
-    }
+    assert!(
+        handle != ROOT_HANDLE,
+        "lerux-cothread: cannot destroy the root cothread"
+    );
     match control.tcbs[index].state {
         State::NotActive => panic!("lerux-cothread: destroy of an inactive handle"),
         State::Blocked => panic!("lerux-cothread: cannot destroy a blocked cothread"),
@@ -468,12 +496,18 @@ pub fn microkit_cothread_wait_on_channel(channel: usize) {
 /// Only the root cothread may call this. Call it from `Handler::notified`.
 /// A waiting worker is switched to immediately, and this function returns when
 /// that worker blocks again or returns.
+///
+/// # Panics
+///
+/// Panics when the runtime is not initialised, when `channel` is not in
+/// `0..MICROKIT_MAX_CHANNELS`, or when the caller is not the root cothread.
 pub fn microkit_cothread_recv_ntfn(channel: usize) {
     let channel = channel_index(channel);
     let wake = with_control(|control| {
-        if control.running != ROOT_HANDLE {
-            panic!("lerux-cothread: recv_ntfn called from a worker cothread");
-        }
+        assert!(
+            control.running == ROOT_HANDLE,
+            "lerux-cothread: recv_ntfn called from a worker cothread"
+        );
         let mut links = SemLinks::from(&control.channels[channel]);
         let wake = signal_one(control, &mut links);
         links.apply(&mut control.channels[channel]);
@@ -491,9 +525,10 @@ fn block_running(links: &mut SemLinks) -> bool {
         return false;
     }
     with_control(|control| {
-        if control.running == ROOT_HANDLE {
-            panic!("lerux-cothread: the root cothread cannot wait");
-        }
+        assert!(
+            control.running != ROOT_HANDLE,
+            "lerux-cothread: the root cothread cannot wait"
+        );
         let running = control.running;
         let index = idx(running);
         control.tcbs[index].state = State::Blocked;
@@ -614,7 +649,9 @@ mod tests {
 
     #[test]
     fn blocked_cothread_resumes_when_its_channel_is_signalled() {
-        let _guard = LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let _guard = LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         reset();
         let _stacks = init_stacks();
         let preserved = 0xA5A5_5A5A_u64;
@@ -644,7 +681,9 @@ mod tests {
 
     #[test]
     fn semaphore_signal_resumes_the_waiter() {
-        let _guard = LOCK.lock().unwrap_or_else(|error| error.into_inner());
+        let _guard = LOCK
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         reset();
         let _stacks = init_stacks();
         assert_ne!(

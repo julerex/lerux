@@ -347,9 +347,8 @@ impl HandlerImpl {
             };
             (resource.width, resource.height, origin, transfer.rect)
         };
-        let buf = match self.dev.change_resolution(width, height) {
-            Ok(buf) => buf,
-            Err(_) => return gpu_resp_status_t::GPU_RESP_ERR_UNSPEC,
+        let Ok(buf) = self.dev.change_resolution(width, height) else {
+            return gpu_resp_status_t::GPU_RESP_ERR_UNSPEC;
         };
         if !copy_rect(buf, origin, rect, width) {
             return gpu_resp_status_t::GPU_RESP_ERR_INVALID_BOUNDS;

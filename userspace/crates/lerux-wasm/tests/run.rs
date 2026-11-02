@@ -54,7 +54,7 @@ fn compile(src: &Path, out: &Path) {
         .arg(out)
         .status()
         .expect("spawn rustc");
-    assert!(status.success(), "rustc {src:?}");
+    assert!(status.success(), "rustc {}", src.display());
 }
 
 fn sign_wasm(wasm: &[u8]) -> Vec<u8> {

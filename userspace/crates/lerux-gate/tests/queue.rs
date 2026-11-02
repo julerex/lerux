@@ -14,7 +14,7 @@ fn leak_data(len: usize) -> Region {
 
 #[test]
 fn enqueue_then_dequeue_one_byte() {
-    let (tx, rx) = serial_pair(leak_queue(), leak_data(4), 4).expect("ring");
+    let (tx, rx) = serial_pair(&leak_queue(), &leak_data(4), 4).expect("ring");
     tx.enqueue(b'q').expect("space");
     assert_eq!(rx.dequeue().expect("byte"), b'q');
     assert_eq!(rx.dequeue(), Err(QueueError::Empty));
@@ -22,7 +22,7 @@ fn enqueue_then_dequeue_one_byte() {
 
 #[test]
 fn a_full_ring_rejects_the_next_byte() {
-    let (tx, _rx) = serial_pair(leak_queue(), leak_data(2), 2).expect("ring");
+    let (tx, _rx) = serial_pair(&leak_queue(), &leak_data(2), 2).expect("ring");
     tx.enqueue(b'a').expect("space");
     tx.enqueue(b'b').expect("space");
     assert_eq!(tx.enqueue(b'c'), Err(QueueError::Full));

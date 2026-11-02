@@ -63,14 +63,21 @@ impl SocketArena {
 
 static mut SOCKET_ARENA: SocketArena = SocketArena::empty();
 
+struct UdpProgress {
+    tx_done: bool,
+    logged: bool,
+}
+
+struct TcpProgress {
+    sent: bool,
+    rx_done: bool,
+}
+
 pub struct NetIo {
     device: DeviceImpl<WithAlignmentBound<BasicAllocator>>,
     iface: Interface,
-    udp_tx_done: bool,
-    udp_tx_logged: bool,
-    tcp_client_sent: bool,
-    tcp_rx_done: bool,
-    done: bool,
+    udp: UdpProgress,
+    tcp: TcpProgress,
 }
 
 fn create_dma_region() -> SharedMemoryRef<'static, [u8]> {
@@ -120,6 +127,10 @@ fn create_net_device(
     caps.max_transmission_unit = 1500;
     caps.medium = Medium::Ethernet;
     DeviceImpl::new(
+        #[expect(
+            clippy::default_trait_access,
+            reason = "DeviceImpl defaults to private unsync RawOneShotMutex"
+        )]
         Default::default(),
         dma_region,
         bounce_buffer_allocator,
@@ -160,11 +171,14 @@ impl NetIo {
         Self {
             device,
             iface,
-            udp_tx_done: false,
-            udp_tx_logged: false,
-            tcp_client_sent: false,
-            tcp_rx_done: false,
-            done: false,
+            udp: UdpProgress {
+                tx_done: false,
+                logged: false,
+            },
+            tcp: TcpProgress {
+                sent: false,
+                rx_done: false,
+            },
         }
     }
 
@@ -206,7 +220,7 @@ impl NetIo {
     }
 
     fn poll_udp_tx(&mut self, sockets: &mut SocketSet<'static>) {
-        if self.udp_tx_done {
+        if self.udp.tx_done {
             return;
         }
         let arena = unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_ARENA) };
@@ -214,40 +228,37 @@ impl NetIo {
         let remote = IpEndpoint::new(IpAddress::Ipv4(HOST_IP), 12345);
         let udp = sockets.get_mut::<UdpSocket>(arena.udp_handle.unwrap());
         if udp.bind(local).is_ok() && udp.send_slice(b"lerux-net", remote).is_ok() {
-            self.udp_tx_done = true;
+            self.udp.tx_done = true;
         }
     }
 
     fn poll_tcp_client(&mut self, sockets: &mut SocketSet<'static>) {
         let arena = unsafe { &mut *core::ptr::addr_of_mut!(SOCKET_ARENA) };
         let tcp_cli = sockets.get_mut::<TcpSocket>(arena.tcp_cli_handle.unwrap());
-        if !self.tcp_client_sent && tcp_cli.may_send() && tcp_cli.send_slice(b"lerux-tcp").is_ok() {
-            self.tcp_client_sent = true;
+        if !self.tcp.sent && tcp_cli.may_send() && tcp_cli.send_slice(b"lerux-tcp").is_ok() {
+            self.tcp.sent = true;
         }
-        if !self.tcp_rx_done && tcp_cli.may_recv() {
+        if !self.tcp.rx_done && tcp_cli.may_recv() {
             let mut buf = [0u8; 16];
             if let Ok(len) = tcp_cli.recv_slice(&mut buf)
                 && len >= 9
                 && &buf[..9] == b"lerux-tcp"
             {
                 log::info!("virtio-net: TCP RX ok");
-                self.tcp_rx_done = true;
+                self.tcp.rx_done = true;
             }
         }
     }
 
     fn update_completion_state(&mut self) {
-        if self.udp_tx_done && !self.udp_tx_logged {
+        if self.udp.tx_done && !self.udp.logged {
             log::info!("virtio-net: TX ok");
-            self.udp_tx_logged = true;
-        }
-        if self.udp_tx_done && self.tcp_rx_done {
-            self.done = true;
+            self.udp.logged = true;
         }
     }
 
     pub fn poll(&mut self) {
-        if self.done {
+        if self.is_done() {
             return;
         }
         self.device.poll();
@@ -262,6 +273,6 @@ impl NetIo {
     }
 
     pub fn is_done(&self) -> bool {
-        self.done
+        self.udp.tx_done && self.tcp.rx_done
     }
 }

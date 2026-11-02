@@ -29,6 +29,7 @@ impl HttpsUrl {
         Some(Self { bytes: stored, len })
     }
 
+    #[must_use]
     pub fn as_str(&self) -> &str {
         let slice = &self.bytes[..usize::from(self.len)];
         core::str::from_utf8(slice).unwrap_or_default()
@@ -68,7 +69,7 @@ fn host_from_url(text: &str) -> Result<&str, ()> {
     let rest = &text[PREFIX.len()..];
     let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
     let authority = &rest[..end];
-    let (host, _) = match authority.rsplit_once(':') {
+    let (host, ()) = match authority.rsplit_once(':') {
         Some((host, _)) => (host, ()),
         None => (authority, ()),
     };
@@ -332,7 +333,7 @@ fn split_url(text: &str) -> Result<UrlParts<'_>, ()> {
     let auth_end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
     let authority = &rest[..auth_end];
     let tail = &rest[auth_end..];
-    let (path, query, fragment) = split_path_query_fragment(tail)?;
+    let (path, query, fragment) = split_path_query_fragment(tail);
     Ok(UrlParts {
         authority,
         path,
@@ -341,9 +342,9 @@ fn split_url(text: &str) -> Result<UrlParts<'_>, ()> {
     })
 }
 
-fn split_path_query_fragment(tail: &str) -> Result<(&str, Option<&str>, Option<&str>), ()> {
+fn split_path_query_fragment(tail: &str) -> (&str, Option<&str>, Option<&str>) {
     if tail.is_empty() {
-        return Ok(("/", None, None));
+        return ("/", None, None);
     }
     let path_end = tail.find(['?', '#']).unwrap_or(tail.len());
     let path = if path_end == 0 {
@@ -363,7 +364,7 @@ fn split_path_query_fragment(tail: &str) -> Result<(&str, Option<&str>, Option<&
     if let Some(after) = rest.strip_prefix('#') {
         fragment = Some(after);
     }
-    Ok((path, query, fragment))
+    (path, query, fragment)
 }
 
 fn join_to_base(base: &HttpsUrl, href: &str) -> Result<HttpsUrl, ()> {
@@ -379,10 +380,7 @@ fn join_to_base(base: &HttpsUrl, href: &str) -> Result<HttpsUrl, ()> {
     } else {
         Some(merge_relative_path(parts.path, href_path)?)
     };
-    let path = path_url
-        .as_ref()
-        .map(HttpsUrl::as_str)
-        .unwrap_or(parts.path);
+    let path = path_url.as_ref().map_or(parts.path, HttpsUrl::as_str);
     // A `#` reference keeps the base query. A path reference carries only its own query.
     let query = if href.starts_with('#') {
         parts.query
@@ -437,9 +435,8 @@ fn base_directory(path: &str) -> &str {
         return "/";
     }
     match path.rfind('/') {
-        Some(0) => "/",
+        Some(0) | None => "/",
         Some(idx) => &path[..=idx],
-        None => "/",
     }
 }
 
@@ -601,7 +598,7 @@ mod tests {
         }
         match intent("?q=1") {
             HrefIntent::Fetch(url) => {
-                assert_eq!(url.as_str(), "https://host:8443/fixture.html?q=1")
+                assert_eq!(url.as_str(), "https://host:8443/fixture.html?q=1");
             }
             other => panic!("expected fetch, got {other:?}"),
         }

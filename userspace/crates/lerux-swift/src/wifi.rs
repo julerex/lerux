@@ -28,6 +28,7 @@ pub trait Nic {
 }
 
 /// `ssid=` and `psk=` lines. The file stays out of git.
+#[must_use]
 pub fn credentials(text: &[u8]) -> Option<(&[u8], &[u8])> {
     let mut ssid = None;
     let mut psk = None;
@@ -56,7 +57,12 @@ pub unsafe fn enqueue_frame(queue: &net_queue_handle_t, frame: &[u8], storage: &
         return -1;
     }
     storage[..frame.len()].copy_from_slice(frame);
-    unsafe { net_enqueue_active(queue, net_buff_desc_t::new(0, frame.len() as u16, 0)) }
+    let len = frame_len(frame.len());
+    unsafe { net_enqueue_active(queue, net_buff_desc_t::new(0, len, 0)) }
+}
+
+fn frame_len(len: usize) -> u16 {
+    u16::try_from(len).expect("frame length")
 }
 
 pub fn bring_up(nic: &mut impl Nic, ssid: &[u8], pass: &[u8]) -> WifiReport {
@@ -191,15 +197,15 @@ fn write_u8(out: &mut [u8], value: u8) -> usize {
     n
 }
 
-fn write_dhcp_headers(out: &mut [u8], mac: &[u8; 6]) {
+fn write_dhcp_headers(out: &mut [u8], mac: [u8; 6]) {
     out[..6].fill(0xff);
-    out[6..12].copy_from_slice(mac);
+    out[6..12].copy_from_slice(&mac);
     out[12..14].copy_from_slice(&0x0800u16.to_be_bytes());
     out[14] = 0x45;
     out[15] = 0;
-    let udp_len = 8 + 240 + 16;
+    let udp_len: u16 = 8 + 240 + 16;
     let ip_len = 20 + udp_len;
-    out[16..18].copy_from_slice(&(ip_len as u16).to_be_bytes());
+    out[16..18].copy_from_slice(&ip_len.to_be_bytes());
     out[18..24].fill(0);
     out[22] = 64;
     out[23] = 17;
@@ -210,7 +216,7 @@ fn write_dhcp_headers(out: &mut [u8], mac: &[u8; 6]) {
     out[24..26].copy_from_slice(&sum.to_be_bytes());
     out[34..36].copy_from_slice(&68u16.to_be_bytes());
     out[36..38].copy_from_slice(&67u16.to_be_bytes());
-    out[38..40].copy_from_slice(&(udp_len as u16).to_be_bytes());
+    out[38..40].copy_from_slice(&udp_len.to_be_bytes());
     out[40..42].fill(0);
 }
 
@@ -228,14 +234,14 @@ fn write_eapol(out: &mut [u8], psk: &[u8; 32]) -> usize {
 }
 
 pub fn write_discover(out: &mut [u8], mac: &[u8; 6]) -> usize {
-    write_dhcp(out, mac, [0; 4], [0; 4], 1)
+    write_dhcp(out, *mac, [0; 4], [0; 4], 1)
 }
 
 pub fn write_request(out: &mut [u8], mac: &[u8; 6], yiaddr: [u8; 4], server: [u8; 4]) -> usize {
-    write_dhcp(out, mac, yiaddr, server, 3)
+    write_dhcp(out, *mac, yiaddr, server, 3)
 }
 
-fn write_dhcp(out: &mut [u8], mac: &[u8; 6], yiaddr: [u8; 4], server: [u8; 4], kind: u8) -> usize {
+fn write_dhcp(out: &mut [u8], mac: [u8; 6], yiaddr: [u8; 4], server: [u8; 4], kind: u8) -> usize {
     write_dhcp_headers(out, mac);
     let boot = &mut out[42..];
     boot[..240].fill(0);
@@ -244,7 +250,7 @@ fn write_dhcp(out: &mut [u8], mac: &[u8; 6], yiaddr: [u8; 4], server: [u8; 4], k
     boot[2] = 6;
     boot[4..8].copy_from_slice(&0x4c52_5558u32.to_be_bytes());
     boot[16..20].copy_from_slice(&yiaddr);
-    boot[28..34].copy_from_slice(mac);
+    boot[28..34].copy_from_slice(&mac);
     boot[236..240].copy_from_slice(&0x6382_5363u32.to_be_bytes());
     boot[240] = 53;
     boot[241] = 1;
@@ -292,6 +298,7 @@ fn dhcp_ack(addr: [u8; 4], server: [u8; 4]) -> [u8; 320] {
     frame
 }
 
+#[must_use]
 pub fn dhcp_yiaddr(frame: &[u8], kind: u8) -> Option<([u8; 4], [u8; 4])> {
     if frame.len() < 42 + 243 || u16::from_be_bytes([frame[12], frame[13]]) != 0x0800 {
         return None;
@@ -314,6 +321,7 @@ pub fn dhcp_yiaddr(frame: &[u8], kind: u8) -> Option<([u8; 4], [u8; 4])> {
     Some((addr, server))
 }
 
+#[must_use]
 pub fn dhcp_router(frame: &[u8]) -> Option<[u8; 4]> {
     let boot = frame.get(42..)?;
     let mut at = 240;
@@ -363,6 +371,7 @@ fn icmp_reply_frame(src: [u8; 4], dst: [u8; 4]) -> [u8; 42] {
     frame
 }
 
+#[must_use]
 pub fn icmp_reply(frame: &[u8]) -> bool {
     frame.len() >= 35 && frame.get(23) == Some(&1) && frame.get(34) == Some(&0)
 }
@@ -379,7 +388,7 @@ fn ip_checksum(header: &[u8]) -> u16 {
     while sum > 0xffff {
         sum = (sum & 0xffff) + (sum >> 16);
     }
-    !(sum as u16)
+    !u16::try_from(sum).expect("checksum")
 }
 
 fn icmp_checksum(body: &[u8]) -> u16 {
@@ -394,7 +403,7 @@ fn icmp_checksum(body: &[u8]) -> u16 {
     while sum > 0xffff {
         sum = (sum & 0xffff) + (sum >> 16);
     }
-    !(sum as u16)
+    !u16::try_from(sum).expect("checksum")
 }
 
 #[cfg(test)]

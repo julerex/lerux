@@ -10,7 +10,7 @@
 
 use std::{
     collections::{BTreeMap, BTreeSet},
-    fmt,
+    fmt::{self, Write},
 };
 
 use anyhow::{bail, Context, Result};
@@ -64,15 +64,15 @@ impl ChannelSpec {
         let mut out = String::from("    <channel>\n");
         for end in &self.ends {
             if end.pp {
-                out.push_str(&format!(
-                    "        <end pd=\"{}\" id=\"{}\" pp=\"true\" />\n",
+                writeln!(
+                    out,
+                    "        <end pd=\"{}\" id=\"{}\" pp=\"true\" />",
                     end.pd, end.id
-                ));
+                )
+                .expect("format into string");
             } else {
-                out.push_str(&format!(
-                    "        <end pd=\"{}\" id=\"{}\" />\n",
-                    end.pd, end.id
-                ));
+                writeln!(out, "        <end pd=\"{}\" id=\"{}\" />", end.pd, end.id)
+                    .expect("format into string");
             }
         }
         out.push_str("    </channel>\n");

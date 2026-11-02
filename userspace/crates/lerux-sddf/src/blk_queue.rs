@@ -29,16 +29,24 @@ fn req_slot(queue: *mut blk_req_queue_t, index: u32, capacity: u32) -> *mut blk_
     let base = queue
         .cast::<u8>()
         .wrapping_add(core::mem::size_of::<blk_req_queue_t>());
-    base.cast::<blk_req_t>()
-        .wrapping_add(word32::index(index, capacity) as usize)
+    #[expect(
+        clippy::cast_ptr_alignment,
+        reason = "the request queue is page-aligned and the prefix ends on an 8-byte boundary"
+    )]
+    let slots = base.cast::<blk_req_t>();
+    slots.wrapping_add(word32::index(index, capacity) as usize)
 }
 
 fn resp_slot(queue: *mut blk_resp_queue_t, index: u32, capacity: u32) -> *mut blk_resp_t {
     let base = queue
         .cast::<u8>()
         .wrapping_add(core::mem::size_of::<blk_resp_queue_t>());
-    base.cast::<blk_resp_t>()
-        .wrapping_add(word32::index(index, capacity) as usize)
+    #[expect(
+        clippy::cast_ptr_alignment,
+        reason = "the response queue is page-aligned and the prefix ends on a 4-byte boundary"
+    )]
+    let slots = base.cast::<blk_resp_t>();
+    slots.wrapping_add(word32::index(index, capacity) as usize)
 }
 
 /// # Safety
@@ -59,6 +67,7 @@ pub unsafe fn blk_queue_init(
 /// # Safety
 ///
 /// Same pointer rules as [`blk_queue_init`]. The caller is the producer of requests.
+#[must_use]
 pub unsafe fn blk_queue_full_req(handle: &blk_queue_handle_t) -> bool {
     unsafe {
         let queue = handle.req_queue;
@@ -71,6 +80,7 @@ pub unsafe fn blk_queue_full_req(handle: &blk_queue_handle_t) -> bool {
 /// # Safety
 ///
 /// Same pointer rules as [`blk_queue_init`]. The caller is the producer of responses.
+#[must_use]
 pub unsafe fn blk_queue_full_resp(handle: &blk_queue_handle_t) -> bool {
     unsafe {
         let queue = handle.resp_queue;
@@ -85,6 +95,7 @@ pub unsafe fn blk_queue_full_resp(handle: &blk_queue_handle_t) -> bool {
 /// # Safety
 ///
 /// Same pointer rules as [`blk_queue_init`]. The caller is the producer of requests.
+#[must_use]
 pub unsafe fn blk_enqueue_req(
     handle: &blk_queue_handle_t,
     code: blk_req_code_t,
@@ -151,6 +162,7 @@ pub unsafe fn blk_dequeue_req(
 /// # Safety
 ///
 /// Same pointer rules as [`blk_queue_init`]. The caller is the producer of responses.
+#[must_use]
 pub unsafe fn blk_enqueue_resp(
     handle: &blk_queue_handle_t,
     status: blk_resp_status_t,

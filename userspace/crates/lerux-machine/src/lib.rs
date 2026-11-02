@@ -46,6 +46,7 @@ impl Arch {
     pub const TARGET: Self = target_arch();
 
     /// Split `qemu_virt_aarch64_serial` into `(Aarch64, "serial")`.
+    #[must_use]
     pub fn split_prefix(stem: &str) -> Option<(Self, &str)> {
         if let Some(rest) = stem.strip_prefix("qemu_virt_aarch64_") {
             return Some((Arch::Aarch64, rest));
@@ -90,6 +91,7 @@ pub enum Serial {
     Ns16550Port,
 }
 
+#[must_use]
 pub fn serial_kind(arch: Arch) -> Serial {
     match arch {
         Arch::Aarch64 => Serial::Pl011,
@@ -98,6 +100,7 @@ pub fn serial_kind(arch: Arch) -> Serial {
     }
 }
 
+#[must_use]
 pub fn serial() -> Serial {
     serial_kind(Arch::TARGET)
 }
@@ -122,6 +125,7 @@ pub enum VirtioAttach {
 }
 
 /// Guest virtual address of the driver direct-memory-access region for one virtio role.
+#[must_use]
 pub const fn virtio_dma_phys_addr(arch: Arch, role: VirtioRole) -> Option<&'static str> {
     match (arch, role) {
         (Arch::X86_64, VirtioRole::Net) => Some(X86_VIRTIO_NET_DMA_PHYS.text()),
@@ -130,6 +134,7 @@ pub const fn virtio_dma_phys_addr(arch: Arch, role: VirtioRole) -> Option<&'stat
     }
 }
 
+#[must_use]
 pub const fn virtio_dma_guest(arch: Arch, role: VirtioRole) -> u64 {
     match arch {
         Arch::Aarch64 => 0x8_000_000_000,
@@ -145,6 +150,7 @@ pub const fn virtio_dma_guest(arch: Arch, role: VirtioRole) -> u64 {
     }
 }
 
+#[must_use]
 pub const fn virtio(arch: Arch, role: VirtioRole) -> Option<VirtioAttach> {
     match arch {
         Arch::Aarch64 => Some(VirtioAttach::Mmio {

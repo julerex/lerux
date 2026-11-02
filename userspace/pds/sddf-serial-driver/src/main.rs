@@ -204,9 +204,8 @@ impl HandlerImpl {
                 blocked = true;
                 break;
             }
-            let byte = match self.uart.read() {
-                Ok(byte) => byte,
-                Err(_) => break,
+            let Ok(byte) = self.uart.read() else {
+                break;
             };
             // SAFETY: the free-space check above left room for one byte.
             let status = unsafe { serial_enqueue(&self.rx, byte) };

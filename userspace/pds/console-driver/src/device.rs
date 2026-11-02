@@ -27,7 +27,7 @@ struct Panel {
     live: bool,
 }
 
-/// Microkit assigns IOPort caps from this CNode slot (same base as COM1).
+/// Microkit assigns `IOPort` caps from this `CNode` slot (same base as COM1).
 const BASE_IOPORT_CAP: u64 = 394;
 
 const STATUS_OBF: u8 = 0x01;
@@ -63,18 +63,22 @@ pub struct Device {
 
 unsafe impl Send for Device {}
 
+fn low_u16(value: usize) -> u16 {
+    u16::try_from(value & 0xffff).expect("low half")
+}
+
 impl Device {
     pub fn from_system() -> Self {
         let data_id = *var!(kbd_data_ioport_id: usize = usize::MAX) as u64;
-        let data_port = *var!(kbd_data_ioport_addr: usize = usize::MAX) as u16;
+        let data_port = low_u16(*var!(kbd_data_ioport_addr: usize = usize::MAX));
         let status_id = *var!(kbd_cmd_ioport_id: usize = usize::MAX) as u64;
-        let status_port = *var!(kbd_cmd_ioport_addr: usize = usize::MAX) as u16;
+        let status_port = low_u16(*var!(kbd_cmd_ioport_addr: usize = usize::MAX));
         #[cfg(not(feature = "board-swift_sfx14_41g"))]
         let vga = memory_region_symbol!(vga_text_vaddr: *mut u16).as_ptr();
         #[cfg(not(feature = "board-swift_sfx14_41g"))]
         let crtc_id = *var!(crtc_ioport_id: usize = usize::MAX) as u64;
         #[cfg(not(feature = "board-swift_sfx14_41g"))]
-        let crtc_port = *var!(crtc_ioport_addr: usize = usize::MAX) as u16;
+        let crtc_port = low_u16(*var!(crtc_ioport_addr: usize = usize::MAX));
         #[cfg(feature = "board-swift_sfx14_41g")]
         let panel = panel_from_system();
         Self {
@@ -105,27 +109,25 @@ impl Device {
         }
     }
 
+    #[cfg(not(feature = "board-swift_sfx14_41g"))]
     pub fn enable_cursor(&self) {
-        #[cfg(not(feature = "board-swift_sfx14_41g"))]
-        {
-            // Start line 0, end line 15, disable-bit clear: a block cursor.
-            self.crtc(0x0a, 0x00);
-            self.crtc(0x0b, 0x0f);
-        }
+        // Start line 0, end line 15, disable-bit clear: a block cursor.
+        self.crtc(0x0a, 0x00);
+        self.crtc(0x0b, 0x0f);
     }
 
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    pub fn enable_cursor() {}
+
+    #[cfg(not(feature = "board-swift_sfx14_41g"))]
     pub fn sync_cursor(&self, screen: &Screen) {
-        #[cfg(not(feature = "board-swift_sfx14_41g"))]
-        {
-            let pos = screen.cursor_index() as u16;
-            self.crtc(0x0e, (pos >> 8) as u8);
-            self.crtc(0x0f, (pos & 0xff) as u8);
-        }
-        #[cfg(feature = "board-swift_sfx14_41g")]
-        {
-            let _ = screen;
-        }
+        let pos = u16::try_from(screen.cursor_index()).expect("cursor fits");
+        self.crtc(0x0e, (pos >> 8) as u8);
+        self.crtc(0x0f, (pos & 0xff) as u8);
     }
+
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    pub fn sync_cursor(_screen: &Screen) {}
 
     /// Enable scan set 1 and IRQ1. A missing controller still leaves the banner up.
     pub fn init_keyboard(&self) -> bool {
@@ -190,15 +192,15 @@ impl Device {
 
     #[cfg(not(feature = "board-swift_sfx14_41g"))]
     fn crtc(&self, index: u8, value: u8) {
-        self.out8(self.crtc_cap, self.crtc_port, index);
-        self.out8(self.crtc_cap, self.crtc_port.wrapping_add(1), value);
+        Self::out8(self.crtc_cap, self.crtc_port, index);
+        Self::out8(self.crtc_cap, self.crtc_port.wrapping_add(1), value);
     }
 
     fn command(&self, byte: u8) -> bool {
         if !self.wait_ibf_clear() {
             return false;
         }
-        self.out8(self.status_cap, self.status_port, byte);
+        Self::out8(self.status_cap, self.status_port, byte);
         true
     }
 
@@ -206,7 +208,7 @@ impl Device {
         if !self.wait_ibf_clear() {
             return false;
         }
-        self.out8(self.data_cap, self.data_port, byte);
+        Self::out8(self.data_cap, self.data_port, byte);
         true
     }
 
@@ -214,11 +216,11 @@ impl Device {
         if self.status() & STATUS_OBF == 0 {
             return None;
         }
-        Some(self.in8(self.data_cap, self.data_port))
+        Some(Self::in8(self.data_cap, self.data_port))
     }
 
     fn status(&self) -> u8 {
-        self.in8(self.status_cap, self.status_port)
+        Self::in8(self.status_cap, self.status_port)
     }
 
     fn wait_ibf_clear(&self) -> bool {
@@ -241,14 +243,14 @@ impl Device {
         false
     }
 
-    fn out8(&self, cap: u64, port: u16, value: u8) {
+    fn out8(cap: u64, port: u16, value: u8) {
         with_ipc_buffer_mut(|ipc| {
             ipc.inner_mut()
                 .seL4_X86_IOPort_Out8(cap, u64::from(port), u64::from(value));
         });
     }
 
-    fn in8(&self, cap: u64, port: u16) -> u8 {
+    fn in8(cap: u64, port: u16) -> u8 {
         with_ipc_buffer_mut(|ipc| {
             let ret = ipc.inner_mut().seL4_X86_IOPort_In8(cap, port);
             ret.result
@@ -258,6 +260,11 @@ impl Device {
 
 #[cfg(feature = "board-swift_sfx14_41g")]
 const _: () = assert!(crate::screen::ROWS == lerux_desk::CONSOLE_ROWS);
+
+#[cfg(feature = "board-swift_sfx14_41g")]
+fn framebuffer_bytes() -> usize {
+    usize::try_from(FRAMEBUFFER_BYTES).expect("framebuffer fits")
+}
 
 #[cfg(feature = "board-swift_sfx14_41g")]
 fn panel_from_system() -> Panel {
@@ -281,7 +288,7 @@ fn panel_from_system() -> Panel {
     if live {
         // SAFETY: Microkit mapped `framebuffer` read-write for FRAMEBUFFER_BYTES
         // bytes. This runs once during init, before the handler borrows the panel.
-        let frame = unsafe { core::slice::from_raw_parts_mut(frame, FRAMEBUFFER_BYTES as usize) };
+        let frame = unsafe { core::slice::from_raw_parts_mut(frame, framebuffer_bytes()) };
         let pen = Pen {
             pitch,
             width,
@@ -296,7 +303,7 @@ fn panel_from_system() -> Panel {
     }
     Panel {
         frame,
-        len: FRAMEBUFFER_BYTES as usize,
+        len: framebuffer_bytes(),
         pitch,
         width,
         height,

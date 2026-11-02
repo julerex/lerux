@@ -1,7 +1,7 @@
 //! Paint vendor, device, BAR, and interrupt pin for the six recorded locations.
 //!
 //! Windows assigned these bus numbers. A line that reads `ffff` is a location
-//! this boot did not find. Firmware assigned the NVMe, xHCI, and MT7921 base
+//! this boot did not find. Firmware assigned the `NVMe`, xHCI, and MT7921 base
 //! addresses. This domain sets bus master and does not move those addresses.
 
 #![no_std]
@@ -26,7 +26,8 @@ struct HandlerImpl;
 #[protection_domain]
 fn init() -> HandlerImpl {
     let cap_id = *var!(pci_ioport_id: usize = usize::MAX) as u64;
-    let addr = *var!(pci_ioport_addr: usize = usize::MAX) as u16;
+    let addr =
+        u16::try_from(*var!(pci_ioport_addr: usize = usize::MAX) & 0xffff).expect("low half");
     let cap = BASE_IOPORT_CAP + cap_id;
     let page = memory_region_symbol!(pci_headers_vaddr: *mut u8).as_ptr();
     let page = unsafe { core::slice::from_raw_parts_mut(page, 0x1000) };
@@ -70,7 +71,8 @@ fn paint(row: usize, text: &[u8]) {
     let mode = memory_region_symbol!(mode_record_vaddr: *mut u8).as_ptr();
     let frame = memory_region_symbol!(fb_vaddr: *mut u8).as_ptr();
     let record = unsafe { core::slice::from_raw_parts(mode, 40) };
-    let frame = unsafe { core::slice::from_raw_parts_mut(frame, FRAMEBUFFER_BYTES as usize) };
+    let bytes = usize::try_from(FRAMEBUFFER_BYTES).expect("framebuffer fits");
+    let frame = unsafe { core::slice::from_raw_parts_mut(frame, bytes) };
     paint_row(record, frame, row, text);
 }
 

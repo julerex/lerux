@@ -72,9 +72,7 @@ fn copy_sources(dockerfile: &str) -> Result<Vec<String>> {
 }
 
 fn strip_inline_comment(line: &str) -> &str {
-    line.split_once(" #")
-        .map(|(code, _comment)| code)
-        .unwrap_or(line)
+    line.split_once(" #").map_or(line, |(code, _comment)| code)
 }
 
 fn copy_covers(source: &str, member: &str) -> bool {

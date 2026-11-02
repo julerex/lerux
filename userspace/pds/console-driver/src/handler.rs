@@ -9,7 +9,7 @@ use heapless::Deque;
 use sel4_microkit::{Channel, ChannelSet, Handler, MessageInfo};
 use sel4_microkit_simple_ipc as simple_ipc;
 
-use lerux_driver_protocols::serial::{NonBlocking, Request, Response, SuccessResponse};
+use lerux_driver_protocols::serial::{ErrorResponse, NonBlocking, Request, SuccessResponse};
 
 #[cfg(feature = "board-swift_sfx14_41g")]
 use crate::usb_off::UsbKbd;
@@ -63,25 +63,32 @@ impl HandlerImpl {
             Damage::Cells { start, end } => self.device.present_cells(&self.screen, start, end),
             Damage::All => self.device.present_all(&self.screen),
         }
-        self.device.sync_cursor(&self.screen);
+        self.sync_cursor();
     }
 
-    fn handle_request(&mut self, req: Request) -> Response {
+    fn sync_cursor(&self) {
+        #[cfg(not(feature = "board-swift_sfx14_41g"))]
+        self.device.sync_cursor(&self.screen);
+        #[cfg(feature = "board-swift_sfx14_41g")]
+        Device::sync_cursor(&self.screen);
+    }
+
+    fn handle_request(&mut self, req: &Request) -> SuccessResponse {
         match req {
             Request::Read => {
                 let byte = self.rx.pop_front();
                 if byte.is_some() {
                     self.notify = true;
                 }
-                Ok(SuccessResponse::Read(byte.into()))
+                SuccessResponse::Read(byte.into())
             }
             Request::Write(byte) => {
-                self.paint(byte);
-                Ok(SuccessResponse::Write(NonBlocking::Ready(())))
+                self.paint(*byte);
+                SuccessResponse::Write(NonBlocking::Ready(()))
             }
             Request::Flush => {
-                self.device.sync_cursor(&self.screen);
-                Ok(SuccessResponse::Flush(NonBlocking::Ready(())))
+                self.sync_cursor();
+                SuccessResponse::Flush(NonBlocking::Ready(()))
             }
         }
     }
@@ -99,16 +106,16 @@ impl Handler for HandlerImpl {
         if usb {
             // `poll` borrows the controller. Copy bytes out before the queue.
             let mut buf = [0u8; 64];
-            let n = self.usb.poll(&mut buf);
+            let n = poll_usb(&mut self.usb, &mut buf);
             for &byte in &buf[..n] {
                 let _ = self.rx.push_back(byte);
             }
-            self.usb.ack_irq();
+            ack_usb(&mut self.usb);
             self.usb_irq.irq_ack().expect("ack usb irq");
         }
         if ps2 {
             // A USB boot keyboard owns the shell. QEMU `send-key` hits PS/2 too.
-            if self.usb.ready() {
+            if usb_ready(&self.usb) {
                 while self.device.read_scancode().is_some() {}
             } else {
                 while let Some(code) = self.device.read_scancode() {
@@ -135,8 +142,38 @@ impl Handler for HandlerImpl {
             unreachable!("unexpected IPC channel");
         }
         Ok(match simple_ipc::recv::<Request>(msg_info) {
-            Ok(req) => simple_ipc::send(self.handle_request(req)),
+            Ok(req) => simple_ipc::send(Ok::<_, ErrorResponse>(self.handle_request(&req))),
             Err(_) => simple_ipc::send_unspecified_error(),
         })
     }
+}
+
+#[cfg(not(feature = "board-swift_sfx14_41g"))]
+fn usb_ready(usb: &UsbKbd) -> bool {
+    usb.ready()
+}
+
+#[cfg(feature = "board-swift_sfx14_41g")]
+fn usb_ready(_usb: &UsbKbd) -> bool {
+    UsbKbd::ready()
+}
+
+#[cfg(not(feature = "board-swift_sfx14_41g"))]
+fn poll_usb(usb: &mut UsbKbd, buf: &mut [u8]) -> usize {
+    usb.poll(buf)
+}
+
+#[cfg(feature = "board-swift_sfx14_41g")]
+fn poll_usb(_usb: &mut UsbKbd, buf: &mut [u8]) -> usize {
+    UsbKbd::poll(buf)
+}
+
+#[cfg(not(feature = "board-swift_sfx14_41g"))]
+fn ack_usb(usb: &mut UsbKbd) {
+    usb.ack_irq();
+}
+
+#[cfg(feature = "board-swift_sfx14_41g")]
+fn ack_usb(_usb: &mut UsbKbd) {
+    UsbKbd::ack_irq();
 }

@@ -33,7 +33,7 @@ fn bytes<T>(value: &T) -> Vec<u8> {
 fn queue_regions_hold_the_descriptor_array() {
     let used = size_of::<lerux_sddf::net_queue_t>()
         + size_of::<lerux_sddf::net_buff_desc_t>() * usize::from(NET_QUEUE_CAPACITY);
-    assert!(used <= NET_QUEUE_REGION_SIZE as usize);
+    assert!(used <= usize::try_from(NET_QUEUE_REGION_SIZE).expect("queue region fits"));
     assert_eq!(
         NET_DATA_SIZE,
         u64::from(NET_QUEUE_CAPACITY) * u64::from(NET_BUFFER_SIZE)

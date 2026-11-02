@@ -13,6 +13,7 @@ pub struct SockFd(u8);
 
 impl SockFd {
     /// The one socket this client stores.
+    #[must_use]
     pub fn number(self) -> i32 {
         i32::from(self.0)
     }
@@ -26,15 +27,40 @@ impl SockFd {
 pub trait Tcp {
     fn start(&mut self);
     fn poll(&mut self) -> bool;
+
+    /// Start a connection to `addr` on `port`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the pipe cannot start that connection.
     fn connect(&mut self, addr: [u8; 4], port: u16) -> Result<(), Errno>;
     fn ready(&self) -> bool;
     fn failed(&self) -> bool;
+
+    /// Queue `data` and return how many bytes the pipe accepted.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Errno::EAGAIN`] when the connection is open and no byte fits.
+    /// Returns another error when the pipe cannot send.
     fn send(&mut self, data: &[u8]) -> Result<usize, Errno>;
+
+    /// Copy waiting bytes into `buf`. `Ok(0)` means the peer closed.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Errno::EAGAIN`] when the peer is open and no byte is waiting.
+    /// Returns another error when the pipe cannot receive.
     fn recv(&mut self, buf: &mut [u8]) -> Result<usize, Errno>;
 
     /// Bind this pipe to `port` and wait for one peer.
     ///
     /// A pipe that only connects returns [`Errno::EOPNOTSUPP`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Errno::EOPNOTSUPP`] when the pipe does not listen. An
+    /// implementation may return [`Errno::EADDRINUSE`] when `port` is already bound.
     fn listen(&mut self, _port: u16) -> Result<(), Errno> {
         Err(Errno(Errno::EOPNOTSUPP))
     }
@@ -43,6 +69,11 @@ pub trait Tcp {
     ///
     /// The default has nothing to drain. A stack that still holds bytes returns
     /// `Ok(false)` until [`Tcp::poll`] has moved them.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the pipe cannot finish the connection. The default
+    /// returns `Ok(true)`.
     fn shutdown(&mut self) -> Result<bool, Errno> {
         Ok(true)
     }
@@ -78,6 +109,10 @@ impl<T: Tcp> Sockets<T> {
     }
 
     /// Allocate the one socket. The number is 3.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Errno::EMFILE`] when a socket is already open.
     pub fn socket(&mut self) -> Result<SockFd, Errno> {
         if !matches!(self.phase, Phase::Empty) {
             return Err(Errno(Errno::EMFILE));
@@ -87,6 +122,14 @@ impl<T: Tcp> Sockets<T> {
     }
 
     /// Connect `fd` and wait until the pipe is ready.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Errno::EBADF`] for an unknown socket, [`Errno::EISCONN`] when
+    /// a connection is already open or in progress, [`Errno::EINVAL`] while
+    /// listening, and [`Errno::ENOTCONN`] when the socket is closed. The pipe's
+    /// connect error is returned as-is. Waiting returns [`Errno::ECONNREFUSED`]
+    /// when the pipe fails and [`Errno::ETIMEDOUT`] when the budget runs out.
     pub fn connect(&mut self, fd: SockFd, addr: [u8; 4], port: u16) -> Result<(), Errno> {
         self.live(fd)?;
         match self.phase {
@@ -102,6 +145,11 @@ impl<T: Tcp> Sockets<T> {
     }
 
     /// Bind `fd` to `port`. The socket stays one entry. The peer arrives later.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Errno::EBADF`] for an unknown socket and [`Errno::EINVAL`] when
+    /// the socket is not idle. The pipe's listen error is returned as-is.
     pub fn listen(&mut self, fd: SockFd, port: u16) -> Result<(), Errno> {
         self.live(fd)?;
         if !matches!(self.phase, Phase::Idle) {
@@ -113,6 +161,12 @@ impl<T: Tcp> Sockets<T> {
     }
 
     /// Wait until the peer of a listening socket is connected.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Errno::EBADF`] for an unknown socket and [`Errno::EINVAL`] when
+    /// the socket is not listening. Waiting returns [`Errno::ECONNREFUSED`] when
+    /// the pipe fails and [`Errno::ETIMEDOUT`] when the budget runs out.
     pub fn accept(&mut self, fd: SockFd) -> Result<(), Errno> {
         self.live(fd)?;
         if !matches!(self.phase, Phase::Listening) {
@@ -123,6 +177,12 @@ impl<T: Tcp> Sockets<T> {
     }
 
     /// Send `data` on an open socket. An empty slice sends nothing.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Errno::EBADF`] for an unknown socket and [`Errno::ENOTCONN`]
+    /// when the socket is not open. Returns [`Errno::ETIMEDOUT`] when the budget
+    /// runs out, and any send error other than [`Errno::EAGAIN`].
     pub fn send(&mut self, fd: SockFd, mut data: &[u8]) -> Result<usize, Errno> {
         self.open(fd)?;
         if data.is_empty() {
@@ -151,6 +211,13 @@ impl<T: Tcp> Sockets<T> {
     /// Finish an open socket and leave the table closed.
     ///
     /// This does not abort. [`Self::close`] aborts and frees the entry.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Errno::EBADF`] for an unknown socket and [`Errno::ENOTCONN`]
+    /// when the socket is not open. Returns [`Errno::ETIMEDOUT`] when the budget
+    /// runs out, or the pipe's shutdown error. Either failure still leaves the
+    /// table closed.
     pub fn shutdown(&mut self, fd: SockFd) -> Result<(), Errno> {
         self.open(fd)?;
         self.tcp.start();
@@ -175,6 +242,10 @@ impl<T: Tcp> Sockets<T> {
     }
 
     /// Drop `fd` and let the next [`Self::socket`] allocate again.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Errno::EBADF`] for an unknown socket or one that is already closed.
     pub fn close(&mut self, fd: SockFd) -> Result<(), Errno> {
         self.live(fd)?;
         if matches!(self.phase, Phase::Empty) {
@@ -186,6 +257,12 @@ impl<T: Tcp> Sockets<T> {
     }
 
     /// Receive at least one byte, or `Ok(0)` when the peer has closed.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Errno::EBADF`] for an unknown socket and [`Errno::ENOTCONN`]
+    /// when the socket is not open. Returns [`Errno::ETIMEDOUT`] when the budget
+    /// runs out, and any receive error other than [`Errno::EAGAIN`].
     pub fn recv(&mut self, fd: SockFd, buf: &mut [u8]) -> Result<usize, Errno> {
         self.open(fd)?;
         if buf.is_empty() {

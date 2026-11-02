@@ -42,6 +42,10 @@ static LOGGER: Logger = LoggerBuilder::const_default()
     .build();
 
 /// Route log output through the serial driver PD on `channel`.
+///
+/// # Errors
+///
+/// Returns [`SetLoggerError`] when a logger is already installed.
 pub fn init(channel: Channel) -> Result<(), SetLoggerError> {
     // SAFETY: called once from the PD entry point before other threads run.
     unsafe {

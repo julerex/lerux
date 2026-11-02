@@ -113,6 +113,7 @@ heapless = { version = "0.9", default-features = false }
 
 [workspace.lints.clippy]
 all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
 redundant_clone = "warn"
 needless_collect = "warn"
 large_enum_variant = "warn"

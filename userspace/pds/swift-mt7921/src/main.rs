@@ -70,7 +70,7 @@ fn init() -> HandlerImpl {
     }
     let regs = memory_region_symbol!(mt7921_regs_vaddr: *mut u8).as_ptr();
     let dma = memory_region_symbol!(wifi_dma_vaddr: *mut u8).as_ptr();
-    let mac = Mac::boot(regs, dma, images);
+    let mac = Mac::boot(regs, dma, &images);
     paint_stage(mac.stage());
     HandlerImpl { mac: Some(mac) }
 }
@@ -85,7 +85,8 @@ fn paint(text: &[u8]) {
     let mode = memory_region_symbol!(mode_record_vaddr: *mut u8).as_ptr();
     let frame = memory_region_symbol!(fb_vaddr: *mut u8).as_ptr();
     let record = unsafe { core::slice::from_raw_parts(mode, 40) };
-    let frame = unsafe { core::slice::from_raw_parts_mut(frame, FRAMEBUFFER_BYTES as usize) };
+    let bytes = usize::try_from(FRAMEBUFFER_BYTES).expect("framebuffer fits");
+    let frame = unsafe { core::slice::from_raw_parts_mut(frame, bytes) };
     paint_row(record, frame, ROW, text);
 }
 

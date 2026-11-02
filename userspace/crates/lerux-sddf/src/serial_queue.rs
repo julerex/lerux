@@ -37,6 +37,7 @@ pub unsafe fn serial_queue_init(
 /// # Safety
 ///
 /// Same pointer rules as [`serial_queue_init`]. The caller is the producer.
+#[must_use]
 pub unsafe fn serial_queue_length_producer(queue_handle: &serial_queue_handle_t) -> u32 {
     unsafe {
         let tail = (*queue_handle.queue).tail.load(Ordering::Relaxed);
@@ -48,6 +49,7 @@ pub unsafe fn serial_queue_length_producer(queue_handle: &serial_queue_handle_t)
 /// # Safety
 ///
 /// Same pointer rules as [`serial_queue_init`]. The caller is the producer.
+#[must_use]
 pub unsafe fn serial_queue_free(queue_handle: &serial_queue_handle_t) -> u32 {
     unsafe { queue_handle.capacity - serial_queue_length_producer(queue_handle) }
 }
@@ -55,6 +57,7 @@ pub unsafe fn serial_queue_free(queue_handle: &serial_queue_handle_t) -> u32 {
 /// # Safety
 ///
 /// Same pointer rules as [`serial_queue_init`]. The caller is the consumer.
+#[must_use]
 pub unsafe fn serial_queue_length_consumer(queue_handle: &serial_queue_handle_t) -> u32 {
     unsafe {
         let tail = load_acquire(&(*queue_handle.queue).tail);
@@ -66,6 +69,7 @@ pub unsafe fn serial_queue_length_consumer(queue_handle: &serial_queue_handle_t)
 /// # Safety
 ///
 /// Same pointer rules as [`serial_queue_init`]. The caller is the producer.
+#[must_use]
 pub unsafe fn serial_queue_empty(queue_handle: &serial_queue_handle_t, local_head: u32) -> bool {
     unsafe {
         let tail = load_acquire(&(*queue_handle.queue).tail);
@@ -76,6 +80,7 @@ pub unsafe fn serial_queue_empty(queue_handle: &serial_queue_handle_t, local_hea
 /// # Safety
 ///
 /// Same pointer rules as [`serial_queue_init`]. The caller is the producer.
+#[must_use]
 pub unsafe fn serial_queue_full(queue_handle: &serial_queue_handle_t, local_tail: u32) -> bool {
     unsafe {
         let head = load_acquire(&(*queue_handle.queue).head);
@@ -86,6 +91,7 @@ pub unsafe fn serial_queue_full(queue_handle: &serial_queue_handle_t, local_tail
 /// # Safety
 ///
 /// Same pointer rules as [`serial_queue_init`]. The caller is the producer.
+#[must_use]
 pub unsafe fn serial_enqueue(queue_handle: &serial_queue_handle_t, character: u8) -> i32 {
     unsafe {
         let tail = (*queue_handle.queue).tail.load(Ordering::Relaxed);
@@ -191,9 +197,14 @@ pub unsafe fn serial_cancel_consumer_signal(queue_handle: &serial_queue_handle_t
 /// `connection.queue.vaddr` and `connection.data.vaddr` must point at shared
 /// memory mapped in this protection domain. `connection.data.size` must be
 /// non-zero and fit in `u32`.
+#[must_use]
 pub unsafe fn serial_handle_from_connection(
     connection: &serial_connection_resource_t,
 ) -> serial_queue_handle_t {
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "the caller guarantees data.size fits in u32"
+    )]
     let capacity = connection.data.size as u32;
     debug_assert_eq!(u64::from(capacity), connection.data.size);
     debug_assert_ne!(capacity, 0);
@@ -216,6 +227,7 @@ pub unsafe fn serial_handle_from_connection(
 /// # Safety
 ///
 /// Same pointer rules as [`serial_queue_init`]. The caller is the consumer.
+#[must_use]
 pub unsafe fn serial_require_consumer_signal(queue_handle: &serial_queue_handle_t) -> bool {
     unsafe {
         fence(Ordering::SeqCst);

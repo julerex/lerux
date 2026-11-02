@@ -153,8 +153,8 @@ fn want_graphic_window(qemu: &QemuConfig, graphic: bool) -> bool {
         return false;
     }
     match std::env::var("LERUX_QEMU_GRAPHIC").as_deref() {
-        Ok("0") | Ok("false") | Ok("no") => false,
-        Ok("1") | Ok("true") | Ok("yes") => true,
+        Ok("0" | "false" | "no") => false,
+        Ok("1" | "true" | "yes") => true,
         _ => std::env::var("DISPLAY").is_ok() || std::env::var("WAYLAND_DISPLAY").is_ok(),
     }
 }

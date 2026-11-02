@@ -145,10 +145,10 @@ pub fn fetch_sdk(root: &Path) -> Result<()> {
         .ok()
         .map(|text| text.trim().to_string());
     let current = installed.as_deref() == Some(version.as_str()) && dest.join("bin").is_dir();
-    if !current {
-        download_sdk(&dest, &url, &version, installed.as_deref())?;
-    } else {
+    if current {
         eprintln!("==> SDK {version} already present at {}", dest.display());
+    } else {
+        download_sdk(&dest, &url, &version, installed.as_deref())?;
     }
 
     let sdk_path_file = root.join("deps/.sdk-path");

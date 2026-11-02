@@ -22,21 +22,21 @@ impl IoPortCam {
     }
 
     fn ioport_cap(&self) -> u64 {
-        BASE_IOPORT_CAP + self.ioport_id as u64
+        BASE_IOPORT_CAP + u64::from(self.ioport_id)
     }
 
     fn config_address(device: DeviceFunction, register_offset: u8) -> u32 {
         0x8000_0000
-            | ((device.bus as u32) << 16)
-            | ((device.device as u32) << 11)
-            | ((device.function as u32) << 8)
-            | (register_offset as u32 & 0xfc)
+            | (u32::from(device.bus) << 16)
+            | (u32::from(device.device) << 11)
+            | (u32::from(device.function) << 8)
+            | (u32::from(register_offset) & 0xfc)
     }
 
     fn out32(&self, port: u16, value: u32) {
         with_ipc_buffer_mut(|ipc| {
             ipc.inner_mut()
-                .seL4_X86_IOPort_Out32(self.ioport_cap(), port.into(), value as u64);
+                .seL4_X86_IOPort_Out32(self.ioport_cap(), port.into(), u64::from(value));
         });
     }
 

@@ -32,6 +32,7 @@ pub struct E1000eMap {
     pub dma_region: &'static str,
 }
 
+#[must_use]
 pub const fn e1000e_map() -> E1000eMap {
     E1000eMap {
         regs_vaddr: REGS_PADDR.value(),
@@ -60,15 +61,21 @@ pub struct RejectedId {
 }
 
 impl UnclaimedNic {
+    #[must_use]
     pub const fn compiled() -> Self {
         Self(PciAddress::new(0, 4, 0))
     }
 
+    #[must_use]
     pub const fn address(self) -> PciAddress {
         self.0
     }
 
     /// Vendor and device only. There is no class argument.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RejectedId`] when `vendor` and `device` are not the QEMU 82574 id.
     pub const fn claim(self, vendor: u16, device: u16) -> Result<ClaimedNic, RejectedId> {
         if vendor == QEMU_82574.0 && device == QEMU_82574.1 {
             Ok(ClaimedNic(self.0))
@@ -79,6 +86,7 @@ impl UnclaimedNic {
 }
 
 impl ClaimedNic {
+    #[must_use]
     pub const fn address(self) -> PciAddress {
         self.0
     }

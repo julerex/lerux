@@ -13,6 +13,7 @@ pub enum FirmwareKind {
     Unsupported,
 }
 
+#[must_use]
 pub fn firmware_kind(chip: u32) -> FirmwareKind {
     match chip {
         0x7922 | 0x7925 => FirmwareKind::Unsupported,
@@ -92,6 +93,7 @@ pub enum Map {
 }
 
 /// `__mt7921_reg_addr`. The fixed windows are the table in `mt7921/pci.c`.
+#[must_use]
 pub fn map_reg(addr: u32) -> Map {
     if addr < 0x10_0000 {
         return Map::Direct(addr);
@@ -231,11 +233,13 @@ pub const TXD_LEN: usize = 32;
 pub const TXP_LEN: usize = 32;
 pub const DESC_LEN: usize = 16;
 
+#[must_use]
 pub fn ring_regs(base: u32, idx: u32) -> u32 {
     base + idx * RING_STRIDE
 }
 
 /// `PREFETCH(base, depth)` values `mt792x_dma_prefetch` writes for MT7921.
+#[must_use]
 pub fn prefetch() -> [(u32, u32); 14] {
     const fn word(base: u32, depth: u32) -> u32 {
         (base << 16) | depth
@@ -279,19 +283,23 @@ pub const EXT_CID: u32 = 0xed;
 const CE: u32 = 1 << 18;
 const QUERY: u32 = 1 << 16;
 
+#[must_use]
 pub fn ext_cmd(id: u32) -> u32 {
     EXT_CID | (id << 8)
 }
 
+#[must_use]
 pub fn ext_query(id: u32) -> u32 {
     ext_cmd(id) | QUERY
 }
 
+#[must_use]
 pub fn ce_cmd(id: u32) -> u32 {
     id | CE
 }
 
 /// `mt76_connac_mcu_init_download` command choice for MT7921.
+#[must_use]
 pub fn download_cmd(addr: u32) -> u32 {
     if addr == 0x20_0000 || addr == 0x90_0000 {
         PATCH_START
@@ -423,6 +431,22 @@ fn ram_mode(feature: u8) -> u32 {
     mode
 }
 
+fn low_u16(value: usize) -> u16 {
+    u16::try_from(value & 0xffff).expect("low 16 bits")
+}
+
+fn fit_u32(value: usize) -> u32 {
+    u32::try_from(value).expect("length fits in u32")
+}
+
+fn fit_u16(value: usize) -> u16 {
+    u16::try_from(value).expect("length fits in u16")
+}
+
+fn fit_u8(value: usize) -> u8 {
+    u8::try_from(value).expect("length fits in a byte")
+}
+
 /// Hardware TXD plus the connac2 MCU header. Payload follows at [`MCU_TXD_LEN`].
 pub fn write_mcu_txd(buf: &mut [u8], cmd: u32, seq: u8, payload: usize) -> bool {
     if buf.len() < MCU_TXD_LEN {
@@ -430,11 +454,11 @@ pub fn write_mcu_txd(buf: &mut [u8], cmd: u32, seq: u8, payload: usize) -> bool 
     }
     buf[..MCU_TXD_LEN].fill(0);
     let total = MCU_TXD_LEN + payload;
-    let tx0 = (total as u32 & 0xffff) | (2 << 23) | (0x20 << 25);
+    let tx0 = u32::from(low_u16(total)) | (2 << 23) | (0x20 << 25);
     let tx1: u32 = 1 << 31 | (1 << 16);
     buf[..4].copy_from_slice(&tx0.to_le_bytes());
     buf[4..8].copy_from_slice(&tx1.to_le_bytes());
-    let body = payload as u16;
+    let body = low_u16(payload);
     buf[32..34].copy_from_slice(&body.to_le_bytes());
     let port = 1u16;
     let queue = 0x20u16;
@@ -445,7 +469,7 @@ pub fn write_mcu_txd(buf: &mut [u8], cmd: u32, seq: u8, payload: usize) -> bool 
     let ext = ((cmd >> 8) & 0xff) as u8;
     let ce = cmd & CE != 0;
     if ext != 0 || ce {
-        buf[38] = if cmd & QUERY != 0 { 0 } else { 1 };
+        buf[38] = u8::from(cmd & QUERY == 0);
         buf[43] = u8::from(ext != 0);
     } else {
         buf[38] = 3;
@@ -456,15 +480,18 @@ pub fn write_mcu_txd(buf: &mut [u8], cmd: u32, seq: u8, payload: usize) -> bool 
     true
 }
 
+#[must_use]
 pub fn rxd_seq(buf: &[u8]) -> Option<u8> {
     buf.get(29).copied()
 }
 
+#[must_use]
 pub fn rxd_eid(buf: &[u8]) -> Option<u8> {
     buf.get(28).copied()
 }
 
 /// Status byte `mt7921_mcu_parse_response` reads for the patch semaphore.
+#[must_use]
 pub fn patch_status(buf: &[u8]) -> Option<u8> {
     buf.get(32).copied()
 }
@@ -480,6 +507,31 @@ const SCAN_CH: usize = 2;
 /// Byte length of `mt76_connac_hw_scan_req`.
 pub const SCAN_REQ_LEN: usize = 1186;
 
+/// `(band, channel)` pairs in `mt76_connac_hw_scan_req`. Band 1 is 2.4 GHz.
+const SCAN_CHANNELS: &[(u8, u8)] = &[
+    (1, 1),
+    (1, 2),
+    (1, 3),
+    (1, 4),
+    (1, 5),
+    (1, 6),
+    (1, 7),
+    (1, 8),
+    (1, 9),
+    (1, 10),
+    (1, 11),
+    (1, 12),
+    (1, 13),
+    (2, 36),
+    (2, 40),
+    (2, 44),
+    (2, 48),
+    (2, 149),
+    (2, 153),
+    (2, 157),
+    (2, 161),
+];
+
 /// Active scan for one SSID. Layout is `mt76_connac_hw_scan_req` in Linux v6.8.
 pub fn write_scan(out: &mut [u8], ssid: &[u8], seq: u8) -> bool {
     if out.len() < SCAN_REQ_LEN || ssid.is_empty() || ssid.len() > 32 {
@@ -493,35 +545,12 @@ pub fn write_scan(out: &mut [u8], ssid: &[u8], seq: u8) -> bool {
     out[5] = 2;
     out[6] = 1 << 5;
     out[7] = 1;
-    out[8..12].copy_from_slice(&(ssid.len() as u32).to_le_bytes());
+    out[8..12].copy_from_slice(&fit_u32(ssid.len()).to_le_bytes());
     out[12..12 + ssid.len()].copy_from_slice(ssid);
-    let channels: &[(u8, u8)] = &[
-        (1, 1),
-        (1, 2),
-        (1, 3),
-        (1, 4),
-        (1, 5),
-        (1, 6),
-        (1, 7),
-        (1, 8),
-        (1, 9),
-        (1, 10),
-        (1, 11),
-        (1, 12),
-        (1, 13),
-        (2, 36),
-        (2, 40),
-        (2, 44),
-        (2, 48),
-        (2, 149),
-        (2, 153),
-        (2, 157),
-        (2, 161),
-    ];
     let base = 8 + 4 * SCAN_SSID + 6;
     out[base] = 4;
-    out[base + 1] = channels.len() as u8;
-    for (i, (band, ch)) in channels.iter().enumerate() {
+    out[base + 1] = fit_u8(SCAN_CHANNELS.len());
+    for (i, (band, ch)) in SCAN_CHANNELS.iter().enumerate() {
         let at = base + 2 + i * SCAN_CH;
         out[at] = *band;
         out[at + 1] = *ch;
@@ -544,18 +573,29 @@ pub fn write_txwi(txwi: &mut [u8], frame: &[u8], frame_phys: u32) -> bool {
         return false;
     }
     txwi[..TXD_LEN + TXP_LEN].fill(0);
+    write_txd(txwi, frame);
+    txwi[32..34].copy_from_slice(&0x8000u16.to_le_bytes());
+    txwi[40..44].copy_from_slice(&frame_phys.to_le_bytes());
+    let len = fit_u16(frame.len()) | 0x8000;
+    txwi[44..46].copy_from_slice(&len.to_le_bytes());
+    true
+}
+
+/// TXD words before the TXP buffer pointer. `frame` is at least 24 bytes.
+fn write_txd(txwi: &mut [u8], frame: &[u8]) {
     let total = frame.len() + TXD_LEN;
     let q = 0x10u32;
-    let tx0 = (total as u32 & 0xffff) | (2 << 23) | (q << 25);
+    let tx0 = u32::from(low_u16(total)) | (2 << 23) | (q << 25);
     txwi[..4].copy_from_slice(&tx0.to_le_bytes());
     let fc = u16::from_le_bytes([frame[0], frame[1]]);
-    let fc_type = u32::from((fc & 0x000c) >> 2);
-    let fc_stype = u32::from((fc & 0x00f0) >> 4);
+    let fc_kind = u32::from((fc & 0x000c) >> 2);
+    let subtype = u32::from((fc & 0x00f0) >> 4);
     let hdr = header_len(frame);
-    let tx1 = (1u32 << 31) | ((hdr / 2) as u32) << 11 | (2 << 16);
+    let words = u32::try_from(hdr / 2).expect("header words");
+    let tx1 = (1u32 << 31) | (words << 11) | (2 << 16);
     txwi[4..8].copy_from_slice(&tx1.to_le_bytes());
     let multicast = frame[4] & 1 != 0;
-    let mut tx2 = (fc_type << 4) | fc_stype;
+    let mut tx2 = (fc_kind << 4) | subtype;
     if multicast {
         tx2 |= 1 << 10;
     }
@@ -576,13 +616,8 @@ pub fn write_txwi(txwi: &mut [u8], frame: &[u8], frame_phys: u32) -> bool {
         tx3 |= 1 << 28;
     }
     txwi[12..16].copy_from_slice(&tx3.to_le_bytes());
-    let tx7 = (fc_type << 20) | (fc_stype << 16);
+    let tx7 = (fc_kind << 20) | (subtype << 16);
     txwi[28..32].copy_from_slice(&tx7.to_le_bytes());
-    txwi[32..34].copy_from_slice(&0x8000u16.to_le_bytes());
-    txwi[40..44].copy_from_slice(&frame_phys.to_le_bytes());
-    let len = (frame.len() as u16) | 0x8000;
-    txwi[44..46].copy_from_slice(&len.to_le_bytes());
-    true
 }
 
 fn header_len(frame: &[u8]) -> usize {
@@ -594,6 +629,7 @@ fn header_len(frame: &[u8]) -> usize {
 }
 
 /// Skip the connac2 RXD groups the way `mt7921_mac_fill_rx` does.
+#[must_use]
 pub fn frame_off(buf: &[u8]) -> Option<usize> {
     if buf.len() < 24 {
         return None;
@@ -625,6 +661,7 @@ pub fn frame_off(buf: &[u8]) -> Option<usize> {
     }
 }
 
+#[must_use]
 pub fn desc_ctrl(len: u32, last: bool) -> u32 {
     let mut ctrl = len & 0x3fff;
     if last {
@@ -640,13 +677,14 @@ pub fn write_key(page: &mut [u8], ssid: &[u8], psk: &[u8]) -> bool {
     }
     page[..128].fill(0);
     page[0] = 1;
-    page[1] = ssid.len() as u8;
-    page[2] = psk.len() as u8;
+    page[1] = fit_u8(ssid.len());
+    page[2] = fit_u8(psk.len());
     page[4..4 + ssid.len()].copy_from_slice(ssid);
     page[36..36 + psk.len()].copy_from_slice(psk);
     true
 }
 
+#[must_use]
 pub fn read_key(page: &[u8]) -> Option<(&[u8], &[u8])> {
     if page.len() < 128 || page[0] != 1 {
         return None;
@@ -694,6 +732,7 @@ pub fn write_efuse_read(out: &mut [u8]) {
     out[..4].fill(0);
 }
 
+#[must_use]
 pub fn efuse_mac(buf: &[u8]) -> Option<[u8; 6]> {
     let data = buf.get(RXD_LEN..)?;
     if data.len() < 8 + 16 {
@@ -708,6 +747,7 @@ pub fn efuse_mac(buf: &[u8]) -> Option<[u8; 6]> {
     }
 }
 
+#[must_use]
 pub fn wtbl_word(idx: u32) -> u32 {
     (idx & 0x3ff) | (1 << 12)
 }

@@ -17,6 +17,7 @@ pub struct PixelLine {
 }
 
 impl PixelLine {
+    #[must_use]
     pub fn as_bytes(&self) -> &[u8] {
         &self.bytes
     }
@@ -48,6 +49,12 @@ impl PaintedPage {
     ///
     /// The sample is the first pixel that is not opaque white, in row-major
     /// order, taken after alpha is set.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`FrameError::Utf8`] when `html` is not UTF-8. Returns
+    /// [`FrameError::Blank`] when the bitmap cannot be built or every pixel is
+    /// opaque white.
     pub fn render(html: &[u8]) -> Result<Self, FrameError> {
         let text = core::str::from_utf8(html).map_err(|_| FrameError::Utf8)?;
         let mut bytes = vec![0u8; Self::BYTES];
@@ -59,19 +66,23 @@ impl PaintedPage {
         Ok(Self { bytes, line })
     }
 
+    #[must_use]
     pub fn width(&self) -> u32 {
         Self::WIDTH
     }
 
+    #[must_use]
     pub fn height(&self) -> u32 {
         Self::HEIGHT
     }
 
     /// Tightly packed BGRA. Length is [`Self::BYTES`].
+    #[must_use]
     pub fn bytes(&self) -> &[u8] {
         &self.bytes
     }
 
+    #[must_use]
     pub fn pixel_line(&self) -> &PixelLine {
         &self.line
     }

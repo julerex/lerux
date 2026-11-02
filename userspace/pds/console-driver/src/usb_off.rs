@@ -7,13 +7,13 @@ impl UsbKbd {
         Self
     }
 
-    pub fn ready(&self) -> bool {
+    pub fn ready() -> bool {
         false
     }
 
-    pub fn poll(&mut self, _buf: &mut [u8]) -> usize {
+    pub fn poll(_buf: &mut [u8]) -> usize {
         0
     }
 
-    pub fn ack_irq(&mut self) {}
+    pub fn ack_irq() {}
 }

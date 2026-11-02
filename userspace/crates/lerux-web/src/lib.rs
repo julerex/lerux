@@ -1,6 +1,6 @@
 //! CSS subset, block-flow layout, and RGB888 paint for `web-content` (Phase 75).
 //!
-//! `#![no_std]` + `alloc`. Not Servo, not Ladybird LibWeb. Supported properties:
+//! `#![no_std]` + `alloc`. Not Servo, not Ladybird `LibWeb`. Supported properties:
 //! `color`, `background-color`, `font-size`, `display: block|inline|none`,
 //! `margin`, `padding`, `width`. Author `<style>` plus a tiny UA sheet.
 
@@ -29,11 +29,16 @@ pub const PAINT_FIXTURE: &str = include_str!("../../../../support/browser/paint.
 /// Parse, lay out, and paint `html` into `bitmap`.
 pub(crate) fn render(html: &str, bitmap: &mut Bitmap<'_>) {
     let doc = lerux_html::parse(html);
+    #[expect(
+        clippy::cast_possible_wrap,
+        reason = "a bitmap side above i32::MAX wraps; layout keeps that coordinate"
+    )]
     let tree = layout_document(&doc, bitmap.width() as i32, bitmap.height() as i32);
     paint_tree(&tree, bitmap);
 }
 
 /// Visible body text with whitespace collapsed (agent `Browse` result).
+#[must_use]
 pub fn visible_text(html: &str) -> alloc::string::String {
     let doc = lerux_html::parse(html);
     let Some(body) = doc.first_element(lerux_html::TagName::Body) else {

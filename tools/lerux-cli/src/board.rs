@@ -24,12 +24,16 @@ pub enum NetMode {
     None,
     /// virtio-net on QEMU user networking.
     User,
-    /// virtio-net with hostfwd tcp::18080-:8080.
+    /// virtio-net with hostfwd `tcp::18080-:8080`.
     Hostfwd,
 }
 
 /// Per-board QEMU launch description. Boards without a `qemu` key are
 /// hardware-only (image build + optional hw-serial smoke).
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "boards.toml qemu table uses one bool per launch flag"
+)]
 #[derive(Debug, Clone, Default, Deserialize, serde::Serialize)]
 pub struct QemuConfig {
     #[serde(default)]
@@ -71,6 +75,10 @@ pub struct QemuConfig {
 #[derive(Debug, Clone, Deserialize, serde::Serialize)]
 pub struct Board {
     pub arch: String,
+    #[expect(
+        clippy::struct_field_names,
+        reason = "microkit_board is the boards.toml key"
+    )]
     pub microkit_board: String,
     pub target: String,
     pub template: String,
@@ -81,7 +89,7 @@ pub struct Board {
     /// list in `.github/workflows/rust.yml`, not this flag.
     #[serde(default)]
     pub ci: bool,
-    /// Expected substring for a host curl of http://127.0.0.1:18080/ after boot.
+    /// Expected substring for a host curl of <http://127.0.0.1:18080>/ after boot.
     #[serde(default)]
     pub curl_expect: Option<String>,
     pub system_vars: BTreeMap<String, TomlValue>,
@@ -196,7 +204,7 @@ mod tests {
     }
 
     #[test]
-    fn swift_image_maps_the_panel_and_skips_serial() {
+    fn swift_image_maps_the_panel() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let xml = crate::system::render_system(&root, "swift_sfx14_41g").expect("swift sdf");
         assert!(xml.contains("phys_addr=\"0x1fe0000\""));
@@ -209,8 +217,6 @@ mod tests {
         assert!(xml.contains("phys_addr=\"0xd1200000\""));
         assert!(xml.contains("phys_addr=\"0xfc82000000\""));
         assert!(xml.contains("vaddr=\"0x82000000\""));
-        assert!(!xml.contains("phys_addr=\"0x82000000\""));
-        assert!(!xml.contains("phys_addr=\"0xfd000000\""));
         assert!(xml.contains("phys_addr=\"0x1f00000\""));
         assert!(xml.contains("phys_addr=\"0x1f20000\""));
         assert!(xml.contains("name=\"wifi_dma\""));
@@ -219,11 +225,6 @@ mod tests {
         assert!(xml.contains("name=\"wifi_key\""));
         assert!(xml.contains("phys_addr=\"0x1fd0000\""));
         assert!(xml.contains("vaddr=\"0x1fd0000\""));
-        assert!(!xml.contains("phys_addr=\"0xf8000000\""));
-        assert!(!xml.contains("phys_addr=\"0xfc000000\""));
-        assert!(!xml.contains("phys_addr=\"0xfa000000\""));
-        assert!(!xml.contains("phys_addr=\"0xf9000000\""));
-        assert!(!xml.contains("phys_addr=\"0xfb000000\""));
         assert_eq!(xml.matches("addr=\"0xcf8\"").count(), 1);
         assert!(xml.contains("addr=\"0x60\""));
         assert!(xml.contains("addr=\"0x64\""));
@@ -239,6 +240,19 @@ mod tests {
         assert!(xml.contains("pcidev=\"02:00.0\""));
         assert!(xml.contains("pcidev=\"04:00.3\""));
         assert!(xml.contains("pcidev=\"04:00.4\""));
+    }
+
+    #[test]
+    fn swift_image_skips_serial() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let xml = crate::system::render_system(&root, "swift_sfx14_41g").expect("swift sdf");
+        assert!(!xml.contains("phys_addr=\"0x82000000\""));
+        assert!(!xml.contains("phys_addr=\"0xfd000000\""));
+        assert!(!xml.contains("phys_addr=\"0xf8000000\""));
+        assert!(!xml.contains("phys_addr=\"0xfc000000\""));
+        assert!(!xml.contains("phys_addr=\"0xfa000000\""));
+        assert!(!xml.contains("phys_addr=\"0xf9000000\""));
+        assert!(!xml.contains("phys_addr=\"0xfb000000\""));
         assert!(!xml.contains("serial-driver"));
         let boards = load_boards(&root).unwrap();
         let board = boards.get("swift_sfx14_41g").unwrap();

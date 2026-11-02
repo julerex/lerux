@@ -274,16 +274,20 @@ fn riscv_gcc_ok() -> bool {
     let output = run_checked("riscv64-unknown-elf-gcc", &["-dumpversion"]).ok();
     output
         .and_then(|o| String::from_utf8(o.stdout).ok())
-        .and_then(|v| v.trim().split('.').next().map(|s| s.to_string()))
+        .and_then(|v| {
+            v.trim()
+                .split('.')
+                .next()
+                .map(std::string::ToString::to_string)
+        })
         .and_then(|s| s.parse::<u32>().ok())
-        .map(|major| major >= 13)
-        .unwrap_or(false)
+        .is_some_and(|major| major >= 13)
 }
 
 fn find_sdk(release: &Path) -> Result<std::path::PathBuf> {
     let mut candidates: Vec<_> = std::fs::read_dir(release)
         .with_context(|| format!("read {}", release.display()))?
-        .filter_map(|e| e.ok())
+        .filter_map(std::result::Result::ok)
         .map(|e| e.path())
         .filter(|p| {
             p.file_name()

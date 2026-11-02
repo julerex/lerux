@@ -2,7 +2,7 @@
 //!
 //! The protection domains paint with [`paint_row`] and call the parsers here.
 //! A missing firmware blob or a controller that does not answer stays an error.
-//! Nothing in this crate formats a disk or sends an NVMe write.
+//! Nothing in this crate formats a disk or sends an `NVMe` write.
 
 #![cfg_attr(not(test), no_std)]
 

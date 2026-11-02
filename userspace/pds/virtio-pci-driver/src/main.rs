@@ -61,7 +61,7 @@ use sel4_virtio_net::DeviceWrapper;
     feature = "board-x86_64_generic_virtio",
     feature = "board-x86_64_generic_blk"
 ))]
-use virtio_drivers::device::blk::*;
+use virtio_drivers::device::blk::{BlkReq, BlkResp, RespStatus, VirtIOBlk};
 #[cfg(any(
     feature = "board-x86_64_generic_virtio",
     feature = "board-x86_64_generic_http",
@@ -138,13 +138,13 @@ fn create_net_handler(
 ) -> NetHandlerImpl<DeviceWrapper<HalImpl, PciTransport>> {
     let net_client_region = create_net_bounce();
     let notify_net_client: fn() = || channels::NET_CLIENT.notify();
-    let net_rx_ring_buffers =
+    let receive_rings =
         RingBuffers::<'_, Use, fn()>::from_ptrs_using_default_initialization_strategy_for_role(
             unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_net_rx_free: *mut _)) },
             unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_net_rx_used: *mut _)) },
             notify_net_client,
         );
-    let net_tx_ring_buffers =
+    let transmit_rings =
         RingBuffers::<'_, Use, fn()>::from_ptrs_using_default_initialization_strategy_for_role(
             unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_net_tx_free: *mut _)) },
             unsafe { SharedMemoryRef::new(memory_region_symbol!(virtio_net_tx_used: *mut _)) },
@@ -160,8 +160,8 @@ fn create_net_handler(
     NetHandlerImpl::new(
         DeviceWrapper::new(net_dev),
         net_client_region,
-        net_rx_ring_buffers,
-        net_tx_ring_buffers,
+        receive_rings,
+        transmit_rings,
         channels::NET_DEVICE,
         channels::NET_CLIENT,
     )

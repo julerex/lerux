@@ -25,7 +25,7 @@ pub mod channels {
     pub const NET_DEVICE: Channel = Channel::new(3);
 }
 
-/// HalImpl region at the base of `virtio_pci_driver_dma`.
+/// `HalImpl` region at the base of `virtio_pci_driver_dma`.
 #[cfg(any(
     feature = "board-x86_64_generic_virtio",
     feature = "board-x86_64_generic_blk"
@@ -122,26 +122,40 @@ pub mod pci {
     ))]
     pub const NET_BAR_PADDRS: &[u64] = &[NET_BAR1_PHYS, NET_BAR4_PHYS];
 
+    #[cfg(any(
+        feature = "board-x86_64_generic_virtio",
+        feature = "board-x86_64_generic_blk",
+        feature = "board-x86_64_generic_http",
+        feature = "board-x86_64_generic_net"
+    ))]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "PCI BAR addresses below 4 GiB fit in usize"
+    )]
+    const fn bar_addr(phys: u64) -> usize {
+        phys as usize
+    }
+
     #[cfg(feature = "board-x86_64_generic_virtio")]
     pub const BAR_REGIONS: &[BarRegion] = &[
         BarRegion {
-            paddr: BLK_BAR1_PHYS as usize,
-            vaddr: BLK_BAR1_PHYS as usize,
+            paddr: bar_addr(BLK_BAR1_PHYS),
+            vaddr: bar_addr(BLK_BAR1_PHYS),
             size: 0x1000,
         },
         BarRegion {
-            paddr: BLK_BAR4_PHYS as usize,
-            vaddr: BLK_BAR4_PHYS as usize,
+            paddr: bar_addr(BLK_BAR4_PHYS),
+            vaddr: bar_addr(BLK_BAR4_PHYS),
             size: 0x4000,
         },
         BarRegion {
-            paddr: NET_BAR1_PHYS as usize,
-            vaddr: NET_BAR1_PHYS as usize,
+            paddr: bar_addr(NET_BAR1_PHYS),
+            vaddr: bar_addr(NET_BAR1_PHYS),
             size: 0x1000,
         },
         BarRegion {
-            paddr: NET_BAR4_PHYS as usize,
-            vaddr: NET_BAR4_PHYS as usize,
+            paddr: bar_addr(NET_BAR4_PHYS),
+            vaddr: bar_addr(NET_BAR4_PHYS),
             size: 0x4000,
         },
     ];
@@ -152,13 +166,13 @@ pub mod pci {
     ))]
     pub const BAR_REGIONS: &[BarRegion] = &[
         BarRegion {
-            paddr: NET_BAR1_PHYS as usize,
-            vaddr: NET_BAR1_PHYS as usize,
+            paddr: bar_addr(NET_BAR1_PHYS),
+            vaddr: bar_addr(NET_BAR1_PHYS),
             size: 0x1000,
         },
         BarRegion {
-            paddr: NET_BAR4_PHYS as usize,
-            vaddr: NET_BAR4_PHYS as usize,
+            paddr: bar_addr(NET_BAR4_PHYS),
+            vaddr: bar_addr(NET_BAR4_PHYS),
             size: 0x4000,
         },
     ];
@@ -166,13 +180,13 @@ pub mod pci {
     #[cfg(feature = "board-x86_64_generic_blk")]
     pub const BAR_REGIONS: &[BarRegion] = &[
         BarRegion {
-            paddr: BLK_BAR1_PHYS as usize,
-            vaddr: BLK_BAR1_PHYS as usize,
+            paddr: bar_addr(BLK_BAR1_PHYS),
+            vaddr: bar_addr(BLK_BAR1_PHYS),
             size: 0x1000,
         },
         BarRegion {
-            paddr: BLK_BAR4_PHYS as usize,
-            vaddr: BLK_BAR4_PHYS as usize,
+            paddr: bar_addr(BLK_BAR4_PHYS),
+            vaddr: bar_addr(BLK_BAR4_PHYS),
             size: 0x4000,
         },
     ];

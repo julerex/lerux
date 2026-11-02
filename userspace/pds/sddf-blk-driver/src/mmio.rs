@@ -23,6 +23,10 @@ use lerux_sddf::blk_image::BLK_VIRTIO_DMA_SIZE;
 pub const VIRTIO_BLK_MMIO_SIZE: usize = 0x200;
 
 #[cfg(not(target_arch = "x86_64"))]
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "virtio-mmio offset fits a guest address"
+)]
 const fn blk_mmio_offset() -> usize {
     match virtio(Arch::TARGET, VirtioRole::Blk) {
         Some(lerux_machine::VirtioAttach::Mmio { offset }) => offset as usize,

@@ -1,4 +1,4 @@
-//! Shared memory structures from LionsOS 0.4.0 and the seL4 Device Driver Framework it pins.
+//! Shared memory structures from `LionsOS` 0.4.0 and the seL4 Device Driver Framework it pins.
 //!
 //! The C headers are the specification. These types use the same names, fields, and
 //! `#[repr(C)]` layout. Guest code does not link the C. A host test compiles the

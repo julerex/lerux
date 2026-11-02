@@ -55,13 +55,13 @@ impl Mac {
         let mut frame = [0u8; 1600];
         for _ in 0..scan_budget() {
             if let Some(n) = self.poll_data()
-                && let Some(m) = copy_frame(self, n, &mut frame)
+                && let Some(m) = copy_frame(n, &mut frame)
                 && let Some(ap) = match_beacon(&frame[..m], ssid)
             {
                 return Some(ap);
             }
             if let Some(n) = self.poll_mcu()
-                && scan_done(self.rx_bytes(n))
+                && scan_done(Mac::rx_bytes(n))
             {
                 return None;
             }
@@ -95,17 +95,17 @@ impl Mac {
     fn four_way(&mut self, ap: &FoundAp, ssid: &[u8], psk: &[u8]) -> Option<[u8; 16]> {
         let sta = self.sta();
         let mut eapol = [0u8; 256];
-        let m = self.wait_eapol(&sta, None, &mut eapol)?;
+        let m = self.wait_eapol(sta, None, &mut eapol)?;
         let (anonce, replay) = message1(&eapol[..m])?;
         let key = pmk(psk, ssid);
         let snonce = snonce();
         let ptk = derive_ptk(&key, &ap.bssid, &sta, &anonce, &snonce);
         let n = message2(&mut eapol, &anonce, &snonce, &replay, &ptk.kck)?;
-        self.send_eapol(&ap.bssid, &sta, &eapol[..n])?;
-        let m = self.wait_eapol(&sta, None, &mut eapol)?;
+        self.send_eapol(ap.bssid, sta, &eapol[..n])?;
+        let m = self.wait_eapol(sta, None, &mut eapol)?;
         let replay = message3(&eapol[..m], &ptk.kck)?;
         let n = message4(&mut eapol, &replay, &ptk.kck)?;
-        self.send_eapol(&ap.bssid, &sta, &eapol[..n])?;
+        self.send_eapol(ap.bssid, sta, &eapol[..n])?;
         Some(ptk.tk)
     }
 
@@ -113,11 +113,11 @@ impl Mac {
         let sta = self.sta();
         let mut ether = [0u8; 400];
         let n = write_discover(&mut ether, &sta);
-        self.send_ether(&ap.bssid, &sta, tk, &ether[..n])?;
-        let (yiaddr, server) = self.wait_dhcp(&sta, tk, 2, &mut ether)?;
+        self.send_ether(ap.bssid, sta, tk, &ether[..n])?;
+        let (yiaddr, server) = self.wait_dhcp(sta, tk, 2, &mut ether)?;
         let n = write_request(&mut ether, &sta, yiaddr, server);
-        self.send_ether(&ap.bssid, &sta, tk, &ether[..n])?;
-        let (addr, _) = self.wait_dhcp(&sta, tk, 5, &mut ether)?;
+        self.send_ether(ap.bssid, sta, tk, &ether[..n])?;
+        let (addr, _) = self.wait_dhcp(sta, tk, 5, &mut ether)?;
         let gateway = dhcp_router(&ether).unwrap_or([addr[0], addr[1], addr[2], 1]);
         Some((addr, gateway))
     }
@@ -126,7 +126,7 @@ impl Mac {
         let sta = self.sta();
         let mut ether = [0u8; 64];
         let n = write_echo(&mut ether, &sta, addr, gateway);
-        if self.send_ether(&ap.bssid, &sta, tk, &ether[..n]).is_none() {
+        if self.send_ether(ap.bssid, sta, tk, &ether[..n]).is_none() {
             return false;
         }
         let mut frame = [0u8; 1600];
@@ -134,7 +134,7 @@ impl Mac {
         let mut rebuilt = [0u8; 400];
         for _ in 0..assoc_budget() {
             if let Some(len) = self.poll_data()
-                && let Some(m) = copy_frame(self, len, &mut frame)
+                && let Some(m) = copy_frame(len, &mut frame)
                 && let Some(body) = msdu(&frame[..m], Some(tk), &mut plain)
                 && let Some(en) = ethernet_from_msdu(body, &sta, &mut rebuilt)
                 && icmp_reply(&rebuilt[..en])
@@ -151,7 +151,7 @@ impl Mac {
         let mut frame = [0u8; 1600];
         for _ in 0..spins {
             if let Some(n) = self.poll_data()
-                && let Some(m) = copy_frame(self, n, &mut frame)
+                && let Some(m) = copy_frame(n, &mut frame)
                 && pred(&frame[..m])
             {
                 return true;
@@ -162,17 +162,12 @@ impl Mac {
         false
     }
 
-    fn wait_eapol(
-        &mut self,
-        sta: &[u8; 6],
-        tk: Option<&[u8; 16]>,
-        out: &mut [u8],
-    ) -> Option<usize> {
+    fn wait_eapol(&mut self, sta: [u8; 6], tk: Option<&[u8; 16]>, out: &mut [u8]) -> Option<usize> {
         let mut frame = [0u8; 1600];
         let mut plain = [0u8; 400];
         for _ in 0..assoc_budget() {
             if let Some(n) = self.poll_data()
-                && let Some(m) = copy_frame(self, n, &mut frame)
+                && let Some(m) = copy_frame(n, &mut frame)
                 && frame.get(4..10) == Some(&sta[..])
                 && let Some(body) = msdu(&frame[..m], tk, &mut plain)
                 && let Some(eapol) = eapol_in_msdu(body)
@@ -190,7 +185,7 @@ impl Mac {
 
     fn wait_dhcp(
         &mut self,
-        sta: &[u8; 6],
+        sta: [u8; 6],
         tk: &[u8; 16],
         kind: u8,
         ether: &mut [u8],
@@ -199,9 +194,9 @@ impl Mac {
         let mut plain = [0u8; 400];
         for _ in 0..assoc_budget() {
             if let Some(n) = self.poll_data()
-                && let Some(m) = copy_frame(self, n, &mut frame)
+                && let Some(m) = copy_frame(n, &mut frame)
                 && let Some(body) = msdu(&frame[..m], Some(tk), &mut plain)
-                && let Some(en) = ethernet_from_msdu(body, sta, ether)
+                && let Some(en) = ethernet_from_msdu(body, &sta, ether)
                 && let Some(pair) = dhcp_yiaddr(&ether[..en], kind)
             {
                 return Some(pair);
@@ -212,7 +207,7 @@ impl Mac {
         None
     }
 
-    fn send_eapol(&mut self, bssid: &[u8; 6], sta: &[u8; 6], eapol: &[u8]) -> Option<()> {
+    fn send_eapol(&mut self, bssid: [u8; 6], sta: [u8; 6], eapol: &[u8]) -> Option<()> {
         let mut llc = [0u8; 280];
         if eapol.len() + 8 > llc.len() {
             return None;
@@ -226,8 +221,8 @@ impl Mac {
 
     fn send_ether(
         &mut self,
-        bssid: &[u8; 6],
-        sta: &[u8; 6],
+        bssid: [u8; 6],
+        sta: [u8; 6],
         tk: &[u8; 16],
         ether: &[u8],
     ) -> Option<()> {
@@ -237,22 +232,16 @@ impl Mac {
         if ether.len() >= 6 {
             da.copy_from_slice(&ether[..6]);
         }
-        self.send_protected(bssid, sta, &da, tk, &llc[..n])
+        self.send_protected(bssid, sta, da, tk, &llc[..n])
     }
 
-    fn send_plain(
-        &mut self,
-        bssid: &[u8; 6],
-        sta: &[u8; 6],
-        da: &[u8; 6],
-        msdu: &[u8],
-    ) -> Option<()> {
+    fn send_plain(&mut self, bssid: [u8; 6], sta: [u8; 6], da: [u8; 6], msdu: &[u8]) -> Option<()> {
         let mut frame = [0u8; 400];
         let n = write_qos_data(
             frame.as_mut_slice(),
-            bssid,
-            sta,
-            da,
+            &bssid,
+            &sta,
+            &da,
             msdu,
             self.next_seq_wifi(),
             false,
@@ -262,20 +251,20 @@ impl Mac {
 
     fn send_protected(
         &mut self,
-        bssid: &[u8; 6],
-        sta: &[u8; 6],
-        da: &[u8; 6],
+        bssid: [u8; 6],
+        sta: [u8; 6],
+        da: [u8; 6],
         tk: &[u8; 16],
         msdu: &[u8],
     ) -> Option<()> {
         let seq = self.next_seq_wifi();
         let mut hdr = [0u8; 26];
-        write_qos_data(&mut hdr, bssid, sta, da, &[], seq, true)?;
+        write_qos_data(&mut hdr, &bssid, &sta, &da, &[], seq, true)?;
         let mut body = [0u8; 500];
         let pn = self.next_pn();
         let clen = ccmp_encrypt(tk, &hdr, pn, msdu, &mut body)?;
         let mut frame = [0u8; 560];
-        let n = write_qos_data(&mut frame, bssid, sta, da, &body[..clen], seq, true)?;
+        let n = write_qos_data(&mut frame, &bssid, &sta, &da, &body[..clen], seq, true)?;
         self.tx_80211(&frame[..n]).then_some(())
     }
 }
@@ -291,8 +280,8 @@ fn scan_done(bytes: &[u8]) -> bool {
     kind == 7 && bytes.get(28) == Some(&SCAN_DONE)
 }
 
-fn copy_frame(mac: &Mac, n: usize, out: &mut [u8]) -> Option<usize> {
-    let bytes = mac.rx_bytes(n);
+fn copy_frame(n: usize, out: &mut [u8]) -> Option<usize> {
+    let bytes = Mac::rx_bytes(n);
     let off = frame_off(bytes)?;
     let frame = bytes.get(off..)?;
     let m = frame.len().min(out.len());

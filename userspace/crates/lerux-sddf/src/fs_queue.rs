@@ -60,6 +60,10 @@ pub unsafe fn fs_queue_publish_production(queue: *mut fs_queue_t, amount_produce
 
 /// Enqueue one command. Returns -1 when the ring already holds [`FS_QUEUE_CAPACITY`] messages.
 ///
+/// # Panics
+///
+/// Panics when the queue index does not fit in `usize`.
+///
 /// # Safety
 ///
 /// `queue` must point at a shared `fs_queue_t`. The caller is the producer.
@@ -71,7 +75,7 @@ pub unsafe fn fs_command_enqueue(queue: *mut fs_queue_t, cmd: fs_cmd_t) -> i32 {
         if word64::is_full(tail, head, capacity) {
             return -1;
         }
-        let index = word64::index(tail, capacity) as usize;
+        let index = usize::try_from(word64::index(tail, capacity)).expect("queue index fits");
         let slot = core::ptr::addr_of_mut!((*queue).buffer).cast::<fs_msg_t>();
         slot.add(index).write(fs_msg_t { cmd });
         (*queue).tail.store(
@@ -86,6 +90,10 @@ pub unsafe fn fs_command_enqueue(queue: *mut fs_queue_t, cmd: fs_cmd_t) -> i32 {
 ///
 /// `fs_cmpl_t` is smaller than `fs_cmd_t`. The slot is zeroed before `cmpl` is written.
 ///
+/// # Panics
+///
+/// Panics when the queue index does not fit in `usize`.
+///
 /// # Safety
 ///
 /// `queue` must point at a shared `fs_queue_t`. The caller is the producer.
@@ -97,7 +105,7 @@ pub unsafe fn fs_completion_enqueue(queue: *mut fs_queue_t, cmpl: fs_cmpl_t) -> 
         if word64::is_full(tail, head, capacity) {
             return -1;
         }
-        let index = word64::index(tail, capacity) as usize;
+        let index = usize::try_from(word64::index(tail, capacity)).expect("queue index fits");
         let slot = core::ptr::addr_of_mut!((*queue).buffer).cast::<fs_msg_t>();
         let mut msg = core::mem::zeroed::<fs_msg_t>();
         msg.cmpl = cmpl;
@@ -112,6 +120,10 @@ pub unsafe fn fs_completion_enqueue(queue: *mut fs_queue_t, cmpl: fs_cmpl_t) -> 
 
 /// Dequeue one message. Returns -1 when the ring is empty.
 ///
+/// # Panics
+///
+/// Panics when the queue index does not fit in `usize`.
+///
 /// # Safety
 ///
 /// `queue` must point at a shared `fs_queue_t`. The caller is the consumer.
@@ -122,7 +134,8 @@ pub unsafe fn fs_message_dequeue(queue: *mut fs_queue_t, msg: &mut fs_msg_t) -> 
         if word64::is_empty(tail, head) {
             return -1;
         }
-        let index = word64::index(head, FS_QUEUE_CAPACITY as u64) as usize;
+        let index = usize::try_from(word64::index(head, FS_QUEUE_CAPACITY as u64))
+            .expect("queue index fits");
         let slot = core::ptr::addr_of!((*queue).buffer).cast::<fs_msg_t>();
         *msg = slot.add(index).read();
         (*queue)

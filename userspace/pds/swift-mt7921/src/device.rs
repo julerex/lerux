@@ -129,53 +129,12 @@ fn rx_byte(index: usize) -> u8 {
 }
 
 impl Mac {
-    pub fn boot(regs: *mut u8, dma: *mut u8, images: Images) -> Self {
+    pub fn boot(regs: *mut u8, dma: *mut u8, images: &Images) -> Self {
         let mut mac = Self {
             regs,
             dma,
-            tx: [
-                TxRing {
-                    regs: ring_regs(TX_RING_BASE, 0),
-                    desc: OFF_TX0,
-                    head: 0,
-                    posted: 0,
-                },
-                TxRing {
-                    regs: ring_regs(TX_RING_BASE, 16),
-                    desc: OFF_TX16,
-                    head: 0,
-                    posted: 0,
-                },
-                TxRing {
-                    regs: ring_regs(TX_RING_BASE, 17),
-                    desc: OFF_TX17,
-                    head: 0,
-                    posted: 0,
-                },
-            ],
-            rx: [
-                RxRing {
-                    regs: ring_regs(RX_EVENT_BASE, 0),
-                    desc: OFF_RX_EVT,
-                    bufs: OFF_RX0_BUFS,
-                    head: 0,
-                    tail: 0,
-                },
-                RxRing {
-                    regs: ring_regs(RX_DATA_BASE, 0),
-                    desc: OFF_RX_DATA,
-                    bufs: OFF_RX_DATA_BUFS,
-                    head: 0,
-                    tail: 0,
-                },
-                RxRing {
-                    regs: ring_regs(RX_WA_BASE, 0),
-                    desc: OFF_RX_WA,
-                    bufs: OFF_RX_WA_BUFS,
-                    head: 0,
-                    tail: 0,
-                },
-            ],
+            tx: tx_rings(),
+            rx: rx_rings(),
             seq: 0,
             n9: false,
             ready: false,
@@ -205,7 +164,7 @@ impl Mac {
         self.sta
     }
 
-    fn start(&mut self, images: Images) -> Result<(), Stage> {
+    fn start(&mut self, images: &Images) -> Result<(), Stage> {
         self.own()?;
         let chip = self.chip();
         let Some((patch, ram)) = images.pick(chip) else {
@@ -228,7 +187,7 @@ impl Mac {
         for ring in &mut self.rx {
             ring.head = RING_N - 1;
         }
-        self.dma_enable()?;
+        self.dma_enable();
         self.wr(SWDEF_MODE, 0);
         self.driver_own()?;
         self.set(PCIE_MAC_PM, L0S_DIS);
@@ -302,20 +261,20 @@ impl Mac {
         }
         self.wr(regs + 8, 0);
         self.wr(regs + 12, 0);
-        let phys = DMA_PHYS.wrapping_add(desc as u32);
+        let phys = DMA_PHYS.wrapping_add(u32_from(desc));
         self.wr(regs, phys);
         self.wr(regs + 4, RING_N);
     }
 
     fn fill_rx(&mut self, desc: usize, bufs: usize, regs: u32) {
         for i in 0..RING_N - 1 {
-            let phys = DMA_PHYS.wrapping_add(bufs as u32) + i * BUF as u32;
-            self.desc_write(desc, i, phys, desc_ctrl(BUF as u32, false), 0, 0);
+            let phys = DMA_PHYS.wrapping_add(u32_from(bufs)) + i * u32_from(BUF);
+            self.desc_write(desc, i, phys, desc_ctrl(u32_from(BUF), false), 0, 0);
         }
         self.kick(regs, RING_N - 1);
     }
 
-    fn dma_enable(&mut self) -> Result<(), Stage> {
+    fn dma_enable(&mut self) {
         for (addr, value) in prefetch() {
             self.wr(addr, value);
         }
@@ -332,7 +291,6 @@ impl Mac {
         self.set(DUMMY_CR, NEED_REINIT);
         self.wr(HOST_INT_ENA, IRQ_MASK);
         self.set(MCU2HOST, MCU_WAKE);
-        Ok(())
     }
 
     fn driver_own(&mut self) -> Result<(), Stage> {
@@ -409,7 +367,7 @@ impl Mac {
     fn download(&mut self, image: &[u8], region: &Region, setup: Stage) -> Result<(), Stage> {
         let mut req = [0u8; 12];
         req[..4].copy_from_slice(&region.addr.to_le_bytes());
-        req[4..8].copy_from_slice(&(region.len as u32).to_le_bytes());
+        req[4..8].copy_from_slice(&u32_from(region.len).to_le_bytes());
         req[8..].copy_from_slice(&region.mode.to_le_bytes());
         if !self.command(download_cmd(region.addr), &req, true) {
             return Err(setup);
@@ -506,19 +464,19 @@ impl Mac {
             return false;
         }
         dma_write(self.dma, OFF_BOUNCE, chunk);
-        self.post_tx(TX_FWDL, DMA_PHYS + OFF_BOUNCE as u32, chunk.len())
+        self.post_tx(TX_FWDL, DMA_PHYS + u32_from(OFF_BOUNCE), chunk.len())
     }
 
     fn tx_bounce(&mut self, ring: usize, len: usize) -> bool {
         dma_write(self.dma, OFF_BOUNCE, &scratch().cmd[..len]);
-        self.post_tx(ring, DMA_PHYS + OFF_BOUNCE as u32, len)
+        self.post_tx(ring, DMA_PHYS + u32_from(OFF_BOUNCE), len)
     }
 
     fn post_tx(&mut self, ring: usize, phys: u32, len: usize) -> bool {
         let head = self.tx[ring].head;
         let desc = self.tx[ring].desc;
         let regs = self.tx[ring].regs;
-        self.desc_write(desc, head, phys, desc_ctrl(len as u32, true), 0, 0);
+        self.desc_write(desc, head, phys, desc_ctrl(u32_from(len), true), 0, 0);
         let next = (head + 1) % RING_N;
         self.tx[ring].head = next;
         self.tx[ring].posted = head;
@@ -562,7 +520,7 @@ impl Mac {
         self.poll_rx(RX_DATA)
     }
 
-    pub(crate) fn rx_bytes(&self, n: usize) -> &'static [u8] {
+    pub(crate) fn rx_bytes(n: usize) -> &'static [u8] {
         rx_slice(n.min(BUF))
     }
 
@@ -596,7 +554,7 @@ impl Mac {
         dma_read(self.dma, off, &mut scratch().rx[..n]);
         let head = self.rx[which].head;
         let regs = self.rx[which].regs;
-        self.desc_write(desc, head, phys, desc_ctrl(BUF as u32, false), 0, 0);
+        self.desc_write(desc, head, phys, desc_ctrl(u32_from(BUF), false), 0, 0);
         self.rx[which].head = (head + 1) % RING_N;
         self.rx[which].tail = (tail + 1) % RING_N;
         self.kick(regs, self.rx[which].head);
@@ -607,7 +565,7 @@ impl Mac {
         if frame.len() + TXD_LEN + TXP_LEN > BUF {
             return false;
         }
-        let phys = DMA_PHYS + OFF_TX_FRAME as u32;
+        let phys = DMA_PHYS + u32_from(OFF_TX_FRAME);
         {
             let txwi = &mut scratch().cmd[..TXD_LEN + TXP_LEN];
             if !write_txwi(txwi, frame, phys) {
@@ -616,7 +574,7 @@ impl Mac {
         }
         dma_write(self.dma, OFF_TXWI, &scratch().cmd[..TXD_LEN + TXP_LEN]);
         dma_write(self.dma, OFF_TX_FRAME, frame);
-        self.post_tx(TX_DATA, DMA_PHYS + OFF_TXWI as u32, TXD_LEN + TXP_LEN)
+        self.post_tx(TX_DATA, DMA_PHYS + u32_from(OFF_TXWI), TXD_LEN + TXP_LEN)
     }
 
     pub(crate) fn next_seq_wifi(&mut self) -> u16 {
@@ -704,6 +662,7 @@ impl Mac {
         dma_u32(self.dma, off + 12, info);
     }
 
+    #[expect(clippy::cast_ptr_alignment, reason = "4-byte DMA descriptor")]
     fn desc_word(&self, desc: usize, idx: u32, word: usize) -> u32 {
         let off = desc + idx as usize * 16 + word * 4;
         unsafe { self.dma.add(off).cast::<u32>().read_volatile() }
@@ -761,14 +720,70 @@ fn spin(n: u32) {
     }
 }
 
+fn u32_from(value: usize) -> u32 {
+    u32::try_from(value).expect("length fits")
+}
+
+fn tx_rings() -> [TxRing; 3] {
+    [
+        TxRing {
+            regs: ring_regs(TX_RING_BASE, 0),
+            desc: OFF_TX0,
+            head: 0,
+            posted: 0,
+        },
+        TxRing {
+            regs: ring_regs(TX_RING_BASE, 16),
+            desc: OFF_TX16,
+            head: 0,
+            posted: 0,
+        },
+        TxRing {
+            regs: ring_regs(TX_RING_BASE, 17),
+            desc: OFF_TX17,
+            head: 0,
+            posted: 0,
+        },
+    ]
+}
+
+fn rx_rings() -> [RxRing; 3] {
+    [
+        RxRing {
+            regs: ring_regs(RX_EVENT_BASE, 0),
+            desc: OFF_RX_EVT,
+            bufs: OFF_RX0_BUFS,
+            head: 0,
+            tail: 0,
+        },
+        RxRing {
+            regs: ring_regs(RX_DATA_BASE, 0),
+            desc: OFF_RX_DATA,
+            bufs: OFF_RX_DATA_BUFS,
+            head: 0,
+            tail: 0,
+        },
+        RxRing {
+            regs: ring_regs(RX_WA_BASE, 0),
+            desc: OFF_RX_WA,
+            bufs: OFF_RX_WA_BUFS,
+            head: 0,
+            tail: 0,
+        },
+    ]
+}
+
+#[expect(clippy::cast_ptr_alignment, reason = "4-byte MMIO register")]
 fn rd(regs: *mut u8, off: u32) -> u32 {
     unsafe { regs.add(off as usize).cast::<u32>().read_volatile() }
 }
 
+#[expect(clippy::cast_ptr_alignment, reason = "4-byte MMIO register")]
 fn wr(regs: *mut u8, off: u32, value: u32) {
     unsafe { regs.add(off as usize).cast::<u32>().write_volatile(value) }
 }
 
+#[expect(clippy::cast_ptr_alignment, reason = "4-byte DMA descriptor")]
 fn dma_u32(dma: *mut u8, off: usize, value: u32) {
     unsafe { dma.add(off).cast::<u32>().write_volatile(value) }
 }

@@ -15,6 +15,12 @@ pub use images::{
 pub use model::{DiskBackend, ImageError, ImageKind, Mode, NetBackend};
 
 /// System description for the one-client serial image.
+///
+/// # Errors
+///
+/// Returns [`ImageError::DuplicateEnd`], [`ImageError::UnknownRegion`],
+/// [`ImageError::ChannelOverflow`], or [`ImageError::MissingIrq`] when the
+/// aarch64 serial description cannot be written.
 pub fn render_serial_xml() -> Result<String, ImageError> {
     images::render_serial()
 }
@@ -66,6 +72,10 @@ mod tests {
         include_str!("serial_filled.xml")
     }
 
+    #[expect(
+        clippy::naive_bytecount,
+        reason = "bytecount is not a dependency; this counts newlines in a template prefix"
+    )]
     fn compare_bytes(actual: &str, expected: &str) -> Result<(), String> {
         if actual.as_bytes() == expected.as_bytes() {
             return Ok(());

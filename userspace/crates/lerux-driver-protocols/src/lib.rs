@@ -30,6 +30,10 @@ pub mod serial {
 
     impl<T> NonBlocking<T> {
         /// Map an `nb` poll result into the wire type, keeping hard errors.
+        ///
+        /// # Errors
+        ///
+        /// Returns `E` when `r` is `nb::Error::Other`.
         pub fn from_nb_result<E>(r: nb::Result<T, E>) -> Result<Self, E> {
             match r {
                 Ok(v) => Ok(Self::Ready(v)),
@@ -129,7 +133,7 @@ pub mod timer {
             Self { driver, client }
         }
 
-        fn handle_request(&mut self, req: Request) -> Response {
+        fn handle_request(&mut self, req: &Request) -> Response {
             match req {
                 Request::GetTime => self
                     .driver
@@ -138,17 +142,17 @@ pub mod timer {
                     .map_err(|_| ErrorResponse::Unspecified),
                 Request::NumTimers => Ok(SuccessResponse::NumTimers(1)),
                 Request::SetTimeout { timer, relative } => {
-                    if timer != 0 {
+                    if *timer != 0 {
                         Err(ErrorResponse::TimerOutOfBounds)
                     } else {
                         self.driver
-                            .set_timeout(relative)
+                            .set_timeout(*relative)
                             .map(|()| SuccessResponse::SetTimeout)
                             .map_err(|_| ErrorResponse::Unspecified)
                     }
                 }
                 Request::ClearTimeout { timer } => {
-                    if timer != 0 {
+                    if *timer != 0 {
                         Err(ErrorResponse::TimerOutOfBounds)
                     } else {
                         self.driver
@@ -173,7 +177,7 @@ pub mod timer {
                 return Ok(simple_ipc::send_unspecified_error());
             }
             Ok(match simple_ipc::recv::<Request>(msg_info) {
-                Ok(req) => simple_ipc::send(self.handle_request(req)),
+                Ok(req) => simple_ipc::send(self.handle_request(&req)),
                 Err(_) => simple_ipc::send_unspecified_error(),
             })
         }

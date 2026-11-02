@@ -42,7 +42,7 @@ pub unsafe fn net_queue_init(
     capacity: u32,
 ) {
     debug_assert_ne!(capacity, 0);
-    debug_assert!(capacity <= u32::from(u16::MAX));
+    debug_assert!(u16::try_from(capacity).is_ok());
     queue.free = free;
     queue.active = active;
     queue.capacity = capacity;
@@ -67,6 +67,7 @@ pub unsafe fn net_queue_length(queue: *const net_queue_t) -> u16 {
 /// # Safety
 ///
 /// Same pointer rules as [`net_queue_init`]. The caller is the consumer of the free queue.
+#[must_use]
 pub unsafe fn net_queue_empty_free(queue: &net_queue_handle_t) -> bool {
     unsafe {
         let tail = load_acquire(&(*queue.free).tail);
@@ -78,6 +79,7 @@ pub unsafe fn net_queue_empty_free(queue: &net_queue_handle_t) -> bool {
 /// # Safety
 ///
 /// Same pointer rules as [`net_queue_init`]. The caller is the consumer of the active queue.
+#[must_use]
 pub unsafe fn net_queue_empty_active(queue: &net_queue_handle_t) -> bool {
     unsafe {
         let tail = load_acquire(&(*queue.active).tail);
@@ -89,6 +91,7 @@ pub unsafe fn net_queue_empty_active(queue: &net_queue_handle_t) -> bool {
 /// # Safety
 ///
 /// Same pointer rules as [`net_queue_init`]. The caller is the producer of the free queue.
+#[must_use]
 pub unsafe fn net_queue_full_free(queue: &net_queue_handle_t) -> bool {
     unsafe {
         let tail = (*queue.free).tail.load(Ordering::Relaxed);
@@ -100,6 +103,7 @@ pub unsafe fn net_queue_full_free(queue: &net_queue_handle_t) -> bool {
 /// # Safety
 ///
 /// Same pointer rules as [`net_queue_init`]. The caller is the producer of the active queue.
+#[must_use]
 pub unsafe fn net_queue_full_active(queue: &net_queue_handle_t) -> bool {
     unsafe {
         let tail = (*queue.active).tail.load(Ordering::Relaxed);
@@ -147,6 +151,7 @@ unsafe fn dequeue(
 /// # Safety
 ///
 /// Same pointer rules as [`net_queue_init`]. The caller is the producer of the free queue.
+#[must_use]
 pub unsafe fn net_enqueue_free(queue: &net_queue_handle_t, buffer: net_buff_desc_t) -> i32 {
     unsafe {
         enqueue(
@@ -161,6 +166,7 @@ pub unsafe fn net_enqueue_free(queue: &net_queue_handle_t, buffer: net_buff_desc
 /// # Safety
 ///
 /// Same pointer rules as [`net_queue_init`]. The caller is the producer of the active queue.
+#[must_use]
 pub unsafe fn net_enqueue_active(queue: &net_queue_handle_t, buffer: net_buff_desc_t) -> i32 {
     unsafe {
         enqueue(
@@ -276,6 +282,7 @@ pub unsafe fn net_cancel_signal_active(queue: &net_queue_handle_t) {
 /// # Safety
 ///
 /// Same pointer rules as [`net_queue_init`]. The caller produces the free queue.
+#[must_use]
 pub unsafe fn net_require_signal_free(queue: &net_queue_handle_t) -> bool {
     unsafe { require_signal(queue.free) }
 }
@@ -283,6 +290,7 @@ pub unsafe fn net_require_signal_free(queue: &net_queue_handle_t) -> bool {
 /// # Safety
 ///
 /// Same pointer rules as [`net_queue_init`]. The caller produces the active queue.
+#[must_use]
 pub unsafe fn net_require_signal_active(queue: &net_queue_handle_t) -> bool {
     unsafe { require_signal(queue.active) }
 }

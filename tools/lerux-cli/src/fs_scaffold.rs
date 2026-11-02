@@ -20,7 +20,7 @@ pub(crate) fn report(root: &Path, from: &str, board: &str) -> Result<String> {
     match scaffold_diff(
         from,
         board,
-        ScaffoldFiles {
+        &ScaffoldFiles {
             shell: &shell,
             writer: &writer,
             justfile: &justfile,
@@ -42,7 +42,7 @@ pub(crate) struct ScaffoldFiles<'a> {
 pub(crate) fn scaffold_diff(
     from: &str,
     board: &str,
-    files: ScaffoldFiles<'_>,
+    files: &ScaffoldFiles<'_>,
 ) -> Result<String, String> {
     let feature = format!("board-{from}");
     let alias = format!("board-{board} = [\"{feature}\"]");
@@ -104,7 +104,7 @@ mod tests {
         let err = scaffold_diff(
             "x86_64_generic_fs_sddf",
             "x86_64_generic_fs_ahci",
-            ScaffoldFiles {
+            &ScaffoldFiles {
                 shell: "board-x86_64_generic_fs_ahci = []\n",
                 writer: "\"x86_64_generic_fs_sddf\" => \"board-x86_64_generic_fs_sddf\",\n",
                 justfile: "",

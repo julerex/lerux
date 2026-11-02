@@ -35,8 +35,10 @@ impl Driver {
     }
 
     pub fn from_system_vars() -> Self {
-        let ioport_id = *var!(com1_ioport_id: usize = usize::MAX) as u32;
-        let base_port = *var!(com1_ioport_addr: usize = usize::MAX) as u16;
+        let ioport_id =
+            u32::try_from(*var!(com1_ioport_id: usize = usize::MAX)).expect("com1 ioport id");
+        let base_port =
+            u16::try_from(*var!(com1_ioport_addr: usize = usize::MAX)).expect("com1 port");
         let mut driver = Self::new(ioport_id, base_port);
         driver.init();
         driver
@@ -55,14 +57,17 @@ impl Driver {
     }
 
     fn ioport_cap(&self) -> u64 {
-        BASE_IOPORT_CAP + self.ioport_id as u64
+        BASE_IOPORT_CAP + u64::from(self.ioport_id)
     }
 
     fn out8(&self, offset: u16, value: u8) {
         let port = self.base_port + offset;
         with_ipc_buffer_mut(|ipc| {
-            ipc.inner_mut()
-                .seL4_X86_IOPort_Out8(self.ioport_cap(), port as u64, value as u64);
+            ipc.inner_mut().seL4_X86_IOPort_Out8(
+                self.ioport_cap(),
+                u64::from(port),
+                u64::from(value),
+            );
         });
     }
 

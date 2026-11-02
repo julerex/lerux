@@ -13,7 +13,7 @@ pub(super) fn basic_parse(input: &str, base: Option<&Url>) -> Result<Url, ParseE
     let Some(base) = base else {
         return Err(ParseError::new());
     };
-    parse_relative(input, base)
+    Ok(parse_relative(input, base))
 }
 
 fn parse_absolute(scheme_raw: &str, rest: &str) -> Result<Url, ParseError> {
@@ -39,16 +39,16 @@ fn parse_absolute(scheme_raw: &str, rest: &str) -> Result<Url, ParseError> {
     ))
 }
 
-fn parse_relative(input: &str, base: &Url) -> Result<Url, ParseError> {
+fn parse_relative(input: &str, base: &Url) -> Url {
     if let Some(fragment) = input.strip_prefix('#') {
-        return Ok(Url::from_parsed(
+        return Url::from_parsed(
             base.scheme.clone(),
             base.host.clone(),
             base.port,
             base.path.clone(),
             base.query.clone(),
             Some(String::from(fragment)),
-        ));
+        );
     }
     let (path_text, query, fragment) = split_tail(input);
     let path = if path_text.is_empty() {
@@ -58,14 +58,14 @@ fn parse_relative(input: &str, base: &Url) -> Result<Url, ParseError> {
     } else {
         remove_dot_segments(&merge_paths(&base.path, path_text))
     };
-    Ok(Url::from_parsed(
+    Url::from_parsed(
         base.scheme.clone(),
         base.host.clone(),
         base.port,
         path,
         owned(query),
         owned(fragment),
-    ))
+    )
 }
 
 fn scheme_and_rest(input: &str) -> Option<(&str, &str)> {

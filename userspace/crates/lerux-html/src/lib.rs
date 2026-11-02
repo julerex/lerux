@@ -50,6 +50,7 @@ pub enum TagName {
 
 impl TagName {
     /// ASCII tag token.
+    #[must_use]
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Html => "html",
@@ -76,6 +77,7 @@ impl TagName {
     }
 
     /// ASCII tag token, case-insensitive.
+    #[must_use]
     pub fn from_ascii(name: &[u8]) -> Option<Self> {
         let mut lower = [0u8; 16];
         if name.is_empty() || name.len() > lower.len() {
@@ -110,11 +112,13 @@ impl TagName {
     }
 
     /// `img` has no end tag / children.
+    #[must_use]
     pub const fn is_void(self) -> bool {
         matches!(self, Self::Img)
     }
 
     /// Tokenizer treats contents as text (no nested tags).
+    #[must_use]
     pub const fn is_raw_text(self) -> bool {
         matches!(self, Self::Style)
     }
@@ -156,6 +160,7 @@ pub struct Node {
 
 impl Node {
     /// Attribute value if this is an element and `name` is present.
+    #[must_use]
     pub fn attr(&self, name: &str) -> Option<&str> {
         let NodeKind::Element { attrs, .. } = &self.kind else {
             return None;
@@ -166,6 +171,7 @@ impl Node {
             .map(|a| a.value.as_str())
     }
 
+    #[must_use]
     pub fn tag(&self) -> Option<TagName> {
         match self.kind {
             NodeKind::Element { name, .. } => Some(name),
@@ -191,20 +197,24 @@ impl Document {
         }
     }
 
+    #[must_use]
     pub fn root(&self) -> NodeId {
         NodeId(0)
     }
 
     /// Total nodes including the document node.
+    #[must_use]
     pub fn node_count(&self) -> usize {
         self.nodes.len()
     }
 
+    #[must_use]
     pub fn get(&self, id: NodeId) -> &Node {
         &self.nodes[id.0]
     }
 
     /// Concatenated descendant text (tree order).
+    #[must_use]
     pub fn text_content(&self, id: NodeId) -> String {
         let mut out = String::new();
         self.collect_text(id, &mut out);
@@ -223,6 +233,7 @@ impl Document {
     }
 
     /// First element with this tag name, tree order.
+    #[must_use]
     pub fn first_element(&self, name: TagName) -> Option<NodeId> {
         self.nodes
             .iter()
@@ -246,6 +257,7 @@ impl Document {
 }
 
 /// Parse `input` into a walkable tree. Never fails: unknown tags are skipped.
+#[must_use]
 pub fn parse(input: &str) -> Document {
     let tokens = tokenize(input);
     let mut doc = Document::new();

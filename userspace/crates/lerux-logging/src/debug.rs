@@ -28,6 +28,10 @@ static LOGGER: Logger = LoggerBuilder::const_default()
     .build();
 
 /// Install the static debug-print logger at [`LOG_LEVEL`].
+///
+/// # Errors
+///
+/// Returns [`SetLoggerError`] when a logger is already installed.
 pub fn init() -> Result<(), SetLoggerError> {
     LOGGER.set()
 }

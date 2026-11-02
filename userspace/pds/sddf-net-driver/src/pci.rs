@@ -32,6 +32,10 @@ const fn bar_paddrs() -> &'static [u64] {
     bars
 }
 
+#[expect(
+    clippy::cast_possible_truncation,
+    reason = "PCI BAR physical address fits the guest map"
+)]
 const fn bar_paddr(index: usize) -> usize {
     bar_paddrs()[index] as usize
 }
@@ -76,8 +80,10 @@ pub fn init_hal() {
 }
 
 pub fn create_virtio_net() -> NetDev {
-    let ioport_id = *var!(pci_net_config_ioport_id: usize = 0) as u32;
-    let ioport_addr = *var!(pci_net_config_ioport_addr: usize = 0) as u16;
+    let ioport_id =
+        u32::try_from(*var!(pci_net_config_ioport_id: usize = 0)).expect("pci ioport id");
+    let ioport_addr =
+        u16::try_from(*var!(pci_net_config_ioport_addr: usize = 0)).expect("pci ioport");
     let transport =
         create_pci_transport_ioport(ioport_id, ioport_addr, device_function(), bar_paddrs())
             .expect("virtio-net PCI transport");

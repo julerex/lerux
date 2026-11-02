@@ -10,7 +10,8 @@ pub fn paint_row(record: &[u8], frame: &mut [u8], row: usize, text: &[u8]) {
     if bytes > FRAMEBUFFER_BYTES {
         return;
     }
-    if frame.len() < bytes as usize {
+    let bytes = fit_panel_bytes(bytes);
+    if frame.len() < bytes {
         return;
     }
     paint_text_row(
@@ -26,4 +27,8 @@ pub fn paint_row(record: &[u8], frame: &mut [u8], row: usize, text: &[u8]) {
         row,
         text,
     );
+}
+
+fn fit_panel_bytes(bytes: u64) -> usize {
+    usize::try_from(bytes).expect("panel bytes")
 }

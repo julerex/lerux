@@ -200,12 +200,11 @@ extern "C" fn worker() {
     }
     bind_sockets();
     let mut guest = Guest { logged: false };
-    match run_signed(BAD, &VERIFYING_KEY, &mut guest) {
-        Err(Error::Signature) => say(b"program: rejected\n"),
-        _ => {
-            say(b"program: err\n");
-            return;
-        }
+    if let Err(Error::Signature) = run_signed(BAD, &VERIFYING_KEY, &mut guest) {
+        say(b"program: rejected\n");
+    } else {
+        say(b"program: err\n");
+        return;
     }
     guest.logged = false;
     if run_signed(GOOD, &VERIFYING_KEY, &mut guest).is_err() || !guest.logged {
@@ -220,7 +219,7 @@ fn bind_files() -> bool {
             fs_image::FS_COMMAND_QUEUE_VADDR as *mut fs_queue_t,
             fs_image::FS_COMPLETION_QUEUE_VADDR as *mut fs_queue_t,
             fs_image::FS_SHARE_VADDR as *mut u8,
-            fs_image::FS_REGION_SIZE as usize,
+            usize::try_from(fs_image::FS_REGION_SIZE).expect("fs region"),
             wake_fs,
             core::ptr::null_mut(),
         )

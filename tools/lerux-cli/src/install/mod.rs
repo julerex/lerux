@@ -257,8 +257,7 @@ pub fn system_libclang_present() -> bool {
         .args(["/usr/lib", "-name", "libclang.so"])
         .output()
         .ok()
-        .map(|o| o.status.success() && !o.stdout.is_empty())
-        .unwrap_or(false)
+        .is_some_and(|o| o.status.success() && !o.stdout.is_empty())
 }
 
 pub fn install_sp804_qemu(root: &Path, need_gtk: bool) -> Result<PathBuf> {
@@ -394,8 +393,7 @@ fn configure_sp804(src_dir: &Path, install_prefix: &Path, need_gtk: bool) -> Res
 fn build_sp804(src_dir: &Path) -> Result<()> {
     eprintln!("==> Building SP804 QEMU");
     let nproc = std::thread::available_parallelism()
-        .map(|n| n.get().to_string())
-        .unwrap_or_else(|_| "4".to_string());
+        .map_or_else(|_| "4".to_string(), |n| n.get().to_string());
     run_checked(
         "make",
         &["-C", &src_dir.join("build").to_string_lossy(), "-j", &nproc],
@@ -436,7 +434,7 @@ fn find_dir(parent: &Path, pattern: &str) -> Option<PathBuf> {
     let prefix = pattern.split('*').next()?;
     std::fs::read_dir(parent)
         .ok()?
-        .filter_map(|e| e.ok())
+        .filter_map(std::result::Result::ok)
         .map(|e| e.path())
         .filter(|p| p.is_dir())
         .find(|p| {

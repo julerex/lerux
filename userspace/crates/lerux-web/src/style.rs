@@ -181,7 +181,6 @@ fn apply_decls(style: &mut ComputedStyle, decls: &[Decl], parent_font: i32) {
             (Property::Padding, Value::Lengths(v)) => {
                 style.padding = Edges::from_px(&lengths_px(v, em));
             }
-            (Property::FontSize, _) => {}
             _ => {}
         }
     }

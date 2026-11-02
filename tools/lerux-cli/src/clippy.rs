@@ -186,41 +186,53 @@ fn run_clippy_once(
         let _ = std::io::stderr().write_all(&output.stderr);
         let fresh = new_ice_files(root, &before);
         if fresh.is_empty() {
-            if output.status.success() {
-                return Ok(());
-            }
-            bail!(
-                "cargo clippy -p {}{} failed",
-                entry.crate_name,
-                entry
-                    .feature
-                    .as_deref()
-                    .map(|f| format!(" --features {f}"))
-                    .unwrap_or_default()
-            );
-        }
-        for path in &fresh {
-            let _ = fs::remove_file(path);
+            return clippy_status(entry, &output);
         }
         if attempt == 0 {
-            eprintln!(
-                "==> compiler ice in {}; clearing cross incremental caches and retrying once",
-                entry.crate_name
-            );
-            clear_cross_incremental(target_dir)?;
+            retry_after_ice(target_dir, entry, &fresh)?;
             continue;
         }
-        let names = fresh
-            .iter()
-            .map(|path| path.display().to_string())
-            .collect::<Vec<_>>()
-            .join(", ");
-        bail!(
-            "cargo clippy -p {} wrote an ice file after one retry: {names}",
-            entry.crate_name
-        );
+        bail_ice(entry, &fresh)?;
     }
     Ok(())
+}
+
+fn clippy_status(entry: &ClippyEntry, output: &std::process::Output) -> Result<()> {
+    if output.status.success() {
+        return Ok(());
+    }
+    bail!(
+        "cargo clippy -p {}{} failed",
+        entry.crate_name,
+        entry
+            .feature
+            .as_deref()
+            .map(|f| format!(" --features {f}"))
+            .unwrap_or_default()
+    );
+}
+
+fn retry_after_ice(target_dir: &Path, entry: &ClippyEntry, fresh: &[PathBuf]) -> Result<()> {
+    for path in fresh {
+        let _ = fs::remove_file(path);
+    }
+    eprintln!(
+        "==> compiler ice in {}; clearing cross incremental caches and retrying once",
+        entry.crate_name
+    );
+    clear_cross_incremental(target_dir)
+}
+
+fn bail_ice(entry: &ClippyEntry, fresh: &[PathBuf]) -> Result<()> {
+    let names = fresh
+        .iter()
+        .map(|path| path.display().to_string())
+        .collect::<Vec<_>>()
+        .join(", ");
+    bail!(
+        "cargo clippy -p {} wrote an ice file after one retry: {names}",
+        entry.crate_name
+    );
 }
 
 fn ice_files(root: &Path) -> HashSet<PathBuf> {

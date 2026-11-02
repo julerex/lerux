@@ -502,6 +502,11 @@ impl UsbKbd {
     }
 
     fn control(&mut self, bm: u8, req: u8, value: u16, index: u16, len: u16) -> Ctl {
+        let (data_trb, status_trb) = self.queue_control(bm, req, value, index, len);
+        self.await_control(len, data_trb, status_trb)
+    }
+
+    fn queue_control(&mut self, bm: u8, req: u8, value: u16, index: u16, len: u16) -> (u64, u64) {
         let trbs = if len == 0 { 2 } else { 3 };
         self.ensure_room(Ring::Ep0, trbs);
         let setup_d0 = u32::from(bm) | (u32::from(req) << 8) | (u32::from(value) << 16);
@@ -538,7 +543,10 @@ impl UsbKbd {
         let status_d3 = IOC | trb_type(TRB_STATUS) | status_dir;
         let status_trb = self.push_trb(Ring::Ep0, 0, 0, 0, status_d3);
         self.doorbell(self.slot, 1);
+        (data_trb, status_trb)
+    }
 
+    fn await_control(&mut self, len: u16, data_trb: u64, status_trb: u64) -> Ctl {
         let mut actual = usize::from(len);
         for _ in 0..SPIN {
             let Some(ev) = self.pop_event() else {

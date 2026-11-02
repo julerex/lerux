@@ -103,8 +103,18 @@ mod tests {
         assert_eq!(hex_group(NET_VIRTIO_MMIO_VADDR), "0x6_000_000_000");
         assert_eq!(hex_group(NET_DRIVER_DMA_VADDR), "0x8_000_000_000");
         assert_eq!(hex_group(UART_VADDR), "0x2_000_000");
-
         let root = repo_root();
+        assert_net_client_manifest(&root);
+        let xml = render_system(&root, "qemu_virt_aarch64_net_sddf").expect("render network image");
+        assert_net_image_shape(&xml);
+        assert_net_priorities(&xml);
+        assert_net_program_images(&xml);
+        assert_net_channels(&xml);
+        assert_net_region_maps(&xml);
+        assert_net_driver_and_client(&xml);
+    }
+
+    fn assert_net_client_manifest(root: &std::path::Path) {
         let client_manifest =
             std::fs::read_to_string(root.join("userspace/pds/sddf-net-client/Cargo.toml"))
                 .expect("client manifest");
@@ -116,9 +126,9 @@ mod tests {
             !client_manifest.contains("lerux-logging"),
             "client manifest stays off the logging crate"
         );
+    }
 
-        let xml = render_system(&root, "qemu_virt_aarch64_net_sddf").expect("render network image");
-
+    fn assert_net_image_shape(xml: &str) {
         assert_eq!(xml.matches("<protection_domain ").count(), 8);
         assert_eq!(xml.matches("<channel>").count(), 9);
         assert_eq!(xml.matches("program_image").count(), 8);
@@ -139,7 +149,9 @@ mod tests {
             "<irq irq=\"33\" id=\"{}\" />",
             serial_image::DRIVER_IRQ_CHANNEL
         )));
+    }
 
+    fn assert_net_priorities(xml: &str) {
         for (name, priority) in [
             ("net_driver", 4),
             ("serial_driver", 4),
@@ -157,7 +169,9 @@ mod tests {
                 "{name}"
             );
         }
+    }
 
+    fn assert_net_program_images(xml: &str) {
         for image in [
             "sddf-net-driver.elf",
             "sddf-net-virt-tx.elf",
@@ -170,7 +184,9 @@ mod tests {
         ] {
             assert!(xml.contains(&format!("<program_image path=\"{image}\" />")));
         }
+    }
 
+    fn assert_net_channels(xml: &str) {
         for (pd, id) in [
             ("net_driver", net_image::DRIVER_RX_CHANNEL),
             ("net_virt_rx", net_image::VIRT_RX_DRIVER_CHANNEL),
@@ -196,7 +212,9 @@ mod tests {
                 "{pd} {id}"
             );
         }
+    }
 
+    fn assert_net_region_maps(xml: &str) {
         for (name, vaddr, count) in [
             ("serial_mmio", UART_VADDR, 1),
             ("serial_tx_driver_queue", TX_DRIVER_QUEUE_VADDR, 2),
@@ -227,7 +245,9 @@ mod tests {
             let needle = format!("mr=\"{name}\" vaddr=\"{}\"", hex_group(vaddr));
             assert_eq!(xml.matches(&needle).count(), count, "{needle}");
         }
+    }
 
+    fn assert_net_driver_and_client(xml: &str) {
         let driver_at = xml.find("name=\"net_driver\"").expect("driver");
         let driver_end = xml[driver_at..]
             .find("</protection_domain>")

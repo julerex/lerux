@@ -48,31 +48,11 @@ fn init() -> HandlerImpl {
         "client count fits the config array"
     );
 
-    // SAFETY: the template maps the driver and client transmit regions here.
+    // SAFETY: the template maps the driver transmit region here.
     let driver = unsafe { serial_handle_from_connection(&config.driver) };
     let driver_ch = Channel::new(usize::from(config.driver.id));
-    let mut clients = core::array::from_fn(|_| empty_handle());
-    let mut client_ch = [Channel::new(0); SDDF_SERIAL_MAX_CLIENTS];
-    for i in 0..num_clients {
-        clients[i] = unsafe { serial_handle_from_connection(&config.clients[i].conn) };
-        client_ch[i] = Channel::new(usize::from(config.clients[i].conn.id));
-    }
-
-    if config.enable_rx {
-        let len = config
-            .begin_str
-            .iter()
-            .position(|byte| *byte == 0)
-            .unwrap_or(config.begin_str.len());
-        for &byte in &config.begin_str[..len] {
-            // SAFETY: `driver` points at the mapped driver transmit queue.
-            let status = unsafe { serial_enqueue(&driver, byte) };
-            assert_eq!(status, 0, "begin string fits in the driver transmit queue");
-        }
-        if len > 0 {
-            driver_ch.notify();
-        }
-    }
+    let (clients, client_ch) = client_handles(&config, num_clients);
+    publish_begin(&config, &driver, driver_ch);
 
     log::info!("serial_virt_tx: ready");
     HandlerImpl {
@@ -82,6 +62,45 @@ fn init() -> HandlerImpl {
         client_ch,
         pending: [false; SDDF_SERIAL_MAX_CLIENTS],
         num_clients,
+    }
+}
+
+fn client_handles(
+    config: &serial_virt_tx_config_t,
+    num_clients: usize,
+) -> (
+    [serial_queue_handle_t; SDDF_SERIAL_MAX_CLIENTS],
+    [Channel; SDDF_SERIAL_MAX_CLIENTS],
+) {
+    let mut clients = core::array::from_fn(|_| empty_handle());
+    let mut client_ch = [Channel::new(0); SDDF_SERIAL_MAX_CLIENTS];
+    for i in 0..num_clients {
+        // SAFETY: the template maps this client's transmit region here.
+        clients[i] = unsafe { serial_handle_from_connection(&config.clients[i].conn) };
+        client_ch[i] = Channel::new(usize::from(config.clients[i].conn.id));
+    }
+    (clients, client_ch)
+}
+
+fn publish_begin(
+    config: &serial_virt_tx_config_t,
+    driver: &serial_queue_handle_t,
+    driver_ch: Channel,
+) {
+    if config.enable_rx {
+        let len = config
+            .begin_str
+            .iter()
+            .position(|byte| *byte == 0)
+            .unwrap_or(config.begin_str.len());
+        for &byte in &config.begin_str[..len] {
+            // SAFETY: `driver` points at the mapped driver transmit queue.
+            let status = unsafe { serial_enqueue(driver, byte) };
+            assert_eq!(status, 0, "begin string fits in the driver transmit queue");
+        }
+        if len > 0 {
+            driver_ch.notify();
+        }
     }
 }
 

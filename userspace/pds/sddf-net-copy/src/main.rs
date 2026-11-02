@@ -85,58 +85,10 @@ impl HandlerImpl {
         while reprocess {
             while unsafe { !net_queue_empty_active(&self.virt) } {
                 if unsafe { !net_queue_empty_free(&self.client) } {
-                    let mut client_buffer = net_buff_desc_t::new(0, 0, 0);
-                    // SAFETY: this protection domain consumes the client free queue.
-                    let err = unsafe { net_dequeue_free(&self.client, &mut client_buffer) };
-                    assert_eq!(err, 0, "client free buffer is present");
-                    assert!(
-                        offset_ok(client_buffer.io_or_offset, self.client.capacity),
-                        "offset fits"
-                    );
-                    let mut virt_buffer = net_buff_desc_t::new(0, 0, 0);
-                    // SAFETY: this protection domain consumes the virtualiser active queue.
-                    let err = unsafe { net_dequeue_active(&self.virt, &mut virt_buffer) };
-                    assert_eq!(err, 0, "virt buffer is present");
-                    assert_eq!(
-                        virt_buffer.oid(),
-                        0,
-                        "packet comes from the one receive region"
-                    );
-                    assert!(
-                        u32::from(virt_buffer.len) <= NET_BUFFER_SIZE
-                            && offset_ok(virt_buffer.io_or_offset, self.virt.capacity),
-                        "offset fits"
-                    );
-                    let len = usize::from(virt_buffer.len);
-                    // SAFETY: both offsets were checked, and both data regions are mapped here.
-                    unsafe {
-                        core::ptr::copy_nonoverlapping(
-                            self.virt_data.add(
-                                usize::try_from(virt_buffer.io_or_offset).expect("offset fits"),
-                            ),
-                            self.client_data.add(
-                                usize::try_from(client_buffer.io_or_offset).expect("offset fits"),
-                            ),
-                            len,
-                        );
-                    }
-                    client_buffer.len = virt_buffer.len;
-                    // SAFETY: this protection domain produces the client active queue.
-                    let err = unsafe { net_enqueue_active(&self.client, client_buffer) };
-                    assert_eq!(err, 0, "client active queue accepts the buffer");
-                    // SAFETY: this protection domain produces the virtualiser free queue.
-                    // The length stays so a later owner can reuse the descriptor.
-                    let err = unsafe { net_enqueue_free(&self.virt, virt_buffer) };
-                    assert_eq!(err, 0, "virt free queue accepts the buffer");
+                    self.copy_frame();
                     client_enqueued = true;
                 } else {
-                    let mut virt_buffer = net_buff_desc_t::new(0, 0, 0);
-                    // SAFETY: this protection domain consumes the virtualiser active queue.
-                    let err = unsafe { net_dequeue_active(&self.virt, &mut virt_buffer) };
-                    assert_eq!(err, 0, "virt buffer is present");
-                    // SAFETY: there is no client buffer, so the frame goes back unused.
-                    let err = unsafe { net_enqueue_free(&self.virt, virt_buffer) };
-                    assert_eq!(err, 0, "virt free queue accepts the buffer");
+                    self.return_virt_buffer();
                 }
                 virt_enqueued = true;
             }
@@ -148,6 +100,64 @@ impl HandlerImpl {
                 reprocess = true;
             }
         }
+        self.signal_queues(client_enqueued, virt_enqueued);
+    }
+
+    fn copy_frame(&mut self) {
+        let mut client_buffer = net_buff_desc_t::new(0, 0, 0);
+        // SAFETY: this protection domain consumes the client free queue.
+        let err = unsafe { net_dequeue_free(&self.client, &mut client_buffer) };
+        assert_eq!(err, 0, "client free buffer is present");
+        assert!(
+            offset_ok(client_buffer.io_or_offset, self.client.capacity),
+            "offset fits"
+        );
+        let mut virt_buffer = net_buff_desc_t::new(0, 0, 0);
+        // SAFETY: this protection domain consumes the virtualiser active queue.
+        let err = unsafe { net_dequeue_active(&self.virt, &mut virt_buffer) };
+        assert_eq!(err, 0, "virt buffer is present");
+        assert_eq!(
+            virt_buffer.oid(),
+            0,
+            "packet comes from the one receive region"
+        );
+        assert!(
+            u32::from(virt_buffer.len) <= NET_BUFFER_SIZE
+                && offset_ok(virt_buffer.io_or_offset, self.virt.capacity),
+            "offset fits"
+        );
+        let len = usize::from(virt_buffer.len);
+        // SAFETY: both offsets were checked, and both data regions are mapped here.
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                self.virt_data
+                    .add(usize::try_from(virt_buffer.io_or_offset).expect("offset fits")),
+                self.client_data
+                    .add(usize::try_from(client_buffer.io_or_offset).expect("offset fits")),
+                len,
+            );
+        }
+        client_buffer.len = virt_buffer.len;
+        // SAFETY: this protection domain produces the client active queue.
+        let err = unsafe { net_enqueue_active(&self.client, client_buffer) };
+        assert_eq!(err, 0, "client active queue accepts the buffer");
+        // SAFETY: this protection domain produces the virtualiser free queue.
+        // The length stays so a later owner can reuse the descriptor.
+        let err = unsafe { net_enqueue_free(&self.virt, virt_buffer) };
+        assert_eq!(err, 0, "virt free queue accepts the buffer");
+    }
+
+    fn return_virt_buffer(&mut self) {
+        let mut virt_buffer = net_buff_desc_t::new(0, 0, 0);
+        // SAFETY: this protection domain consumes the virtualiser active queue.
+        let err = unsafe { net_dequeue_active(&self.virt, &mut virt_buffer) };
+        assert_eq!(err, 0, "virt buffer is present");
+        // SAFETY: there is no client buffer, so the frame goes back unused.
+        let err = unsafe { net_enqueue_free(&self.virt, virt_buffer) };
+        assert_eq!(err, 0, "virt free queue accepts the buffer");
+    }
+
+    fn signal_queues(&mut self, client_enqueued: bool, virt_enqueued: bool) {
         if client_enqueued && unsafe { net_require_signal_active(&self.client) } {
             unsafe { net_cancel_signal_active(&self.client) };
             self.client_ch.notify();

@@ -8,7 +8,7 @@ use lerux_machine::{
     ahci_map,
     description::{
         ahci_msi, e1000e_fetch_irq, e1000e_standalone_irq, pci_config_port, pci_net_config_port,
-        IoApicPin, IoApicVector, Irq, MmioDevice, MmioWindow, PciBar, Polarity, SerialNode,
+        IoApicPin, IoApicVector, IoPort, Irq, MmioDevice, MmioWindow, PciBar, Polarity, SerialNode,
         Trigger, VirtioNode, X86Irq,
     },
     e1000e::{self, e1000e_map},
@@ -74,26 +74,43 @@ pub fn render_kind(kind: ImageKind, arch: Arch) -> Result<String, ImageError> {
 const SDDF_SUFFIX: &str = "_sddf";
 
 pub fn board_registration(board: &str) -> Result<Option<BoardId>, ImageError> {
-    if board.ends_with("net_e1000e") {
-        if board == "x86_64_generic_net_e1000e" {
-            return Ok(Some(BoardId {
-                kind: ImageKind::Net,
-                mode: None,
-                arch: Arch::X86_64,
-                disk: DiskBackend::Virtio,
-                net: NetBackend::E1000e,
-            }));
-        }
-        if let Some((arch, _)) = Arch::split_prefix(board) {
-            return Err(ImageError::Unsupported {
-                kind: ImageKind::Net,
-                arch,
-            });
-        }
-        return Err(ImageError::UnknownBoard {
-            name: board.to_string(),
+    if let Some(id) = net_e1000e_registration(board)? {
+        return Ok(Some(id));
+    }
+    if let Some(id) = fs_ahci_registration(board)? {
+        return Ok(Some(id));
+    }
+    if let Some(id) = fetch_native_registration(board)? {
+        return Ok(Some(id));
+    }
+    sddf_registration(board)
+}
+
+fn net_e1000e_registration(board: &str) -> Result<Option<BoardId>, ImageError> {
+    if !board.ends_with("net_e1000e") {
+        return Ok(None);
+    }
+    if board == "x86_64_generic_net_e1000e" {
+        return Ok(Some(BoardId {
+            kind: ImageKind::Net,
+            mode: None,
+            arch: Arch::X86_64,
+            disk: DiskBackend::Virtio,
+            net: NetBackend::E1000e,
+        }));
+    }
+    if let Some((arch, _)) = Arch::split_prefix(board) {
+        return Err(ImageError::Unsupported {
+            kind: ImageKind::Net,
+            arch,
         });
     }
+    Err(ImageError::UnknownBoard {
+        name: board.to_string(),
+    })
+}
+
+fn fs_ahci_registration(board: &str) -> Result<Option<BoardId>, ImageError> {
     if board == "x86_64_generic_fs_ahci" {
         return Ok(Some(BoardId {
             kind: ImageKind::Fs,
@@ -111,6 +128,10 @@ pub fn board_registration(board: &str) -> Result<Option<BoardId>, ImageError> {
             arch,
         });
     }
+    Ok(None)
+}
+
+fn fetch_native_registration(board: &str) -> Result<Option<BoardId>, ImageError> {
     if board == "x86_64_generic_fetch_native" {
         return Ok(Some(BoardId {
             kind: ImageKind::Fetch,
@@ -128,6 +149,10 @@ pub fn board_registration(board: &str) -> Result<Option<BoardId>, ImageError> {
             arch,
         });
     }
+    Ok(None)
+}
+
+fn sddf_registration(board: &str) -> Result<Option<BoardId>, ImageError> {
     if !board.ends_with(SDDF_SUFFIX) {
         return Ok(None);
     }
@@ -282,12 +307,62 @@ const AHCI_BLK_PROGRAM: &str = "sddf-ahci-driver.elf";
 
 fn fs_image(arch: Arch, disk: DiskBackend) -> Image {
     let serial = serial_attachment(arch);
-    let block = match disk {
-        DiskBackend::Virtio => virtio_block(arch, false),
-        DiskBackend::Ahci => ahci_block(false),
-    };
+    let block = fs_block(arch, disk);
     let mut shell = serial_client_slots();
     shell.extend(fs_client_slots());
+    let domains = fs_domains(
+        serial.slots,
+        serial.irq,
+        block.driver_slots,
+        block.irq,
+        block.program,
+        shell,
+    );
+    Image {
+        groups: vec![serial.regions, block.regions, blk_regions(), fs_regions()],
+        domains,
+        links: fs_links(),
+    }
+}
+
+fn fs_block(arch: Arch, disk: DiskBackend) -> BlockAttachment {
+    match disk {
+        DiskBackend::Virtio => virtio_block(arch, false),
+        DiskBackend::Ahci => ahci_block(false),
+    }
+}
+
+fn fs_domains(
+    serial_slots: Vec<Slot>,
+    serial_irq: Irq,
+    block_slots: Vec<Slot>,
+    block_irq: Irq,
+    program: &'static str,
+    shell: Vec<Slot>,
+) -> Vec<Domain> {
+    vec![
+        blk_driver_domain(block_slots, block_irq, budget(4000), 4, program),
+        serial_driver(serial_slots, serial_irq, budget(4000)),
+        blk_virt(budget(3000)),
+        serial_virt_tx(budget(3000)),
+        serial_virt_rx(budget(3000)),
+        fatfs(budget(2000)),
+        domain(
+            "timer_driver",
+            5,
+            Some(Qos {
+                budget: 5000,
+                passive: true,
+            }),
+            "sddf-timer-driver.elf",
+            Vec::new(),
+            None,
+        ),
+        domain("shell", 1, budget(1000), "sddf-shell.elf", shell, None),
+    ]
+}
+
+fn fs_links() -> Vec<Link> {
     let mut links = link_rows(&[
         ("blk_driver", "blk_virt", 0),
         ("blk_virt", "fatfs", 1),
@@ -303,36 +378,7 @@ fn fs_image(arch: Arch, disk: DiskBackend) -> Image {
         pp_b: true,
         order: 7,
     });
-    Image {
-        groups: vec![serial.regions, block.regions, blk_regions(), fs_regions()],
-        domains: vec![
-            blk_driver_domain(
-                block.driver_slots,
-                block.irq,
-                budget(4000),
-                4,
-                block.program,
-            ),
-            serial_driver(serial.slots, serial.irq, budget(4000)),
-            blk_virt(budget(3000)),
-            serial_virt_tx(budget(3000)),
-            serial_virt_rx(budget(3000)),
-            fatfs(budget(2000)),
-            domain(
-                "timer_driver",
-                5,
-                Some(Qos {
-                    budget: 5000,
-                    passive: true,
-                }),
-                "sddf-timer-driver.elf",
-                Vec::new(),
-                None,
-            ),
-            domain("shell", 1, budget(1000), "sddf-shell.elf", shell, None),
-        ],
-        links,
-    }
+    links
 }
 
 fn net_image(arch: Arch, net: NetBackend) -> Image {
@@ -647,21 +693,8 @@ fn browser_image(arch: Arch) -> Image {
 fn agent_image(arch: Arch) -> Image {
     let serial = serial_attachment(arch);
     let blk = virtio_block(arch, arch == Arch::X86_64);
-    let blk_irq = if arch == Arch::X86_64 {
-        fetch_x86_pci_irq(VirtioRole::Blk)
-    } else {
-        blk.irq
-    };
-    let net_irq = if arch == Arch::X86_64 {
-        fetch_x86_pci_irq(VirtioRole::Net)
-    } else {
-        net_virtio_attachment(arch, false).irq
-    };
-    let mut grok = serial_client_slots();
-    grok.extend(cached(&["agent_tool"]));
-    let mut agent = fs_client_slots();
-    agent.extend(net_client_slots());
-    agent.extend(cached(&["agent_tool"]));
+    let (grok, agent) = agent_client_slots();
+    let domains = agent_domains(arch, serial.slots, serial.irq, blk, grok, agent);
     Image {
         groups: vec![
             serial.regions,
@@ -670,63 +703,126 @@ fn agent_image(arch: Arch) -> Image {
             fs_regions(),
             net_regions(true),
         ],
-        domains: vec![
-            blk_driver_domain(
-                blk.driver_slots,
-                blk_irq,
-                fetch_qos(arch, 4000),
-                4,
-                blk.program,
-            ),
-            net_driver_with_irq(
-                arch,
-                false,
-                net_irq,
-                fetch_qos(arch, if arch == Arch::X86_64 { 2000 } else { 4000 }),
-                if arch == Arch::X86_64 { 2 } else { 4 },
-            ),
-            serial_driver(serial.slots, serial.irq, fetch_qos(arch, 4000)),
-            blk_virt(fetch_qos(arch, 3000)),
-            net_virt_tx(fetch_qos(arch, 3000)),
-            net_virt_rx(fetch_qos(arch, 3000)),
-            serial_virt_tx(fetch_qos(arch, 3000)),
-            serial_virt_rx(fetch_qos(arch, 3000)),
-            fatfs(fetch_qos(arch, 2000)),
-            net_copy(fetch_qos(arch, 2000)),
-            domain(
-                "shell",
-                1,
-                fetch_qos(arch, 1000),
-                "sddf-grok.elf",
-                grok,
-                None,
-            ),
-            domain(
-                "agent",
-                2,
-                fetch_qos(arch, 2000),
-                "sddf-agent.elf",
-                agent,
-                None,
-            ),
-        ],
-        links: link_rows(&[
-            ("blk_driver", "blk_virt", 0),
-            ("blk_virt", "fatfs", 1),
-            ("fatfs", "agent", 8),
-            ("serial_driver", "serial_virt_tx", 2),
-            ("serial_driver", "serial_virt_rx", 3),
-            ("serial_virt_tx", "shell", 4),
-            ("serial_virt_rx", "shell", 5),
-            ("net_driver", "net_virt_rx", 9),
-            ("net_driver", "net_virt_tx", 10),
-            ("net_virt_rx", "net_copy", 11),
-            ("net_copy", "agent", 12),
-            ("net_virt_tx", "agent", 13),
-            ("shell", "agent", 6),
-            ("shell", "agent", 7),
-        ]),
+        domains,
+        links: agent_links(),
     }
+}
+
+fn agent_client_slots() -> (Vec<Slot>, Vec<Slot>) {
+    let mut grok = serial_client_slots();
+    grok.extend(cached(&["agent_tool"]));
+    let mut agent = fs_client_slots();
+    agent.extend(net_client_slots());
+    agent.extend(cached(&["agent_tool"]));
+    (grok, agent)
+}
+
+fn agent_irqs(arch: Arch, blk_irq: Irq) -> (Irq, Irq) {
+    let blk_irq = if arch == Arch::X86_64 {
+        fetch_x86_pci_irq(VirtioRole::Blk)
+    } else {
+        blk_irq
+    };
+    let net_irq = if arch == Arch::X86_64 {
+        fetch_x86_pci_irq(VirtioRole::Net)
+    } else {
+        net_virtio_attachment(arch, false).irq
+    };
+    (blk_irq, net_irq)
+}
+
+fn agent_domains(
+    arch: Arch,
+    serial_slots: Vec<Slot>,
+    serial_irq: Irq,
+    blk: BlockAttachment,
+    grok: Vec<Slot>,
+    agent: Vec<Slot>,
+) -> Vec<Domain> {
+    let (blk_irq, net_irq) = agent_irqs(arch, blk.irq);
+    let mut domains = agent_driver_domains(arch, serial_slots, serial_irq, blk, blk_irq, net_irq);
+    domains.extend(agent_virt_domains(arch));
+    domains.extend(agent_endpoint_domains(arch, grok, agent));
+    domains
+}
+
+fn agent_driver_domains(
+    arch: Arch,
+    serial_slots: Vec<Slot>,
+    serial_irq: Irq,
+    blk: BlockAttachment,
+    blk_irq: Irq,
+    net_irq: Irq,
+) -> Vec<Domain> {
+    vec![
+        blk_driver_domain(
+            blk.driver_slots,
+            blk_irq,
+            fetch_qos(arch, 4000),
+            4,
+            blk.program,
+        ),
+        net_driver_with_irq(
+            arch,
+            false,
+            net_irq,
+            fetch_qos(arch, if arch == Arch::X86_64 { 2000 } else { 4000 }),
+            if arch == Arch::X86_64 { 2 } else { 4 },
+        ),
+        serial_driver(serial_slots, serial_irq, fetch_qos(arch, 4000)),
+    ]
+}
+
+fn agent_virt_domains(arch: Arch) -> Vec<Domain> {
+    vec![
+        blk_virt(fetch_qos(arch, 3000)),
+        net_virt_tx(fetch_qos(arch, 3000)),
+        net_virt_rx(fetch_qos(arch, 3000)),
+        serial_virt_tx(fetch_qos(arch, 3000)),
+        serial_virt_rx(fetch_qos(arch, 3000)),
+        fatfs(fetch_qos(arch, 2000)),
+        net_copy(fetch_qos(arch, 2000)),
+    ]
+}
+
+fn agent_endpoint_domains(arch: Arch, grok: Vec<Slot>, agent: Vec<Slot>) -> Vec<Domain> {
+    vec![
+        domain(
+            "shell",
+            1,
+            fetch_qos(arch, 1000),
+            "sddf-grok.elf",
+            grok,
+            None,
+        ),
+        domain(
+            "agent",
+            2,
+            fetch_qos(arch, 2000),
+            "sddf-agent.elf",
+            agent,
+            None,
+        ),
+    ]
+}
+
+fn agent_links() -> Vec<Link> {
+    link_rows(&[
+        ("blk_driver", "blk_virt", 0),
+        ("blk_virt", "fatfs", 1),
+        ("fatfs", "agent", 8),
+        ("serial_driver", "serial_virt_tx", 2),
+        ("serial_driver", "serial_virt_rx", 3),
+        ("serial_virt_tx", "shell", 4),
+        ("serial_virt_rx", "shell", 5),
+        ("net_driver", "net_virt_rx", 9),
+        ("net_driver", "net_virt_tx", 10),
+        ("net_virt_rx", "net_copy", 11),
+        ("net_copy", "agent", 12),
+        ("net_virt_tx", "agent", 13),
+        ("shell", "agent", 6),
+        ("shell", "agent", 7),
+    ])
 }
 
 fn fabric_links(client: &'static str) -> Vec<Link> {
@@ -798,66 +894,74 @@ struct BlockAttachment {
 
 fn virtio_block(arch: Arch, blk_pci_ecam: bool) -> BlockAttachment {
     match arch {
-        Arch::Aarch64 => BlockAttachment {
-            regions: virtio_regions(true, false, false),
-            driver_slots: vec![
-                mmio("virtio_mmio", "virtio_blk_mmio_vaddr"),
-                dma("virtio_blk_driver_dma", "virtio_blk_driver_dma_vaddr"),
-                setvar("virtio_blk_driver_dma_paddr", "virtio_blk_driver_dma"),
-            ],
-            irq: line_irq(78),
-            program: VIRTIO_BLK_PROGRAM,
-        },
-        Arch::Riscv64 => {
-            let VirtioNode::Mmio(device) =
-                virtio_node(arch, VirtioRole::Blk).expect("filesystem image includes virtio-blk")
-            else {
-                panic!("riscv virtio-blk is memory-mapped input/output");
-            };
-            BlockAttachment {
-                regions: vec![window_region(&device.window), blk_driver_dma_region(arch)],
-                driver_slots: vec![
-                    mmio(device.window.name, device.setvar),
-                    dma("virtio_blk_driver_dma", "virtio_blk_driver_dma_vaddr"),
-                    setvar("virtio_blk_driver_dma_paddr", "virtio_blk_driver_dma"),
-                ],
-                irq: Irq::Line(device.irq),
-                program: VIRTIO_BLK_PROGRAM,
-            }
-        }
-        Arch::X86_64 => {
-            let VirtioNode::Pci {
-                config, irq, bars, ..
-            } = virtio_node(arch, VirtioRole::Blk).expect("filesystem image includes virtio-blk")
-            else {
-                panic!("x86 virtio-blk is PCI");
-            };
-            let mut regions = pci_bar_regions(bars);
-            regions.push(blk_driver_dma_region(arch));
-            let mut driver_slots = Vec::new();
-            if blk_pci_ecam {
-                push_x86_pci_ecam(&mut regions, &mut driver_slots);
-            } else {
-                driver_slots.push(Slot::Port(config));
-            }
-            for bar in bars {
-                driver_slots.push(Slot::Map(Map {
-                    region: bar.setvar,
-                    cached: Some(false),
-                    setvar: None,
-                }));
-            }
-            driver_slots.extend([
-                dma("virtio_blk_driver_dma", "virtio_blk_driver_dma_vaddr"),
-                setvar("virtio_blk_driver_dma_paddr", "virtio_blk_driver_dma"),
-            ]);
-            BlockAttachment {
-                regions,
-                driver_slots,
-                irq: Irq::X86(irq),
-                program: VIRTIO_BLK_PROGRAM,
-            }
-        }
+        Arch::Aarch64 => virtio_block_aarch64(),
+        Arch::Riscv64 => virtio_block_riscv(arch),
+        Arch::X86_64 => virtio_block_x86(arch, blk_pci_ecam),
+    }
+}
+
+fn virtio_block_aarch64() -> BlockAttachment {
+    BlockAttachment {
+        regions: virtio_regions(true, false, false),
+        driver_slots: vec![
+            mmio("virtio_mmio", "virtio_blk_mmio_vaddr"),
+            dma("virtio_blk_driver_dma", "virtio_blk_driver_dma_vaddr"),
+            setvar("virtio_blk_driver_dma_paddr", "virtio_blk_driver_dma"),
+        ],
+        irq: line_irq(78),
+        program: VIRTIO_BLK_PROGRAM,
+    }
+}
+
+fn virtio_block_riscv(arch: Arch) -> BlockAttachment {
+    let VirtioNode::Mmio(device) =
+        virtio_node(arch, VirtioRole::Blk).expect("filesystem image includes virtio-blk")
+    else {
+        panic!("riscv virtio-blk is memory-mapped input/output");
+    };
+    BlockAttachment {
+        regions: vec![window_region(&device.window), blk_driver_dma_region(arch)],
+        driver_slots: vec![
+            mmio(device.window.name, device.setvar),
+            dma("virtio_blk_driver_dma", "virtio_blk_driver_dma_vaddr"),
+            setvar("virtio_blk_driver_dma_paddr", "virtio_blk_driver_dma"),
+        ],
+        irq: Irq::Line(device.irq),
+        program: VIRTIO_BLK_PROGRAM,
+    }
+}
+
+fn virtio_block_x86(arch: Arch, blk_pci_ecam: bool) -> BlockAttachment {
+    let VirtioNode::Pci {
+        config, irq, bars, ..
+    } = virtio_node(arch, VirtioRole::Blk).expect("filesystem image includes virtio-blk")
+    else {
+        panic!("x86 virtio-blk is PCI");
+    };
+    let mut regions = pci_bar_regions(bars);
+    regions.push(blk_driver_dma_region(arch));
+    let mut driver_slots = Vec::new();
+    if blk_pci_ecam {
+        push_x86_pci_ecam(&mut regions, &mut driver_slots);
+    } else {
+        driver_slots.push(Slot::Port(config));
+    }
+    for bar in bars {
+        driver_slots.push(Slot::Map(Map {
+            region: bar.setvar,
+            cached: Some(false),
+            setvar: None,
+        }));
+    }
+    driver_slots.extend([
+        dma("virtio_blk_driver_dma", "virtio_blk_driver_dma_vaddr"),
+        setvar("virtio_blk_driver_dma_paddr", "virtio_blk_driver_dma"),
+    ]);
+    BlockAttachment {
+        regions,
+        driver_slots,
+        irq: Irq::X86(irq),
+        program: VIRTIO_BLK_PROGRAM,
     }
 }
 
@@ -994,48 +1098,58 @@ struct NetVirtioAttachment {
 
 fn net_virtio_attachment(arch: Arch, net_pci_ecam: bool) -> NetVirtioAttachment {
     match virtio_node(arch, VirtioRole::Net).expect("network image includes virtio-net") {
-        VirtioNode::Mmio(device) => {
-            let mut regions = vec![window_region(&device.window)];
-            regions.push(net_driver_dma_region(arch));
-            let driver_slots = vec![
-                mmio(device.window.name, device.setvar),
-                dma("virtio_net_driver_dma", "virtio_net_driver_dma_vaddr"),
-                setvar("virtio_net_driver_dma_paddr", "virtio_net_driver_dma"),
-            ];
-            NetVirtioAttachment {
-                regions,
-                driver_slots,
-                irq: Irq::Line(device.irq),
-            }
-        }
+        VirtioNode::Mmio(device) => net_virtio_mmio(arch, device),
         VirtioNode::Pci {
             config, irq, bars, ..
-        } => {
-            let mut regions = pci_bar_regions(bars);
-            regions.push(net_driver_dma_region(arch));
-            let mut driver_slots = Vec::new();
-            if net_pci_ecam {
-                push_x86_pci_ecam(&mut regions, &mut driver_slots);
-            } else {
-                driver_slots.push(Slot::Port(config));
-            }
-            for bar in bars {
-                driver_slots.push(Slot::Map(Map {
-                    region: bar.setvar,
-                    cached: Some(false),
-                    setvar: None,
-                }));
-            }
-            driver_slots.extend([
-                dma("virtio_net_driver_dma", "virtio_net_driver_dma_vaddr"),
-                setvar("virtio_net_driver_dma_paddr", "virtio_net_driver_dma"),
-            ]);
-            NetVirtioAttachment {
-                regions,
-                driver_slots,
-                irq: Irq::X86(irq),
-            }
-        }
+        } => net_virtio_pci(arch, net_pci_ecam, config, irq, bars),
+    }
+}
+
+fn net_virtio_mmio(arch: Arch, device: MmioDevice) -> NetVirtioAttachment {
+    let mut regions = vec![window_region(&device.window)];
+    regions.push(net_driver_dma_region(arch));
+    let driver_slots = vec![
+        mmio(device.window.name, device.setvar),
+        dma("virtio_net_driver_dma", "virtio_net_driver_dma_vaddr"),
+        setvar("virtio_net_driver_dma_paddr", "virtio_net_driver_dma"),
+    ];
+    NetVirtioAttachment {
+        regions,
+        driver_slots,
+        irq: Irq::Line(device.irq),
+    }
+}
+
+fn net_virtio_pci(
+    arch: Arch,
+    net_pci_ecam: bool,
+    config: IoPort,
+    irq: X86Irq,
+    bars: &'static [PciBar],
+) -> NetVirtioAttachment {
+    let mut regions = pci_bar_regions(bars);
+    regions.push(net_driver_dma_region(arch));
+    let mut driver_slots = Vec::new();
+    if net_pci_ecam {
+        push_x86_pci_ecam(&mut regions, &mut driver_slots);
+    } else {
+        driver_slots.push(Slot::Port(config));
+    }
+    for bar in bars {
+        driver_slots.push(Slot::Map(Map {
+            region: bar.setvar,
+            cached: Some(false),
+            setvar: None,
+        }));
+    }
+    driver_slots.extend([
+        dma("virtio_net_driver_dma", "virtio_net_driver_dma_vaddr"),
+        setvar("virtio_net_driver_dma_paddr", "virtio_net_driver_dma"),
+    ]);
+    NetVirtioAttachment {
+        regions,
+        driver_slots,
+        irq: Irq::X86(irq),
     }
 }
 
@@ -1563,26 +1677,35 @@ mod tests {
             (DiskBackend::Ahci, NetBackend::E1000e, Arch::X86_64, None),
         ];
         for (disk, net, arch, mode) in cases {
-            let err = rejected(disk, net, arch, mode);
-            let text = err.to_string();
-            match err {
-                ImageError::FetchPairRejected {
-                    disk: got_disk,
-                    net: got_net,
-                    arch: got_arch,
-                    mode: got_mode,
-                } => {
-                    assert_eq!(got_disk, disk);
-                    assert_eq!(got_net, net);
-                    assert_eq!(got_arch, arch);
-                    assert_eq!(got_mode, mode);
-                }
-                other => panic!("expected FetchPairRejected, got {other:?}"),
-            }
-            assert!(text.contains(&format!("{disk:?}")), "{text}");
-            assert!(text.contains(&format!("{net:?}")), "{text}");
-            assert!(text.contains(&format!("{arch:?}")), "{text}");
-            assert!(text.contains(&format!("{mode:?}")), "{text}");
+            assert_rejected_fetch_pair(disk, net, arch, mode);
         }
+    }
+
+    fn assert_rejected_fetch_pair(
+        disk: DiskBackend,
+        net: NetBackend,
+        arch: Arch,
+        mode: Option<Mode>,
+    ) {
+        let err = rejected(disk, net, arch, mode);
+        let text = err.to_string();
+        match err {
+            ImageError::FetchPairRejected {
+                disk: got_disk,
+                net: got_net,
+                arch: got_arch,
+                mode: got_mode,
+            } => {
+                assert_eq!(got_disk, disk);
+                assert_eq!(got_net, net);
+                assert_eq!(got_arch, arch);
+                assert_eq!(got_mode, mode);
+            }
+            other => panic!("expected FetchPairRejected, got {other:?}"),
+        }
+        assert!(text.contains(&format!("{disk:?}")), "{text}");
+        assert!(text.contains(&format!("{net:?}")), "{text}");
+        assert!(text.contains(&format!("{arch:?}")), "{text}");
+        assert!(text.contains(&format!("{mode:?}")), "{text}");
     }
 }

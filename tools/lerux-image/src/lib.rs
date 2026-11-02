@@ -477,6 +477,11 @@ mod tests {
         let xml = render_board("x86_64_generic_net_e1000e")
             .expect("render")
             .expect("e1000e image");
+        assert_82574_driver_image(&xml);
+        assert_82574_driver_binding(&xml);
+    }
+
+    fn assert_82574_driver_image(xml: &str) {
         let map = e1000e_map();
         let irq = e1000e_standalone_irq();
         assert_eq!(map.dma_vaddr, lerux_sddf::net_image::NET_DRIVER_DMA_VADDR);
@@ -508,6 +513,9 @@ mod tests {
             "<end pd=\"net_driver\" id=\"{}\" />",
             lerux_sddf::net_image::DRIVER_TX_CHANNEL
         )));
+    }
+
+    fn assert_82574_driver_binding(xml: &str) {
         let driver_at = xml.find("name=\"net_driver\"").expect("driver");
         let driver_end = xml[driver_at..]
             .find("</protection_domain>")
@@ -592,6 +600,14 @@ mod tests {
             x86_net_backend("x86_64_generic_fetch_native").expect("net"),
             NetBackend::E1000e
         );
+        assert_fetch_native_other_arch_rejected();
+        assert_eq!(
+            board_registration("fetch_native").expect("unregistered"),
+            None
+        );
+    }
+
+    fn assert_fetch_native_other_arch_rejected() {
         let aarch64 =
             board_registration("qemu_virt_aarch64_fetch_native").expect_err("unsupported");
         assert!(
@@ -615,10 +631,6 @@ mod tests {
             ),
             "{riscv:?}"
         );
-        assert_eq!(
-            board_registration("fetch_native").expect("unregistered"),
-            None
-        );
     }
 
     #[test]
@@ -629,6 +641,12 @@ mod tests {
         let virtio = render_board("x86_64_generic_fetch_sddf")
             .expect("render")
             .expect("virtio fetch image");
+        assert_native_fetch_image_shape(&xml, &virtio);
+        assert_native_blk_driver(pd_slice(&xml, "blk_driver"));
+        assert_native_net_driver(pd_slice(&xml, "net_driver"));
+    }
+
+    fn assert_native_fetch_image_shape(xml: &str, virtio: &str) {
         let msi = ahci_msi();
         assert_eq!(msi.handle, 99);
         assert_eq!(msi.vector, IoApicVector(51));
@@ -654,8 +672,9 @@ mod tests {
         assert!(!xml.contains("virtio"));
         assert!(virtio.contains("sddf-net-driver.elf"));
         assert!(virtio.contains("pin=\"11\""));
+    }
 
-        let blk = pd_slice(&xml, "blk_driver");
+    fn assert_native_blk_driver(blk: &str) {
         assert!(blk.contains("<irq pcidev=\"00:1f.2\" handle=\"99\" vector=\"51\" id=\"0\" />"));
         assert!(blk.contains("mr=\"pci_ecam\" vaddr=\"0xe0_000_000\""));
         assert!(blk.contains("setvar_vaddr=\"pci_ecam_vaddr\""));
@@ -664,8 +683,9 @@ mod tests {
         assert!(
             blk.contains("priority=\"4\" budget=\"4000\" period=\"4000\" stack_size=\"0x10_000\"")
         );
+    }
 
-        let net = pd_slice(&xml, "net_driver");
+    fn assert_native_net_driver(net: &str) {
         assert!(net.contains(
             "<irq pin=\"10\" vector=\"50\" id=\"0\" trigger=\"level\" polarity=\"low\" />"
         ));
@@ -726,26 +746,7 @@ mod tests {
             .expect("web")
             .expect("x86 web image");
         assert_eq!(fetch, web);
-        assert!(web.contains("phys_addr=\"0xfed0_0000\""));
-        assert!(web.contains("phys_addr=\"0xfed1_0000\""));
-        assert!(web.contains("phys_addr=\"0xfed2_0000\""));
-        assert!(web.contains("phys_addr=\"0xfed3_0000\""));
-        assert!(web.contains("pci_ecam"));
-        assert!(web.contains(
-            "<ioport id=\"0\" addr=\"0xcf8\" size=\"8\" setvar_id=\"pci_net_config_ioport_id\" setvar_addr=\"pci_net_config_ioport_addr\" />"
-        ));
-        assert!(web.contains(
-            "<irq pin=\"11\" vector=\"49\" id=\"0\" trigger=\"level\" polarity=\"low\" />"
-        ));
-        assert!(web.contains(
-            "<irq pin=\"10\" vector=\"50\" id=\"0\" trigger=\"level\" polarity=\"low\" />"
-        ));
-        assert!(web.contains(
-            "<protection_domain name=\"net_driver\" priority=\"2\" budget=\"2000\" period=\"2000\" stack_size=\"0x10_000\">"
-        ));
-        assert!(!web.contains("0xa003000"));
-        assert!(!web.contains("serial_mmio"));
-        assert!(!web.contains("pci_config_ioport_id"));
+        assert_x86_web_pci_xml(&web);
         assert_eq!(
             board_registration("x86_64_generic_web_sddf").expect("register"),
             Some(BoardId {
@@ -770,6 +771,29 @@ mod tests {
             .expect("aarch64 web image");
         assert_eq!(aarch64_fetch, aarch64_web);
         assert!(aarch64_web.contains("0xa003000"));
+    }
+
+    fn assert_x86_web_pci_xml(web: &str) {
+        assert!(web.contains("phys_addr=\"0xfed0_0000\""));
+        assert!(web.contains("phys_addr=\"0xfed1_0000\""));
+        assert!(web.contains("phys_addr=\"0xfed2_0000\""));
+        assert!(web.contains("phys_addr=\"0xfed3_0000\""));
+        assert!(web.contains("pci_ecam"));
+        assert!(web.contains(
+            "<ioport id=\"0\" addr=\"0xcf8\" size=\"8\" setvar_id=\"pci_net_config_ioport_id\" setvar_addr=\"pci_net_config_ioport_addr\" />"
+        ));
+        assert!(web.contains(
+            "<irq pin=\"11\" vector=\"49\" id=\"0\" trigger=\"level\" polarity=\"low\" />"
+        ));
+        assert!(web.contains(
+            "<irq pin=\"10\" vector=\"50\" id=\"0\" trigger=\"level\" polarity=\"low\" />"
+        ));
+        assert!(web.contains(
+            "<protection_domain name=\"net_driver\" priority=\"2\" budget=\"2000\" period=\"2000\" stack_size=\"0x10_000\">"
+        ));
+        assert!(!web.contains("0xa003000"));
+        assert!(!web.contains("serial_mmio"));
+        assert!(!web.contains("pci_config_ioport_id"));
     }
 
     #[test]
@@ -1043,12 +1067,24 @@ mod tests {
     #[test]
     fn serial_xml_ids_match_config_page() {
         let xml = render_serial_xml().expect("render serial xml");
+        for (label, pd_a, pd_b, want, page_id) in driver_serial_id_cases()
+            .into_iter()
+            .chain(client_serial_id_cases())
+        {
+            let xml_id = channel_end_id(&xml, pd_a, pd_b, want);
+            assert_eq!(xml_id, page_id, "{label}");
+            if label == "driver transmit" {
+                println!("driver transmit id {xml_id}");
+            }
+        }
+    }
+
+    fn driver_serial_id_cases() -> [(&'static str, &'static str, &'static str, &'static str, u8); 4]
+    {
         let driver = driver_config();
         let virt_tx = virt_tx_config();
-        let virt_rx = virt_rx_config();
-        let client = client_config();
         let id = connection_id();
-        let cases = [
+        [
             (
                 "driver transmit",
                 "serial_driver",
@@ -1082,6 +1118,15 @@ mod tests {
                         + id,
                 ),
             ),
+        ]
+    }
+
+    fn client_serial_id_cases() -> [(&'static str, &'static str, &'static str, &'static str, u8); 4]
+    {
+        let virt_rx = virt_rx_config();
+        let client = client_config();
+        let id = connection_id();
+        [
             (
                 "virt rx driver",
                 "serial_driver",
@@ -1110,13 +1155,6 @@ mod tests {
                 "serial_client",
                 page_byte(&client, offset_of!(serial_client_config_t, rx) + id),
             ),
-        ];
-        for (label, pd_a, pd_b, want, page_id) in cases {
-            let xml_id = channel_end_id(&xml, pd_a, pd_b, want);
-            assert_eq!(xml_id, page_id, "{label}");
-            if label == "driver transmit" {
-                println!("driver transmit id {xml_id}");
-            }
-        }
+        ]
     }
 }

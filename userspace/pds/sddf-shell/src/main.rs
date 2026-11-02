@@ -643,6 +643,29 @@ fn dispatch(line: &[u8]) {
         say(b"err\n");
         return;
     };
+    if dispatch_file(cmd, rest) {
+        return;
+    }
+    #[cfg(any(
+        feature = "board-qemu_virt_aarch64_fetch_sddf",
+        feature = "board-qemu_virt_riscv64_fetch_sddf",
+        feature = "board-x86_64_generic_fetch_sddf"
+    ))]
+    if dispatch_fetch(cmd, rest) {
+        return;
+    }
+    #[cfg(any(
+        feature = "board-qemu_virt_aarch64_fs_sddf",
+        feature = "board-qemu_virt_riscv64_fs_sddf",
+        feature = "board-x86_64_generic_fs_sddf"
+    ))]
+    if dispatch_fs_board(cmd, rest) {
+        return;
+    }
+    say(b"err\n");
+}
+
+fn dispatch_file(cmd: &[u8], rest: &[u8]) -> bool {
     match cmd {
         b"mkdir" => cmd_mkdir(rest),
         b"write" => cmd_write(rest),
@@ -651,86 +674,46 @@ fn dispatch(line: &[u8]) {
         b"mv" => cmd_mv(rest),
         b"rm" => cmd_rm(rest),
         b"stat" => cmd_stat(rest),
-        #[cfg(any(
-            feature = "board-qemu_virt_aarch64_fetch_sddf",
-            feature = "board-qemu_virt_riscv64_fetch_sddf",
-            feature = "board-x86_64_generic_fetch_sddf"
-        ))]
-        b"fetch" => cmd_fetch(rest),
-        #[cfg(any(
-            feature = "board-qemu_virt_aarch64_fetch_sddf",
-            feature = "board-qemu_virt_riscv64_fetch_sddf",
-            feature = "board-x86_64_generic_fetch_sddf"
-        ))]
-        b"calc" => cmd_calc(rest),
-        #[cfg(any(
-            feature = "board-qemu_virt_aarch64_fetch_sddf",
-            feature = "board-qemu_virt_riscv64_fetch_sddf",
-            feature = "board-x86_64_generic_fetch_sddf"
-        ))]
-        b"backup" => cmd_backup(rest),
-        #[cfg(any(
-            feature = "board-qemu_virt_aarch64_fetch_sddf",
-            feature = "board-qemu_virt_riscv64_fetch_sddf",
-            feature = "board-x86_64_generic_fetch_sddf"
-        ))]
-        b"source" => cmd_source(rest),
-        #[cfg(any(
-            feature = "board-qemu_virt_aarch64_fetch_sddf",
-            feature = "board-qemu_virt_riscv64_fetch_sddf",
-            feature = "board-x86_64_generic_fetch_sddf"
-        ))]
-        b"cert" => cmd_cert(rest),
-        #[cfg(any(
-            feature = "board-qemu_virt_aarch64_fetch_sddf",
-            feature = "board-qemu_virt_riscv64_fetch_sddf",
-            feature = "board-x86_64_generic_fetch_sddf"
-        ))]
-        b"edit" => cmd_edit(rest),
-        #[cfg(any(
-            feature = "board-qemu_virt_aarch64_fetch_sddf",
-            feature = "board-qemu_virt_riscv64_fetch_sddf",
-            feature = "board-x86_64_generic_fetch_sddf"
-        ))]
-        b"chat" => cmd_chat(rest),
-        #[cfg(any(
-            feature = "board-qemu_virt_aarch64_fs_sddf",
-            feature = "board-qemu_virt_riscv64_fs_sddf",
-            feature = "board-x86_64_generic_fs_sddf"
-        ))]
-        b"config" => cmd_config(rest),
-        #[cfg(any(
-            feature = "board-qemu_virt_aarch64_fs_sddf",
-            feature = "board-qemu_virt_riscv64_fs_sddf",
-            feature = "board-x86_64_generic_fs_sddf"
-        ))]
-        b"date" => cmd_date(rest),
-        #[cfg(any(
-            feature = "board-qemu_virt_aarch64_fs_sddf",
-            feature = "board-qemu_virt_riscv64_fs_sddf",
-            feature = "board-x86_64_generic_fs_sddf"
-        ))]
-        b"ps" => cmd_table(rest, b"ps ok\n", b"ps err\n"),
-        #[cfg(any(
-            feature = "board-qemu_virt_aarch64_fs_sddf",
-            feature = "board-qemu_virt_riscv64_fs_sddf",
-            feature = "board-x86_64_generic_fs_sddf"
-        ))]
-        b"qos" => cmd_table(rest, b"qos ok\n", b"qos err\n"),
-        #[cfg(any(
-            feature = "board-qemu_virt_aarch64_fs_sddf",
-            feature = "board-qemu_virt_riscv64_fs_sddf",
-            feature = "board-x86_64_generic_fs_sddf"
-        ))]
-        b"dmesg" => cmd_dmesg(rest),
-        #[cfg(any(
-            feature = "board-qemu_virt_aarch64_fs_sddf",
-            feature = "board-qemu_virt_riscv64_fs_sddf",
-            feature = "board-x86_64_generic_fs_sddf"
-        ))]
-        b"reboot" => cmd_reboot(rest),
-        _ => say(b"err\n"),
+        _ => return false,
     }
+    true
+}
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
+fn dispatch_fetch(cmd: &[u8], rest: &[u8]) -> bool {
+    match cmd {
+        b"fetch" => cmd_fetch(rest),
+        b"calc" => cmd_calc(rest),
+        b"backup" => cmd_backup(rest),
+        b"source" => cmd_source(rest),
+        b"cert" => cmd_cert(rest),
+        b"edit" => cmd_edit(rest),
+        b"chat" => cmd_chat(rest),
+        _ => return false,
+    }
+    true
+}
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf"
+))]
+fn dispatch_fs_board(cmd: &[u8], rest: &[u8]) -> bool {
+    match cmd {
+        b"config" => cmd_config(rest),
+        b"date" => cmd_date(rest),
+        b"ps" => cmd_table(rest, b"ps ok\n", b"ps err\n"),
+        b"qos" => cmd_table(rest, b"qos ok\n", b"qos err\n"),
+        b"dmesg" => cmd_dmesg(rest),
+        b"reboot" => cmd_reboot(rest),
+        _ => return false,
+    }
+    true
 }
 
 #[cfg(any(
@@ -1417,6 +1400,26 @@ fn trim(line: &[u8]) -> &[u8] {
 fn init() -> HandlerImpl {
     let serial_len = size_of::<serial_client_config_t>();
     let fs_len = size_of::<fs_client_config_t>();
+    let serial = client_pages(serial_len, fs_len);
+    #[cfg(feature = "net-client")]
+    install_net(serial_len + fs_len);
+    #[cfg(any(
+        feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-qemu_virt_riscv64_browser_sddf"
+    ))]
+    gpu::install();
+    #[cfg(any(
+        feature = "board-qemu_virt_aarch64_fs_sddf",
+        feature = "board-qemu_virt_riscv64_fs_sddf",
+        feature = "board-x86_64_generic_fs_sddf"
+    ))]
+    install_status(serial_len + fs_len);
+    install_serial(serial);
+    spawn_worker();
+    HandlerImpl
+}
+
+fn client_pages(serial_len: usize, fs_len: usize) -> serial_client_config_t {
     #[cfg(not(any(
         feature = "net-client",
         any(
@@ -1440,23 +1443,17 @@ fn init() -> HandlerImpl {
     assert_eq!(serial.tx.id, CLIENT_TX_CHANNEL);
     assert_eq!(serial.rx.id, CLIENT_RX_CHANNEL);
     assert_eq!(fs.server.id, FS_SHELL_SERVER_CHANNEL);
-    #[cfg(feature = "net-client")]
-    install_net(serial_len + fs_len);
-    #[cfg(any(
-        feature = "board-qemu_virt_aarch64_browser_sddf",
-        feature = "board-qemu_virt_riscv64_browser_sddf"
-    ))]
-    gpu::install();
-    #[cfg(any(
-        feature = "board-qemu_virt_aarch64_fs_sddf",
-        feature = "board-qemu_virt_riscv64_fs_sddf",
-        feature = "board-x86_64_generic_fs_sddf"
-    ))]
-    install_status(serial_len + fs_len);
+    serial
+}
+
+fn install_serial(serial: serial_client_config_t) {
     // SAFETY: the template maps this client's transmit and receive regions.
     let tx = unsafe { serial_handle_from_connection(&serial.tx) };
     let rx = unsafe { serial_handle_from_connection(&serial.rx) };
     unsafe { (*IO.0.get()).write(Io { tx, rx }) };
+}
+
+fn spawn_worker() {
     // SAFETY: `STACKS` is exclusive to this init and the spawned worker.
     let stacks = unsafe { &mut *STACKS.0.get() };
     let ptrs = core::array::from_fn(|index| stacks[index].0.as_mut_ptr());
@@ -1465,7 +1462,6 @@ fn init() -> HandlerImpl {
     let handle = microkit_cothread_spawn(worker, core::ptr::null_mut());
     assert_ne!(handle, NULL_HANDLE, "worker cothread slot is free");
     microkit_cothread_yield();
-    HandlerImpl
 }
 
 impl Handler for HandlerImpl {

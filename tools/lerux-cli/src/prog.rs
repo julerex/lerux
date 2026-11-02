@@ -16,10 +16,26 @@ pub fn pack(root: &Path, key: &Path, out: &Path, src: Option<&Path>) -> Result<(
     if !src.is_file() {
         bail!("missing {}", src.display());
     }
+    let wasm = compile_smoke_wasm(&src)?;
+    let blob = sign_wasm(&wasm, key)?;
+    if let Some(parent) = out.parent() {
+        fs::create_dir_all(parent).ok();
+    }
+    fs::write(out, &blob).with_context(|| format!("write {}", out.display()))?;
+    println!(
+        "==> wrote {} (wasm {} bytes, blob {} bytes)",
+        out.display(),
+        wasm.len(),
+        blob.len()
+    );
+    Ok(())
+}
+
+fn compile_smoke_wasm(src: &Path) -> Result<Vec<u8>> {
     let wasm_tmp = tempfile::NamedTempFile::new().context("wasm temp file")?;
     let status = Command::new("rustc")
         .args(lerux_wasm::SMOKE_RUSTC_ARGS)
-        .arg(&src)
+        .arg(src)
         .arg("-o")
         .arg(wasm_tmp.path())
         .status()
@@ -35,6 +51,10 @@ pub fn pack(root: &Path, key: &Path, out: &Path, src: Option<&Path>) -> Result<(
             lerux_wasm::MAX_WASM_LEN
         );
     }
+    Ok(wasm)
+}
+
+fn sign_wasm(wasm: &[u8], key: &Path) -> Result<Vec<u8>> {
     let secret = fs::read(key).with_context(|| format!("read {}", key.display()))?;
     let secret: [u8; 32] = secret
         .as_slice()
@@ -42,24 +62,16 @@ pub fn pack(root: &Path, key: &Path, out: &Path, src: Option<&Path>) -> Result<(
         .map_err(|_| anyhow::anyhow!("ed25519 secret key must be 32 bytes"))?;
     let signing = SigningKey::from_bytes(&secret);
     let mut message = vec![0u8; lerux_wasm::HEADER_LEN + wasm.len()];
-    let message_len = lerux_wasm::signing_message(&wasm, &mut message)
+    let message_len = lerux_wasm::signing_message(wasm, &mut message)
         .map_err(|err| anyhow::anyhow!("signing message: {err:?}"))?;
     let signature = signing.sign(&message[..message_len]);
     let mut sig = [0u8; lerux_wasm::SIG_LEN];
     sig.copy_from_slice(&signature.to_bytes());
     let mut blob = vec![0u8; message_len + lerux_wasm::SIG_LEN];
-    let n = lerux_wasm::encode(&wasm, &sig, &mut blob)
+    let n = lerux_wasm::encode(wasm, &sig, &mut blob)
         .map_err(|err| anyhow::anyhow!("encode blob: {err:?}"))?;
-    if let Some(parent) = out.parent() {
-        fs::create_dir_all(parent).ok();
-    }
-    fs::write(out, &blob[..n]).with_context(|| format!("write {}", out.display()))?;
-    println!(
-        "==> wrote {} (wasm {} bytes, blob {n} bytes)",
-        out.display(),
-        wasm.len()
-    );
-    Ok(())
+    blob.truncate(n);
+    Ok(blob)
 }
 
 /// `lerux prog pack` with repo-relative defaults resolved from `root` when the

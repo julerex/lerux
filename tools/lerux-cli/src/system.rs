@@ -266,23 +266,30 @@ pub fn sdf_diff_summary(a_label: &str, a: &str, b_label: &str, b: &str) -> Strin
         b_lines.len(),
         b.matches("<channel>").count(),
     ));
+    append_channel_diff(&mut out, a, b);
+    append_line_diffs(&mut out, &a_lines, &b_lines);
+    out
+}
 
+fn append_channel_diff(out: &mut String, a: &str, b: &str) {
     let a_ch = extract_channel_blocks(a);
     let b_ch = extract_channel_blocks(b);
     if a_ch == b_ch {
         out.push_str("Channel blocks: identical\n");
-    } else {
-        out.push_str("Channel blocks: differ\n");
-        let a_set: BTreeSet<&str> = a_ch.lines().filter(|l| l.contains("pd=")).collect();
-        let b_set: BTreeSet<&str> = b_ch.lines().filter(|l| l.contains("pd=")).collect();
-        for line in a_set.difference(&b_set) {
-            out.push_str(&format!("  ch - {line}\n"));
-        }
-        for line in b_set.difference(&a_set) {
-            out.push_str(&format!("  ch + {line}\n"));
-        }
+        return;
     }
+    out.push_str("Channel blocks: differ\n");
+    let a_set: BTreeSet<&str> = a_ch.lines().filter(|l| l.contains("pd=")).collect();
+    let b_set: BTreeSet<&str> = b_ch.lines().filter(|l| l.contains("pd=")).collect();
+    for line in a_set.difference(&b_set) {
+        out.push_str(&format!("  ch - {line}\n"));
+    }
+    for line in b_set.difference(&a_set) {
+        out.push_str(&format!("  ch + {line}\n"));
+    }
+}
 
+fn append_line_diffs(out: &mut String, a_lines: &[&str], b_lines: &[&str]) {
     let max = a_lines.len().max(b_lines.len());
     let mut shown = 0usize;
     let mut total_diff = 0usize;
@@ -307,7 +314,6 @@ pub fn sdf_diff_summary(a_label: &str, a: &str, b_label: &str, b: &str) -> Strin
     } else if total_diff == 0 {
         out.push_str("Full SDF: identical\n");
     }
-    out
 }
 
 #[cfg(test)]
@@ -348,6 +354,13 @@ mod tests {
     fn generate_system_rejects_unknown_component() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
+        let output = write_unknown_component_fixture(root);
+        let err = generate_system(root, "test_board", &output).unwrap_err();
+        assert_eq!(err.to_string(), "unknown component \"nosuch\"");
+        assert_eq!(std::fs::read(&output).unwrap(), b"SENTINEL");
+    }
+
+    fn write_unknown_component_fixture(root: &std::path::Path) -> PathBuf {
         let template_dir = root.join("userspace/systems/templates");
         std::fs::create_dir_all(&template_dir).unwrap();
         std::fs::write(
@@ -387,9 +400,7 @@ description = "unknown"
         .unwrap();
         let output = root.join("out.system");
         std::fs::write(&output, b"SENTINEL").unwrap();
-        let err = generate_system(root, "test_board", &output).unwrap_err();
-        assert_eq!(err.to_string(), "unknown component \"nosuch\"");
-        assert_eq!(std::fs::read(&output).unwrap(), b"SENTINEL");
+        output
     }
 
     #[test]

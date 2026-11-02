@@ -114,49 +114,61 @@ impl Engine {
         let mut remaining = len;
         while remaining > 0 {
             let chunk = remaining.min(BOUNCE_SIZE);
-            let sectors = u16::try_from(chunk / 512).expect("chunk is sector-aligned");
-            if read {
-                run_dma(
-                    self.abar,
-                    self.dma_vaddr,
-                    self.dma_paddr,
-                    false,
-                    lba,
-                    sectors,
-                    ATA_CMD_READ_DMA_EXT,
-                )?;
-                // SAFETY: bounce lies inside the mapped DMA window and `chunk` fits.
-                unsafe {
-                    ptr::copy_nonoverlapping(
-                        (self.dma_vaddr + BOUNCE_OFF as usize) as *const u8,
-                        guest.add(offset),
-                        chunk,
-                    );
-                }
-            } else {
-                // SAFETY: guest buffer is mapped for `len` bytes and `chunk` fits in the remainder.
-                unsafe {
-                    ptr::copy_nonoverlapping(
-                        guest.add(offset),
-                        (self.dma_vaddr + BOUNCE_OFF as usize) as *mut u8,
-                        chunk,
-                    );
-                }
-                run_dma(
-                    self.abar,
-                    self.dma_vaddr,
-                    self.dma_paddr,
-                    true,
-                    lba,
-                    sectors,
-                    ATA_CMD_WRITE_DMA_EXT,
-                )?;
-            }
+            let sectors = self.move_chunk(read, guest, offset, lba, chunk)?;
             offset += chunk;
             remaining -= chunk;
             lba += u64::from(sectors);
         }
         Ok(())
+    }
+
+    fn move_chunk(
+        &mut self,
+        read: bool,
+        guest: *mut u8,
+        offset: usize,
+        lba: u64,
+        chunk: usize,
+    ) -> Result<u16, ()> {
+        let sectors = u16::try_from(chunk / 512).expect("chunk is sector-aligned");
+        if read {
+            run_dma(
+                self.abar,
+                self.dma_vaddr,
+                self.dma_paddr,
+                false,
+                lba,
+                sectors,
+                ATA_CMD_READ_DMA_EXT,
+            )?;
+            // SAFETY: bounce lies inside the mapped DMA window and `chunk` fits.
+            unsafe {
+                ptr::copy_nonoverlapping(
+                    (self.dma_vaddr + BOUNCE_OFF as usize) as *const u8,
+                    guest.add(offset),
+                    chunk,
+                );
+            }
+        } else {
+            // SAFETY: guest buffer is mapped for the whole transfer and `chunk` fits at `offset`.
+            unsafe {
+                ptr::copy_nonoverlapping(
+                    guest.add(offset),
+                    (self.dma_vaddr + BOUNCE_OFF as usize) as *mut u8,
+                    chunk,
+                );
+            }
+            run_dma(
+                self.abar,
+                self.dma_vaddr,
+                self.dma_paddr,
+                true,
+                lba,
+                sectors,
+                ATA_CMD_WRITE_DMA_EXT,
+            )?;
+        }
+        Ok(sectors)
     }
 }
 

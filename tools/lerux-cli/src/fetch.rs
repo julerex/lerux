@@ -77,36 +77,8 @@ pub fn fetch(root: &Path) -> Result<()> {
 fn clone_or_checkout(workspace: &Path, name: &str, url: &str, tag: &str) -> Result<()> {
     let dest = workspace.join(name);
     if dest.join(".git").is_dir() {
-        let _ = run_checked(
-            "git",
-            &[
-                "config",
-                "--global",
-                "--add",
-                "safe.directory",
-                &dest.to_string_lossy(),
-            ],
-        );
-        eprintln!("==> {name}: already cloned, checking out {tag}");
-        // `--tags` retrieves every tag. Git then fetches a populated submodule
-        // commit recorded by that history. Older LionsOS history records an
-        // sddf commit the remote no longer has, and the fetch fails before
-        // checkout. LionsOS dep/sddf is initialised after this checkout.
-        run_checked(
-            "git",
-            &[
-                "-C",
-                &dest.to_string_lossy(),
-                "fetch",
-                "--no-recurse-submodules",
-                "--tags",
-                "origin",
-            ],
-        )?;
-        run_checked("git", &["-C", &dest.to_string_lossy(), "checkout", tag])?;
-        return Ok(());
+        return checkout_existing(&dest, name, tag);
     }
-
     if dest.exists() {
         eprintln!(
             "==> {name}: removing existing non-repository path at {}",
@@ -114,7 +86,6 @@ fn clone_or_checkout(workspace: &Path, name: &str, url: &str, tag: &str) -> Resu
         );
         std::fs::remove_dir_all(&dest)?;
     }
-
     eprintln!("==> {name}: cloning {tag}");
     run_checked(
         "git",
@@ -131,6 +102,37 @@ fn clone_or_checkout(workspace: &Path, name: &str, url: &str, tag: &str) -> Resu
     Ok(())
 }
 
+fn checkout_existing(dest: &Path, name: &str, tag: &str) -> Result<()> {
+    let _ = run_checked(
+        "git",
+        &[
+            "config",
+            "--global",
+            "--add",
+            "safe.directory",
+            &dest.to_string_lossy(),
+        ],
+    );
+    eprintln!("==> {name}: already cloned, checking out {tag}");
+    // `--tags` retrieves every tag. Git then fetches a populated submodule
+    // commit recorded by that history. Older LionsOS history records an
+    // sddf commit the remote no longer has, and the fetch fails before
+    // checkout. LionsOS dep/sddf is initialised after this checkout.
+    run_checked(
+        "git",
+        &[
+            "-C",
+            &dest.to_string_lossy(),
+            "fetch",
+            "--no-recurse-submodules",
+            "--tags",
+            "origin",
+        ],
+    )?;
+    run_checked("git", &["-C", &dest.to_string_lossy(), "checkout", tag])?;
+    Ok(())
+}
+
 pub fn fetch_sdk(root: &Path) -> Result<()> {
     let versions = load_versions(root)?;
     let version = versions.repos.microkit.tag;
@@ -144,35 +146,7 @@ pub fn fetch_sdk(root: &Path) -> Result<()> {
         .map(|text| text.trim().to_string());
     let current = installed.as_deref() == Some(version.as_str()) && dest.join("bin").is_dir();
     if !current {
-        if dest.exists() {
-            eprintln!(
-                "==> Replacing Microkit SDK at {} (installed {})",
-                dest.display(),
-                installed.as_deref().unwrap_or("unknown")
-            );
-            std::fs::remove_dir_all(&dest)?;
-        }
-        eprintln!("==> Downloading Microkit SDK {version}");
-        ensure_dir(&dest)?;
-        let status = std::process::Command::new("bash")
-            .arg("-c")
-            .arg(format!(
-                "curl -fsSL '{url}' | tar -xzf - -C '{}' --strip-components=1",
-                dest.display()
-            ))
-            .status()
-            .context("extract SDK tarball")?;
-        if !status.success() {
-            bail!("SDK download failed");
-        }
-        let downloaded = std::fs::read_to_string(dest.join("VERSION"))
-            .context("read SDK VERSION")?
-            .trim()
-            .to_string();
-        if downloaded != version {
-            bail!("SDK VERSION is {downloaded}, expected {version}");
-        }
-        run_checked("chmod", &["-R", "a+X", &dest.to_string_lossy()])?;
+        download_sdk(&dest, &url, &version, installed.as_deref())?;
     } else {
         eprintln!("==> SDK {version} already present at {}", dest.display());
     }
@@ -180,6 +154,39 @@ pub fn fetch_sdk(root: &Path) -> Result<()> {
     let sdk_path_file = root.join("deps/.sdk-path");
     crate::process::write_file(&sdk_path_file, &format!("{}\n", dest.display()))?;
     eprintln!("==> Microkit SDK: {}", dest.display());
+    Ok(())
+}
+
+fn download_sdk(dest: &Path, url: &str, version: &str, installed: Option<&str>) -> Result<()> {
+    if dest.exists() {
+        eprintln!(
+            "==> Replacing Microkit SDK at {} (installed {})",
+            dest.display(),
+            installed.unwrap_or("unknown")
+        );
+        std::fs::remove_dir_all(dest)?;
+    }
+    eprintln!("==> Downloading Microkit SDK {version}");
+    ensure_dir(dest)?;
+    let status = std::process::Command::new("bash")
+        .arg("-c")
+        .arg(format!(
+            "curl -fsSL '{url}' | tar -xzf - -C '{}' --strip-components=1",
+            dest.display()
+        ))
+        .status()
+        .context("extract SDK tarball")?;
+    if !status.success() {
+        bail!("SDK download failed");
+    }
+    let downloaded = std::fs::read_to_string(dest.join("VERSION"))
+        .context("read SDK VERSION")?
+        .trim()
+        .to_string();
+    if downloaded != version {
+        bail!("SDK VERSION is {downloaded}, expected {version}");
+    }
+    run_checked("chmod", &["-R", "a+X", &dest.to_string_lossy()])?;
     Ok(())
 }
 

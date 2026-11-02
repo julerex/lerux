@@ -70,37 +70,52 @@ pub fn bring_up(nic: &mut impl Nic, ssid: &[u8], pass: &[u8]) -> WifiReport {
         return WifiReport::KeyErr;
     }
     let key = wpa_psk(pass, ssid);
+    if let Err(report) = associate(nic, &key) {
+        return report;
+    }
+    let Ok((addr, gateway)) = dhcp_lease(nic) else {
+        return WifiReport::RadioErr;
+    };
+    ping(nic, addr, gateway)
+}
+
+fn associate(nic: &mut impl Nic, key: &[u8; 32]) -> Result<(), WifiReport> {
     let mut eapol = [0u8; 64];
-    let eapol_len = write_eapol(&mut eapol, &key);
-    if !nic.tx(&eapol[..eapol_len]) {
-        return WifiReport::RadioErr;
+    let eapol_len = write_eapol(&mut eapol, key);
+    if !nic.tx(&eapol[..eapol_len]) || nic.rx() != Some(&[1]) {
+        return Err(WifiReport::RadioErr);
     }
-    if nic.rx() != Some(&[1]) {
-        return WifiReport::RadioErr;
-    }
+    Ok(())
+}
+
+fn dhcp_lease(nic: &mut impl Nic) -> Result<([u8; 4], [u8; 4]), WifiReport> {
     let mut discover = [0u8; 342];
     let discover_len = write_discover(&mut discover, &CLIENT_MAC);
     if !nic.tx(&discover[..discover_len]) {
-        return WifiReport::RadioErr;
+        return Err(WifiReport::RadioErr);
     }
     let Some(offer) = nic.rx() else {
-        return WifiReport::RadioErr;
+        return Err(WifiReport::RadioErr);
     };
     let Some((yiaddr, server)) = dhcp_yiaddr(offer, 2) else {
-        return WifiReport::RadioErr;
+        return Err(WifiReport::RadioErr);
     };
     let mut request = [0u8; 342];
     let request_len = write_request(&mut request, &CLIENT_MAC, yiaddr, server);
     if !nic.tx(&request[..request_len]) {
-        return WifiReport::RadioErr;
+        return Err(WifiReport::RadioErr);
     }
     let Some(ack) = nic.rx() else {
-        return WifiReport::RadioErr;
+        return Err(WifiReport::RadioErr);
     };
     let Some((addr, _)) = dhcp_yiaddr(ack, 5) else {
-        return WifiReport::RadioErr;
+        return Err(WifiReport::RadioErr);
     };
     let gateway = dhcp_router(ack).unwrap_or([addr[0], addr[1], addr[2], 1]);
+    Ok((addr, gateway))
+}
+
+fn ping(nic: &mut impl Nic, addr: [u8; 4], gateway: [u8; 4]) -> WifiReport {
     let mut echo = [0u8; 64];
     let echo_len = write_echo(&mut echo, &CLIENT_MAC, addr, gateway);
     if !nic.tx(&echo[..echo_len]) {
@@ -176,6 +191,29 @@ fn write_u8(out: &mut [u8], value: u8) -> usize {
     n
 }
 
+fn write_dhcp_headers(out: &mut [u8], mac: &[u8; 6]) {
+    out[..6].fill(0xff);
+    out[6..12].copy_from_slice(mac);
+    out[12..14].copy_from_slice(&0x0800u16.to_be_bytes());
+    out[14] = 0x45;
+    out[15] = 0;
+    let udp_len = 8 + 240 + 16;
+    let ip_len = 20 + udp_len;
+    out[16..18].copy_from_slice(&(ip_len as u16).to_be_bytes());
+    out[18..24].fill(0);
+    out[22] = 64;
+    out[23] = 17;
+    out[24..26].fill(0);
+    out[26..30].fill(0);
+    out[30..34].fill(0xff);
+    let sum = ip_checksum(&out[14..34]);
+    out[24..26].copy_from_slice(&sum.to_be_bytes());
+    out[34..36].copy_from_slice(&68u16.to_be_bytes());
+    out[36..38].copy_from_slice(&67u16.to_be_bytes());
+    out[38..40].copy_from_slice(&(udp_len as u16).to_be_bytes());
+    out[40..42].fill(0);
+}
+
 fn write_eapol(out: &mut [u8], psk: &[u8; 32]) -> usize {
     out[..6].fill(0xff);
     out[6..12].copy_from_slice(&CLIENT_MAC);
@@ -198,26 +236,7 @@ pub fn write_request(out: &mut [u8], mac: &[u8; 6], yiaddr: [u8; 4], server: [u8
 }
 
 fn write_dhcp(out: &mut [u8], mac: &[u8; 6], yiaddr: [u8; 4], server: [u8; 4], kind: u8) -> usize {
-    out[..6].fill(0xff);
-    out[6..12].copy_from_slice(mac);
-    out[12..14].copy_from_slice(&0x0800u16.to_be_bytes());
-    out[14] = 0x45;
-    out[15] = 0;
-    let udp_len = 8 + 240 + 16;
-    let ip_len = 20 + udp_len;
-    out[16..18].copy_from_slice(&(ip_len as u16).to_be_bytes());
-    out[18..24].fill(0);
-    out[22] = 64;
-    out[23] = 17;
-    out[24..26].fill(0);
-    out[26..30].fill(0);
-    out[30..34].fill(0xff);
-    let sum = ip_checksum(&out[14..34]);
-    out[24..26].copy_from_slice(&sum.to_be_bytes());
-    out[34..36].copy_from_slice(&68u16.to_be_bytes());
-    out[36..38].copy_from_slice(&67u16.to_be_bytes());
-    out[38..40].copy_from_slice(&(udp_len as u16).to_be_bytes());
-    out[40..42].fill(0);
+    write_dhcp_headers(out, mac);
     let boot = &mut out[42..];
     boot[..240].fill(0);
     boot[0] = 1;

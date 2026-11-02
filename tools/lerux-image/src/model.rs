@@ -222,9 +222,24 @@ fn assign(image: &Image) -> Result<Assigned, ImageError> {
     let mut next = BTreeMap::new();
     let mut irqs = Vec::new();
     let mut ends = Vec::new();
+    assign_domain_irqs(image, &mut next, &mut irqs, &mut ends)?;
+    let ids = assign_link_ids(image, &mut next, &mut ends)?;
+    Ok(Assigned {
+        channels: assigned_channels(image, &ids),
+        ends,
+        irqs,
+    })
+}
+
+fn assign_domain_irqs(
+    image: &Image,
+    next: &mut BTreeMap<&'static str, u8>,
+    irqs: &mut Vec<AssignedIrq>,
+    ends: &mut Vec<AssignedEnd>,
+) -> Result<(), ImageError> {
     for domain in &image.domains {
         if domain.irq.is_some() {
-            let id = take_id(&mut next, domain.name)?;
+            let id = take_id(next, domain.name)?;
             irqs.push(AssignedIrq {
                 pd: domain.name,
                 id,
@@ -235,13 +250,21 @@ fn assign(image: &Image) -> Result<Assigned, ImageError> {
             });
         }
     }
+    Ok(())
+}
+
+fn assign_link_ids(
+    image: &Image,
+    next: &mut BTreeMap<&'static str, u8>,
+    ends: &mut Vec<AssignedEnd>,
+) -> Result<Vec<(u8, u8)>, ImageError> {
     let mut sequence: Vec<usize> = (0..image.links.len()).collect();
     sequence.sort_by_key(|&index| image.links[index].order);
     let mut ids = vec![(0u8, 0u8); image.links.len()];
     for index in sequence {
         let link = &image.links[index];
-        let a_id = take_id(&mut next, link.a)?;
-        let b_id = take_id(&mut next, link.b)?;
+        let a_id = take_id(next, link.a)?;
+        let b_id = take_id(next, link.b)?;
         ids[index] = (a_id, b_id);
         ends.push(AssignedEnd {
             pd: link.a,
@@ -252,7 +275,11 @@ fn assign(image: &Image) -> Result<Assigned, ImageError> {
             id: b_id,
         });
     }
-    let channels = image
+    Ok(ids)
+}
+
+fn assigned_channels(image: &Image, ids: &[(u8, u8)]) -> Vec<AssignedChannel> {
+    image
         .links
         .iter()
         .enumerate()
@@ -263,12 +290,7 @@ fn assign(image: &Image) -> Result<Assigned, ImageError> {
             b_id: ids[index].1,
             pp_b: link.pp_b,
         })
-        .collect();
-    Ok(Assigned {
-        channels,
-        ends,
-        irqs,
-    })
+        .collect()
 }
 
 fn take_id(next: &mut BTreeMap<&'static str, u8>, pd: &'static str) -> Result<u8, ImageError> {

@@ -76,6 +76,25 @@ fn driver_and_virtualisers_share_queues_with_different_channels() {
     assert_eq!(driver.magic, SDDF_NET_MAGIC);
     assert_eq!(tx.magic, SDDF_NET_MAGIC);
     assert_eq!(rx.magic, SDDF_NET_MAGIC);
+    assert_driver(&driver);
+    assert_virt_tx(&tx, &driver);
+    assert_virt_rx(&rx, &driver);
+}
+
+#[test]
+fn copier_and_client_meet_on_the_client_queues() {
+    let tx = virt_tx_config();
+    let rx = virt_rx_config();
+    let copy = copy_config();
+    let client = client_config();
+
+    assert_eq!(copy.magic, SDDF_NET_MAGIC);
+    assert_eq!(client.magic, SDDF_NET_MAGIC);
+    assert_copier(&copy, &rx);
+    assert_client(&client, &copy, &tx);
+}
+
+fn assert_driver(driver: &net_driver_config_t) {
     assert_eq!(driver.virt_rx.id, DRIVER_RX_CHANNEL);
     assert_eq!(driver.virt_tx.id, DRIVER_TX_CHANNEL);
     assert_eq!(driver.virt_rx.num_buffers, NET_QUEUE_CAPACITY);
@@ -89,6 +108,9 @@ fn driver_and_virtualisers_share_queues_with_different_channels() {
         addr(driver.virt_tx.active_queue.vaddr),
         NET_TX_DRV_ACTIVE_VADDR
     );
+}
+
+fn assert_virt_tx(tx: &net_virt_tx_config_t, driver: &net_driver_config_t) {
     assert_eq!(tx.num_clients, 1);
     assert_eq!(tx.driver.id, VIRT_TX_DRIVER_CHANNEL);
     assert_ne!(driver.virt_tx.id, tx.driver.id);
@@ -116,7 +138,9 @@ fn driver_and_virtualisers_share_queues_with_different_channels() {
         u32::from(NET_QUEUE_CAPACITY)
     );
     assert_eq!(tx.clients[1].num_regions, 0);
+}
 
+fn assert_virt_rx(rx: &net_virt_rx_config_t, driver: &net_driver_config_t) {
     assert_eq!(rx.num_clients, 1);
     assert_eq!(rx.driver.id, VIRT_RX_DRIVER_CHANNEL);
     assert_ne!(driver.virt_rx.id, rx.driver.id);
@@ -133,15 +157,7 @@ fn driver_and_virtualisers_share_queues_with_different_channels() {
     assert_eq!(rx.clients[1].num_macs, 0);
 }
 
-#[test]
-fn copier_and_client_meet_on_the_client_queues() {
-    let tx = virt_tx_config();
-    let rx = virt_rx_config();
-    let copy = copy_config();
-    let client = client_config();
-
-    assert_eq!(copy.magic, SDDF_NET_MAGIC);
-    assert_eq!(client.magic, SDDF_NET_MAGIC);
+fn assert_copier(copy: &net_copy_config_t, rx: &net_virt_rx_config_t) {
     assert_eq!(copy.rx.id, COPY_VIRT_CHANNEL);
     assert_eq!(copy.client.id, COPY_CLIENT_CHANNEL);
     assert_ne!(rx.clients[0].conn.id, copy.rx.id);
@@ -161,7 +177,13 @@ fn copier_and_client_meet_on_the_client_queues() {
         NET_RX_CLIENT_ACTIVE_VADDR
     );
     assert_eq!(addr(copy.client_data.vaddr), NET_RX_CLIENT_DATA_VADDR);
+}
 
+fn assert_client(
+    client: &net_client_config_t,
+    copy: &net_copy_config_t,
+    tx: &net_virt_tx_config_t,
+) {
     assert_eq!(client.rx.id, CLIENT_NET_RX_CHANNEL);
     assert_eq!(client.tx.id, CLIENT_NET_TX_CHANNEL);
     assert_ne!(copy.client.id, client.rx.id);

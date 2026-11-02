@@ -327,6 +327,11 @@ impl Engine {
         unsafe {
             ptr::write_bytes(self.dma_vaddr as *mut u8, 0, size_of::<DmaLayout>());
         }
+        self.fill_rx_ring();
+        self.arm_rings()
+    }
+
+    fn fill_rx_ring(&mut self) {
         for slot in 0..RING_LEN {
             let index = u16::try_from(slot).expect("slot");
             let phys = self.buf_phys(offset_of!(DmaLayout, rx_bufs), index);
@@ -345,6 +350,9 @@ impl Engine {
                 );
             }
         }
+    }
+
+    fn arm_rings(&mut self) -> Result<(), OpenError> {
         compiler_fence(Ordering::Release);
         write_base(
             self.regs,

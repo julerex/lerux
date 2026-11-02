@@ -102,54 +102,15 @@ fn run_smoke_inner(
         Some(child.stdin.take().context("child stdin pipe")?)
     };
 
-    let result = (|| -> Result<()> {
-        if test.unordered {
-            let deadline = Instant::now() + Duration::from_secs(test.timeout_secs);
-            expect_unordered(&capture.output, &test.expects, deadline)?;
-        } else {
-            let per = std::cmp::max(30, test.timeout_secs / test.expects.len().max(1) as u64);
-            expect_ordered(&capture.output, &test.expects, per)?;
-        }
-        for (url, expect) in &test.curls {
-            curl_check(url, expect, 30)?;
-        }
-        if !test.qmp_keys.is_empty() {
-            let socket = qmp_socket.context("qmp_keys set but this run has no QMP socket")?;
-            let expect = test
-                .qmp_expect
-                .as_deref()
-                .context("qmp_keys set without qmp_expect")?;
-            println!("==> injecting {} PS/2 key(s) via QMP…", test.qmp_keys.len());
-            send_qmp_keys(socket, &test.qmp_keys)?;
-            expect_ordered(
-                &capture.output,
-                &[expect.to_string()],
-                test.script_timeout_secs.max(30),
-            )?;
-            println!("==> PS/2 line matched");
-        }
-        if !test.script.is_empty() {
-            let output = Arc::clone(&capture.output);
-            let mut restart = host_restart.as_mut().map(|factory| HostRestart {
-                factory,
-                child: &mut child,
-                test,
-                stdio_log,
-                capture: &mut capture,
-            });
-            run_script_steps(
-                &output,
-                &test.script,
-                test.script_timeout_secs,
-                qmp_socket,
-                |_| Ok(()),
-                Some(&mut script_in),
-                restart.as_mut(),
-            )?;
-        }
-        println!("\n==> smoke test passed");
-        Ok(())
-    })();
+    let result = drive_smoke(
+        &mut capture,
+        &mut child,
+        test,
+        qmp_socket,
+        stdio_log,
+        &mut script_in,
+        &mut host_restart,
+    );
 
     let _ = child.kill();
     drop(script_in);
@@ -157,23 +118,120 @@ fn run_smoke_inner(
     capture.join();
 
     let captured = capture.output.lock().map(|s| s.clone()).unwrap_or_default();
+    report_smoke_capture(save_log, &captured, result.is_err());
+    result
+}
+
+fn drive_smoke(
+    capture: &mut SmokeCapture,
+    child: &mut Child,
+    test: &SmokeTest,
+    qmp_socket: Option<&Path>,
+    stdio_log: Option<&Path>,
+    script_in: &mut Option<ChildStdin>,
+    host_restart: &mut Option<Box<dyn FnMut() -> Result<Command>>>,
+) -> Result<()> {
+    await_boot_expects(&capture.output, test)?;
+    for (url, expect) in &test.curls {
+        curl_check(url, expect, 30)?;
+    }
+    inject_qmp_keys(&capture.output, test, qmp_socket)?;
+    run_optional_script(
+        capture,
+        child,
+        test,
+        qmp_socket,
+        stdio_log,
+        script_in,
+        host_restart,
+    )?;
+    println!("\n==> smoke test passed");
+    Ok(())
+}
+
+fn await_boot_expects(output: &Arc<Mutex<String>>, test: &SmokeTest) -> Result<()> {
+    if test.unordered {
+        let deadline = Instant::now() + Duration::from_secs(test.timeout_secs);
+        expect_unordered(output, &test.expects, deadline)
+    } else {
+        let per = std::cmp::max(30, test.timeout_secs / test.expects.len().max(1) as u64);
+        expect_ordered(output, &test.expects, per)
+    }
+}
+
+fn inject_qmp_keys(
+    output: &Arc<Mutex<String>>,
+    test: &SmokeTest,
+    qmp_socket: Option<&Path>,
+) -> Result<()> {
+    if test.qmp_keys.is_empty() {
+        return Ok(());
+    }
+    let socket = qmp_socket.context("qmp_keys set but this run has no QMP socket")?;
+    let expect = test
+        .qmp_expect
+        .as_deref()
+        .context("qmp_keys set without qmp_expect")?;
+    println!("==> injecting {} PS/2 key(s) via QMP…", test.qmp_keys.len());
+    send_qmp_keys(socket, &test.qmp_keys)?;
+    expect_ordered(
+        output,
+        &[expect.to_string()],
+        test.script_timeout_secs.max(30),
+    )?;
+    println!("==> PS/2 line matched");
+    Ok(())
+}
+
+fn run_optional_script(
+    capture: &mut SmokeCapture,
+    child: &mut Child,
+    test: &SmokeTest,
+    qmp_socket: Option<&Path>,
+    stdio_log: Option<&Path>,
+    script_in: &mut Option<ChildStdin>,
+    host_restart: &mut Option<Box<dyn FnMut() -> Result<Command>>>,
+) -> Result<()> {
+    if test.script.is_empty() {
+        return Ok(());
+    }
+    let output = Arc::clone(&capture.output);
+    let mut restart = host_restart.as_mut().map(|factory| HostRestart {
+        factory,
+        child,
+        test,
+        stdio_log,
+        capture,
+    });
+    run_script_steps(
+        &output,
+        &test.script,
+        test.script_timeout_secs,
+        qmp_socket,
+        |_| Ok(()),
+        Some(script_in),
+        restart.as_mut(),
+    )
+}
+
+fn report_smoke_capture(save_log: Option<&Path>, captured: &str, failed: bool) {
     if let Some(path) = save_log {
         if let Some(parent) = path.parent() {
             let _ = std::fs::create_dir_all(parent);
         }
-        if let Err(e) = std::fs::write(path, &captured) {
+        if let Err(e) = std::fs::write(path, captured) {
             eprintln!(
                 "warning: could not write serial log {}: {e}",
                 path.display()
             );
-        } else if result.is_err() {
+        } else if failed {
             eprintln!("==> serial capture: {}", path.display());
             eprintln!(
                 "    re-run: cargo run -q -p lerux-cli -- diagnose {}",
                 path.display()
             );
         }
-    } else if result.is_err() {
+    } else if failed {
         // Always dump a short tail on failure for CI logs.
         let tail: String = captured
             .lines()
@@ -188,7 +246,6 @@ fn run_smoke_inner(
             eprintln!("==> serial tail (failure):\n{tail}");
         }
     }
-    result
 }
 
 struct SmokeCapture {
@@ -263,51 +320,65 @@ fn spawn_smoke_qemu(
         cmd.stdin(Stdio::piped());
     }
     if let Some(path) = stdio_log {
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .with_context(|| format!("mkdir {}", parent.display()))?;
-        }
-        let start_offset = if append_stdio {
-            std::fs::metadata(path).map(|m| m.len()).unwrap_or(0)
-        } else {
-            let _ = std::fs::remove_file(path);
-            0
-        };
-        let file = OpenOptions::new()
-            .create(true)
-            .append(append_stdio)
-            .write(true)
-            .read(true)
-            .truncate(!append_stdio)
-            .open(path)
-            .with_context(|| format!("open {}", path.display()))?;
-        let file_err = file.try_clone().context("clone stdio smoke log")?;
-        cmd.stdout(Stdio::from(file));
-        cmd.stderr(Stdio::from(file_err));
-        let path = path.to_path_buf();
-        let sink = Arc::clone(&capture.output);
-        let stop = Arc::clone(&capture.stdio_stop);
-        capture.stdio_thread = Some(std::thread::spawn(move || {
-            pump_stdio_log_file(path, sink, stop, start_offset);
-        }));
+        attach_stdio_log(cmd, path, append_stdio, capture)?;
     } else {
         cmd.stdout(Stdio::piped());
         cmd.stderr(Stdio::piped());
     }
     let mut child = cmd.spawn()?;
     if stdio_log.is_none() {
-        let stdout = child.stdout.take().context("child stdout pipe")?;
-        let stderr = child.stderr.take().context("child stderr pipe")?;
-        let out_clone = Arc::clone(&capture.output);
-        let err_clone = Arc::clone(&capture.output);
-        capture.out_thread = Some(std::thread::spawn(move || {
-            pump_reader(BufReader::new(stdout), out_clone);
-        }));
-        capture.err_thread = Some(std::thread::spawn(move || {
-            pump_reader(BufReader::new(stderr), err_clone);
-        }));
+        spawn_piped_pumps(&mut child, capture)?;
     }
     Ok(child)
+}
+
+fn attach_stdio_log(
+    cmd: &mut Command,
+    path: &Path,
+    append_stdio: bool,
+    capture: &mut SmokeCapture,
+) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).with_context(|| format!("mkdir {}", parent.display()))?;
+    }
+    let start_offset = if append_stdio {
+        std::fs::metadata(path).map(|m| m.len()).unwrap_or(0)
+    } else {
+        let _ = std::fs::remove_file(path);
+        0
+    };
+    let file = OpenOptions::new()
+        .create(true)
+        .append(append_stdio)
+        .write(true)
+        .read(true)
+        .truncate(!append_stdio)
+        .open(path)
+        .with_context(|| format!("open {}", path.display()))?;
+    let file_err = file.try_clone().context("clone stdio smoke log")?;
+    cmd.stdout(Stdio::from(file));
+    cmd.stderr(Stdio::from(file_err));
+    let path = path.to_path_buf();
+    let sink = Arc::clone(&capture.output);
+    let stop = Arc::clone(&capture.stdio_stop);
+    capture.stdio_thread = Some(std::thread::spawn(move || {
+        pump_stdio_log_file(path, sink, stop, start_offset);
+    }));
+    Ok(())
+}
+
+fn spawn_piped_pumps(child: &mut Child, capture: &mut SmokeCapture) -> Result<()> {
+    let stdout = child.stdout.take().context("child stdout pipe")?;
+    let stderr = child.stderr.take().context("child stderr pipe")?;
+    let out_clone = Arc::clone(&capture.output);
+    let err_clone = Arc::clone(&capture.output);
+    capture.out_thread = Some(std::thread::spawn(move || {
+        pump_reader(BufReader::new(stdout), out_clone);
+    }));
+    capture.err_thread = Some(std::thread::spawn(move || {
+        pump_reader(BufReader::new(stderr), err_clone);
+    }));
+    Ok(())
 }
 
 fn pump_stdio_log_file(
@@ -649,41 +720,15 @@ pub fn run_hw_serial_smoke(test: &SmokeTest) -> Result<()> {
     let baud = std::env::var("LERUX_HW_BAUD").unwrap_or_else(|_| "115200".into());
     println!("==> Hardware serial smoke on {device:?} ({baud} 8N1 raw)");
 
-    let stty = Command::new("stty")
-        .args(["-F", &device, &baud, "raw", "-echo"])
-        .status()
-        .context("stty serial config")?;
-    if !stty.success() {
-        bail!("stty failed configuring {device:?}");
-    }
-
+    configure_hw_serial(&device, &baud)?;
     // RDWR so Phase 52 script steps can inject REPL commands.
-    let file = OpenOptions::new()
-        .read(true)
-        .write(true)
-        .open(&device)
-        .with_context(|| format!("open serial {device:?}"))?;
-    let reader = file
-        .try_clone()
-        .with_context(|| format!("clone serial {device:?} for reader"))?;
-    let mut writer = file;
-
+    let (reader, mut writer) = open_hw_serial(&device)?;
     let output = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
     let out_clone = std::sync::Arc::clone(&output);
-
     let reader_thread = std::thread::spawn(move || {
         pump_reader(BufReader::new(reader), out_clone);
     });
-
-    let deadline = Instant::now() + Duration::from_secs(test.timeout_secs);
-    let result = if test.unordered {
-        expect_unordered(&output, &test.expects, deadline)
-    } else {
-        let per = std::cmp::max(30, test.timeout_secs / test.expects.len().max(1) as u64);
-        expect_ordered(&output, &test.expects, per)
-    };
-
-    if let Err(e) = result {
+    if let Err(e) = await_boot_expects(&output, test) {
         drop(reader_thread);
         return Err(e);
     }
@@ -714,6 +759,29 @@ pub fn run_hw_serial_smoke(test: &SmokeTest) -> Result<()> {
     Ok(())
 }
 
+fn configure_hw_serial(device: &str, baud: &str) -> Result<()> {
+    let stty = Command::new("stty")
+        .args(["-F", device, baud, "raw", "-echo"])
+        .status()
+        .context("stty serial config")?;
+    if !stty.success() {
+        bail!("stty failed configuring {device:?}");
+    }
+    Ok(())
+}
+
+fn open_hw_serial(device: &str) -> Result<(std::fs::File, std::fs::File)> {
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(device)
+        .with_context(|| format!("open serial {device:?}"))?;
+    let reader = file
+        .try_clone()
+        .with_context(|| format!("clone serial {device:?} for reader"))?;
+    Ok((reader, file))
+}
+
 /// Write each script step and wait until the capture after the send contains `expect`.
 fn run_script_steps(
     output: &Arc<Mutex<String>>,
@@ -734,61 +802,102 @@ fn run_script_steps(
             step.expect
         );
         let _ = std::io::Write::flush(&mut std::io::stdout());
-        if let Some(stdin) = guest_stdin.as_mut().and_then(|slot| slot.as_mut()) {
-            stdin
-                .write_all(step.send.as_bytes())
-                .with_context(|| format!("write serial step {}", i + 1))?;
-            stdin.flush().context("flush serial")?;
-        } else {
-            send(step.send.as_bytes()).with_context(|| format!("write serial step {}", i + 1))?;
-        }
+        deliver_script_step(step, i, &mut send, guest_stdin.as_mut())?;
         let mut step_deadline = Instant::now() + Duration::from_secs(timeout_secs);
         if step.send.starts_with("reboot") {
-            wait_for_mark(output, mark, "reboot", step_deadline).with_context(|| {
-                format!(
-                    "script step {} timed out waiting for the guest reboot line",
-                    i + 1
-                )
-            })?;
-            if let Some(slot) = guest_stdin.as_mut() {
-                slot.take();
-            }
-            if let Some(restart) = host_restart.as_mut() {
-                let stdin_slot = guest_stdin
-                    .as_mut()
-                    .context("host restart needs guest stdin")?;
-                restart.restart(stdin_slot).with_context(|| {
-                    format!("script step {} host QEMU restart after reboot", i + 1)
-                })?;
-            } else {
-                let socket = qmp_socket.context("a reboot step needs a QMP socket")?;
-                qmp_system_reset(socket).context("QMP system_reset")?;
-            }
-            mark = output.lock().map(|s| s.len()).unwrap_or(mark);
-            step_deadline = Instant::now() + Duration::from_secs(timeout_secs);
+            (mark, step_deadline) = handle_script_reboot(
+                output,
+                mark,
+                i,
+                timeout_secs,
+                qmp_socket,
+                guest_stdin.as_mut(),
+                host_restart.as_mut(),
+            )?;
         }
-        loop {
-            let found = output
-                .lock()
-                .map(|s| s.len() > mark && capture_contains(&s[mark..], &step.expect))
-                .unwrap_or(false);
-            if found {
-                println!("ok");
-                break;
-            }
-            if Instant::now() >= step_deadline {
-                bail!(
-                    "script step {} timed out waiting for {:?} after send {:?}",
-                    i + 1,
-                    step.expect,
-                    step.send
-                );
-            }
-            std::thread::sleep(Duration::from_millis(50));
-        }
+        wait_script_expect(output, step, i, mark, step_deadline)?;
     }
     println!("==> scripted REPL steps passed");
     Ok(())
+}
+
+fn deliver_script_step(
+    step: &ScriptStep,
+    index: usize,
+    send: &mut impl FnMut(&[u8]) -> Result<()>,
+    guest_stdin: Option<&mut &mut Option<ChildStdin>>,
+) -> Result<()> {
+    if let Some(stdin) = guest_stdin.and_then(|slot| slot.as_mut()) {
+        stdin
+            .write_all(step.send.as_bytes())
+            .with_context(|| format!("write serial step {}", index + 1))?;
+        stdin.flush().context("flush serial")?;
+    } else {
+        send(step.send.as_bytes()).with_context(|| format!("write serial step {}", index + 1))?;
+    }
+    Ok(())
+}
+
+fn handle_script_reboot(
+    output: &Arc<Mutex<String>>,
+    mark: usize,
+    index: usize,
+    timeout_secs: u64,
+    qmp_socket: Option<&Path>,
+    mut guest_stdin: Option<&mut &mut Option<ChildStdin>>,
+    mut host_restart: Option<&mut &mut HostRestart<'_>>,
+) -> Result<(usize, Instant)> {
+    let step_deadline = Instant::now() + Duration::from_secs(timeout_secs);
+    wait_for_mark(output, mark, "reboot", step_deadline).with_context(|| {
+        format!(
+            "script step {} timed out waiting for the guest reboot line",
+            index + 1
+        )
+    })?;
+    if let Some(slot) = guest_stdin.as_mut() {
+        slot.take();
+    }
+    if let Some(restart) = host_restart.as_mut() {
+        let stdin_slot = guest_stdin
+            .as_mut()
+            .context("host restart needs guest stdin")?;
+        restart
+            .restart(stdin_slot)
+            .with_context(|| format!("script step {} host QEMU restart after reboot", index + 1))?;
+    } else {
+        let socket = qmp_socket.context("a reboot step needs a QMP socket")?;
+        qmp_system_reset(socket).context("QMP system_reset")?;
+    }
+    let mark = output.lock().map(|s| s.len()).unwrap_or(mark);
+    Ok((mark, Instant::now() + Duration::from_secs(timeout_secs)))
+}
+
+fn wait_script_expect(
+    output: &Arc<Mutex<String>>,
+    step: &ScriptStep,
+    index: usize,
+    mark: usize,
+    step_deadline: Instant,
+) -> Result<()> {
+    loop {
+        let found = output
+            .lock()
+            .map(|s| s.len() > mark && capture_contains(&s[mark..], &step.expect))
+            .unwrap_or(false);
+        if found {
+            println!("ok");
+            return Ok(());
+        }
+        if Instant::now() >= step_deadline {
+            bail!(
+                "script step {} timed out waiting for {:?} after send {:?}",
+                index + 1,
+                step.expect,
+                step.send
+            );
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
 }
 
 const SEL4_LOG_LEVELS: [&str; 5] = ["ERROR", "WARN", "INFO", "DEBUG", "TRACE"];
@@ -970,6 +1079,18 @@ fn resumed_outer_lines(
     if old_pay.is_empty() || cur_pay.is_empty() || after.is_empty() {
         return Vec::new();
     }
+    emit_resumed_lines(
+        oldest,
+        current,
+        after,
+        after_at,
+        outer_newline_at,
+        cur_pre,
+        &score_resumed_splits(old_pay, cur_pay, after),
+    )
+}
+
+fn score_resumed_splits(old_pay: &str, cur_pay: &str, after: &str) -> Vec<usize> {
     let mut best = 0usize;
     let mut splits = Vec::new();
     for s in 1..cur_pay.len() {
@@ -998,8 +1119,20 @@ fn resumed_outer_lines(
             splits.push(s);
         }
     }
+    splits
+}
+
+fn emit_resumed_lines(
+    oldest: &Traced,
+    current: &Traced,
+    after: &str,
+    after_at: usize,
+    outer_newline_at: usize,
+    cur_pre: usize,
+    splits: &[usize],
+) -> Vec<Traced> {
     let mut lines = Vec::with_capacity(splits.len().saturating_mul(2));
-    for s in splits {
+    for &s in splits {
         let mut outer = Traced::new();
         outer.append(oldest);
         outer.push_copied(current, cur_pre + s..current.text.len());
@@ -1041,14 +1174,7 @@ fn collapse_traced(haystack: &str) -> Traced {
     let mut current: Option<Traced> = None;
     let mut i = 0;
     while i < haystack.len() {
-        if let Some(plen) = sel4_log_prefix_len(&haystack[i..]) {
-            if let Some(cur) = current.take() {
-                incomplete.push_back(cur);
-            }
-            let mut started = Traced::new();
-            started.push_raw(&haystack[i..i + plen], i);
-            current = Some(started);
-            i += plen;
+        if take_traced_prefix(haystack, &mut i, &mut current, &mut incomplete) {
             continue;
         }
         let Some(ch) = haystack[i..].chars().next() else {
@@ -1056,57 +1182,114 @@ fn collapse_traced(haystack: &str) -> Traced {
         };
         let ch_at = i;
         i += ch.len_utf8();
-        if let Some(mut cur) = current.take() {
-            if ch == '\n' {
-                if let Some(oldest) = incomplete.back() {
-                    let after = rest_of_line(&haystack[i..]);
-                    for line in resumed_outer_lines(oldest, &cur, after, i, ch_at) {
-                        completed.append(&line);
-                    }
-                }
-                if let Some((inner, outer_tail)) =
-                    steal_preempted_outer_payload(&cur, incomplete.front())
-                {
-                    if let Some(front) = incomplete.front_mut() {
-                        if !front.text.ends_with(' ') && !outer_tail.text.starts_with(' ') {
-                            front.push_inserted(' ');
-                        }
-                        front.append(&outer_tail);
-                        front.push_char('\n', ch_at);
-                    }
-                    if let Some(done) = incomplete.pop_front() {
-                        completed.append(&done);
-                    }
-                    current = Some(inner);
-                } else {
-                    completed.append(&cur);
-                    completed.push_char('\n', ch_at);
-                }
-            } else {
-                cur.push_char(ch, ch_at);
-                current = Some(cur);
-            }
-        } else if incomplete.front().is_some() {
-            if let Some(front) = incomplete.front_mut() {
-                front.push_char(ch, ch_at);
-            }
-            if ch == '\n'
-                && let Some(done) = incomplete.pop_front()
-            {
-                completed.append(&done);
-            }
+        apply_traced_char(
+            haystack,
+            &mut i,
+            ch,
+            ch_at,
+            &mut completed,
+            &mut incomplete,
+            &mut current,
+        );
+    }
+    finish_traced(&mut completed, incomplete, current);
+    debug_assert_eq!(completed.text.len(), completed.src.len());
+    completed
+}
+
+fn take_traced_prefix(
+    haystack: &str,
+    i: &mut usize,
+    current: &mut Option<Traced>,
+    incomplete: &mut VecDeque<Traced>,
+) -> bool {
+    let Some(plen) = sel4_log_prefix_len(&haystack[*i..]) else {
+        return false;
+    };
+    if let Some(cur) = current.take() {
+        incomplete.push_back(cur);
+    }
+    let mut started = Traced::new();
+    started.push_raw(&haystack[*i..*i + plen], *i);
+    *current = Some(started);
+    *i += plen;
+    true
+}
+
+fn apply_traced_char(
+    haystack: &str,
+    i: &mut usize,
+    ch: char,
+    ch_at: usize,
+    completed: &mut Traced,
+    incomplete: &mut VecDeque<Traced>,
+    current: &mut Option<Traced>,
+) {
+    if let Some(mut cur) = current.take() {
+        if ch == '\n' {
+            close_traced_line(haystack, *i, ch_at, cur, completed, incomplete, current);
         } else {
-            completed.push_char(ch, ch_at);
+            cur.push_char(ch, ch_at);
+            *current = Some(cur);
+        }
+    } else if incomplete.front().is_some() {
+        if let Some(front) = incomplete.front_mut() {
+            front.push_char(ch, ch_at);
+        }
+        if ch == '\n'
+            && let Some(done) = incomplete.pop_front()
+        {
+            completed.append(&done);
+        }
+    } else {
+        completed.push_char(ch, ch_at);
+    }
+}
+
+fn close_traced_line(
+    haystack: &str,
+    i: usize,
+    ch_at: usize,
+    cur: Traced,
+    completed: &mut Traced,
+    incomplete: &mut VecDeque<Traced>,
+    current: &mut Option<Traced>,
+) {
+    if let Some(oldest) = incomplete.back() {
+        let after = rest_of_line(&haystack[i..]);
+        for line in resumed_outer_lines(oldest, &cur, after, i, ch_at) {
+            completed.append(&line);
         }
     }
+    if let Some((inner, outer_tail)) = steal_preempted_outer_payload(&cur, incomplete.front()) {
+        if let Some(front) = incomplete.front_mut() {
+            if !front.text.ends_with(' ') && !outer_tail.text.starts_with(' ') {
+                front.push_inserted(' ');
+            }
+            front.append(&outer_tail);
+            front.push_char('\n', ch_at);
+        }
+        if let Some(done) = incomplete.pop_front() {
+            completed.append(&done);
+        }
+        *current = Some(inner);
+    } else {
+        completed.append(&cur);
+        completed.push_char('\n', ch_at);
+    }
+}
+
+fn finish_traced(
+    completed: &mut Traced,
+    mut incomplete: VecDeque<Traced>,
+    current: Option<Traced>,
+) {
     if let Some(cur) = current {
         incomplete.push_back(cur);
     }
     for line in incomplete {
         completed.append(&line);
     }
-    debug_assert_eq!(completed.text.len(), completed.src.len());
-    completed
 }
 
 /// Substring match that also accepts tokens split by concurrent sel4-logging.
@@ -1167,116 +1350,132 @@ pub fn run_board_test_with_mode(
         crate::qemu::cleanup_http_conflicts();
     }
     let hardware = crate::qemu::is_hardware_board(&ctx);
-    let hw_serial_set = std::env::var_os("LERUX_HW_SERIAL").is_some();
+    let use_hw = select_hw_mode(mode, hardware, board)?;
+    if hardware && !use_hw {
+        print_hardware_skip(&ctx, board);
+        return Ok(());
+    }
+    if use_hw {
+        return run_hardware_smoke(root, board, hardware, mode);
+    }
+    run_qemu_smoke(root, board, build_dir, &ctx)
+}
 
-    let use_hw = match mode {
-        TestMode::HwSerial => true,
+fn select_hw_mode(mode: TestMode, hardware: bool, board: &str) -> Result<bool> {
+    let hw_serial_set = std::env::var_os("LERUX_HW_SERIAL").is_some();
+    match mode {
+        TestMode::HwSerial => Ok(true),
         TestMode::Qemu => {
             if hardware {
                 bail!(
                     "board {board:?} is hardware-only; cannot use --mode qemu (use --mode hw-serial with LERUX_HW_SERIAL)"
                 );
             }
-            false
+            Ok(false)
         }
-        TestMode::Auto => hardware && hw_serial_set,
+        TestMode::Auto => Ok(hardware && hw_serial_set),
+    }
+}
+
+fn print_hardware_skip(ctx: &crate::qemu::QemuContext, board: &str) {
+    // HwSerial sets use_hw, so this path is the auto skip.
+    let iso_line = if ctx.board.arch == "x86_64" {
+        format!(
+            "   ISO: {}  (build/{board}/{})\n",
+            crate::build::iso_recipe(board),
+            crate::iso::iso_file_name(board)
+        )
+    } else {
+        String::new()
     };
+    println!(
+        "==> Hardware board {board:?}: image built successfully.\n\
+         {iso_line}\
+         \x20   No QEMU profile.\n\
+         \x20   Deploy: lerux deploy --board {board} --dest /abs/path/to/boot\n\
+         \x20   Golden path: LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD={board} just test-hw\n\
+         \x20   Install path: docs/boards.md"
+    );
+}
 
-    if hardware && !use_hw {
-        if mode == TestMode::HwSerial {
-            // unreachable: use_hw true
-        }
-        let iso_line = if ctx.board.arch == "x86_64" {
-            format!(
-                "   ISO: {}  (build/{board}/{})\n",
-                crate::build::iso_recipe(board),
-                crate::iso::iso_file_name(board)
-            )
-        } else {
-            String::new()
-        };
+fn run_hardware_smoke(root: &Path, board: &str, hardware: bool, mode: TestMode) -> Result<()> {
+    if !hardware && mode == TestMode::HwSerial {
         println!(
-            "==> Hardware board {board:?}: image built successfully.\n\
-             {iso_line}\
-             \x20   No QEMU profile.\n\
-             \x20   Deploy: lerux deploy --board {board} --dest /abs/path/to/boot\n\
-             \x20   Golden path: LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD={board} just test-hw\n\
-             \x20   Install path: docs/boards.md"
+            "==> Note: {board:?} has a QEMU profile; hw-serial will only read LERUX_HW_SERIAL (no QEMU)."
         );
-        return Ok(());
     }
+    let mut test = crate::smoke_expects::smoke_test_for_board(root, board)?;
+    // Host curls do not apply over bare serial.
+    test.curls.clear();
+    let _lock = crate::hw_lock::BoardLock::acquire(board)?;
+    run_hw_serial_smoke(&test)
+}
 
-    if use_hw {
-        if !hardware && mode == TestMode::HwSerial {
-            println!(
-                "==> Note: {board:?} has a QEMU profile; hw-serial will only read LERUX_HW_SERIAL (no QEMU)."
-            );
-        }
-        let mut test = crate::smoke_expects::smoke_test_for_board(root, board)?;
-        // Host curls do not apply over bare serial.
-        test.curls.clear();
-        let _lock = crate::hw_lock::BoardLock::acquire(board)?;
-        return run_hw_serial_smoke(&test);
-    }
-
+fn run_qemu_smoke(
+    root: &Path,
+    board: &str,
+    build_dir: &str,
+    ctx: &crate::qemu::QemuContext,
+) -> Result<()> {
     crate::qemu::ensure_qemu_binary(&ctx.root, &ctx.board)?;
-    crate::qemu::print_http_hint(&ctx);
-
+    crate::qemu::print_http_hint(ctx);
     if ctx.board.needs_disk() {
         // A scripted smoke starts from a fresh image. An existing
         // support/disk.img keeps files from the last local run.
         crate::disk_img::fresh_disk_img(root)?;
     }
-
-    let helpers = crate::qemu::setup_test_helpers(&ctx)?;
-    let cmd = crate::qemu::qemu_command(&ctx)?;
+    let helpers = crate::qemu::setup_test_helpers(ctx)?;
+    let cmd = crate::qemu::qemu_command(ctx)?;
     let test = crate::smoke_expects::smoke_test_for_board(root, board)?;
-
     // Phase 57: always capture serial under build/smoke-logs/ for diagnose.
     let log_path = root
         .join(build_dir)
         .join("smoke-logs")
         .join(format!("{board}.serial.log"));
+    launch_qemu_smoke(ctx, board, cmd, &test, &log_path)?;
+    for mut child in helpers {
+        let _ = child.kill();
+    }
+    Ok(())
+}
+
+fn launch_qemu_smoke(
+    ctx: &crate::qemu::QemuContext,
+    board: &str,
+    cmd: Command,
+    test: &SmokeTest,
+    log_path: &Path,
+) -> Result<()> {
     let script_reboots = test
         .script
         .iter()
         .any(|step| step.send.starts_with("reboot"));
-    let result = if test.qmp_keys.is_empty() && !script_reboots {
-        run_smoke_with_capture(cmd, &test, Some(&log_path))
-    } else {
-        let qemu = ctx
-            .board
-            .qemu()
-            .context("this smoke needs a QEMU board with QMP")?;
-        if !qemu.qmp {
-            bail!("board {board:?} smoke needs QMP but qemu.qmp is false");
-        }
-        let socket = crate::qemu::qmp_socket(&ctx);
-        let stdio_log = if reboot_needs_new_process(&ctx.board.arch, script_reboots) {
-            Some(crate::qemu::stdio_smoke_log(&ctx))
-        } else {
-            None
-        };
-        let host_restart = if reboot_needs_new_process(&ctx.board.arch, script_reboots) {
-            let restart_ctx = ctx.clone();
-            Some(Box::new(move || crate::qemu::qemu_command(&restart_ctx))
-                as Box<dyn FnMut() -> Result<Command>>)
-        } else {
-            None
-        };
-        run_smoke_with_qmp(
-            cmd,
-            &test,
-            Some(&log_path),
-            &socket,
-            stdio_log.as_deref(),
-            host_restart,
-        )
-    };
-    for mut child in helpers {
-        let _ = child.kill();
+    if test.qmp_keys.is_empty() && !script_reboots {
+        return run_smoke_with_capture(cmd, test, Some(log_path));
     }
-    result
+    let qemu = ctx
+        .board
+        .qemu()
+        .context("this smoke needs a QEMU board with QMP")?;
+    if !qemu.qmp {
+        bail!("board {board:?} smoke needs QMP but qemu.qmp is false");
+    }
+    let socket = crate::qemu::qmp_socket(ctx);
+    let fresh = reboot_needs_new_process(&ctx.board.arch, script_reboots);
+    let stdio_log = fresh.then(|| crate::qemu::stdio_smoke_log(ctx));
+    let host_restart = fresh.then(|| {
+        let restart_ctx = ctx.clone();
+        Box::new(move || crate::qemu::qemu_command(&restart_ctx))
+            as Box<dyn FnMut() -> Result<Command>>
+    });
+    run_smoke_with_qmp(
+        cmd,
+        test,
+        Some(log_path),
+        &socket,
+        stdio_log.as_deref(),
+        host_restart,
+    )
 }
 
 /// QEMU 6.2 does not reload an x86 OVMF+ISO guest on `system_reset`.

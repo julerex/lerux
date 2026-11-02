@@ -84,45 +84,64 @@ fn serve_one(config: &Arc<ServerConfig>, sock: &mut std::net::TcpStream) -> Resu
     let mut request = Vec::new();
     let mut saw_http = false;
     for _ in 0..64 {
-        if conn.wants_write() {
-            let mut out = Vec::new();
-            conn.write_tls(&mut out).context("write_tls")?;
-            if !out.is_empty() {
-                sock.write_all(&out).context("sock write")?;
-            }
-        }
+        write_tls_if_wanted(&mut conn, sock)?;
         if saw_http && !conn.wants_write() {
             return Ok(());
         }
-        if conn.wants_read() {
-            match sock.read(&mut raw) {
-                Ok(0) => anyhow::bail!("peer closed"),
-                Ok(n) => {
-                    conn.read_tls(&mut &raw[..n]).context("read_tls")?;
-                    conn.process_new_packets().context("process")?;
-                }
-                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
-                Err(e) => return Err(e).context("sock read"),
-            }
-        }
+        read_tls_if_wanted(&mut conn, sock, &mut raw)?;
         if !conn.is_handshaking() && !saw_http {
-            let mut plain = [0u8; 512];
-            match conn.reader().read(&mut plain) {
-                Ok(0) => {}
-                Ok(n) => request.extend_from_slice(&plain[..n]),
-                Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
-                Err(e) => return Err(e).context("plain read"),
-            }
-            if request_headers_complete(&request) {
-                let path = path_from_http_request(&request);
-                let file_body = load_browser_path(path)?;
-                let body = http_response_for_path(path, &file_body);
-                conn.writer().write_all(&body).context("http write")?;
-                saw_http = true;
-            }
+            saw_http = read_http_request(&mut conn, &mut request)?;
         }
     }
     anyhow::bail!("https-one handshake/serve loop exhausted")
+}
+
+fn write_tls_if_wanted(conn: &mut ServerConnection, sock: &mut std::net::TcpStream) -> Result<()> {
+    if conn.wants_write() {
+        let mut out = Vec::new();
+        conn.write_tls(&mut out).context("write_tls")?;
+        if !out.is_empty() {
+            sock.write_all(&out).context("sock write")?;
+        }
+    }
+    Ok(())
+}
+
+fn read_tls_if_wanted(
+    conn: &mut ServerConnection,
+    sock: &mut std::net::TcpStream,
+    raw: &mut [u8],
+) -> Result<()> {
+    if conn.wants_read() {
+        match sock.read(raw) {
+            Ok(0) => anyhow::bail!("peer closed"),
+            Ok(n) => {
+                conn.read_tls(&mut &raw[..n]).context("read_tls")?;
+                conn.process_new_packets().context("process")?;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
+            Err(e) => return Err(e).context("sock read"),
+        }
+    }
+    Ok(())
+}
+
+fn read_http_request(conn: &mut ServerConnection, request: &mut Vec<u8>) -> Result<bool> {
+    let mut plain = [0u8; 512];
+    match conn.reader().read(&mut plain) {
+        Ok(0) => {}
+        Ok(n) => request.extend_from_slice(&plain[..n]),
+        Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
+        Err(e) => return Err(e).context("plain read"),
+    }
+    if request_headers_complete(request) {
+        let path = path_from_http_request(request);
+        let file_body = load_browser_path(path)?;
+        let body = http_response_for_path(path, &file_body);
+        conn.writer().write_all(&body).context("http write")?;
+        return Ok(true);
+    }
+    Ok(false)
 }
 
 fn request_headers_complete(buf: &[u8]) -> bool {

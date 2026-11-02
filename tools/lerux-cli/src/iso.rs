@@ -542,7 +542,11 @@ mod tests {
         let image = uefi_boot_volume(&root, &kernel, &loader, true).unwrap();
         let dest = tmp.path().join("esp");
         image.write_to(&dest).unwrap();
+        assert_volume_files(&dest);
+        assert_stub_header(&dest);
+    }
 
+    fn assert_volume_files(dest: &Path) {
         assert!(dest.join("boot/mb2-stub.elf").is_file());
         assert_eq!(
             fs::read(dest.join("boot/sel4.elf")).unwrap(),
@@ -561,6 +565,9 @@ mod tests {
         assert!(stub_at < kernel_at && kernel_at < loader_at, "{cfg}");
         assert!(!cfg.contains("multiboot2 /boot/sel4.elf"), "{cfg}");
         assert!(!dest.join("boot/limine.conf").exists());
+    }
+
+    fn assert_stub_header(dest: &Path) {
         let stub = fs::read(dest.join("boot/mb2-stub.elf")).unwrap();
         let magic = 0xe85250d6u32.to_le_bytes();
         let at = stub
@@ -728,29 +735,31 @@ mod tests {
     #[test]
     fn resolve_output_default_and_guards() {
         let tmp = tempfile::tempdir().unwrap();
-        let default = resolve_iso_output(tmp.path(), "build", "pc_z97_d3h", None).unwrap();
-        assert_eq!(
-            default,
-            tmp.path().join("build/pc_z97_d3h/lerux_pc_z97_d3h.iso")
-        );
-        let swift = resolve_iso_output(tmp.path(), "build", "swift_sfx14_41g", None).unwrap();
+        assert_iso_output_defaults(tmp.path());
+        assert_iso_output_guards(tmp.path());
+    }
+
+    fn assert_iso_output_defaults(root: &Path) {
+        let default = resolve_iso_output(root, "build", "pc_z97_d3h", None).unwrap();
+        assert_eq!(default, root.join("build/pc_z97_d3h/lerux_pc_z97_d3h.iso"));
+        let swift = resolve_iso_output(root, "build", "swift_sfx14_41g", None).unwrap();
         assert_eq!(
             swift,
-            tmp.path()
-                .join("build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso")
+            root.join("build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso")
         );
-
         let custom = resolve_iso_output(
-            tmp.path(),
+            root,
             "build",
             "pc_z97_d3h",
             Some(Path::new("build/pc_z97_d3h/custom.iso")),
         )
         .unwrap();
-        assert_eq!(custom, tmp.path().join("build/pc_z97_d3h/custom.iso"));
+        assert_eq!(custom, root.join("build/pc_z97_d3h/custom.iso"));
+    }
 
+    fn assert_iso_output_guards(root: &Path) {
         let outside = resolve_iso_output(
-            tmp.path(),
+            root,
             "build",
             "pc_z97_d3h",
             Some(Path::new("build/../outside.iso")),
@@ -758,25 +767,14 @@ mod tests {
         .unwrap_err()
         .to_string();
         assert!(outside.contains(".."), "{outside}");
-
-        let device = resolve_iso_output(
-            tmp.path(),
-            "build",
-            "pc_z97_d3h",
-            Some(Path::new("/dev/sdb")),
-        )
-        .unwrap_err()
-        .to_string();
+        let device = resolve_iso_output(root, "build", "pc_z97_d3h", Some(Path::new("/dev/sdb")))
+            .unwrap_err()
+            .to_string();
         assert!(device.contains("/dev"), "{device}");
-
-        let relative = resolve_iso_output(
-            tmp.path(),
-            "build",
-            "pc_z97_d3h",
-            Some(Path::new("other.iso")),
-        )
-        .unwrap_err()
-        .to_string();
+        let relative =
+            resolve_iso_output(root, "build", "pc_z97_d3h", Some(Path::new("other.iso")))
+                .unwrap_err()
+                .to_string();
         assert!(relative.contains("build"), "{relative}");
     }
 }

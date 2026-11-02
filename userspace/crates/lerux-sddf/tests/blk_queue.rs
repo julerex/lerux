@@ -26,172 +26,133 @@ fn enqueues_and_dequeues_a_request_and_a_response() {
             2,
         );
         (*handle.req_queue).plugged = true;
-
-        let mut code = blk_req_code_t::BLK_REQ_FLUSH;
-        let mut offset = 0u64;
-        let mut block = 0u64;
-        let mut count = 0u16;
-        let mut id = 0u32;
-        assert_eq!(
-            blk_dequeue_req(
-                &handle,
-                &mut code,
-                &mut offset,
-                &mut block,
-                &mut count,
-                &mut id
-            ),
-            -1
-        );
-        assert_eq!(
-            blk_enqueue_req(&handle, blk_req_code_t::BLK_REQ_READ, 0x1000, 7, 1, 9),
-            0
-        );
-        assert_eq!(
-            blk_dequeue_req(
-                &handle,
-                &mut code,
-                &mut offset,
-                &mut block,
-                &mut count,
-                &mut id
-            ),
-            0
-        );
-        assert_eq!(code, blk_req_code_t::BLK_REQ_READ);
-        assert_eq!(offset, 0x1000);
-        assert_eq!(block, 7);
-        assert_eq!(count, 1);
-        assert_eq!(id, 9);
-        assert_eq!(
-            blk_dequeue_req(
-                &handle,
-                &mut code,
-                &mut offset,
-                &mut block,
-                &mut count,
-                &mut id
-            ),
-            -1
-        );
-
-        assert_eq!(
-            blk_enqueue_req(&handle, blk_req_code_t::BLK_REQ_WRITE, 0, 1, 1, 1),
-            0
-        );
-        assert_eq!(
-            blk_enqueue_req(&handle, blk_req_code_t::BLK_REQ_WRITE, 0, 2, 1, 2),
-            0
-        );
-        assert_eq!(
-            blk_enqueue_req(&handle, blk_req_code_t::BLK_REQ_WRITE, 0, 3, 1, 3),
-            -1
-        );
-        assert_eq!(
-            blk_dequeue_req(
-                &handle,
-                &mut code,
-                &mut offset,
-                &mut block,
-                &mut count,
-                &mut id
-            ),
-            0
-        );
-        assert_eq!(id, 1);
-        assert_eq!(
-            blk_dequeue_req(
-                &handle,
-                &mut code,
-                &mut offset,
-                &mut block,
-                &mut count,
-                &mut id
-            ),
-            0
-        );
-        assert_eq!(id, 2);
-        assert_eq!(
-            blk_enqueue_req(&handle, blk_req_code_t::BLK_REQ_READ, 8, 4, 2, 4),
-            0
-        );
-        assert_eq!(
-            blk_dequeue_req(
-                &handle,
-                &mut code,
-                &mut offset,
-                &mut block,
-                &mut count,
-                &mut id
-            ),
-            0
-        );
-        assert_eq!(id, 4);
-        assert_eq!(offset, 8);
-        assert_eq!(block, 4);
-        assert_eq!(count, 2);
-
-        let mut status = blk_resp_status_t::BLK_RESP_ERR_UNSPEC;
-        let mut success = 1u16;
-        let mut resp_id = 1u32;
-        assert_eq!(
-            blk_dequeue_resp(&handle, &mut status, &mut success, &mut resp_id),
-            -1
-        );
-        assert_eq!(
-            blk_enqueue_resp(&handle, blk_resp_status_t::BLK_RESP_OK, 1, 9),
-            0
-        );
-        assert_eq!(
-            blk_dequeue_resp(&handle, &mut status, &mut success, &mut resp_id),
-            0
-        );
-        assert_eq!(status, blk_resp_status_t::BLK_RESP_OK);
-        assert_eq!(success, 1);
-        assert_eq!(resp_id, 9);
-        assert_eq!(
-            blk_dequeue_resp(&handle, &mut status, &mut success, &mut resp_id),
-            -1
-        );
-        assert_eq!(
-            blk_enqueue_resp(&handle, blk_resp_status_t::BLK_RESP_OK, 1, 11),
-            0
-        );
-        assert_eq!(
-            blk_enqueue_resp(&handle, blk_resp_status_t::BLK_RESP_ERR_IO, 0, 12),
-            0
-        );
-        assert_eq!(
-            blk_enqueue_resp(&handle, blk_resp_status_t::BLK_RESP_ERR_IO, 0, 13),
-            -1
-        );
-        assert_eq!(
-            blk_dequeue_resp(&handle, &mut status, &mut success, &mut resp_id),
-            0
-        );
-        assert_eq!(resp_id, 11);
-        assert_eq!(
-            blk_dequeue_resp(&handle, &mut status, &mut success, &mut resp_id),
-            0
-        );
-        assert_eq!(resp_id, 12);
-        assert_eq!(status, blk_resp_status_t::BLK_RESP_ERR_IO);
-        assert_eq!(
-            blk_enqueue_resp(
-                &handle,
-                blk_resp_status_t::BLK_RESP_ERR_INVALID_PARAM,
-                0,
-                14
-            ),
-            0
-        );
-        assert_eq!(
-            blk_dequeue_resp(&handle, &mut status, &mut success, &mut resp_id),
-            0
-        );
-        assert_eq!(resp_id, 14);
-        assert_eq!(status, blk_resp_status_t::BLK_RESP_ERR_INVALID_PARAM);
     }
+    assert_first_read(&handle);
+    assert_request_capacity(&handle);
+    assert_first_response(&handle);
+    assert_response_capacity(&handle);
+}
+
+fn dequeue_req(handle: &blk_queue_handle_t) -> (i32, blk_req_code_t, u64, u64, u16, u32) {
+    let mut code = blk_req_code_t::BLK_REQ_FLUSH;
+    let mut offset = 0u64;
+    let mut block = 0u64;
+    let mut count = 0u16;
+    let mut id = 0u32;
+    let status = unsafe {
+        blk_dequeue_req(
+            handle,
+            &mut code,
+            &mut offset,
+            &mut block,
+            &mut count,
+            &mut id,
+        )
+    };
+    (status, code, offset, block, count, id)
+}
+
+fn dequeue_resp(handle: &blk_queue_handle_t) -> (i32, blk_resp_status_t, u16, u32) {
+    let mut status = blk_resp_status_t::BLK_RESP_ERR_UNSPEC;
+    let mut success = 1u16;
+    let mut id = 1u32;
+    let result = unsafe { blk_dequeue_resp(handle, &mut status, &mut success, &mut id) };
+    (result, status, success, id)
+}
+
+fn assert_first_read(handle: &blk_queue_handle_t) {
+    let (status, _, _, _, _, _) = dequeue_req(handle);
+    assert_eq!(status, -1);
+    assert_eq!(
+        unsafe { blk_enqueue_req(handle, blk_req_code_t::BLK_REQ_READ, 0x1000, 7, 1, 9) },
+        0
+    );
+    let (status, code, offset, block, count, id) = dequeue_req(handle);
+    assert_eq!(status, 0);
+    assert_eq!(code, blk_req_code_t::BLK_REQ_READ);
+    assert_eq!(offset, 0x1000);
+    assert_eq!(block, 7);
+    assert_eq!(count, 1);
+    assert_eq!(id, 9);
+    let (status, _, _, _, _, _) = dequeue_req(handle);
+    assert_eq!(status, -1);
+}
+
+fn assert_request_capacity(handle: &blk_queue_handle_t) {
+    assert_eq!(
+        unsafe { blk_enqueue_req(handle, blk_req_code_t::BLK_REQ_WRITE, 0, 1, 1, 1) },
+        0
+    );
+    assert_eq!(
+        unsafe { blk_enqueue_req(handle, blk_req_code_t::BLK_REQ_WRITE, 0, 2, 1, 2) },
+        0
+    );
+    assert_eq!(
+        unsafe { blk_enqueue_req(handle, blk_req_code_t::BLK_REQ_WRITE, 0, 3, 1, 3) },
+        -1
+    );
+    let (status, _, _, _, _, id) = dequeue_req(handle);
+    assert_eq!(status, 0);
+    assert_eq!(id, 1);
+    let (status, _, _, _, _, id) = dequeue_req(handle);
+    assert_eq!(status, 0);
+    assert_eq!(id, 2);
+    assert_eq!(
+        unsafe { blk_enqueue_req(handle, blk_req_code_t::BLK_REQ_READ, 8, 4, 2, 4) },
+        0
+    );
+    let (status, _, offset, block, count, id) = dequeue_req(handle);
+    assert_eq!(status, 0);
+    assert_eq!(id, 4);
+    assert_eq!(offset, 8);
+    assert_eq!(block, 4);
+    assert_eq!(count, 2);
+}
+
+fn assert_first_response(handle: &blk_queue_handle_t) {
+    let (status, _, _, _) = dequeue_resp(handle);
+    assert_eq!(status, -1);
+    assert_eq!(
+        unsafe { blk_enqueue_resp(handle, blk_resp_status_t::BLK_RESP_OK, 1, 9) },
+        0
+    );
+    let (status, resp_status, success, resp_id) = dequeue_resp(handle);
+    assert_eq!(status, 0);
+    assert_eq!(resp_status, blk_resp_status_t::BLK_RESP_OK);
+    assert_eq!(success, 1);
+    assert_eq!(resp_id, 9);
+    let (status, _, _, _) = dequeue_resp(handle);
+    assert_eq!(status, -1);
+}
+
+fn assert_response_capacity(handle: &blk_queue_handle_t) {
+    assert_eq!(
+        unsafe { blk_enqueue_resp(handle, blk_resp_status_t::BLK_RESP_OK, 1, 11) },
+        0
+    );
+    assert_eq!(
+        unsafe { blk_enqueue_resp(handle, blk_resp_status_t::BLK_RESP_ERR_IO, 0, 12) },
+        0
+    );
+    assert_eq!(
+        unsafe { blk_enqueue_resp(handle, blk_resp_status_t::BLK_RESP_ERR_IO, 0, 13) },
+        -1
+    );
+    let (status, _, _, resp_id) = dequeue_resp(handle);
+    assert_eq!(status, 0);
+    assert_eq!(resp_id, 11);
+    let (status, resp_status, _, resp_id) = dequeue_resp(handle);
+    assert_eq!(status, 0);
+    assert_eq!(resp_id, 12);
+    assert_eq!(resp_status, blk_resp_status_t::BLK_RESP_ERR_IO);
+    assert_eq!(
+        unsafe { blk_enqueue_resp(handle, blk_resp_status_t::BLK_RESP_ERR_INVALID_PARAM, 0, 14,) },
+        0
+    );
+    let (status, resp_status, _, resp_id) = dequeue_resp(handle);
+    assert_eq!(status, 0);
+    assert_eq!(resp_id, 14);
+    assert_eq!(resp_status, blk_resp_status_t::BLK_RESP_ERR_INVALID_PARAM);
 }
 
 #[test]

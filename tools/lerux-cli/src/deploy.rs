@@ -33,6 +33,35 @@ pub fn deploy_loader(
     require_single_normal_segment(board, "--board")?;
     let build_root = resolve_under_root(root, Path::new(build_dir), "--build-dir")?;
     let board_build = resolve_under_root(&build_root, Path::new(board), "--board")?;
+    let loader = ensure_loader(
+        root,
+        board,
+        build_dir,
+        config,
+        &board_build,
+        build_if_missing,
+    )?;
+    if verify {
+        // Sidecar is written by `lerux image` / `lerux digest`. Do not invent a
+        // digest from an unknown on-disk image — that would bless tampering.
+        crate::image_digest::verify_sidecar(&loader)?;
+    }
+
+    let kernel = board_build.join("sel4.elf");
+    if kernel.is_file() {
+        return deploy_x86(root, board, &dest, &loader, &kernel, verify);
+    }
+    deploy_uboot(board, &dest, &loader)
+}
+
+fn ensure_loader(
+    root: &Path,
+    board: &str,
+    build_dir: &str,
+    config: &str,
+    board_build: &Path,
+    build_if_missing: bool,
+) -> Result<PathBuf> {
     let loader = board_build.join("loader.img");
     if !loader.is_file() {
         if build_if_missing {
@@ -45,40 +74,41 @@ pub fn deploy_loader(
             );
         }
     }
+    Ok(loader)
+}
 
+fn deploy_x86(
+    root: &Path,
+    board: &str,
+    dest: &Path,
+    loader: &Path,
+    kernel: &Path,
+    verify: bool,
+) -> Result<PathBuf> {
     if verify {
-        // Sidecar is written by `lerux image` / `lerux digest`. Do not invent a
-        // digest from an unknown on-disk image — that would bless tampering.
-        crate::image_digest::verify_sidecar(&loader)?;
+        crate::image_digest::verify_sidecar(kernel)?;
     }
+    let image = crate::iso::uefi_boot_volume(root, kernel, loader, verify)?;
+    image.write_to(dest)?;
+    copy_sidecar_beside(kernel, &dest.join("boot/sel4.elf"))?;
+    copy_sidecar_beside(loader, &dest.join("boot/loader.img"))?;
+    // Best-effort sync so unplug is safer.
+    let _ = Command::new("sync").status();
+    let deployed = dest.join("boot/loader.img");
+    let size = fs::metadata(&deployed).map(|m| m.len()).unwrap_or(0);
+    println!(
+        "==> Deployed loader.img ({} bytes) → {}",
+        size,
+        deployed.display()
+    );
+    println!();
+    print_x86_deploy_notice(board, dest);
+    Ok(deployed)
+}
 
-    let kernel = board_build.join("sel4.elf");
-    let x86 = kernel.is_file();
-
-    if x86 {
-        if verify {
-            crate::image_digest::verify_sidecar(&kernel)?;
-        }
-        let image = crate::iso::uefi_boot_volume(root, &kernel, &loader, verify)?;
-        image.write_to(&dest)?;
-        copy_sidecar_beside(&kernel, &dest.join("boot/sel4.elf"))?;
-        copy_sidecar_beside(&loader, &dest.join("boot/loader.img"))?;
-        // Best-effort sync so unplug is safer.
-        let _ = Command::new("sync").status();
-        let deployed = dest.join("boot/loader.img");
-        let size = fs::metadata(&deployed).map(|m| m.len()).unwrap_or(0);
-        println!(
-            "==> Deployed loader.img ({} bytes) → {}",
-            size,
-            deployed.display()
-        );
-        println!();
-        print_x86_deploy_notice(board, &dest);
-        return Ok(deployed);
-    }
-
+fn deploy_uboot(board: &str, dest: &Path, loader: &Path) -> Result<PathBuf> {
     let dest_loader = dest.join("loader.img");
-    copy_file_and_sidecar(&loader, &dest_loader)?;
+    copy_file_and_sidecar(loader, &dest_loader)?;
     // Best-effort sync so unplug is safer.
     let _ = Command::new("sync").status();
     let size = fs::metadata(&dest_loader).map(|m| m.len()).unwrap_or(0);
@@ -432,33 +462,45 @@ mod tests {
         )
         .unwrap();
 
+        assert_x86_boot_files(&dest_canon);
+        assert_x86_grub_order(&dest_canon);
+        assert_x86_root_cleared(&dest_canon);
+    }
+
+    fn assert_x86_boot_files(dest: &Path) {
         assert_eq!(
-            fs::read(dest_canon.join("boot/sel4.elf")).unwrap(),
+            fs::read(dest.join("boot/sel4.elf")).unwrap(),
             b"fake-kernel"
         );
-        assert!(dest_canon.join("boot/sel4.elf.sha256").is_file());
-        assert!(dest_canon.join("boot/loader.img.sha256").is_file());
+        assert!(dest.join("boot/sel4.elf.sha256").is_file());
+        assert!(dest.join("boot/loader.img.sha256").is_file());
         assert_eq!(
-            fs::read(dest_canon.join("boot/loader.img")).unwrap(),
+            fs::read(dest.join("boot/loader.img")).unwrap(),
             b"fake-loader"
         );
         assert_eq!(
-            fs::read(dest_canon.join("boot/mb2-stub.elf")).unwrap(),
+            fs::read(dest.join("boot/mb2-stub.elf")).unwrap(),
             b"fake-stub"
         );
-        let cfg = fs::read_to_string(dest_canon.join("boot/grub/grub.cfg")).unwrap();
+    }
+
+    fn assert_x86_grub_order(dest: &Path) {
+        let cfg = fs::read_to_string(dest.join("boot/grub/grub.cfg")).unwrap();
         let stub_at = cfg.find("multiboot2 /boot/mb2-stub.elf").expect("stub");
         let kernel_at = cfg.find("module2 /boot/sel4.elf").expect("kernel");
         let loader_at = cfg.find("module2 /boot/loader.img").expect("loader");
         assert!(stub_at < kernel_at && kernel_at < loader_at, "{cfg}");
         assert!(!cfg.contains("multiboot2 /boot/sel4.elf"), "{cfg}");
         assert!(!cfg.contains("multiboot2 /sel4.elf"), "{cfg}");
-        assert!(!dest_canon.join("lerux-limine.conf").exists());
-        assert!(!dest_canon.join("lerux-grub.cfg").exists());
-        assert!(!dest_canon.join("sel4.elf").exists());
-        assert!(!dest_canon.join("loader.img").exists());
-        assert!(!dest_canon.join("mb2-stub.elf").exists());
-        assert!(!dest_canon.join("lerux-uboot.txt").is_file());
+    }
+
+    fn assert_x86_root_cleared(dest: &Path) {
+        assert!(!dest.join("lerux-limine.conf").exists());
+        assert!(!dest.join("lerux-grub.cfg").exists());
+        assert!(!dest.join("sel4.elf").exists());
+        assert!(!dest.join("loader.img").exists());
+        assert!(!dest.join("mb2-stub.elf").exists());
+        assert!(!dest.join("lerux-uboot.txt").is_file());
     }
 
     fn plant_fake_mb2_stub(root: &Path) {

@@ -50,15 +50,23 @@ fn check_census(census: &SmokeCensus) -> Result<()> {
     if census.include.is_empty() {
         bail!("workflow smoke include list is empty");
     }
-    let include_len = census.include.len();
     let mut errors = Vec::new();
-    push_count_errors(&mut errors, "README.md", &census.readme_counts, include_len);
-    push_count_errors(
-        &mut errors,
-        "docs/ci.md",
-        &census.ci_doc_counts,
-        include_len,
-    );
+    push_census_counts(&mut errors, census);
+    push_census_membership(&mut errors, census);
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        bail!("{}", errors.join("\n"))
+    }
+}
+
+fn push_census_counts(errors: &mut Vec<String>, census: &SmokeCensus) {
+    let include_len = census.include.len();
+    push_count_errors(errors, "README.md", &census.readme_counts, include_len);
+    push_count_errors(errors, "docs/ci.md", &census.ci_doc_counts, include_len);
+}
+
+fn push_census_membership(errors: &mut Vec<String>, census: &SmokeCensus) {
     for board in &census.include {
         if !census.ci_true.contains(board) {
             errors.push(format!(
@@ -74,24 +82,19 @@ fn check_census(census: &SmokeCensus) -> Result<()> {
         .cloned()
         .collect();
     push_section_errors(
-        &mut errors,
+        errors,
         &census.ci_doc,
         OUTSIDE_WORKFLOW,
         &outside,
         "ci = true and outside the workflow",
     );
     push_section_errors(
-        &mut errors,
+        errors,
         &census.ci_doc,
         WAITING_ON_SMOKE,
         &census.ci_false,
         "ci = false",
     );
-    if errors.is_empty() {
-        Ok(())
-    } else {
-        bail!("{}", errors.join("\n"))
-    }
 }
 
 fn push_section_errors(

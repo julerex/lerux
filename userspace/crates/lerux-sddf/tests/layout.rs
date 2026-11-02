@@ -67,6 +67,13 @@ struct SnapshotStruct {
     fields: Vec<(String, usize)>,
 }
 
+struct RawStruct {
+    name: String,
+    size: Option<usize>,
+    align: Option<usize>,
+    fields: Vec<(String, usize)>,
+}
+
 #[test]
 fn snapshot_matches_lerux_sddf() {
     let path = snapshot_path();
@@ -176,31 +183,43 @@ fn compare_snapshot(rust: &[SnapshotStruct], snapshot: &[SnapshotStruct]) -> Vec
                 item.name, snap.align, item.align
             ));
         }
-        for (field, offset) in &item.fields {
-            match snap.fields.iter().find(|(name, _)| name == field) {
-                Some((_, snap_offset)) if snap_offset != offset => errors.push(format!(
-                    "{}.{}: snapshot offset {snap_offset}, Rust offset {offset}",
-                    item.name, field
-                )),
-                Some(_) => {}
-                None => errors.push(format!("{}.{}: snapshot missing", item.name, field)),
-            }
-        }
-        for (field, _) in &snap.fields {
-            if !item.fields.iter().any(|(name, _)| name == field) {
-                errors.push(format!(
-                    "{}.{}: snapshot has an extra field",
-                    item.name, field
-                ));
-            }
+        compare_fields(item, snap, &mut errors);
+    }
+    scan_extra_structs(rust, snapshot, &mut errors);
+    errors
+}
+
+fn compare_fields(item: &SnapshotStruct, snap: &SnapshotStruct, errors: &mut Vec<String>) {
+    for (field, offset) in &item.fields {
+        match snap.fields.iter().find(|(name, _)| name == field) {
+            Some((_, snap_offset)) if snap_offset != offset => errors.push(format!(
+                "{}.{}: snapshot offset {snap_offset}, Rust offset {offset}",
+                item.name, field
+            )),
+            Some(_) => {}
+            None => errors.push(format!("{}.{}: snapshot missing", item.name, field)),
         }
     }
+    for (field, _) in &snap.fields {
+        if !item.fields.iter().any(|(name, _)| name == field) {
+            errors.push(format!(
+                "{}.{}: snapshot has an extra field",
+                item.name, field
+            ));
+        }
+    }
+}
+
+fn scan_extra_structs(
+    rust: &[SnapshotStruct],
+    snapshot: &[SnapshotStruct],
+    errors: &mut Vec<String>,
+) {
     for snap in snapshot {
         if !rust.iter().any(|item| item.name == snap.name) {
             errors.push(format!("{}: snapshot has an extra struct", snap.name));
         }
     }
-    errors
 }
 
 fn match_lionsos_headers() {
@@ -251,13 +270,6 @@ fn load_snapshot(path: &Path) -> Vec<SnapshotStruct> {
 }
 
 fn parse_snapshot(text: &str) -> Vec<SnapshotStruct> {
-    struct RawStruct {
-        name: String,
-        size: Option<usize>,
-        align: Option<usize>,
-        fields: Vec<(String, usize)>,
-    }
-
     let mut structs: Vec<RawStruct> = Vec::new();
     let mut current: Option<usize> = None;
     let mut in_fields = false;
@@ -271,53 +283,83 @@ fn parse_snapshot(text: &str) -> Vec<SnapshotStruct> {
             .strip_prefix('[')
             .and_then(|rest| rest.strip_suffix(']'))
         {
-            if let Some(name) = header.strip_suffix(".field") {
-                let index = structs
-                    .iter()
-                    .position(|item| item.name == name)
-                    .unwrap_or_else(|| {
-                        panic!("snapshot field table {name} has no struct at line {line_number}")
-                    });
-                current = Some(index);
-                in_fields = true;
-            } else if structs.iter().any(|item| item.name == header) {
-                panic!("duplicate snapshot struct {header} at line {line_number}");
-            } else {
-                structs.push(RawStruct {
-                    name: header.to_string(),
-                    size: None,
-                    align: None,
-                    fields: Vec::new(),
-                });
-                current = Some(structs.len() - 1);
-                in_fields = false;
-            }
+            apply_snapshot_header(
+                header,
+                line_number,
+                &mut structs,
+                &mut current,
+                &mut in_fields,
+            );
             continue;
         }
-        let Some((key, value)) = line.split_once('=') else {
-            panic!("bad snapshot line {line_number}");
-        };
-        let key = key.trim();
-        let value: usize = value
-            .trim()
-            .parse()
-            .unwrap_or_else(|err| panic!("bad snapshot number on line {line_number}: {err}"));
-        let Some(index) = current else {
-            panic!("snapshot assignment before a struct at line {line_number}");
-        };
-        if in_fields {
-            if structs[index].fields.iter().any(|(name, _)| name == key) {
-                panic!("duplicate snapshot field {key} at line {line_number}");
-            }
-            structs[index].fields.push((key.to_string(), value));
-        } else if key == "size" {
-            structs[index].size = Some(value);
-        } else if key == "align" {
-            structs[index].align = Some(value);
-        } else {
-            panic!("unknown snapshot key {key} at line {line_number}");
-        }
+        apply_snapshot_assignment(line, line_number, &mut structs, current, in_fields);
     }
+    structs_from_raw(structs)
+}
+
+fn apply_snapshot_header(
+    header: &str,
+    line_number: usize,
+    structs: &mut Vec<RawStruct>,
+    current: &mut Option<usize>,
+    in_fields: &mut bool,
+) {
+    if let Some(name) = header.strip_suffix(".field") {
+        let index = structs
+            .iter()
+            .position(|item| item.name == name)
+            .unwrap_or_else(|| {
+                panic!("snapshot field table {name} has no struct at line {line_number}")
+            });
+        *current = Some(index);
+        *in_fields = true;
+    } else if structs.iter().any(|item| item.name == header) {
+        panic!("duplicate snapshot struct {header} at line {line_number}");
+    } else {
+        structs.push(RawStruct {
+            name: header.to_string(),
+            size: None,
+            align: None,
+            fields: Vec::new(),
+        });
+        *current = Some(structs.len() - 1);
+        *in_fields = false;
+    }
+}
+
+fn apply_snapshot_assignment(
+    line: &str,
+    line_number: usize,
+    structs: &mut [RawStruct],
+    current: Option<usize>,
+    in_fields: bool,
+) {
+    let Some((key, value)) = line.split_once('=') else {
+        panic!("bad snapshot line {line_number}");
+    };
+    let key = key.trim();
+    let value: usize = value
+        .trim()
+        .parse()
+        .unwrap_or_else(|err| panic!("bad snapshot number on line {line_number}: {err}"));
+    let Some(index) = current else {
+        panic!("snapshot assignment before a struct at line {line_number}");
+    };
+    if in_fields {
+        if structs[index].fields.iter().any(|(name, _)| name == key) {
+            panic!("duplicate snapshot field {key} at line {line_number}");
+        }
+        structs[index].fields.push((key.to_string(), value));
+    } else if key == "size" {
+        structs[index].size = Some(value);
+    } else if key == "align" {
+        structs[index].align = Some(value);
+    } else {
+        panic!("unknown snapshot key {key} at line {line_number}");
+    }
+}
+
+fn structs_from_raw(structs: Vec<RawStruct>) -> Vec<SnapshotStruct> {
     structs
         .into_iter()
         .map(|item| SnapshotStruct {
@@ -352,14 +394,23 @@ fn compile_and_run(root: &Path) -> CReport {
     let dir = std::env::temp_dir().join(format!("lerux-sddf-layout-{}", std::process::id()));
     fs::create_dir_all(&dir).expect("create layout probe directory");
     let _guard = TempDir(dir.clone());
+    let source = write_c_stubs(&dir);
+    compile_and_run_probe(root, &dir, &source)
+}
+
+fn write_c_stubs(dir: &Path) -> PathBuf {
     let stub = dir.join("stub");
     fs::create_dir_all(stub.join("sel4")).expect("create sel4 stub directory");
     fs::write(stub.join("microkit.h"), MICROKIT_STUB).expect("write microkit stub");
     fs::write(stub.join("sel4/sel4.h"), SEL4_STUB).expect("write sel4 stub");
     let source = dir.join("layout.c");
     fs::write(&source, LAYOUT_C).expect("write layout probe");
-    let binary = dir.join("layout");
+    source
+}
 
+fn compile_and_run_probe(root: &Path, dir: &Path, source: &Path) -> CReport {
+    let binary = dir.join("layout");
+    let stub = dir.join("stub");
     let sddf = root.join("deps/workspace/lionsos/dep/sddf/include");
     let lions = root.join("deps/workspace/lionsos/include");
     let cc = std::env::var("CC").unwrap_or_else(|_| "cc".to_string());
@@ -376,7 +427,7 @@ fn compile_and_run(root: &Path) -> CReport {
         .arg(&lions)
         .arg("-o")
         .arg(&binary)
-        .arg(&source)
+        .arg(source)
         .output()
         .unwrap_or_else(|err| panic!("failed to spawn {cc}: {err}"));
     if !compiled.status.success() {
@@ -414,41 +465,45 @@ fn parse_report(text: &str) -> CReport {
         timer_magic: Vec::new(),
     };
     for line in text.lines() {
-        let mut parts = line.split_whitespace();
-        let kind = parts.next().unwrap_or_else(|| panic!("empty probe line"));
-        match kind {
-            "size" => {
-                let name = part(&mut parts, line);
-                report.size.insert(name, number(&mut parts, line));
-            }
-            "align" => {
-                let name = part(&mut parts, line);
-                report.align.insert(name, number(&mut parts, line));
-            }
-            "off" => {
-                let name = part(&mut parts, line);
-                let field = part(&mut parts, line);
-                report
-                    .offset
-                    .insert((name, field), number(&mut parts, line));
-            }
-            "const" => {
-                let name = part(&mut parts, line);
-                report.constants.insert(name, number_u64(&mut parts, line));
-            }
-            "image" => {
-                let name = part(&mut parts, line);
-                report.images.insert(name, hex_bytes(parts, line));
-            }
-            "magic" => report.magic = hex_bytes(parts, line),
-            "blkmagic" => report.blk_magic = hex_bytes(parts, line),
-            "fsmagic" => report.fs_magic = hex_bytes(parts, line),
-            "netmagic" => report.net_magic = hex_bytes(parts, line),
-            "timermagic" => report.timer_magic = hex_bytes(parts, line),
-            other => panic!("unknown probe line kind {other} in {line}"),
-        }
+        apply_probe_line(&mut report, line);
     }
     report
+}
+
+fn apply_probe_line(report: &mut CReport, line: &str) {
+    let mut parts = line.split_whitespace();
+    let kind = parts.next().unwrap_or_else(|| panic!("empty probe line"));
+    match kind {
+        "size" => {
+            let name = part(&mut parts, line);
+            report.size.insert(name, number(&mut parts, line));
+        }
+        "align" => {
+            let name = part(&mut parts, line);
+            report.align.insert(name, number(&mut parts, line));
+        }
+        "off" => {
+            let name = part(&mut parts, line);
+            let field = part(&mut parts, line);
+            report
+                .offset
+                .insert((name, field), number(&mut parts, line));
+        }
+        "const" => {
+            let name = part(&mut parts, line);
+            report.constants.insert(name, number_u64(&mut parts, line));
+        }
+        "image" => {
+            let name = part(&mut parts, line);
+            report.images.insert(name, hex_bytes(parts, line));
+        }
+        "magic" => report.magic = hex_bytes(parts, line),
+        "blkmagic" => report.blk_magic = hex_bytes(parts, line),
+        "fsmagic" => report.fs_magic = hex_bytes(parts, line),
+        "netmagic" => report.net_magic = hex_bytes(parts, line),
+        "timermagic" => report.timer_magic = hex_bytes(parts, line),
+        other => panic!("unknown probe line kind {other} in {line}"),
+    }
 }
 
 fn part(parts: &mut std::str::SplitWhitespace<'_>, line: &str) -> String {
@@ -597,18 +652,40 @@ fn check_magic(report: &CReport, errors: &mut Vec<String>) {
     }
 }
 
+macro_rules! ty {
+    ($($name:ty),* $(,)?) => {
+        vec![
+            $((
+                stringify!($name),
+                core::mem::size_of::<$name>(),
+                core::mem::align_of::<$name>(),
+            ),)*
+        ]
+    };
+}
+
+macro_rules! field {
+    ($($name:ty, $field:ident);* $(;)?) => {
+        vec![
+            $((
+                stringify!($name),
+                stringify!($field),
+                core::mem::offset_of!($name, $field),
+            ),)*
+        ]
+    };
+}
+
 fn rust_types() -> Vec<(&'static str, usize, usize)> {
-    macro_rules! ty {
-        ($($name:ty),* $(,)?) => {
-            vec![
-                $((
-                    stringify!($name),
-                    core::mem::size_of::<$name>(),
-                    core::mem::align_of::<$name>(),
-                ),)*
-            ]
-        };
-    }
+    let mut types = serial_layout_types();
+    types.extend(net_layout_types());
+    types.extend(blk_layout_types());
+    types.extend(fs_timer_layout_types());
+    types.extend(gpu_layout_types());
+    types
+}
+
+fn serial_layout_types() -> Vec<(&'static str, usize, usize)> {
     ty![
         serial_queue_t,
         serial_queue_handle_t,
@@ -619,6 +696,11 @@ fn rust_types() -> Vec<(&'static str, usize, usize)> {
         serial_virt_tx_client_config_t,
         serial_virt_tx_config_t,
         serial_client_config_t,
+    ]
+}
+
+fn net_layout_types() -> Vec<(&'static str, usize, usize)> {
+    ty![
         net_buff_desc_t,
         net_queue_t,
         net_queue_handle_t,
@@ -634,6 +716,11 @@ fn rust_types() -> Vec<(&'static str, usize, usize)> {
         net_client_config_t,
         net_vswitch_port_config_t,
         net_vswitch_config_t,
+    ]
+}
+
+fn blk_layout_types() -> Vec<(&'static str, usize, usize)> {
+    ty![
         blk_req_t,
         blk_resp_t,
         blk_req_queue_t,
@@ -647,6 +734,11 @@ fn rust_types() -> Vec<(&'static str, usize, usize)> {
         blk_virt_config_t,
         blk_client_config_t,
         blk_storage_info_t,
+    ]
+}
+
+fn fs_timer_layout_types() -> Vec<(&'static str, usize, usize)> {
+    ty![
         fs_connection_resource_t,
         fs_server_config_t,
         fs_client_config_t,
@@ -656,6 +748,11 @@ fn rust_types() -> Vec<(&'static str, usize, usize)> {
         fs_msg_t,
         fs_queue_t,
         timer_client_config_t,
+    ]
+}
+
+fn gpu_layout_types() -> Vec<(&'static str, usize, usize)> {
+    ty![
         gpu_rect_t,
         gpu_scanout_t,
         gpu_events_t,
@@ -679,18 +776,21 @@ fn rust_types() -> Vec<(&'static str, usize, usize)> {
 }
 
 fn rust_fields() -> Vec<(&'static str, &'static str, usize)> {
-    macro_rules! field {
-        ($($name:ty, $field:ident);* $(;)?) => {
-            vec![
-                $((
-                    stringify!($name),
-                    stringify!($field),
-                    core::mem::offset_of!($name, $field),
-                ),)*
-            ]
-        };
-    }
-    let mut fields = field![
+    let mut fields = serial_layout_fields();
+    fields.extend(net_queue_layout_fields());
+    fields.extend(net_role_layout_fields());
+    fields.extend(blk_queue_layout_fields());
+    fields.extend(blk_virt_layout_fields());
+    fields.extend(fs_layout_fields());
+    fields.extend(gpu_resource_layout_fields());
+    fields.extend(gpu_queue_layout_fields());
+    fields.extend(manual_layout_fields());
+    fields.extend(gpu_payload_layout_fields());
+    fields
+}
+
+fn serial_layout_fields() -> Vec<(&'static str, &'static str, usize)> {
+    field![
         serial_queue_t, tail;
         serial_queue_t, head;
         serial_queue_t, producer_signalled;
@@ -725,6 +825,11 @@ fn rust_fields() -> Vec<(&'static str, &'static str, usize)> {
         serial_client_config_t, magic;
         serial_client_config_t, rx;
         serial_client_config_t, tx;
+    ]
+}
+
+fn net_queue_layout_fields() -> Vec<(&'static str, &'static str, usize)> {
+    field![
         net_buff_desc_t, io_or_offset;
         net_buff_desc_t, len;
         net_queue_t, tail;
@@ -753,6 +858,11 @@ fn rust_fields() -> Vec<(&'static str, &'static str, usize)> {
         net_virt_rx_client_config_t, conn;
         net_virt_rx_client_config_t, mac_addrs;
         net_virt_rx_client_config_t, num_macs;
+    ]
+}
+
+fn net_role_layout_fields() -> Vec<(&'static str, &'static str, usize)> {
+    field![
         net_virt_rx_config_t, magic;
         net_virt_rx_config_t, driver;
         net_virt_rx_config_t, data;
@@ -779,6 +889,11 @@ fn rust_fields() -> Vec<(&'static str, &'static str, usize)> {
         net_vswitch_config_t, ports;
         net_vswitch_config_t, num_ports;
         net_vswitch_config_t, buffer_metadata;
+    ]
+}
+
+fn blk_queue_layout_fields() -> Vec<(&'static str, &'static str, usize)> {
+    field![
         blk_req_t, code;
         blk_req_t, io_or_offset;
         blk_req_t, block_number;
@@ -804,6 +919,11 @@ fn rust_fields() -> Vec<(&'static str, &'static str, usize)> {
         blk_connection_resource_t, id;
         blk_driver_config_t, magic;
         blk_driver_config_t, virt;
+    ]
+}
+
+fn blk_virt_layout_fields() -> Vec<(&'static str, &'static str, usize)> {
+    field![
         blk_virt_config_driver_t, conn;
         blk_virt_config_driver_t, data;
         blk_virt_config_client_t, conn;
@@ -826,6 +946,11 @@ fn rust_fields() -> Vec<(&'static str, &'static str, usize)> {
         blk_storage_info_t, heads;
         blk_storage_info_t, blocks;
         blk_storage_info_t, capacity;
+    ]
+}
+
+fn fs_layout_fields() -> Vec<(&'static str, &'static str, usize)> {
+    field![
         fs_connection_resource_t, command_queue;
         fs_connection_resource_t, completion_queue;
         fs_connection_resource_t, share;
@@ -848,6 +973,11 @@ fn rust_fields() -> Vec<(&'static str, &'static str, usize)> {
         fs_queue_t, tail;
         fs_queue_t, padding;
         fs_queue_t, buffer;
+    ]
+}
+
+fn gpu_resource_layout_fields() -> Vec<(&'static str, &'static str, usize)> {
+    field![
         gpu_rect_t, x;
         gpu_rect_t, y;
         gpu_rect_t, width;
@@ -873,6 +1003,11 @@ fn rust_fields() -> Vec<(&'static str, &'static str, usize)> {
         gpu_req_resource_create_2d_t, width;
         gpu_req_resource_create_2d_t, height;
         gpu_req_resource_create_2d_t, format;
+    ]
+}
+
+fn gpu_queue_layout_fields() -> Vec<(&'static str, &'static str, usize)> {
+    field![
         gpu_req_resource_attach_backing_t, resource_id;
         gpu_req_resource_attach_backing_t, mem_offset;
         gpu_req_resource_attach_backing_t, mem_size;
@@ -897,7 +1032,11 @@ fn rust_fields() -> Vec<(&'static str, &'static str, usize)> {
         gpu_queue_handle_t, req_queue;
         gpu_queue_handle_t, resp_queue;
         gpu_queue_handle_t, capacity;
-    ];
+    ]
+}
+
+fn manual_layout_fields() -> Vec<(&'static str, &'static str, usize)> {
+    let mut fields = Vec::new();
     fields.push(("fs_cmd_t", "type", core::mem::offset_of!(fs_cmd_t, r#type)));
     fields.push((
         "timer_client_config_t",
@@ -930,6 +1069,15 @@ fn rust_fields() -> Vec<(&'static str, &'static str, usize)> {
             "resource_attach_backing",
             core::mem::offset_of!(gpu_req_t, payload.resource_attach_backing),
         ),
+    ] {
+        fields.push(("gpu_req_t", field, offset));
+    }
+    fields
+}
+
+fn gpu_payload_layout_fields() -> Vec<(&'static str, &'static str, usize)> {
+    let mut fields = Vec::new();
+    for (field, offset) in [
         (
             "resource_detach_backing",
             core::mem::offset_of!(gpu_req_t, payload.resource_detach_backing),
@@ -957,6 +1105,13 @@ fn rust_fields() -> Vec<(&'static str, &'static str, usize)> {
 }
 
 fn rust_constants() -> Vec<(&'static str, u64)> {
+    let mut constants = protocol_constants();
+    constants.extend(capacity_constants());
+    constants.extend(gpu_constants());
+    constants
+}
+
+fn protocol_constants() -> Vec<(&'static str, u64)> {
     vec![
         ("FS_QUEUE_CAPACITY", FS_QUEUE_CAPACITY as u64),
         ("FS_STATUS_SUCCESS", FS_STATUS_SUCCESS),
@@ -973,6 +1128,11 @@ fn rust_constants() -> Vec<(&'static str, u64)> {
         ("SDDF_NET_MAX_CLIENTS", SDDF_NET_MAX_CLIENTS as u64),
         ("SDDF_NET_MAGIC_LEN", SDDF_NET_MAGIC_LEN as u64),
         ("MAC802_BYTES", MAC802_BYTES as u64),
+    ]
+}
+
+fn capacity_constants() -> Vec<(&'static str, u64)> {
+    vec![
         ("SDDF_SERIAL_MAX_CLIENTS", SDDF_SERIAL_MAX_CLIENTS as u64),
         ("SDDF_NAME_LENGTH", SDDF_NAME_LENGTH as u64),
         (
@@ -992,6 +1152,11 @@ fn rust_constants() -> Vec<(&'static str, u64)> {
         ("SDDF_TIMER_SET_TIMEOUT", SDDF_TIMER_SET_TIMEOUT),
         ("SDDF_TIMER_MAGIC_LEN", SDDF_TIMER_MAGIC_LEN as u64),
         ("SDDF_TIMER_MAX_CLIENTS", SDDF_TIMER_MAX_CLIENTS as u64),
+    ]
+}
+
+fn gpu_constants() -> Vec<(&'static str, u64)> {
+    vec![
         ("GPU_MAX_RESOURCES", GPU_MAX_RESOURCES as u64),
         (
             "GPU_DISABLE_SCANOUT_RESOURCE_ID",

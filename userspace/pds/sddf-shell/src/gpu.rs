@@ -75,6 +75,11 @@ pub fn show_page(html: &[u8]) -> Result<PixelLine, ()> {
     info.payload.get_display_info = gpu_req_get_display_info_t { mem_offset: 0 };
     submit(info)?;
     copy_frame(&page);
+    present_page(&page, rect)?;
+    Ok(*page.pixel_line())
+}
+
+fn present_page(page: &PaintedPage, rect: gpu_rect_t) -> Result<(), ()> {
     let mut created = gpu_req_new(gpu_req_code_t::GPU_REQ_RESOURCE_CREATE_2D, next_id());
     created.payload.resource_create_2d = gpu_req_resource_create_2d_t {
         resource_id: RESOURCE_ID,
@@ -111,7 +116,7 @@ pub fn show_page(html: &[u8]) -> Result<PixelLine, ()> {
         rect,
     };
     submit(flush)?;
-    Ok(*page.pixel_line())
+    Ok(())
 }
 
 fn copy_frame(page: &PaintedPage) {

@@ -232,7 +232,19 @@ impl Emmc2 {
         if !self.card_present() {
             log::info!("emmc2: no card detected (proceeding with init anyway)");
         }
+        self.reset_host()?;
+        self.identify_card()?;
+        self.read_capacity()?;
+        self.initialized = true;
+        log::info!(
+            "emmc2: card ready rca={:#06x} blocks={}",
+            self.rca,
+            self.num_blocks
+        );
+        Ok(())
+    }
 
+    unsafe fn reset_host(&mut self) -> Result<(), Emmc2Error> {
         self.write8(SOFTWARE_RESET, RESET_ALL);
         for _ in 0..100_000 {
             if self.read8(SOFTWARE_RESET) == 0 {
@@ -251,9 +263,11 @@ impl Emmc2 {
         self.write16(NORMAL_INT_ENABLE, 0xffff);
         self.write16(NORMAL_INT_SIGNAL_ENABLE, 0xffff);
         self.write8(TIMEOUT_CONTROL, 0x0e);
-
         self.set_clock(400_000)?;
+        Ok(())
+    }
 
+    unsafe fn identify_card(&mut self) -> Result<(), Emmc2Error> {
         // CMD0 — go idle
         self.send_cmd(0, 0, RESP_NONE, 0)?;
         for _ in 0..10_000 {
@@ -262,7 +276,25 @@ impl Emmc2 {
 
         // CMD8 — interface condition (SD v2+)
         let _ = self.send_cmd(8, 0x1aa, RESP_48, 0);
+        self.wait_sdhc_ready()?;
 
+        self.send_cmd(2, 0, RESP_136, 0)?;
+        self.send_cmd(3, 0, RESP_48, 0)?;
+        self.rca = (self.read32(RESPONSE) >> 16) as u16;
+        let select_arg = u32::from(self.rca) << 16;
+        self.send_cmd(7, select_arg, RESP_48_BUSY, 0)?;
+        self.send_cmd(16, SECTOR_SIZE as u32, RESP_48, 0)?;
+
+        // ACMD6 — 4-bit bus (faster transfers on the SD slot).
+        self.send_cmd(55, select_arg, RESP_48, 0)?;
+        self.send_cmd(6, 2, RESP_48, 0)?;
+        let hc = self.read8(HOST_CONTROL);
+        self.write8(HOST_CONTROL, hc | HOST_CONTROL_4BIT);
+        self.set_clock(25_000_000)?;
+        Ok(())
+    }
+
+    unsafe fn wait_sdhc_ready(&mut self) -> Result<(), Emmc2Error> {
         // ACMD41 — HCS for SDHC/SDXC; wait until card ready (OCR busy bit).
         const OCR_VOLTAGE: u32 = 0x00ff8000;
         const OCR_HCS: u32 = 1 << 30;
@@ -278,22 +310,11 @@ impl Emmc2 {
                 core::hint::spin_loop();
             }
         }
+        Ok(())
+    }
 
-        self.send_cmd(2, 0, RESP_136, 0)?;
-        self.send_cmd(3, 0, RESP_48, 0)?;
-        self.rca = (self.read32(RESPONSE) >> 16) as u16;
+    unsafe fn read_capacity(&mut self) -> Result<(), Emmc2Error> {
         let select_arg = u32::from(self.rca) << 16;
-        self.send_cmd(7, select_arg, RESP_48_BUSY, 0)?;
-        self.send_cmd(16, SECTOR_SIZE as u32, RESP_48, 0)?;
-
-        // ACMD6 — 4-bit bus (faster transfers on the SD slot).
-        self.send_cmd(55, select_arg, RESP_48, 0)?;
-        self.send_cmd(6, 2, RESP_48, 0)?;
-        let hc = self.read8(HOST_CONTROL);
-        self.write8(HOST_CONTROL, hc | HOST_CONTROL_4BIT);
-
-        self.set_clock(25_000_000)?;
-
         // CMD9 — CSD for capacity (SDHC uses sector addressing).
         self.send_cmd(9, select_arg, RESP_136, 0)?;
         let csd0 = self.read32(RESPONSE);
@@ -311,13 +332,6 @@ impl Emmc2 {
             // Fallback for older cards or failed CSD parse.
             16 * 1024 * 2 // 16 MiB smoke default
         };
-
-        self.initialized = true;
-        log::info!(
-            "emmc2: card ready rca={:#06x} blocks={}",
-            self.rca,
-            self.num_blocks
-        );
         Ok(())
     }
 

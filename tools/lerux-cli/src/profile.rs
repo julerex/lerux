@@ -103,30 +103,13 @@ fn compose_profile(name: &str, file: ProfileFile, bases: &Profiles) -> Result<Pr
         .or_else(|| base.map(|b| b.template.clone()))
         .with_context(|| format!("profile {name} missing template"))?;
 
-    let mut pds = base.map(|b| b.pds.clone()).unwrap_or_default();
-    for pd in file.body.pds {
-        if !pds.contains(&pd) {
-            pds.push(pd);
-        }
-    }
-    anyhow::ensure!(
-        !pds.is_empty(),
-        "profile {name} has no pds (set pds or extends)"
+    let (description, default_board, trust_class) = inherited_fields(
+        &file.body.description,
+        &file.body.default_board,
+        file.body.trust_class,
+        base,
     );
-
-    let description = file
-        .body
-        .description
-        .or_else(|| base.and_then(|b| b.description.clone()));
-    let default_board = file
-        .body
-        .default_board
-        .or_else(|| base.and_then(|b| b.default_board.clone()));
-    let trust_class = file
-        .body
-        .trust_class
-        .or_else(|| base.and_then(|b| b.trust_class));
-
+    let pds = overlay_pds(name, base, file.body.pds)?;
     let base_channels = base.map(|b| b.channel.as_slice()).unwrap_or(&[]);
     let channel = merge_channels(base_channels, &file.body.channel);
 
@@ -138,6 +121,36 @@ fn compose_profile(name: &str, file: ProfileFile, bases: &Profiles) -> Result<Pr
         trust_class,
         channel,
     })
+}
+
+fn overlay_pds(name: &str, base: Option<&Profile>, overlay: Vec<String>) -> Result<Vec<String>> {
+    let mut pds = base.map(|b| b.pds.clone()).unwrap_or_default();
+    for pd in overlay {
+        if !pds.contains(&pd) {
+            pds.push(pd);
+        }
+    }
+    anyhow::ensure!(
+        !pds.is_empty(),
+        "profile {name} has no pds (set pds or extends)"
+    );
+    Ok(pds)
+}
+
+fn inherited_fields(
+    description: &Option<String>,
+    default_board: &Option<String>,
+    trust_class: Option<TrustClass>,
+    base: Option<&Profile>,
+) -> (Option<String>, Option<String>, Option<TrustClass>) {
+    let description = description
+        .clone()
+        .or_else(|| base.and_then(|b| b.description.clone()));
+    let default_board = default_board
+        .clone()
+        .or_else(|| base.and_then(|b| b.default_board.clone()));
+    let trust_class = trust_class.or_else(|| base.and_then(|b| b.trust_class));
+    (description, default_board, trust_class)
 }
 
 /// Overlay channels win on name; base channels not overridden keep base order.
@@ -159,9 +172,13 @@ pub fn load_profiles(root: &Path) -> Result<Profiles> {
     if !dir.exists() {
         return Ok(BTreeMap::new());
     }
+    let raw = read_profile_files(&dir)?;
+    compose_extends(raw)
+}
 
+fn read_profile_files(dir: &Path) -> Result<BTreeMap<String, ProfileFile>> {
     let mut raw: BTreeMap<String, ProfileFile> = BTreeMap::new();
-    for entry in fs::read_dir(&dir).with_context(|| format!("read dir {}", dir.display()))? {
+    for entry in fs::read_dir(dir).with_context(|| format!("read dir {}", dir.display()))? {
         let entry = entry?;
         let path = entry.path();
         if path.extension().and_then(|e| e.to_str()) != Some("toml") {
@@ -181,30 +198,16 @@ pub fn load_profiles(root: &Path) -> Result<Profiles> {
             toml::from_str(&contents).with_context(|| format!("parse {}", path.display()))?;
         raw.insert(name, file);
     }
+    Ok(raw)
+}
 
+fn compose_extends(raw: BTreeMap<String, ProfileFile>) -> Result<Profiles> {
     // Compose `extends` in dependency order (bases before overlays).
     let mut profiles = BTreeMap::new();
     let mut pending: Vec<String> = raw.keys().cloned().collect();
     while !pending.is_empty() {
         let before = pending.len();
-        let mut still_pending = Vec::new();
-        for name in pending {
-            let file = raw
-                .get(&name)
-                .with_context(|| format!("profile {name} missing from raw map"))?;
-            if let Some(ref base_name) = file.extends
-                && !profiles.contains_key(base_name)
-            {
-                still_pending.push(name);
-                continue;
-            }
-            let profile = compose_profile(&name, file.clone(), &profiles)
-                .with_context(|| format!("compose profile {name}"))?;
-            ensure_channels_valid(&profile.channel, &profile.pds, &format!("profile {name}"))
-                .with_context(|| format!("validate channels in profile {name}"))?;
-            profiles.insert(name, profile);
-        }
-        pending = still_pending;
+        pending = compose_ready(&raw, &mut profiles, pending)?;
         if pending.len() == before {
             anyhow::bail!(
                 "unresolved profile extends (cycle or missing base?): {}",
@@ -213,6 +216,31 @@ pub fn load_profiles(root: &Path) -> Result<Profiles> {
         }
     }
     Ok(profiles)
+}
+
+fn compose_ready(
+    raw: &BTreeMap<String, ProfileFile>,
+    profiles: &mut Profiles,
+    pending: Vec<String>,
+) -> Result<Vec<String>> {
+    let mut still_pending = Vec::new();
+    for name in pending {
+        let file = raw
+            .get(&name)
+            .with_context(|| format!("profile {name} missing from raw map"))?;
+        if let Some(ref base_name) = file.extends
+            && !profiles.contains_key(base_name)
+        {
+            still_pending.push(name);
+            continue;
+        }
+        let profile = compose_profile(&name, file.clone(), profiles)
+            .with_context(|| format!("compose profile {name}"))?;
+        ensure_channels_valid(&profile.channel, &profile.pds, &format!("profile {name}"))
+            .with_context(|| format!("validate channels in profile {name}"))?;
+        profiles.insert(name, profile);
+    }
+    Ok(still_pending)
 }
 
 pub fn get_profile<'a>(profiles: &'a Profiles, name: &str) -> Result<&'a Profile> {
@@ -337,6 +365,13 @@ pub fn audit_profiles(profiles: &Profiles, name: Option<&str>) -> Result<()> {
 }
 
 fn audit_one(name: &str, profile: &Profile) {
+    print_audit_header(name, profile);
+    print_pds_by_domain(profile);
+    print_high_risk_edges(profile);
+    print_trust_note(effective_trust_class(profile));
+}
+
+fn print_audit_header(name: &str, profile: &Profile) {
     let tier = effective_trust_class(profile);
     let src = if profile.trust_class.is_some() {
         "declared"
@@ -351,7 +386,9 @@ fn audit_one(name: &str, profile: &Profile) {
     if let Some(board) = &profile.default_board {
         println!("    default_board: {board}");
     }
+}
 
+fn print_pds_by_domain(profile: &Profile) {
     println!("    PDs by trust domain:");
     let mut by_domain: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
     for pd in &profile.pds {
@@ -363,9 +400,29 @@ fn audit_one(name: &str, profile: &Profile) {
     for (domain, pds) in by_domain {
         println!("      {domain:10} {}", pds.join(", "));
     }
+}
 
+fn print_high_risk_edges(profile: &Profile) {
     println!("    High-risk edges (capability surface):");
-    let mut notes: Vec<String> = Vec::new();
+    let notes = high_risk_notes(profile);
+    if notes.is_empty() {
+        println!("      (none flagged — appliance/minimal layout)");
+    } else {
+        for n in notes {
+            println!("      - {n}");
+        }
+    }
+}
+
+fn high_risk_notes(profile: &Profile) -> Vec<String> {
+    let mut notes = shell_risk_notes(profile);
+    notes.extend(app_fs_risk_notes(profile));
+    notes.extend(app_net_risk_notes(profile));
+    notes
+}
+
+fn shell_risk_notes(profile: &Profile) -> Vec<String> {
+    let mut notes = Vec::new();
     if profile.pds.iter().any(|p| p == "shell") {
         if profile_has_channel_between(profile, "shell", "supervisor") {
             notes.push("shell ↔ supervisor (reboot / status IPC)".into());
@@ -390,6 +447,11 @@ fn audit_one(name: &str, profile: &Profile) {
             }
         }
     }
+    notes
+}
+
+fn app_fs_risk_notes(profile: &Profile) -> Vec<String> {
+    let mut notes = Vec::new();
     for app in ["edit", "http-file-browser", "backup"] {
         if profile.pds.iter().any(|p| p == app)
             && profile_has_channel_between(profile, app, "fs-server")
@@ -397,6 +459,11 @@ fn audit_one(name: &str, profile: &Profile) {
             notes.push(format!("{app} ↔ fs-server (untrusted app FS access)"));
         }
     }
+    notes
+}
+
+fn app_net_risk_notes(profile: &Profile) -> Vec<String> {
+    let mut notes = Vec::new();
     for app in ["chat-client", "http-file-browser", "fetch-client"] {
         if profile.pds.iter().any(|p| p == app)
             && profile_has_channel_between(profile, app, "net-server")
@@ -404,14 +471,10 @@ fn audit_one(name: &str, profile: &Profile) {
             notes.push(format!("{app} ↔ net-server (untrusted app net access)"));
         }
     }
-    if notes.is_empty() {
-        println!("      (none flagged — appliance/minimal layout)");
-    } else {
-        for n in notes {
-            println!("      - {n}");
-        }
-    }
+    notes
+}
 
+fn print_trust_note(tier: TrustClass) {
     match tier {
         TrustClass::Admin => println!(
             "    note: admin surface — full REPL + bulk apps; use only on trusted consoles"
@@ -468,7 +531,11 @@ pub fn diff_profiles(a_name: &str, a: &Profile, b_name: &str, b: &Profile) {
         a.default_board.as_deref().unwrap_or("-"),
         b.default_board.as_deref().unwrap_or("-")
     );
+    print_pd_diff(a_name, a, b_name, b);
+    print_channel_diff(a_name, a, b_name, b);
+}
 
+fn print_pd_diff(a_name: &str, a: &Profile, b_name: &str, b: &Profile) {
     println!("\nPDs in {a_name} only:");
     for pd in &a.pds {
         if !b.pds.contains(pd) {
@@ -485,7 +552,9 @@ pub fn diff_profiles(a_name: &str, a: &Profile, b_name: &str, b: &Profile) {
         "Common PDs: {}",
         a.pds.iter().filter(|p| b.pds.contains(p)).count()
     );
+}
 
+fn print_channel_diff(a_name: &str, a: &Profile, b_name: &str, b: &Profile) {
     let a_lines: BTreeMap<String, &ChannelSpec> = a
         .channel
         .iter()

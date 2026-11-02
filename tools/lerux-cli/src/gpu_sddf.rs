@@ -19,6 +19,18 @@ mod tests {
     #[test]
     fn rendered_browser_sddf_system_matches_the_graphics_constants() {
         let root = repo_root();
+        assert_browser_shell_manifest(&root);
+        let xml =
+            render_system(&root, "qemu_virt_aarch64_browser_sddf").expect("render browser image");
+        assert_browser_image_shape(&xml);
+        assert_browser_priorities(&xml);
+        assert_browser_program_images(&xml);
+        assert_browser_channels(&xml);
+        assert_browser_shell_regions(&xml);
+        assert_browser_driver_regions(&xml);
+    }
+
+    fn assert_browser_shell_manifest(root: &std::path::Path) {
         let shell_manifest =
             std::fs::read_to_string(root.join("userspace/pds/sddf-shell/Cargo.toml"))
                 .expect("shell manifest");
@@ -38,10 +50,9 @@ mod tests {
             !shell_manifest.contains("lerux-logging"),
             "shell manifest stays off the logging crate"
         );
+    }
 
-        let xml =
-            render_system(&root, "qemu_virt_aarch64_browser_sddf").expect("render browser image");
-
+    fn assert_browser_image_shape(xml: &str) {
         assert_eq!(xml.matches("<protection_domain ").count(), 13);
         assert_eq!(xml.matches("<channel>").count(), 14);
         assert_eq!(xml.matches("program_image").count(), 13);
@@ -73,7 +84,9 @@ mod tests {
             )),
             "client pixel region size"
         );
+    }
 
+    fn assert_browser_priorities(xml: &str) {
         for (name, priority) in [
             ("blk_driver", 4),
             ("net_driver", 4),
@@ -96,7 +109,9 @@ mod tests {
                 "{name}"
             );
         }
+    }
 
+    fn assert_browser_program_images(xml: &str) {
         for image in [
             "sddf-blk-driver.elf",
             "sddf-blk-virt.elf",
@@ -114,7 +129,9 @@ mod tests {
         ] {
             assert!(xml.contains(&format!("<program_image path=\"{image}\" />")));
         }
+    }
 
+    fn assert_browser_channels(xml: &str) {
         for (pd, id) in [
             ("blk_driver", blk_image::BLK_DRIVER_VIRT_CHANNEL),
             ("blk_virt", blk_image::BLK_VIRT_DRIVER_CHANNEL),
@@ -150,8 +167,10 @@ mod tests {
                 "{pd} {id}"
             );
         }
+    }
 
-        let shell = domain(&xml, "shell");
+    fn assert_browser_shell_regions(xml: &str) {
+        let shell = domain(xml, "shell");
         assert!(!shell.contains("virtio"));
         assert!(!shell.contains("gpu_driver"));
         assert!(!shell.contains("serial_mmio"));
@@ -166,8 +185,10 @@ mod tests {
                 "{region}"
             );
         }
+    }
 
-        let driver = domain(&xml, "gpu_driver");
+    fn assert_browser_driver_regions(xml: &str) {
+        let driver = domain(xml, "gpu_driver");
         assert!(driver.contains(&format!(
             "mr=\"virtio_mmio\" vaddr=\"{}\"",
             hex_group(gpu_image::GPU_VIRTIO_MMIO_VADDR)

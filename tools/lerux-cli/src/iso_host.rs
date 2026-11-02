@@ -212,54 +212,70 @@ fn same_file(left: &Path, right: &Path) -> bool {
 fn host_gaps(facts: &HostFacts, need_image: bool, boot_test: bool) -> Vec<Gap> {
     let mut gaps = Vec::new();
     if need_image {
-        match &facts.sdk {
-            SdkFact::Missing => gaps.push(Gap {
-                title: "Microkit SDK",
-                detail: "\
+        push_sdk_gap(&mut gaps, facts);
+        push_image_toolchain_gaps(&mut gaps, facts);
+    }
+    push_iso_tool_gaps(&mut gaps, facts);
+    if boot_test {
+        push_boot_test_gaps(&mut gaps, facts);
+    }
+    gaps
+}
+
+fn push_sdk_gap(gaps: &mut Vec<Gap>, facts: &HostFacts) {
+    match &facts.sdk {
+        SdkFact::Missing => gaps.push(Gap {
+            title: "Microkit SDK",
+            detail: "\
 Run: just fetch-sdk
 That downloads the prebuilt SDK 2.3.0 used to build this ISO.
 just build-sdk builds the SDK from source instead.
 Or set MICROKIT_SDK to an existing SDK directory."
-                    .to_string(),
-            }),
-            SdkFact::NoTool { path } => gaps.push(Gap {
-                title: "Microkit SDK",
-                detail: format!(
-                    "{path} has no bin/microkit.\nRun: just fetch-sdk\nOr set MICROKIT_SDK to a complete SDK directory."
-                ),
-            }),
-            SdkFact::NoKernel { path, kernel, board } => gaps.push(Gap {
-                title: "seL4 kernel",
-                detail: format!(
-                    "The SDK at {path} has no {kernel}.\n\
+                .to_string(),
+        }),
+        SdkFact::NoTool { path } => gaps.push(Gap {
+            title: "Microkit SDK",
+            detail: format!(
+                "{path} has no bin/microkit.\nRun: just fetch-sdk\nOr set MICROKIT_SDK to a complete SDK directory."
+            ),
+        }),
+        SdkFact::NoKernel { path, kernel, board } => gaps.push(Gap {
+            title: "seL4 kernel",
+            detail: format!(
+                "The SDK at {path} has no {kernel}.\n\
 just fetch-sdk provides the prebuilt SDK, including the x86_64_generic kernel this desk ISO uses.\n\
 For Microkit board {board}, run: MICROKIT_BOARDS={board} just build-sdk"
-                ),
-            }),
-            SdkFact::Ready => {}
-        }
-        if facts.cargo.is_none() {
-            gaps.push(Gap {
-                title: "cargo",
-                detail: "\
+            ),
+        }),
+        SdkFact::Ready => {}
+    }
+}
+
+fn push_image_toolchain_gaps(gaps: &mut Vec<Gap>, facts: &HostFacts) {
+    if facts.cargo.is_none() {
+        gaps.push(Gap {
+            title: "cargo",
+            detail: "\
 cargo was not found on PATH.
 Install rustup from https://rustup.rs and open a new shell.
 Re-run just iso from this repository. rust-toolchain.toml selects nightly-2026-04-04, which includes rust-src."
-                    .to_string(),
-            });
-        } else if !facts.rust_src {
-            gaps.push(rust_src_gap(facts));
-        }
-        if !facts.libclang && !facts.fetch_libclang {
-            gaps.push(Gap {
-                title: "libclang",
-                detail: format!(
-                    "libclang was not found. Compiling the protection domains needs it for bindgen.\n{}",
-                    package_hint(facts.distro, "clang", "libclang-dev")
-                ),
-            });
-        }
+                .to_string(),
+        });
+    } else if !facts.rust_src {
+        gaps.push(rust_src_gap(facts));
     }
+    if !facts.libclang && !facts.fetch_libclang {
+        gaps.push(Gap {
+            title: "libclang",
+            detail: format!(
+                "libclang was not found. Compiling the protection domains needs it for bindgen.\n{}",
+                package_hint(facts.distro, "clang", "libclang-dev")
+            ),
+        });
+    }
+}
+
+fn push_iso_tool_gaps(gaps: &mut Vec<Gap>, facts: &HostFacts) {
     if !facts.clang {
         gaps.push(Gap {
             title: "clang",
@@ -278,6 +294,10 @@ Re-run just iso from this repository. rust-toolchain.toml selects nightly-2026-0
             ),
         });
     }
+    push_packer_gaps(gaps, facts);
+}
+
+fn push_packer_gaps(gaps: &mut Vec<Gap>, facts: &HostFacts) {
     if !facts.grub {
         gaps.push(Gap {
             title: "grub",
@@ -296,7 +316,10 @@ Re-run just iso from this repository. rust-toolchain.toml selects nightly-2026-0
             ),
         });
     }
-    if boot_test && !facts.qemu_x86 {
+}
+
+fn push_boot_test_gaps(gaps: &mut Vec<Gap>, facts: &HostFacts) {
+    if !facts.qemu_x86 {
         gaps.push(Gap {
             title: "qemu-system-x86_64",
             detail: format!(
@@ -305,25 +328,22 @@ Re-run just iso from this repository. rust-toolchain.toml selects nightly-2026-0
             ),
         });
     }
-    if boot_test {
-        match &facts.ovmf {
-            OvmfFact::Found(_) => {}
-            OvmfFact::BadPath(path) => gaps.push(Gap {
-                title: "OVMF",
-                detail: format!("OVMF_PATH={path} is not a file"),
-            }),
-            OvmfFact::Missing => gaps.push(Gap {
-                title: "OVMF",
-                detail: format!(
-                    "The ISO boot test needs a combined OVMF firmware.\n\
-                     Install the ovmf package or set OVMF_PATH to a combined OVMF.fd.\n\
-                     Arch's edk2-ovmf package ships one at /usr/share/edk2/x64/OVMF.4m.fd.\n{}",
-                    package_hint(facts.distro, "edk2-ovmf", "ovmf")
-                ),
-            }),
-        }
+    match &facts.ovmf {
+        OvmfFact::Found(_) => {}
+        OvmfFact::BadPath(path) => gaps.push(Gap {
+            title: "OVMF",
+            detail: format!("OVMF_PATH={path} is not a file"),
+        }),
+        OvmfFact::Missing => gaps.push(Gap {
+            title: "OVMF",
+            detail: format!(
+                "The ISO boot test needs a combined OVMF firmware.\n\
+                 Install the ovmf package or set OVMF_PATH to a combined OVMF.fd.\n\
+                 Arch's edk2-ovmf package ships one at /usr/share/edk2/x64/OVMF.4m.fd.\n{}",
+                package_hint(facts.distro, "edk2-ovmf", "ovmf")
+            ),
+        }),
     }
-    gaps
 }
 
 fn grub_ready() -> bool {
@@ -343,46 +363,58 @@ fn rust_src_gap(facts: &HostFacts) -> Gap {
             .is_some_and(|cargo| same_file(cargo, rustup))
     });
     let detail = if using_rustup {
-        "\
+        rustup_src_detail()
+    } else if let Some(rustup) = &facts.rustup_cargo {
+        foreign_cargo_src_detail(&cargo, rustup, facts.distro)
+    } else {
+        packaged_cargo_src_detail(&cargo, facts.distro)
+    };
+    Gap {
+        title: "rust-src",
+        detail,
+    }
+}
+
+fn rustup_src_detail() -> String {
+    "\
 The active Rust toolchain has no standard-library source.
 The protection-domain build rebuilds core for a custom target from that source.
 Run: rustup component add rust-src
 Re-run just iso from this repository. rust-toolchain.toml selects nightly-2026-04-04, which includes rust-src."
-            .to_string()
-    } else if let Some(rustup) = &facts.rustup_cargo {
-        let mut detail = format!(
-            "\
+        .to_string()
+}
+
+fn foreign_cargo_src_detail(cargo: &str, rustup: &Path, distro: Distro) -> String {
+    let mut detail = format!(
+        "\
 cargo is {cargo}, and its sysroot has no standard-library source.
 The protection-domain build rebuilds core for a custom target from that source.
 rustup's cargo is {}. Put it first on PATH:
   export PATH=\"$HOME/.cargo/bin:$PATH\"
 Re-run just iso from this repository. rust-toolchain.toml selects nightly-2026-04-04, which includes rust-src.",
-            rustup.display()
-        );
-        if facts.distro == Distro::Arch {
-            detail.push_str(
-                "\nOn Arch, sudo pacman -S rust-src adds that source to the packaged compiler.",
-            );
-        }
-        detail
-    } else {
-        let mut detail = format!(
-            "\
+        rustup.display()
+    );
+    append_arch_rust_src(&mut detail, distro);
+    detail
+}
+
+fn packaged_cargo_src_detail(cargo: &str, distro: Distro) -> String {
+    let mut detail = format!(
+        "\
 cargo is {cargo}, and its sysroot has no standard-library source.
 The protection-domain build rebuilds core for a custom target from that source.
 Install rustup from https://rustup.rs and open a new shell.
 Re-run just iso from this repository. rust-toolchain.toml selects nightly-2026-04-04, which includes rust-src."
+    );
+    append_arch_rust_src(&mut detail, distro);
+    detail
+}
+
+fn append_arch_rust_src(detail: &mut String, distro: Distro) {
+    if distro == Distro::Arch {
+        detail.push_str(
+            "\nOn Arch, sudo pacman -S rust-src adds that source to the packaged compiler.",
         );
-        if facts.distro == Distro::Arch {
-            detail.push_str(
-                "\nOn Arch, sudo pacman -S rust-src adds that source to the packaged compiler.",
-            );
-        }
-        detail
-    };
-    Gap {
-        title: "rust-src",
-        detail,
     }
 }
 

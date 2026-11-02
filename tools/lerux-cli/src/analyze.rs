@@ -45,46 +45,53 @@ fn analyze_text(text: &str) -> Report {
         ..Default::default()
     };
     for line in text.lines() {
-        let l = line.trim();
-        if l.contains("lerux-debug: fault")
-            || l.contains("VmFault")
-            || l.contains("CapFault")
-            || l.contains("crash dump")
-        {
-            r.faults += 1;
-            push_cap(&mut r.fault_lines, l, 12);
-        }
-        if l.contains("lerux-supervisor: watchdog ok") {
-            r.watchdog_ok = true;
-        }
-        if l.contains("lerux-supervisor: watchdog fail") {
-            r.watchdog_fail = true;
-        }
-        if l.contains("lerux-supervisor: init ok") {
-            r.init_ok = true;
-        }
-        if l.contains("lerux-supervisor: ready") || l.contains("lerux-shell: ready") {
-            r.ready = true;
-        }
-        if l.contains(" ERROR ")
-            || l.contains("log::error")
-            || l.contains(": error")
-            || l.starts_with("E[")
-        {
-            // Heuristic: structured E[tag] or traditional ERROR
-            if l.contains("ERROR") || l.starts_with("E[") || l.contains(" probe error") {
-                r.errors += 1;
-                push_cap(&mut r.service_errors, l, 16);
-            }
-        }
-        if l.contains(" WARN ") || l.starts_with("W[") || l.contains(" degraded") {
-            r.warns += 1;
-        }
-        if l.contains("lerux-") || l.contains("MON|") || l.contains("fault") {
-            push_cap(&mut r.last_interesting, l, 20);
-        }
+        classify_line(&mut r, line.trim());
     }
     r
+}
+
+fn classify_line(r: &mut Report, l: &str) {
+    if l.contains("lerux-debug: fault")
+        || l.contains("VmFault")
+        || l.contains("CapFault")
+        || l.contains("crash dump")
+    {
+        r.faults += 1;
+        push_cap(&mut r.fault_lines, l, 12);
+    }
+    if l.contains("lerux-supervisor: watchdog ok") {
+        r.watchdog_ok = true;
+    }
+    if l.contains("lerux-supervisor: watchdog fail") {
+        r.watchdog_fail = true;
+    }
+    if l.contains("lerux-supervisor: init ok") {
+        r.init_ok = true;
+    }
+    if l.contains("lerux-supervisor: ready") || l.contains("lerux-shell: ready") {
+        r.ready = true;
+    }
+    note_error_line(r, l);
+    if l.contains(" WARN ") || l.starts_with("W[") || l.contains(" degraded") {
+        r.warns += 1;
+    }
+    if l.contains("lerux-") || l.contains("MON|") || l.contains("fault") {
+        push_cap(&mut r.last_interesting, l, 20);
+    }
+}
+
+fn note_error_line(r: &mut Report, l: &str) {
+    if l.contains(" ERROR ")
+        || l.contains("log::error")
+        || l.contains(": error")
+        || l.starts_with("E[")
+    {
+        // Heuristic: structured E[tag] or traditional ERROR
+        if l.contains("ERROR") || l.starts_with("E[") || l.contains(" probe error") {
+            r.errors += 1;
+            push_cap(&mut r.service_errors, l, 16);
+        }
+    }
 }
 
 fn push_cap(v: &mut Vec<String>, line: &str, cap: usize) {

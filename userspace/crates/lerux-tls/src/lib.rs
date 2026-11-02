@@ -119,30 +119,11 @@ impl ClientSession {
                 self.conn.process_tls_records(&mut self.incoming);
             let status = match state.map_err(|_| TlsError)? {
                 ConnectionState::EncodeTlsData(mut etd) => {
-                    let mut buf = [0u8; OUT_BUF];
-                    match etd.encode(&mut buf) {
-                        Ok(n) => self.outgoing.extend_from_slice(&buf[..n]),
-                        Err(EncodeError::AlreadyEncoded) => {}
-                        Err(_) => {
-                            if discard > 0 {
-                                self.incoming.drain(..discard);
-                            }
-                            return Err(TlsError);
-                        }
-                    }
-                    if self.outgoing.is_empty() {
-                        None
-                    } else {
-                        Some(Status::WantSend)
-                    }
+                    absorb_encoded(&mut self.outgoing, &mut self.incoming, &mut etd, discard)?
                 }
                 ConnectionState::TransmitTlsData(ttd) => {
                     ttd.done();
-                    if self.outgoing.is_empty() {
-                        None
-                    } else {
-                        Some(Status::WantSend)
-                    }
+                    pending_send(&self.outgoing)
                 }
                 ConnectionState::BlockedHandshake => Some(Status::WantRecv),
                 ConnectionState::WriteTraffic(_) => {
@@ -151,38 +132,75 @@ impl ClientSession {
                 }
                 ConnectionState::ReadTraffic(mut rt) => {
                     self.connected = true;
-                    let mut extra = 0usize;
-                    while let Some(item) = rt.next_record() {
-                        let rec = item.map_err(|_| TlsError)?;
-                        extra += rec.discard;
-                        self.plaintext.extend_from_slice(rec.payload);
-                    }
-                    discard = discard.saturating_add(extra);
+                    discard = discard.saturating_add(take_plaintext(&mut self.plaintext, &mut rt)?);
                     Some(Status::Connected)
                 }
                 ConnectionState::Closed | ConnectionState::PeerClosed => Some(Status::Closed),
-                _ => {
-                    if self.connected {
-                        Some(Status::Connected)
-                    } else {
-                        Some(Status::WantRecv)
-                    }
-                }
+                _ => Some(if self.connected {
+                    Status::Connected
+                } else {
+                    Status::WantRecv
+                }),
             };
             if discard > 0 {
                 self.incoming.drain(..discard);
             }
-            if let Some(s) = status {
-                return Ok(s);
+            if let Some(status) = status {
+                return Ok(status);
             }
         }
-        if self.connected {
-            Ok(Status::Connected)
-        } else if self.outgoing.is_empty() {
-            Ok(Status::WantRecv)
-        } else {
-            Ok(Status::WantSend)
+        Ok(drive_timeout(self.connected, &self.outgoing))
+    }
+}
+
+fn absorb_encoded<Data>(
+    outgoing: &mut Vec<u8>,
+    incoming: &mut Vec<u8>,
+    etd: &mut rustls::unbuffered::EncodeTlsData<'_, Data>,
+    discard: usize,
+) -> Result<Option<Status>, TlsError> {
+    let mut buf = [0u8; OUT_BUF];
+    match etd.encode(&mut buf) {
+        Ok(n) => outgoing.extend_from_slice(&buf[..n]),
+        Err(EncodeError::AlreadyEncoded) => {}
+        Err(_) => {
+            if discard > 0 {
+                incoming.drain(..discard);
+            }
+            return Err(TlsError);
         }
+    }
+    Ok(pending_send(outgoing))
+}
+
+fn take_plaintext<Data>(
+    plaintext: &mut Vec<u8>,
+    rt: &mut rustls::unbuffered::ReadTraffic<'_, '_, Data>,
+) -> Result<usize, TlsError> {
+    let mut extra = 0usize;
+    while let Some(item) = rt.next_record() {
+        let rec = item.map_err(|_| TlsError)?;
+        extra += rec.discard;
+        plaintext.extend_from_slice(rec.payload);
+    }
+    Ok(extra)
+}
+
+fn pending_send(outgoing: &[u8]) -> Option<Status> {
+    if outgoing.is_empty() {
+        None
+    } else {
+        Some(Status::WantSend)
+    }
+}
+
+fn drive_timeout(connected: bool, outgoing: &[u8]) -> Status {
+    if connected {
+        Status::Connected
+    } else if outgoing.is_empty() {
+        Status::WantRecv
+    } else {
+        Status::WantSend
     }
 }
 

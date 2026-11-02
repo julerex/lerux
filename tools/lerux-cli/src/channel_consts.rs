@@ -152,58 +152,9 @@ fn is_trunk_exception(
 pub fn check_profile_channels(root: &Path, profile_name: &str, profile: &Profile) -> Result<()> {
     let peers = pd_peer_map(&profile.channel);
     let mut errors: Vec<String> = Vec::new();
-
     for pd_crate in &profile.pds {
-        let sdf = to_sdf_pd_name(pd_crate);
-        let Some(peer_map) = peers.get(&sdf) else {
-            continue;
-        };
-        let dir = crate_dir_for_pd(root, pd_crate);
-        if !dir.is_dir() {
-            errors.push(format!("PD crate directory missing: {}", dir.display()));
-            continue;
-        }
-        let source = collect_rs_sources(&dir)?;
-        if source.is_empty() {
-            continue;
-        }
-
-        let peers_present: BTreeSet<&str> = peer_map.values().map(String::as_str).collect();
-
-        // Group by const name — PDs often have cfg-gated Channel::new aliases.
-        let mut by_name: BTreeMap<String, BTreeSet<u8>> = BTreeMap::new();
-        for (const_name, id) in parse_named_channel_consts(&source) {
-            by_name.entry(const_name).or_default().insert(id);
-        }
-
-        for (const_name, ids) in &by_name {
-            let Some(expected_peer) = const_name_to_peer_sdf(const_name) else {
-                continue;
-            };
-            let peer_in_profile = peers_present
-                .iter()
-                .any(|p| *p == expected_peer.as_str() || peer_aliases(p, &expected_peer));
-            if !peer_in_profile {
-                continue;
-            }
-            let expected_ids: BTreeSet<u8> = peer_map
-                .iter()
-                .filter(|(_, peer)| *peer == &expected_peer || peer_aliases(peer, &expected_peer))
-                .map(|(id, _)| *id)
-                .collect();
-            if expected_ids.is_empty() || !ids.is_disjoint(&expected_ids) {
-                continue;
-            }
-            if is_trunk_exception(profile_name, const_name, ids, &expected_ids) {
-                continue;
-            }
-            errors.push(format!(
-                "{pd_crate}: const {const_name} uses Channel::new ids {ids:?}, \
-                 but manifest requires one of {expected_ids:?} for peer {expected_peer}"
-            ));
-        }
+        check_pd_channels(root, profile_name, pd_crate, &peers, &mut errors)?;
     }
-
     if !errors.is_empty() {
         bail!(
             "profile {profile_name} channel check failed ({} issue(s)):\n  - {}",
@@ -212,6 +163,76 @@ pub fn check_profile_channels(root: &Path, profile_name: &str, profile: &Profile
         );
     }
     Ok(())
+}
+
+fn check_pd_channels(
+    root: &Path,
+    profile_name: &str,
+    pd_crate: &str,
+    peers: &BTreeMap<String, BTreeMap<u8, String>>,
+    errors: &mut Vec<String>,
+) -> Result<()> {
+    let sdf = to_sdf_pd_name(pd_crate);
+    let Some(peer_map) = peers.get(&sdf) else {
+        return Ok(());
+    };
+    let dir = crate_dir_for_pd(root, pd_crate);
+    if !dir.is_dir() {
+        errors.push(format!("PD crate directory missing: {}", dir.display()));
+        return Ok(());
+    }
+    let source = collect_rs_sources(&dir)?;
+    if source.is_empty() {
+        return Ok(());
+    }
+    let by_name = channel_ids_by_name(&source);
+    push_channel_mismatches(profile_name, pd_crate, peer_map, &by_name, errors);
+    Ok(())
+}
+
+fn channel_ids_by_name(source: &str) -> BTreeMap<String, BTreeSet<u8>> {
+    // Group by const name — PDs often have cfg-gated Channel::new aliases.
+    let mut by_name: BTreeMap<String, BTreeSet<u8>> = BTreeMap::new();
+    for (const_name, id) in parse_named_channel_consts(source) {
+        by_name.entry(const_name).or_default().insert(id);
+    }
+    by_name
+}
+
+fn push_channel_mismatches(
+    profile_name: &str,
+    pd_crate: &str,
+    peer_map: &BTreeMap<u8, String>,
+    by_name: &BTreeMap<String, BTreeSet<u8>>,
+    errors: &mut Vec<String>,
+) {
+    let peers_present: BTreeSet<&str> = peer_map.values().map(String::as_str).collect();
+    for (const_name, ids) in by_name {
+        let Some(expected_peer) = const_name_to_peer_sdf(const_name) else {
+            continue;
+        };
+        let peer_in_profile = peers_present
+            .iter()
+            .any(|p| *p == expected_peer.as_str() || peer_aliases(p, &expected_peer));
+        if !peer_in_profile {
+            continue;
+        }
+        let expected_ids: BTreeSet<u8> = peer_map
+            .iter()
+            .filter(|(_, peer)| *peer == &expected_peer || peer_aliases(peer, &expected_peer))
+            .map(|(id, _)| *id)
+            .collect();
+        if expected_ids.is_empty() || !ids.is_disjoint(&expected_ids) {
+            continue;
+        }
+        if is_trunk_exception(profile_name, const_name, ids, &expected_ids) {
+            continue;
+        }
+        errors.push(format!(
+            "{pd_crate}: const {const_name} uses Channel::new ids {ids:?}, \
+             but manifest requires one of {expected_ids:?} for peer {expected_peer}"
+        ));
+    }
 }
 
 /// Map a Rust const name to an expected peer SDF name when unambiguous.

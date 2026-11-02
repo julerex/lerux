@@ -21,23 +21,44 @@ pub fn system(root: &Path, board: &str, build_dir: &str) -> Result<()> {
 
 pub fn build(root: &Path, board: &str, build_dir: &str, config: &str) -> Result<()> {
     system(root, board, build_dir)?;
-    if board == "qemu_virt_aarch64_serial_sddf" {
-        crate::serial_sddf::write_configs(&board_build_dir(root, board, build_dir))?;
+    write_sddf_configs(root, board, build_dir)?;
+    let boards = load_boards(root)?;
+    let board_cfg = get_board(&boards, board)?;
+    for crate_name in &board_cfg.pds {
+        build_pd(root, board, build_dir, config, crate_name)?;
     }
+    Ok(())
+}
+
+fn write_sddf_configs(root: &Path, board: &str, build_dir: &str) -> Result<()> {
+    let dir = board_build_dir(root, board, build_dir);
+    if board == "qemu_virt_aarch64_serial_sddf" {
+        crate::serial_sddf::write_configs(&dir)?;
+    }
+    write_block_and_net_configs(&dir, board)?;
+    write_client_configs(&dir, board)?;
+    Ok(())
+}
+
+fn write_block_and_net_configs(dir: &Path, board: &str) -> Result<()> {
     if board == "qemu_virt_aarch64_fs_sddf"
         || board == "qemu_virt_riscv64_fs_sddf"
         || board == "x86_64_generic_fs_sddf"
         || board == "x86_64_generic_fs_ahci"
     {
-        crate::fs_sddf::write_configs(&board_build_dir(root, board, build_dir), board)?;
+        crate::fs_sddf::write_configs(dir, board)?;
     }
     if board == "qemu_virt_aarch64_net_sddf"
         || board == "qemu_virt_riscv64_net_sddf"
         || board == "x86_64_generic_net_sddf"
         || board == "x86_64_generic_net_e1000e"
     {
-        crate::net_sddf::write_configs(&board_build_dir(root, board, build_dir), board)?;
+        crate::net_sddf::write_configs(dir, board)?;
     }
+    Ok(())
+}
+
+fn write_client_configs(dir: &Path, board: &str) -> Result<()> {
     if board == "qemu_virt_aarch64_fetch_sddf"
         || board == "qemu_virt_riscv64_fetch_sddf"
         || board == "x86_64_generic_fetch_sddf"
@@ -48,24 +69,19 @@ pub fn build(root: &Path, board: &str, build_dir: &str, config: &str) -> Result<
         || board == "qemu_virt_aarch64_browser_sddf"
         || board == "qemu_virt_riscv64_browser_sddf"
     {
-        crate::fetch_sddf::write_configs(&board_build_dir(root, board, build_dir), board)?;
+        crate::fetch_sddf::write_configs(dir, board)?;
     }
     if board == "qemu_virt_aarch64_agent_sddf"
         || board == "qemu_virt_riscv64_agent_sddf"
         || board == "x86_64_generic_agent_sddf"
     {
-        crate::agent_sddf::write_configs(&board_build_dir(root, board, build_dir))?;
+        crate::agent_sddf::write_configs(dir)?;
     }
     if board == "qemu_virt_aarch64_program_sddf"
         || board == "qemu_virt_riscv64_program_sddf"
         || board == "x86_64_generic_program_sddf"
     {
-        crate::program_sddf::write_configs(&board_build_dir(root, board, build_dir))?;
-    }
-    let boards = load_boards(root)?;
-    let board_cfg = get_board(&boards, board)?;
-    for crate_name in &board_cfg.pds {
-        build_pd(root, board, build_dir, config, crate_name)?;
+        crate::program_sddf::write_configs(dir)?;
     }
     Ok(())
 }
@@ -90,33 +106,18 @@ pub fn build_pd(
     ensure_dir(&board_build)?;
     ensure_dir(&target_dir)?;
 
-    let mut cmd = Command::new("cargo");
-    cmd.current_dir(root);
-    cmd.arg("build").arg("--release").arg("-p").arg(crate_name);
-    if crate_has_board_feature(root, crate_name, board) {
-        cmd.arg("--features").arg(format!("board-{board}"));
-    }
-    cmd.args([
-        "--target-dir",
-        &path_str(&target_dir),
-        "--target",
-        &path_str(&target_spec),
-        "-Z",
-        "json-target-spec",
-        "-Z",
-        "build-std=core,alloc,compiler_builtins",
-        "-Z",
-        "build-std-features=compiler-builtins-mem",
-    ]);
-
-    let include = format!(
-        "{}/board/{}/{}/include",
-        sdk, board_cfg.microkit_board, config
+    let mut cmd = pd_cargo_command(
+        root,
+        board,
+        crate_name,
+        &sdk,
+        &board_cfg.microkit_board,
+        config,
+        PdBuildPaths {
+            target_dir: &target_dir,
+            target_spec: &target_spec,
+        },
     );
-    cmd.env("SEL4_INCLUDE_DIRS", include);
-    cmd.env("RUST_TARGET_PATH", root.join("support/targets"));
-    cmd.env("RUSTC_BOOTSTRAP", "1");
-
     let status = cmd.status().context("cargo build pd")?;
     if !status.success() {
         bail!("cargo build -p {crate_name} failed");
@@ -130,6 +131,46 @@ pub fn build_pd(
     std::fs::copy(&elf_src, &elf_dst)
         .with_context(|| format!("copy {} to {}", elf_src.display(), elf_dst.display()))?;
     Ok(())
+}
+
+struct PdBuildPaths<'a> {
+    target_dir: &'a Path,
+    target_spec: &'a Path,
+}
+
+fn pd_cargo_command(
+    root: &Path,
+    board: &str,
+    crate_name: &str,
+    sdk: &str,
+    microkit_board: &str,
+    config: &str,
+    paths: PdBuildPaths<'_>,
+) -> Command {
+    let mut cmd = Command::new("cargo");
+    cmd.current_dir(root);
+    cmd.arg("build").arg("--release").arg("-p").arg(crate_name);
+    if crate_has_board_feature(root, crate_name, board) {
+        cmd.arg("--features").arg(format!("board-{board}"));
+    }
+    cmd.args([
+        "--target-dir",
+        &path_str(paths.target_dir),
+        "--target",
+        &path_str(paths.target_spec),
+        "-Z",
+        "json-target-spec",
+        "-Z",
+        "build-std=core,alloc,compiler_builtins",
+        "-Z",
+        "build-std-features=compiler-builtins-mem",
+    ]);
+
+    let include = format!("{sdk}/board/{microkit_board}/{config}/include");
+    cmd.env("SEL4_INCLUDE_DIRS", include);
+    cmd.env("RUST_TARGET_PATH", root.join("support/targets"));
+    cmd.env("RUSTC_BOOTSTRAP", "1");
+    cmd
 }
 
 pub fn image(root: &Path, board: &str, build_dir: &str, config: &str) -> Result<()> {

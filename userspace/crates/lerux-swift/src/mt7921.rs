@@ -480,6 +480,31 @@ const SCAN_CH: usize = 2;
 /// Byte length of `mt76_connac_hw_scan_req`.
 pub const SCAN_REQ_LEN: usize = 1186;
 
+/// `(band, channel)` pairs in `mt76_connac_hw_scan_req`. Band 1 is 2.4 GHz.
+const SCAN_CHANNELS: &[(u8, u8)] = &[
+    (1, 1),
+    (1, 2),
+    (1, 3),
+    (1, 4),
+    (1, 5),
+    (1, 6),
+    (1, 7),
+    (1, 8),
+    (1, 9),
+    (1, 10),
+    (1, 11),
+    (1, 12),
+    (1, 13),
+    (2, 36),
+    (2, 40),
+    (2, 44),
+    (2, 48),
+    (2, 149),
+    (2, 153),
+    (2, 157),
+    (2, 161),
+];
+
 /// Active scan for one SSID. Layout is `mt76_connac_hw_scan_req` in Linux v6.8.
 pub fn write_scan(out: &mut [u8], ssid: &[u8], seq: u8) -> bool {
     if out.len() < SCAN_REQ_LEN || ssid.is_empty() || ssid.len() > 32 {
@@ -495,33 +520,10 @@ pub fn write_scan(out: &mut [u8], ssid: &[u8], seq: u8) -> bool {
     out[7] = 1;
     out[8..12].copy_from_slice(&(ssid.len() as u32).to_le_bytes());
     out[12..12 + ssid.len()].copy_from_slice(ssid);
-    let channels: &[(u8, u8)] = &[
-        (1, 1),
-        (1, 2),
-        (1, 3),
-        (1, 4),
-        (1, 5),
-        (1, 6),
-        (1, 7),
-        (1, 8),
-        (1, 9),
-        (1, 10),
-        (1, 11),
-        (1, 12),
-        (1, 13),
-        (2, 36),
-        (2, 40),
-        (2, 44),
-        (2, 48),
-        (2, 149),
-        (2, 153),
-        (2, 157),
-        (2, 161),
-    ];
     let base = 8 + 4 * SCAN_SSID + 6;
     out[base] = 4;
-    out[base + 1] = channels.len() as u8;
-    for (i, (band, ch)) in channels.iter().enumerate() {
+    out[base + 1] = SCAN_CHANNELS.len() as u8;
+    for (i, (band, ch)) in SCAN_CHANNELS.iter().enumerate() {
         let at = base + 2 + i * SCAN_CH;
         out[at] = *band;
         out[at + 1] = *ch;
@@ -544,6 +546,16 @@ pub fn write_txwi(txwi: &mut [u8], frame: &[u8], frame_phys: u32) -> bool {
         return false;
     }
     txwi[..TXD_LEN + TXP_LEN].fill(0);
+    write_txd(txwi, frame);
+    txwi[32..34].copy_from_slice(&0x8000u16.to_le_bytes());
+    txwi[40..44].copy_from_slice(&frame_phys.to_le_bytes());
+    let len = (frame.len() as u16) | 0x8000;
+    txwi[44..46].copy_from_slice(&len.to_le_bytes());
+    true
+}
+
+/// TXD words before the TXP buffer pointer. `frame` is at least 24 bytes.
+fn write_txd(txwi: &mut [u8], frame: &[u8]) {
     let total = frame.len() + TXD_LEN;
     let q = 0x10u32;
     let tx0 = (total as u32 & 0xffff) | (2 << 23) | (q << 25);
@@ -578,11 +590,6 @@ pub fn write_txwi(txwi: &mut [u8], frame: &[u8], frame_phys: u32) -> bool {
     txwi[12..16].copy_from_slice(&tx3.to_le_bytes());
     let tx7 = (fc_type << 20) | (fc_stype << 16);
     txwi[28..32].copy_from_slice(&tx7.to_le_bytes());
-    txwi[32..34].copy_from_slice(&0x8000u16.to_le_bytes());
-    txwi[40..44].copy_from_slice(&frame_phys.to_le_bytes());
-    let len = (frame.len() as u16) | 0x8000;
-    txwi[44..46].copy_from_slice(&len.to_le_bytes());
-    true
 }
 
 fn header_len(frame: &[u8]) -> usize {

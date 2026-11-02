@@ -93,27 +93,34 @@ fn is_protective_mbr(boot: &[u8; 512]) -> bool {
     (0..4).any(|slot| boot[446 + slot * 16 + 4] == 0xee)
 }
 
-fn load_gpt(read: &mut impl FnMut(u64) -> Option<[u8; 512]>) -> DiskReport {
-    let Some(header) = read(1) else {
-        return DiskReport::Admin;
-    };
+/// Entry LBA and entry count from a header this reader accepts.
+fn gpt_entries(header: &[u8; 512]) -> Option<(u64, u32)> {
     if &header[..8] != b"EFI PART" {
-        return DiskReport::Raw;
+        return None;
     }
-    let header_size = u32_at(&header, 12);
-    let my_lba = u64_at(&header, 24);
-    let entry_lba = u64_at(&header, 72);
-    let count = u32_at(&header, 80);
-    let entry_size = u32_at(&header, 84);
+    let header_size = u32_at(header, 12);
+    let my_lba = u64_at(header, 24);
+    let entry_lba = u64_at(header, 72);
+    let count = u32_at(header, 80);
+    let entry_size = u32_at(header, 84);
     if !(92..=512).contains(&header_size)
         || my_lba != 1
         || entry_lba == 0
         || entry_size != 128
         || count == 0
     {
-        return DiskReport::Raw;
+        return None;
     }
-    let count = count.min(128);
+    Some((entry_lba, count.min(128)))
+}
+
+fn load_gpt(read: &mut impl FnMut(u64) -> Option<[u8; 512]>) -> DiskReport {
+    let Some(header) = read(1) else {
+        return DiskReport::Admin;
+    };
+    let Some((entry_lba, count)) = gpt_entries(&header) else {
+        return DiskReport::Raw;
+    };
     let mut saw_fs = false;
     for index in 0..u64::from(count) {
         let Some(entry) = read_gpt_entry(read, entry_lba, index) else {

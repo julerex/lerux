@@ -1,6 +1,6 @@
 # Glossary
 
-Words for the machines in this repo, the devices on the [Swift X](#swift-x), and the mechanisms a [driver](#driver) uses to program them. A linked name jumps to the heading that defines it.
+Words for the machines in this repo, the devices on the [Swift X](#swift-x), and the mechanisms a [driver](#driver) uses to program them. A linked name jumps to the heading that defines it. The [MT7921](#mt7921) line, from the [patch semaphore](#patch-semaphore) through [ping](#ping), is under [Wi-Fi bring-up](#wi-fi-bring-up).
 
 The shell, the browser, and the agent stay in [docs/context.md](docs/context.md). Which [protection domain](#protection-domain) programs which device is in [docs/platforms.md](docs/platforms.md#x86-device-map) and [docs/platforms.md](docs/platforms.md#swift-x-devices).
 
@@ -186,7 +186,13 @@ A device signal delivered to a [protection domain](#protection-domain) on a [cha
 
 ### PCI
 
-The configuration model the probe and the [drivers](#driver) use to name a function. A function has a [BDF](#bdf), a [configuration space](#configuration-space), and [base address registers](#base-address-register). The [Swift X](#swift-x) endpoints are PCIe. The same headers describe them.
+The configuration model the probe and the [drivers](#driver) use to name a function. A function has a [BDF](#bdf), a [configuration space](#configuration-space), and [base address registers](#base-address-register). The [Swift X](#swift-x) endpoints sit on [PCIe](#pcie). The same headers describe them.
+
+### PCIe
+
+The link the [Swift X](#swift-x) endpoints share. A [DMA](#dma) read that never finishes can stay on this link and stall another function. That is how `nvme: admin` can show up beside a stuck [MT7921](#mt7921) transmit. Sitting on the bus means sitting on this link.
+
+_Avoid_: the bus number in a [BDF](#bdf), and [bus master](#bus-master). The bus number names where the function is attached. [Bus master](#bus-master) is the bit that allows [DMA](#dma). [Configuration space](#configuration-space) holds the [PCI](#pci) registers.
 
 ### configuration space
 
@@ -207,6 +213,12 @@ _Avoid_: [DMA window](#dma-window), [I/O port](#io-port)
 The [PCI](#pci) command bit that lets a function read and write RAM on its own. The Swift probe sets this bit, and the memory-space bit, on the [NVMe](#nvme), the [AMD xHCI](#amd-xhci) functions, and the [MT7921](#mt7921). The [firmware](#firmware) [BAR](#base-address-register) values stay where they are.
 
 _Avoid_: [driver own](#driver-own)
+
+### IOMMU
+
+The AMD unit that can translate a device [DMA](#dma) address before it reaches RAM. This system does not build those tables. A [doorbell](#doorbell) that lands while the [DMA index](#dma-index) stays 0 does not by itself name this unit.
+
+_Avoid_: the processor [memory page](#memory-page) tables. Those translate CPU loads and stores. This unit would translate device [DMA](#dma).
 
 ### memory-mapped I/O
 
@@ -252,17 +264,53 @@ _Avoid_: [memory-mapped I/O](#memory-mapped-io), [firmware hole](#firmware-hole)
 
 The range at `0xf8000000`. The Bluetooth command [ring](#ring) used to sit there and did not run. A [ring](#ring) the device must read sits in a low [DMA window](#dma-window) instead.
 
+### memory page
+
+The 4 KiB unit [Microkit](#microkit) uses to map device registers. The [MT7921](#mt7921) [BAR](#base-address-register) is mapped with 4 KiB [memory pages](#memory-page). A [WFDMA](#wfdma) [ring](#ring) base has to be the start of one. `0x200` sits inside a [memory page](#memory-page), and the [DMA engine](#dma-engine) can ignore a base that is not the start of one. Linux [mt76](#mt76) allocates those [rings](#ring) on that boundary.
+
+_Avoid_: the [VGA text page](#vga-text-page), the [virtio](#virtio) register page, and the [GOP](#gop) framebuffer.
+
+### cache line
+
+The 64 bytes this processor keeps together. A device [DMA](#dma) reads RAM, not this cache. The [descriptor](#descriptor) has to be written out before the [doorbell](#doorbell). A store fence orders the CPU's own writes. It does not by itself push the [cache line](#cache-line) out. The [mb2-stub](#mb2-stub) runs `wbinvd` before [seL4](#sel4) when the [GOP](#gop) buffer is above 4 GiB.
+
+_Avoid_: a [memory page](#memory-page). A [memory page](#memory-page) is 4 KiB. This [cache line](#cache-line) is 64 bytes.
+
 ### descriptor
 
-One slot in a [ring](#ring). It holds a buffer address, a length, and status. An [MT7921](#mt7921) slot is 16 bytes. An [NVMe](#nvme) [submission queue](#submission-queue) entry is 64 bytes, and the sector address in it is a [PRP](#prp). A completion entry is 16 bytes.
+One slot in a [ring](#ring). It holds a buffer address, a length, and status. An [MT7921](#mt7921) slot is 16 bytes, and its length fields are the [descriptor segments](#descriptor-segment). An [NVMe](#nvme) [submission queue](#submission-queue) entry is 64 bytes, and the sector address in it is a [PRP](#prp). A completion entry is 16 bytes.
+
+### descriptor segment
+
+One length field in the [MT7921](#mt7921) [descriptor](#descriptor) control word, in the Linux [mt76](#mt76) layout. The [first segment](#descriptor-segment) is bits 29–16 and is the buffer the [DMA engine](#dma-engine) transfers. The [second segment](#descriptor-segment) is bits 13–0. A length that sits only in the [second segment](#descriptor-segment) moves zero bytes, so the [ROM](#rom) never sees the command. A receive length taken from that same field drops the reply the same way. Bit 30 marks the end of the [first segment](#descriptor-segment). Bit 31 is the [write-back](#write-back) flag.
+
+_Avoid_: the [NVMe](#nvme) command length. That lives in the 64-byte [submission queue](#submission-queue) entry, not in this control word.
+
+### write-back
+
+Bit 31 of the [MT7921](#mt7921) [descriptor](#descriptor) control word. The [DMA engine](#dma-engine) may set it when a transfer finishes. Linux [mt76](#mt76) also treats a transmit as done when the [DMA index](#dma-index) moves. Waiting only for this bit can time out while the read is still outstanding.
+
+_Avoid_: the [DMA index](#dma-index). The [DMA index](#dma-index) moving is the other completion. This bit is the flag in the [descriptor](#descriptor).
+
+### DMA index
+
+The [WFDMA](#wfdma) [ring](#ring) register at offset 12. The [DMA engine](#dma-engine) advances it when it takes a [descriptor](#descriptor). The panel field is `d`. `d00` means the [DMA index](#dma-index) stayed 0, so the [DMA engine](#dma-engine) never fetched the slot.
+
+_Avoid_: the [CPU index](#cpu-index), which is the [doorbell](#doorbell).
+
+### CPU index
+
+The [WFDMA](#wfdma) [ring](#ring) register at offset 8. Writing it is the [doorbell](#doorbell). The panel field is `c`. `c01` means the [doorbell](#doorbell) value is 1.
+
+_Avoid_: the [DMA index](#dma-index).
 
 ### ring
 
-A circular array of [descriptors](#descriptor) in a [DMA window](#dma-window). The [driver](#driver) fills a slot, then writes the [doorbell](#doorbell) with the new index. The [MT7921](#mt7921) uses transmit and receive [rings](#ring) of eight slots. [NVMe](#nvme) uses a [submission queue](#submission-queue) and a [completion queue](#completion-queue). An [sDDF queue](#sddf-queue) is this kind of array between [protection domains](#protection-domain).
+A circular array of [descriptors](#descriptor) in a [DMA window](#dma-window). The [driver](#driver) fills a slot, then writes the [doorbell](#doorbell) with the new [CPU index](#cpu-index). The [DMA index](#dma-index) is how far the device has walked. The base register is the physical address of the first slot and has to start a [memory page](#memory-page). The [MT7921](#mt7921) uses transmit and receive [rings](#ring) of eight slots. [NVMe](#nvme) uses a [submission queue](#submission-queue) and a [completion queue](#completion-queue). An [sDDF queue](#sddf-queue) is this kind of array between [protection domains](#protection-domain).
 
 ### doorbell
 
-A register write that tells the device its [ring](#ring) index moved. The [descriptor](#descriptor) bytes are already in the [DMA window](#dma-window). The [NVMe](#nvme) [driver](#driver) writes the [submission queue](#submission-queue) tail or the [completion queue](#completion-queue) head at `0x1000 + queue id * stride`. The stride comes from the controller CAP register. The [xHCI](#xhci) [driver](#driver) writes the slot and the endpoint into the [doorbell](#doorbell) array, at the offset the [doorbell](#doorbell) field at register `0x14` names. The [MT7921](#mt7921) [driver](#driver) writes the CPU index at offset 8 of that [ring](#ring)'s [WFDMA](#wfdma) registers. A [virtio](#virtio) [driver](#driver) writes the queue notify register for the same reason.
+A register write that tells the device its [ring](#ring) index moved. The [descriptor](#descriptor) bytes are already in the [DMA window](#dma-window), and a dirty [cache line](#cache-line) still has to be written out before this write. The [NVMe](#nvme) [driver](#driver) writes the [submission queue](#submission-queue) tail or the [completion queue](#completion-queue) head at `0x1000 + queue id * stride`. The stride comes from the controller CAP register. The [xHCI](#xhci) [driver](#driver) writes the slot and the endpoint into the [doorbell](#doorbell) array, at the offset the [doorbell](#doorbell) field at register `0x14` names. The [MT7921](#mt7921) [driver](#driver) writes the [CPU index](#cpu-index) at offset 8 of that [ring](#ring)'s [WFDMA](#wfdma) registers. A [virtio](#virtio) [driver](#driver) writes the queue notify register for the same reason.
 
 _Avoid_: [interrupt](#interrupt). This write goes from the [driver](#driver) to the device. An [interrupt](#interrupt) goes from the device to the [driver](#driver).
 
@@ -292,13 +340,31 @@ A program this image did not compile, and that still has to run before a device 
 
 Platform [firmware](#firmware) is [UEFI](#uefi) on the [Swift X](#swift-x) and the [Z97 desk](#z97-desk). On QEMU it is [SeaBIOS](#seabios) or [OVMF](#ovmf). It assigns each [BAR](#base-address-register), chooses the boot display, and owns the machine until [ExitBootServices](#exitbootservices).
 
-Device [firmware](#firmware) is a blob a [driver](#driver) copies onto a chip so an on-chip processor can run. The [MT7921](#mt7921) needs a patch image and a RAM image. `support/mt7921.bin` overrides only the RAM image. The patch has no file under `support/`. An empty pair paints `mt7921: firmware err`. Bluetooth uses `support/mt7921-bt.bin`, which is a different blob. An empty Bluetooth blob paints `bt: firmware err`.
+Device [firmware](#firmware) is a blob a [driver](#driver) copies onto a chip so an on-chip processor can run. The [MT7921](#mt7921) needs a [patch image](#patch-image) and a [RAM image](#ram-image). An empty pair paints `mt7921: firmware err`. Bluetooth uses `support/mt7921-bt.bin`, which is a different blob. An empty Bluetooth blob paints `bt: firmware err`.
 
 _Avoid_: the [seL4](#sel4) kernel. The [mb2-stub](#mb2-stub) loads the kernel. Device [firmware](#firmware) is the blob linked into the [protection domain](#protection-domain).
 
 ### UEFI
 
-The [firmware](#firmware) interface the [Swift X](#swift-x) and the [Z97 desk](#z97-desk) boot. The USB boot entry has to say [UEFI](#uefi). GRUB is `EFI/BOOT/BOOTX64.EFI`. There is no BIOS El Torito entry.
+The [firmware](#firmware) interface the [Swift X](#swift-x) and the [Z97 desk](#z97-desk) boot. The USB boot entry has to say [UEFI](#uefi). [GRUB](#grub) is `EFI/BOOT/BOOTX64.EFI`. There is no BIOS [El Torito](#el-torito) entry.
+
+### ISO
+
+The image `just iso` writes for the [Swift X](#swift-x). The file is `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`. The recipe's own status line includes `Wrote ISO`. [GRUB](#grub) is the loader on that image. The boot entry has to say [UEFI](#uefi).
+
+_Avoid_: [OVMF](#ovmf). That is the [firmware](#firmware) QEMU uses for an x86 [ISO](#iso). This file is the [Swift X](#swift-x) image.
+
+### metal boot
+
+A boot of the [ISO](#iso) on the [Swift X](#swift-x) itself. The panel is the only output. There is no [COM1](#com1). The host test that prints an address and `ping ok` drives a scripted radio and does not stand in for this boot.
+
+### GRUB
+
+The [UEFI](#uefi) loader at `EFI/BOOT/BOOTX64.EFI` on the [ISO](#iso). It loads the [mb2-stub](#mb2-stub). There is no BIOS [El Torito](#el-torito) entry.
+
+### El Torito
+
+The BIOS boot record used for optical discs. The [Swift X](#swift-x) [ISO](#iso) does not use one. The USB entry has to say [UEFI](#uefi).
 
 _Avoid_: [SeaBIOS](#seabios)
 
@@ -312,19 +378,25 @@ _Avoid_: [VGA text page](#vga-text-page)
 
 The number of bytes from one row of the [GOP](#gop) buffer to the next. The [Swift X](#swift-x) mode line recorded 7680 on a 1920 by 1080 frame, four bytes per pixel.
 
+### cell buffer
+
+The character grid the console [driver](#driver) paints from. On the [Swift X](#swift-x) the grid is 25 rows, and the pixels land in the [GOP](#gop) buffer. `swift_mt7921` writes row 22, `swift_nvme` writes row 23, and `swift_bt` writes row 24. A scroll or a full clear is `Damage::All`, so `present_all` copies this grid back over those rows. Read the [firmware stage](#firmware-stage) before that happens.
+
+_Avoid_: the [GOP](#gop) mode line the [mb2-stub](#mb2-stub) paints. That line is the framebuffer record. This grid is the console.
+
 ### ExitBootServices
 
 The [UEFI](#uefi) call after which [firmware](#firmware) boot services are gone. `sel4.elf` is linked at 1 MiB, a range [firmware](#firmware) still owns before this call. The [mb2-stub](#mb2-stub) places the kernel there only after boot services have exited.
 
 ### OVMF
 
-The [UEFI](#uefi) [firmware](#firmware) QEMU runs for an x86 ISO boot.
+The [UEFI](#uefi) [firmware](#firmware) QEMU runs for an x86 [ISO](#iso) boot.
 
 _Avoid_: the [firmware](#firmware) on the [Swift X](#swift-x), and [SeaBIOS](#seabios). A QEMU hello line does not prove the [Swift X](#swift-x) panel.
 
 ### mb2-stub
 
-The Multiboot 2 trampoline linked at 32 MiB. GRUB loads it under [UEFI](#uefi). It asks for a framebuffer, paints the [GOP](#gop) mode line, writes the mode record at `0x01fe0000`, and then jumps to [seL4](#sel4). A [GOP](#gop) buffer above 4 GiB is painted with paging on, on a stack inside the identity map.
+The Multiboot 2 trampoline linked at 32 MiB. [GRUB](#grub) loads it under [UEFI](#uefi). It asks for a framebuffer, paints the [GOP](#gop) mode line, writes the mode record at `0x01fe0000`, and then jumps to [seL4](#sel4). A [GOP](#gop) buffer above 4 GiB is painted with paging on, on a stack inside the identity map. `wbinvd` runs before [seL4](#sel4), so those [cache lines](#cache-line) reach the panel.
 
 ## Acer Swift X
 
@@ -336,35 +408,41 @@ _Avoid_: [Z97 desk](#z97-desk), [q35](#q35)
 
 ### MT7921
 
-The MediaTek Wi-Fi function at [PCI](#pci) `03:00.0`, identity `14c3:7961` or `14c3:0608`. `swift-mt7921` owns it. The recorded memory [BAR](#base-address-register) is `0xfc82000000`, mapped at virtual `0x82000000` with 4 KiB pages. The [DMA window](#dma-window) is physical `0x1f60000`. The register names [WFDMA](#wfdma), [WFSYS](#wfsys), and [MCU](#mcu) are the Linux v6.8 mt76 names this [driver](#driver) follows. Association is WPA-Personal. The menu item is `3 wifi`.
+The MediaTek Wi-Fi function at [PCI](#pci) `03:00.0`, identity `14c3:7961` or `14c3:0608`. `swift-mt7921` owns it. The recorded memory [BAR](#base-address-register) is `0xfc82000000`, mapped at virtual `0x82000000` with 4 KiB [memory pages](#memory-page). The [DMA window](#dma-window) is physical `0x1f60000`. The register names [WFDMA](#wfdma), [WFSYS](#wfsys), and [MCU](#mcu) are the Linux v6.8 [mt76](#mt76) names this [driver](#driver) follows. [Association](#association) is [WPA-Personal](#wpa-personal). The menu item is `3 wifi`. The bring-up words are the [firmware stage](#firmware-stage).
 
 _Avoid_: the Bluetooth [HCI](#hci). That is a USB device behind an [AMD xHCI](#amd-xhci), with a different [firmware](#firmware) blob.
 
 ### WFDMA
 
-The [DMA engine](#dma-engine) inside the [MT7921](#mt7921). Its registers sit in the [BAR](#base-address-register). The Linux map names the block base `0xd4000`. The [driver](#driver) programs the [ring](#ring) base and the count, then writes the CPU index at offset 8, which is the [doorbell](#doorbell).
+The [DMA engine](#dma-engine) inside the [MT7921](#mt7921). Its registers sit in the [BAR](#base-address-register). The Linux [mt76](#mt76) map names the block base `0xd4000`. Each [ring](#ring) has a base, a size, the [CPU index](#cpu-index) at offset 8, and the [DMA index](#dma-index) at offset 12. The base has to start a [memory page](#memory-page). It is written again after the [ring](#ring) pointers are reset and after [driver own](#driver-own), because those steps can drop it. Bit 0 of the global config's low byte enables transmit. The panel field `g` is that byte. The [write-back](#write-back) bit is not the only way a transmit finishes.
 
 ### WFSYS
 
-The Wi-Fi subsystem [hardware block](#hardware-block) in the [MT7921](#mt7921). The [driver](#driver) resets it and waits for init-done before the [firmware](#firmware) load. A failure at this step, and a later MAC setup failure, both paint `mt7921: mac`.
+The Wi-Fi subsystem [hardware block](#hardware-block) in the [MT7921](#mt7921). The [driver](#driver) resets it and waits for init-done before the [firmware](#firmware) load. A failure at this step, and a later [MAC setup](#mac) failure, both paint `mt7921: mac`.
 
 ### MCU
 
-The processor inside the [MT7921](#mt7921) that runs the device [firmware](#firmware). The [driver](#driver) scatters the patch and the RAM image into it and waits until N9 is ready. A chunk that does not leave the download [ring](#ring) paints `mt7921: fw scatter`.
+The processor inside the [MT7921](#mt7921) that runs the device [firmware](#firmware). Commands it accepts before the [RAM image](#ram-image) is running are answered by the on-chip [ROM](#rom). The [driver](#driver) sends those commands with a [hardware transmit descriptor](#hardware-transmit-descriptor) and an [MCU header](#mcu-header), then [scatters](#scatter) the [patch image](#patch-image) and the [RAM image](#ram-image). It waits until [N9](#n9) is ready.
 
 ### driver own
 
-The host-ownership handshake on the [MT7921](#mt7921). It covers the opening polls and the later grab after [DMA](#dma) is enabled. Failure paints `mt7921: own`.
+The [host-own](#driver-own) handshake on the [MT7921](#mt7921). It covers the opening polls, before the [patch image](#patch-image) load, and the later grab after [DMA](#dma) is enabled. Failure paints `mt7921: own`. A line that says `own` still includes those polls.
 
 _Avoid_: [bus master](#bus-master). [Bus master](#bus-master) lets the function use [DMA](#dma). This handshake is the chip's power ownership.
 
 ### NVMe
 
-The disk command set, and on this machine the SK hynix BC711 at [PCI](#pci) `02:00.0`, class `0x010802`. `swift-nvme` reads `LERUX.TXT`. IO write `0x01` and admin format `0x80` are rejected. The volume is not formatted. A controller that returns sector 0 with no FAT or NTFS boot sector paints `nvme: raw`.
+The disk command set, and on this machine the SK hynix BC711 at [PCI](#pci) `02:00.0`, class `0x010802`. `swift-nvme` reads `LERUX.TXT`. IO write `0x01` and admin format `0x80` are rejected. The volume is not formatted. A controller that returns sector 0 with no FAT or NTFS boot sector paints `nvme: raw`. A read that never returns paints `nvme: admin`. See [admin command](#admin-command).
+
+### admin command
+
+A command on the [NVMe](#nvme) admin [submission queue](#submission-queue). Creating the IO queues is one. The controller has come up, and then one [admin command](#admin-command) never returns, which paints `nvme: admin`. An [MT7921](#mt7921) [DMA](#dma) read that never finishes can sit on the [PCIe](#pcie) link and stall it.
+
+_Avoid_: admin format, opcode `0x80`, which this [driver](#driver) rejects on purpose. IO read is opcode `0x02` and uses the IO queue, not this one.
 
 ### submission queue
 
-The [NVMe](#nvme) [ring](#ring) the [driver](#driver) fills with commands. Admin and IO each have one. [Doorbell](#doorbell) ids 0 and 2 carry the tails.
+The [NVMe](#nvme) [ring](#ring) the [driver](#driver) fills with commands. The [admin command](#admin-command) queue and the IO queue each have one. [Doorbell](#doorbell) ids 0 and 2 carry the tails.
 
 ### completion queue
 
@@ -387,3 +465,125 @@ _Avoid_: [RX 560](#rx-560), [GTX 1650](#gtx-1650), [HD Graphics 4600](#hd-graphi
 The NVIDIA function at [PCI](#pci) `01:00.0`, identity `10de:1f9d`. The probe prints its header. No [driver](#driver) maps it.
 
 _Avoid_: [Swift Radeon](#swift-radeon)
+
+## Wi-Fi bring-up
+
+### mt76
+
+The Linux v6.8 MediaTek [driver](#driver) family this [MT7921](#mt7921) sequence follows. The files are `mt7921/pci.c`, `mt792x_dma.c`, and `mt76_connac_mcu.c`. A register those files do not map is not invented here.
+
+_Avoid_: the [RTL8852BE](#rtl8852be) [driver](#driver). That card is the [Z97 desk](#z97-desk).
+
+### ROM
+
+The on-chip program in the [MT7921](#mt7921) that answers [MCU](#mcu) commands until the [RAM image](#ram-image) is running. The [patch semaphore](#patch-semaphore) is the first command it is asked.
+
+### hardware transmit descriptor
+
+The 32-byte prefix on an [MCU](#mcu) command, eight dwords, placed in front of the [MCU header](#mcu-header). The [DMA engine](#dma-engine) moves the whole buffer. The length the [ROM](#rom) trusts is counted after this prefix.
+
+_Avoid_: the [descriptor](#descriptor) in the [ring](#ring). `fw sem tx` means that [ring](#ring) slot never finished. This prefix is the 32 bytes at the start of the command that slot points at.
+
+### MCU header
+
+The bytes after the [hardware transmit descriptor](#hardware-transmit-descriptor) and before the command payload. The [hardware transmit descriptor](#hardware-transmit-descriptor) and the [MCU header](#mcu-header) together are 64 bytes, and the payload starts on the next byte. The length the [ROM](#rom) trusts counts every byte after the [hardware transmit descriptor](#hardware-transmit-descriptor), the [MCU header](#mcu-header) included. The [patch semaphore](#patch-semaphore) payload is 4 bytes, so that length is 36. The command id sits at byte 36 of the buffer. A length that counts only the payload stops before the command id, and the [ROM](#rom) does not answer.
+
+### patch image
+
+The first [firmware](#firmware) half, the one the [ROM](#rom) takes before the [RAM image](#ram-image). The build decompresses `WIFI_MT7961_patch_mcu_1_2_hdr.bin.zst`, and the `1a` file beside it. There is no file under `support/` for this half. A file header that does not parse, a region setup that is rejected, or a finish command with no reply paints `mt7921: fw patch`.
+
+_Avoid_: the [RAM image](#ram-image). `support/mt7921.bin` overrides the RAM half only.
+
+### RAM image
+
+The second [firmware](#firmware) half, the program the [MCU](#mcu) runs after the [patch image](#patch-image). The build decompresses `WIFI_RAM_CODE_MT7961_1.bin.zst`, and the `1a` file beside it. `support/mt7921.bin` overrides only the primary file. A trailer or a region setup that is rejected paints `mt7921: fw ram`. The start command after this half, with no reply, paints `mt7921: fw start`. An empty [patch image](#patch-image) pair or an empty [RAM image](#ram-image) pair paints `mt7921: firmware err`.
+
+_Avoid_: `support/mt7921-bt.bin`. That blob is the [HCI](#hci).
+
+### chip id
+
+The id the [MT7921](#mt7921) reports before the [patch image](#patch-image) is loaded. `0x7922` and `0x7925` need a different pair from the one this build links. That mismatch paints `mt7921: fw chip`.
+
+_Avoid_: the [PCI](#pci) identity `14c3:7961`. That names the function. This id is the one the [firmware](#firmware) path checks.
+
+### patch semaphore
+
+The first command the [ROM](#rom) is asked once the [firmware](#firmware) is ready to load. The command id is `0x10`. The payload is 4 bytes. The [MCU header](#mcu-header) plus that payload is a length of 36.
+
+The status byte is the byte the [ROM](#rom) returns. `01` means the [patch image](#patch-image) is already loaded. `02` means it is not, and the download continues. `03` releases the [semaphore](#patch-semaphore) after the finish command. A held [semaphore](#patch-semaphore) is released when the transfer fails too.
+
+The line can name which stop it was. `tx` means the transmit [descriptor](#descriptor) never finished. `rx` means the [descriptor](#descriptor) finished and no event matched it. Two hex digits are the status byte, and `02` is the value that continues into the [patch image](#patch-image). A readback is `d`, `c`, `s`, `b`, and `g`. `d` is the [DMA index](#dma-index). `c` is the [CPU index](#cpu-index). `s` is the [ring](#ring) size. `b` is the low 16 bits of the [descriptor](#descriptor) base. `g` is the low byte of the [DMA](#dma) config, and bit 0 means transmit is enabled. `fw sem d00 c01 s08 b0200 g75` means the [DMA index](#dma-index) stayed 0, the [doorbell](#doorbell) is 1, the size is 8, the base is `0x0200` and not a [memory page](#memory-page), and transmit is enabled.
+
+_Avoid_: a [channel](#channel) signal. This [semaphore](#patch-semaphore) is a command to the [ROM](#rom).
+
+### scatter
+
+One chunk of the [patch image](#patch-image) or the [RAM image](#ram-image) on the download [ring](#ring). A chunk that does not leave that [ring](#ring) paints `mt7921: fw scatter`.
+
+### N9
+
+The ready flag the [MCU](#mcu) raises after the [RAM image](#ram-image) has started. [MAC setup](#mac) waits until it is set. The normal [firmware stage](#firmware-stage) after that is `wait`.
+
+### MAC
+
+The [MT7921](#mt7921) radio setup after [N9](#n9). It covers the [WFSYS](#wfsys) reset and init-done, `dma_disable`, and the later `mac_init`. Failure paints `mt7921: mac`. A line that says `mac` or `own` still includes the earlier returns.
+
+_Avoid_: the 6-byte station address. The [driver](#driver) uses `02:14:c3:79:21:01`. This word is the setup step.
+
+### firmware stage
+
+The word `swift_mt7921` paints on row 22 of the [cell buffer](#cell-buffer). The line starts with `mt7921:`.
+
+`own` is [driver own](#driver-own). `fw sem` is the [patch semaphore](#patch-semaphore). `fw patch` is the [patch image](#patch-image). `fw scatter` is one [scatter](#scatter). `fw ram` and `fw start` are the [RAM image](#ram-image). `fw chip` is the [chip id](#chip-id). `mac` is [MAC setup](#mac). `wait` is the normal state after [N9](#n9) and that setup. `scan` is a [Wi-Fi scan](#wi-fi-scan). `auth` is [authentication](#authentication). `assoc` is [association](#association). `eapol` is [EAPOL](#eapol). `dhcp` is [DHCP](#dhcp). `ping` is [ping](#ping). `bar` is a [BAR](#base-address-register) that is not the address the [driver](#driver) maps. `firmware err` means the [patch image](#patch-image) or the [RAM image](#ram-image) was empty.
+
+A line that says `mac` or `own` still includes the earlier returns. Type `3` only when the line says `wait`. The shell then stores the [SSID](#ssid) and the [PSK](#psk) and notifies the radio on [channel](#channel) 1. A notify while the line is still one of these words repaints that word and does not keep the key. The `bt:` line on row 24 is the [HCI](#hci) behind an [AMD xHCI](#amd-xhci). It does not join the [access point](#access-point).
+
+### Wi-Fi scan
+
+The [MT7921](#mt7921) looks for the [SSID](#ssid) the shell stored. The paint word is `scan`. This runs only after the [firmware stage](#firmware-stage) says `wait`.
+
+_Avoid_: [scanout](#scanout). That path reads pixels. This command looks for an [access point](#access-point).
+
+### authentication
+
+The step the radio takes after a [Wi-Fi scan](#wi-fi-scan), before [association](#association). The paint word is `auth`.
+
+### association
+
+The step that joins an [access point](#access-point) after [authentication](#authentication). The paint word is `assoc`. [WPA-Personal](#wpa-personal) is the kind this [driver](#driver) performs.
+
+### access point
+
+The network named by the [SSID](#ssid). [Association](#association) joins it. The [HCI](#hci) line does not.
+
+### SSID
+
+The network name, 1 to 32 bytes. Menu item `3` asks for it. The shell paints `ssid ok` when it stores the name, then asks for the [PSK](#psk).
+
+_Avoid_: the [access point](#access-point) itself. This is the name.
+
+### PSK
+
+The [passphrase](#psk), 8 to 63 bytes. The shell paints `psk ok` when it stores the bytes and notifies the radio. A notify before the [firmware stage](#firmware-stage) is `wait` does not keep the key for the next boot.
+
+_Avoid_: the [SSID](#ssid). The name and the [passphrase](#psk) are separate prompts.
+
+### WPA-Personal
+
+The [association](#association) this [driver](#driver) performs: the [SSID](#ssid) plus the [PSK](#psk). Also called [WPA2-PSK](#wpa-personal). The frames on a [metal boot](#metal-boot) are wireless. The host test's scripted frames are not this.
+
+_Avoid_: the Bluetooth [HCI](#hci).
+
+### EAPOL
+
+The four-way handshake after [association](#association), before [DHCP](#dhcp). The paint word is `eapol`.
+
+### DHCP
+
+The address request after [EAPOL](#eapol). The paint word is `dhcp`. The bring-up wants the address before [ping](#ping).
+
+### ping
+
+One [ICMP](#ping) echo after [DHCP](#dhcp). An address and then `ping ok` is the end of this bring-up. The host test that prints `ip 192.168.1.20 ping ok` drives a scripted radio. A [metal boot](#metal-boot) is the one that counts.
+
+_Avoid_: treating the host test as that boot.

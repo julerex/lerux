@@ -9,7 +9,7 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [../AGENTS.md](../AGENTS.md) | LLM agent instructions for idiomatic Rust in this repo |
 | [context.md](context.md) | Domain language and architectural decisions |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Dependency hierarchy and call graph across lerux, rust-sel4, Microkit, and seL4 |
-| [../GLOSSARY.md](../GLOSSARY.md) | Machine names, driver words, and the Acer Swift X devices. Each mention links to its entry |
+| [../GLOSSARY.md](../GLOSSARY.md) | Machine names, driver words, the Acer Swift X devices, and the Wi-Fi bring-up line. Each mention links to its entry |
 | [plan.md](plan.md) | Roadmap and cross-arch smoke parity (phases 1–82, done); [Physical RPi4 lab](plan.md#physical-rpi4-lab-hardware-gated) |
 | [plan-lionsos.md](plan-lionsos.md) | LionsOS structures in a Rust guest (milestones 1–21 done; 22 is the Z97 bind) |
 | [plan-arch.md](plan-arch.md) | Phases 50–60 living checklist; [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated) (hardware-gated) |

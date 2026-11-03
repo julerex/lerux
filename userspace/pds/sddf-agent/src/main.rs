@@ -20,10 +20,9 @@ use lerux_cothread::{
     microkit_cothread_wait_on_channel, microkit_cothread_yield, NULL_HANDLE, STACK_SLOTS,
 };
 use lerux_sddf::{
-    agent_tool_t, fs_client_config_t, fs_image, net_client_config_t, net_image,
-    AGENT_BROWSE_CHANNEL, AGENT_FS_CHANNEL, AGENT_NET_RX_CHANNEL, AGENT_NET_TX_CHANNEL,
-    AGENT_STATE_ERR, AGENT_STATE_OK, AGENT_TOOL_CHANNEL, AGENT_TOOL_VADDR, LIONS_FS_MAGIC,
-    SDDF_NET_MAGIC,
+    agent_store_outcome, agent_tool_t, fs_client_config_t, fs_image, net_client_config_t,
+    net_image, AGENT_BROWSE_CHANNEL, AGENT_FS_CHANNEL, AGENT_NET_RX_CHANNEL, AGENT_NET_TX_CHANNEL,
+    AGENT_TOOL_CHANNEL, AGENT_TOOL_VADDR, LIONS_FS_MAGIC, SDDF_NET_MAGIC,
 };
 
 const CONFIG: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/config.bin"));
@@ -97,12 +96,7 @@ extern "C" fn worker() {
         microkit_cothread_wait_on_channel(TOOL_CH);
         let ok = tools::run();
         let tool = tool_page();
-        if ok {
-            tool.state = AGENT_STATE_OK;
-        } else {
-            tool.result_len = 0;
-            tool.state = AGENT_STATE_ERR;
-        }
+        agent_store_outcome(tool, ok);
         Channel::new(TOOL_CH).notify();
     }
 }

@@ -11,18 +11,18 @@ use lerux_swift::{
         ce_cmd, desc_ctrl, desc_len, download_cmd, efuse_mac, ext_cmd, ext_query, firmware_kind,
         map_reg, patch_regions, patch_status, prefetch, ram_regions, ring_regs, write_chan,
         write_eeprom_mode, write_efuse_read, write_mac_enable, write_mcu_txd, write_rts,
-        write_scan, write_txwi, wtbl_word, FirmwareKind, Map, Region, Sem, Stage, CONN_ON_LPCTL,
-        CONN_ON_MISC, DMASHDL_BYPASS, DMASHDL_ENABLE, DMASHDL_SW, DMA_DONE, DUMMY_CR, FW_N9_RDY,
-        FW_SCATTER, FW_START, GLO_CFG, GLO_CFG_CHAIN, GLO_CFG_CLK, GLO_CFG_EXT0, GLO_CFG_LE,
-        GLO_CFG_OMIT_RX, GLO_CFG_OMIT_RX_PFET, GLO_CFG_OMIT_TX, GLO_CFG_RX_BUSY, GLO_CFG_RX_EN,
-        GLO_CFG_TX_BUSY, GLO_CFG_TX_EN, GLO_CFG_TX_WB, HIF_REMAP_L1, HOST_CLR_OWN, HOST_INT_ENA,
-        HOST_OWN_SYNC, HOST_SET_OWN, HW_CHIPID, HW_REV, IRQ_MASK, L0S_DIS, LAST_SEC0, LPCR_DRV_OWN,
-        LPCR_FW_OWN, MCU2HOST, MCU_TXD_LEN, MCU_WAKE, MDP_DAMSDU, MDP_DCR0, MDP_DCR1,
-        MDP_HDR_TRANS, NEED_REINIT, PATCH_FINISH, PATCH_IS_DL, PATCH_NOT_DL, PATCH_REL, PATCH_SEM,
-        PCIE_MAC_INT, PCIE_MAC_PM, PRI_DLY, RST_DMASHDL, RST_DTX_PTR, RST_LOGIC, RXD_LEN,
-        RX_DATA_BASE, RX_EVENT_BASE, RX_WA_BASE, SCAN_REQ_LEN, SWDEF_MODE, TOP_LPCR, TXD_LEN,
-        TXP_LEN, TX_RING_BASE, WFDMA_RST, WFSYS_INIT_DONE, WFSYS_RST, WFSYS_RST_B, WTBL_BUSY,
-        WTBL_UPDATE,
+        write_scan, write_txwi, wtbl_word, FirmwareKind, Map, Region, Sem, Stage, TxStop,
+        CONN_ON_LPCTL, CONN_ON_MISC, DMASHDL_BYPASS, DMASHDL_ENABLE, DMASHDL_SW, DMA_DONE,
+        DUMMY_CR, FW_N9_RDY, FW_SCATTER, FW_START, GLO_CFG, GLO_CFG_CHAIN, GLO_CFG_CLK,
+        GLO_CFG_EXT0, GLO_CFG_LE, GLO_CFG_OMIT_RX, GLO_CFG_OMIT_RX_PFET, GLO_CFG_OMIT_TX,
+        GLO_CFG_RX_BUSY, GLO_CFG_RX_EN, GLO_CFG_TX_BUSY, GLO_CFG_TX_EN, GLO_CFG_TX_WB,
+        HIF_REMAP_L1, HOST_CLR_OWN, HOST_INT_ENA, HOST_OWN_SYNC, HOST_SET_OWN, HW_CHIPID, HW_REV,
+        IRQ_MASK, L0S_DIS, LAST_SEC0, LPCR_DRV_OWN, LPCR_FW_OWN, MCU2HOST, MCU_TXD_LEN, MCU_WAKE,
+        MDP_DAMSDU, MDP_DCR0, MDP_DCR1, MDP_HDR_TRANS, NEED_REINIT, PATCH_FINISH, PATCH_IS_DL,
+        PATCH_NOT_DL, PATCH_REL, PATCH_SEM, PCIE_MAC_INT, PCIE_MAC_PM, PRI_DLY, RST_DMASHDL,
+        RST_DTX_PTR, RST_LOGIC, RXD_LEN, RX_DATA_BASE, RX_EVENT_BASE, RX_WA_BASE, SCAN_REQ_LEN,
+        SWDEF_MODE, TOP_LPCR, TXD_LEN, TXP_LEN, TX_RING_BASE, WFDMA_RST, WFSYS_INIT_DONE,
+        WFSYS_RST, WFSYS_RST_B, WTBL_BUSY, WTBL_UPDATE,
     },
     CLIENT_MAC,
 };
@@ -195,6 +195,9 @@ impl Mac {
         self.dma_enable();
         self.wr(SWDEF_MODE, 0);
         self.driver_own()?;
+        // The pointer reset and driver-own run after the first programming.
+        // Write the base again so the doorbell still names these rings.
+        self.rebind();
         self.set(PCIE_MAC_PM, L0S_DIS);
         self.load_patch(patch)?;
         self.load_ram(ram)?;
@@ -277,6 +280,22 @@ impl Mac {
             self.desc_write(desc, i, phys, desc_ctrl(u32_from(BUF), false), 0, 0);
         }
         self.kick(regs, RING_N - 1);
+    }
+
+    fn rebind(&mut self) {
+        for ring in self.tx {
+            self.bind(ring.regs, ring.desc, ring.head);
+        }
+        for ring in self.rx {
+            self.bind(ring.regs, ring.desc, ring.head);
+        }
+    }
+
+    fn bind(&mut self, regs: u32, desc: usize, head: u32) {
+        let phys = DMA_PHYS.wrapping_add(u32_from(desc));
+        self.wr(regs, phys);
+        self.wr(regs + 4, RING_N);
+        self.wr(regs + 8, head);
     }
 
     fn dma_enable(&mut self) {
@@ -459,7 +478,7 @@ impl Mac {
 
     fn exchange(&mut self, cmd: u32, payload: &[u8]) -> Result<(), Sem> {
         if !self.post_mcu(cmd, payload) {
-            return Err(Sem::Tx(self.dma_idx(self.tx[TX_MCU].regs)));
+            return Err(Sem::Tx(self.tx_stop(self.tx[TX_MCU].regs)));
         }
         let seq = self.seq;
         if self.wait_seq(seq) {
@@ -525,6 +544,16 @@ impl Mac {
 
     fn dma_idx(&mut self, regs: u32) -> u8 {
         u8::try_from(self.rr(regs + 12) & 0xff).expect("dma index")
+    }
+
+    fn tx_stop(&mut self, regs: u32) -> TxStop {
+        TxStop {
+            dma: self.dma_idx(regs),
+            cpu: u8::try_from(self.rr(regs + 8) & 0xff).expect("cpu index"),
+            size: u8::try_from(self.rr(regs + 4) & 0xff).expect("ring size"),
+            base: u16::try_from(self.rr(regs) & 0xffff).expect("ring base"),
+            cfg: u8::try_from(self.rr(GLO_CFG) & 0xff).expect("global config"),
+        }
     }
 
     fn quiesce(&mut self) {

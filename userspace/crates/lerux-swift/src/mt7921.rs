@@ -21,11 +21,26 @@ pub fn firmware_kind(chip: u32) -> FirmwareKind {
     }
 }
 
+/// Ring registers read back after a semaphore transmit that did not finish.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct TxStop {
+    /// DMA index register.
+    pub dma: u8,
+    /// CPU index register.
+    pub cpu: u8,
+    /// Ring size register, low byte.
+    pub size: u8,
+    /// Descriptor base, low 16 bits.
+    pub base: u16,
+    /// `MT_WFDMA0_GLO_CFG`, low byte. Bit 0 is transmit enable.
+    pub cfg: u8,
+}
+
 /// Why the patch semaphore stopped.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Sem {
-    /// The DMA index never moved. The byte is the index register.
-    Tx(u8),
+    /// The DMA index never moved. The fields are the ring registers.
+    Tx(TxStop),
     /// The descriptor completed and no event matched the sequence.
     Rx,
     /// The event carried this status byte.
@@ -102,25 +117,54 @@ fn write_line(out: &mut [u8], word: &[u8]) -> usize {
     n
 }
 
-fn sem_word(why: Sem) -> ([u8; 11], usize) {
-    let mut word = *b"fw sem tx00";
+fn sem_word(why: Sem) -> ([u8; 28], usize) {
+    let mut word = [0u8; 28];
     let n = match why {
-        Sem::Tx(idx) => {
-            word[9] = hex_nibble(idx >> 4);
-            word[10] = hex_nibble(idx);
-            11
-        }
+        Sem::Tx(stop) => write_tx_stop(&mut word, stop),
         Sem::Rx => {
-            word[7] = b'r';
+            word[..9].copy_from_slice(b"fw sem rx");
             9
         }
         Sem::Status(byte) => {
+            word[..7].copy_from_slice(b"fw sem ");
             word[7] = hex_nibble(byte >> 4);
             word[8] = hex_nibble(byte);
             9
         }
     };
     (word, n)
+}
+
+/// `fw sem d00 c00 s00 b0000 g00`: DMA index, CPU index, size, base, global config.
+fn write_tx_stop(word: &mut [u8; 28], stop: TxStop) -> usize {
+    word[..6].copy_from_slice(b"fw sem");
+    word[6] = b' ';
+    word[7] = b'd';
+    word[8] = hex_nibble(stop.dma >> 4);
+    word[9] = hex_nibble(stop.dma);
+    word[10] = b' ';
+    word[11] = b'c';
+    word[12] = hex_nibble(stop.cpu >> 4);
+    word[13] = hex_nibble(stop.cpu);
+    word[14] = b' ';
+    word[15] = b's';
+    word[16] = hex_nibble(stop.size >> 4);
+    word[17] = hex_nibble(stop.size);
+    word[18] = b' ';
+    word[19] = b'b';
+    word[20] = hex_nibble(low_nibble(stop.base, 12));
+    word[21] = hex_nibble(low_nibble(stop.base, 8));
+    word[22] = hex_nibble(low_nibble(stop.base, 4));
+    word[23] = hex_nibble(low_nibble(stop.base, 0));
+    word[24] = b' ';
+    word[25] = b'g';
+    word[26] = hex_nibble(stop.cfg >> 4);
+    word[27] = hex_nibble(stop.cfg);
+    28
+}
+
+fn low_nibble(value: u16, shift: u32) -> u8 {
+    u8::try_from((value >> shift) & 0xf).expect("nibble")
 }
 
 fn hex_nibble(nibble: u8) -> u8 {
@@ -830,13 +874,18 @@ mod tests {
 
     #[test]
     fn stage_line_names_the_wait() {
-        let mut out = [0u8; 32];
+        let mut out = [0u8; 40];
         let n = Stage::Wait.paint(&mut out);
         assert_eq!(&out[..n], b"mt7921: wait");
-        let n = Stage::FwSem(Sem::Tx(0)).paint(&mut out);
-        assert_eq!(&out[..n], b"mt7921: fw sem tx00");
-        let n = Stage::FwSem(Sem::Tx(0x1a)).paint(&mut out);
-        assert_eq!(&out[..n], b"mt7921: fw sem tx1a");
+        let n = Stage::FwSem(Sem::Tx(TxStop {
+            dma: 0,
+            cpu: 1,
+            size: 8,
+            base: 0x0200,
+            cfg: 0x45,
+        }))
+        .paint(&mut out);
+        assert_eq!(&out[..n], b"mt7921: fw sem d00 c01 s08 b0200 g45");
         let n = Stage::FwSem(Sem::Rx).paint(&mut out);
         assert_eq!(&out[..n], b"mt7921: fw sem rx");
         let n = Stage::FwSem(Sem::Status(0x2a)).paint(&mut out);

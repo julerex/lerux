@@ -458,7 +458,8 @@ pub fn write_mcu_txd(buf: &mut [u8], cmd: u32, seq: u8, payload: usize) -> bool 
     let tx1: u32 = 1 << 31 | (1 << 16);
     buf[..4].copy_from_slice(&tx0.to_le_bytes());
     buf[4..8].copy_from_slice(&tx1.to_le_bytes());
-    let body = low_u16(payload);
+    // `mt76_connac2_mcu_fill_message` counts every byte after the eight-dword TXD.
+    let body = low_u16((MCU_TXD_LEN - TXD_LEN) + payload);
     buf[32..34].copy_from_slice(&body.to_le_bytes());
     let port = 1u16;
     let queue = 0x20u16;
@@ -821,6 +822,16 @@ mod tests {
         assert_eq!(regions[0].addr, 0x20_0000);
         assert_eq!(regions[0].len, 4);
         assert_eq!(download_cmd(regions[0].addr), PATCH_START);
+    }
+
+    #[test]
+    fn mcu_header_len_includes_itself() {
+        let mut buf = [0u8; MCU_TXD_LEN];
+        assert!(write_mcu_txd(&mut buf, PATCH_SEM, 1, 4));
+        let len = u16::from_le_bytes([buf[32], buf[33]]);
+        assert_eq!(len, u16::try_from(MCU_TXD_LEN - TXD_LEN + 4).unwrap());
+        assert_eq!(buf[36], 0x10);
+        assert_eq!(buf[39], 1);
     }
 
     #[test]

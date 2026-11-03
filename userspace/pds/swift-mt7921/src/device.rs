@@ -310,6 +310,11 @@ impl Mac {
         if status != PATCH_NOT_DL {
             return Err(Stage::FwSem);
         }
+        let sent = self.transfer_patch(image);
+        self.release_sem().and(sent)
+    }
+
+    fn transfer_patch(&mut self, image: &[u8]) -> Result<(), Stage> {
         let mut regions = [Region {
             addr: 0,
             off: 0,
@@ -330,10 +335,15 @@ impl Mac {
         if patch_status(self.response()) != Some(0) {
             return Err(Stage::FwPatch);
         }
-        if self.sem(false) != Some(PATCH_REL) {
-            return Err(Stage::FwSem);
-        }
         Ok(())
+    }
+
+    fn release_sem(&mut self) -> Result<(), Stage> {
+        if self.sem(false) == Some(PATCH_REL) {
+            Ok(())
+        } else {
+            Err(Stage::FwSem)
+        }
     }
 
     fn load_ram(&mut self, image: &[u8]) -> Result<(), Stage> {

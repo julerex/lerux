@@ -8,10 +8,10 @@ use core::sync::atomic::{fence, Ordering};
 
 use lerux_swift::{
     mt7921::{
-        ce_cmd, desc_ctrl, download_cmd, efuse_mac, ext_cmd, ext_query, firmware_kind, map_reg,
-        patch_regions, patch_status, prefetch, ram_regions, ring_regs, write_chan,
+        ce_cmd, desc_ctrl, desc_len, download_cmd, efuse_mac, ext_cmd, ext_query, firmware_kind,
+        map_reg, patch_regions, patch_status, prefetch, ram_regions, ring_regs, write_chan,
         write_eeprom_mode, write_efuse_read, write_mac_enable, write_mcu_txd, write_rts,
-        write_scan, write_txwi, wtbl_word, FirmwareKind, Map, Region, Stage, CONN_ON_LPCTL,
+        write_scan, write_txwi, wtbl_word, FirmwareKind, Map, Region, Sem, Stage, CONN_ON_LPCTL,
         CONN_ON_MISC, DMASHDL_BYPASS, DMASHDL_ENABLE, DMASHDL_SW, DMA_DONE, DUMMY_CR, FW_N9_RDY,
         FW_SCATTER, FW_START, GLO_CFG, GLO_CFG_CHAIN, GLO_CFG_CLK, GLO_CFG_EXT0, GLO_CFG_LE,
         GLO_CFG_OMIT_RX, GLO_CFG_OMIT_RX_PFET, GLO_CFG_OMIT_TX, GLO_CFG_RX_BUSY, GLO_CFG_RX_EN,
@@ -303,12 +303,12 @@ impl Mac {
     }
 
     fn load_patch(&mut self, image: &[u8]) -> Result<(), Stage> {
-        let status = self.sem(true).ok_or(Stage::FwSem)?;
+        let status = self.sem(true).map_err(Stage::FwSem)?;
         if status == PATCH_IS_DL {
             return Ok(());
         }
         if status != PATCH_NOT_DL {
-            return Err(Stage::FwSem);
+            return Err(Stage::FwSem(Sem::Status(status)));
         }
         let sent = self.transfer_patch(image);
         self.release_sem().and(sent)
@@ -339,10 +339,10 @@ impl Mac {
     }
 
     fn release_sem(&mut self) -> Result<(), Stage> {
-        if self.sem(false) == Some(PATCH_REL) {
-            Ok(())
-        } else {
-            Err(Stage::FwSem)
+        match self.sem(false) {
+            Ok(PATCH_REL) => Ok(()),
+            Ok(status) => Err(Stage::FwSem(Sem::Status(status))),
+            Err(why) => Err(Stage::FwSem(why)),
         }
     }
 
@@ -396,12 +396,10 @@ impl Mac {
         Ok(())
     }
 
-    fn sem(&mut self, get: bool) -> Option<u8> {
+    fn sem(&mut self, get: bool) -> Result<u8, Sem> {
         let op = u32::from(get).to_le_bytes();
-        if !self.command(PATCH_SEM, &op, true) {
-            return None;
-        }
-        patch_status(self.response())
+        self.exchange(PATCH_SEM, &op)?;
+        patch_status(self.response()).ok_or(Sem::Rx)
     }
 
     fn mac_init(&mut self) -> Result<(), Stage> {
@@ -448,6 +446,25 @@ impl Mac {
         if cmd & 0xff == FW_SCATTER {
             return self.scatter(payload);
         }
+        if !wait {
+            return self.post_mcu(cmd, payload);
+        }
+        self.exchange(cmd, payload).is_ok()
+    }
+
+    fn exchange(&mut self, cmd: u32, payload: &[u8]) -> Result<(), Sem> {
+        if !self.post_mcu(cmd, payload) {
+            return Err(Sem::Tx);
+        }
+        let seq = self.seq;
+        if self.wait_seq(seq) {
+            Ok(())
+        } else {
+            Err(Sem::Rx)
+        }
+    }
+
+    fn post_mcu(&mut self, cmd: u32, payload: &[u8]) -> bool {
         let seq = self.next_seq();
         let total = MCU_TXD_LEN + payload.len();
         if total > BOUNCE {
@@ -460,13 +477,7 @@ impl Mac {
             }
             cmd_buf[MCU_TXD_LEN..total].copy_from_slice(payload);
         }
-        if !self.tx_bounce(TX_MCU, total) {
-            return false;
-        }
-        if !wait {
-            return true;
-        }
-        self.wait_seq(seq)
+        self.tx_bounce(TX_MCU, total)
     }
 
     fn scatter(&mut self, chunk: &[u8]) -> bool {
@@ -557,7 +568,7 @@ impl Mac {
         if ctrl & DMA_DONE == 0 {
             return None;
         }
-        let len = (ctrl & 0x3fff) as usize;
+        let len = desc_len(ctrl);
         let phys = self.desc_word(desc, tail, 0);
         let off = phys.wrapping_sub(DMA_PHYS) as usize;
         let n = len.min(BUF);

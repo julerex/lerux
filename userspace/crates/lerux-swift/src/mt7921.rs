@@ -21,11 +21,22 @@ pub fn firmware_kind(chip: u32) -> FirmwareKind {
     }
 }
 
+/// Why the patch semaphore stopped.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Sem {
+    /// The transmit descriptor never completed.
+    Tx,
+    /// The descriptor completed and no event matched the sequence.
+    Rx,
+    /// The event carried this status byte.
+    Status(u8),
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Stage {
     Own,
-    /// Patch semaphore got no reply, or a status other than held or released.
-    FwSem,
+    /// Patch semaphore. The tag separates a stuck descriptor, a missing event, and a status byte.
+    FwSem(Sem),
     /// Patch header, a patch region setup, or patch-finish was rejected.
     FwPatch,
     /// A firmware chunk did not leave the download ring.
@@ -49,9 +60,16 @@ pub enum Stage {
 
 impl Stage {
     pub fn paint(self, out: &mut [u8]) -> usize {
-        let word: &[u8] = match self {
+        match self {
+            Stage::PingOk(addr) => format_report(&WifiReport::PingOk(addr), out),
+            Stage::FwSem(why) => write_line(out, &sem_word(why)),
+            stage => write_line(out, stage.word()),
+        }
+    }
+
+    fn word(self) -> &'static [u8] {
+        match self {
             Stage::Own => b"own",
-            Stage::FwSem => b"fw sem",
             Stage::FwPatch => b"fw patch",
             Stage::FwScatter => b"fw scatter",
             Stage::FwRam => b"fw ram",
@@ -65,18 +83,41 @@ impl Stage {
             Stage::Eapol => b"eapol",
             Stage::Dhcp => b"dhcp",
             Stage::Ping => b"ping",
-            Stage::PingOk(addr) => {
-                return format_report(&WifiReport::PingOk(addr), out);
-            }
-        };
-        let prefix = b"mt7921: ";
-        let n = prefix.len() + word.len();
-        if out.len() < n {
-            return 0;
+            Stage::FwSem(_) | Stage::PingOk(_) => b"",
         }
-        out[..prefix.len()].copy_from_slice(prefix);
-        out[prefix.len()..n].copy_from_slice(word);
-        n
+    }
+}
+
+fn write_line(out: &mut [u8], word: &[u8]) -> usize {
+    let prefix = b"mt7921: ";
+    let n = prefix.len() + word.len();
+    if out.len() < n {
+        return 0;
+    }
+    out[..prefix.len()].copy_from_slice(prefix);
+    out[prefix.len()..n].copy_from_slice(word);
+    n
+}
+
+fn sem_word(why: Sem) -> [u8; 9] {
+    let mut word = *b"fw sem tx";
+    match why {
+        Sem::Tx => {}
+        Sem::Rx => word[7] = b'r',
+        Sem::Status(byte) => {
+            word[7] = hex_nibble(byte >> 4);
+            word[8] = hex_nibble(byte);
+        }
+    }
+    word
+}
+
+fn hex_nibble(nibble: u8) -> u8 {
+    let nibble = nibble & 0xf;
+    if nibble < 10 {
+        b'0' + nibble
+    } else {
+        b'a' + (nibble - 10)
     }
 }
 
@@ -663,12 +704,18 @@ pub fn frame_off(buf: &[u8]) -> Option<usize> {
 }
 
 #[must_use]
+/// `MT_DMA_CTL_SD_LEN0` is bits 29:16. The low half is the unused second segment.
 pub fn desc_ctrl(len: u32, last: bool) -> u32 {
-    let mut ctrl = len & 0x3fff;
+    let mut ctrl = (len & 0x3fff) << 16;
     if last {
         ctrl |= LAST_SEC0;
     }
     ctrl
+}
+
+#[must_use]
+pub fn desc_len(ctrl: u32) -> usize {
+    ((ctrl >> 16) & 0x3fff) as usize
 }
 
 /// Credential page the shell writes and the radio reads.
@@ -775,8 +822,12 @@ mod tests {
         let mut out = [0u8; 32];
         let n = Stage::Wait.paint(&mut out);
         assert_eq!(&out[..n], b"mt7921: wait");
-        let n = Stage::FwSem.paint(&mut out);
-        assert_eq!(&out[..n], b"mt7921: fw sem");
+        let n = Stage::FwSem(Sem::Tx).paint(&mut out);
+        assert_eq!(&out[..n], b"mt7921: fw sem tx");
+        let n = Stage::FwSem(Sem::Rx).paint(&mut out);
+        assert_eq!(&out[..n], b"mt7921: fw sem rx");
+        let n = Stage::FwSem(Sem::Status(0x2a)).paint(&mut out);
+        assert_eq!(&out[..n], b"mt7921: fw sem 2a");
         let n = Stage::FwScatter.paint(&mut out);
         assert_eq!(&out[..n], b"mt7921: fw scatter");
         let n = Stage::PingOk([192, 168, 1, 20]).paint(&mut out);
@@ -822,6 +873,15 @@ mod tests {
         assert_eq!(regions[0].addr, 0x20_0000);
         assert_eq!(regions[0].len, 4);
         assert_eq!(download_cmd(regions[0].addr), PATCH_START);
+    }
+
+    #[test]
+    fn dma_length_sits_in_the_first_segment() {
+        let ctrl = desc_ctrl(36, true);
+        assert_eq!(ctrl & 0x3fff, 0);
+        assert_eq!(desc_len(ctrl), 36);
+        assert_eq!(ctrl & LAST_SEC0, LAST_SEC0);
+        assert_eq!(ctrl & DMA_DONE, 0);
     }
 
     #[test]

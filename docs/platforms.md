@@ -26,7 +26,7 @@ App channel ends (shell↔fs/net/apps, log, config) are **shared** across workst
 
 ## x86 device map
 
-q35 and the Z97 desk share a kernel and do not share a chipset. Names that both machines use are defined in [GLOSSARY.md](../GLOSSARY.md). A row is one device and the protection domain that programs it. "In the tree" means that protection domain crate exists today.
+q35 and the Z97 desk share a kernel and do not share a chipset. Names that both machines use are defined in [GLOSSARY.md](../GLOSSARY.md), along with the driver words and the Swift X devices. A row is one device and the protection domain that programs it. "In the tree" means that protection domain crate exists today.
 
 ### q35 devices
 

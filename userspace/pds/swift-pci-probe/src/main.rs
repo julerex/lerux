@@ -14,8 +14,8 @@ use sel4_microkit::{
 
 use lerux_desk::FRAMEBUFFER_BYTES;
 use lerux_swift::{
-    class_code, config_address, describe, paint_row, store_header, vendor_device, LOCATIONS,
-    MT7921_BDF, MT7921_IDS, NVME_BDF, NVME_CLASS, XHCI_BDFS, XHCI_CLASS,
+    class_code, config_address, describe, iommu_base, paint_row, store_header, store_iommu,
+    vendor_device, LOCATIONS, MT7921_BDF, MT7921_IDS, NVME_BDF, NVME_CLASS, XHCI_BDFS, XHCI_CLASS,
 };
 
 const BASE_IOPORT_CAP: u64 = 394;
@@ -41,7 +41,42 @@ fn init() -> HandlerImpl {
         paint(ROW + index, &line);
         enable_claimed(cap, addr, bus, dev, func, &header);
     }
+    store_iommu(page, find_iommu(cap, addr));
     HandlerImpl
+}
+
+/// Bus 0 function `00:00.2` is the Cezanne IOMMU. The scan covers the rest of
+/// bus 0 when that function is not class `080600`.
+fn find_iommu(cap: u64, port: u16) -> u64 {
+    for dev in 0..32u8 {
+        for func in 0..8u8 {
+            if let Some(base) = read_iommu(cap, port, dev, func) {
+                return base;
+            }
+        }
+    }
+    0
+}
+
+fn read_iommu(cap: u64, port: u16, dev: u8, func: u8) -> Option<u64> {
+    let data = port.wrapping_add(4);
+    out32(cap, port, config_address(0, dev, func, 0));
+    let id = in32(cap, data);
+    if id & 0xffff != 0x1022 {
+        return None;
+    }
+    out32(cap, port, config_address(0, dev, func, 0x08));
+    if in32(cap, data) >> 8 != 0x0008_0600 {
+        return None;
+    }
+    let mut config = [0u8; 256];
+    for reg in (0u8..=252).step_by(4) {
+        out32(cap, port, config_address(0, dev, func, reg));
+        let word = in32(cap, data);
+        let offset = usize::from(reg);
+        config[offset..offset + 4].copy_from_slice(&word.to_le_bytes());
+    }
+    iommu_base(&config)
 }
 
 fn enable_claimed(cap: u64, port: u16, bus: u8, dev: u8, func: u8, header: &[u8]) {

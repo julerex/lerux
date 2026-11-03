@@ -28,12 +28,10 @@ pub struct TxStop {
     pub dma: u8,
     /// CPU index register.
     pub cpu: u8,
-    /// Ring size register, low byte.
-    pub size: u8,
-    /// Descriptor base, low 16 bits.
-    pub base: u16,
-    /// `MT_WFDMA0_GLO_CFG`, low byte. Bit 0 is transmit enable.
-    pub cfg: u8,
+    /// Ring size register.
+    pub size: u16,
+    /// AMD IOMMU MMIO base, low 32 bits. Zero means the probe found none.
+    pub iommu: u32,
 }
 
 /// Why the patch semaphore stopped.
@@ -117,8 +115,8 @@ fn write_line(out: &mut [u8], word: &[u8]) -> usize {
     n
 }
 
-fn sem_word(why: Sem) -> ([u8; 28], usize) {
-    let mut word = [0u8; 28];
+fn sem_word(why: Sem) -> ([u8; 32], usize) {
+    let mut word = [0u8; 32];
     let n = match why {
         Sem::Tx(stop) => write_tx_stop(&mut word, stop),
         Sem::Rx => {
@@ -135,8 +133,8 @@ fn sem_word(why: Sem) -> ([u8; 28], usize) {
     (word, n)
 }
 
-/// `fw sem d00 c00 s00 b0000 g00`: DMA index, CPU index, size, base, global config.
-fn write_tx_stop(word: &mut [u8; 28], stop: TxStop) -> usize {
+/// `fw sem d00 c00 s0000 i00000000`: DMA index, CPU index, size, IOMMU base.
+fn write_tx_stop(word: &mut [u8; 32], stop: TxStop) -> usize {
     word[..6].copy_from_slice(b"fw sem");
     word[6] = b' ';
     word[7] = b'd';
@@ -148,22 +146,18 @@ fn write_tx_stop(word: &mut [u8; 28], stop: TxStop) -> usize {
     word[13] = hex_nibble(stop.cpu);
     word[14] = b' ';
     word[15] = b's';
-    word[16] = hex_nibble(stop.size >> 4);
-    word[17] = hex_nibble(stop.size);
-    word[18] = b' ';
-    word[19] = b'b';
-    word[20] = hex_nibble(low_nibble(stop.base, 12));
-    word[21] = hex_nibble(low_nibble(stop.base, 8));
-    word[22] = hex_nibble(low_nibble(stop.base, 4));
-    word[23] = hex_nibble(low_nibble(stop.base, 0));
-    word[24] = b' ';
-    word[25] = b'g';
-    word[26] = hex_nibble(stop.cfg >> 4);
-    word[27] = hex_nibble(stop.cfg);
-    28
+    for (i, shift) in [12, 8, 4, 0].into_iter().enumerate() {
+        word[16 + i] = hex_nibble(low_nibble(u32::from(stop.size), shift));
+    }
+    word[20] = b' ';
+    word[21] = b'i';
+    for (i, shift) in [28, 24, 20, 16, 12, 8, 4, 0].into_iter().enumerate() {
+        word[22 + i] = hex_nibble(low_nibble(stop.iommu, shift));
+    }
+    30
 }
 
-fn low_nibble(value: u16, shift: u32) -> u8 {
+fn low_nibble(value: u32, shift: u32) -> u8 {
     u8::try_from((value >> shift) & 0xf).expect("nibble")
 }
 
@@ -880,12 +874,11 @@ mod tests {
         let n = Stage::FwSem(Sem::Tx(TxStop {
             dma: 0,
             cpu: 1,
-            size: 8,
-            base: 0x0200,
-            cfg: 0x45,
+            size: 0x0100,
+            iommu: 0xfed8_0000,
         }))
         .paint(&mut out);
-        assert_eq!(&out[..n], b"mt7921: fw sem d00 c01 s08 b0200 g45");
+        assert_eq!(&out[..n], b"mt7921: fw sem d00 c01 s0100 ifed80000");
         let n = Stage::FwSem(Sem::Rx).paint(&mut out);
         assert_eq!(&out[..n], b"mt7921: fw sem rx");
         let n = Stage::FwSem(Sem::Status(0x2a)).paint(&mut out);

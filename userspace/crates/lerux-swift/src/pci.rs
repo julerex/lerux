@@ -24,6 +24,74 @@ pub const XHCI_CLASS: u32 = 0x000c_0330;
 /// One PCI configuration header. Six of these fill the shared page.
 pub const HEADER_BYTES: usize = 64;
 
+/// Eight bytes in the shared header page, past the six headers.
+pub const IOMMU_RECORD: usize = 0x800;
+
+/// The AMD IOMMU lives at PCI class `080600` and capability id `0x0f`.
+/// The base address registers sit at offsets 4 and 8 in that capability.
+#[must_use]
+pub fn iommu_base(config: &[u8]) -> Option<u64> {
+    if config.len() < 0x40 || config[0x0b] != 0x08 || config[0x0a] != 0x06 || config[0x09] != 0x00 {
+        return None;
+    }
+    let status = u16::from_le_bytes([config[0x06], config[0x07]]);
+    if status & 0x10 == 0 {
+        return None;
+    }
+    let mut ptr = usize::from(config[0x34] & !0x3);
+    for _ in 0..48 {
+        if ptr < 0x40 || ptr + 12 > config.len() {
+            return None;
+        }
+        if config[ptr] == 0x0f {
+            let lo = u32::from_le_bytes([
+                config[ptr + 4],
+                config[ptr + 5],
+                config[ptr + 6],
+                config[ptr + 7],
+            ]);
+            let hi = u32::from_le_bytes([
+                config[ptr + 8],
+                config[ptr + 9],
+                config[ptr + 10],
+                config[ptr + 11],
+            ]);
+            return Some((u64::from(hi) << 32) | u64::from(lo & 0xffff_c000));
+        }
+        let next = usize::from(config[ptr + 1] & !0x3);
+        if next == 0 || next == ptr {
+            return None;
+        }
+        ptr = next;
+    }
+    None
+}
+
+/// Write the IOMMU MMIO base. A short page is left unchanged.
+pub fn store_iommu(page: &mut [u8], addr: u64) {
+    let Some(end) = IOMMU_RECORD.checked_add(8) else {
+        return;
+    };
+    if page.len() < end {
+        return;
+    }
+    page[IOMMU_RECORD..end].copy_from_slice(&addr.to_le_bytes());
+}
+
+/// IOMMU MMIO base from [`store_iommu`]. A short page reads as 0.
+#[must_use]
+pub fn load_iommu(page: &[u8]) -> u64 {
+    let Some(end) = IOMMU_RECORD.checked_add(8) else {
+        return 0;
+    };
+    if page.len() < end {
+        return 0;
+    }
+    let mut buf = [0u8; 8];
+    buf.copy_from_slice(&page[IOMMU_RECORD..end]);
+    u64::from_le_bytes(buf)
+}
+
 /// Byte offset of this location in the shared header page.
 fn header_offset(bus: u8, dev: u8, func: u8) -> Option<usize> {
     LOCATIONS
@@ -239,6 +307,22 @@ mod tests {
         let n = bar_line(None, &mut line);
         assert_eq!(&line[..n], b"mt7921: bar io");
         assert_eq!(bar_line(Some(0), &mut [0u8; 4]), 0);
+    }
+
+    #[test]
+    fn iommu_base_drops_the_lock_bit() {
+        let mut config = [0u8; 256];
+        config[0x09] = 0x00;
+        config[0x0a] = 0x06;
+        config[0x0b] = 0x08;
+        config[0x06] = 0x10;
+        config[0x34] = 0x40;
+        config[0x40] = 0x0f;
+        config[0x44..0x48].copy_from_slice(&0xfed8_0001u32.to_le_bytes());
+        assert_eq!(iommu_base(&config), Some(0xfed8_0000));
+        let mut page = [0u8; 0x1000];
+        store_iommu(&mut page, 0xfed8_0000);
+        assert_eq!(load_iommu(&page), 0xfed8_0000);
     }
 
     #[test]

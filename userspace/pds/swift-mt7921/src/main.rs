@@ -18,8 +18,8 @@ use sel4_microkit::{
 
 use lerux_desk::FRAMEBUFFER_BYTES;
 use lerux_swift::{
-    bar_line, class_code, format_report, load_header, memory_bar, mt7921::Stage, paint_row,
-    read_key, vendor_device, WifiReport, MT7921_BAR, MT7921_BDF, MT7921_IDS,
+    bar_line, class_code, format_report, load_header, load_iommu, memory_bar, mt7921::Stage,
+    paint_row, read_key, vendor_device, WifiReport, MT7921_BAR, MT7921_BDF, MT7921_IDS,
 };
 
 use device::{Images, Mac};
@@ -70,7 +70,8 @@ fn init() -> HandlerImpl {
     }
     let regs = memory_region_symbol!(mt7921_regs_vaddr: *mut u8).as_ptr();
     let dma = memory_region_symbol!(wifi_dma_vaddr: *mut u8).as_ptr();
-    let mac = Mac::boot(regs, dma, &images);
+    let iommu = u32::try_from(load_iommu(page) & 0xffff_ffff).expect("iommu low half");
+    let mac = Mac::boot(regs, dma, &images, iommu);
     paint_stage(mac.stage());
     HandlerImpl { mac: Some(mac) }
 }

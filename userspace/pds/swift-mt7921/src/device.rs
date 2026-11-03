@@ -146,7 +146,12 @@ impl Mac {
         };
         mac.stage = match mac.start(images) {
             Ok(()) => Stage::Wait,
-            Err(stage) => stage,
+            Err(stage) => {
+                // A descriptor the engine never finishes stays a bus read. The
+                // NVMe admin command is the next device on this root port.
+                mac.quiesce();
+                stage
+            }
         };
         mac.ready = mac.stage == Stage::Wait;
         mac
@@ -454,7 +459,7 @@ impl Mac {
 
     fn exchange(&mut self, cmd: u32, payload: &[u8]) -> Result<(), Sem> {
         if !self.post_mcu(cmd, payload) {
-            return Err(Sem::Tx);
+            return Err(Sem::Tx(self.dma_idx(self.tx[TX_MCU].regs)));
         }
         let seq = self.seq;
         if self.wait_seq(seq) {
@@ -501,18 +506,29 @@ impl Mac {
         let next = (head + 1) % RING_N;
         self.tx[ring].head = next;
         self.tx[ring].posted = head;
+        let index = self.dma_idx(regs);
         self.kick(regs, next);
-        self.wait_done(desc, head, MCU_SPIN)
+        // `mt76_dma_tx_cleanup` waits on the DMA index. The DDONE bit is the RX
+        // signal; `OMIT_TX_INFO` does not have to write it back.
+        self.wait_done(desc, head, regs, index, MCU_SPIN)
     }
 
-    fn wait_done(&mut self, desc: usize, idx: u32, spins: u32) -> bool {
+    fn wait_done(&mut self, desc: usize, idx: u32, regs: u32, index: u8, spins: u32) -> bool {
         for _ in 0..spins {
-            if self.desc_word(desc, idx, 1) & DMA_DONE != 0 {
+            if self.desc_word(desc, idx, 1) & DMA_DONE != 0 || self.dma_idx(regs) != index {
                 return true;
             }
             core::hint::spin_loop();
         }
         false
+    }
+
+    fn dma_idx(&mut self, regs: u32) -> u8 {
+        u8::try_from(self.rr(regs + 12) & 0xff).expect("dma index")
+    }
+
+    fn quiesce(&mut self) {
+        self.clear(GLO_CFG, GLO_CFG_TX_EN | GLO_CFG_RX_EN);
     }
 
     fn wait_seq(&mut self, seq: u8) -> bool {

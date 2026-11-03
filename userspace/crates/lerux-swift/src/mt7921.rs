@@ -24,8 +24,8 @@ pub fn firmware_kind(chip: u32) -> FirmwareKind {
 /// Why the patch semaphore stopped.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Sem {
-    /// The transmit descriptor never completed.
-    Tx,
+    /// The DMA index never moved. The byte is the index register.
+    Tx(u8),
     /// The descriptor completed and no event matched the sequence.
     Rx,
     /// The event carried this status byte.
@@ -62,7 +62,10 @@ impl Stage {
     pub fn paint(self, out: &mut [u8]) -> usize {
         match self {
             Stage::PingOk(addr) => format_report(&WifiReport::PingOk(addr), out),
-            Stage::FwSem(why) => write_line(out, &sem_word(why)),
+            Stage::FwSem(why) => {
+                let (word, n) = sem_word(why);
+                write_line(out, &word[..n])
+            }
             stage => write_line(out, stage.word()),
         }
     }
@@ -99,17 +102,25 @@ fn write_line(out: &mut [u8], word: &[u8]) -> usize {
     n
 }
 
-fn sem_word(why: Sem) -> [u8; 9] {
-    let mut word = *b"fw sem tx";
-    match why {
-        Sem::Tx => {}
-        Sem::Rx => word[7] = b'r',
+fn sem_word(why: Sem) -> ([u8; 11], usize) {
+    let mut word = *b"fw sem tx00";
+    let n = match why {
+        Sem::Tx(idx) => {
+            word[9] = hex_nibble(idx >> 4);
+            word[10] = hex_nibble(idx);
+            11
+        }
+        Sem::Rx => {
+            word[7] = b'r';
+            9
+        }
         Sem::Status(byte) => {
             word[7] = hex_nibble(byte >> 4);
             word[8] = hex_nibble(byte);
+            9
         }
-    }
-    word
+    };
+    (word, n)
 }
 
 fn hex_nibble(nibble: u8) -> u8 {
@@ -822,8 +833,10 @@ mod tests {
         let mut out = [0u8; 32];
         let n = Stage::Wait.paint(&mut out);
         assert_eq!(&out[..n], b"mt7921: wait");
-        let n = Stage::FwSem(Sem::Tx).paint(&mut out);
-        assert_eq!(&out[..n], b"mt7921: fw sem tx");
+        let n = Stage::FwSem(Sem::Tx(0)).paint(&mut out);
+        assert_eq!(&out[..n], b"mt7921: fw sem tx00");
+        let n = Stage::FwSem(Sem::Tx(0x1a)).paint(&mut out);
+        assert_eq!(&out[..n], b"mt7921: fw sem tx1a");
         let n = Stage::FwSem(Sem::Rx).paint(&mut out);
         assert_eq!(&out[..n], b"mt7921: fw sem rx");
         let n = Stage::FwSem(Sem::Status(0x2a)).paint(&mut out);

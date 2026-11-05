@@ -1,49 +1,52 @@
 //! MT7921 MAC from Linux v6.8 `mt7921/pci.c`, `mt792x_dma.c`, and `mt76_connac_mcu.c`.
 //!
-//! The DMA window is physical `0x1f60000`. Rings are eight descriptors because
-//! that window is 256 KiB. One transmit is in flight, so the bounce buffer is
-//! reused only after `DMA_DONE`.
+//! The DMA window is physical `0x1f60000`. Each ring starts on its own page.
+//! The MCU ring is 256 descriptors, one page, matching `MT7921_TX_MCU_RING_SIZE`.
+//! One transmit is in flight, so the bounce buffer is reused only after the
+//! DMA index moves.
 
 use core::sync::atomic::{fence, Ordering};
 
 use lerux_swift::{
     mt7921::{
-        ce_cmd, desc_ctrl, download_cmd, efuse_mac, ext_cmd, ext_query, firmware_kind, map_reg,
-        patch_regions, patch_status, prefetch, ram_regions, ring_regs, write_chan,
+        ce_cmd, desc_ctrl, desc_len, download_cmd, efuse_mac, ext_cmd, ext_query, firmware_kind,
+        map_reg, patch_regions, patch_status, prefetch, ram_regions, ring_regs, write_chan,
         write_eeprom_mode, write_efuse_read, write_mac_enable, write_mcu_txd, write_rts,
-        write_scan, write_txwi, wtbl_word, FirmwareKind, Map, Region, Stage, CONN_ON_LPCTL,
-        CONN_ON_MISC, DMASHDL_BYPASS, DMASHDL_ENABLE, DMASHDL_SW, DMA_DONE, DUMMY_CR, FW_N9_RDY,
-        FW_SCATTER, FW_START, GLO_CFG, GLO_CFG_CHAIN, GLO_CFG_CLK, GLO_CFG_EXT0, GLO_CFG_LE,
-        GLO_CFG_OMIT_RX, GLO_CFG_OMIT_RX_PFET, GLO_CFG_OMIT_TX, GLO_CFG_RX_BUSY, GLO_CFG_RX_EN,
-        GLO_CFG_TX_BUSY, GLO_CFG_TX_EN, GLO_CFG_TX_WB, HIF_REMAP_L1, HOST_CLR_OWN, HOST_INT_ENA,
-        HOST_OWN_SYNC, HOST_SET_OWN, HW_CHIPID, HW_REV, IRQ_MASK, L0S_DIS, LAST_SEC0, LPCR_DRV_OWN,
-        LPCR_FW_OWN, MCU2HOST, MCU_TXD_LEN, MCU_WAKE, MDP_DAMSDU, MDP_DCR0, MDP_DCR1,
-        MDP_HDR_TRANS, NEED_REINIT, PATCH_FINISH, PATCH_IS_DL, PATCH_NOT_DL, PATCH_REL, PATCH_SEM,
-        PCIE_MAC_INT, PCIE_MAC_PM, PRI_DLY, RST_DMASHDL, RST_DTX_PTR, RST_LOGIC, RXD_LEN,
-        RX_DATA_BASE, RX_EVENT_BASE, RX_WA_BASE, SCAN_REQ_LEN, SWDEF_MODE, TOP_LPCR, TXD_LEN,
-        TXP_LEN, TX_RING_BASE, WFDMA_RST, WFSYS_INIT_DONE, WFSYS_RST, WFSYS_RST_B, WTBL_BUSY,
-        WTBL_UPDATE,
+        write_scan, write_txwi, wtbl_word, FirmwareKind, Map, Region, Sem, Stage, TxStop,
+        CONN_ON_LPCTL, CONN_ON_MISC, DMASHDL_BYPASS, DMASHDL_ENABLE, DMASHDL_SW, DMA_DONE,
+        DUMMY_CR, FW_N9_RDY, FW_SCATTER, FW_START, GLO_CFG, GLO_CFG_CHAIN, GLO_CFG_CLK,
+        GLO_CFG_EXT0, GLO_CFG_LE, GLO_CFG_OMIT_RX, GLO_CFG_OMIT_RX_PFET, GLO_CFG_OMIT_TX,
+        GLO_CFG_RX_BUSY, GLO_CFG_RX_EN, GLO_CFG_TX_BUSY, GLO_CFG_TX_EN, GLO_CFG_TX_WB,
+        HIF_REMAP_L1, HOST_CLR_OWN, HOST_INT_ENA, HOST_OWN_SYNC, HOST_SET_OWN, HW_CHIPID, HW_REV,
+        IRQ_MASK, L0S_DIS, LAST_SEC0, LPCR_DRV_OWN, LPCR_FW_OWN, MCU2HOST, MCU_TXD_LEN, MCU_WAKE,
+        MDP_DAMSDU, MDP_DCR0, MDP_DCR1, MDP_HDR_TRANS, NEED_REINIT, PATCH_FINISH, PATCH_IS_DL,
+        PATCH_NOT_DL, PATCH_REL, PATCH_SEM, PCIE_MAC_INT, PCIE_MAC_PM, PRI_DLY, RST_DMASHDL,
+        RST_DTX_PTR, RST_LOGIC, RXD_LEN, RX_DATA_BASE, RX_EVENT_BASE, RX_WA_BASE, SCAN_REQ_LEN,
+        SWDEF_MODE, TOP_LPCR, TXD_LEN, TXP_LEN, TX_RING_BASE, WFDMA_RST, WFSYS_INIT_DONE,
+        WFSYS_RST, WFSYS_RST_B, WTBL_BUSY, WTBL_UPDATE,
     },
     CLIENT_MAC,
 };
 
 const DMA_PHYS: u32 = 0x01f6_0000;
 const RING_N: u32 = 8;
+/// `MT7921_TX_MCU_RING_SIZE`. One page holds 256 descriptors.
+const MCU_N: u32 = 256;
 const BUF: usize = 2048;
 const BOUNCE: usize = 4096;
 
 const OFF_TX0: usize = 0x0000;
-const OFF_TX16: usize = 0x0100;
-const OFF_TX17: usize = 0x0200;
-const OFF_RX_EVT: usize = 0x0300;
-const OFF_RX_DATA: usize = 0x0400;
-const OFF_RX_WA: usize = 0x0500;
-const OFF_BOUNCE: usize = 0x1000;
-const OFF_RX0_BUFS: usize = 0x2000;
-const OFF_RX_DATA_BUFS: usize = 0x5800;
-const OFF_RX_WA_BUFS: usize = 0x9000;
-const OFF_TXWI: usize = 0xd000;
-const OFF_TX_FRAME: usize = 0xd100;
+const OFF_TX16: usize = 0x1000;
+const OFF_TX17: usize = 0x2000;
+const OFF_RX_EVT: usize = 0x3000;
+const OFF_RX_DATA: usize = 0x4000;
+const OFF_RX_WA: usize = 0x5000;
+const OFF_BOUNCE: usize = 0x6000;
+const OFF_RX0_BUFS: usize = 0x7000;
+const OFF_RX_DATA_BUFS: usize = 0xb000;
+const OFF_RX_WA_BUFS: usize = 0xf000;
+const OFF_TXWI: usize = 0x1_3000;
+const OFF_TX_FRAME: usize = 0x1_4000;
 
 const TX_DATA: usize = 0;
 const TX_FWDL: usize = 1;
@@ -72,6 +75,7 @@ const ASSOC_SPIN: u32 = 40_000_000;
 struct TxRing {
     regs: u32,
     desc: usize,
+    count: u32,
     head: u32,
     posted: u32,
 }
@@ -95,6 +99,7 @@ pub struct Mac {
     ready: bool,
     stage: Stage,
     sta: [u8; 6],
+    iommu: u32,
     last_len: usize,
     pn: u64,
     wifi_seq: u16,
@@ -129,7 +134,7 @@ fn rx_byte(index: usize) -> u8 {
 }
 
 impl Mac {
-    pub fn boot(regs: *mut u8, dma: *mut u8, images: &Images) -> Self {
+    pub fn boot(regs: *mut u8, dma: *mut u8, images: &Images, iommu: u32) -> Self {
         let mut mac = Self {
             regs,
             dma,
@@ -140,13 +145,19 @@ impl Mac {
             ready: false,
             stage: Stage::Own,
             sta: CLIENT_MAC,
+            iommu,
             last_len: 0,
             pn: 1,
             wifi_seq: 1,
         };
         mac.stage = match mac.start(images) {
             Ok(()) => Stage::Wait,
-            Err(stage) => stage,
+            Err(stage) => {
+                // A descriptor the engine never finishes stays a bus read. The
+                // NVMe admin command is the next device on this root port.
+                mac.quiesce();
+                stage
+            }
         };
         mac.ready = mac.stage == Stage::Wait;
         mac
@@ -175,13 +186,13 @@ impl Mac {
         self.wr(PCIE_MAC_INT, 0xff);
         self.dma_disable()?;
         unsafe { core::ptr::write_bytes(self.dma, 0, 0x4_0000) };
-        let tx = self.tx.map(|ring| (ring.regs, ring.desc));
+        let tx = self.tx.map(|ring| (ring.regs, ring.desc, ring.count));
         let rx = self.rx.map(|ring| (ring.regs, ring.desc, ring.bufs));
-        for (regs, desc) in tx {
-            self.program(regs, desc);
+        for (regs, desc, count) in tx {
+            self.program(regs, desc, count);
         }
         for (regs, desc, bufs) in rx {
-            self.program(regs, desc);
+            self.program(regs, desc, RING_N);
             self.fill_rx(desc, bufs, regs);
         }
         for ring in &mut self.rx {
@@ -190,6 +201,10 @@ impl Mac {
         self.dma_enable();
         self.wr(SWDEF_MODE, 0);
         self.driver_own()?;
+        // The pointer reset and driver-own run after the first programming.
+        // Write the base again so the doorbell still names these rings.
+        self.set(DMASHDL_SW, DMASHDL_BYPASS);
+        self.rebind();
         self.set(PCIE_MAC_PM, L0S_DIS);
         self.load_patch(patch)?;
         self.load_ram(ram)?;
@@ -255,15 +270,16 @@ impl Mac {
         Ok(())
     }
 
-    fn program(&mut self, regs: u32, desc: usize) {
-        for i in 0..RING_N {
+    fn program(&mut self, regs: u32, desc: usize, count: u32) {
+        for i in 0..count {
             self.desc_write(desc, i, 0, DMA_DONE, 0, 0);
         }
+        self.publish(desc, usize_from(count) * 16);
         self.wr(regs + 8, 0);
         self.wr(regs + 12, 0);
         let phys = DMA_PHYS.wrapping_add(u32_from(desc));
         self.wr(regs, phys);
-        self.wr(regs + 4, RING_N);
+        self.wr(regs + 4, count);
     }
 
     fn fill_rx(&mut self, desc: usize, bufs: usize, regs: u32) {
@@ -272,6 +288,23 @@ impl Mac {
             self.desc_write(desc, i, phys, desc_ctrl(u32_from(BUF), false), 0, 0);
         }
         self.kick(regs, RING_N - 1);
+        self.publish(desc, usize_from(RING_N) * 16);
+    }
+
+    fn rebind(&mut self) {
+        for ring in self.tx {
+            self.bind(ring.regs, ring.desc, ring.head, ring.count);
+        }
+        for ring in self.rx {
+            self.bind(ring.regs, ring.desc, ring.head, RING_N);
+        }
+    }
+
+    fn bind(&mut self, regs: u32, desc: usize, head: u32, count: u32) {
+        let phys = DMA_PHYS.wrapping_add(u32_from(desc));
+        self.wr(regs, phys);
+        self.wr(regs + 4, count);
+        self.wr(regs + 8, head);
     }
 
     fn dma_enable(&mut self) {
@@ -279,6 +312,8 @@ impl Mac {
             self.wr(addr, value);
         }
         self.wr(RST_DTX_PTR, u32::MAX);
+        // A sticky reset holds every transmit index at 0.
+        self.wr(RST_DTX_PTR, 0);
         self.wr(PRI_DLY, 0);
         let cfg = GLO_CFG_TX_WB
             | GLO_CFG_LE
@@ -303,13 +338,18 @@ impl Mac {
     }
 
     fn load_patch(&mut self, image: &[u8]) -> Result<(), Stage> {
-        let status = self.sem(true).ok_or(Stage::FwSem)?;
+        let status = self.sem(true).map_err(Stage::FwSem)?;
         if status == PATCH_IS_DL {
             return Ok(());
         }
         if status != PATCH_NOT_DL {
-            return Err(Stage::FwSem);
+            return Err(Stage::FwSem(Sem::Status(status)));
         }
+        let sent = self.transfer_patch(image);
+        self.release_sem().and(sent)
+    }
+
+    fn transfer_patch(&mut self, image: &[u8]) -> Result<(), Stage> {
         let mut regions = [Region {
             addr: 0,
             off: 0,
@@ -330,10 +370,15 @@ impl Mac {
         if patch_status(self.response()) != Some(0) {
             return Err(Stage::FwPatch);
         }
-        if self.sem(false) != Some(PATCH_REL) {
-            return Err(Stage::FwSem);
-        }
         Ok(())
+    }
+
+    fn release_sem(&mut self) -> Result<(), Stage> {
+        match self.sem(false) {
+            Ok(PATCH_REL) => Ok(()),
+            Ok(status) => Err(Stage::FwSem(Sem::Status(status))),
+            Err(why) => Err(Stage::FwSem(why)),
+        }
     }
 
     fn load_ram(&mut self, image: &[u8]) -> Result<(), Stage> {
@@ -386,12 +431,10 @@ impl Mac {
         Ok(())
     }
 
-    fn sem(&mut self, get: bool) -> Option<u8> {
+    fn sem(&mut self, get: bool) -> Result<u8, Sem> {
         let op = u32::from(get).to_le_bytes();
-        if !self.command(PATCH_SEM, &op, true) {
-            return None;
-        }
-        patch_status(self.response())
+        self.exchange(PATCH_SEM, &op)?;
+        patch_status(self.response()).ok_or(Sem::Rx)
     }
 
     fn mac_init(&mut self) -> Result<(), Stage> {
@@ -438,6 +481,25 @@ impl Mac {
         if cmd & 0xff == FW_SCATTER {
             return self.scatter(payload);
         }
+        if !wait {
+            return self.post_mcu(cmd, payload);
+        }
+        self.exchange(cmd, payload).is_ok()
+    }
+
+    fn exchange(&mut self, cmd: u32, payload: &[u8]) -> Result<(), Sem> {
+        if !self.post_mcu(cmd, payload) {
+            return Err(Sem::Tx(self.tx_stop(TX_MCU)));
+        }
+        let seq = self.seq;
+        if self.wait_seq(seq) {
+            Ok(())
+        } else {
+            Err(Sem::Rx)
+        }
+    }
+
+    fn post_mcu(&mut self, cmd: u32, payload: &[u8]) -> bool {
         let seq = self.next_seq();
         let total = MCU_TXD_LEN + payload.len();
         if total > BOUNCE {
@@ -450,13 +512,7 @@ impl Mac {
             }
             cmd_buf[MCU_TXD_LEN..total].copy_from_slice(payload);
         }
-        if !self.tx_bounce(TX_MCU, total) {
-            return false;
-        }
-        if !wait {
-            return true;
-        }
-        self.wait_seq(seq)
+        self.tx_bounce(TX_MCU, total)
     }
 
     fn scatter(&mut self, chunk: &[u8]) -> bool {
@@ -477,21 +533,48 @@ impl Mac {
         let desc = self.tx[ring].desc;
         let regs = self.tx[ring].regs;
         self.desc_write(desc, head, phys, desc_ctrl(u32_from(len), true), 0, 0);
-        let next = (head + 1) % RING_N;
+        self.publish(desc + head as usize * 16, 16);
+        self.publish(phys.wrapping_sub(DMA_PHYS) as usize, len);
+        let next = (head + 1) % self.tx[ring].count;
         self.tx[ring].head = next;
         self.tx[ring].posted = head;
+        let index = self.dma_idx(regs);
         self.kick(regs, next);
-        self.wait_done(desc, head, MCU_SPIN)
+        // `mt76_dma_tx_cleanup` waits on the DMA index. The DDONE bit is the RX
+        // signal; `OMIT_TX_INFO` does not have to write it back.
+        self.wait_done(desc, head, regs, index, MCU_SPIN)
     }
 
-    fn wait_done(&mut self, desc: usize, idx: u32, spins: u32) -> bool {
-        for _ in 0..spins {
-            if self.desc_word(desc, idx, 1) & DMA_DONE != 0 {
+    fn wait_done(&mut self, desc: usize, idx: u32, regs: u32, index: u8, spins: u32) -> bool {
+        for spin in 0..spins {
+            // A write-back line filled by an earlier read hides the device's store.
+            if spin.is_multiple_of(64) {
+                self.publish(desc + idx as usize * 16, 16);
+            }
+            if self.desc_word(desc, idx, 1) & DMA_DONE != 0 || self.dma_idx(regs) != index {
                 return true;
             }
             core::hint::spin_loop();
         }
         false
+    }
+
+    fn dma_idx(&mut self, regs: u32) -> u8 {
+        u8::try_from(self.rr(regs + 12) & 0xff).expect("dma index")
+    }
+
+    fn tx_stop(&mut self, ring: usize) -> TxStop {
+        let regs = self.tx[ring].regs;
+        TxStop {
+            dma: self.dma_idx(regs),
+            cpu: u8::try_from(self.rr(regs + 8) & 0xff).expect("cpu index"),
+            size: u16::try_from(self.rr(regs + 4) & 0xffff).expect("ring size"),
+            iommu: self.iommu,
+        }
+    }
+
+    fn quiesce(&mut self) {
+        self.clear(GLO_CFG, GLO_CFG_TX_EN | GLO_CFG_RX_EN);
     }
 
     fn wait_seq(&mut self, seq: u8) -> bool {
@@ -547,7 +630,7 @@ impl Mac {
         if ctrl & DMA_DONE == 0 {
             return None;
         }
-        let len = (ctrl & 0x3fff) as usize;
+        let len = desc_len(ctrl);
         let phys = self.desc_word(desc, tail, 0);
         let off = phys.wrapping_sub(DMA_PHYS) as usize;
         let n = len.min(BUF);
@@ -654,12 +737,30 @@ impl Mac {
         self.wr(regs + 8, head);
     }
 
+    /// The control word is last, matching `mt76_dma_add_buf`, then the line is
+    /// flushed so the device cannot fetch the previous `DMA_DONE` value.
     fn desc_write(&mut self, desc: usize, idx: u32, buf0: u32, ctrl: u32, buf1: u32, info: u32) {
         let off = desc + idx as usize * 16;
         dma_u32(self.dma, off, buf0);
-        dma_u32(self.dma, off + 4, ctrl);
         dma_u32(self.dma, off + 8, buf1);
         dma_u32(self.dma, off + 12, info);
+        dma_u32(self.dma, off + 4, ctrl);
+    }
+
+    fn publish(&self, off: usize, len: usize) {
+        if len == 0 {
+            return;
+        }
+        unsafe {
+            let start = self.dma.add(off) as usize;
+            let mut line = start & !63;
+            let end = start + len;
+            while line < end {
+                core::arch::x86_64::_mm_clflush(line as *const u8);
+                line += 64;
+            }
+            core::arch::x86_64::_mm_sfence();
+        }
     }
 
     #[expect(clippy::cast_ptr_alignment, reason = "4-byte DMA descriptor")]
@@ -724,23 +825,30 @@ fn u32_from(value: usize) -> u32 {
     u32::try_from(value).expect("length fits")
 }
 
+fn usize_from(value: u32) -> usize {
+    usize::try_from(value).expect("count fits")
+}
+
 fn tx_rings() -> [TxRing; 3] {
     [
         TxRing {
             regs: ring_regs(TX_RING_BASE, 0),
             desc: OFF_TX0,
+            count: RING_N,
             head: 0,
             posted: 0,
         },
         TxRing {
             regs: ring_regs(TX_RING_BASE, 16),
             desc: OFF_TX16,
+            count: RING_N,
             head: 0,
             posted: 0,
         },
         TxRing {
             regs: ring_regs(TX_RING_BASE, 17),
             desc: OFF_TX17,
+            count: MCU_N,
             head: 0,
             posted: 0,
         },
@@ -806,5 +914,13 @@ fn dma_read(dma: *mut u8, off: usize, out: &mut [u8]) {
     }
 }
 
+const RX_SPAN: usize = (RING_N as usize - 1) * BUF;
+const _: () = assert!(MCU_N * 16 == 0x1000);
+const _: () = assert!(OFF_RX_EVT == OFF_TX17 + 0x1000);
+const _: () = assert!(OFF_TX17.trailing_zeros() >= 12);
+const _: () = assert!(OFF_RX0_BUFS >= OFF_BOUNCE + BOUNCE);
+const _: () = assert!(OFF_RX_DATA_BUFS >= OFF_RX0_BUFS + RX_SPAN);
+const _: () = assert!(OFF_RX_WA_BUFS >= OFF_RX_DATA_BUFS + RX_SPAN);
+const _: () = assert!(OFF_TXWI >= OFF_RX_WA_BUFS + RX_SPAN);
 const _: () = assert!(OFF_TX_FRAME + BUF < 0x4_0000);
 const _: () = assert!(LAST_SEC0 == 1 << 30);

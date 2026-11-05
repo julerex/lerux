@@ -21,11 +21,35 @@ pub fn firmware_kind(chip: u32) -> FirmwareKind {
     }
 }
 
+/// Ring registers read back after a semaphore transmit that did not finish.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct TxStop {
+    /// DMA index register.
+    pub dma: u8,
+    /// CPU index register.
+    pub cpu: u8,
+    /// Ring size register.
+    pub size: u16,
+    /// AMD IOMMU MMIO base, low 32 bits. Zero means the probe found none.
+    pub iommu: u32,
+}
+
+/// Why the patch semaphore stopped.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Sem {
+    /// The DMA index never moved. The fields are the ring registers.
+    Tx(TxStop),
+    /// The descriptor completed and no event matched the sequence.
+    Rx,
+    /// The event carried this status byte.
+    Status(u8),
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Stage {
     Own,
-    /// Patch semaphore got no reply, or a status other than held or released.
-    FwSem,
+    /// Patch semaphore. The tag separates a stuck descriptor, a missing event, and a status byte.
+    FwSem(Sem),
     /// Patch header, a patch region setup, or patch-finish was rejected.
     FwPatch,
     /// A firmware chunk did not leave the download ring.
@@ -49,9 +73,19 @@ pub enum Stage {
 
 impl Stage {
     pub fn paint(self, out: &mut [u8]) -> usize {
-        let word: &[u8] = match self {
+        match self {
+            Stage::PingOk(addr) => format_report(&WifiReport::PingOk(addr), out),
+            Stage::FwSem(why) => {
+                let (word, n) = sem_word(why);
+                write_line(out, &word[..n])
+            }
+            stage => write_line(out, stage.word()),
+        }
+    }
+
+    fn word(self) -> &'static [u8] {
+        match self {
             Stage::Own => b"own",
-            Stage::FwSem => b"fw sem",
             Stage::FwPatch => b"fw patch",
             Stage::FwScatter => b"fw scatter",
             Stage::FwRam => b"fw ram",
@@ -65,18 +99,74 @@ impl Stage {
             Stage::Eapol => b"eapol",
             Stage::Dhcp => b"dhcp",
             Stage::Ping => b"ping",
-            Stage::PingOk(addr) => {
-                return format_report(&WifiReport::PingOk(addr), out);
-            }
-        };
-        let prefix = b"mt7921: ";
-        let n = prefix.len() + word.len();
-        if out.len() < n {
-            return 0;
+            Stage::FwSem(_) | Stage::PingOk(_) => b"",
         }
-        out[..prefix.len()].copy_from_slice(prefix);
-        out[prefix.len()..n].copy_from_slice(word);
-        n
+    }
+}
+
+fn write_line(out: &mut [u8], word: &[u8]) -> usize {
+    let prefix = b"mt7921: ";
+    let n = prefix.len() + word.len();
+    if out.len() < n {
+        return 0;
+    }
+    out[..prefix.len()].copy_from_slice(prefix);
+    out[prefix.len()..n].copy_from_slice(word);
+    n
+}
+
+fn sem_word(why: Sem) -> ([u8; 32], usize) {
+    let mut word = [0u8; 32];
+    let n = match why {
+        Sem::Tx(stop) => write_tx_stop(&mut word, stop),
+        Sem::Rx => {
+            word[..9].copy_from_slice(b"fw sem rx");
+            9
+        }
+        Sem::Status(byte) => {
+            word[..7].copy_from_slice(b"fw sem ");
+            word[7] = hex_nibble(byte >> 4);
+            word[8] = hex_nibble(byte);
+            9
+        }
+    };
+    (word, n)
+}
+
+/// `fw sem d00 c00 s0000 i00000000`: DMA index, CPU index, size, IOMMU base.
+fn write_tx_stop(word: &mut [u8; 32], stop: TxStop) -> usize {
+    word[..6].copy_from_slice(b"fw sem");
+    word[6] = b' ';
+    word[7] = b'd';
+    word[8] = hex_nibble(stop.dma >> 4);
+    word[9] = hex_nibble(stop.dma);
+    word[10] = b' ';
+    word[11] = b'c';
+    word[12] = hex_nibble(stop.cpu >> 4);
+    word[13] = hex_nibble(stop.cpu);
+    word[14] = b' ';
+    word[15] = b's';
+    for (i, shift) in [12, 8, 4, 0].into_iter().enumerate() {
+        word[16 + i] = hex_nibble(low_nibble(u32::from(stop.size), shift));
+    }
+    word[20] = b' ';
+    word[21] = b'i';
+    for (i, shift) in [28, 24, 20, 16, 12, 8, 4, 0].into_iter().enumerate() {
+        word[22 + i] = hex_nibble(low_nibble(stop.iommu, shift));
+    }
+    30
+}
+
+fn low_nibble(value: u32, shift: u32) -> u8 {
+    u8::try_from((value >> shift) & 0xf).expect("nibble")
+}
+
+fn hex_nibble(nibble: u8) -> u8 {
+    let nibble = nibble & 0xf;
+    if nibble < 10 {
+        b'0' + nibble
+    } else {
+        b'a' + (nibble - 10)
     }
 }
 
@@ -458,7 +548,8 @@ pub fn write_mcu_txd(buf: &mut [u8], cmd: u32, seq: u8, payload: usize) -> bool 
     let tx1: u32 = 1 << 31 | (1 << 16);
     buf[..4].copy_from_slice(&tx0.to_le_bytes());
     buf[4..8].copy_from_slice(&tx1.to_le_bytes());
-    let body = low_u16(payload);
+    // `mt76_connac2_mcu_fill_message` counts every byte after the eight-dword TXD.
+    let body = low_u16((MCU_TXD_LEN - TXD_LEN) + payload);
     buf[32..34].copy_from_slice(&body.to_le_bytes());
     let port = 1u16;
     let queue = 0x20u16;
@@ -662,12 +753,18 @@ pub fn frame_off(buf: &[u8]) -> Option<usize> {
 }
 
 #[must_use]
+/// `MT_DMA_CTL_SD_LEN0` is bits 29:16. The low half is the unused second segment.
 pub fn desc_ctrl(len: u32, last: bool) -> u32 {
-    let mut ctrl = len & 0x3fff;
+    let mut ctrl = (len & 0x3fff) << 16;
     if last {
         ctrl |= LAST_SEC0;
     }
     ctrl
+}
+
+#[must_use]
+pub fn desc_len(ctrl: u32) -> usize {
+    ((ctrl >> 16) & 0x3fff) as usize
 }
 
 /// Credential page the shell writes and the radio reads.
@@ -771,11 +868,21 @@ mod tests {
 
     #[test]
     fn stage_line_names_the_wait() {
-        let mut out = [0u8; 32];
+        let mut out = [0u8; 40];
         let n = Stage::Wait.paint(&mut out);
         assert_eq!(&out[..n], b"mt7921: wait");
-        let n = Stage::FwSem.paint(&mut out);
-        assert_eq!(&out[..n], b"mt7921: fw sem");
+        let n = Stage::FwSem(Sem::Tx(TxStop {
+            dma: 0,
+            cpu: 1,
+            size: 0x0100,
+            iommu: 0xfed8_0000,
+        }))
+        .paint(&mut out);
+        assert_eq!(&out[..n], b"mt7921: fw sem d00 c01 s0100 ifed80000");
+        let n = Stage::FwSem(Sem::Rx).paint(&mut out);
+        assert_eq!(&out[..n], b"mt7921: fw sem rx");
+        let n = Stage::FwSem(Sem::Status(0x2a)).paint(&mut out);
+        assert_eq!(&out[..n], b"mt7921: fw sem 2a");
         let n = Stage::FwScatter.paint(&mut out);
         assert_eq!(&out[..n], b"mt7921: fw scatter");
         let n = Stage::PingOk([192, 168, 1, 20]).paint(&mut out);
@@ -821,6 +928,25 @@ mod tests {
         assert_eq!(regions[0].addr, 0x20_0000);
         assert_eq!(regions[0].len, 4);
         assert_eq!(download_cmd(regions[0].addr), PATCH_START);
+    }
+
+    #[test]
+    fn dma_length_sits_in_the_first_segment() {
+        let ctrl = desc_ctrl(36, true);
+        assert_eq!(ctrl & 0x3fff, 0);
+        assert_eq!(desc_len(ctrl), 36);
+        assert_eq!(ctrl & LAST_SEC0, LAST_SEC0);
+        assert_eq!(ctrl & DMA_DONE, 0);
+    }
+
+    #[test]
+    fn mcu_header_len_includes_itself() {
+        let mut buf = [0u8; MCU_TXD_LEN];
+        assert!(write_mcu_txd(&mut buf, PATCH_SEM, 1, 4));
+        let len = u16::from_le_bytes([buf[32], buf[33]]);
+        assert_eq!(len, u16::try_from(MCU_TXD_LEN - TXD_LEN + 4).unwrap());
+        assert_eq!(buf[36], 0x10);
+        assert_eq!(buf[39], 1);
     }
 
     #[test]

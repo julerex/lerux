@@ -14,8 +14,10 @@ use sel4_microkit::{
 
 use lerux_desk::FRAMEBUFFER_BYTES;
 use lerux_swift::{
-    class_code, config_address, describe, iommu_base, paint_row, store_header, store_iommu,
-    vendor_device, LOCATIONS, MT7921_BDF, MT7921_IDS, NVME_BDF, NVME_CLASS, XHCI_BDFS, XHCI_CLASS,
+    class_code, config_address, describe, exclusion_base, exclusion_limit, iommu_base,
+    iommu_with_bit, paint_row, store_header, store_iommu, vendor_device, IOMMU_CTRL,
+    IOMMU_EXCL_BASE, IOMMU_EXCL_LIMIT, IOMMU_OFF_BITS, LOCATIONS, MT7921_BDF, MT7921_IDS, NVME_BDF,
+    NVME_CLASS, SWIFT_DMA_END, SWIFT_DMA_START, XHCI_BDFS, XHCI_CLASS,
 };
 
 const BASE_IOPORT_CAP: u64 = 394;
@@ -41,8 +43,47 @@ fn init() -> HandlerImpl {
         paint(ROW + index, &line);
         enable_claimed(cap, addr, bus, dev, func, &header);
     }
-    store_iommu(page, find_iommu(cap, addr));
+    let base = find_iommu(cap, addr);
+    store_iommu(page, base);
+    pass_dma(base);
     HandlerImpl
+}
+
+/// `0xfdf00000` is the base this Swift painted. Translation stays on for the
+/// display. The `NVMe`, `xHCI`, and MT7921 windows are excluded so those DMA
+/// addresses are used as physical.
+const IOMMU_PHYS: u64 = 0xfdf0_0000;
+
+#[expect(
+    clippy::cast_ptr_alignment,
+    reason = "the IOMMU page is 4 KiB aligned and these offsets are multiples of 8"
+)]
+fn pass_dma(base: u64) {
+    if base != IOMMU_PHYS {
+        return;
+    }
+    let regs = memory_region_symbol!(iommu_regs_vaddr: *mut u8).as_ptr();
+    // Safety: the template maps the AMD IOMMU MMIO here, uncached. The control
+    // register is the aligned 8-byte word at offset 0x18. A read of all ones is
+    // not a register, and a clear enable bit means translation is already off.
+    unsafe {
+        let ctrl_ptr = regs.add(IOMMU_CTRL).cast::<u64>();
+        let excl = regs.add(IOMMU_EXCL_BASE).cast::<u64>();
+        let limit = regs.add(IOMMU_EXCL_LIMIT).cast::<u64>();
+        let ctrl = ctrl_ptr.read_volatile();
+        if ctrl == u64::MAX || (ctrl & 1) == 0 {
+            return;
+        }
+        for bit in IOMMU_OFF_BITS {
+            let current = ctrl_ptr.read_volatile();
+            ctrl_ptr.write_volatile(iommu_with_bit(current, bit, false));
+        }
+        excl.write_volatile(exclusion_base(SWIFT_DMA_START));
+        limit.write_volatile(exclusion_limit(SWIFT_DMA_END));
+        let current = ctrl_ptr.read_volatile();
+        ctrl_ptr.write_volatile(iommu_with_bit(current, 0, true));
+        let _ = ctrl_ptr.read_volatile();
+    }
 }
 
 /// Bus 0 function `00:00.2` is the Cezanne IOMMU. The scan covers the rest of

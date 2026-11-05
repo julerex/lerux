@@ -216,7 +216,7 @@ _Avoid_: [driver own](#driver-own)
 
 ### IOMMU
 
-The AMD unit that can translate a device [DMA](#dma) address before it reaches RAM. This system does not build those tables. A [doorbell](#doorbell) that lands while the [DMA index](#dma-index) stays 0 does not by itself name this unit.
+The AMD unit that can translate a device [DMA](#dma) address before it reaches RAM. This [Swift X](#swift-x) reports its registers at `0xfdf00000` (`ifdf00000` on the [firmware stage](#firmware-stage) line). The probe does not build device tables. It excludes `0x1f00000` through `0x1fa0000`, the [NVMe](#nvme), [xHCI](#xhci), and [MT7921](#mt7921) [DMA windows](#dma-window), so those addresses are not translated. The display path stays translated.
 
 _Avoid_: the processor [memory page](#memory-page) tables. Those translate CPU loads and stores. This unit would translate device [DMA](#dma).
 

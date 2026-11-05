@@ -27,6 +27,45 @@ pub const HEADER_BYTES: usize = 64;
 /// Eight bytes in the shared header page, past the six headers.
 pub const IOMMU_RECORD: usize = 0x800;
 
+/// AMD IOMMU control register, and the exclusion base and limit beside it.
+pub const IOMMU_CTRL: usize = 0x18;
+pub const IOMMU_EXCL_BASE: usize = 0x20;
+pub const IOMMU_EXCL_LIMIT: usize = 0x28;
+
+/// Bit 0 of the exclusion base. Linux `iommu_set_exclusion_range` sets this and
+/// leaves the allow bit clear. Addresses in the range are not translated.
+pub const IOMMU_EXCL_ENABLE: u64 = 1;
+
+/// Control bits Linux `iommu_disable` clears, in that order.
+pub const IOMMU_OFF_BITS: [u32; 8] = [12, 3, 2, 28, 29, 13, 14, 0];
+
+/// `NVMe` through the MT7921 DMA windows, including the `xHCI` window between them.
+pub const SWIFT_DMA_START: u64 = 0x01f0_0000;
+pub const SWIFT_DMA_END: u64 = 0x01fa_0000;
+
+/// Set or clear one control bit. The other bits stay.
+#[must_use]
+pub fn iommu_with_bit(ctrl: u64, bit: u32, on: bool) -> u64 {
+    let mask = 1u64 << bit;
+    if on {
+        ctrl | mask
+    } else {
+        ctrl & !mask
+    }
+}
+
+/// Exclusion base for a page-aligned start, with translation bypassed.
+#[must_use]
+pub fn exclusion_base(start: u64) -> u64 {
+    (start & !0xfff) | IOMMU_EXCL_ENABLE
+}
+
+/// Last page of an exclusive end, the value Linux writes to the limit register.
+#[must_use]
+pub fn exclusion_limit(end: u64) -> u64 {
+    (end - 1) & !0xfff
+}
+
 /// The AMD IOMMU lives at PCI class `080600` and capability id `0x0f`.
 /// The base address registers sit at offsets 4 and 8 in that capability.
 #[must_use]
@@ -323,6 +362,18 @@ mod tests {
         let mut page = [0u8; 0x1000];
         store_iommu(&mut page, 0xfed8_0000);
         assert_eq!(load_iommu(&page), 0xfed8_0000);
+    }
+
+    #[test]
+    fn exclusion_covers_the_swift_dma_windows() {
+        assert_eq!(exclusion_base(SWIFT_DMA_START), 0x01f0_0001);
+        assert_eq!(exclusion_limit(SWIFT_DMA_END), 0x01f9_f000);
+        let ctrl = 1u64 | (1 << 10);
+        let off = IOMMU_OFF_BITS
+            .iter()
+            .fold(ctrl, |value, bit| iommu_with_bit(value, *bit, false));
+        assert_eq!(off, 1 << 10);
+        assert_eq!(iommu_with_bit(off, 0, true) & 1, 1);
     }
 
     #[test]

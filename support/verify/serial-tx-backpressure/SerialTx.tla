@@ -3,30 +3,31 @@
 A client transmit ring, the transmit virtualiser, and the serial driver's
 transmit drain. One step is one branch in the source.
 
-The client loop is emit / say:
+The client loop is emit / say. A full ring notifies the virtualiser
+before the wait. The notify after the loop hands off a ring that fitted.
 
-  userspace/pds/sddf-shell/src/main.rs          emit 534-544
-  userspace/pds/sddf-grok/src/main.rs           say 146-156
-  userspace/pds/sddf-program/src/main.rs        say 276-286
+  userspace/pds/sddf-shell/src/main.rs          emit 590-602
+  userspace/pds/sddf-grok/src/main.rs           say 146-158
+  userspace/pds/sddf-program/src/main.rs        say 275-287
                                                 Guest::log 89-91
 
 The consumer is userspace/pds/sddf-serial-virt-tx/src/main.rs:
 
-  move_client 93-114, wake_client 117-123, provide 125-130,
-  resume_pending 136-157, notified 163-172
+  move_client 112-134, wake_client 136-142, provide 144-149,
+  resume_pending 155-176, notified 182-192
 
 The driver step is drain_tx in
-userspace/pds/sddf-serial-driver/src/main.rs 173-190.
+userspace/pds/sddf-serial-driver/src/main.rs 173-191.
 
 Queue words are userspace/crates/lerux-sddf/src/serial_queue.rs:
 
-  serial_enqueue 87-98, serial_dequeue 123-134,
-  serial_request_consumer_signal 153-160,
-  serial_cancel_consumer_signal 165-171,
-  serial_require_consumer_signal 208-216
+  serial_enqueue 95-110, serial_dequeue 136-151,
+  serial_request_consumer_signal 170-177,
+  serial_cancel_consumer_signal 182-188,
+  serial_require_consumer_signal 231-239
 
 The wait is microkit_cothread_wait_on_channel in
-userspace/crates/lerux-cothread/src/lib.rs 455-464. block_running 488-492
+userspace/crates/lerux-cothread/src/lib.rs 483-492. block_running 522-526
 consumes a set semaphore and does not block. The image data region is
 SERIAL_REGION_SIZE in userspace/crates/lerux-sddf/src/serial_image.rs:20.
 
@@ -58,7 +59,7 @@ VARIABLES
   drvSignal,  \* driver producer_signalled
   uart,       \* bytes drain_tx has written
   accepted,   \* how many Bytes serial_enqueue has accepted
-  phase,      \* "enqueue" | "request" | "wait" | "idle"
+  phase,      \* "enqueue" | "request" | "notify" | "wait" | "idle"
   blocked,    \* worker is inside microkit_cothread_wait_on_channel
   sem,        \* TX channel semaphore sticky bit
   pending,    \* serial_virt_tx pending[client]
@@ -102,14 +103,25 @@ ShellEnqueue ==
           /\ UNCHANGED <<queue, accepted>>
   /\ UNCHANGED <<signalled, driver, drvSignal, uart, blocked, sem, pending, virtRun, burst, note>>
 
-\* serial_request_consumer_signal, then the next statement is the wait.
-\* An interrupt can run the driver between these two statements.
+\* serial_request_consumer_signal. The next statement is the notify.
+\* An interrupt can run the driver before that notify, and again before
+\* the wait that follows it.
 ShellRequest ==
   /\ ClientTurn
   /\ phase = "request"
   /\ signalled' = 0
-  /\ phase' = "wait"
+  /\ phase' = "notify"
   /\ UNCHANGED <<queue, driver, drvSignal, uart, accepted, blocked, sem, pending, virtRun, burst, note>>
+
+\* Channel::notify inside the while loop. The virtualiser is higher
+\* priority, so provide finishes before this notify returns. The wait is
+\* the next client statement, and it stays disabled until virtRun is "none".
+ShellNotifyFull ==
+  /\ ClientTurn
+  /\ phase = "notify"
+  /\ phase' = "wait"
+  /\ virtRun' = "check"
+  /\ UNCHANGED <<queue, signalled, driver, drvSignal, uart, accepted, blocked, sem, pending, burst, note>>
 
 \* microkit_cothread_wait_on_channel. block_running returns without blocking
 \* when the semaphore is already set, and clears it.
@@ -256,8 +268,9 @@ Park == Terminated /\ UNCHANGED vars
 Next ==
   \/ Park
   \/ /\ ~Terminated
-     /\ \/ ShellEnqueue
+     /\         \/ ShellEnqueue
         \/ ShellRequest
+        \/ ShellNotifyFull
         \/ ShellWait
         \/ ShellNotify
         \/ VirtCheck

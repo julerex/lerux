@@ -88,6 +88,51 @@ pub fn agent_bytes(buf: &[u8], len: u32) -> Option<&[u8]> {
     buf.get(..len)
 }
 
+/// The agent is waiting for the shell to answer Browse.
+///
+/// `sddf-agent` `browse` does this, then notifies [`AGENT_BROWSE_CHANNEL`] and waits.
+pub fn agent_mark_browse(tool: &mut agent_tool_t) {
+    tool.state = AGENT_STATE_BROWSE;
+}
+
+/// Write the Browse reply. The shell notifies the agent only when this returns true.
+///
+/// A page that is not a Browse request is left unchanged. A name that does not fit
+/// in the name field or the result field finishes with `result_len` 0. Otherwise
+/// the result is the name.
+#[must_use]
+pub fn agent_answer_browse(tool: &mut agent_tool_t) -> bool {
+    if tool.state != AGENT_STATE_BROWSE || tool.kind != AGENT_KIND_BROWSE {
+        return false;
+    }
+    let name_len = usize::try_from(tool.name_len).unwrap_or(usize::MAX);
+    if name_len > tool.name.len() || name_len > tool.result.len() {
+        tool.state = AGENT_STATE_BROWSE_DONE;
+        tool.result_len = 0;
+        return true;
+    }
+    tool.result[..name_len].copy_from_slice(&tool.name[..name_len]);
+    tool.result_len = u32::try_from(name_len).unwrap_or(u32::MAX);
+    tool.state = AGENT_STATE_BROWSE_DONE;
+    true
+}
+
+/// The shell copied a name into the result.
+#[must_use]
+pub fn agent_browse_accepted(tool: &agent_tool_t) -> bool {
+    tool.state == AGENT_STATE_BROWSE_DONE && tool.result_len > 0
+}
+
+/// Record the worker's outcome. Failure clears the result length.
+pub fn agent_store_outcome(tool: &mut agent_tool_t, ok: bool) {
+    if ok {
+        tool.state = AGENT_STATE_OK;
+    } else {
+        tool.result_len = 0;
+        tool.state = AGENT_STATE_ERR;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use core::mem::{align_of, offset_of, size_of};
@@ -111,5 +156,50 @@ mod tests {
         assert_eq!(AGENT_FS_CHANNEL, 2);
         assert_eq!(AGENT_NET_RX_CHANNEL, 3);
         assert_eq!(AGENT_NET_TX_CHANNEL, 4);
+    }
+
+    fn browse_page(name: &[u8], name_len: u32) -> agent_tool_t {
+        let mut tool = agent_tool_zeroed();
+        tool.kind = AGENT_KIND_BROWSE;
+        tool.state = AGENT_STATE_BROWSE;
+        tool.name_len = name_len;
+        let n = name.len().min(tool.name.len());
+        tool.name[..n].copy_from_slice(&name[..n]);
+        tool
+    }
+
+    #[test]
+    fn answer_copies_a_name_that_fits() {
+        let mut tool = browse_page(b"host", 4);
+        assert!(agent_answer_browse(&mut tool));
+        assert_eq!(tool.state, AGENT_STATE_BROWSE_DONE);
+        assert_eq!(tool.result_len, 4);
+        assert_eq!(&tool.result[..4], b"host");
+        assert!(agent_browse_accepted(&tool));
+        agent_store_outcome(&mut tool, true);
+        assert_eq!(tool.state, AGENT_STATE_OK);
+        assert_eq!(tool.result_len, 4);
+    }
+
+    #[test]
+    fn answer_rejects_a_name_longer_than_the_field() {
+        let mut tool = browse_page(b"host", 65);
+        assert!(agent_answer_browse(&mut tool));
+        assert_eq!(tool.state, AGENT_STATE_BROWSE_DONE);
+        assert_eq!(tool.result_len, 0);
+        assert!(!agent_browse_accepted(&tool));
+        agent_store_outcome(&mut tool, false);
+        assert_eq!(tool.state, AGENT_STATE_ERR);
+        assert_eq!(tool.result_len, 0);
+    }
+
+    #[test]
+    fn answer_leaves_a_page_that_is_not_browse() {
+        let mut tool = agent_tool_zeroed();
+        tool.kind = AGENT_KIND_READ;
+        tool.state = AGENT_STATE_IDLE;
+        assert!(!agent_answer_browse(&mut tool));
+        assert_eq!(tool.state, AGENT_STATE_IDLE);
+        assert_eq!(tool.result_len, 0);
     }
 }

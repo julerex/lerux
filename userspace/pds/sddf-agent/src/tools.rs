@@ -16,9 +16,10 @@ use sel4_microkit::Channel;
 use lerux_cothread::microkit_cothread_wait_on_channel;
 use lerux_posix::{Errno, Fd, Files, Open, Stat};
 use lerux_sddf::{
-    agent_bytes, fs_image, fs_queue_t, AGENT_BROWSE_CHANNEL, AGENT_FS_CHANNEL, AGENT_KIND_BROWSE,
-    AGENT_KIND_EDIT, AGENT_KIND_LIST_DIR, AGENT_KIND_READ, AGENT_KIND_SEARCH, AGENT_KIND_WEB_FETCH,
-    AGENT_KIND_WRITE, AGENT_RESULT_CAP, AGENT_STATE_BROWSE, AGENT_STATE_BROWSE_DONE,
+    agent_browse_accepted, agent_bytes, agent_mark_browse, fs_image, fs_queue_t,
+    AGENT_BROWSE_CHANNEL, AGENT_FS_CHANNEL, AGENT_KIND_BROWSE, AGENT_KIND_EDIT,
+    AGENT_KIND_LIST_DIR, AGENT_KIND_READ, AGENT_KIND_SEARCH, AGENT_KIND_WEB_FETCH,
+    AGENT_KIND_WRITE, AGENT_RESULT_CAP,
 };
 
 use crate::{net, tool_page};
@@ -221,11 +222,10 @@ fn web_fetch(path: &[u8]) -> bool {
 
 fn browse() -> bool {
     let tool = tool_page();
-    tool.state = AGENT_STATE_BROWSE;
+    agent_mark_browse(tool);
     Channel::new(AGENT_BROWSE_CHANNEL as usize).notify();
     microkit_cothread_wait_on_channel(AGENT_BROWSE_CHANNEL as usize);
-    let tool = tool_page();
-    tool.state == AGENT_STATE_BROWSE_DONE && tool.result_len > 0
+    agent_browse_accepted(tool_page())
 }
 
 fn store(bytes: &[u8]) -> bool {

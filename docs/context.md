@@ -46,7 +46,7 @@ The written desk-browser spec is [`desk-browser.md`](desk-browser.md).
 
 ## Platform parity
 
-x86 names that get mixed across QEMU and the desk (q35, the 82574, the I217-V, COM1, the VGA text page, the CRTC, the Intel display engine) are defined in [GLOSSARY.md](../GLOSSARY.md). The driver tables are in [platforms.md](platforms.md#x86-device-map).
+x86 names that get mixed across QEMU and the desk (q35, the 82574, the I217-V, COM1, the VGA text page, the CRTC, the Intel display engine) are defined in [GLOSSARY.md](../GLOSSARY.md). That file also defines the driver words (doorbell, DMA, firmware), the Acer Swift X devices, and the Wi-Fi bring-up line. The driver tables are in [platforms.md](platforms.md#x86-device-map).
 
 Virtio hello and HTTP smokes run on aarch64, RISC-V virt, and x86 (PCI virtio on q35). Debug hierarchy smokes run on all three. See [`boards.md`](boards.md) and [`plan.md`](plan.md).
 

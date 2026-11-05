@@ -1,0 +1,12 @@
+[workspace]
+
+[package]
+name = "agent-browse"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+description = "Schedule check for the agent browse handshake. Calls the real page functions."
+
+[dependencies]
+lerux-sddf = { path = "../../../../userspace/crates/lerux-sddf" }

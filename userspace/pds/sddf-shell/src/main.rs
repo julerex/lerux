@@ -593,6 +593,8 @@ fn emit(bytes: &[u8]) {
         // SAFETY: `tx` is this client's mapped transmit queue. This worker produces it.
         while unsafe { serial_enqueue(tx, byte) } != 0 {
             unsafe { serial_request_consumer_signal(tx) };
+            // This notify runs the virtualiser before the wait, so the wake is stored.
+            Channel::new(TX_CH).notify();
             microkit_cothread_wait_on_channel(TX_CH);
         }
     }

@@ -16,14 +16,13 @@ use lerux_cothread::{
     microkit_cothread_wait_on_channel, microkit_cothread_yield, NULL_HANDLE, STACK_SLOTS,
 };
 use lerux_sddf::{
-    agent_tool_t, serial_cancel_consumer_signal, serial_client_config_t, serial_dequeue,
-    serial_enqueue, serial_handle_from_connection,
+    agent_answer_browse, agent_tool_t, serial_cancel_consumer_signal, serial_client_config_t,
+    serial_dequeue, serial_enqueue, serial_handle_from_connection,
     serial_image::{self, CLIENT_RX_CHANNEL, CLIENT_TX_CHANNEL},
     serial_queue_handle_t, serial_request_consumer_signal, serial_require_consumer_signal,
     AGENT_KIND_BROWSE, AGENT_KIND_EDIT, AGENT_KIND_LIST_DIR, AGENT_KIND_READ, AGENT_KIND_SEARCH,
-    AGENT_KIND_WEB_FETCH, AGENT_KIND_WRITE, AGENT_RESULT_CAP, AGENT_STATE_BROWSE,
-    AGENT_STATE_BROWSE_DONE, AGENT_STATE_OK, AGENT_TOOL_VADDR, SDDF_SERIAL_MAGIC,
-    SHELL_BROWSE_CHANNEL, SHELL_TOOL_CHANNEL,
+    AGENT_KIND_WEB_FETCH, AGENT_KIND_WRITE, AGENT_RESULT_CAP, AGENT_STATE_OK, AGENT_TOOL_VADDR,
+    SDDF_SERIAL_MAGIC, SHELL_BROWSE_CHANNEL, SHELL_TOOL_CHANNEL,
 };
 
 const CONFIG: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/config.bin"));
@@ -127,19 +126,11 @@ fn tool_page() -> &'static mut agent_tool_t {
 
 fn answer_browse() {
     let tool = tool_page();
-    if tool.state != AGENT_STATE_BROWSE || tool.kind != AGENT_KIND_BROWSE {
+    // The agent is priority 2. Notifying it runs the rest of Browse before this
+    // handler looks at the tool channel, so the completion is a later recv.
+    if !agent_answer_browse(tool) {
         return;
     }
-    let name_len = usize::try_from(tool.name_len).unwrap_or(usize::MAX);
-    if name_len > tool.name.len() || name_len > tool.result.len() {
-        tool.state = AGENT_STATE_BROWSE_DONE;
-        tool.result_len = 0;
-        Channel::new(BROWSE_CH).notify();
-        return;
-    }
-    tool.result[..name_len].copy_from_slice(&tool.name[..name_len]);
-    tool.result_len = u32::try_from(name_len).expect("browse name");
-    tool.state = AGENT_STATE_BROWSE_DONE;
     Channel::new(BROWSE_CH).notify();
 }
 
@@ -149,6 +140,8 @@ fn say(bytes: &[u8]) {
         // SAFETY: `tx` is this client's mapped transmit queue. This worker produces it.
         while unsafe { serial_enqueue(tx, byte) } != 0 {
             unsafe { serial_request_consumer_signal(tx) };
+            // This notify runs the virtualiser before the wait, so the wake is stored.
+            Channel::new(TX_CH).notify();
             microkit_cothread_wait_on_channel(TX_CH);
         }
     }

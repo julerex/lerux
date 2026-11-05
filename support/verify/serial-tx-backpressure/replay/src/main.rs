@@ -23,6 +23,7 @@ const CAPACITY: u32 = 2;
 enum Phase {
     Enqueue,
     Request,
+    Notify,
     Wait,
     Idle,
 }
@@ -194,7 +195,17 @@ fn shell_request(world: &World) -> Option<World> {
     });
     let mut next = world.clone();
     next.client = client;
+    next.phase = Phase::Notify;
+    Some(next)
+}
+
+fn shell_notify_full(world: &World) -> Option<World> {
+    if !client_turn(world) || world.phase != Phase::Notify {
+        return None;
+    }
+    let mut next = world.clone();
     next.phase = Phase::Wait;
+    next.virt = Virt::Check;
     Some(next)
 }
 
@@ -402,6 +413,7 @@ fn successors(world: &World, bytes: &[u8]) -> Vec<World> {
     [
         shell_enqueue(world, bytes),
         shell_request(world),
+        shell_notify_full(world),
         shell_wait(world),
         shell_notify(world, bytes),
         virt_check(world),
@@ -497,6 +509,7 @@ fn main() -> ExitCode {
             }
         },
         "overflow" => match explore(CAPACITY as usize + 1) {
+            Outcome::Holds => ExitCode::SUCCESS,
             Outcome::Stuck => ExitCode::from(1),
             other => {
                 eprintln!("overflow: {other:?}");

@@ -99,7 +99,6 @@ pub struct Mac {
     ready: bool,
     stage: Stage,
     sta: [u8; 6],
-    iommu: u32,
     last_len: usize,
     pn: u64,
     wifi_seq: u16,
@@ -134,7 +133,7 @@ fn rx_byte(index: usize) -> u8 {
 }
 
 impl Mac {
-    pub fn boot(regs: *mut u8, dma: *mut u8, images: &Images, iommu: u32) -> Self {
+    pub fn boot(regs: *mut u8, dma: *mut u8, images: &Images) -> Self {
         let mut mac = Self {
             regs,
             dma,
@@ -145,7 +144,6 @@ impl Mac {
             ready: false,
             stage: Stage::Own,
             sta: CLIENT_MAC,
-            iommu,
             last_len: 0,
             pn: 1,
             wifi_seq: 1,
@@ -512,6 +510,7 @@ impl Mac {
             }
             cmd_buf[MCU_TXD_LEN..total].copy_from_slice(payload);
         }
+        crate::step_cmd();
         self.tx_bounce(TX_MCU, total)
     }
 
@@ -533,6 +532,9 @@ impl Mac {
         let desc = self.tx[ring].desc;
         let regs = self.tx[ring].regs;
         self.desc_write(desc, head, phys, desc_ctrl(u32_from(len), true), 0, 0);
+        if ring == TX_MCU {
+            crate::step_desc();
+        }
         self.publish(desc + head as usize * 16, 16);
         self.publish(phys.wrapping_sub(DMA_PHYS) as usize, len);
         let next = (head + 1) % self.tx[ring].count;
@@ -540,12 +542,18 @@ impl Mac {
         self.tx[ring].posted = head;
         let index = self.dma_idx(regs);
         self.kick(regs, next);
+        if ring == TX_MCU {
+            crate::step_bell();
+        }
         // `mt76_dma_tx_cleanup` waits on the DMA index. The DDONE bit is the RX
         // signal; `OMIT_TX_INFO` does not have to write it back.
         self.wait_done(desc, head, regs, index, MCU_SPIN)
     }
 
     fn wait_done(&mut self, desc: usize, idx: u32, regs: u32, index: u8, spins: u32) -> bool {
+        if regs == self.tx[TX_MCU].regs {
+            crate::step_fetch();
+        }
         for spin in 0..spins {
             // A write-back line filled by an earlier read hides the device's store.
             if spin.is_multiple_of(64) {
@@ -569,7 +577,8 @@ impl Mac {
             dma: self.dma_idx(regs),
             cpu: u8::try_from(self.rr(regs + 8) & 0xff).expect("cpu index"),
             size: u16::try_from(self.rr(regs + 4) & 0xffff).expect("ring size"),
-            iommu: self.iommu,
+            base: u16::try_from(self.rr(regs) & 0xffff).expect("ring base"),
+            cfg: u8::try_from(self.rr(GLO_CFG) & 0xff).expect("dma config"),
         }
     }
 
@@ -579,6 +588,7 @@ impl Mac {
 
     fn wait_seq(&mut self, seq: u8) -> bool {
         for _ in 0..MCU_SPIN {
+            crate::beat();
             if let Some(n) = self.poll_mcu()
                 && n >= RXD_LEN
                 && rx_byte(29) == seq
@@ -711,6 +721,7 @@ impl Mac {
     }
 
     fn rr(&mut self, addr: u32) -> u32 {
+        crate::beat();
         match map_reg(addr) {
             Map::Direct(off) => rd(self.regs, off),
             Map::Remap { base, window } => {
@@ -817,6 +828,7 @@ pub(crate) fn assoc_budget() -> u32 {
 
 fn spin(n: u32) {
     for _ in 0..n {
+        crate::beat();
         core::hint::spin_loop();
     }
 }

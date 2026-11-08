@@ -30,8 +30,10 @@ pub struct TxStop {
     pub cpu: u8,
     /// Ring size register.
     pub size: u16,
-    /// AMD IOMMU MMIO base, low 32 bits. Zero means the probe found none.
-    pub iommu: u32,
+    /// Low 16 bits of the ring base register.
+    pub base: u16,
+    /// Low byte of the DMA config. Bit 0 is transmit enable.
+    pub cfg: u8,
 }
 
 /// Why the patch semaphore stopped.
@@ -133,7 +135,7 @@ fn sem_word(why: Sem) -> ([u8; 32], usize) {
     (word, n)
 }
 
-/// `fw sem d00 c00 s0000 i00000000`: DMA index, CPU index, size, IOMMU base.
+/// `fw sem d00 c00 s0000 b0000 g00`: DMA index, CPU index, size, ring base, DMA config.
 fn write_tx_stop(word: &mut [u8; 32], stop: TxStop) -> usize {
     word[..6].copy_from_slice(b"fw sem");
     word[6] = b' ';
@@ -150,10 +152,14 @@ fn write_tx_stop(word: &mut [u8; 32], stop: TxStop) -> usize {
         word[16 + i] = hex_nibble(low_nibble(u32::from(stop.size), shift));
     }
     word[20] = b' ';
-    word[21] = b'i';
-    for (i, shift) in [28, 24, 20, 16, 12, 8, 4, 0].into_iter().enumerate() {
-        word[22 + i] = hex_nibble(low_nibble(stop.iommu, shift));
+    word[21] = b'b';
+    for (i, shift) in [12, 8, 4, 0].into_iter().enumerate() {
+        word[22 + i] = hex_nibble(low_nibble(u32::from(stop.base), shift));
     }
+    word[26] = b' ';
+    word[27] = b'g';
+    word[28] = hex_nibble(stop.cfg >> 4);
+    word[29] = hex_nibble(stop.cfg);
     30
 }
 
@@ -875,10 +881,11 @@ mod tests {
             dma: 0,
             cpu: 1,
             size: 0x0100,
-            iommu: 0xfed8_0000,
+            base: 0x2000,
+            cfg: 0x45,
         }))
         .paint(&mut out);
-        assert_eq!(&out[..n], b"mt7921: fw sem d00 c01 s0100 ifed80000");
+        assert_eq!(&out[..n], b"mt7921: fw sem d00 c01 s0100 b2000 g45");
         let n = Stage::FwSem(Sem::Rx).paint(&mut out);
         assert_eq!(&out[..n], b"mt7921: fw sem rx");
         let n = Stage::FwSem(Sem::Status(0x2a)).paint(&mut out);

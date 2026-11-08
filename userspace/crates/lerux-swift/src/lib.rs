@@ -25,7 +25,7 @@ pub use mt7921::{read_key, write_key, FirmwareKind, Stage};
 pub use nvme::{
     io_allowed, io_rejected, load_named, report_bytes, write_result, DiskReport, NAMED_FILE,
 };
-pub use panel::paint_row;
+pub use panel::{paint_row, working_line, WaitMark};
 pub use pci::{
     bar_line, class_code, config_address, describe, exclusion_base, exclusion_limit, iommu_base,
     iommu_with_bit, load_header, load_iommu, memory_bar, store_header, store_iommu, vendor_device,

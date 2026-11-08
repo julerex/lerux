@@ -40,7 +40,13 @@ COPY Cargo.toml /work/Cargo.toml
 COPY Cargo.lock /work/Cargo.lock
 WORKDIR /work
 # Install under /opt so a bind-mounted /work checkout does not hide the toolchain in CI.
-RUN cargo build -q -p lerux-cli && \
+# The RISC-V archive is a GitHub release. Unauthenticated downloads return
+# HTTP 504; the optional github_token secret is the job token.
+RUN --mount=type=secret,id=github_token,required=false \
+    if [ -s /run/secrets/github_token ]; then \
+      export GITHUB_TOKEN="$$(tr -d '[:space:]' < /run/secrets/github_token)"; \
+    fi; \
+    cargo build -q -p lerux-cli && \
     cargo run -q -p lerux-cli -- install riscv-toolchain && \
     mv deps/toolchains /opt/lerux-toolchains
 ENV PATH="/opt/lerux-toolchains/riscv64-unknown-elf/bin:${PATH}"

@@ -34,6 +34,8 @@ jobs:
     if: ${{ vars.LERUX_HW_ENABLED == 'true' }}
     runs-on: [self-hosted, lerux-hw]
     timeout-minutes: 45
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 

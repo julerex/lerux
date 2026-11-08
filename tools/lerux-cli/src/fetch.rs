@@ -3,7 +3,7 @@ use std::path::Path;
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 
-use crate::process::{ensure_dir, run_checked};
+use crate::process::{download, ensure_dir, run_checked};
 
 #[derive(Debug, Deserialize)]
 struct Versions {
@@ -168,17 +168,9 @@ fn download_sdk(dest: &Path, url: &str, version: &str, installed: Option<&str>) 
     }
     eprintln!("==> Downloading Microkit SDK {version}");
     ensure_dir(dest)?;
-    let status = std::process::Command::new("bash")
-        .arg("-c")
-        .arg(format!(
-            "curl -fsSL '{url}' | tar -xzf - -C '{}' --strip-components=1",
-            dest.display()
-        ))
-        .status()
-        .context("extract SDK tarball")?;
-    if !status.success() {
-        bail!("SDK download failed");
-    }
+    let tmp = tempfile::NamedTempFile::new().context("sdk tarball")?;
+    download(url, tmp.path())?;
+    extract_sdk_tarball(tmp.path(), dest)?;
     let downloaded = std::fs::read_to_string(dest.join("VERSION"))
         .context("read SDK VERSION")?
         .trim()
@@ -187,6 +179,19 @@ fn download_sdk(dest: &Path, url: &str, version: &str, installed: Option<&str>) 
         bail!("SDK VERSION is {downloaded}, expected {version}");
     }
     run_checked("chmod", &["-R", "a+X", &dest.to_string_lossy()])?;
+    Ok(())
+}
+
+fn extract_sdk_tarball(tarball: &Path, dest: &Path) -> Result<()> {
+    let archive = tarball.to_string_lossy().into_owned();
+    let dest_dir = dest.to_string_lossy().into_owned();
+    let status = std::process::Command::new("tar")
+        .args(["-xzf", &archive, "-C", &dest_dir, "--strip-components=1"])
+        .status()
+        .context("extract SDK tarball")?;
+    if !status.success() {
+        bail!("SDK download failed");
+    }
     Ok(())
 }
 

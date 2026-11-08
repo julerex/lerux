@@ -30,10 +30,14 @@ pub struct TxStop {
     pub cpu: u8,
     /// Ring size register.
     pub size: u16,
-    /// Low 16 bits of the ring base register.
-    pub base: u16,
-    /// Low byte of the DMA config. Bit 0 is transmit enable.
-    pub cfg: u8,
+    /// Ring base register.
+    pub base: u32,
+    /// DMA config register. Bit 0 is transmit enable. Bit 12 is little-endian.
+    pub cfg: u32,
+    /// Transmit-reset register. Zero means the reset is released.
+    pub rst: u32,
+    /// Scheduler software control. Bit 28 is the bypass.
+    pub sw: u32,
     /// Posted slot index.
     pub slot: u8,
     /// Buffer address in descriptor word 0.
@@ -160,13 +164,41 @@ fn write_tx_stop(word: &mut [u8; 32], stop: TxStop) -> usize {
     word[20] = b' ';
     word[21] = b'b';
     for (i, shift) in [12, 8, 4, 0].into_iter().enumerate() {
-        word[22 + i] = hex_nibble(low_nibble(u32::from(stop.base), shift));
+        word[22 + i] = hex_nibble(low_nibble(stop.base, shift));
     }
     word[26] = b' ';
     word[27] = b'g';
-    word[28] = hex_nibble(stop.cfg >> 4);
-    word[29] = hex_nibble(stop.cfg);
+    word[28] = hex_nibble(low_nibble(stop.cfg, 4));
+    word[29] = hex_nibble(low_nibble(stop.cfg, 0));
     30
+}
+
+/// `base 01f62000 glo 50209075`: full ring base and full DMA config.
+#[must_use]
+pub fn write_base_line(out: &mut [u8], stop: TxStop) -> usize {
+    const N: usize = 26;
+    if out.len() < N {
+        return 0;
+    }
+    out[..5].copy_from_slice(b"base ");
+    write_hex32(&mut out[5..13], stop.base);
+    out[13..18].copy_from_slice(b" glo ");
+    write_hex32(&mut out[18..26], stop.cfg);
+    N
+}
+
+/// `rst 00000000 sw 10000000`: transmit reset, then scheduler control.
+#[must_use]
+pub fn write_hold_line(out: &mut [u8], stop: TxStop) -> usize {
+    const N: usize = 24;
+    if out.len() < N {
+        return 0;
+    }
+    out[..4].copy_from_slice(b"rst ");
+    write_hex32(&mut out[4..12], stop.rst);
+    out[12..16].copy_from_slice(b" sw ");
+    write_hex32(&mut out[16..24], stop.sw);
+    N
 }
 
 /// `slot 00 00000000 d0`: posted index, buffer address, done bit (`d0` clear, `d1` set).
@@ -187,6 +219,12 @@ pub fn write_slot_line(out: &mut [u8], stop: TxStop) -> usize {
     out[17] = b'd';
     out[18] = if stop.done { b'1' } else { b'0' };
     N
+}
+
+fn write_hex32(out: &mut [u8], value: u32) {
+    for (i, shift) in [28, 24, 20, 16, 12, 8, 4, 0].into_iter().enumerate() {
+        out[i] = hex_nibble(low_nibble(value, shift));
+    }
 }
 
 fn low_nibble(value: u32, shift: u32) -> u8 {
@@ -909,6 +947,8 @@ mod tests {
             size: 0x0100,
             base: 0x2000,
             cfg: 0x45,
+            rst: 0,
+            sw: 0x1000_0000,
             slot: 0,
             buf: 0x01f6_6000,
             done: false,
@@ -934,6 +974,27 @@ mod tests {
         assert_eq!(&out[..n], b"mt7921: fw scatter");
         let n = Stage::PingOk([192, 168, 1, 20]).paint(&mut out);
         assert_eq!(&out[..n], b"ip 192.168.1.20 ping ok");
+    }
+
+    #[test]
+    fn base_and_hold_lines_name_the_registers() {
+        let stop = TxStop {
+            dma: 0,
+            cpu: 1,
+            size: 0x0100,
+            base: 0x01f6_2000,
+            cfg: 0x5020_9045,
+            rst: 0,
+            sw: 0x1000_0000,
+            slot: 0,
+            buf: 0x01f6_6000,
+            done: false,
+        };
+        let mut out = [0u8; 32];
+        let n = write_base_line(&mut out, stop);
+        assert_eq!(&out[..n], b"base 01f62000 glo 50209045");
+        let n = write_hold_line(&mut out, stop);
+        assert_eq!(&out[..n], b"rst 00000000 sw 10000000");
     }
 
     #[test]

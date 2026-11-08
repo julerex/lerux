@@ -4,7 +4,9 @@
 //! transmit then paints `cpu: write cmd`, `ram: write desc`, `wfdma: doorbell`,
 //! and `wfdma: fetch` on the rows above the stage line. A stuck transmit also
 //! paints `slot` on the row above those four: the posted index, the buffer
-//! address, and the done bit. The stage line is `own`,
+//! address, and the done bit. Rows 13 and 14 read the full ring base, the
+//! full DMA config, the transmit reset, and the scheduler control. The stage
+//! line is `own`,
 //! `fw sem`, `fw patch`, `fw scatter`, `fw ram`, `fw start`, `fw chip`, or
 //! `mac` when that step fails, and `wait` when the
 //! firmware has reached the normal state. The shell then writes the network
@@ -26,7 +28,7 @@ use sel4_microkit::{
 use lerux_desk::FRAMEBUFFER_BYTES;
 use lerux_swift::{
     bar_line, class_code, format_report, load_header, memory_bar,
-    mt7921::{write_slot_line, Sem, Stage},
+    mt7921::{write_base_line, write_hold_line, write_slot_line, Sem, Stage},
     paint_row, read_key, vendor_device, working_line, WaitMark, WifiReport, MT7921_BAR, MT7921_BDF,
     MT7921_IDS,
 };
@@ -34,6 +36,8 @@ use lerux_swift::{
 use device::{Images, Mac};
 
 const ROW: usize = 22;
+const ROW_BASE: usize = 13;
+const ROW_HOLD: usize = 14;
 const ROW_SLOT: usize = 17;
 const ROW_CMD: usize = 18;
 const ROW_DESC: usize = 19;
@@ -165,6 +169,11 @@ fn paint_stage(stage: Stage) {
     if let Stage::FwSem(Sem::Tx(stop)) = stage {
         let n = write_slot_line(&mut line, stop);
         paint_at(ROW_SLOT, &line[..n]);
+        let mut wide = [0u8; 32];
+        let n = write_base_line(&mut wide, stop);
+        paint_at(ROW_BASE, &wide[..n]);
+        let n = write_hold_line(&mut wide, stop);
+        paint_at(ROW_HOLD, &wide[..n]);
     }
 }
 

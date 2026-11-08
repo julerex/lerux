@@ -573,12 +573,19 @@ impl Mac {
 
     fn tx_stop(&mut self, ring: usize) -> TxStop {
         let regs = self.tx[ring].regs;
+        let posted = self.tx[ring].posted;
+        let desc = self.tx[ring].desc;
+        self.publish(desc + posted as usize * 16, 16);
+        let ctrl = self.desc_word(desc, posted, 1);
         TxStop {
             dma: self.dma_idx(regs),
             cpu: u8::try_from(self.rr(regs + 8) & 0xff).expect("cpu index"),
             size: u16::try_from(self.rr(regs + 4) & 0xffff).expect("ring size"),
             base: u16::try_from(self.rr(regs) & 0xffff).expect("ring base"),
             cfg: u8::try_from(self.rr(GLO_CFG) & 0xff).expect("dma config"),
+            slot: u8::try_from(posted & 0xff).expect("slot"),
+            buf: self.desc_word(desc, posted, 0),
+            done: ctrl & DMA_DONE != 0,
         }
     }
 

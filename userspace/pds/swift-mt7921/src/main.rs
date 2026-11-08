@@ -2,7 +2,9 @@
 //!
 //! Init paints a moving `mt7921 .` while a poll is running. The semaphore
 //! transmit then paints `cpu: write cmd`, `ram: write desc`, `wfdma: doorbell`,
-//! and `wfdma: fetch` on the rows above the stage line. The stage line is `own`,
+//! and `wfdma: fetch` on the rows above the stage line. A stuck transmit also
+//! paints `slot` on the row above those four: the posted index, the buffer
+//! address, and the done bit. The stage line is `own`,
 //! `fw sem`, `fw patch`, `fw scatter`, `fw ram`, `fw start`, `fw chip`, or
 //! `mac` when that step fails, and `wait` when the
 //! firmware has reached the normal state. The shell then writes the network
@@ -23,14 +25,16 @@ use sel4_microkit::{
 
 use lerux_desk::FRAMEBUFFER_BYTES;
 use lerux_swift::{
-    bar_line, class_code, format_report, load_header, memory_bar, mt7921::Stage, paint_row,
-    read_key, vendor_device, working_line, WaitMark, WifiReport, MT7921_BAR, MT7921_BDF,
+    bar_line, class_code, format_report, load_header, memory_bar,
+    mt7921::{write_slot_line, Sem, Stage},
+    paint_row, read_key, vendor_device, working_line, WaitMark, WifiReport, MT7921_BAR, MT7921_BDF,
     MT7921_IDS,
 };
 
 use device::{Images, Mac};
 
 const ROW: usize = 22;
+const ROW_SLOT: usize = 17;
 const ROW_CMD: usize = 18;
 const ROW_DESC: usize = 19;
 const ROW_BELL: usize = 20;
@@ -158,6 +162,10 @@ fn paint_stage(stage: Stage) {
     let mut line = [0u8; 40];
     let n = stage.paint(&mut line);
     paint(&line[..n]);
+    if let Stage::FwSem(Sem::Tx(stop)) = stage {
+        let n = write_slot_line(&mut line, stop);
+        paint_at(ROW_SLOT, &line[..n]);
+    }
 }
 
 fn paint(text: &[u8]) {

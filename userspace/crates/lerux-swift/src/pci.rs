@@ -66,6 +66,32 @@ pub fn exclusion_limit(end: u64) -> u64 {
     (end - 1) & !0xfff
 }
 
+/// `excl 01f00001 01f9f000 on`: exclusion base, exclusion limit, and translation.
+/// `on` is control bit 0 set. `None` is `excl miss`, the probe left the unit alone.
+#[must_use]
+pub fn write_excl_line(out: &mut [u8], regs: Option<(u64, u64, u64)>) -> usize {
+    let Some((base, limit, ctrl)) = regs else {
+        let miss = b"excl miss";
+        if out.len() < miss.len() {
+            return 0;
+        }
+        out[..miss.len()].copy_from_slice(miss);
+        return miss.len();
+    };
+    let state: &[u8] = if ctrl & 1 == 0 { b"off" } else { b"on" };
+    let n = 5 + 8 + 1 + 8 + 1 + state.len();
+    if out.len() < n {
+        return 0;
+    }
+    out[..5].copy_from_slice(b"excl ");
+    write_low32(&mut out[5..13], base);
+    out[13] = b' ';
+    write_low32(&mut out[14..22], limit);
+    out[22] = b' ';
+    out[23..n].copy_from_slice(state);
+    n
+}
+
 /// The AMD IOMMU lives at PCI class `080600` and capability id `0x0f`.
 /// The base address registers sit at offsets 4 and 8 in that capability.
 #[must_use]
@@ -282,6 +308,13 @@ fn write_hex16(slot: &mut [u8], value: u16) {
     }
 }
 
+fn write_low32(slot: &mut [u8], value: u64) {
+    for (i, byte) in slot.iter_mut().enumerate() {
+        let shift = (7 - i) * 4;
+        *byte = hex(((value >> shift) & 0xf) as u8);
+    }
+}
+
 fn write_hex32(slot: &mut [u8], value: u32) {
     for (i, byte) in slot.iter_mut().enumerate() {
         let shift = (7 - i) * 4;
@@ -374,6 +407,13 @@ mod tests {
             .fold(ctrl, |value, bit| iommu_with_bit(value, *bit, false));
         assert_eq!(off, 1 << 10);
         assert_eq!(iommu_with_bit(off, 0, true) & 1, 1);
+        let mut line = [0u8; 40];
+        let n = write_excl_line(&mut line, Some((0x01f0_0001, 0x01f9_f000, 1)));
+        assert_eq!(&line[..n], b"excl 01f00001 01f9f000 on");
+        let n = write_excl_line(&mut line, Some((0, 0, 0)));
+        assert_eq!(&line[..n], b"excl 00000000 00000000 off");
+        let n = write_excl_line(&mut line, None);
+        assert_eq!(&line[..n], b"excl miss");
     }
 
     #[test]

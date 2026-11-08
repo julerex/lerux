@@ -34,6 +34,12 @@ pub struct TxStop {
     pub base: u16,
     /// Low byte of the DMA config. Bit 0 is transmit enable.
     pub cfg: u8,
+    /// Posted slot index.
+    pub slot: u8,
+    /// Buffer address in descriptor word 0.
+    pub buf: u32,
+    /// Done bit in descriptor word 1. Clear means the slot is still a command.
+    pub done: bool,
 }
 
 /// Why the patch semaphore stopped.
@@ -161,6 +167,26 @@ fn write_tx_stop(word: &mut [u8; 32], stop: TxStop) -> usize {
     word[28] = hex_nibble(stop.cfg >> 4);
     word[29] = hex_nibble(stop.cfg);
     30
+}
+
+/// `slot 00 00000000 d0`: posted index, buffer address, done bit (`d0` clear, `d1` set).
+#[must_use]
+pub fn write_slot_line(out: &mut [u8], stop: TxStop) -> usize {
+    const N: usize = 19;
+    if out.len() < N {
+        return 0;
+    }
+    out[..5].copy_from_slice(b"slot ");
+    out[5] = hex_nibble(stop.slot >> 4);
+    out[6] = hex_nibble(stop.slot);
+    out[7] = b' ';
+    for (i, shift) in [28, 24, 20, 16, 12, 8, 4, 0].into_iter().enumerate() {
+        out[8 + i] = hex_nibble(low_nibble(stop.buf, shift));
+    }
+    out[16] = b' ';
+    out[17] = b'd';
+    out[18] = if stop.done { b'1' } else { b'0' };
+    N
 }
 
 fn low_nibble(value: u32, shift: u32) -> u8 {
@@ -877,15 +903,29 @@ mod tests {
         let mut out = [0u8; 40];
         let n = Stage::Wait.paint(&mut out);
         assert_eq!(&out[..n], b"mt7921: wait");
-        let n = Stage::FwSem(Sem::Tx(TxStop {
+        let stop = TxStop {
             dma: 0,
             cpu: 1,
             size: 0x0100,
             base: 0x2000,
             cfg: 0x45,
-        }))
-        .paint(&mut out);
+            slot: 0,
+            buf: 0x01f6_6000,
+            done: false,
+        };
+        let n = Stage::FwSem(Sem::Tx(stop)).paint(&mut out);
         assert_eq!(&out[..n], b"mt7921: fw sem d00 c01 s0100 b2000 g45");
+        let n = write_slot_line(&mut out, stop);
+        assert_eq!(&out[..n], b"slot 00 01f66000 d0");
+        let n = write_slot_line(
+            &mut out,
+            TxStop {
+                buf: 0,
+                done: true,
+                ..stop
+            },
+        );
+        assert_eq!(&out[..n], b"slot 00 00000000 d1");
         let n = Stage::FwSem(Sem::Rx).paint(&mut out);
         assert_eq!(&out[..n], b"mt7921: fw sem rx");
         let n = Stage::FwSem(Sem::Status(0x2a)).paint(&mut out);

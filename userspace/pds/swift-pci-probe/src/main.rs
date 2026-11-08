@@ -3,6 +3,7 @@
 //! Windows assigned these bus numbers. A line that reads `ffff` is a location
 //! this boot did not find. Firmware assigned the `NVMe`, xHCI, and MT7921 base
 //! addresses. This domain sets bus master and does not move those addresses.
+//! Row 16 reads the exclusion range back after that programming.
 
 #![no_std]
 #![no_main]
@@ -15,13 +16,14 @@ use sel4_microkit::{
 use lerux_desk::FRAMEBUFFER_BYTES;
 use lerux_swift::{
     class_code, config_address, describe, exclusion_base, exclusion_limit, iommu_base,
-    iommu_with_bit, paint_row, store_header, store_iommu, vendor_device, IOMMU_CTRL,
-    IOMMU_EXCL_BASE, IOMMU_EXCL_LIMIT, IOMMU_OFF_BITS, LOCATIONS, MT7921_BDF, MT7921_IDS, NVME_BDF,
-    NVME_CLASS, SWIFT_DMA_END, SWIFT_DMA_START, XHCI_BDFS, XHCI_CLASS,
+    iommu_with_bit, paint_row, store_header, store_iommu, vendor_device, write_excl_line,
+    IOMMU_CTRL, IOMMU_EXCL_BASE, IOMMU_EXCL_LIMIT, IOMMU_OFF_BITS, LOCATIONS, MT7921_BDF,
+    MT7921_IDS, NVME_BDF, NVME_CLASS, SWIFT_DMA_END, SWIFT_DMA_START, XHCI_BDFS, XHCI_CLASS,
 };
 
 const BASE_IOPORT_CAP: u64 = 394;
 const ROW: usize = lerux_desk::CONSOLE_ROWS;
+const ROW_EXCL: usize = 16;
 
 struct HandlerImpl;
 
@@ -45,7 +47,10 @@ fn init() -> HandlerImpl {
     }
     let base = find_iommu(cap, addr);
     store_iommu(page, base);
-    pass_dma(base);
+    let seen = pass_dma(base);
+    let mut line = [b' '; 28];
+    let n = write_excl_line(&mut line, seen);
+    paint(ROW_EXCL, &line[..n.max(26)]);
     HandlerImpl
 }
 
@@ -58,9 +63,9 @@ const IOMMU_PHYS: u64 = 0xfdf0_0000;
     clippy::cast_ptr_alignment,
     reason = "the IOMMU page is 4 KiB aligned and these offsets are multiples of 8"
 )]
-fn pass_dma(base: u64) {
+fn pass_dma(base: u64) -> Option<(u64, u64, u64)> {
     if base != IOMMU_PHYS {
-        return;
+        return None;
     }
     let regs = memory_region_symbol!(iommu_regs_vaddr: *mut u8).as_ptr();
     // Safety: the template maps the AMD IOMMU MMIO here, uncached. The control
@@ -71,18 +76,25 @@ fn pass_dma(base: u64) {
         let excl = regs.add(IOMMU_EXCL_BASE).cast::<u64>();
         let limit = regs.add(IOMMU_EXCL_LIMIT).cast::<u64>();
         let ctrl = ctrl_ptr.read_volatile();
-        if ctrl == u64::MAX || (ctrl & 1) == 0 {
-            return;
+        if ctrl == u64::MAX {
+            return None;
         }
-        for bit in IOMMU_OFF_BITS {
+        if ctrl & 1 != 0 {
+            for bit in IOMMU_OFF_BITS {
+                let current = ctrl_ptr.read_volatile();
+                ctrl_ptr.write_volatile(iommu_with_bit(current, bit, false));
+            }
+            excl.write_volatile(exclusion_base(SWIFT_DMA_START));
+            limit.write_volatile(exclusion_limit(SWIFT_DMA_END));
             let current = ctrl_ptr.read_volatile();
-            ctrl_ptr.write_volatile(iommu_with_bit(current, bit, false));
+            ctrl_ptr.write_volatile(iommu_with_bit(current, 0, true));
+            let _ = ctrl_ptr.read_volatile();
         }
-        excl.write_volatile(exclusion_base(SWIFT_DMA_START));
-        limit.write_volatile(exclusion_limit(SWIFT_DMA_END));
-        let current = ctrl_ptr.read_volatile();
-        ctrl_ptr.write_volatile(iommu_with_bit(current, 0, true));
-        let _ = ctrl_ptr.read_volatile();
+        Some((
+            excl.read_volatile(),
+            limit.read_volatile(),
+            ctrl_ptr.read_volatile(),
+        ))
     }
 }
 

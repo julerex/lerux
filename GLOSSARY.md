@@ -210,7 +210,7 @@ _Avoid_: [DMA window](#dma-window), [I/O port](#io-port)
 
 ### bus master
 
-The [PCI](#pci) command bit that lets a function read and write RAM on its own. The Swift probe sets this bit, and the memory-space bit, on the [NVMe](#nvme), the [AMD xHCI](#amd-xhci) functions, and the [MT7921](#mt7921). The [firmware](#firmware) [BAR](#base-address-register) values stay where they are.
+The [PCI](#pci) command bit that lets a function read and write RAM on its own. The Swift probe sets this bit, and the memory-space bit, on the [NVMe](#nvme), the [AMD xHCI](#amd-xhci) functions, and the [MT7921](#mt7921). The [firmware](#firmware) [BAR](#base-address-register) values stay where they are. Row 15 reads the [MT7921](#mt7921) command word back after that write: `cmd` and four hex digits. The last digit is the low nibble. Bus master is on when that digit is `4`, `5`, `6`, `7`, `c`, `d`, `e`, or `f`. `cmd miss` means the probe did not claim the card.
 
 _Avoid_: [driver own](#driver-own)
 

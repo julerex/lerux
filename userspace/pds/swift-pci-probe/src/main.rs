@@ -3,6 +3,7 @@
 //! Windows assigned these bus numbers. A line that reads `ffff` is a location
 //! this boot did not find. Firmware assigned the `NVMe`, xHCI, and MT7921 base
 //! addresses. This domain sets bus master and does not move those addresses.
+//! Row 15 reads the MT7921 command word back after bus master is set.
 //! Row 16 reads the exclusion range back after that programming.
 
 #![no_std]
@@ -16,13 +17,15 @@ use sel4_microkit::{
 use lerux_desk::FRAMEBUFFER_BYTES;
 use lerux_swift::{
     class_code, config_address, describe, exclusion_base, exclusion_limit, iommu_base,
-    iommu_with_bit, paint_row, store_header, store_iommu, vendor_device, write_excl_line,
-    IOMMU_CTRL, IOMMU_EXCL_BASE, IOMMU_EXCL_LIMIT, IOMMU_OFF_BITS, LOCATIONS, MT7921_BDF,
-    MT7921_IDS, NVME_BDF, NVME_CLASS, SWIFT_DMA_END, SWIFT_DMA_START, XHCI_BDFS, XHCI_CLASS,
+    iommu_with_bit, paint_row, store_header, store_iommu, vendor_device, write_cmd_line,
+    write_excl_line, IOMMU_CTRL, IOMMU_EXCL_BASE, IOMMU_EXCL_LIMIT, IOMMU_OFF_BITS, LOCATIONS,
+    MT7921_BDF, MT7921_IDS, NVME_BDF, NVME_CLASS, SWIFT_DMA_END, SWIFT_DMA_START, XHCI_BDFS,
+    XHCI_CLASS,
 };
 
 const BASE_IOPORT_CAP: u64 = 394;
 const ROW: usize = lerux_desk::CONSOLE_ROWS;
+const ROW_CMD: usize = 15;
 const ROW_EXCL: usize = 16;
 
 struct HandlerImpl;
@@ -35,6 +38,7 @@ fn init() -> HandlerImpl {
     let cap = BASE_IOPORT_CAP + cap_id;
     let page = memory_region_symbol!(pci_headers_vaddr: *mut u8).as_ptr();
     let page = unsafe { core::slice::from_raw_parts_mut(page, 0x1000) };
+    let mut wifi_cmd = None;
     for (index, (bus, dev, func)) in LOCATIONS.iter().copied().enumerate() {
         let header = read_header(cap, addr, bus, dev, func);
         store_header(page, index, &header);
@@ -44,7 +48,13 @@ fn init() -> HandlerImpl {
         let line = describe(bus, dev, func, &header).unwrap_or(fallback);
         paint(ROW + index, &line);
         enable_claimed(cap, addr, bus, dev, func, &header);
+        if (bus, dev, func) == MT7921_BDF {
+            wifi_cmd = command_word(cap, addr, bus, dev, func, &header);
+        }
     }
+    let mut line = [b' '; 8];
+    let n = write_cmd_line(&mut line, wifi_cmd);
+    paint(ROW_CMD, &line[..n.max(8)]);
     let base = find_iommu(cap, addr);
     store_iommu(page, base);
     let seen = pass_dma(base);
@@ -144,6 +154,23 @@ fn enable_claimed(cap: u64, port: u16, bus: u8, dev: u8, func: u8, header: &[u8]
     if nvme || xhci || wifi {
         enable_mem(cap, port, bus, dev, func);
     }
+}
+
+/// Low 16 bits at offset `0x04`, read after [`enable_mem`] on the MT7921.
+/// `None` is `cmd miss`: another function, or a read of all ones.
+fn command_word(cap: u64, port: u16, bus: u8, dev: u8, func: u8, header: &[u8]) -> Option<u16> {
+    let wifi = (bus, dev, func) == MT7921_BDF
+        && vendor_device(header).is_some_and(|id| MT7921_IDS.contains(&id));
+    if !wifi {
+        return None;
+    }
+    let data = port.wrapping_add(4);
+    out32(cap, port, config_address(bus, dev, func, 0x04));
+    let word = in32(cap, data);
+    if word == u32::MAX {
+        return None;
+    }
+    Some(u16::try_from(word & 0xffff).expect("low half"))
 }
 
 /// Memory space and bus master. The base address stays the firmware value.

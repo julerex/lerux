@@ -29,9 +29,9 @@ pub use panel::{paint_row, working_line, WaitMark};
 pub use pci::{
     bar_line, class_code, config_address, describe, exclusion_base, exclusion_limit, iommu_base,
     iommu_with_bit, load_header, load_iommu, memory_bar, store_header, store_iommu, vendor_device,
-    write_excl_line, HEADER_BYTES, IOMMU_CTRL, IOMMU_EXCL_BASE, IOMMU_EXCL_LIMIT, IOMMU_OFF_BITS,
-    IOMMU_RECORD, LOCATIONS, MT7921_BAR, MT7921_BDF, MT7921_IDS, NVME_BDF, NVME_CLASS,
-    SWIFT_DMA_END, SWIFT_DMA_START, XHCI_BDFS, XHCI_CLASS,
+    write_cmd_line, write_excl_line, HEADER_BYTES, IOMMU_CTRL, IOMMU_EXCL_BASE, IOMMU_EXCL_LIMIT,
+    IOMMU_OFF_BITS, IOMMU_RECORD, LOCATIONS, MT7921_BAR, MT7921_BDF, MT7921_IDS, NVME_BDF,
+    NVME_CLASS, SWIFT_DMA_END, SWIFT_DMA_START, XHCI_BDFS, XHCI_CLASS,
 };
 pub use wifi::{
     bring_up, credentials, dhcp_router, dhcp_yiaddr, enqueue_frame, format_report, icmp_reply,

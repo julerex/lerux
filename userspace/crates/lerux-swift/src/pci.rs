@@ -66,6 +66,29 @@ pub fn exclusion_limit(end: u64) -> u64 {
     (end - 1) & !0xfff
 }
 
+/// `cmd 0006`: the MT7921 PCI command word, four hex digits.
+/// The last digit is the low nibble. Bus master, the permission to fetch RAM,
+/// is that nibble's bit 2, so the digit is `4`, `5`, `6`, `7`, `c`, `d`, `e`,
+/// or `f`. `None` is `cmd miss`, the probe did not claim the card.
+#[must_use]
+pub fn write_cmd_line(out: &mut [u8], command: Option<u16>) -> usize {
+    let Some(command) = command else {
+        let miss = b"cmd miss";
+        if out.len() < miss.len() {
+            return 0;
+        }
+        out[..miss.len()].copy_from_slice(miss);
+        return miss.len();
+    };
+    let n = 8;
+    if out.len() < n {
+        return 0;
+    }
+    out[..4].copy_from_slice(b"cmd ");
+    write_hex16(&mut out[4..8], command);
+    n
+}
+
 /// `excl 01f00001 01f9f000 on`: exclusion base, exclusion limit, and translation.
 /// `on` is control bit 0 set. `None` is `excl miss`, the probe left the unit alone.
 #[must_use]
@@ -414,6 +437,29 @@ mod tests {
         assert_eq!(&line[..n], b"excl 00000000 00000000 off");
         let n = write_excl_line(&mut line, None);
         assert_eq!(&line[..n], b"excl miss");
+    }
+
+    #[test]
+    fn command_line_is_the_pci_word() {
+        let mut line = [0u8; 16];
+        let n = write_cmd_line(&mut line, Some(0x0006));
+        assert_eq!(&line[..n], b"cmd 0006");
+        let n = write_cmd_line(&mut line, Some(0x0402));
+        assert_eq!(&line[..n], b"cmd 0402");
+        let n = write_cmd_line(&mut line, None);
+        assert_eq!(&line[..n], b"cmd miss");
+        assert_eq!(write_cmd_line(&mut [0u8; 4], Some(0x0006)), 0);
+        for command in [
+            0x0004u16, 0x0005, 0x0006, 0x0007, 0x000c, 0x000d, 0x000e, 0x000f,
+        ] {
+            let n = write_cmd_line(&mut line, Some(command));
+            assert!(matches!(
+                line[n - 1],
+                b'4' | b'5' | b'6' | b'7' | b'c' | b'd' | b'e' | b'f'
+            ));
+        }
+        let n = write_cmd_line(&mut line, Some(0x0002));
+        assert_eq!(line[n - 1], b'2');
     }
 
     #[test]

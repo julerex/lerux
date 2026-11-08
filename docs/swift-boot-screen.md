@@ -44,7 +44,7 @@ lerux runs several small programs at once. Each one has its own memory. They sha
 | Priority | Program | What it paints |
 | --- | --- | --- |
 | 6 | Display | `hello lerux` and, later, the menu |
-| 5 | PCI probe | Device names below the menu, and row 16 |
+| 5 | PCI probe | Device names below the menu, and rows 15 and 16 |
 | 4 | Wi-Fi | Rows 17–22 |
 | 3 | Disk | Row 23, `nvme` |
 | 2 | Bluetooth | Row 24, `bt` |
@@ -52,7 +52,7 @@ lerux runs several small programs at once. Each one has its own memory. They sha
 
 The Wi-Fi program starts before the disk program and the Bluetooth program. Its startup includes a long wait for the card. Until that wait ends, the disk line and the Bluetooth line do not exist yet. The blank minute is that wait. The moving dots, and the lines under them, are there so the wait is visible.
 
-A later scroll of the menu redraws the whole picture from the menu's own record of the screen. That record does not contain rows 16–21. A full redraw erases them. The status word on row 22 is painted again by the Wi-Fi program, so it survives.
+A later scroll of the menu redraws the whole picture from the menu's own record of the screen. That record does not contain rows 15–21. A full redraw erases them. The status word on row 22 is painted again by the Wi-Fi program, so it survives.
 
 ## How to read the numbers
 
@@ -159,6 +159,7 @@ During the wait, the Wi-Fi program paints these rows:
 
 | Row | Text | What just happened |
 | --- | --- | --- |
+| 15 | `cmd …` | The probe read back the MT7921 PCI command word. This is painted before the Wi-Fi program starts |
 | 16 | `excl …` | The probe read back the IOMMU exclusion settings. This is painted before the Wi-Fi program starts |
 | 17 | `slot …` | After the wait fails, the processor reads note 0 back out of RAM |
 | 18 | `cpu: write cmd` | The processor copied the 68-byte semaphore message into the bounce buffer |
@@ -224,17 +225,33 @@ Row 16 is the probe reading those registers back after the attempt. The current 
 | a line ending in `off` | Translation is off. The probe does not write the range in that case, because device addresses are already plain physical addresses |
 | `excl miss` | The probe left the unit alone. It did not find the unit at `0xfdf00000`, or the control register read as all ones |
 
-## What is settled, and what the next line is for
+## The command line
 
-Two boots have already answered the earlier questions.
+`excl 00000000 00000000 off` means the translator is switched off. The probe found the unit at `0xfdf00000`, the translation bit was already clear, and both exclusion registers read as zero. The probe leaves them alone in that case, so nothing is rewriting the card's RAM address. The slot line under it is still the live command at `0x01f66000`.
+
+The card is supposed to read that address directly. Its counter still stayed at 0. The next permission is in the card itself.
+
+Every PCI function has a command word. It is the 16-bit register at offset `0x04` in configuration space. Two bits in it matter here. Memory space lets the processor's writes reach the card's registers. Bus master lets the card read and write RAM on its own. Without bus master, the DMA engine is not allowed to fetch the note, whatever the doorbell and the translator say.
+
+The probe sets both of those bits on the MT7921 at `03:00.0`, then reads the word back. Row 15, the row above `excl`, is that reading. It is painted before the Wi-Fi program starts. The line is `cmd` and four hex digits. The last digit is the low nibble, bits 0 through 3. Bit 2 of that nibble is bus master.
+
+| Line | Meaning |
+| --- | --- |
+| `cmd 0006` | Memory space and bus master are both set. The last digit `6` is those two bits |
+| `cmd` followed by other digits | The word the hardware actually holds after the probe's write |
+| a last digit of `4`, `5`, `6`, `7`, `c`, `d`, `e`, or `f` | Bus master is on. The card is allowed to fetch |
+| any other last digit | Bus master is off. The card is not allowed to fetch |
+| `cmd miss` | The probe did not find the MT7921, or the command read came back all ones |
+
+## What is settled, and what the next line is for
 
 The ring length is 256, the base register still names the command ring, and transmit is enabled. That was `fw sem d00 c01 s0100 b2000 g75`.
 
 The note in RAM is a live order for the bounce buffer. That was `slot 00 01f66000 d0`.
 
-The step that failed is the fetch. The DMA engine was pointed at a finished note in RAM, with its transmit switch on, and its counter stayed at 0. The ROM never received the semaphore message, because the engine never collected the note.
+The translator is off, and both exclusion registers are zero. That was `excl 00000000 00000000 off`. The card is supposed to use `0x01f66000` as a plain RAM address. The DMA index stayed 0, so the engine still did not collect the note.
 
-The exclusion readback is the next measurement. It says whether the translator between the card and that RAM holds the range this image writes. Paste the `excl` line from row 16. The reading decides the following change. The firmware download order stays as it is until a line says a later step is the one that failed.
+The command word is the next measurement. It says whether the card is allowed to fetch that address. Paste the `cmd` line from row 15. Bus master is on when the last digit is `4`, `5`, `6`, `7`, `c`, `d`, `e`, or `f`. The firmware download order stays as it is until a line says a later step is the one that failed.
 
 ## Other words on row 22
 
@@ -262,9 +279,9 @@ If you want to see the same facts in the source, these are the files. The screen
 | --- | --- |
 | `userspace/pds/swift-mt7921/src/device.rs` | The startup sequence, the ring addresses, the doorbell, and the read of note 0 |
 | `userspace/pds/swift-mt7921/src/main.rs` | Which screen row gets `slot`, the four step lines, and `fw sem` |
-| `userspace/pds/swift-pci-probe/src/main.rs` | The IOMMU programming and the `excl` row |
+| `userspace/pds/swift-pci-probe/src/main.rs` | The IOMMU programming, the `cmd` row, and the `excl` row |
 | `userspace/crates/lerux-swift/src/mt7921.rs` | The register numbers, the 16-byte note layout, and the text of `fw sem` and `slot` |
-| `userspace/crates/lerux-swift/src/pci.rs` | The exclusion addresses and the text of `excl` |
+| `userspace/crates/lerux-swift/src/pci.rs` | The exclusion addresses and the text of `cmd` and `excl` |
 | `GLOSSARY.md` | Short definitions of the same words, linked to each other |
 
-The ISO you boot is `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`, produced by `just iso`. An older file on the USB stick does not contain a line that was added later. The `excl` line is on the ISO built after that readback was added.
+The ISO you boot is `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`, produced by `just iso`. An older file on the USB stick does not contain a line that was added later. The `cmd` line is on the ISO built after that readback was added.

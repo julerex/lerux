@@ -288,12 +288,19 @@ fetch_iso() {
       echo "iso-arch-and-capture: checksum mismatch, downloading again" >&2
     done
   fi
-  echo "iso-arch-and-capture: checking the signature" >&2
+  echo "iso-arch-and-capture: downloading the signature" >&2
   curl_get "$mirror/$name.sig" "$sig"
+  printf '%s\n' "$iso"
+}
+
+verify_iso_signature() {
+  local iso=$1
+  local sig="${iso}.sig"
+  [[ -f "$sig" ]] || die "signature file not found: $sig"
+  echo "iso-arch-and-capture: checking the signature" >&2
   if ! gpg --batch --no-tty --trust-model always --homedir /etc/pacman.d/gnupg --verify "$sig" "$iso"; then
     die "signature check failed. Update archlinux-keyring and run this again"
   fi
-  printf '%s\n' "$iso"
 }
 
 confirm_erase() {
@@ -444,6 +451,8 @@ if [[ "$(id -u)" -ne 0 ]]; then
   echo "iso-arch-and-capture: asking for root to write $dev" >&2
   exec sudo --preserve-env=SWIFT_LINUX_LAYOUT_TEST bash "$0" --image "$image" "$dev"
 fi
+
+verify_iso_signature "$image"
 
 if [[ "$layout_test" -eq 0 ]]; then
   confirm_erase

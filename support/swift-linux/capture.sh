@@ -127,7 +127,7 @@ write_iommu() {
     cat /proc/cmdline
     echo
     echo "== iommu groups =="
-    find /sys/kernel/iommu_groups -mindepth 2 -maxdepth 2 -type l -printf '%p -> %l\n' 2>/dev/null || true
+    find /sys/kernel/iommu_groups -mindepth 3 -maxdepth 3 -type l -printf '%p -> %l\n' 2>/dev/null || true
     echo
     echo "== debugfs =="
     find /sys/kernel/debug -iname '*iommu*' -o -iname '*amd*vi*' 2>/dev/null || true

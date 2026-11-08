@@ -317,6 +317,11 @@ pub const GLO_CFG_OMIT_TX: u32 = 1 << 28;
 pub const GLO_CFG_CLK: u32 = 1 << 30;
 pub const GLO_CFG_OMIT_RX: u32 = 1 << 27;
 pub const WFDMA_RST: u32 = WFDMA0 + 0x100;
+pub const BUSY_ENA: u32 = WFDMA0 + 0x13c;
+pub const MCU_CMD: u32 = WFDMA0 + 0x1f0;
+pub const HOST_INT_STA: u32 = WFDMA0 + 0x200;
+pub const RST_DRX_PTR: u32 = WFDMA0 + 0x280;
+pub const HIF_MISC: u32 = 0xd_7044;
 pub const RST_LOGIC: u32 = 1 << 4;
 pub const RST_DMASHDL: u32 = 1 << 5;
 pub const GLO_CFG_EXT0: u32 = WFDMA0 + 0x2b0;
@@ -358,6 +363,68 @@ pub const DESC_LEN: usize = 16;
 #[must_use]
 pub fn ring_regs(base: u32, idx: u32) -> u32 {
     base + idx * RING_STRIDE
+}
+
+/// Registers the dump rows read, in row order: three rows of seven.
+/// The names are the `dump::write_named_row` labels. The first row is
+/// ownership and reset state, the second the WFDMA control block, the third
+/// the reset, shaper, and mode registers.
+pub const DUMP_REGS: [(&[u8], u32); 21] = [
+    (b"lpctl", CONN_ON_LPCTL),
+    (b"misc", CONN_ON_MISC),
+    (b"wfsys", WFSYS_RST),
+    (b"lpcr", TOP_LPCR),
+    (b"chip", HW_CHIPID),
+    (b"rev", HW_REV),
+    (b"mint", PCIE_MAC_INT),
+    (b"mpm", PCIE_MAC_PM),
+    (b"iena", HOST_INT_ENA),
+    (b"ista", HOST_INT_STA),
+    (b"glo", GLO_CFG),
+    (b"ext0", GLO_CFG_EXT0),
+    (b"dtx", RST_DTX_PTR),
+    (b"drx", RST_DRX_PTR),
+    (b"mcmd", MCU_CMD),
+    (b"m2h", MCU2HOST),
+    (b"rst", WFDMA_RST),
+    (b"busy", BUSY_ENA),
+    (b"shdl", DMASHDL_SW),
+    (b"dummy", DUMMY_CR),
+    (b"swdef", SWDEF_MODE),
+];
+
+/// Ring register blocks the dump rows read: transmit 0, 16, 17, then receive
+/// event, data, and the post-download event ring.
+pub const DUMP_RINGS: [(&[u8], u32); 6] = [
+    (b"t00", TX_RING_BASE),
+    (b"t16", TX_RING_BASE + 16 * RING_STRIDE),
+    (b"t17", TX_RING_BASE + 17 * RING_STRIDE),
+    (b"r00", RX_EVENT_BASE),
+    (b"r01", RX_DATA_BASE),
+    (b"r02", RX_WA_BASE),
+];
+
+/// First register of each prefetch row: transmit rings 0 to 11, transmit
+/// rings 12 to 17 and the words after them, then receive rings 0 to 7.
+pub const DUMP_PREFETCH: [u32; 3] = [WFDMA0 + 0x600, WFDMA0 + 0x630, WFDMA0 + 0x680];
+
+/// `t17 01f62000 00000100 00000001 00000000`: one ring's base, size, CPU
+/// index, and DMA index. Three of these fill one row.
+#[must_use]
+pub fn write_ring(out: &mut [u8], name: &[u8], regs: [u32; 4]) -> usize {
+    const N: usize = 3 + 4 * 9;
+    if out.len() < N || name.len() < 3 {
+        return 0;
+    }
+    out[..3].copy_from_slice(&name[..3]);
+    for (i, value) in regs.iter().enumerate() {
+        let at = 3 + i * 9;
+        out[at] = b' ';
+        for (byte, shift) in out[at + 1..at + 9].iter_mut().zip((0..8).rev()) {
+            *byte = hex_nibble(low_nibble(*value, shift * 4));
+        }
+    }
+    N
 }
 
 /// `PREFETCH(base, depth)` values `mt792x_dma_prefetch` writes for MT7921.
@@ -934,6 +1001,18 @@ mod tests {
         assert_eq!(&out[..n], b"mt7921: fw scatter");
         let n = Stage::PingOk([192, 168, 1, 20]).paint(&mut out);
         assert_eq!(&out[..n], b"ip 192.168.1.20 ping ok");
+    }
+
+    #[test]
+    fn ring_line_holds_four_registers() {
+        let mut out = [0u8; 40];
+        let n = write_ring(&mut out, b"t17", [0x01f6_2000, 0x100, 1, 0]);
+        assert_eq!(&out[..n], b"t17 01f62000 00000100 00000001 00000000");
+        assert_eq!(n * 3 + 2, 119);
+        assert_eq!(DUMP_REGS.len(), 21);
+        assert!(DUMP_REGS.iter().all(|(name, _)| name.len() <= 5));
+        assert_eq!(DUMP_RINGS[2].1, 0xd_4410);
+        assert_eq!(DUMP_PREFETCH, [0xd_4600, 0xd_4630, 0xd_4680]);
     }
 
     #[test]

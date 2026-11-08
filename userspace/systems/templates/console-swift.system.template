@@ -4,8 +4,9 @@
   page is filled by mb2-stub before seL4. There is no COM port. The built-in
   keyboard is the i8042. PCI locations are the Windows enumeration.
   Microkit allows 0xcf8 in one protection domain. The probe writes the six
-  headers and sets bus master on the NVMe, xHCI, and MT7921 functions. Firmware
-  assigned those base addresses. The other domains read that page.
+  headers and sets bus master on the NVMe, xHCI, and MT7921 functions, and on
+  the root port above the MT7921. Firmware assigned those base addresses. The
+  other domains read that page.
 -->
 <system>
     <memory_region name="mode_record" size="0x1000" phys_addr="0x1fe0000" />

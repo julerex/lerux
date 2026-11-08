@@ -12,11 +12,14 @@
 //! firmware has reached the normal state. The shell then writes the network
 //! name and passphrase and notifies channel 1. Channel 0 stays the MSI.
 //! Association paints `scan`, `auth`, `assoc`, `eapol`, `dhcp`, and `ping`.
+//! Rows 52 to 66 are the register, ring, descriptor, and command dump that
+//! `dump` paints once the boot attempt has returned, on success or failure.
 
 #![no_std]
 #![no_main]
 
 mod device;
+mod dump;
 mod join;
 
 use core::sync::atomic::{AtomicU8, Ordering};
@@ -27,7 +30,9 @@ use sel4_microkit::{
 
 use lerux_desk::FRAMEBUFFER_BYTES;
 use lerux_swift::{
-    bar_line, class_code, format_report, load_header, memory_bar,
+    bar_line, class_code,
+    dump::PANEL_COLS,
+    format_report, load_header, memory_bar,
     mt7921::{write_base_line, write_hold_line, write_slot_line, Sem, Stage},
     paint_row, read_key, vendor_device, working_line, WaitMark, WifiReport, MT7921_BAR, MT7921_BDF,
     MT7921_IDS,
@@ -95,6 +100,7 @@ fn init() -> HandlerImpl {
     let mac = Mac::boot(regs, dma, &images);
     beat_disarm();
     paint_stage(mac.stage());
+    dump::paint_mac_dump(mac.before(), mac.after());
     HandlerImpl { mac: Some(mac) }
 }
 
@@ -182,16 +188,28 @@ fn paint(text: &[u8]) {
 }
 
 fn paint_at(row: usize, text: &[u8]) {
+    let mut line = [b' '; 48];
+    let n = text.len().min(line.len());
+    line[..n].copy_from_slice(&text[..n]);
+    let width = n.max(24);
+    paint_line(row, &line[..width]);
+}
+
+/// A dump row, padded to the panel width so a repaint erases the old row.
+pub(crate) fn paint_full(row: usize, text: &[u8]) {
+    let mut line = [b' '; PANEL_COLS];
+    let n = text.len().min(PANEL_COLS);
+    line[..n].copy_from_slice(&text[..n]);
+    paint_line(row, &line);
+}
+
+fn paint_line(row: usize, line: &[u8]) {
     let mode = memory_region_symbol!(mode_record_vaddr: *mut u8).as_ptr();
     let frame = memory_region_symbol!(fb_vaddr: *mut u8).as_ptr();
     let record = unsafe { core::slice::from_raw_parts(mode, 40) };
     let bytes = usize::try_from(FRAMEBUFFER_BYTES).expect("framebuffer fits");
     let frame = unsafe { core::slice::from_raw_parts_mut(frame, bytes) };
-    let mut line = [b' '; 48];
-    let n = text.len().min(line.len());
-    line[..n].copy_from_slice(&text[..n]);
-    let width = n.max(24);
-    paint_row(record, frame, row, &line[..width]);
+    paint_row(record, frame, row, line);
 }
 
 fn posted_key() -> Option<([u8; 32], usize, [u8; 64], usize)> {

@@ -5,9 +5,14 @@
 //! addresses. This domain sets bus master and does not move those addresses.
 //! Row 15 reads the MT7921 command word back after bus master is set.
 //! Row 16 reads the exclusion range back after that programming.
+//! Rows 31 to 51 are the configuration spaces of the MT7921, the root port
+//! above it, and the root port above the `NVMe`, then the IOMMU registers.
+//! The Wi-Fi root port gets memory space and bus master before that dump.
 
 #![no_std]
 #![no_main]
+
+mod dump;
 
 use sel4::with_ipc_buffer_mut;
 use sel4_microkit::{
@@ -57,11 +62,37 @@ fn init() -> HandlerImpl {
     paint(ROW_CMD, &line[..n.max(8)]);
     let base = find_iommu(cap, addr);
     store_iommu(page, base);
-    let seen = pass_dma(base);
+    let iommu = memory_region_symbol!(iommu_regs_vaddr: *mut u8).as_ptr();
+    let seen = pass_dma(iommu, base);
     let mut line = [b' '; 28];
     let n = write_excl_line(&mut line, seen);
     paint(ROW_EXCL, &line[..n.max(26)]);
+    let pci = dump::Pci { cap, port: addr };
+    dump::paint_probe_dump(&pci, base, iommu_snapshot(iommu, base));
     HandlerImpl
+}
+
+/// The seven registers rows 50 and 51 paint, read after [`pass_dma`].
+#[expect(
+    clippy::cast_ptr_alignment,
+    reason = "the IOMMU page is 4 KiB aligned and these offsets are multiples of 8"
+)]
+fn iommu_snapshot(regs: *mut u8, base: u64) -> Option<[u64; 7]> {
+    if base != IOMMU_PHYS {
+        return None;
+    }
+    let mut out = [0u64; 7];
+    // Safety: the template maps 0x4000 bytes of IOMMU MMIO here, uncached.
+    // Every offset in the list is inside that window and 8-byte aligned.
+    unsafe {
+        for (slot, offset) in out.iter_mut().zip(dump::IOMMU_DUMP_OFFSETS) {
+            *slot = regs.add(offset).cast::<u64>().read_volatile();
+        }
+    }
+    if out[3] == u64::MAX {
+        return None;
+    }
+    Some(out)
 }
 
 /// `0xfdf00000` is the base this Swift painted. Translation stays on for the
@@ -73,11 +104,10 @@ const IOMMU_PHYS: u64 = 0xfdf0_0000;
     clippy::cast_ptr_alignment,
     reason = "the IOMMU page is 4 KiB aligned and these offsets are multiples of 8"
 )]
-fn pass_dma(base: u64) -> Option<(u64, u64, u64)> {
+fn pass_dma(regs: *mut u8, base: u64) -> Option<(u64, u64, u64)> {
     if base != IOMMU_PHYS {
         return None;
     }
-    let regs = memory_region_symbol!(iommu_regs_vaddr: *mut u8).as_ptr();
     // Safety: the template maps the AMD IOMMU MMIO here, uncached. The control
     // register is the aligned 8-byte word at offset 0x18. A read of all ones is
     // not a register, and a clear enable bit means translation is already off.
@@ -182,7 +212,7 @@ fn enable_mem(cap: u64, port: u16, bus: u8, dev: u8, func: u8) {
     out32(cap, data, command | 0x06);
 }
 
-fn paint(row: usize, text: &[u8]) {
+pub(crate) fn paint(row: usize, text: &[u8]) {
     let mode = memory_region_symbol!(mode_record_vaddr: *mut u8).as_ptr();
     let frame = memory_region_symbol!(fb_vaddr: *mut u8).as_ptr();
     let record = unsafe { core::slice::from_raw_parts(mode, 40) };
@@ -222,14 +252,14 @@ fn read_header(cap: u64, addr: u16, bus: u8, dev: u8, func: u8) -> [u8; 64] {
     header
 }
 
-fn out32(cap: u64, port: u16, value: u32) {
+pub(crate) fn out32(cap: u64, port: u16, value: u32) {
     with_ipc_buffer_mut(|ipc| {
         ipc.inner_mut()
             .seL4_X86_IOPort_Out32(cap, u64::from(port), u64::from(value));
     });
 }
 
-fn in32(cap: u64, port: u16) -> u32 {
+pub(crate) fn in32(cap: u64, port: u16) -> u32 {
     with_ipc_buffer_mut(|ipc| {
         let ret = ipc.inner_mut().seL4_X86_IOPort_In32(cap, port);
         ret.result

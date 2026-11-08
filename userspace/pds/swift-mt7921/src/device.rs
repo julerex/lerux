@@ -8,40 +8,43 @@
 use core::sync::atomic::{fence, Ordering};
 
 use lerux_swift::{
+    dump::WORDS_PER_ROW,
     mt7921::{
         ce_cmd, desc_ctrl, desc_len, download_cmd, efuse_mac, ext_cmd, ext_query, firmware_kind,
         map_reg, patch_regions, patch_status, prefetch, ram_regions, ring_regs, write_chan,
         write_eeprom_mode, write_efuse_read, write_mac_enable, write_mcu_txd, write_rts,
         write_scan, write_txwi, wtbl_word, FirmwareKind, Map, Region, Sem, Stage, TxStop,
         CONN_ON_LPCTL, CONN_ON_MISC, DMASHDL_BYPASS, DMASHDL_ENABLE, DMASHDL_SW, DMA_DONE,
-        DUMMY_CR, FW_N9_RDY, FW_SCATTER, FW_START, GLO_CFG, GLO_CFG_CHAIN, GLO_CFG_CLK,
-        GLO_CFG_EXT0, GLO_CFG_LE, GLO_CFG_OMIT_RX, GLO_CFG_OMIT_RX_PFET, GLO_CFG_OMIT_TX,
-        GLO_CFG_RX_BUSY, GLO_CFG_RX_EN, GLO_CFG_TX_BUSY, GLO_CFG_TX_EN, GLO_CFG_TX_WB,
-        HIF_REMAP_L1, HOST_CLR_OWN, HOST_INT_ENA, HOST_OWN_SYNC, HOST_SET_OWN, HW_CHIPID, HW_REV,
-        IRQ_MASK, L0S_DIS, LAST_SEC0, LPCR_DRV_OWN, LPCR_FW_OWN, MCU2HOST, MCU_TXD_LEN, MCU_WAKE,
-        MDP_DAMSDU, MDP_DCR0, MDP_DCR1, MDP_HDR_TRANS, NEED_REINIT, PATCH_FINISH, PATCH_IS_DL,
-        PATCH_NOT_DL, PATCH_REL, PATCH_SEM, PCIE_MAC_INT, PCIE_MAC_PM, PRI_DLY, RST_DMASHDL,
-        RST_DTX_PTR, RST_LOGIC, RXD_LEN, RX_DATA_BASE, RX_EVENT_BASE, RX_WA_BASE, SCAN_REQ_LEN,
-        SWDEF_MODE, TOP_LPCR, TXD_LEN, TXP_LEN, TX_RING_BASE, WFDMA_RST, WFSYS_INIT_DONE,
-        WFSYS_RST, WFSYS_RST_B, WTBL_BUSY, WTBL_UPDATE,
+        DUMMY_CR, DUMP_PREFETCH, DUMP_REGS, DUMP_RINGS, FW_N9_RDY, FW_SCATTER, FW_START, GLO_CFG,
+        GLO_CFG_CHAIN, GLO_CFG_CLK, GLO_CFG_EXT0, GLO_CFG_LE, GLO_CFG_OMIT_RX,
+        GLO_CFG_OMIT_RX_PFET, GLO_CFG_OMIT_TX, GLO_CFG_RX_BUSY, GLO_CFG_RX_EN, GLO_CFG_TX_BUSY,
+        GLO_CFG_TX_EN, GLO_CFG_TX_WB, HIF_REMAP_L1, HOST_CLR_OWN, HOST_INT_ENA, HOST_OWN_SYNC,
+        HOST_SET_OWN, HW_CHIPID, HW_REV, IRQ_MASK, L0S_DIS, LAST_SEC0, LPCR_DRV_OWN, LPCR_FW_OWN,
+        MCU2HOST, MCU_TXD_LEN, MCU_WAKE, MDP_DAMSDU, MDP_DCR0, MDP_DCR1, MDP_HDR_TRANS,
+        NEED_REINIT, PATCH_FINISH, PATCH_IS_DL, PATCH_NOT_DL, PATCH_REL, PATCH_SEM, PCIE_MAC_INT,
+        PCIE_MAC_PM, PRI_DLY, RST_DMASHDL, RST_DTX_PTR, RST_LOGIC, RXD_LEN, RX_DATA_BASE,
+        RX_EVENT_BASE, RX_WA_BASE, SCAN_REQ_LEN, SWDEF_MODE, TOP_LPCR, TXD_LEN, TXP_LEN,
+        TX_RING_BASE, WFDMA_RST, WFSYS_INIT_DONE, WFSYS_RST, WFSYS_RST_B, WTBL_BUSY, WTBL_UPDATE,
     },
     CLIENT_MAC,
 };
 
-const DMA_PHYS: u32 = 0x01f6_0000;
+pub(crate) const DMA_PHYS: u32 = 0x01f6_0000;
 const RING_N: u32 = 8;
 /// `MT7921_TX_MCU_RING_SIZE`. One page holds 256 descriptors.
 const MCU_N: u32 = 256;
 const BUF: usize = 2048;
 const BOUNCE: usize = 4096;
+/// Words of the bounce buffer the dump rows show: the 68-byte semaphore command.
+pub(crate) const BOUNCE_WORDS: usize = 17;
 
 const OFF_TX0: usize = 0x0000;
 const OFF_TX16: usize = 0x1000;
-const OFF_TX17: usize = 0x2000;
-const OFF_RX_EVT: usize = 0x3000;
+pub(crate) const OFF_TX17: usize = 0x2000;
+pub(crate) const OFF_RX_EVT: usize = 0x3000;
 const OFF_RX_DATA: usize = 0x4000;
 const OFF_RX_WA: usize = 0x5000;
-const OFF_BOUNCE: usize = 0x6000;
+pub(crate) const OFF_BOUNCE: usize = 0x6000;
 const OFF_RX0_BUFS: usize = 0x7000;
 const OFF_RX_DATA_BUFS: usize = 0xb000;
 const OFF_RX_WA_BUFS: usize = 0xf000;
@@ -102,6 +105,34 @@ pub struct Mac {
     last_len: usize,
     pn: u64,
     wifi_seq: u16,
+    before: [u32; DUMP_REGS.len()],
+    after: Snapshot,
+}
+
+/// Registers, ring blocks, and DMA words for the dump rows. `regs` follows
+/// `DUMP_REGS`, `rings` follows `DUMP_RINGS`, `prefetch` follows
+/// `DUMP_PREFETCH`. The descriptor and bounce words are read back from the
+/// DMA window, so they show what the card could have fetched.
+pub struct Snapshot {
+    pub regs: [u32; DUMP_REGS.len()],
+    pub rings: [[u32; 4]; DUMP_RINGS.len()],
+    pub prefetch: [[u32; WORDS_PER_ROW]; DUMP_PREFETCH.len()],
+    pub tx_desc: [u32; WORDS_PER_ROW],
+    pub bounce: [u32; BOUNCE_WORDS],
+    pub rx_desc: [u32; WORDS_PER_ROW],
+}
+
+impl Snapshot {
+    const fn empty() -> Self {
+        Self {
+            regs: [0; DUMP_REGS.len()],
+            rings: [[0; 4]; DUMP_RINGS.len()],
+            prefetch: [[0; WORDS_PER_ROW]; DUMP_PREFETCH.len()],
+            tx_desc: [0; WORDS_PER_ROW],
+            bounce: [0; BOUNCE_WORDS],
+            rx_desc: [0; WORDS_PER_ROW],
+        }
+    }
 }
 
 struct Scratch {
@@ -147,8 +178,12 @@ impl Mac {
             last_len: 0,
             pn: 1,
             wifi_seq: 1,
+            before: [0; DUMP_REGS.len()],
+            after: Snapshot::empty(),
         };
-        mac.stage = match mac.start(images) {
+        let outcome = mac.start(images);
+        mac.after = mac.snapshot();
+        mac.stage = match outcome {
             Ok(()) => Stage::Wait,
             Err(stage) => {
                 // A descriptor the engine never finishes stays a bus read. The
@@ -163,6 +198,49 @@ impl Mac {
 
     pub fn ready(&self) -> bool {
         self.ready
+    }
+
+    /// `DUMP_REGS` read just before the first MCU command.
+    pub fn before(&self) -> &[u32; DUMP_REGS.len()] {
+        &self.before
+    }
+
+    /// Everything the dump rows show, read when `start` returned.
+    pub fn after(&self) -> &Snapshot {
+        &self.after
+    }
+
+    fn read_regs(&mut self) -> [u32; DUMP_REGS.len()] {
+        let mut out = [0u32; DUMP_REGS.len()];
+        for (slot, (_, addr)) in out.iter_mut().zip(DUMP_REGS) {
+            *slot = self.rr(addr);
+        }
+        out
+    }
+
+    fn snapshot(&mut self) -> Snapshot {
+        let mut snap = Snapshot::empty();
+        snap.regs = self.read_regs();
+        for (block, (_, regs)) in snap.rings.iter_mut().zip(DUMP_RINGS) {
+            for (i, word) in block.iter_mut().enumerate() {
+                *word = self.rr(regs + 4 * u32_from(i));
+            }
+        }
+        for (row, base) in snap.prefetch.iter_mut().zip(DUMP_PREFETCH) {
+            for (i, word) in row.iter_mut().enumerate() {
+                *word = self.rr(base + 4 * u32_from(i));
+            }
+        }
+        self.dma_words(OFF_TX17, &mut snap.tx_desc);
+        self.dma_words(OFF_BOUNCE, &mut snap.bounce);
+        self.dma_words(OFF_RX_EVT, &mut snap.rx_desc);
+        snap
+    }
+
+    fn dma_words(&self, off: usize, out: &mut [u32]) {
+        for (i, word) in out.iter_mut().enumerate() {
+            *word = dma_u32_read(self.dma, off + 4 * i);
+        }
     }
 
     pub fn stage(&self) -> Stage {
@@ -204,6 +282,7 @@ impl Mac {
         self.set(DMASHDL_SW, DMASHDL_BYPASS);
         self.rebind();
         self.set(PCIE_MAC_PM, L0S_DIS);
+        self.before = self.read_regs();
         self.load_patch(patch)?;
         self.load_ram(ram)?;
         if !self.poll(CONN_ON_MISC, FW_N9_RDY, FW_N9_RDY, N9_SPIN) {
@@ -915,6 +994,11 @@ fn wr(regs: *mut u8, off: u32, value: u32) {
 #[expect(clippy::cast_ptr_alignment, reason = "4-byte DMA descriptor")]
 fn dma_u32(dma: *mut u8, off: usize, value: u32) {
     unsafe { dma.add(off).cast::<u32>().write_volatile(value) }
+}
+
+#[expect(clippy::cast_ptr_alignment, reason = "4-byte DMA descriptor")]
+fn dma_u32_read(dma: *mut u8, off: usize) -> u32 {
+    unsafe { dma.add(off).cast::<u32>().read_volatile() }
 }
 
 fn dma_write(dma: *mut u8, off: usize, bytes: &[u8]) {

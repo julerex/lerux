@@ -8,6 +8,7 @@
 
 mod bt;
 mod crypto;
+pub mod dump;
 pub mod mt7921;
 mod nvme;
 mod panel;

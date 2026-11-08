@@ -44,8 +44,8 @@ lerux runs several small programs at once. Each one has its own memory. They sha
 | Priority | Program | What it paints |
 | --- | --- | --- |
 | 6 | Display | `hello lerux` and, later, the menu |
-| 5 | PCI probe | Device names below the menu, and rows 15 and 16 |
-| 4 | Wi-Fi | Rows 13, 14, and 17–22 |
+| 5 | PCI probe | Device names below the menu, rows 15 and 16, and rows 31–51 of the dump |
+| 4 | Wi-Fi | Rows 13, 14, and 17–22, and rows 52–66 of the dump |
 | 3 | Disk | Row 23, `nvme` |
 | 2 | Bluetooth | Row 24, `bt` |
 | 1 | Menu | `1 browser`, `2 maths`, `3 wifi` |
@@ -245,31 +245,41 @@ The probe sets both of those bits on the MT7921 at `03:00.0`, then reads the wor
 | any other last digit | Bus master is off. The card is not allowed to fetch |
 | `cmd miss` | The probe did not find the MT7921, or the command read came back all ones |
 
-## What is settled, and what the next lines are for
+## What is settled, and what the next line is for
 
-The ring length is 256, the low half of the base still names the command ring, and transmit is enabled. That was `fw sem d00 c01 s0100 b2000 g75`.
+The ring length is 256, the base register still names the command ring, and transmit is enabled. That was `fw sem d00 c01 s0100 b2000 g75`.
 
 The note in RAM is a live order for the bounce buffer. That was `slot 00 01f66000 d0`.
 
-The translator is off, and both exclusion registers are zero. That was `excl 00000000 00000000 off`. The card is supposed to use `0x01f66000` as a plain RAM address.
+The translator is off, and both exclusion registers are zero. That was `excl 00000000 00000000 off`. The card is supposed to use `0x01f66000` as a plain RAM address. The DMA index stayed 0, so the engine still did not collect the note.
 
-The command word is `cmd 0006`. Memory space and bus master are both set, so the card is allowed to fetch. The DMA index stayed 0.
+The command word is the next measurement. It says whether the card is allowed to fetch that address. Paste the `cmd` line from row 15. Bus master is on when the last digit is `4`, `5`, `6`, `7`, `c`, `d`, `e`, or `f`. The firmware download order stays as it is until a line says a later step is the one that failed.
 
-`b2000` is only the low 16 bits of the base, and `g75` is only the low byte of the DMA config. Little-endian is bit 12 of that config, and the engine clock is bit 30. Neither of those is in the low byte. Row 13 prints both registers in full. Row 14 prints the transmit-reset register and the scheduler control register. A reset that stays set holds the DMA index at 0. Bit 28 of the scheduler register is the bypass that lets this first command skip the scheduler.
+Rows 13 and 14 are an earlier reading of registers the dump below prints in full. Row 13 is `base` and `glo`: the whole ring base and the whole DMA config. `base 01f62000` is the command ring. Little-endian is bit 12 of `glo`, and the engine clock is bit 30. Row 14 is `rst` and `sw`: the transmit reset and the scheduler control. `rst 00000000` means the reset is released. Bit 28 of `sw` is the scheduler bypass, set when the first digit is `1`, `3`, `5`, `7`, `9`, `b`, `d`, or `f`. `sw ffffffff` means the read missed.
 
-| Line | Meaning |
-| --- | --- |
-| `base 01f62000` | The base register holds the command ring at `0x01f62000` |
-| `base` followed by another number | The register the hardware holds. A high half other than `01f6` means the card is reading a different page |
-| `glo 50209075` | Little-endian, the clock, the omit bits, the chain bit, and the low byte `75` are all set |
-| `glo` followed by another number | The config the hardware holds. Bit 12 clear means the card reads the note in the other byte order. Bit 30 clear means the engine clock is gated |
-| `rst 00000000` | The transmit reset is released |
-| `rst` followed by another number | The reset is still held, and that hold keeps the DMA index at 0 |
-| `sw 10000000` | Scheduler bypass is on. Bit 28 is set when the first digit is `1`, `3`, `5`, `7`, `9`, `b`, `d`, or `f` |
-| `sw ffffffff` | The read missed. The remap window did not return the register |
-| `sw` with bit 28 clear | The bypass did not stick. The scheduler can refuse the fetch |
+## The dump rows, 31 to 66
 
-Paste row 13 and row 14. The firmware download order stays as it is until a line says a later step is the one that failed.
+Rows 31 to 66 are a hex dump meant to be photographed. They are painted once per boot and the console redraw does not touch them. Each row is at most 120 characters: a label of eight characters, then up to twelve 8-digit words. The layout constants live in `userspace/crates/lerux-swift/src/dump.rs`.
+
+| Rows | Painted by | What is there |
+| --- | --- | --- |
+| 31 | PCI probe | `03:00.0 cmd XXXX lnk XXXX pm XXXX \| rp 00:0Y.Z sec 03 cmd BBBB>AAAA lnk XXXX \| np 00:0Y.Z sec 02 cmd XXXX lnk XXXX`. `cmd` is the command word, `lnk` the PCI Express link control, `pm` the power-management control. `rp` is the root port above the Wi-Fi card: `BBBB` is its command word before the probe set memory space and bus master, `AAAA` after. `np` is the root port above the disk, left alone. `----` means that capability was not found. `rp miss` means no bus 0 bridge has secondary bus 3 |
+| 32–37 | PCI probe | The 256 bytes of `03:00.0` configuration space. The first row is labelled with the function, the rest with the byte offset (`+030`) |
+| 38–43 | PCI probe | The Wi-Fi root port's 256 bytes, read after the write |
+| 44–49 | PCI probe | The disk root port's 256 bytes |
+| 50 | PCI probe | `iommu` base, `ctrl` (offset `0x18`), `excl` (`0x20`), `limit` (`0x28`), each 16 digits |
+| 51 | PCI probe | `devtb` (`0x00`), `cmdb` (`0x08`), `evtlog` (`0x10`), `sts` (`0x2020`). `iommu miss` when the unit was not found |
+| 52–54 | Wi-Fi | `aft`: twenty-one WFDMA and top registers read when the boot attempt returned, seven per row, each as a five-letter name and 8 digits |
+| 55–56 | Wi-Fi | `t00`, `t16`, `t17`, `r00`, `r01`, `r02`: each ring's base, size, cpu index, and dma index |
+| 57–59 | Wi-Fi | The prefetch table at `0xd4600`, `0xd4630`, `0xd4680`, twelve words each |
+| 60 | Wi-Fi | The TX17 ring at `01f62000`: the first three descriptors, the first being note 0 |
+| 61–62 | Wi-Fi | The bounce buffer at `01f66000`: the 68-byte semaphore command |
+| 63 | Wi-Fi | The RX event ring at `01f63000`: the first three receive descriptors |
+| 64–66 | Wi-Fi | `pre`: the same twenty-one registers read just before the semaphore command was published |
+
+The register names on rows 52 to 54 and 64 to 66 are, in order: `lpctl` `CONN_ON_LPCTL`, `misc` `CONN_ON_MISC`, `wfsys` `WFSYS_RST`, `lpcr` `TOP_LPCR_HOST_BAND0`, `chip` `HW_CHIPID`, `rev` `HW_REV`, `mint` `PCIE_MAC_INT_ENABLE`, `mpm` `PCIE_MAC_PM`, `iena` `HOST_INT_ENA`, `ista` `HOST_INT_STA`, `glo` `GLO_CFG`, `ext0` `GLO_CFG_EXT0`, `dtx` `RST_DTX_PTR`, `drx` `RST_DRX_PTR`, `mcmd` `MCU_CMD`, `m2h` `MCU2HOST_SW_INT_ENA`, `rst` `WFDMA_RST`, `busy` `BUSY_ENA`, `shdl` `DMASHDL_SW_CONTROL`, `dummy` `DUMMY_CR`, `swdef` `SWDEF_MODE`. The table is `DUMP_REGS` in `userspace/crates/lerux-swift/src/mt7921.rs`.
+
+Reading the photograph: `rp` on row 31 says whether the root port above the card was allowed to forward its reads. The two command words either side of `>` say whether the probe changed anything. Rows 32–49 put the card, its port, and the working disk's port one above the other so a field that differs stands out. `aft` against `pre` says what moved in the card while the processor waited. The `t17` block on row 55 is the same four registers as `fw sem` on row 22, in full.
 
 ## Other words on row 22
 
@@ -296,10 +306,13 @@ If you want to see the same facts in the source, these are the files. The screen
 | File | What it holds |
 | --- | --- |
 | `userspace/pds/swift-mt7921/src/device.rs` | The startup sequence, the ring addresses, the doorbell, and the read of note 0 |
-| `userspace/pds/swift-mt7921/src/main.rs` | Which screen row gets `base`, `rst`, `slot`, the four step lines, and `fw sem` |
+| `userspace/pds/swift-mt7921/src/main.rs` | Which screen row gets `slot`, the four step lines, `fw sem`, and rows 13 and 14 |
 | `userspace/pds/swift-pci-probe/src/main.rs` | The IOMMU programming, the `cmd` row, and the `excl` row |
-| `userspace/crates/lerux-swift/src/mt7921.rs` | The register numbers, the 16-byte note layout, and the text of `fw sem`, `base`, `rst`, and `slot` |
+| `userspace/pds/swift-pci-probe/src/dump.rs` | The root-port lookup and enable, and rows 31 to 51 |
+| `userspace/pds/swift-mt7921/src/dump.rs` | Rows 52 to 66 |
+| `userspace/crates/lerux-swift/src/dump.rs` | The row layout, the hex row formatters, and the capability walk |
+| `userspace/crates/lerux-swift/src/mt7921.rs` | The register numbers, the 16-byte note layout, the text of `fw sem`, `slot`, `base`, and `rst`, and the `DUMP_REGS` name table |
 | `userspace/crates/lerux-swift/src/pci.rs` | The exclusion addresses and the text of `cmd` and `excl` |
 | `GLOSSARY.md` | Short definitions of the same words, linked to each other |
 
-The ISO you boot is `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`, produced by `just iso`. An older file on the USB stick does not contain a line that was added later. Rows 13 and 14 are on the ISO built after that readback was added.
+The ISO you boot is `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`, produced by `just iso`. An older file on the USB stick does not contain a line that was added later. The `cmd` line is on the ISO built after that readback was added. Rows 13 and 14 are on the ISO built after the full-register readback was added.

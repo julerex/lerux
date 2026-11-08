@@ -21,12 +21,13 @@ use sel4_microkit::{
 use lerux_desk::FRAMEBUFFER_BYTES;
 use lerux_swift::{
     bt_bring_up, bt_line, class_code, fail_line, further, load_header, vendor_device, version_line,
-    BtReport, XferFail, XHCI_BDFS, XHCI_CLASS,
+    working_line, BtReport, WaitMark, XferFail, XHCI_BDFS, XHCI_CLASS,
 };
 
 mod xhci;
 
 const ROW: usize = 24;
+static MARK: WaitMark = WaitMark::new();
 const FIRMWARE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/mt7921-bt.bin"));
 
 struct HandlerImpl {
@@ -86,11 +87,14 @@ fn bring_up_text(
     if FIRMWARE.is_empty() {
         return copy_line(text, bt_line(&BtReport::FirmwareErr));
     }
+    beat_arm();
     let mut event = [0u8; 16];
-    match reset_either(regs, dma, &mut event) {
+    let n = match reset_either(regs, dma, &mut event) {
         Ok(n) => copy_line(text, bt_line(&bt_bring_up(true, true, Some(&event[..n])))),
         Err(fail) => fail_line(&fail, text),
-    }
+    };
+    beat_disarm();
+    n
 }
 
 fn reset_either(regs: &[*mut u8; 2], dma: *mut u8, event: &mut [u8]) -> Result<usize, XferFail> {
@@ -115,13 +119,38 @@ fn copy_line(dst: &mut [u8], src: &[u8]) -> usize {
     n
 }
 
+/// The status line is painted only after the controller answers. A moving dot fills that wait.
+fn beat_arm() {
+    MARK.arm();
+    paint_working(0);
+}
+
+fn beat_disarm() {
+    MARK.disarm();
+}
+
+pub(crate) fn beat() {
+    if let Some(tick) = MARK.beat() {
+        paint_working(tick);
+    }
+}
+
+fn paint_working(tick: u32) {
+    let mut line = [0u8; 16];
+    let n = working_line(b"bt", tick, &mut line);
+    paint(&line[..n]);
+}
+
 fn paint(text: &[u8]) {
     let mode = memory_region_symbol!(mode_record_vaddr: *mut u8).as_ptr();
     let frame = memory_region_symbol!(fb_vaddr: *mut u8).as_ptr();
     let record = unsafe { core::slice::from_raw_parts(mode, 40) };
     let bytes = usize::try_from(FRAMEBUFFER_BYTES).expect("framebuffer fits");
     let frame = unsafe { core::slice::from_raw_parts_mut(frame, bytes) };
-    lerux_swift::paint_row(record, frame, ROW, text);
+    let mut line = [b' '; 40];
+    let n = text.len().min(line.len());
+    line[..n].copy_from_slice(&text[..n]);
+    lerux_swift::paint_row(record, frame, ROW, &line[..n.max(16)]);
 }
 
 impl Handler for HandlerImpl {

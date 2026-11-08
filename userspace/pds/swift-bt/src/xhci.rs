@@ -339,6 +339,7 @@ impl Host {
             return self.intr_result();
         }
         for _ in 0..SPIN {
+            super::beat();
             let Some(ev) = self.pop_event() else {
                 core::hint::spin_loop();
                 continue;
@@ -418,6 +419,7 @@ impl Host {
             if id == 1 {
                 self.write32(off, dw | (1 << 24));
                 for _ in 0..SPIN {
+                    super::beat();
                     if self.read32(off) & (1 << 16) == 0 {
                         break;
                     }
@@ -451,6 +453,7 @@ impl Host {
     fn reset_controller(&self) -> bool {
         self.write32(self.op, 1 << 1);
         for _ in 0..SPIN {
+            super::beat();
             let cmd = self.read32(self.op);
             let status = self.read32(self.op + 4);
             if cmd & (1 << 1) == 0 && status & (1 << 11) == 0 {
@@ -566,6 +569,7 @@ impl Host {
     fn await_control(&mut self, len: u16, data_trb: u64, status_trb: u64) -> Ctl {
         let mut actual = usize::from(len);
         for _ in 0..SPIN {
+            super::beat();
             let Some(ev) = self.pop_event() else {
                 core::hint::spin_loop();
                 continue;
@@ -663,6 +667,7 @@ impl Host {
 
     fn wait_completion(&mut self, trb: u64) -> Option<[u32; 4]> {
         for _ in 0..SPIN {
+            super::beat();
             let Some(ev) = self.pop_event() else {
                 core::hint::spin_loop();
                 continue;
@@ -738,6 +743,7 @@ impl Host {
 
     fn wait_connect() {
         for _ in 0..CONNECT_SPIN {
+            super::beat();
             core::hint::spin_loop();
         }
     }
@@ -765,6 +771,7 @@ impl Host {
         self.write32(off, portsc_neutral(raw) | (1 << 9) | start);
         let mut saw_start = false;
         for _ in 0..CONNECT_SPIN {
+            super::beat();
             let cur = self.read32(off);
             if cur & start != 0 {
                 saw_start = true;
@@ -799,6 +806,7 @@ impl Host {
 
     fn wait_status(&self, ready: impl Fn(u32) -> bool) -> bool {
         for _ in 0..SPIN {
+            super::beat();
             if ready(self.read32(self.op + 4)) {
                 return true;
             }

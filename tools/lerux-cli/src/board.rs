@@ -222,6 +222,8 @@ mod tests {
         assert!(xml.contains("name=\"wifi_dma\""));
         assert!(xml.contains("phys_addr=\"0x1f60000\""));
         assert!(xml.contains("vaddr=\"0x1f60000\""));
+        assert!(xml.contains("name=\"iommu_regs\""));
+        assert!(xml.contains("phys_addr=\"0xfdf00000\""));
         assert!(xml.contains("name=\"wifi_key\""));
         assert!(xml.contains("phys_addr=\"0x1fd0000\""));
         assert!(xml.contains("vaddr=\"0x1fd0000\""));

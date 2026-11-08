@@ -1167,4 +1167,134 @@ mod tests {
             ),
         ]
     }
+
+    const X86_DEVICE_BOARDS: &[&str] = &[
+        "x86_64_generic_serial_sddf",
+        "x86_64_generic_fs_sddf",
+        "x86_64_generic_fs_ahci",
+        "x86_64_generic_net_sddf",
+        "x86_64_generic_net_e1000e",
+        "x86_64_generic_fetch_sddf",
+        "x86_64_generic_web_sddf",
+        "x86_64_generic_agent_sddf",
+        "x86_64_generic_program_sddf",
+        "x86_64_generic_fetch_native",
+    ];
+
+    fn tag_attr<'a>(element: &'a str, name: &str) -> &'a str {
+        let key = format!("{name}=\"");
+        let start = element
+            .find(&key)
+            .unwrap_or_else(|| panic!("missing {name} in {element}"))
+            + key.len();
+        let rest = &element[start..];
+        let end = rest.find('"').expect("attribute end");
+        &rest[..end]
+    }
+
+    fn spelled_u64(text: &str) -> u64 {
+        let hex: String = text
+            .trim()
+            .trim_start_matches("0x")
+            .chars()
+            .filter(|ch| *ch != '_')
+            .collect();
+        u64::from_str_radix(&hex, 16).unwrap_or_else(|err| panic!("{text}: {err}"))
+    }
+
+    fn ioport_ranges(xml: &str) -> Vec<(u64, u64)> {
+        let mut ranges = Vec::new();
+        let mut rest = xml;
+        while let Some(start) = rest.find("<ioport ") {
+            let tag = &rest[start..];
+            let end = tag.find('>').expect("ioport tag");
+            let element = &tag[..=end];
+            let addr = spelled_u64(tag_attr(element, "addr"));
+            let size: u64 = tag_attr(element, "size")
+                .parse()
+                .unwrap_or_else(|err| panic!("ioport size: {err}"));
+            ranges.push((addr, addr.saturating_add(size)));
+            rest = &tag[end + 1..];
+        }
+        ranges
+    }
+
+    fn overlapping_ioport(xml: &str) -> Option<String> {
+        let ranges = ioport_ranges(xml);
+        for (index, (start, end)) in ranges.iter().enumerate() {
+            for (other_start, other_end) in ranges.iter().skip(index + 1) {
+                if *start < *other_end && *other_start < *end {
+                    return Some(format!(
+                        "[{start:#x}, {end:#x}) overlaps [{other_start:#x}, {other_end:#x})"
+                    ));
+                }
+            }
+        }
+        None
+    }
+
+    #[test]
+    fn x86_ioports_do_not_overlap() {
+        let doubled = "\
+<ioport id=\"0\" addr=\"0xcf8\" size=\"8\" setvar_id=\"pci_config_ioport_id\" setvar_addr=\"pci_config_ioport_addr\" />
+<ioport id=\"0\" addr=\"0xcf8\" size=\"8\" setvar_id=\"pci_net_config_ioport_id\" setvar_addr=\"pci_net_config_ioport_addr\" />
+";
+        assert!(
+            overlapping_ioport(doubled).is_some(),
+            "distinct setvars on [0xcf8, 0xd00) still overlap"
+        );
+        assert!(overlapping_ioport(
+            "<ioport addr=\"0xcf8\" size=\"8\" /><ioport addr=\"0xd00\" size=\"8\" />"
+        )
+        .is_none());
+        for board in X86_DEVICE_BOARDS {
+            let xml = render_board(board).expect("render").expect("image");
+            assert!(
+                !ioport_ranges(&xml).is_empty(),
+                "{board} rendered no ioport"
+            );
+            let overlap = overlapping_ioport(&xml);
+            assert!(overlap.is_none(), "{board}: {overlap:?}");
+        }
+    }
+
+    const PCI_ECAM_SMOKES: &[(&str, &str)] = &[
+        ("x86_64_generic_fetch_sddf", "just test-fetch-sddf-x86"),
+        ("x86_64_generic_web_sddf", "just test-web-sddf-x86"),
+        ("x86_64_generic_agent_sddf", "just test-agent-sddf-x86"),
+        ("x86_64_generic_program_sddf", "just test-program-sddf-x86"),
+        ("x86_64_generic_fetch_native", "just test-x86-fetch-native"),
+    ];
+
+    fn sibling_ecam_smokes(script: &str) -> Vec<&str> {
+        let start = script.find("ECAM_SMOKES = (").expect("ECAM_SMOKES");
+        let rest = &script[start..];
+        let end = rest.find(')').expect("ECAM_SMOKES end");
+        rest[..end]
+            .split('"')
+            .filter(|part| part.starts_with("just test-"))
+            .collect()
+    }
+
+    fn board_has_pci_ecam(board: &str) -> bool {
+        render_board(board)
+            .expect("render")
+            .expect("image")
+            .contains("name=\"pci_ecam\"")
+    }
+
+    #[test]
+    fn pci_ecam_images_match_the_sibling_smokes() {
+        let script = fs::read_to_string(repo_root().join("support/check-sibling-smoke.py"))
+            .expect("sibling script");
+        let named = sibling_ecam_smokes(&script);
+        assert_eq!(named.len(), PCI_ECAM_SMOKES.len(), "{named:?}");
+        for (_, recipe) in PCI_ECAM_SMOKES {
+            assert!(named.contains(recipe), "{recipe}");
+        }
+        for board in X86_DEVICE_BOARDS {
+            let maps = PCI_ECAM_SMOKES.iter().any(|(name, _)| *name == *board);
+            assert_eq!(board_has_pci_ecam(board), maps, "{board}");
+        }
+    }
 }

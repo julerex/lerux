@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Require a sibling smoke when a shared filesystem config writer changes.
+"""Require sibling smokes for shared filesystem writers and the ECAM window.
 
-The plan exit passes when the new board sets ci = true, or the test plan
-names a `just test-...` recipe. A diff that does not touch the shared
-writer passes.
+The filesystem plan passes when the new board sets ci = true, or the test
+plan names a `just test-...` recipe. An added or removed line that names
+`X86_PCI_ECAM_` or `push_x86_pci_ecam` must also name a guest smoke for every
+image whose rendered XML contains `pci_ecam`.
 """
 
 import re
@@ -18,6 +19,14 @@ SHARED = {
     "userspace/pds/sddf-shell/Cargo.toml",
 }
 RECIPE = re.compile(r"just test-[A-Za-z0-9-]+")
+ECAM_TOKENS = ("X86_PCI_ECAM_", "push_x86_pci_ecam")
+ECAM_SMOKES = (
+    "just test-fetch-sddf-x86",
+    "just test-web-sddf-x86",
+    "just test-agent-sddf-x86",
+    "just test-program-sddf-x86",
+    "just test-x86-fetch-native",
+)
 
 
 def judge(touched: set[str], plan: str, ci_true: bool) -> tuple[int, str]:
@@ -35,6 +44,25 @@ def judge(touched: set[str], plan: str, ci_true: bool) -> tuple[int, str]:
         f"sibling smoke: {names} changed; set ci = true or name a just test- recipe "
         "in the test plan",
     )
+
+
+def ecam_touched(diff: str) -> bool:
+    for line in diff.splitlines():
+        if line.startswith(("+++", "---")) or not line.startswith(("+", "-")):
+            continue
+        if any(token in line for token in ECAM_TOKENS):
+            return True
+    return False
+
+
+def judge_ecam(diff: str, plan: str) -> tuple[int, str]:
+    if not ecam_touched(diff):
+        return 0, "sibling smoke: ecam constant unchanged"
+    missing = [recipe for recipe in ECAM_SMOKES if recipe not in plan]
+    if missing:
+        names = ", ".join(missing)
+        return 1, f"sibling smoke: pci_ecam change needs {names}"
+    return 0, "sibling smoke: pci_ecam images named"
 
 
 def git(*args: str) -> subprocess.CompletedProcess[str]:
@@ -61,7 +89,13 @@ def real() -> tuple[int, str]:
         text = diff.stdout
         ci_true = bool(re.search(r"(?m)^\+\s*ci = true\s*$", text))
         plan = text + "\n" + git("log", "--format=%B", f"{base.stdout.strip()}..HEAD").stdout
-        return judge(touched, plan, ci_true)
+        code, message = judge(touched, plan, ci_true)
+        if code != 0:
+            return code, message
+        ecam_code, ecam_message = judge_ecam(text, plan)
+        if ecam_code != 0 or ecam_touched(text):
+            return ecam_code, ecam_message
+        return code, message
     return 0, "sibling smoke: no merge base"
 
 
@@ -86,7 +120,36 @@ def self_test() -> int:
     if code != 0:
         print("sibling self-test rejected ci = true")
         return 1
+    if ecam_self_test() != 0:
+        return 1
     print("sibling smoke self-test ok")
+    return 0
+
+
+def ecam_self_test() -> int:
+    code, message = judge_ecam(" context X86_PCI_ECAM_PHYS\n", "")
+    if code != 0:
+        print(f"sibling self-test treated a context line as a change: {message}")
+        return 1
+    header = "+++ b/userspace/crates/lerux-machine/src/table.rs\n"
+    code, message = judge_ecam(header, "")
+    if code != 0:
+        print(f"sibling self-test treated a diff header as a change: {message}")
+        return 1
+    bare = "+pub const X86_PCI_ECAM_PHYS: u64 = 1;\n"
+    code, message = judge_ecam(bare, "just test-fetch-sddf-x86")
+    if code != 1:
+        print(f"sibling self-test accepted a partial ecam plan: {message}")
+        return 1
+    code, message = judge_ecam(bare, "\n".join(ECAM_SMOKES))
+    if code != 0:
+        print(f"sibling self-test rejected a full ecam plan: {message}")
+        return 1
+    removed = "-fn push_x86_pci_ecam() {}\n"
+    code, message = judge_ecam(removed, "")
+    if code != 1 or "just test-web-sddf-x86" not in message:
+        print(f"sibling self-test missed push_x86_pci_ecam: {message}")
+        return 1
     return 0
 
 

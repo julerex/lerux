@@ -35,6 +35,10 @@ jobs:
       - name: Install just
         run: bash .github/scripts/install-just.sh
 
+      # q35_device_lines_match_help_types spawns qemu-system-x86_64.
+      - name: Install QEMU
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends qemu-system-x86
+
       - name: Format and clippy
         run: just check
 

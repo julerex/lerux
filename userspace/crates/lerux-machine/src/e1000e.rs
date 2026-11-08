@@ -17,7 +17,8 @@ pub const DISABLE_VNET_HDR: bool = true;
 pub const REGISTER_BAR: u8 = 0;
 pub const REGISTER_BAR_SIZE: u64 = 0x2_0000;
 
-const REGS_PADDR: SpelledAddr = SpelledAddr::new("0xfed2_0000");
+/// After `X86_NET_BAR1`. A 128 KiB window at `X86_NET_BAR0` would contain that constant.
+const REGS_PADDR: SpelledAddr = SpelledAddr::new("0xfed4_0000");
 const DMA_PADDR: SpelledAddr = SpelledAddr::new("0x6000_0000");
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -129,9 +130,10 @@ mod tests {
     #[test]
     fn e1000e_map_windows() {
         let map = e1000e_map();
-        assert_eq!(map.regs_vaddr, 0xfed2_0000);
-        assert_eq!(map.regs_paddr.text(), "0xfed2_0000");
-        assert_eq!(map.regs_paddr.value(), 0xfed2_0000);
+        assert_eq!(map.regs_vaddr, 0xfed4_0000);
+        assert_eq!(map.regs_paddr.text(), "0xfed4_0000");
+        assert_eq!(map.regs_paddr.value(), 0xfed4_0000);
+        assert_device_windows_exclude_foreign_constants();
         assert_eq!(map.regs_size, 0x2_0000);
         assert_eq!(map.regs_region, "e1000e_regs");
         assert_eq!(map.dma_vaddr, 0x8_000_000_000);
@@ -147,7 +149,7 @@ mod tests {
         let ahci = ahci_map();
         assert_ne!(map.dma_paddr.value(), ahci.dma_paddr.value());
         assert_ne!(map.regs_paddr.value(), ahci.abar_paddr.value());
-        assert_eq!(map.regs_paddr.value() + map.regs_size, 0xfed4_0000);
+        assert_eq!(map.regs_paddr.value() + map.regs_size, 0xfed6_0000);
         assert!(map.regs_paddr.value() + map.regs_size < ahci.abar_paddr.value());
     }
 
@@ -157,5 +159,85 @@ mod tests {
         assert_eq!(REGISTER_BAR, 0);
         assert_eq!(QEMU_82574, (0x8086, 0x10d3));
         const { assert!(DISABLE_VNET_HDR) };
+    }
+
+    fn always_address_constants() -> [(&'static str, u64); 11] {
+        use crate::table::{
+            X86_BLK_BAR0, X86_BLK_BAR1, X86_NET_BAR0, X86_NET_BAR1, X86_PCI_ECAM_PHYS,
+            X86_VIRTIO_BLK_DMA_PHYS, X86_VIRTIO_NET_DMA_PHYS,
+        };
+        let nic = e1000e_map();
+        let ahci = ahci_map();
+        [
+            ("X86_PCI_ECAM_PHYS", X86_PCI_ECAM_PHYS.value()),
+            ("X86_BLK_BAR0", X86_BLK_BAR0.value()),
+            ("X86_BLK_BAR1", X86_BLK_BAR1.value()),
+            ("X86_NET_BAR0", X86_NET_BAR0.value()),
+            ("X86_NET_BAR1", X86_NET_BAR1.value()),
+            ("X86_VIRTIO_NET_DMA_PHYS", X86_VIRTIO_NET_DMA_PHYS.value()),
+            ("X86_VIRTIO_BLK_DMA_PHYS", X86_VIRTIO_BLK_DMA_PHYS.value()),
+            ("e1000e regs", nic.regs_paddr.value()),
+            ("e1000e dma", nic.dma_paddr.value()),
+            ("ahci abar", ahci.abar_paddr.value()),
+            ("ahci dma", ahci.dma_paddr.value()),
+        ]
+    }
+
+    #[cfg(feature = "system-description")]
+    fn description_address_constants() -> [(&'static str, u64); 8] {
+        use crate::table::{
+            AARCH64_UART_PHYS, AARCH64_VIRTIO_WINDOW_PHYS, RISCV64_BLK_PHYS, RISCV64_GPU_PHYS,
+            RISCV64_NET_PHYS, RISCV64_UART_PHYS, X86_PCI_CONFIG_PORT, X86_UART_PORT,
+        };
+        [
+            ("AARCH64_UART_PHYS", AARCH64_UART_PHYS.value()),
+            ("RISCV64_UART_PHYS", RISCV64_UART_PHYS.value()),
+            ("X86_UART_PORT", X86_UART_PORT.value()),
+            (
+                "AARCH64_VIRTIO_WINDOW_PHYS",
+                AARCH64_VIRTIO_WINDOW_PHYS.value(),
+            ),
+            ("RISCV64_BLK_PHYS", RISCV64_BLK_PHYS.value()),
+            ("RISCV64_NET_PHYS", RISCV64_NET_PHYS.value()),
+            ("RISCV64_GPU_PHYS", RISCV64_GPU_PHYS.value()),
+            ("X86_PCI_CONFIG_PORT", X86_PCI_CONFIG_PORT.value()),
+        ]
+    }
+
+    fn hit_in(base: u64, end: u64, constants: &[(&'static str, u64)]) -> Option<&'static str> {
+        constants
+            .iter()
+            .find_map(|&(label, value)| (value > base && value < end).then_some(label))
+    }
+
+    fn foreign_inside(base: u64, size: u64) -> Option<&'static str> {
+        let end = base.checked_add(size).expect("window end");
+        let hit = hit_in(base, end, &always_address_constants());
+        #[cfg(feature = "system-description")]
+        if hit.is_none() {
+            return hit_in(base, end, &description_address_constants());
+        }
+        hit
+    }
+
+    fn assert_device_windows_exclude_foreign_constants() {
+        let nic = e1000e_map();
+        let ahci = ahci_map();
+        let windows = [
+            ("e1000e regs", nic.regs_paddr.value(), nic.regs_size),
+            ("e1000e dma", nic.dma_paddr.value(), nic.dma_size),
+            ("ahci abar", ahci.abar_paddr.value(), ahci.abar_size),
+            ("ahci dma", ahci.dma_paddr.value(), ahci.dma_size),
+            (
+                "ecam",
+                crate::X86_PCI_ECAM_PHYS.value(),
+                crate::X86_PCI_ECAM_SIZE,
+            ),
+        ];
+        for (name, base, size) in windows {
+            let hit = foreign_inside(base, size);
+            assert!(hit.is_none(), "{name} contains {hit:?}");
+        }
+        assert_eq!(foreign_inside(0xfed2_0000, 0x2_0000), Some("X86_NET_BAR1"));
     }
 }

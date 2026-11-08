@@ -1257,4 +1257,44 @@ mod tests {
             assert!(overlap.is_none(), "{board}: {overlap:?}");
         }
     }
+
+    const PCI_ECAM_SMOKES: &[(&str, &str)] = &[
+        ("x86_64_generic_fetch_sddf", "just test-fetch-sddf-x86"),
+        ("x86_64_generic_web_sddf", "just test-web-sddf-x86"),
+        ("x86_64_generic_agent_sddf", "just test-agent-sddf-x86"),
+        ("x86_64_generic_program_sddf", "just test-program-sddf-x86"),
+        ("x86_64_generic_fetch_native", "just test-x86-fetch-native"),
+    ];
+
+    fn sibling_ecam_smokes(script: &str) -> Vec<&str> {
+        let start = script.find("ECAM_SMOKES = (").expect("ECAM_SMOKES");
+        let rest = &script[start..];
+        let end = rest.find(')').expect("ECAM_SMOKES end");
+        rest[..end]
+            .split('"')
+            .filter(|part| part.starts_with("just test-"))
+            .collect()
+    }
+
+    fn board_has_pci_ecam(board: &str) -> bool {
+        render_board(board)
+            .expect("render")
+            .expect("image")
+            .contains("name=\"pci_ecam\"")
+    }
+
+    #[test]
+    fn pci_ecam_images_match_the_sibling_smokes() {
+        let script = fs::read_to_string(repo_root().join("support/check-sibling-smoke.py"))
+            .expect("sibling script");
+        let named = sibling_ecam_smokes(&script);
+        assert_eq!(named.len(), PCI_ECAM_SMOKES.len(), "{named:?}");
+        for (_, recipe) in PCI_ECAM_SMOKES {
+            assert!(named.contains(recipe), "{recipe}");
+        }
+        for board in X86_DEVICE_BOARDS {
+            let maps = PCI_ECAM_SMOKES.iter().any(|(name, _)| *name == *board);
+            assert_eq!(board_has_pci_ecam(board), maps, "{board}");
+        }
+    }
 }

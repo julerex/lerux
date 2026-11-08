@@ -1,10 +1,11 @@
 ---
 name: uefi-grub-iso
 description: >
-  Use when changing the x86 ISO, GRUB menu, FAT ESP, mb2-stub, or the Swift
-  panel mode line. Covers a GRUB warning, a lone underscore on the Acer, an
-  underscore under the mode line, a framebuffer above 4 GiB, a newer ISO that
-  still maps the spare page, and a QEMU hello line that does not prove the panel.
+  Packs the x86 GRUB ISO and reads its finish line. Use for `just iso`,
+  `Wrote ISO`, packing a Swift protection domain into the ISO, the xorriso
+  `/EFI/BOOT` warning, the Swift panel mode line, a newer ISO that still maps
+  the spare page, GRUB, the FAT ESP, or mb2-stub. A QEMU hello line does not
+  prove the panel.
 ---
 
 # UEFI GRUB ISO

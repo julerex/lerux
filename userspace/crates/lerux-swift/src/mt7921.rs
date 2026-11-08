@@ -733,21 +733,28 @@ const SCAN_CHANNELS: &[(u8, u8)] = &[
     (2, 161),
 ];
 
-/// Active scan for one SSID. Layout is `mt76_connac_hw_scan_req` in Linux v6.8.
+/// Active scan. Layout is `mt76_connac_hw_scan_req` in Linux v6.8.
+///
+/// An empty `ssid` is the wildcard survey: `ssid_type` bit 0, `ssids_num` 0.
+/// A name is the directed scan association uses.
 pub fn write_scan(out: &mut [u8], ssid: &[u8], seq: u8) -> bool {
-    if out.len() < SCAN_REQ_LEN || ssid.is_empty() || ssid.len() > 32 {
+    if out.len() < SCAN_REQ_LEN || ssid.len() > 32 {
         return false;
     }
     out[..SCAN_REQ_LEN].fill(0);
     out[0] = seq & 0x7f;
     out[2] = 1;
-    out[3] = 1 << 2;
-    out[4] = 1;
+    if ssid.is_empty() {
+        out[3] = 1;
+    } else {
+        out[3] = 1 << 2;
+        out[4] = 1;
+        out[8..12].copy_from_slice(&fit_u32(ssid.len()).to_le_bytes());
+        out[12..12 + ssid.len()].copy_from_slice(ssid);
+    }
     out[5] = 2;
     out[6] = 1 << 5;
     out[7] = 1;
-    out[8..12].copy_from_slice(&fit_u32(ssid.len()).to_le_bytes());
-    out[12..12 + ssid.len()].copy_from_slice(ssid);
     let base = 8 + 4 * SCAN_SSID + 6;
     out[base] = 4;
     out[base + 1] = fit_u8(SCAN_CHANNELS.len());
@@ -902,6 +909,147 @@ pub fn read_key(page: &[u8]) -> Option<(&[u8], &[u8])> {
         return None;
     }
     Some((&page[4..4 + ssid_len], &page[36..36 + psk_len]))
+}
+
+/// Names kept from one survey. The shell prints one line each.
+pub const SCAN_MAX: usize = 16;
+
+const PAGE_SURVEY: u8 = 2;
+const PAGE_LIST: u8 = 3;
+const SURVEY_STRIDE: usize = 33;
+
+fn survey_span() -> usize {
+    4 + SCAN_MAX * SURVEY_STRIDE
+}
+
+/// The shell asks which names the radio can hear. The radio replaces this tag.
+pub fn write_survey(page: &mut [u8]) -> bool {
+    if page.len() < survey_span() {
+        return false;
+    }
+    page[..survey_span()].fill(0);
+    page[0] = PAGE_SURVEY;
+    true
+}
+
+#[must_use]
+pub fn survey_requested(page: &[u8]) -> bool {
+    !page.is_empty() && page[0] == PAGE_SURVEY
+}
+
+/// Store the heard names in byte order. Tag becomes the list the shell reads.
+pub fn write_survey_list(page: &mut [u8], names: &[&[u8]]) -> bool {
+    if page.len() < survey_span() || names.len() > SCAN_MAX {
+        return false;
+    }
+    for name in names {
+        if name.is_empty() || name.len() > 32 {
+            return false;
+        }
+    }
+    let mut owned = [[0u8; 32]; SCAN_MAX];
+    let mut lens = [0u8; SCAN_MAX];
+    for (i, name) in names.iter().enumerate() {
+        owned[i][..name.len()].copy_from_slice(name);
+        lens[i] = fit_u8(name.len());
+    }
+    sort_names(&mut owned, &mut lens, names.len());
+    page[..survey_span()].fill(0);
+    page[0] = PAGE_LIST;
+    page[1] = fit_u8(names.len());
+    for i in 0..names.len() {
+        let at = 4 + i * SURVEY_STRIDE;
+        let n = usize::from(lens[i]);
+        page[at] = lens[i];
+        page[at + 1..at + 1 + n].copy_from_slice(&owned[i][..n]);
+    }
+    true
+}
+
+#[must_use]
+pub fn read_survey_count(page: &[u8]) -> Option<usize> {
+    let n = survey_len(page)?;
+    for i in 0..n {
+        survey_name(page, i)?;
+    }
+    Some(n)
+}
+
+#[must_use]
+pub fn read_survey_ssid(page: &[u8], index: usize) -> Option<&[u8]> {
+    let n = read_survey_count(page)?;
+    if index >= n {
+        return None;
+    }
+    survey_name(page, index)
+}
+
+/// A listed name, or the 1-based index of one. A line that is neither is `None`.
+#[must_use]
+pub fn survey_choice<'a>(page: &'a [u8], line: &[u8]) -> Option<&'a [u8]> {
+    let n = read_survey_count(page)?;
+    for i in 0..n {
+        let name = survey_name(page, i)?;
+        if name == line {
+            return Some(name);
+        }
+    }
+    let index = menu_index(line)?;
+    if index >= n {
+        return None;
+    }
+    survey_name(page, index)
+}
+
+fn survey_len(page: &[u8]) -> Option<usize> {
+    if page.len() < survey_span() || page[0] != PAGE_LIST {
+        return None;
+    }
+    let n = usize::from(page[1]);
+    if n > SCAN_MAX {
+        None
+    } else {
+        Some(n)
+    }
+}
+
+fn survey_name(page: &[u8], index: usize) -> Option<&[u8]> {
+    let at = 4 + index * SURVEY_STRIDE;
+    let len = usize::from(*page.get(at)?);
+    if len == 0 || len > 32 || page.len() < at + 1 + len {
+        return None;
+    }
+    Some(&page[at + 1..at + 1 + len])
+}
+
+fn menu_index(line: &[u8]) -> Option<usize> {
+    if line.is_empty() || line.len() > 2 || line[0] == b'0' {
+        return None;
+    }
+    let mut value = 0usize;
+    for byte in line {
+        let digit = byte.wrapping_sub(b'0');
+        if digit > 9 {
+            return None;
+        }
+        value = value * 10 + usize::from(digit);
+    }
+    value.checked_sub(1)
+}
+
+fn sort_names(names: &mut [[u8; 32]], lens: &mut [u8], count: usize) {
+    for i in 1..count {
+        let mut j = i;
+        while j > 0 && name_before(&names[j], lens[j], &names[j - 1], lens[j - 1]) {
+            names.swap(j, j - 1);
+            lens.swap(j, j - 1);
+            j -= 1;
+        }
+    }
+}
+
+fn name_before(left: &[u8; 32], left_len: u8, right: &[u8; 32], right_len: u8) -> bool {
+    left[..usize::from(left_len)] < right[..usize::from(right_len)]
 }
 
 /// `mt7921_mcu_set_chan_info` body for a 20 MHz channel, one stream.
@@ -1100,5 +1248,34 @@ mod tests {
         assert!(write_scan(&mut buf, b"home", 3));
         assert_eq!(&buf[12..16], b"home");
         assert_eq!(buf[2], 1);
+        assert_eq!(buf[3], 1 << 2);
+        assert_eq!(buf[4], 1);
+        assert!(write_scan(&mut buf, b"", 3));
+        assert_eq!(buf[2], 1);
+        assert_eq!(buf[3], 1);
+        assert_eq!(buf[4], 0);
+        assert_eq!(buf[12], 0);
+    }
+
+    #[test]
+    fn survey_page_lists_names_in_byte_order() {
+        let mut page = [0u8; 0x1000];
+        assert!(write_survey(&mut page));
+        assert!(survey_requested(&page));
+        assert!(read_survey_count(&page).is_none());
+        assert!(write_survey_list(&mut page, &[b"zeta", b"alpha", b"2"]));
+        assert_eq!(read_survey_count(&page), Some(3));
+        assert_eq!(read_survey_ssid(&page, 0), Some(&b"2"[..]));
+        assert_eq!(read_survey_ssid(&page, 1), Some(&b"alpha"[..]));
+        assert_eq!(read_survey_ssid(&page, 2), Some(&b"zeta"[..]));
+        assert_eq!(survey_choice(&page, b"2"), Some(&b"2"[..]));
+        assert_eq!(survey_choice(&page, b"1"), Some(&b"2"[..]));
+        assert_eq!(survey_choice(&page, b"alpha"), Some(&b"alpha"[..]));
+        assert!(survey_choice(&page, b"02").is_none());
+        assert!(survey_choice(&page, b"other").is_none());
+        assert!(write_survey_list(&mut page, &[]));
+        assert_eq!(read_survey_count(&page), Some(0));
+        assert!(write_key(&mut page, b"alpha", b"password"));
+        assert!(read_survey_count(&page).is_none());
     }
 }

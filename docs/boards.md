@@ -174,7 +174,7 @@ sudo dd if=build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso of=/dev/sdX bs=4M sta
 
 Replace `sdX` with the flash drive from `lsblk`. Do not overwrite the host OS disk. Reboot and open the firmware boot menu. Choose the USB entry that says UEFI (GRUB `EFI/BOOT/BOOTX64.EFI`). GRUB boots immediately. It Multiboot 2-loads `/boot/mb2-stub.elf` with modules `/boot/sel4.elf` and `/boot/loader.img`. The stub places the 64-bit kernel at 1 MiB after `ExitBootServices`.
 
-On 2026-10-29 the panel showed `fb 0x000000fc90000000 pitch 7680 1920x1080 r16 g8 b0`. On 2026-10-30 it then showed `hello lerux` and the menu `1 browser`, `2 maths`, and `3 wifi`. `1` or `browser` prints `browser unavailable`. `2` or `maths` reads integer expressions until `quit`, which returns the menu. A value prints `maths N`. A bad line prints `maths err`. `3` or `wifi` prompts `ssid>` and then `psk>`. The built-in keyboard types those lines.
+On 2026-10-29 the panel showed `fb 0x000000fc90000000 pitch 7680 1920x1080 r16 g8 b0`. On 2026-10-30 it then showed `hello lerux` and the menu `1 browser`, `2 maths`, and `3 wifi`. `1` or `browser` prints `browser unavailable`. `2` or `maths` reads integer expressions until `quit`, which returns the menu. A value prints `maths N`. A bad line prints `maths err`. `3` or `wifi` lists the names the radio can hear, then prompts `ssid>` and `psk>`. The built-in keyboard types those lines.
 
 The ISO is UEFI only. Packing needs `xorriso` and `grub-mkimage` (Arch: `sudo pacman -S libisoburn grub`. Debian: `xorriso` and `grub-efi-amd64-bin`).
 

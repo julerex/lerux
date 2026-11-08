@@ -2,9 +2,9 @@
 
 use lerux_swift::{
     dhcp_router, dhcp_yiaddr, icmp_reply,
-    mt7921::{frame_off, Stage, SCAN_DONE},
+    mt7921::{frame_off, write_survey_list, Stage, SCAN_DONE, SCAN_MAX},
     wpa::{
-        assoc_ok, auth_ok, ccmp_decrypt, ccmp_encrypt, derive_ptk, eapol_in_msdu,
+        assoc_ok, auth_ok, beacon_ssid, ccmp_decrypt, ccmp_encrypt, derive_ptk, eapol_in_msdu,
         ethernet_from_msdu, llc_from_ethernet, match_beacon, message1, message2, message3,
         message4, pmk, write_assoc, write_auth, write_qos_data, FoundAp,
     },
@@ -68,6 +68,36 @@ impl Mac {
             core::hint::spin_loop();
         }
         None
+    }
+
+    /// Wildcard scan. Heard names are written for the shell, in byte order.
+    pub(crate) fn survey(&mut self, page: &mut [u8]) {
+        let mut names = [[0u8; 32]; SCAN_MAX];
+        let mut lens = [0u8; SCAN_MAX];
+        let mut count = 0usize;
+        if self.start_scan(&[]) {
+            let mut frame = [0u8; 1600];
+            for _ in 0..scan_budget() {
+                if let Some(n) = self.poll_data()
+                    && let Some(m) = copy_frame(n, &mut frame)
+                    && let Some(ssid) = beacon_ssid(&frame[..m])
+                {
+                    count = remember(&mut names, &mut lens, count, ssid);
+                }
+                if let Some(n) = self.poll_mcu()
+                    && scan_done(Mac::rx_bytes(n))
+                {
+                    break;
+                }
+                core::hint::spin_loop();
+            }
+        }
+        let mut refs: [&[u8]; SCAN_MAX] = [&[]; SCAN_MAX];
+        for i in 0..count {
+            let n = usize::from(lens[i]);
+            refs[i] = &names[i][..n];
+        }
+        let _ = write_survey_list(page, &refs[..count]);
     }
 
     fn open_auth(&mut self, ap: &FoundAp) -> bool {
@@ -267,6 +297,20 @@ impl Mac {
         let n = write_qos_data(&mut frame, &bssid, &sta, &da, &body[..clen], seq, true)?;
         self.tx_80211(&frame[..n]).then_some(())
     }
+}
+
+fn remember(names: &mut [[u8; 32]], lens: &mut [u8], count: usize, ssid: &[u8]) -> usize {
+    if ssid.is_empty() || ssid.len() > 32 || count >= names.len() {
+        return count;
+    }
+    for i in 0..count {
+        if usize::from(lens[i]) == ssid.len() && names[i][..ssid.len()] == *ssid {
+            return count;
+        }
+    }
+    names[count][..ssid.len()].copy_from_slice(ssid);
+    lens[count] = u8::try_from(ssid.len()).expect("ssid length");
+    count + 1
 }
 
 fn scan_done(bytes: &[u8]) -> bool {

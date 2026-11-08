@@ -7,8 +7,9 @@
 //! address, and the done bit. The stage line is `own`,
 //! `fw sem`, `fw patch`, `fw scatter`, `fw ram`, `fw start`, `fw chip`, or
 //! `mac` when that step fails, and `wait` when the
-//! firmware has reached the normal state. The shell then writes the network
-//! name and passphrase and notifies channel 1. Channel 0 stays the MSI.
+//! firmware has reached the normal state. The shell then asks for a survey.
+//! This domain writes the names it hears and, after the passphrase, associates.
+//! The shell notifies channel 1 for both. Channel 0 stays the MSI.
 //! Association paints `scan`, `auth`, `assoc`, `eapol`, `dhcp`, and `ping`.
 //! Rows 51 to 65 are the register, ring, descriptor, and command dump that
 //! `dump` paints once the boot attempt has returned, on success or failure.
@@ -31,7 +32,7 @@ use lerux_swift::{
     bar_line, class_code,
     dump::PANEL_COLS,
     format_report, load_header, memory_bar,
-    mt7921::{write_slot_line, Sem, Stage},
+    mt7921::{survey_requested, write_slot_line, Sem, Stage},
     paint_row, read_key, vendor_device, working_line, WaitMark, WifiReport, MT7921_BAR, MT7921_BDF,
     MT7921_IDS,
 };
@@ -203,9 +204,13 @@ fn paint_line(row: usize, line: &[u8]) {
     paint_row(record, frame, row, line);
 }
 
-fn posted_key() -> Option<([u8; 32], usize, [u8; 64], usize)> {
+fn key_page() -> &'static mut [u8] {
     let ptr = memory_region_symbol!(wifi_key_vaddr: *mut u8).as_ptr();
-    let page = unsafe { core::slice::from_raw_parts(ptr, 0x1000) };
+    unsafe { core::slice::from_raw_parts_mut(ptr, 0x1000) }
+}
+
+fn posted_key() -> Option<([u8; 32], usize, [u8; 64], usize)> {
+    let page = key_page();
     let (ssid, psk) = read_key(page)?;
     let mut name = [0u8; 32];
     let mut pass = [0u8; 64];
@@ -224,13 +229,15 @@ impl Handler for HandlerImpl {
         if channels.contains(KEY)
             && let Some(mac) = self.mac.as_mut()
         {
-            if mac.ready()
-                && let Some((name, name_len, pass, pass_len)) = posted_key()
-            {
+            if !mac.ready() {
+                paint_stage(mac.stage());
+            } else if survey_requested(key_page()) {
+                paint_stage(Stage::Scan);
+                mac.survey(key_page());
+                paint_stage(Stage::Wait);
+            } else if let Some((name, name_len, pass, pass_len)) = posted_key() {
                 let stage = mac.associate(&name[..name_len], &pass[..pass_len], paint_stage);
                 paint_stage(stage);
-            } else if !mac.ready() {
-                paint_stage(mac.stage());
             }
         }
         Ok(())

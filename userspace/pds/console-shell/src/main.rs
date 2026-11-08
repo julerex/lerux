@@ -19,7 +19,9 @@ use sel4_microkit_driver_adapters::serial::client::Client;
 
 use lerux_calc::{eval, write_i64, Error};
 #[cfg(feature = "board-swift_sfx14_41g")]
-use lerux_swift::{key_ok, write_key};
+use lerux_swift::{
+    key_ok, read_survey_count, read_survey_ssid, survey_choice, write_key, write_survey, SCAN_MAX,
+};
 
 const CONSOLE: Channel = Channel::new(0);
 #[cfg(not(feature = "board-swift_sfx14_41g"))]
@@ -182,8 +184,13 @@ impl HandlerImpl {
             }
             #[cfg(feature = "board-swift_sfx14_41g")]
             b"3" | b"wifi" => {
-                self.mode = Mode::Ssid;
                 self.ssid_len = 0;
+                if !request_survey() {
+                    self.wifi_err();
+                    return;
+                }
+                self.mode = Mode::Ssid;
+                self.show_networks();
                 self.emit(b"ssid> ");
             }
             _ => self.reject(),
@@ -197,14 +204,60 @@ impl HandlerImpl {
             self.emit(MENU);
             return;
         }
-        if (1..=32).contains(&line.len()) {
-            self.ssid[..line.len()].copy_from_slice(line);
-            self.ssid_len = line.len();
-            self.mode = Mode::Psk;
-            self.emit(b"ssid ok\npsk> ");
+        if let Some(name) = survey_choice(key_page(), line) {
+            self.accept_ssid(name);
+        } else if (1..=32).contains(&line.len()) {
+            self.accept_ssid(line);
         } else {
             self.wifi_err();
         }
+    }
+
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    fn accept_ssid(&mut self, name: &[u8]) {
+        self.ssid[..name.len()].copy_from_slice(name);
+        self.ssid_len = name.len();
+        self.mode = Mode::Psk;
+        self.emit(b"ssid ok\npsk> ");
+    }
+
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    fn show_networks(&mut self) {
+        let mut lines = [[0u8; 32]; SCAN_MAX];
+        let mut lens = [0u8; SCAN_MAX];
+        let count = {
+            let page = key_page();
+            let Some(count) = read_survey_count(page) else {
+                return;
+            };
+            for i in 0..count {
+                let Some(name) = read_survey_ssid(page, i) else {
+                    return;
+                };
+                lines[i][..name.len()].copy_from_slice(name);
+                lens[i] = u8::try_from(name.len()).expect("ssid length");
+            }
+            count
+        };
+        for i in 0..count {
+            let n = usize::from(lens[i]);
+            self.emit_network(i + 1, &lines[i][..n]);
+        }
+    }
+
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    fn emit_network(&mut self, index: usize, name: &[u8]) {
+        let mut line = [0u8; 40];
+        let value = i64::try_from(index).expect("network index");
+        let mut len = write_i64(&mut line, value);
+        line[len] = b' ';
+        len += 1;
+        let n = name.len().min(line.len() - len - 1);
+        line[len..len + n].copy_from_slice(&name[..n]);
+        len += n;
+        line[len] = b'\n';
+        len += 1;
+        self.emit(&line[..len]);
     }
 
     #[cfg(feature = "board-swift_sfx14_41g")]
@@ -262,9 +315,7 @@ impl HandlerImpl {
         let name_len = self.ssid_len;
         let mut name = [0u8; 32];
         name[..name_len].copy_from_slice(&self.ssid[..name_len]);
-        let ptr = memory_region_symbol!(wifi_key_vaddr: *mut u8).as_ptr();
-        let page = unsafe { core::slice::from_raw_parts_mut(ptr, 0x1000) };
-        if !write_key(page, &name[..name_len], psk) {
+        if !write_key(key_page(), &name[..name_len], psk) {
             self.wifi_err();
             return;
         }
@@ -283,6 +334,21 @@ fn push(client: &mut Client, byte: u8) {
             Err(nb::Error::Other(_)) => unreachable!("serial write"),
         }
     }
+}
+
+#[cfg(feature = "board-swift_sfx14_41g")]
+fn request_survey() -> bool {
+    if !write_survey(key_page()) {
+        return false;
+    }
+    WIFI.notify();
+    read_survey_count(key_page()).is_some()
+}
+
+#[cfg(feature = "board-swift_sfx14_41g")]
+fn key_page() -> &'static mut [u8] {
+    let ptr = memory_region_symbol!(wifi_key_vaddr: *mut u8).as_ptr();
+    unsafe { core::slice::from_raw_parts_mut(ptr, 0x1000) }
 }
 
 #[cfg(feature = "board-swift_sfx14_41g")]

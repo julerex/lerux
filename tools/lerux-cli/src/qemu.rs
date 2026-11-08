@@ -418,6 +418,14 @@ pub fn probe_tcp_echo(port: u16) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        collections::BTreeMap,
+        io::Read,
+        process::{Child, Command, ExitStatus, Stdio},
+        thread,
+        time::{Duration, Instant},
+    };
+
     use super::*;
 
     fn render_aarch64(qemu_toml: &str, window: bool) -> String {
@@ -573,5 +581,161 @@ mod tests {
             x86_net_device("x86_64_generic_fetch_sddf").expect("virtio net"),
             X86_VIRTIO_NET_PCI
         );
+    }
+
+    const INTEGER_HELP_TYPES: &[&str] = &[
+        "uint8", "uint16", "uint32", "uint64", "int8", "int16", "int32", "int64",
+    ];
+
+    /// Help text shaped like `qemu-system-x86_64 -device e1000e,help`.
+    const E1000E_HELP_FIXTURE: &str = "\
+e1000e options:
+  disable_vnet_hdr=<uint8> - Do not use virtio headers (default: 0)
+  multifunction=<bool>   - on/off (default: false)
+  mac=<str>              - Ethernet MAC
+";
+
+    fn device_name(line: &str) -> &str {
+        line.split(',').next().unwrap_or(line)
+    }
+
+    fn property_types(help: &str) -> BTreeMap<String, String> {
+        let mut types = BTreeMap::new();
+        for raw in help.lines() {
+            let line = raw.trim();
+            let Some((name, rest)) = line.split_once("=<") else {
+                continue;
+            };
+            let Some((ty, _)) = rest.split_once('>') else {
+                continue;
+            };
+            if name.contains(' ') {
+                continue;
+            }
+            types.insert(name.to_string(), ty.to_string());
+        }
+        types
+    }
+
+    fn integer_on_off(line: &str, types: &BTreeMap<String, String>) -> Option<String> {
+        for part in line.split(',').skip(1) {
+            let Some((key, value)) = part.split_once('=') else {
+                continue;
+            };
+            let Some(ty) = types.get(key) else {
+                continue;
+            };
+            if INTEGER_HELP_TYPES.contains(&ty.as_str()) && (value == "on" || value == "off") {
+                return Some(format!("{key}={value} is <{ty}>"));
+            }
+        }
+        None
+    }
+
+    fn q35_device_lines() -> Vec<String> {
+        vec![
+            e1000e_net_device(),
+            ahci_disk_device("blkdev0"),
+            X86_VIRTIO_BLK_PCI.to_string(),
+            X86_VIRTIO_NET_PCI.to_string(),
+            "qemu-xhci,id=xhci,addr=0x14.0x0".to_string(),
+            "usb-kbd,bus=xhci.0".to_string(),
+        ]
+    }
+
+    fn wait_for_help(child: &mut Child, name: &str) -> ExitStatus {
+        let started = Instant::now();
+        loop {
+            match child.try_wait() {
+                Ok(Some(status)) => return status,
+                Ok(None) if started.elapsed() > Duration::from_secs(5) => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    panic!("qemu help for {name} did not exit within 5s");
+                }
+                Ok(None) => thread::sleep(Duration::from_millis(20)),
+                Err(err) => panic!("wait qemu help for {name}: {err}"),
+            }
+        }
+    }
+
+    fn read_pipe(pipe: Option<impl Read>, name: &str) -> String {
+        let Some(mut pipe) = pipe else {
+            return String::new();
+        };
+        let mut text = String::new();
+        pipe.read_to_string(&mut text)
+            .unwrap_or_else(|err| panic!("read qemu help for {name}: {err}"));
+        text
+    }
+
+    fn q35_device_help(name: &str) -> String {
+        let mut child = Command::new("qemu-system-x86_64")
+            .args([
+                "-machine",
+                "q35",
+                "-nodefaults",
+                "-display",
+                "none",
+                "-S",
+                "-monitor",
+                "none",
+                "-device",
+                &format!("{name},help"),
+            ])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap_or_else(|err| panic!("spawn qemu help for {name}: {err}"));
+        let status = wait_for_help(&mut child, name);
+        let out = read_pipe(child.stdout.take(), name);
+        let err = read_pipe(child.stderr.take(), name);
+        assert!(status.success(), "qemu help for {name} failed: {err}{out}");
+        out
+    }
+
+    #[test]
+    fn integer_property_rejects_on_off_from_help_fixture() {
+        let types = property_types(E1000E_HELP_FIXTURE);
+        assert_eq!(
+            types.get("disable_vnet_hdr").map(String::as_str),
+            Some("uint8")
+        );
+        assert!(
+            integer_on_off("e1000e,id=net0,disable_vnet_hdr=on", &types).is_some(),
+            "uint8 on must fail"
+        );
+        assert!(integer_on_off("e1000e,disable_vnet_hdr=off", &types).is_some());
+        assert!(integer_on_off("e1000e,disable_vnet_hdr=1", &types).is_none());
+        assert!(
+            integer_on_off("e1000e,multifunction=on", &types).is_none(),
+            "bool on stays legal"
+        );
+        assert!(integer_on_off("e1000e,id=net0", &types).is_none());
+    }
+
+    #[test]
+    fn q35_device_lines_match_help_types() {
+        let mut help = BTreeMap::new();
+        for line in q35_device_lines() {
+            let name = device_name(&line).to_string();
+            if !help.contains_key(&name) {
+                let text = q35_device_help(&name);
+                help.insert(name.clone(), text);
+            }
+            let types = property_types(&help[&name]);
+            assert!(
+                integer_on_off(&line, &types).is_none(),
+                "{line} uses on/off for an integer property"
+            );
+            if name == "e1000e" {
+                assert_eq!(
+                    types.get("disable_vnet_hdr").map(String::as_str),
+                    Some("uint8"),
+                    "live help:\n{}",
+                    help[&name]
+                );
+            }
+        }
     }
 }

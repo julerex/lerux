@@ -45,14 +45,14 @@ lerux runs several small programs at once. Each one has its own memory. They sha
 | --- | --- | --- |
 | 6 | Display | `hello lerux` and, later, the menu |
 | 5 | PCI probe | Device names below the menu, rows 15 and 16, and rows 31–51 of the dump |
-| 4 | Wi-Fi | Rows 17–22, and rows 52–66 of the dump |
+| 4 | Wi-Fi | Rows 13, 14, and 17–22, and rows 52–66 of the dump |
 | 3 | Disk | Row 23, `nvme` |
 | 2 | Bluetooth | Row 24, `bt` |
 | 1 | Menu | `1 browser`, `2 maths`, `3 wifi` |
 
 The Wi-Fi program starts before the disk program and the Bluetooth program. Its startup includes a long wait for the card. Until that wait ends, the disk line and the Bluetooth line do not exist yet. The blank minute is that wait. The moving dots, and the lines under them, are there so the wait is visible.
 
-A later scroll of the menu redraws the whole picture from the menu's own record of the screen. That record does not contain rows 15–21. A full redraw erases them. The status word on row 22 is painted again by the Wi-Fi program, so it survives.
+A later scroll of the menu redraws the whole picture from the menu's own record of the screen. That record does not contain rows 13–21. A full redraw erases them. The status word on row 22 is painted again by the Wi-Fi program, so it survives.
 
 ## How to read the numbers
 
@@ -159,6 +159,8 @@ During the wait, the Wi-Fi program paints these rows:
 
 | Row | Text | What just happened |
 | --- | --- | --- |
+| 13 | `base … glo …` | After the wait fails, the processor reads the whole ring-base register and the whole DMA config |
+| 14 | `rst … sw …` | The same moment. Transmit reset, then the scheduler control register |
 | 15 | `cmd …` | The probe read back the MT7921 PCI command word. This is painted before the Wi-Fi program starts |
 | 16 | `excl …` | The probe read back the IOMMU exclusion settings. This is painted before the Wi-Fi program starts |
 | 17 | `slot …` | After the wait fails, the processor reads note 0 back out of RAM |
@@ -253,6 +255,8 @@ The translator is off, and both exclusion registers are zero. That was `excl 000
 
 The command word is the next measurement. It says whether the card is allowed to fetch that address. Paste the `cmd` line from row 15. Bus master is on when the last digit is `4`, `5`, `6`, `7`, `c`, `d`, `e`, or `f`. The firmware download order stays as it is until a line says a later step is the one that failed.
 
+Rows 13 and 14 are an earlier reading of registers the dump below prints in full. Row 13 is `base` and `glo`: the whole ring base and the whole DMA config. `base 01f62000` is the command ring. Little-endian is bit 12 of `glo`, and the engine clock is bit 30. Row 14 is `rst` and `sw`: the transmit reset and the scheduler control. `rst 00000000` means the reset is released. Bit 28 of `sw` is the scheduler bypass, set when the first digit is `1`, `3`, `5`, `7`, `9`, `b`, `d`, or `f`. `sw ffffffff` means the read missed.
+
 ## The dump rows, 31 to 66
 
 Rows 31 to 66 are a hex dump meant to be photographed. They are painted once per boot and the console redraw does not touch them. Each row is at most 120 characters: a label of eight characters, then up to twelve 8-digit words. The layout constants live in `userspace/crates/lerux-swift/src/dump.rs`.
@@ -302,13 +306,13 @@ If you want to see the same facts in the source, these are the files. The screen
 | File | What it holds |
 | --- | --- |
 | `userspace/pds/swift-mt7921/src/device.rs` | The startup sequence, the ring addresses, the doorbell, and the read of note 0 |
-| `userspace/pds/swift-mt7921/src/main.rs` | Which screen row gets `slot`, the four step lines, and `fw sem` |
+| `userspace/pds/swift-mt7921/src/main.rs` | Which screen row gets `slot`, the four step lines, `fw sem`, and rows 13 and 14 |
 | `userspace/pds/swift-pci-probe/src/main.rs` | The IOMMU programming, the `cmd` row, and the `excl` row |
 | `userspace/pds/swift-pci-probe/src/dump.rs` | The root-port lookup and enable, and rows 31 to 51 |
 | `userspace/pds/swift-mt7921/src/dump.rs` | Rows 52 to 66 |
 | `userspace/crates/lerux-swift/src/dump.rs` | The row layout, the hex row formatters, and the capability walk |
-| `userspace/crates/lerux-swift/src/mt7921.rs` | The register numbers, the 16-byte note layout, the text of `fw sem` and `slot`, and the `DUMP_REGS` name table |
+| `userspace/crates/lerux-swift/src/mt7921.rs` | The register numbers, the 16-byte note layout, the text of `fw sem`, `slot`, `base`, and `rst`, and the `DUMP_REGS` name table |
 | `userspace/crates/lerux-swift/src/pci.rs` | The exclusion addresses and the text of `cmd` and `excl` |
 | `GLOSSARY.md` | Short definitions of the same words, linked to each other |
 
-The ISO you boot is `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`, produced by `just iso`. An older file on the USB stick does not contain a line that was added later. The `cmd` line is on the ISO built after that readback was added.
+The ISO you boot is `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`, produced by `just iso`. An older file on the USB stick does not contain a line that was added later. The `cmd` line is on the ISO built after that readback was added. Rows 13 and 14 are on the ISO built after the full-register readback was added.

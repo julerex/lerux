@@ -254,11 +254,18 @@ pub fn write_port_summary(out: &mut [u8], tag: &[u8; 2], port: Option<PortReadba
     out[10..15].copy_from_slice(b" sec ");
     out[15] = hex(secondary_bus(port.config).unwrap_or(0xff) >> 4);
     out[16] = hex(secondary_bus(port.config).unwrap_or(0xff));
-    write_field(&mut out[17..26], b" cmd ", port.before);
-    out[26] = b'>';
-    write_hex16_opt(&mut out[27..31], command_word(port.config));
-    write_field(&mut out[31..40], b" lnk ", link_control(port.config));
-    N
+    let mut at = 17;
+    if let Some(before) = port.before {
+        write_field(&mut out[at..at + 9], b" cmd ", Some(before));
+        out[at + 9] = b'>';
+        write_hex16_opt(&mut out[at + 10..at + 14], command_word(port.config));
+        at += 14;
+    } else {
+        write_field(&mut out[at..at + 9], b" cmd ", command_word(port.config));
+        at += 9;
+    }
+    write_field(&mut out[at..at + 9], b" lnk ", link_control(port.config));
+    at + 9
 }
 
 /// A root port the probe found: its location, its configuration space after
@@ -480,9 +487,19 @@ mod tests {
             &out[n + 3..n + 3 + m],
             b"rp 00:02.2 sec 03 cmd 0403>0407 lnk 0043"
         );
-        let k = write_port_summary(&mut out[n + 3 + m + 3..], b"np", None);
-        assert_eq!(&out[n + 3 + m + 3..n + 3 + m + 3 + k], b"np miss");
+        let untouched = PortReadback {
+            bdf: (0, 2, 1),
+            config: &port,
+            before: None,
+        };
+        let k = write_port_summary(&mut out[n + 3 + m + 3..], b"np", Some(untouched));
+        assert_eq!(
+            &out[n + 3 + m + 3..n + 3 + m + 3 + k],
+            b"np 00:02.1 sec 03 cmd 0407 lnk 0043"
+        );
         assert!(n + 3 + m + 3 + m <= PANEL_COLS);
+        let k = write_port_summary(&mut out, b"np", None);
+        assert_eq!(&out[..k], b"np miss");
     }
 
     #[test]

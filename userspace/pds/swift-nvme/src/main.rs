@@ -17,10 +17,11 @@ use lerux_sddf::{
 };
 use lerux_swift::{
     class_code, io_allowed, load_header, load_named, paint_row, report_bytes, vendor_device,
-    write_result, DiskReport, NVME_BDF, NVME_CLASS,
+    working_line, write_result, DiskReport, WaitMark, NVME_BDF, NVME_CLASS,
 };
 
 const ROW: usize = 23;
+static MARK: WaitMark = WaitMark::new();
 /// Matches `nvme_dma` in the Swift template. The window ends at `0x01f20000`,
 /// below the header pages and below the stub linked at 32 MiB.
 const DMA_PHYS: u64 = 0x01f0_0000;
@@ -64,10 +65,13 @@ fn init() -> HandlerImpl {
     let regs = memory_region_symbol!(nvme_regs_vaddr: *mut u8).as_ptr();
     let dma = memory_region_symbol!(nvme_dma_vaddr: *mut u8).as_ptr();
     let report = if present && queue_read(dma) {
-        match Ctrl::open(regs, dma) {
+        beat_arm();
+        let report = match Ctrl::open(regs, dma) {
             Ok(mut ctrl) => load_named(|lba| ctrl.read_lba(lba)),
             Err(stage) => stage.report(),
-        }
+        };
+        beat_disarm();
+        report
     } else {
         DiskReport::Absent
     };
@@ -328,9 +332,32 @@ impl Ctrl {
     }
 }
 
+/// The status line is painted only after the controller answers. A moving dot fills that wait.
+fn beat_arm() {
+    MARK.arm();
+    paint_working(0);
+}
+
+fn beat_disarm() {
+    MARK.disarm();
+}
+
+fn beat() {
+    if let Some(tick) = MARK.beat() {
+        paint_working(tick);
+    }
+}
+
+fn paint_working(tick: u32) {
+    let mut line = [0u8; 16];
+    let n = working_line(b"nvme", tick, &mut line);
+    paint(&line[..n]);
+}
+
 fn poll(cq: *mut u8, head: u16, phase: u32) -> Option<u16> {
     let slot = usize::from(head & 1) * 16;
     for _ in 0..SPIN {
+        beat();
         #[expect(clippy::cast_ptr_alignment, reason = "4-byte completion dword")]
         let dw3 = unsafe { cq.add(slot + 12).cast::<u32>().read_volatile() };
         if (dw3 >> 16) & 1 == phase {
@@ -343,6 +370,7 @@ fn poll(cq: *mut u8, head: u16, phase: u32) -> Option<u16> {
 
 fn wait_rdy(regs: *mut u8, ready: bool) -> bool {
     for _ in 0..SPIN {
+        beat();
         let csts = read32(regs, 0x1c);
         if csts == 0xffff_ffff {
             return false;
@@ -361,7 +389,13 @@ fn paint(text: &[u8]) {
     let record = unsafe { core::slice::from_raw_parts(mode, 40) };
     let bytes = usize::try_from(FRAMEBUFFER_BYTES).expect("framebuffer fits");
     let frame = unsafe { core::slice::from_raw_parts_mut(frame, bytes) };
-    paint_row(record, frame, ROW, text);
+    if text.len() > 80 {
+        paint_row(record, frame, ROW, text);
+        return;
+    }
+    let mut line = [b' '; 80];
+    line[..text.len()].copy_from_slice(text);
+    paint_row(record, frame, ROW, &line[..text.len().max(16)]);
 }
 
 #[expect(clippy::cast_ptr_alignment, reason = "4-byte MMIO register")]

@@ -2,7 +2,7 @@
 
 Last updated: 2026-11-08
 
-**Status:** Phase 1 is done and is the full-panel dump plus the root-port readback. Its first photograph eliminated the root port, and Phase 3's ASPM clear is on the next ISO. Phases run in order. Phases 2 through 5 are the Swift radio. Phases 6 through 8 are the application path and do not need the laptop. Phase 9 is an alternative route, not a step.
+**Status:** Phase 1 is done. The 8 November 2026 photograph of the ASPM clear left the stall at `fw sem`, so link power is eliminated. Phase 4 is the Linux capture in [support/swift-linux/README.md](../support/swift-linux/README.md). Phases 2 through 5 are the Swift radio. Phases 6 through 8 are the application path and do not need the laptop. Phase 9 is an alternative route, not a step.
 
 **Goal:** A lerux application on the Acer Swift X reaches a host on the internet over the MT7921 radio. [plan-lionsos.md](plan-lionsos.md) Milestone 27 stays the radio exit (`ping ok`). This plan is the route from the current stall to that exit, and from that exit to an application.
 
@@ -39,13 +39,15 @@ Rows 32 to 49 hold the card, its root port, and the disk's root port, not the di
 
 Linux calls `mt76_pci_disable_aspm` on the endpoint and the parent before it touches the chip. Through `pci_disable_link_state(L0S | L1 | CLKPM)` that clears link control bits 1:0 on both functions and bit 8 on the endpoint. The first photograph showed those bits set (`lnk 0142` on the card, `0042` on the port), so the probe now clears them in that order, endpoint then port, before `swift-mt7921` starts, and row 31 paints each link word before and after (`lnk 0142>0040`, `lnk 0042>0040`). Boot from power-off at least once, since the Linux form of this stall (`Failed to get patch semaphore`) is often reported after a warm restart.
 
-The Linux call also disables the L1 PM substates (L1.1 and L1.2). That control register is in the extended capability past byte 256, and the probe reads configuration space through port `0xcf8`, which stops at byte 255. If the stall stays at `fw sem` with `lnk …>0040` on both functions, the next readback is that register through ECAM (the MCFG base, a new region in the template), painted before and after the same way. Clock power management being on is the hint that L1.2 is armed.
+The Linux call also disables the L1 PM substates (L1.1 and L1.2). That control register is in the extended capability past byte 256, and the probe reads configuration space through port `0xcf8`, which stops at byte 255.
+
+The photograph of 8 November 2026 showed `lnk 0142>0040` on the card and `lnk 0042>0040` on `00:02.2`, with the stall still `fw sem d00 c01 s0100 b2000 g75`. Bits 1:0 are clear on both ends, so the link cannot enter L1 and the L1 substate register is not the next measurement.
 
 ## Phase 4 — Linux ground truth on the same laptop
 
-**Exit:** `support/swift-linux/` holds `lspci -vvv` for `03:00.0` and its root port, the `dmesg` lines matching `mt7921|AMD-Vi`, and a `trace-cmd` report of `mt76:reg_rr` and `mt76:reg_wr` from one `modprobe mt7921e`.
+**Exit:** `support/swift-linux/out/` holds `lspci -vvv` for the MT7921 and its root port, the `dmesg` lines matching `mt7921|AMD-Vi`, and a report of `mt76:reg_rr` and `mt76:reg_wr` from one `modprobe mt7921e`.
 
-A live USB gives more in one boot than ten ISO cycles. The trace is register offsets and values of a bring-up that works on this exact unit. Diff that trace against `DUMP_REGS` and the sequence in `device.rs`. The first register whose value differs at the same step is the lead. Add that directory to `.gitignore` when the files land, since they name the unit; the diff is written into this document.
+The capture is [support/swift-linux/README.md](../support/swift-linux/README.md). Boot the current Arch install image from power-off with `modprobe.blacklist=mt7921e` on the kernel line, and run `capture.sh` from a second stick. The install image has no network until this driver is up, so the script reads those two events from the kernel tracer; they are the events `trace-cmd` would record. The addresses in the report are BAR offsets, because `mt76` traces the access after remap. `map_reg` in `userspace/crates/lerux-swift/src/mt7921.rs` is the translation back to the logical addresses in `device.rs`. The same run saves the NVMe endpoint and its root port, which is the Phase 2 comparison the panel photograph did not resolve. `out/` is gitignored because the files name the unit. The diff against `DUMP_REGS` and `device.rs` is written into this document. The first register whose value differs at the same step is the lead.
 
 ## Phase 5 — Driver-side deltas
 

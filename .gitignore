@@ -8,6 +8,9 @@
 /support/swift-wifi.txt
 /support/mt7921.bin
 /support/mt7921-bt.bin
+# Names the Swift. The diff is written into docs/plan-swift-wifi.md.
+/support/swift-linux/out/
+/support/swift-linux/swift-linux-out/
 /support/mb2-stub/mb2-stub.elf
 /loader.img
 /sel4.elf

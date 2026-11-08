@@ -243,15 +243,19 @@ The probe sets both of those bits on the MT7921 at `03:00.0`, then reads the wor
 | any other last digit | Bus master is off. The card is not allowed to fetch |
 | `cmd miss` | The probe did not find the MT7921, or the command read came back all ones |
 
-## What is settled, and what the next line is for
+## What is settled, and what comes next
 
 The ring length is 256, the base register still names the command ring, and transmit is enabled. That was `fw sem d00 c01 s0100 b2000 g75`.
 
 The note in RAM is a live order for the bounce buffer. That was `slot 00 01f66000 d0`.
 
-The translator is off, and both exclusion registers are zero. That was `excl 00000000 00000000 off`. The card is supposed to use `0x01f66000` as a plain RAM address. The DMA index stayed 0, so the engine still did not collect the note.
+The translator is off, and both exclusion registers are zero. That was `excl 00000000 00000000 off`. The card is supposed to use `0x01f66000` as a plain RAM address. The DMA index stayed 0.
 
-The command word is the next measurement. It says whether the card is allowed to fetch that address. Paste the `cmd` line from row 15. Bus master is on when the last digit is `4`, `5`, `6`, `7`, `c`, `d`, `e`, or `f`. The firmware download order stays as it is until a line says a later step is the one that failed.
+The command word is `cmd 0006`. Memory space and bus master are both set, so the card is allowed to fetch.
+
+The link control was cleared on the card and on its root port (`lnk 0142>0040` and `lnk 0042>0040` on row 31) and the stall stayed on `fw sem`. The fetch is permitted from the processor's side of the bus, and the engine's counter still does not move.
+
+The next measurement is a Linux probe of this same card, recorded by `support/swift-linux/capture.sh`. The firmware download order stays as it is until a line says a later step is the one that failed.
 
 ## The dump rows, 31 to 66
 
@@ -289,6 +293,8 @@ The boot of 8 November 2026 read `03:00.0 cmd 0006 lnk 0142 pm 0008 | rp 00:02.2
 - `lnk 0142` on the card: ASPM L1 (bit 1), common clock (bit 6), and clock power management (bit 8) are all on. Both root ports read `0042`: L1 and common clock.
 
 Linux clears those link bits before it touches the chip (`mt76_pci_disable_aspm`), and a card parked in L1 that does not wake for its own read would look exactly like this stall. The ISO after that photograph clears them from the probe, and row 31 now shows each link word before and after. The Linux call also turns off the L1 substates, whose control register is past byte 256 of configuration space; the probe reads configuration space through port `0xcf8`, which stops at byte 255, so that register is neither shown nor cleared yet.
+
+The next photograph, the same day, showed the clear taking effect and the stall staying put: `03:00.0 cmd 0006 lnk 0142>0040 pm 0008`, root port `00:02.2` with `lnk 0042>0040`, and row 22 still `fw sem d00 c01 s0100 b2000 g75`. With bits 1:0 clear on both ends of the link, L1 and its substates are not reachable, so that extended register is not the next measurement. The next measurement is the Linux probe in `support/swift-linux/capture.sh`.
 
 ## Other words on row 22
 

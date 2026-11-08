@@ -41,7 +41,7 @@ Linux calls `mt76_pci_disable_aspm` on the endpoint and the parent before it tou
 
 **Exit:** `support/swift-linux/` holds `lspci -vvv` for `03:00.0` and its root port, the `dmesg` lines matching `mt7921|AMD-Vi`, and a `trace-cmd` report of `mt76:reg_rr` and `mt76:reg_wr` from one `modprobe mt7921e`.
 
-A live USB gives more in one boot than ten ISO cycles. The trace is register offsets and values of a bring-up that works on this exact unit. Diff that trace against `DUMP_REGS` and the sequence in `device.rs`. The first register whose value differs at the same step is the lead. The files are gitignored because they name the unit; the diff is written into this document.
+A live USB gives more in one boot than ten ISO cycles. The trace is register offsets and values of a bring-up that works on this exact unit. Diff that trace against `DUMP_REGS` and the sequence in `device.rs`. The first register whose value differs at the same step is the lead. Add that directory to `.gitignore` when the files land, since they name the unit; the diff is written into this document.
 
 ## Phase 5 — Driver-side deltas
 

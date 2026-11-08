@@ -2,7 +2,7 @@
 
 An assessment of the Acer Swift X (`swift_sfx14_41g`) bring-up, written after reading the Swift protection domains, the recent commits, [plan-lionsos.md](plan-lionsos.md) Milestones 24 to 29, and comparing the MT7921 sequence against the Linux v6.8 `mt76` sources side by side. The question was whether the work is on the right track toward lerux applications reaching the internet from that laptop, given that progress through the ISO loop has been slower than expected.
 
-The plan that follows from this assessment is [plan-swift-wifi.md](plan-swift-wifi.md). The screen guide is [swift-boot-screen.md](swift-boot-screen.md).
+The plan that follows from this assessment is [plan-swift-wifi.md](plan-swift-wifi.md). The screen guide is [swift-boot-screen.md](swift-boot-screen.md). The 8 November 2026 Linux boot is [what the Linux boot showed](plan-swift-wifi.md#what-the-linux-boot-showed). Linux loads the firmware on this laptop. The paragraphs below are the reasoning as it stood before that boot, including the decision to set the `fe24c` full-word write aside.
 
 ## Short answer
 

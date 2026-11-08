@@ -255,7 +255,7 @@ The command word is `cmd 0006`. Memory space and bus master are both set, so the
 
 The link control was cleared on the card and on its root port (`lnk 0142>0040` and `lnk 0042>0040` on row 31) and the stall stayed on `fw sem`. The fetch is permitted from the processor's side of the bus, and the engine's counter still does not move.
 
-The Linux probe of 8 November 2026 is in `support/swift-linux/out/`. Linux loads the firmware. The first write that differs from `device.rs` is `HIF_REMAP_L1`: Linux keeps `1845` in the high half, and `device.rs` stores the page alone. That difference, and the `RST_DTX_PTR` zero that follows it, are written up in [plan-swift-wifi.md](plan-swift-wifi.md). The firmware download order stays as it is until a boot after the remap change shows a later word.
+The Linux probe of 8 November 2026 is written up in [plan-swift-wifi.md](plan-swift-wifi.md#what-the-linux-boot-showed). Linux loads the firmware on this unit. `rr` and `wr` now keep the high half of `HIF_REMAP_L1`. The next photograph is a cold boot of that image. The row 22 word is the result. The firmware download order stays as it is until that photograph shows a later word.
 
 ## The dump rows, 31 to 66
 

@@ -2,7 +2,7 @@
 
 Last updated: 2026-11-08
 
-**Status:** Phase 1 is done. The 8 November 2026 photograph of the ASPM clear left the stall at `fw sem`, so link power is eliminated. The Phase 4 capture shows Linux loads firmware on this unit. The first write that differs from `device.rs` is `HIF_REMAP_L1`. Phases 2 through 5 are the Swift radio. Phases 6 through 8 are the application path and do not need the laptop. Phase 9 is an alternative route, not a step.
+**Status:** Phase 1 is done. The 8 November 2026 photograph of the ASPM clear left the stall at `fw sem`, so link power is eliminated. The Phase 4 capture shows Linux loads firmware on this unit. The first write that differed was `HIF_REMAP_L1`, and `rr` / `wr` now keep its high half. The next photograph is a cold boot of that image. Phases 2 through 5 are the Swift radio. Phases 6 through 8 are the application path and do not need the laptop. Phase 9 is an alternative route, not a step.
 
 **Goal:** A lerux application on the Acer Swift X reaches a host on the internet over the MT7921 radio. [plan-lionsos.md](plan-lionsos.md) Milestone 27 stays the radio exit (`ping ok`). This plan is the route from the current stall to that exit, and from that exit to an application.
 
@@ -53,17 +53,35 @@ The 8 November 2026 capture is that `out/` directory. `verdict.txt` says `probe 
 
 These writes match `device.rs` through driver-own. `CONN_ON_LPCTL` is written `00000001` then `00000002`. `WFSYS_RST` (`40140`) goes `00000011`, `00000010`, `00000001`, `00000011`. `GLO_CFG` (`d4208`) goes `00103870`, `5030b870`, `5030b875`. `TOP_LPCR` (`40010`) is written `00000002` and reads back `00000000`. `PCIE_MAC_PM` (`10194`) goes `00000e0f` to `00000f0f`.
 
-The first write whose value differs is `HIF_REMAP_L1` (`fe24c`), on the chip-id read. Linux reads `18451844` and writes `18457001`: bits 15:0 become the page `7001`, and bits 31:16 stay `1845`. `rr` and `wr` in `device.rs` store that page alone, so the same step writes `00007001`. The same pattern is the wfsys window: Linux writes `18451800`, and `device.rs` writes `00001800`. The panel still read chip `00007961` and `wfsys 00000011`, so those two windows answered with the short write.
+The first write whose value differed is `HIF_REMAP_L1` (`fe24c`), on the chip-id read. Linux reads `18451844` and writes `18457001`: bits 15:0 become the page `7001`, and bits 31:16 stay `1845`. `rr` and `wr` stored that page alone, so the same step wrote `00007001`. The same pattern is the wfsys window: Linux writes `18451800`, and the old code wrote `00001800`. The panel still read chip `00007961` and `wfsys 00000011`, so those two windows answered with the short write.
 
 The next value both sides leave behind is `RST_DTX_PTR` (`d420c`). Linux writes `ffffffff` once, and the later reset paths in the same trace write `ffffffff` again. `dma_enable` writes `ffffffff` and then `0`, and that `0` is what is present when lerux posts the semaphore. Linux's one `DMASHDL_SW` write while `e00f0` is still `00000000` stores `10000000`, during `dma_disable`. The second bypass and the ring rebind do not appear in the trace before `e00f0` reads `00000003`. Ring base, size, and index are programmed with `writel` on the queue registers, so they are absent from this trace on both the Linux side and any comparison that only has `regs.txt`.
 
-The lead is the remap write. The following change keeps bits 31:16 of `fe24c` and stores the page in bits 15:0. The `dtx` zero stays until a boot after that change shows a later word.
+`rr` and `wr` now keep bits 31:16 of `fe24c` and store the page in bits 15:0, then read the register back before the window access. `remap_l1` is that merge, and its host test is the three words from the trace. The `dtx` zero stays until a boot of this image shows a later word. What this boot changed about the earlier investigation is [below](#what-the-linux-boot-showed).
+
+## What the Linux boot showed
+
+The photographs through 8 November had closed every suspect the panel can show.
+
+The descriptor is a live command for the bounce buffer (`slot 00 01f66000 d0`). Transmit is enabled, and the DMA index stays 0 (`fw sem d00 c01 s0100 b2000 g75`). The root port already had memory space and bus master (`cmd 0007>0007`). The card's own command word is `cmd 0006`. Clearing link power on both ends (`lnk 0142>0040` on the card, `lnk 0042>0040` on `00:02.2`) left the stall on `fw sem`. The IOMMU exclusion registers are zero. The NVMe admin commands completed, and the USB controller reached `bt: port 3 desc`. Both of those devices fetch from the same reserved RAM the Wi-Fi card is asked to fetch from. The Wi-Fi card is the one whose counter does not move.
+
+[swift-wifi-assessment.md](swift-wifi-assessment.md) treated the driver text as a faithful copy of Linux v6.8 and put the remaining cause on platform permission and power. It recorded that `fe24c` was written as a whole word where Linux masks, and set that aside: the stall was already there, and the panel's chip id and wfsys readbacks were the right values (`00007961`, `wfsys 00000011`). Ten ISO cycles of painting another permission could not show a high half that those readbacks do not contain.
+
+One Arch boot on the same laptop is the measurement those photographs could not make. The stick is `just iso-arch-and-capture`. The kernel line carries `modprobe.blacklist=mt7921e`, and the boot is from power-off. The files are in `support/swift-linux/out/`, gitignored because they name the unit.
+
+Linux loads the firmware on this unit. `dmesg` prints the patch header (`HW/SW Version: 0x8a108a10, Build Time: 20260224110909a`) and `WM Firmware Version: ____010000, Build Time: 20260224110949` within half a second of `modprobe`. There is no `Failed to get patch semaphore` and no `Timeout for initializing firmware`. `lspci-wifi-after.txt` leaves the driver in use as `mt7921e`. `CONN_ON_MISC` reads `00000000`, then `00000001`, then `00000003`, and `00000003` is `FW_N9_RDY`. From about a second after the load until the trace stops, `iwd` is using the card. `verdict.txt` says `probe unfinished` because the script waits for the words `Firmware init done`, and that line is not in the kernel log. The string is in `mt792x-lib`, and this boot never printed it. The driver staying bound, the firmware version lines, and `FW_N9_RDY` are the result.
+
+The register trace of that success matches the writes the panel had been used to judge. Own, wfsys, `GLO_CFG`, driver-own, and `L0S_DIS` take the values listed in Phase 4. The fork is earlier than the semaphore, at the chip-id read. Linux reads `HIF_REMAP_L1` as `18451844` and writes `18457001`. The page `7001` replaces bits 15:0, and bits 31:16 stay `1845`. The code stored the page alone (`00007001`), and the wfsys window the same way (`18451800` against `00001800`). A correct chip id on the panel was evidence that the window answered, and it hid the half of the register the window read does not return.
+
+`RST_DTX_PTR` is the next value that remains different at the semaphore. Linux writes `ffffffff` and leaves it, including on the later reset paths in the same trace. `dma_enable` writes `ffffffff` and then `0`. The second `DMASHDL_BYPASS` and the ring rebind do not appear before `FW_N9_RDY`. Ring base, size, and cpu index are programmed with `writel` on the queue registers, below the `mt76` tracepoint, so `regs.txt` has nothing to say about them.
+
+`rr` and `wr` now perform that masked update and read `fe24c` back before the window access. The download order, the `dtx` zero, the second bypass, and the rebind are unchanged. The next photograph is a cold boot. The row 22 word is the result. A word past `fw sem` names the following step. Another `fw sem` makes the `dtx` zero the next change.
 
 ## Phase 5 — Driver-side deltas
 
 **Exit:** `device.rs` matches the Linux order byte for byte, or each remaining delta has a photograph that justifies it.
 
-Only after Phases 1 to 4. Three steps are not in Linux and were added on hypothesis: `RST_DTX_PTR = 0` after `~0`, `rebind` after `TX_DMA_EN`, and the second `DMASHDL_BYPASS`. The L1 remap writes the whole `0xfe24c` word where Linux masks. Revert each one in its own commit and photograph the result. Then `ping ok` on the metal panel is the Milestone 27 exit.
+Only after Phases 1 to 4. Three steps are not in Linux and were added on hypothesis: `RST_DTX_PTR = 0` after `~0`, `rebind` after `TX_DMA_EN`, and the second `DMASHDL_BYPASS`. The L1 remap now keeps bits 31:16, which is the Phase 4 change, and its photograph comes first. Revert each of the three in its own commit after that photograph and record the result. Then `ping ok` on the metal panel is the Milestone 27 exit.
 
 ## Phase 6 — Application path on QEMU
 

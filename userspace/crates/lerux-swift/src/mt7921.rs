@@ -206,7 +206,8 @@ fn hex_nibble(nibble: u8) -> u8 {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Map {
     Direct(u32),
-    /// Write `base` into `MT_HIF_REMAP_L1`, then use `window`.
+    /// `base` is the page (`addr >> 16`). `rr` and `wr` merge it into bits
+    /// 15:0 of `MT_HIF_REMAP_L1` and then use `window`.
     Remap {
         base: u32,
         window: u32,
@@ -302,6 +303,16 @@ pub const WFSYS_RST: u32 = 0x1800_0140;
 pub const WFSYS_RST_B: u32 = 1 << 0;
 pub const WFSYS_INIT_DONE: u32 = 1 << 4;
 pub const HIF_REMAP_L1: u32 = 0xfe24c;
+
+/// Word Linux writes to [`HIF_REMAP_L1`].
+///
+/// Bits 31:16 stay as the register already holds them. Bits 15:0 are the
+/// page from [`map_reg`]. On the 8 November 2026 Swift capture the chip-id
+/// step read `0x1845_1844` and wrote `0x1845_7001`.
+#[must_use]
+pub fn remap_l1(current: u32, page: u32) -> u32 {
+    (current & !0xffff) | (page & 0xffff)
+}
 pub const SWDEF_MODE: u32 = 0x41_f23c;
 pub const WFDMA0: u32 = 0xd_4000;
 pub const GLO_CFG: u32 = WFDMA0 + 0x208;
@@ -951,6 +962,14 @@ pub fn wtbl_word(idx: u32) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn remap_l1_keeps_the_high_half() {
+        // Chip id, wfsys, and driver-own, in the order the trace wrote them.
+        assert_eq!(remap_l1(0x1845_1844, 0x7001), 0x1845_7001);
+        assert_eq!(remap_l1(0x1845_7001, 0x1800), 0x1845_1800);
+        assert_eq!(remap_l1(0x1845_1800, 0x1806), 0x1845_1806);
+    }
 
     #[test]
     fn lpctl_is_in_the_fixed_window() {

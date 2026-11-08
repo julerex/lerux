@@ -11,10 +11,10 @@ use lerux_swift::{
     dump::WORDS_PER_ROW,
     mt7921::{
         ce_cmd, desc_ctrl, desc_len, download_cmd, efuse_mac, ext_cmd, ext_query, firmware_kind,
-        map_reg, patch_regions, patch_status, prefetch, ram_regions, ring_regs, write_chan,
-        write_eeprom_mode, write_efuse_read, write_mac_enable, write_mcu_txd, write_rts,
-        write_scan, write_txwi, wtbl_word, FirmwareKind, Map, Region, Sem, Stage, TxStop,
-        CONN_ON_LPCTL, CONN_ON_MISC, DMASHDL_BYPASS, DMASHDL_ENABLE, DMASHDL_SW, DMA_DONE,
+        map_reg, patch_regions, patch_status, prefetch, ram_regions, remap_l1, ring_regs,
+        write_chan, write_eeprom_mode, write_efuse_read, write_mac_enable, write_mcu_txd,
+        write_rts, write_scan, write_txwi, wtbl_word, FirmwareKind, Map, Region, Sem, Stage,
+        TxStop, CONN_ON_LPCTL, CONN_ON_MISC, DMASHDL_BYPASS, DMASHDL_ENABLE, DMASHDL_SW, DMA_DONE,
         DUMMY_CR, DUMP_PREFETCH, DUMP_REGS, DUMP_RINGS, FW_N9_RDY, FW_SCATTER, FW_START, GLO_CFG,
         GLO_CFG_CHAIN, GLO_CFG_CLK, GLO_CFG_EXT0, GLO_CFG_LE, GLO_CFG_OMIT_RX,
         GLO_CFG_OMIT_RX_PFET, GLO_CFG_OMIT_TX, GLO_CFG_RX_BUSY, GLO_CFG_RX_EN, GLO_CFG_TX_BUSY,
@@ -811,7 +811,7 @@ impl Mac {
         match map_reg(addr) {
             Map::Direct(off) => rd(self.regs, off),
             Map::Remap { base, window } => {
-                wr(self.regs, HIF_REMAP_L1, base);
+                self.arm_remap(base);
                 rd(self.regs, window)
             }
             Map::Unsupported => u32::MAX,
@@ -822,11 +822,20 @@ impl Mac {
         match map_reg(addr) {
             Map::Direct(off) => wr(self.regs, off, value),
             Map::Remap { base, window } => {
-                wr(self.regs, HIF_REMAP_L1, base);
+                self.arm_remap(base);
                 wr(self.regs, window, value);
             }
             Map::Unsupported => {}
         }
+    }
+
+    /// Linux reads `fe24c`, replaces bits 15:0 with the page, and reads the
+    /// register back before touching the window. The read-back is what posts
+    /// the write. Bits 31:16 stay as the card already holds them.
+    fn arm_remap(&mut self, page: u32) {
+        let current = rd(self.regs, HIF_REMAP_L1);
+        wr(self.regs, HIF_REMAP_L1, remap_l1(current, page));
+        let _posted = rd(self.regs, HIF_REMAP_L1);
     }
 
     fn kick(&mut self, regs: u32, head: u32) {

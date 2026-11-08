@@ -3,7 +3,12 @@
 #
 # extractions/setup-just lists every GitHub release and fails with
 # "no release for just matching version specifier" when that lookup is empty.
+# support/github-release.sh retries the pinned asset, then uses the API when
+# releases/download returns HTTP 504.
 set -euo pipefail
+
+# shellcheck disable=SC1091
+source "$(cd "$(dirname "$0")/../.." && pwd)/support/github-release.sh"
 
 version=1.59.0
 case "$(uname -m)" in
@@ -25,7 +30,7 @@ archive="just-${version}-${target}.tar.gz"
 url="https://github.com/casey/just/releases/download/${version}/${archive}"
 tmp="$(mktemp -d)"
 trap 'rm -rf "${tmp}"' EXIT
-curl -fsSL -o "${tmp}/${archive}" "${url}"
+github_release_curl "${tmp}/${archive}" "${url}"
 echo "${sha256}  ${tmp}/${archive}" | sha256sum -c -
 tar -xzf "${tmp}/${archive}" -C "${tmp}" just
 dest="${HOME}/.local/bin"

@@ -22,6 +22,9 @@ jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      # Release downloads answer unauthenticated clients with HTTP 504.
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -54,6 +57,8 @@ jobs:
   verify-ring:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -93,6 +98,8 @@ jobs:
           load: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          secrets: |
+            github_token=${{ secrets.GITHUB_TOKEN }}
 
       - name: Restore workspace cache
         uses: actions/cache/restore@v4
@@ -270,6 +277,8 @@ jobs:
           load: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          secrets: |
+            github_token=${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/download-artifact@v4
         with:
@@ -397,6 +406,8 @@ jobs:
           load: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          secrets: |
+            github_token=${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/download-artifact@v4
         with:

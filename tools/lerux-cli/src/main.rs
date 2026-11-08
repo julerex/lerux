@@ -18,6 +18,7 @@ mod fetch;
 mod fetch_sddf;
 mod fs_scaffold;
 mod fs_sddf;
+mod github_release;
 mod gpu_sddf;
 mod http_one;
 mod https_one;

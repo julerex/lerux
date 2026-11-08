@@ -8,6 +8,8 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck disable=SC1091
+source "${root}/support/github-release.sh"
 release="0.2026.10.18.7d82994"
 verus_sha256="e9af03732d4bdd32b93a8fcf471706739c24c1473fa5086618d96c47237845dd"
 fmt_version="0.7.4"
@@ -21,7 +23,7 @@ download_verus() {
   local archive tmp
   archive="verus-${release}-x86-linux.zip"
   tmp="$(mktemp -d)"
-  curl -fsSL -o "${tmp}/${archive}" \
+  github_release_curl "${tmp}/${archive}" \
     "https://github.com/verus-lang/verus/releases/download/release/${release}/${archive}"
   echo "${verus_sha256}  ${tmp}/${archive}" | sha256sum -c -
   mkdir -p "${root}/deps/verus"
@@ -36,9 +38,9 @@ download_verusfmt() {
   local name tmp
   name="verusfmt-x86_64-unknown-linux-gnu.tar.xz"
   tmp="$(mktemp -d)"
-  curl -fsSL -o "${tmp}/${name}" \
+  github_release_curl "${tmp}/${name}" \
     "https://github.com/verus-lang/verusfmt/releases/download/v${fmt_version}/${name}"
-  curl -fsSL -o "${tmp}/${name}.sha256" \
+  github_release_curl "${tmp}/${name}.sha256" \
     "https://github.com/verus-lang/verusfmt/releases/download/v${fmt_version}/${name}.sha256"
   (cd "${tmp}" && sha256sum -c "${name}.sha256")
   mkdir -p "${fmt_dir}"
@@ -86,7 +88,7 @@ ensure_rustup() {
   fi
   apt-get update
   apt-get install -y --no-install-recommends \
-    ca-certificates curl build-essential gcc pkg-config xz-utils unzip
+    ca-certificates curl python3 build-essential gcc pkg-config xz-utils unzip
   curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --default-toolchain none
   # shellcheck disable=SC1091
   source "${HOME}/.cargo/env"
@@ -115,7 +117,7 @@ fi
 if [[ "${VERIFY_RING_IN_DOCKER:-}" == 1 ]]; then
   apt-get update
   apt-get install -y --no-install-recommends \
-    ca-certificates curl build-essential gcc pkg-config xz-utils unzip
+    ca-certificates curl python3 build-essential gcc pkg-config xz-utils unzip
 fi
 
 if ! command -v rustup >/dev/null 2>&1 && [[ -f "${HOME}/.cargo/env" ]]; then

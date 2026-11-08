@@ -255,7 +255,7 @@ The command word is `cmd 0006`. Memory space and bus master are both set, so the
 
 The link control was cleared on the card and on its root port (`lnk 0142>0040` and `lnk 0042>0040` on row 31) and the stall stayed on `fw sem`. The fetch is permitted from the processor's side of the bus, and the engine's counter still does not move.
 
-The next measurement is a Linux probe of this same card, recorded by `support/swift-linux/capture.sh`. The firmware download order stays as it is until a line says a later step is the one that failed.
+The Linux probe of 8 November 2026 is in `support/swift-linux/out/`. Linux loads the firmware. The first write that differs from `device.rs` is `HIF_REMAP_L1`: Linux keeps `1845` in the high half, and `device.rs` stores the page alone. That difference, and the `RST_DTX_PTR` zero that follows it, are written up in [plan-swift-wifi.md](plan-swift-wifi.md). The firmware download order stays as it is until a boot after the remap change shows a later word.
 
 ## The dump rows, 31 to 66
 
@@ -294,7 +294,7 @@ The boot of 8 November 2026 read `03:00.0 cmd 0006 lnk 0142 pm 0008 | rp 00:02.2
 
 Linux clears those link bits before it touches the chip (`mt76_pci_disable_aspm`), and a card parked in L1 that does not wake for its own read would look exactly like this stall. The ISO after that photograph clears them from the probe, and row 31 now shows each link word before and after. The Linux call also turns off the L1 substates, whose control register is past byte 256 of configuration space; the probe reads configuration space through port `0xcf8`, which stops at byte 255, so that register is neither shown nor cleared yet.
 
-The next photograph, the same day, showed the clear taking effect and the stall staying put: `03:00.0 cmd 0006 lnk 0142>0040 pm 0008`, root port `00:02.2` with `lnk 0042>0040`, and row 22 still `fw sem d00 c01 s0100 b2000 g75`. With bits 1:0 clear on both ends of the link, L1 and its substates are not reachable, so that extended register is not the next measurement. The next measurement is the Linux probe in `support/swift-linux/capture.sh`.
+The next photograph, the same day, showed the clear taking effect and the stall staying put: `03:00.0 cmd 0006 lnk 0142>0040 pm 0008`, root port `00:02.2` with `lnk 0042>0040`, and row 22 still `fw sem d00 c01 s0100 b2000 g75`. With bits 1:0 clear on both ends of the link, L1 and its substates are not reachable, so that extended register is not the next measurement. The Linux probe that followed is recorded in [plan-swift-wifi.md](plan-swift-wifi.md).
 
 ## Other words on row 22
 

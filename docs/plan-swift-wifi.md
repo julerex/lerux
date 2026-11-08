@@ -2,7 +2,7 @@
 
 Last updated: 2026-11-08
 
-**Status:** Phase 1 is done. The 8 November 2026 photograph of the ASPM clear left the stall at `fw sem`, so link power is eliminated. Phase 4 is the Linux capture in [support/swift-linux/README.md](../support/swift-linux/README.md). Phases 2 through 5 are the Swift radio. Phases 6 through 8 are the application path and do not need the laptop. Phase 9 is an alternative route, not a step.
+**Status:** Phase 1 is done. The 8 November 2026 photograph of the ASPM clear left the stall at `fw sem`, so link power is eliminated. The Phase 4 capture shows Linux loads firmware on this unit. The first write that differs from `device.rs` is `HIF_REMAP_L1`. Phases 2 through 5 are the Swift radio. Phases 6 through 8 are the application path and do not need the laptop. Phase 9 is an alternative route, not a step.
 
 **Goal:** A lerux application on the Acer Swift X reaches a host on the internet over the MT7921 radio. [plan-lionsos.md](plan-lionsos.md) Milestone 27 stays the radio exit (`ping ok`). This plan is the route from the current stall to that exit, and from that exit to an application.
 
@@ -47,7 +47,17 @@ The photograph of 8 November 2026 showed `lnk 0142>0040` on the card and `lnk 00
 
 **Exit:** `support/swift-linux/out/` holds `lspci -vvv` for the MT7921 and its root port, the `dmesg` lines matching `mt7921|AMD-Vi`, and a report of `mt76:reg_rr` and `mt76:reg_wr` from one `modprobe mt7921e`.
 
-The capture is [support/swift-linux/README.md](../support/swift-linux/README.md). `just iso-arch-and-capture` lists the USB sticks and writes the current Arch install image and `capture.sh` onto the one you choose. Boot that stick from power-off with `modprobe.blacklist=mt7921e` on the kernel line. The install image has no network until this driver is up, so the script reads those two events from the kernel tracer; they are the events `trace-cmd` would record. The addresses in the report are BAR offsets, because `mt76` traces the access after remap. `map_reg` in `userspace/crates/lerux-swift/src/mt7921.rs` is the translation back to the logical addresses in `device.rs`. The same run saves the NVMe endpoint and its root port, which is the Phase 2 comparison the panel photograph did not resolve. `out/` is gitignored because the files name the unit. The diff against `DUMP_REGS` and `device.rs` is written into this document. The first register whose value differs at the same step is the lead.
+The capture is [support/swift-linux/README.md](../support/swift-linux/README.md). `just iso-arch-and-capture` lists the USB sticks and writes the current Arch install image and `capture.sh` onto the one you choose. Boot that stick from power-off with `modprobe.blacklist=mt7921e` on the kernel line. The install image has no network until this driver is up, so the script reads those two events from the kernel tracer; they are the events `trace-cmd` would record. The addresses in the report are BAR offsets, because `mt76` traces the access after remap. `map_reg` in `userspace/crates/lerux-swift/src/mt7921.rs` is the translation back to the logical addresses in `device.rs`. The same run saves the NVMe endpoint and its root port, which is the Phase 2 comparison the panel photograph did not resolve. `out/` is gitignored because the files name the unit.
+
+The 8 November 2026 capture is that `out/` directory. `verdict.txt` says `probe unfinished` because the script waits for the words `Firmware init done`, and that line is absent from `dmesg`. `lspci-wifi-after.txt` says the driver in use is `mt7921e`. The log prints the patch header and `WM Firmware Version: ____010000` within half a second, with no `Failed to get patch semaphore`. `CONN_ON_MISC` (`e00f0`) reads `00000000` at 83.930 s, `00000001` at 83.950 s, and `00000003` at 84.240 s, which is `FW_N9_RDY`.
+
+These writes match `device.rs` through driver-own. `CONN_ON_LPCTL` is written `00000001` then `00000002`. `WFSYS_RST` (`40140`) goes `00000011`, `00000010`, `00000001`, `00000011`. `GLO_CFG` (`d4208`) goes `00103870`, `5030b870`, `5030b875`. `TOP_LPCR` (`40010`) is written `00000002` and reads back `00000000`. `PCIE_MAC_PM` (`10194`) goes `00000e0f` to `00000f0f`.
+
+The first write whose value differs is `HIF_REMAP_L1` (`fe24c`), on the chip-id read. Linux reads `18451844` and writes `18457001`: bits 15:0 become the page `7001`, and bits 31:16 stay `1845`. `rr` and `wr` in `device.rs` store that page alone, so the same step writes `00007001`. The same pattern is the wfsys window: Linux writes `18451800`, and `device.rs` writes `00001800`. The panel still read chip `00007961` and `wfsys 00000011`, so those two windows answered with the short write.
+
+The next value both sides leave behind is `RST_DTX_PTR` (`d420c`). Linux writes `ffffffff` once, and the later reset paths in the same trace write `ffffffff` again. `dma_enable` writes `ffffffff` and then `0`, and that `0` is what is present when lerux posts the semaphore. Linux's one `DMASHDL_SW` write while `e00f0` is still `00000000` stores `10000000`, during `dma_disable`. The second bypass and the ring rebind do not appear in the trace before `e00f0` reads `00000003`. Ring base, size, and index are programmed with `writel` on the queue registers, so they are absent from this trace on both the Linux side and any comparison that only has `regs.txt`.
+
+The lead is the remap write. The following change keeps bits 31:16 of `fe24c` and stores the page in bits 15:0. The `dtx` zero stays until a boot after that change shows a later word.
 
 ## Phase 5 — Driver-side deltas
 

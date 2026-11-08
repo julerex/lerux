@@ -5,9 +5,10 @@
 //! addresses. This domain sets bus master and does not move those addresses.
 //! Row 15 reads the MT7921 command word back after bus master is set.
 //! Row 16 reads the exclusion range back after that programming.
-//! Rows 31 to 51 are the configuration spaces of the MT7921, the root port
+//! Rows 31 to 50 are the configuration spaces of the MT7921, the root port
 //! above it, and the root port above the `NVMe`, then the IOMMU registers.
-//! The Wi-Fi root port gets memory space and bus master before that dump.
+//! Row 66 is the end marker. The Wi-Fi root port gets memory space and bus
+//! master before that dump, and ASPM is cleared on the MT7921 and that port.
 
 #![no_std]
 #![no_main]
@@ -72,16 +73,17 @@ fn init() -> HandlerImpl {
     HandlerImpl
 }
 
-/// The seven registers rows 50 and 51 paint, read after [`pass_dma`].
+/// The four registers row 50 paints, read after [`pass_dma`]. The first is
+/// the control register; all ones there means the unit did not answer.
 #[expect(
     clippy::cast_ptr_alignment,
     reason = "the IOMMU page is 4 KiB aligned and these offsets are multiples of 8"
 )]
-fn iommu_snapshot(regs: *mut u8, base: u64) -> Option<[u64; 7]> {
+fn iommu_snapshot(regs: *mut u8, base: u64) -> Option<[u64; 4]> {
     if base != IOMMU_PHYS {
         return None;
     }
-    let mut out = [0u64; 7];
+    let mut out = [0u64; 4];
     // Safety: the template maps 0x4000 bytes of IOMMU MMIO here, uncached.
     // Every offset in the list is inside that window and 8-byte aligned.
     unsafe {
@@ -89,7 +91,7 @@ fn iommu_snapshot(regs: *mut u8, base: u64) -> Option<[u64; 7]> {
             *slot = regs.add(offset).cast::<u64>().read_volatile();
         }
     }
-    if out[3] == u64::MAX {
+    if out[0] == u64::MAX {
         return None;
     }
     Some(out)

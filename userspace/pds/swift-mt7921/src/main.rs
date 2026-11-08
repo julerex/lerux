@@ -10,7 +10,7 @@
 //! firmware has reached the normal state. The shell then writes the network
 //! name and passphrase and notifies channel 1. Channel 0 stays the MSI.
 //! Association paints `scan`, `auth`, `assoc`, `eapol`, `dhcp`, and `ping`.
-//! Rows 52 to 66 are the register, ring, descriptor, and command dump that
+//! Rows 51 to 65 are the register, ring, descriptor, and command dump that
 //! `dump` paints once the boot attempt has returned, on success or failure.
 
 #![no_std]

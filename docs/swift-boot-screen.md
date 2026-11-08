@@ -44,8 +44,8 @@ lerux runs several small programs at once. Each one has its own memory. They sha
 | Priority | Program | What it paints |
 | --- | --- | --- |
 | 6 | Display | `hello lerux` and, later, the menu |
-| 5 | PCI probe | Device names below the menu, rows 15 and 16, and rows 31–51 of the dump |
-| 4 | Wi-Fi | Rows 17–22, and rows 52–66 of the dump |
+| 5 | PCI probe | Device names below the menu, rows 15 and 16, rows 31–50 of the dump, and the end marker on row 66 |
+| 4 | Wi-Fi | Rows 17–22, and rows 51–65 of the dump |
 | 3 | Disk | Row 23, `nvme` |
 | 2 | Bluetooth | Row 24, `bt` |
 | 1 | Menu | `1 browser`, `2 maths`, `3 wifi` |
@@ -255,27 +255,40 @@ The command word is the next measurement. It says whether the card is allowed to
 
 ## The dump rows, 31 to 66
 
-Rows 31 to 66 are a hex dump meant to be photographed. They are painted once per boot and the console redraw does not touch them. Each row is at most 120 characters: a label of eight characters, then up to twelve 8-digit words. The layout constants live in `userspace/crates/lerux-swift/src/dump.rs`.
+Rows 31 to 65 are a hex dump meant to be photographed, and row 66 is the end marker. They are painted once per boot and the console redraw does not touch them. Each row is at most 120 characters: a label of eight characters, then up to twelve 8-digit words. The layout constants live in `userspace/crates/lerux-swift/src/dump.rs`.
 
 | Rows | Painted by | What is there |
 | --- | --- | --- |
-| 31 | PCI probe | `03:00.0 cmd XXXX lnk XXXX pm XXXX \| rp 00:0Y.Z sec 03 cmd BBBB>AAAA lnk XXXX \| np 00:0Y.Z sec 02 cmd XXXX lnk XXXX`. `cmd` is the command word, `lnk` the PCI Express link control, `pm` the power-management control. `rp` is the root port above the Wi-Fi card: `BBBB` is its command word before the probe set memory space and bus master, `AAAA` after. `np` is the root port above the disk, left alone. `----` means that capability was not found. `rp miss` means no bus 0 bridge has secondary bus 3 |
-| 32–37 | PCI probe | The 256 bytes of `03:00.0` configuration space. The first row is labelled with the function, the rest with the byte offset (`+030`) |
-| 38–43 | PCI probe | The Wi-Fi root port's 256 bytes, read after the write |
+| 31 | PCI probe | `03:00.0 cmd XXXX lnk BBBB>AAAA pm XXXX\|rp 00:0Y.Z sec 03 cmd BBBB>AAAA lnk BBBB>AAAA\|np 00:0Y.Z sec 02 cmd XXXX lnk XXXX`. `cmd` is the command word, `lnk` the PCI Express link control, `pm` the power-management control. `BBBB>AAAA` is a word before and after a probe write. On the card, `lnk` shows ASPM and clock power management being cleared (bits 1:0 and 8). `rp` is the root port above the Wi-Fi card: `cmd` shows memory space and bus master being set, `lnk` shows ASPM being cleared (bits 1:0). `np` is the root port above the disk, left alone. `----` means that capability was not found. `rp miss` means no bus 0 bridge has secondary bus 3. The separators are a bare `\|` because the row is exactly 120 characters |
+| 32–37 | PCI probe | The 256 bytes of `03:00.0` configuration space, read after the link write. The first row is labelled with the function, the rest with the byte offset (`+030`) |
+| 38–43 | PCI probe | The Wi-Fi root port's 256 bytes, read after both writes |
 | 44–49 | PCI probe | The disk root port's 256 bytes |
-| 50 | PCI probe | `iommu` base, `ctrl` (offset `0x18`), `excl` (`0x20`), `limit` (`0x28`), each 16 digits |
-| 51 | PCI probe | `devtb` (`0x00`), `cmdb` (`0x08`), `evtlog` (`0x10`), `sts` (`0x2020`). `iommu miss` when the unit was not found |
-| 52–54 | Wi-Fi | `aft`: twenty-one WFDMA and top registers read when the boot attempt returned, seven per row, each as a five-letter name and 8 digits |
-| 55–56 | Wi-Fi | `t00`, `t16`, `t17`, `r00`, `r01`, `r02`: each ring's base, size, cpu index, and dma index |
-| 57–59 | Wi-Fi | The prefetch table at `0xd4600`, `0xd4630`, `0xd4680`, twelve words each |
-| 60 | Wi-Fi | The TX17 ring at `01f62000`: the first three descriptors, the first being note 0 |
-| 61–62 | Wi-Fi | The bounce buffer at `01f66000`: the 68-byte semaphore command |
-| 63 | Wi-Fi | The RX event ring at `01f63000`: the first three receive descriptors |
-| 64–66 | Wi-Fi | `pre`: the same twenty-one registers read just before the semaphore command was published |
+| 50 | PCI probe | `iommu` base, `ctrl` (offset `0x18`), `excl` (`0x20`), `limit` (`0x28`), `sts` (`0x2020`), each 16 digits. `iommu miss` when the unit was not found |
+| 51–53 | Wi-Fi | `aft`: twenty-one WFDMA and top registers read when the boot attempt returned, seven per row, each as a five-letter name and 8 digits |
+| 54–55 | Wi-Fi | `t00`, `t16`, `t17`, `r00`, `r01`, `r02`: each ring's base, size, cpu index, and dma index |
+| 56–58 | Wi-Fi | The prefetch table at `0xd4600`, `0xd4630`, `0xd4680`, twelve words each |
+| 59 | Wi-Fi | The TX17 ring at `01f62000`: the first three descriptors, the first being note 0 |
+| 60–61 | Wi-Fi | The bounce buffer at `01f66000`: the 68-byte semaphore command |
+| 62 | Wi-Fi | The RX event ring at `01f63000`: the first three receive descriptors |
+| 63–65 | Wi-Fi | `pre`: the same twenty-one registers read just before the semaphore command was published |
+| 66 | PCI probe | `END OF OUTPUT`, then dashes to column 119, which is `\|`. Row 66 is the last whole 16-pixel row of the 1080-pixel panel. A photograph that shows this row and its final `\|` shows every row above it and the full width; nothing is painted below it |
 
-The register names on rows 52 to 54 and 64 to 66 are, in order: `lpctl` `CONN_ON_LPCTL`, `misc` `CONN_ON_MISC`, `wfsys` `WFSYS_RST`, `lpcr` `TOP_LPCR_HOST_BAND0`, `chip` `HW_CHIPID`, `rev` `HW_REV`, `mint` `PCIE_MAC_INT_ENABLE`, `mpm` `PCIE_MAC_PM`, `iena` `HOST_INT_ENA`, `ista` `HOST_INT_STA`, `glo` `GLO_CFG`, `ext0` `GLO_CFG_EXT0`, `dtx` `RST_DTX_PTR`, `drx` `RST_DRX_PTR`, `mcmd` `MCU_CMD`, `m2h` `MCU2HOST_SW_INT_ENA`, `rst` `WFDMA_RST`, `busy` `BUSY_ENA`, `shdl` `DMASHDL_SW_CONTROL`, `dummy` `DUMMY_CR`, `swdef` `SWDEF_MODE`. The table is `DUMP_REGS` in `userspace/crates/lerux-swift/src/mt7921.rs`.
+The register names on rows 51 to 53 and 63 to 65 are, in order: `lpctl` `CONN_ON_LPCTL`, `misc` `CONN_ON_MISC`, `wfsys` `WFSYS_RST`, `lpcr` `TOP_LPCR_HOST_BAND0`, `chip` `HW_CHIPID`, `rev` `HW_REV`, `mint` `PCIE_MAC_INT_ENABLE`, `mpm` `PCIE_MAC_PM`, `iena` `HOST_INT_ENA`, `ista` `HOST_INT_STA`, `glo` `GLO_CFG`, `ext0` `GLO_CFG_EXT0`, `dtx` `RST_DTX_PTR`, `drx` `RST_DRX_PTR`, `mcmd` `MCU_CMD`, `m2h` `MCU2HOST_SW_INT_ENA`, `rst` `WFDMA_RST`, `busy` `BUSY_ENA`, `shdl` `DMASHDL_SW_CONTROL`, `dummy` `DUMMY_CR`, `swdef` `SWDEF_MODE`. The table is `DUMP_REGS` in `userspace/crates/lerux-swift/src/mt7921.rs`.
 
-Reading the photograph: `rp` on row 31 says whether the root port above the card was allowed to forward its reads. The two command words either side of `>` say whether the probe changed anything. Rows 32–49 put the card, its port, and the working disk's port one above the other so a field that differs stands out. `aft` against `pre` says what moved in the card while the processor waited. The `t17` block on row 55 is the same four registers as `fw sem` on row 22, in full.
+Reading the photograph: `rp` on row 31 says whether the root port above the card was allowed to forward its reads. The two words either side of `>` say whether the probe changed anything. Rows 32–49 put the card, its port, and the working disk's port one above the other so a field that differs stands out. `aft` against `pre` says what moved in the card while the processor waited. The `t17` block on row 54 is the same four registers as `fw sem` on row 22, in full.
+
+Photograph rows 31–66 at full camera resolution, in two frames if one does not resolve the digits: rows 31–49 and rows 50–66. An upload scaled to about a thousand pixels across leaves 8 pixels per character, and the configuration-space rows cannot be read from it.
+
+### The first photograph of these rows
+
+The boot of 8 November 2026 read `03:00.0 cmd 0006 lnk 0142 pm 0008 | rp 00:02.2 sec 03 cmd 0007>0007 lnk 0042 | np 00:01.2 sec 02 cmd 0007 lnk 0042`, with `nvme: missing` on row 23 and `bt: port 3 desc` on row 24.
+
+- `cmd 0007>0007`: the root port already had memory space and bus master. Setting them changed nothing, so that port was never the block.
+- `nvme: missing` means the disk's admin and read commands completed and the named file was simply not on the volume. `bt: port 3 desc` means the USB controller ran its command ring and addressed three devices. Both of those controllers fetch from the same reserved RAM the Wi-Fi card is asked to fetch from. The Wi-Fi card is the one of three that does not.
+- `pm 0008`: the card is in D0.
+- `lnk 0142` on the card: ASPM L1 (bit 1), common clock (bit 6), and clock power management (bit 8) are all on. Both root ports read `0042`: L1 and common clock.
+
+Linux clears those link bits before it touches the chip (`mt76_pci_disable_aspm`), and a card parked in L1 that does not wake for its own read would look exactly like this stall. The ISO after that photograph clears them from the probe, and row 31 now shows each link word before and after. The Linux call also turns off the L1 substates, whose control register is past byte 256 of configuration space; the probe reads configuration space through port `0xcf8`, which stops at byte 255, so that register is neither shown nor cleared yet.
 
 ## Other words on row 22
 
@@ -304,8 +317,8 @@ If you want to see the same facts in the source, these are the files. The screen
 | `userspace/pds/swift-mt7921/src/device.rs` | The startup sequence, the ring addresses, the doorbell, and the read of note 0 |
 | `userspace/pds/swift-mt7921/src/main.rs` | Which screen row gets `slot`, the four step lines, and `fw sem` |
 | `userspace/pds/swift-pci-probe/src/main.rs` | The IOMMU programming, the `cmd` row, and the `excl` row |
-| `userspace/pds/swift-pci-probe/src/dump.rs` | The root-port lookup and enable, and rows 31 to 51 |
-| `userspace/pds/swift-mt7921/src/dump.rs` | Rows 52 to 66 |
+| `userspace/pds/swift-pci-probe/src/dump.rs` | The root-port lookup and enable, the ASPM clear, rows 31 to 50, and the end marker on row 66 |
+| `userspace/pds/swift-mt7921/src/dump.rs` | Rows 51 to 65 |
 | `userspace/crates/lerux-swift/src/dump.rs` | The row layout, the hex row formatters, and the capability walk |
 | `userspace/crates/lerux-swift/src/mt7921.rs` | The register numbers, the 16-byte note layout, the text of `fw sem` and `slot`, and the `DUMP_REGS` name table |
 | `userspace/crates/lerux-swift/src/pci.rs` | The exclusion addresses and the text of `cmd` and `excl` |

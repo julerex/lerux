@@ -210,13 +210,13 @@ _Avoid_: [DMA window](#dma-window), [I/O port](#io-port)
 
 ### bus master
 
-The [PCI](#pci) command bit that lets a function read and write RAM on its own. The Swift probe sets this bit, and the memory-space bit, on the [NVMe](#nvme), the [AMD xHCI](#amd-xhci) functions, and the [MT7921](#mt7921). The [firmware](#firmware) [BAR](#base-address-register) values stay where they are.
+The [PCI](#pci) command bit that lets a function read and write RAM on its own. The Swift probe sets this bit, and the memory-space bit, on the [NVMe](#nvme), the [AMD xHCI](#amd-xhci) functions, and the [MT7921](#mt7921). The [firmware](#firmware) [BAR](#base-address-register) values stay where they are. Row 15 reads the [MT7921](#mt7921) command word back after that write: `cmd` and four hex digits. The last digit is the low nibble. Bus master is on when that digit is `4`, `5`, `6`, `7`, `c`, `d`, `e`, or `f`. `cmd miss` means the probe did not claim the card.
 
 _Avoid_: [driver own](#driver-own)
 
 ### IOMMU
 
-The AMD unit that can translate a device [DMA](#dma) address before it reaches RAM. This system does not build those tables. A [doorbell](#doorbell) that lands while the [DMA index](#dma-index) stays 0 does not by itself name this unit.
+The AMD unit that can translate a device [DMA](#dma) address before it reaches RAM. This [Swift X](#swift-x) reports its registers at `0xfdf00000`. The probe does not build device tables. It excludes `0x1f00000` through `0x1fa0000`, the [NVMe](#nvme), [xHCI](#xhci), and [MT7921](#mt7921) [DMA windows](#dma-window), so those addresses are not translated. The display path stays translated. Row 16 reads that programming back: `excl 01f00001 01f9f000 on` is translation on, base `0x01f00001`, limit `0x01f9f000`. `off` means translation is off. `excl miss` means the probe left the unit alone.
 
 _Avoid_: the processor [memory page](#memory-page) tables. Those translate CPU loads and stores. This unit would translate device [DMA](#dma).
 
@@ -512,7 +512,7 @@ The first command the [ROM](#rom) is asked once the [firmware](#firmware) is rea
 
 The status byte is the byte the [ROM](#rom) returns. `01` means the [patch image](#patch-image) is already loaded. `02` means it is not, and the download continues. `03` releases the [semaphore](#patch-semaphore) after the finish command. A held [semaphore](#patch-semaphore) is released when the transfer fails too.
 
-The line can name which stop it was. `tx` means the transmit [descriptor](#descriptor) never finished. `rx` means the [descriptor](#descriptor) finished and no event matched it. Two hex digits are the status byte, and `02` is the value that continues into the [patch image](#patch-image). A readback is `d`, `c`, `s`, `b`, and `g`. `d` is the [DMA index](#dma-index). `c` is the [CPU index](#cpu-index). `s` is the [ring](#ring) size. `b` is the low 16 bits of the [descriptor](#descriptor) base. `g` is the low byte of the [DMA](#dma) config, and bit 0 means transmit is enabled. `fw sem d00 c01 s08 b0200 g75` means the [DMA index](#dma-index) stayed 0, the [doorbell](#doorbell) is 1, the size is 8, the base is `0x0200` and not a [memory page](#memory-page), and transmit is enabled.
+The line can name which stop it was. `tx` means the transmit [descriptor](#descriptor) never finished. `rx` means the [descriptor](#descriptor) finished and no event matched it. Two hex digits are the status byte, and `02` is the value that continues into the [patch image](#patch-image). A readback is `d`, `c`, `s`, `b`, and `g`. `d` is the [DMA index](#dma-index). `c` is the [CPU index](#cpu-index). `s` is the [ring](#ring) size. `b` is the low 16 bits of the [descriptor](#descriptor) base. `g` is the low byte of the [DMA](#dma) config, and bit 0 means transmit is enabled. `fw sem d00 c01 s08 b0200 g75` means the [DMA index](#dma-index) stayed 0, the [doorbell](#doorbell) is 1, the size is 8, the base is `0x0200` and not a [memory page](#memory-page), and transmit is enabled. Row 17 reads the posted [descriptor](#descriptor) back: `slot 00 01f66000 d0` is index 0, buffer `0x01f66000`, and a clear done bit. `d1` means that bit is set.
 
 _Avoid_: a [channel](#channel) signal. This [semaphore](#patch-semaphore) is a command to the [ROM](#rom).
 

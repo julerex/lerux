@@ -355,7 +355,7 @@ Done. `just test-x86-e1000e` printed `e1000e: ready`, then `ip 10.0.2.15`, then 
 
 Done. `just test-x86-fetch-native` printed `ahci: port 0`, `e1000e: ready`, and `fetch ok`. The saved file contains `lerux-http-fixture`.
 
-- Board `x86_64_generic_fetch_native` reuses the fetch template. `blk_driver` maps the one ECAM window at `0xe0000000` and reads `00:1f.2` there. `net_driver` keeps `pci_net_config_ioport`. The block interrupt is MSI on `00:1f.2`, handle 99, vector 51. The network interrupt is I/O APIC pin 10, vector 50, level, active-low.
+- Board `x86_64_generic_fetch_native` reuses the fetch template. Combined x86 images copy the virtio fetch split: block ECAM, one config port on net. `blk_driver` maps the one ECAM window at `0xe0000000` and reads `00:1f.2` there. `net_driver` keeps `pci_net_config_ioport`. The block interrupt is MSI on `00:1f.2`, handle 99, vector 51. The network interrupt is I/O APIC pin 10, vector 50, level, active-low.
 - Serial stays the NS16550. No virtio device is attached. `x86_64_generic_fs_ahci` stays on `pci_config_ioport` and does not map ECAM.
 - `ci` stays false. The workflow include list and the hand-written smoke counts stay put until the board is explicitly promoted.
 

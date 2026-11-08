@@ -69,7 +69,7 @@ When the unknown is operational, probe it on the host before a large delegated s
 
 Jobs that share one build-driver target directory run one at a time. Host-only tests use `just test-host <crate>` or `just check-host <crate>`. Both set `CARGO_TARGET_DIR` to `build/host` and do not start `just check-pd`.
 
-Before a Task spawn, run `python3 support/check-spawn.py` with the role, the subagent type, and the prompt. A non-zero exit is a refusal. Do not spawn.
+Before a Task spawn, run `python3 support/check-spawn.py` with the role, the subagent type, and the prompt. A how explorer uses `--role how-explorer`. A how explainer uses `--role how-explainer`. Both require the literal `readonly: true` in the prompt. A non-zero exit is a refusal. Do not spawn.
 
 Before the numbered plan skill does any other work, run `python3 support/check-plan-owner.py --skills` with every attached skill name. If poteto-mode is one of them, the script exits non-zero and names the design doc.
 

@@ -1,33 +1,38 @@
 #!/usr/bin/env python3
-"""Refuse a Task spawn that breaks the how-explorer or feature-delegate rule.
+"""Refuse a Task spawn that breaks the how or feature-delegate rule.
 
-A how explorer whose subagent is general-purpose must carry a read-only
-requirement in the prompt. A feature implementation delegate must be a
-poteto-agent. How explorers stay on generalPurpose, which is the type the
-how skill names.
+A how explorer and a how explainer stay on generalPurpose. Each prompt must
+contain the literal ``readonly: true``. A ``--readonly`` flag does not replace
+that literal. A feature implementation delegate must be a poteto-agent.
 """
 
 import argparse
 import sys
 
 HOW_TYPES = {"generalPurpose", "general-purpose"}
-READ_ONLY = ("readonly: true", "read-only", "readonly=true")
+HOW_ROLES = {
+    "how-explorer": "how explorer",
+    "how-explainer": "how explainer",
+}
+LITERAL_READ_ONLY = "readonly: true"
 
 
 def judge(role: str, subagent: str, prompt: str, readonly: bool) -> tuple[int, str]:
-    prompt_ro = readonly or any(token in prompt for token in READ_ONLY)
-    if role == "how-explorer":
-        if subagent in HOW_TYPES and not prompt_ro:
-            return (
-                1,
-                "refusing how explorer: general-purpose Task prompt does not require read-only",
-            )
+    # `readonly` is accepted so a set flag cannot stand in for the literal.
+    _ = readonly
+    if role in HOW_ROLES:
+        label = HOW_ROLES[role]
         if subagent not in HOW_TYPES:
             return (
                 1,
-                "refusing how explorer: stay on generalPurpose with readonly: true",
+                f"refusing {label}: stay on generalPurpose with {LITERAL_READ_ONLY}",
             )
-        return 0, "how explorer ok"
+        if LITERAL_READ_ONLY not in prompt:
+            return (
+                1,
+                f"refusing {label}: prompt lacks {LITERAL_READ_ONLY}",
+            )
+        return 0, f"{label} ok"
     if role == "feature-impl":
         if subagent != "poteto-agent":
             return (
@@ -42,7 +47,15 @@ def self_test() -> int:
     cases = [
         ("how-explorer", "generalPurpose", "explore the linker", False, 1),
         ("how-explorer", "generalPurpose", "readonly: true", False, 0),
+        ("how-explorer", "generalPurpose", "read-only", False, 1),
+        ("how-explorer", "generalPurpose", "readonly=true", False, 1),
+        ("how-explorer", "generalPurpose", "explore the linker", True, 1),
         ("how-explorer", "poteto-agent", "readonly: true", True, 1),
+        ("how-explainer", "generalPurpose", "readonly: true", False, 0),
+        ("how-explainer", "generalPurpose", "read-only", False, 1),
+        ("how-explainer", "generalPurpose", "readonly=true", False, 1),
+        ("how-explainer", "generalPurpose", "turn the notes into constraints", True, 1),
+        ("how-explainer", "poteto-agent", "readonly: true", True, 1),
         ("feature-impl", "generalPurpose", "", False, 1),
         ("feature-impl", "poteto-agent", "", False, 0),
     ]
@@ -62,7 +75,11 @@ def main() -> int:
     if "--self-test" in sys.argv:
         return self_test()
     parser = argparse.ArgumentParser()
-    parser.add_argument("--role", required=True, choices=("how-explorer", "feature-impl"))
+    parser.add_argument(
+        "--role",
+        required=True,
+        choices=("how-explorer", "how-explainer", "feature-impl"),
+    )
     parser.add_argument("--subagent", required=True)
     parser.add_argument("--prompt", default="")
     parser.add_argument("--readonly", action="store_true")

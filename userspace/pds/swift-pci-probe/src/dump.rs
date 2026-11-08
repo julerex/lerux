@@ -105,8 +105,8 @@ pub fn paint_probe_dump(pci: &Pci, iommu_base: u64, iommu: Option<[u64; 7]>) {
     let nvme_port = pci.port(NVME_BDF.0, false);
     paint_summary(&wifi, wifi_port.as_ref(), nvme_port.as_ref());
     paint_config(ROW_WIFI_CONFIG, MT7921_BDF, &wifi);
-    paint_port(ROW_WIFI_PORT, b"rp", wifi_port.as_ref());
-    paint_port(ROW_NVME_PORT, b"np", nvme_port.as_ref());
+    paint_port(ROW_WIFI_PORT, *b"rp", wifi_port.as_ref());
+    paint_port(ROW_NVME_PORT, *b"np", nvme_port.as_ref());
     paint_iommu(iommu_base, iommu);
 }
 
@@ -130,18 +130,17 @@ fn readback(port: &Port) -> PortReadback<'_> {
     }
 }
 
-fn paint_port(row: usize, tag: &[u8; 2], port: Option<&Port>) {
-    match port {
-        Some(port) => paint_config(row, port.bdf, &port.config),
-        None => {
-            let mut miss = *b"rp miss";
-            miss[..2].copy_from_slice(tag);
-            paint_full(row, &miss);
-            for extra in 1..CONFIG_ROWS {
-                paint_full(row + extra, b"");
-            }
+fn paint_port(row: usize, tag: [u8; 2], port: Option<&Port>) {
+    let Some(port) = port else {
+        let mut miss = *b"rp miss";
+        miss[..2].copy_from_slice(&tag);
+        paint_full(row, &miss);
+        for extra in 1..CONFIG_ROWS {
+            paint_full(row + extra, b"");
         }
-    }
+        return;
+    };
+    paint_config(row, port.bdf, &port.config);
 }
 
 fn paint_config(row: usize, (bus, dev, func): (u8, u8, u8), config: &[u8]) {

@@ -21,6 +21,7 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [../lerux-ladybird/PLAN.md](../lerux-ladybird/PLAN.md) | Ladybird-shaped browser libraries and protection domains. Milestone 1 adds the crates and an empty document on a page |
 | [desk-browser.md](desk-browser.md) | Desk browser spec: one public page on this Z97, from the typed address to the motherboard HDMI port |
 | [plan-qip.md](plan-qip.md) | Investigation: QIP component contracts and whether a host belongs in lerux. No decision yet. |
+| [bluechip.md](bluechip.md) | Investigation: emulating the Anduril BlueChip laptop (Snapdragon X), the lerux port gap, and a QEMU proxy board. No decision yet. |
 | [config.md](config.md) | Phase 54: config key schema, secrets, boot policy |
 | [packages.md](packages.md) | Phase 55: package CLI, pins, profile recipes, out-of-tree “AUR” |
 | [plan-au-ts.md](plan-au-ts.md) | Phases 41–49: sDDF/LionsOS/sdfgen-inspired work |

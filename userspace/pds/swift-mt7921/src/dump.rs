@@ -1,4 +1,4 @@
-//! Rows 52 to 66 of the panel: the WFDMA registers after the boot attempt,
+//! Rows 51 to 65 of the panel: the WFDMA registers after the boot attempt,
 //! the ring registers, the prefetch table, the posted TX17 descriptor, the
 //! semaphore command it points at, the first RX event descriptor, and the
 //! same registers read before the first MCU command.

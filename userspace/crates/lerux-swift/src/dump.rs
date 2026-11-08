@@ -2,8 +2,9 @@
 //!
 //! The panel is 1920 by 1080 and a cell is 16 pixels, so the text grid is
 //! [`PANEL_COLS`] by [`PANEL_ROWS`]. The console owns rows 0 to 24, the six
-//! probe lines rows 25 to 30, and the dump rows 31 to 66. The console fill
-//! and `Damage::All` cover rows 0 to 24, so every dump row survives a redraw.
+//! probe lines rows 25 to 30, the dump rows 31 to 65, and the end marker row
+//! 66. The console fill and `Damage::All` cover rows 0 to 24, so every dump
+//! row survives a redraw.
 //!
 //! A hex row is an eight-character label, then twelve `xxxxxxxx` words. A
 //! named row is a three-character tag, then seven `name value` pairs. Both
@@ -37,26 +38,53 @@ pub const ROW_WIFI_CONFIG: usize = 32;
 pub const ROW_WIFI_PORT: usize = ROW_WIFI_CONFIG + CONFIG_ROWS;
 /// Rows 44 to 49: configuration space of the root port above bus 2.
 pub const ROW_NVME_PORT: usize = ROW_WIFI_PORT + CONFIG_ROWS;
-/// Rows 50 and 51: AMD IOMMU registers.
+/// Row 50: AMD IOMMU registers.
 pub const ROW_IOMMU: usize = ROW_NVME_PORT + CONFIG_ROWS;
-/// Rows 52 to 54: MT7921 registers read after the firmware step returned.
-pub const ROW_REGS_AFTER: usize = ROW_IOMMU + 2;
-/// Rows 55 and 56: transmit rings 0, 16, 17, then receive rings 0, 1, 2.
+/// Rows 51 to 53: MT7921 registers read after the firmware step returned.
+pub const ROW_REGS_AFTER: usize = ROW_IOMMU + 1;
+/// Rows 54 and 55: transmit rings 0, 16, 17, then receive rings 0, 1, 2.
 pub const ROW_RINGS: usize = ROW_REGS_AFTER + 3;
-/// Rows 57 to 59: the prefetch registers at `0xd4600`, `0xd4630`, `0xd4680`.
+/// Rows 56 to 58: the prefetch registers at `0xd4600`, `0xd4630`, `0xd4680`.
 pub const ROW_PREFETCH: usize = ROW_RINGS + 2;
-/// Row 60: slots 0 to 2 of the MCU transmit ring.
+/// Row 59: slots 0 to 2 of the MCU transmit ring.
 pub const ROW_TX_DESC: usize = ROW_PREFETCH + 3;
-/// Rows 61 and 62: the first 68 bytes of the bounce buffer.
+/// Rows 60 and 61: the first 68 bytes of the bounce buffer.
 pub const ROW_BOUNCE: usize = ROW_TX_DESC + 1;
-/// Row 63: slots 0 to 2 of the event receive ring.
+/// Row 62: slots 0 to 2 of the event receive ring.
 pub const ROW_RX_DESC: usize = ROW_BOUNCE + 2;
-/// Rows 64 to 66: MT7921 registers read before the first MCU command.
+/// Rows 63 to 65: MT7921 registers read before the first MCU command.
 pub const ROW_REGS_BEFORE: usize = ROW_RX_DESC + 1;
+/// Row 66, the last whole cell: the end marker. A photograph that shows it
+/// shows every row above it.
+pub const ROW_END: usize = ROW_REGS_BEFORE + 3;
 
-const _: () = assert!(ROW_REGS_BEFORE + 3 == PANEL_ROWS);
+const _: () = assert!(ROW_END + 1 == PANEL_ROWS);
 const _: () = assert!(LABEL_LEN + WORDS_PER_ROW * 9 <= PANEL_COLS);
 const _: () = assert!(4 + NAMES_PER_ROW * (NAME_LEN + 10) <= PANEL_COLS);
+
+/// PCI Express link control bits 1:0: ASPM L0s and L1.
+pub const LINK_ASPM: u16 = 0x0003;
+/// PCI Express link control bit 8: clock power management (CLKREQ).
+pub const LINK_CLKPM: u16 = 0x0100;
+/// What Linux `mt76_pci_disable_aspm` clears on the endpoint through
+/// `pci_disable_link_state(L0S | L1 | CLKPM)`.
+pub const ENDPOINT_LINK_CLEAR: u16 = LINK_ASPM | LINK_CLKPM;
+/// What that call clears on the parent root port.
+pub const PORT_LINK_CLEAR: u16 = LINK_ASPM;
+
+/// The end marker. `END OF OUTPUT`, then dashes to the last column, which is
+/// `|`, so the photograph shows the bottom row and the right edge together.
+#[must_use]
+pub fn write_end_row(out: &mut [u8]) -> usize {
+    const TEXT: &[u8] = b"END OF OUTPUT ";
+    if out.len() < PANEL_COLS {
+        return 0;
+    }
+    out[..TEXT.len()].copy_from_slice(TEXT);
+    out[TEXT.len()..PANEL_COLS - 1].fill(b'-');
+    out[PANEL_COLS - 1] = b'|';
+    PANEL_COLS
+}
 
 /// `+000    ` style label for a configuration row past the first.
 #[must_use]
@@ -204,11 +232,18 @@ pub fn find_capability(config: &[u8], id: u8) -> Option<usize> {
     None
 }
 
+/// Byte offset of the PCI Express link control register. The capability
+/// pointer is dword aligned, so this offset is too, and link control is the
+/// low half of that dword. Link status is the high half.
+#[must_use]
+pub fn link_control_offset(config: &[u8]) -> Option<usize> {
+    find_capability(config, 0x10).map(|cap| cap + 0x10)
+}
+
 /// PCI Express link control: the ASPM field is bits 1:0.
 #[must_use]
 pub fn link_control(config: &[u8]) -> Option<u16> {
-    let cap = find_capability(config, 0x10)?;
-    read_u16(config, cap + 0x10)
+    read_u16(config, link_control_offset(config)?)
 }
 
 /// Power management control and status: the power state is bits 1:0.
@@ -218,33 +253,41 @@ pub fn power_control(config: &[u8]) -> Option<u16> {
     read_u16(config, cap + 0x04)
 }
 
-/// `03:00.0 cmd 0006 lnk 0042 pm 0008` for one function.
+/// `03:00.0 cmd 0006 lnk 0142>0040 pm 0008` for one function. `link_before`
+/// is the link control word read before the probe cleared ASPM on it; `None`
+/// leaves the `>` and the second word out.
 #[must_use]
-pub fn write_function_summary(out: &mut [u8], bdf: (u8, u8, u8), config: &[u8]) -> usize {
-    const N: usize = 7 + 9 + 9 + 8;
-    if out.len() < N {
+pub fn write_function_summary(
+    out: &mut [u8],
+    bdf: (u8, u8, u8),
+    config: &[u8],
+    link_before: Option<u16>,
+) -> usize {
+    let n = 7 + 9 + readback_width(5, link_before) + 8;
+    if out.len() < n {
         return 0;
     }
     let (bus, dev, func) = bdf;
     out[..7].copy_from_slice(&bdf_label(bus, dev, func)[..7]);
     write_field(&mut out[7..16], b" cmd ", command_word(config));
-    write_field(&mut out[16..25], b" lnk ", link_control(config));
-    write_field(&mut out[25..33], b" pm ", power_control(config));
-    N
+    let at = 16 + write_readback(&mut out[16..], b" lnk ", link_before, link_control(config));
+    write_field(&mut out[at..at + 8], b" pm ", power_control(config));
+    at + 8
 }
 
-/// `rp 00:02.2 sec 03 cmd 0407>0407 lnk 0042` for a root port, or `rp miss`.
-/// `tag` is `rp` for the Wi-Fi port and `np` for the `NVMe` port. `before` is
-/// the command word read before bus master was set on the port.
+/// `rp 00:02.2 sec 03 cmd 0407>0407 lnk 0042>0040` for a root port, or
+/// `rp miss`. `tag` is `rp` for the Wi-Fi port and `np` for the `NVMe` port.
+/// `before` is the command word read before bus master was set on the port,
+/// and `link_before` the link control word read before ASPM was cleared.
 #[must_use]
 pub fn write_port_summary(out: &mut [u8], tag: &[u8; 2], port: Option<PortReadback<'_>>) -> usize {
-    const N: usize = 10 + 7 + 9 + 5 + 9;
     let Some(port) = port else {
         let mut miss = *b"rp miss";
         miss[..2].copy_from_slice(tag);
         return write_bytes(out, &miss);
     };
-    if out.len() < N {
+    let n = 10 + 7 + readback_width(5, port.before) + readback_width(5, port.link_before);
+    if out.len() < n {
         return 0;
     }
     let (bus, dev, func) = port.bdf;
@@ -255,26 +298,47 @@ pub fn write_port_summary(out: &mut [u8], tag: &[u8; 2], port: Option<PortReadba
     out[15] = hex(secondary_bus(port.config).unwrap_or(0xff) >> 4);
     out[16] = hex(secondary_bus(port.config).unwrap_or(0xff));
     let mut at = 17;
-    if let Some(before) = port.before {
-        write_field(&mut out[at..at + 9], b" cmd ", Some(before));
-        out[at + 9] = b'>';
-        write_hex16_opt(&mut out[at + 10..at + 14], command_word(port.config));
-        at += 14;
-    } else {
-        write_field(&mut out[at..at + 9], b" cmd ", command_word(port.config));
-        at += 9;
-    }
-    write_field(&mut out[at..at + 9], b" lnk ", link_control(port.config));
-    at + 9
+    at += write_readback(
+        &mut out[at..],
+        b" cmd ",
+        port.before,
+        command_word(port.config),
+    );
+    at += write_readback(
+        &mut out[at..],
+        b" lnk ",
+        port.link_before,
+        link_control(port.config),
+    );
+    at
 }
 
 /// A root port the probe found: its location, its configuration space after
-/// the probe's write, and the command word before that write.
+/// the probe's writes, the command word before bus master was set, and the
+/// link control word before ASPM was cleared.
 #[derive(Clone, Copy)]
 pub struct PortReadback<'a> {
     pub bdf: (u8, u8, u8),
     pub config: &'a [u8],
     pub before: Option<u16>,
+    pub link_before: Option<u16>,
+}
+
+/// Width of [`write_readback`] for a name of `name_len` characters.
+fn readback_width(name_len: usize, before: Option<u16>) -> usize {
+    name_len + if before.is_some() { 9 } else { 4 }
+}
+
+/// ` name bbbb>aaaa` when `before` is known, ` name aaaa` otherwise.
+fn write_readback(out: &mut [u8], name: &[u8], before: Option<u16>, after: Option<u16>) -> usize {
+    let Some(before) = before else {
+        write_field(&mut out[..name.len() + 4], name, after);
+        return name.len() + 4;
+    };
+    write_field(&mut out[..name.len() + 4], name, Some(before));
+    out[name.len() + 4] = b'>';
+    write_hex16_opt(&mut out[name.len() + 5..name.len() + 9], after);
+    name.len() + 9
 }
 
 fn write_field(out: &mut [u8], name: &[u8], value: Option<u16>) {
@@ -382,14 +446,27 @@ mod tests {
         assert_eq!(ROW_WIFI_PORT, 38);
         assert_eq!(ROW_NVME_PORT, 44);
         assert_eq!(ROW_IOMMU, 50);
-        assert_eq!(ROW_REGS_AFTER, 52);
-        assert_eq!(ROW_RINGS, 55);
-        assert_eq!(ROW_PREFETCH, 57);
-        assert_eq!(ROW_TX_DESC, 60);
-        assert_eq!(ROW_BOUNCE, 61);
-        assert_eq!(ROW_RX_DESC, 63);
-        assert_eq!(ROW_REGS_BEFORE, 64);
+        assert_eq!(ROW_REGS_AFTER, 51);
+        assert_eq!(ROW_RINGS, 54);
+        assert_eq!(ROW_PREFETCH, 56);
+        assert_eq!(ROW_TX_DESC, 59);
+        assert_eq!(ROW_BOUNCE, 60);
+        assert_eq!(ROW_RX_DESC, 62);
+        assert_eq!(ROW_REGS_BEFORE, 63);
+        assert_eq!(ROW_END, 66);
         assert_eq!(CONFIG_ROWS, 6);
+    }
+
+    #[test]
+    fn end_row_fills_the_last_row_to_the_right_edge() {
+        let mut out = [0u8; PANEL_COLS];
+        let n = write_end_row(&mut out);
+        assert_eq!(n, PANEL_COLS);
+        assert!(out.starts_with(b"END OF OUTPUT ---"));
+        assert!(out.ends_with(b"---|"));
+        assert!(out[..PANEL_COLS - 1].iter().all(|byte| *byte != b'|'));
+        let mut short = [0u8; PANEL_COLS - 1];
+        assert_eq!(write_end_row(&mut short), 0);
     }
 
     #[test]
@@ -465,9 +542,20 @@ mod tests {
         assert!(!is_bridge(&wifi));
         assert_eq!(secondary_bus(&wifi), None);
         assert_eq!(find_capability(&wifi, 0x10), Some(0x90));
+        assert_eq!(link_control_offset(&wifi), Some(0xa0));
         assert_eq!(link_control(&wifi), Some(0x0042));
+        assert_eq!(link_control_offset(&port), Some(0x68));
         assert_eq!(power_control(&wifi), Some(0x0008));
         assert_eq!(command_word(&[0xff; 64]), None);
+        assert_eq!(link_control_offset(&[0u8; CONFIG_BYTES]), None);
+    }
+
+    #[test]
+    fn link_clear_masks_match_linux() {
+        assert_eq!(ENDPOINT_LINK_CLEAR, 0x0103);
+        assert_eq!(PORT_LINK_CLEAR, 0x0003);
+        assert_eq!(0x0142 & !ENDPOINT_LINK_CLEAR, 0x0040);
+        assert_eq!(0x0042 & !PORT_LINK_CLEAR, 0x0040);
     }
 
     #[test]
@@ -475,38 +563,52 @@ mod tests {
         let mut out = [b' '; PANEL_COLS];
         let wifi = wifi_config();
         let port = port_config();
-        let n = write_function_summary(&mut out, (3, 0, 0), &wifi);
-        assert_eq!(&out[..n], b"03:00.0 cmd 0006 lnk 0042 pm 0008");
+        let n = write_function_summary(&mut out, (3, 0, 0), &wifi, Some(0x0142));
+        assert_eq!(&out[..n], b"03:00.0 cmd 0006 lnk 0142>0042 pm 0008");
+        out[n] = b'|';
         let readback = PortReadback {
             bdf: (0, 2, 2),
             config: &port,
             before: Some(0x0403),
+            link_before: Some(0x0043),
         };
-        let m = write_port_summary(&mut out[n + 3..], b"rp", Some(readback));
+        let m = write_port_summary(&mut out[n + 1..], b"rp", Some(readback));
         assert_eq!(
-            &out[n + 3..n + 3 + m],
-            b"rp 00:02.2 sec 03 cmd 0403>0407 lnk 0043"
+            &out[n + 1..n + 1 + m],
+            b"rp 00:02.2 sec 03 cmd 0403>0407 lnk 0043>0043"
         );
+        out[n + 1 + m] = b'|';
         let untouched = PortReadback {
             bdf: (0, 2, 1),
             config: &port,
             before: None,
+            link_before: None,
         };
-        let k = write_port_summary(&mut out[n + 3 + m + 3..], b"np", Some(untouched));
+        let k = write_port_summary(&mut out[n + 2 + m..], b"np", Some(untouched));
         assert_eq!(
-            &out[n + 3 + m + 3..n + 3 + m + 3 + k],
+            &out[n + 2 + m..n + 2 + m + k],
             b"np 00:02.1 sec 03 cmd 0407 lnk 0043"
         );
-        assert!(n + 3 + m + 3 + m <= PANEL_COLS);
+        assert_eq!(n + 2 + m + k, PANEL_COLS);
         let k = write_port_summary(&mut out, b"np", None);
         assert_eq!(&out[..k], b"np miss");
+    }
+
+    #[test]
+    fn summary_without_a_link_readback_is_the_old_shape() {
+        let mut out = [b' '; PANEL_COLS];
+        let wifi = wifi_config();
+        let n = write_function_summary(&mut out, (3, 0, 0), &wifi, None);
+        assert_eq!(&out[..n], b"03:00.0 cmd 0006 lnk 0042 pm 0008");
     }
 
     #[test]
     fn missing_capability_prints_dashes() {
         let mut out = [0u8; 40];
         let bare = [0x22u8, 0x10, 0x34, 0x16, 0x07, 0x04, 0, 0];
-        let n = write_function_summary(&mut out, (0, 2, 1), &bare);
+        let n = write_function_summary(&mut out, (0, 2, 1), &bare, None);
         assert_eq!(&out[..n], b"00:02.1 cmd 0407 lnk ---- pm ----");
+        let n = write_function_summary(&mut out, (0, 2, 1), &bare, Some(0x0042));
+        assert_eq!(&out[..n], b"00:02.1 cmd 0407 lnk 0042>---- pm ----");
     }
 }

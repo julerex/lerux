@@ -1,54 +1,58 @@
 # Linux probe of the Swift MT7921
 
-One boot of the official Arch install image, with the card's driver held until `capture.sh` loads it. The output is the Phase 4 record in [docs/plan-swift-wifi.md](../../docs/plan-swift-wifi.md): `lspci -vvv` for the MT7921 and its root port, the `dmesg` lines for `mt7921` and `AMD-Vi`, and the `mt76:reg_rr` / `mt76:reg_wr` trace of that probe.
+One USB stick holds the official Arch install image and `capture.sh`. Boot it on the Acer, with the card's driver held until the script loads it. The output is the Phase 4 record in [docs/plan-swift-wifi.md](../../docs/plan-swift-wifi.md): `lspci -vvv` for the MT7921 and its root port, the `dmesg` lines matching `mt7921|AMD-Vi`, and the `mt76:reg_rr` / `mt76:reg_wr` trace of that probe.
 
-Arch is enough. The releng image already contains `linux-firmware` (the MT7961 patch and RAM image), `pciutils`, and `kmod`. It has no network until this driver comes up, so the script does not install `trace-cmd`. It reads the same two events from the kernel tracer.
+Arch is enough. The install image already contains `linux-firmware` (the MT7961 patch and RAM image), `pciutils`, and `kmod`. It has no network until this driver comes up, so the script does not install `trace-cmd`. It reads the same two events from the kernel tracer.
 
-## What to take to the laptop
+`just iso` is a different stick. That one is the lerux image. This recipe does not build lerux.
 
-1. A USB stick with the current x86_64 Arch install image from <https://archlinux.org/download/>.
-2. A second stick, formatted FAT or exFAT, holding `capture.sh` (and this file, if you want it on the machine):
+## Make the stick
 
-```bash
-cp support/swift-linux/capture.sh support/swift-linux/README.md /run/media/$USER/<stick>/
-```
-
-Ventoy works as one stick: copy the Arch ISO and `capture.sh` onto the Ventoy data partition, boot the ISO, then mount that partition and run the script from it.
-
-Write the Arch image with the usual care. `lsblk` first, then `dd` only to that stick:
+Plug in the USB stick and run:
 
 ```bash
-sudo dd if=archlinux-x86_64.iso of=/dev/sdX bs=4M status=progress conv=fsync
+just iso-arch-and-capture
 ```
 
-## Boot
+The command waits if the stick is not in yet. It then lists the USB sticks and asks for a number. The list is whole disks whose transport is `usb`. On this machine `sda` and `sdb` are internal SATA disks. The stick needs room for the Arch image (about 1.3 GiB) plus 1 GiB for the capture.
 
-Shut the laptop down and leave it off for a few seconds. A reboot out of a system that already loaded the card can leave the firmware running, and the semaphore then answers that the patch is already present.
+The command then:
 
-In the firmware boot menu, choose the Arch stick. At the systemd-boot menu, highlight the install-medium entry and press `e`. At the end of the kernel line, add:
+1. Downloads the current Arch x86_64 image into `build/archiso/`, checks its sha256 against the published list, and checks the signature with the Arch keyring.
+2. Asks for your password, prints the stick, and waits until you type the device path back. Any other answer stops before writing.
+3. Writes the image, then adds a FAT partition named `CAPTURE` in the free space and copies `capture.sh`, this file, and `BOOT.txt` onto it.
+
+`just iso-arch-and-capture /dev/sdX` uses that stick directly. The same checks apply.
+
+A second run uses the cached image when the published checksum still matches. The stick is erased either way, including an earlier `swift-linux-out`.
+
+Unplug the stick when the recipe prints `wrote CAPTURE`.
+
+## On the Acer
+
+Shut the laptop down and leave it off for a few seconds. A restart out of a system that already loaded the card can leave the firmware running, and the semaphore then answers that the patch is already present.
+
+Plug the stick in. Power on and open the firmware boot menu the same way you boot the lerux stick. Choose the USB entry. If the firmware refuses the stick, turn secure boot off.
+
+At the Arch menu, highlight the install-medium entry and press `e`. Add this to the end of the line that contains `archisobasedir`:
 
 ```text
 modprobe.blacklist=mt7921e
 ```
 
-Press Enter to boot. That stops the automatic load and still allows the script's `modprobe`. Do not use `module_blacklist=mt7921e`: the kernel then refuses the manual load as well.
+Press Enter to boot. That stops the automatic load and still allows the script's `modprobe`. `module_blacklist=mt7921e` is a different parameter: the kernel then refuses the manual load as well.
 
-If the firmware refuses the stick, turn secure boot off. The lerux stick already boots that way.
-
-The console logs in as root.
-
-## Capture
-
-Mount the stick that holds the script and run it:
+The console is already root. Leave the stick plugged in. The Arch files stay on the stick, and `CAPTURE` is a separate partition:
 
 ```bash
-lsblk -f
 mkdir -p /mnt/stick
-mount /dev/sdY1 /mnt/stick
+mount /dev/disk/by-label/CAPTURE /mnt/stick
 bash /mnt/stick/capture.sh
 ```
 
-The script waits up to two minutes. Linux retries a semaphore timeout and may reset the chip before `Firmware init done`, so the first `Failed to get patch semaphore` line is not the end. The last line on the console is the verdict:
+If the label is missing, `lsblk -f` shows it as `CAPTURE`. That partition is the large FAT one. The 109 MiB partition is the installer's EFI system partition.
+
+The script waits up to two minutes. Linux retries a semaphore timeout and may reset the chip before `Firmware init done`, so the first `Failed to get patch semaphore` line is not the end. A line of progress prints every few seconds. The last line is the verdict:
 
 | Verdict | Meaning |
 | --- | --- |
@@ -56,13 +60,26 @@ The script waits up to two minutes. Linux retries a semaphore timeout and may re
 | `probe failed: patch semaphore` | Linux stopped in the same place lerux does |
 | `probe failed: chip reset` | The retries ended in a failed reset |
 | `probe unfinished` | Two minutes passed with neither result |
-| `already loaded, no trace` | The driver loaded at boot. Power off and reboot with the blacklist |
+| `already loaded, no trace` | The driver loaded at boot. Power off, and boot again with the blacklist |
 
-When the script says `wrote /mnt/stick/swift-linux-out`, the stick is safe to remove. If it instead points at `/run/swift-linux`, that copy is RAM: copy it onto the stick before rebooting.
+When the script prints `wrote /mnt/stick/swift-linux-out`, shut down:
 
-## Bring back
+```bash
+poweroff
+```
 
-Copy `swift-linux-out/` to `support/swift-linux/out/` in this tree. That directory is gitignored; the files name the machine. The diff against `device.rs` is what gets written into the plan.
+`already loaded, no trace` means this boot did not record the register trace. Power the machine off, then boot the stick again and add `modprobe.blacklist=mt7921e` before the installer starts.
+
+## Bring the results back
+
+Plug the stick into this machine. Mount `CAPTURE` and copy the directory into the tree. The destination is gitignored because the files name the laptop.
+
+```bash
+mkdir -p /mnt/stick support/swift-linux/out
+sudo mount /dev/disk/by-label/CAPTURE /mnt/stick
+cp -r --no-preserve=ownership,mode /mnt/stick/swift-linux-out/. support/swift-linux/out/
+sudo umount /mnt/stick
+```
 
 `regs.txt` is one `rr` or `wr` per line, then the BAR offset, then the value. `mt76` traces the access after remap, so `0x7c060010` shows up as the BAR offset `map_reg` produces (`0xe0010` for that register), not as the logical address. Lost events, if the trace buffer wrapped, are counted in `regs-note.txt`.
 

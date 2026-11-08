@@ -82,6 +82,13 @@ image: build
 iso target="swift_sfx14_41g":
     {{lerux}} iso --board {{target}} --build-dir {{build_dir}} --config {{config}}
 
+# Erase a USB stick and write the Arch install image plus capture.sh.
+# With no argument, lists USB sticks and asks which one to erase.
+# just iso-arch-and-capture
+# just iso-arch-and-capture /dev/sdX
+iso-arch-and-capture *args:
+    bash "{{root}}/support/swift-linux/write-stick.sh" {{args}}
+
 # Boot in QEMU for the selected board
 run: image
     {{lerux}} run --board {{board}} --build-dir {{build_dir}} --config {{config}}

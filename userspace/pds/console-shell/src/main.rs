@@ -128,6 +128,24 @@ impl HandlerImpl {
         }
     }
 
+    /// Drop keys queued while `WIFI.notify` ran the survey.
+    ///
+    /// That call does not return until the scan finishes, and the console
+    /// driver keeps bytes that arrive during the wait. They are not the
+    /// answer to the prompt that follows.
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    fn discard_pending(&mut self) {
+        self.len = 0;
+        self.overflow = false;
+        loop {
+            match self.screen.read() {
+                Ok(_) => {}
+                Err(nb::Error::WouldBlock) => return,
+                Err(nb::Error::Other(_)) => unreachable!("console read"),
+            }
+        }
+    }
+
     fn on_byte(&mut self, byte: u8) {
         match byte {
             b'\n' => {}
@@ -185,7 +203,9 @@ impl HandlerImpl {
             #[cfg(feature = "board-swift_sfx14_41g")]
             b"3" | b"wifi" => {
                 self.ssid_len = 0;
-                if !request_survey() {
+                let answered = request_survey();
+                self.discard_pending();
+                if !answered {
                     self.wifi_err();
                     return;
                 }

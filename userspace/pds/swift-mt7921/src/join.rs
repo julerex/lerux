@@ -71,26 +71,30 @@ impl Mac {
     }
 
     /// Wildcard scan. Heard names are written for the shell, in byte order.
+    ///
+    /// A scan that does not start leaves the request tag, so the shell reports
+    /// `wifi err` instead of an empty list.
     pub(crate) fn survey(&mut self, page: &mut [u8]) {
+        if !self.start_scan(&[]) {
+            return;
+        }
         let mut names = [[0u8; 32]; SCAN_MAX];
         let mut lens = [0u8; SCAN_MAX];
         let mut count = 0usize;
-        if self.start_scan(&[]) {
-            let mut frame = [0u8; 1600];
-            for _ in 0..scan_budget() {
-                if let Some(n) = self.poll_data()
-                    && let Some(m) = copy_frame(n, &mut frame)
-                    && let Some(ssid) = beacon_ssid(&frame[..m])
-                {
-                    count = remember(&mut names, &mut lens, count, ssid);
-                }
-                if let Some(n) = self.poll_mcu()
-                    && scan_done(Mac::rx_bytes(n))
-                {
-                    break;
-                }
-                core::hint::spin_loop();
+        let mut frame = [0u8; 1600];
+        for _ in 0..scan_budget() {
+            if let Some(n) = self.poll_data()
+                && let Some(m) = copy_frame(n, &mut frame)
+                && let Some(ssid) = beacon_ssid(&frame[..m])
+            {
+                count = remember(&mut names, &mut lens, count, ssid);
             }
+            if let Some(n) = self.poll_mcu()
+                && scan_done(Mac::rx_bytes(n))
+            {
+                break;
+            }
+            core::hint::spin_loop();
         }
         let mut refs: [&[u8]; SCAN_MAX] = [&[]; SCAN_MAX];
         for i in 0..count {

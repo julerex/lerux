@@ -703,7 +703,8 @@ impl Mac {
         rx_slice(n.min(BUF))
     }
 
-    /// Active scan. The completion is `MCU_EVENT_SCAN_DONE`, not a command ack.
+    /// Active scan. An empty name is the wildcard survey. The completion is
+    /// `MCU_EVENT_SCAN_DONE`, not a command ack.
     pub(crate) fn start_scan(&mut self, ssid: &[u8]) -> bool {
         let seq = self.next_seq();
         {

@@ -26,7 +26,7 @@
     <!-- WFDMA rings. The xHCI window ends here. The header page starts at 0x1fb0000. -->
     <memory_region name="wifi_dma" size="0x40000" phys_addr="0x1f60000" />
     <memory_region name="disk_result" size="0x1000" phys_addr="0x1fc0000" />
-    <!-- Between the disk result and the mode record. The shell writes the network name and passphrase. -->
+    <!-- Between the disk result and the mode record. The shell asks for a survey, then writes the network name and passphrase. -->
     <memory_region name="wifi_key" size="0x1000" phys_addr="0x1fd0000" />
 
     <protection_domain name="console_driver" priority="6" stack_size="0x10_000">

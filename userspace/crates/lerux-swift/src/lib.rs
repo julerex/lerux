@@ -22,7 +22,10 @@ pub use bt::{
     hci_reset, is_bluetooth_interface, usb_hci_reset, version_line, xfer_line, BtReport, HciIntr,
     PortStop, XferFail,
 };
-pub use mt7921::{read_key, write_key, FirmwareKind, Stage};
+pub use mt7921::{
+    read_key, read_survey_count, read_survey_ssid, survey_choice, write_key, write_survey,
+    FirmwareKind, Stage, SCAN_MAX,
+};
 pub use nvme::{
     io_allowed, io_rejected, load_named, report_bytes, write_result, DiskReport, NAMED_FILE,
 };

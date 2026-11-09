@@ -511,6 +511,35 @@ pub fn pmk(pass: &[u8], ssid: &[u8]) -> [u8; 32] {
     wpa_psk(pass, ssid)
 }
 
+/// SSID from a beacon or a probe response. An empty name is a hidden network.
+#[must_use]
+pub fn beacon_ssid(frame: &[u8]) -> Option<&[u8]> {
+    if frame.len() < 36 {
+        return None;
+    }
+    let kind = frame[0] & 0xfc;
+    if kind != 0x80 && kind != 0x50 {
+        return None;
+    }
+    let mut ies = &frame[36..];
+    while ies.len() >= 2 {
+        let tag = ies[0];
+        let len = usize::from(ies[1]);
+        if ies.len() < 2 + len {
+            break;
+        }
+        let body = &ies[2..2 + len];
+        if tag == 0 {
+            if body.is_empty() || body.len() > SSID_MAX {
+                return None;
+            }
+            return Some(body);
+        }
+        ies = &ies[2 + len..];
+    }
+    None
+}
+
 /// A beacon whose SSID matches. The channel comes from the DS parameter set.
 pub struct FoundAp {
     pub bssid: [u8; 6],
@@ -783,5 +812,10 @@ mod tests {
         assert_eq!(found.bssid[0], 0xaa);
         assert_eq!(found.channel, 6);
         assert!(match_beacon(&frame, b"other").is_none());
+        assert_eq!(beacon_ssid(&frame), Some(&b"home"[..]));
+        frame[0] = 0x50;
+        assert_eq!(beacon_ssid(&frame), Some(&b"home"[..]));
+        frame[37] = 0;
+        assert!(beacon_ssid(&frame).is_none());
     }
 }

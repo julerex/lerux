@@ -52,7 +52,7 @@ Read every TLC result with `/statechart`. It shows a broken rule as its shortest
 
 ## Sync commit
 
-`SYNC_COMMIT`
+`e599121d159bd050d2e69547eb42bfcc7deb791b`
 
 Move this hash forward only after you re-read `drive`, update the model so each step is still one arm, and re-run the check at the new commit.
 

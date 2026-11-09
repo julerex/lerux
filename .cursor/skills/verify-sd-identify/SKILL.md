@@ -53,7 +53,7 @@ Read every TLC result with `/statechart`. It shows each broken rule as its short
 
 ## Sync commit
 
-`SYNC_COMMIT`
+`e599121d159bd050d2e69547eb42bfcc7deb791b`
 
 Move this hash forward only after you re-read the functions above, update the model so each step is still one command, and re-run the check at the new commit.
 

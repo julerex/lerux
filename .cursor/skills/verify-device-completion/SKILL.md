@@ -56,7 +56,7 @@ One buffer. The four devices share the step "the device finishes, then software 
 
 ## Sync commit
 
-`SYNC_COMMIT`
+`e599121d159bd050d2e69547eb42bfcc7deb791b`
 
 Move this hash forward only after you re-read the functions above, update the model so each step is still one branch, and re-run the check at the new commit.
 

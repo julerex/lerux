@@ -53,7 +53,7 @@ The tokenizer has no state enum. The cursor and `take_raw_text` are the title's 
 
 ## Sync commit
 
-`SYNC_COMMIT`
+`e599121d159bd050d2e69547eb42bfcc7deb791b`
 
 Move this hash forward only after you re-read the title arm, update the model so the step is still that arm, and re-run the check at the new commit.
 

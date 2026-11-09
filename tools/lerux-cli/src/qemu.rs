@@ -1,7 +1,9 @@
 //! QEMU launch derived from `support/boards.toml` (`[board].qemu` table).
 //!
 //! The board entry is the whole interface: arch picks the base machine,
-//! `disk`/`net`/`sp804`/`tcp_echo`/`http_one`/`https_one`/`grok_one`/`gpu` pick devices and host helpers.
+//! `disk`/`net`/`sp804`/`tcp_echo`/`http_one`/`https_one`/`grok_one`/`gpu`/`dns_one`
+//! pick devices and host helpers. `dns_one` runs QEMU inside a mount namespace
+//! whose `resolv.conf` points at the local helper. QEMU's uid does not change.
 
 use std::{
     path::{Path, PathBuf},
@@ -92,7 +94,90 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
     apply_dev_flags(&mut cmd, ctx);
     cmd.env("PATH", path);
     cmd.stdin(std::process::Stdio::inherit());
+    if qemu.dns_one {
+        cmd = wrap_dns_namespace(&board_build, &cmd)?;
+    }
     Ok(cmd)
+}
+
+/// Bind-mount `resolv` over `/etc/resolv.conf`, drop to the sudo caller, and exec.
+///
+/// A user namespace on this machine cannot open `/dev/kvm`, so the namespace is
+/// a root mount namespace. `setpriv` restores the calling uid before QEMU
+/// starts, which keeps the writable disk image owned by that user.
+pub(crate) fn qemu_with_resolv(resolv: &Path, cmd: &[std::ffi::OsString]) -> Result<()> {
+    if cmd.is_empty() {
+        bail!("qemu-with-resolv needs the qemu command");
+    }
+    mount_resolv(resolv)?;
+    drop_and_exec(cmd)
+}
+
+fn wrap_dns_namespace(board_build: &Path, inner: &Command) -> Result<Command> {
+    let resolv = write_dns_resolv(board_build)?;
+    let mut outer = Command::new("sudo");
+    outer.args(["-n", "--preserve-env=PATH", "unshare", "--mount", "--"]);
+    outer.arg(std::env::current_exe().context("current exe")?);
+    outer.args(["qemu-with-resolv", "--resolv"]);
+    outer.arg(&resolv);
+    outer.arg("--");
+    outer.arg(inner.get_program());
+    outer.args(inner.get_args());
+    copy_command_env(&mut outer, inner);
+    outer.stdin(std::process::Stdio::inherit());
+    Ok(outer)
+}
+
+fn write_dns_resolv(board_build: &Path) -> Result<PathBuf> {
+    std::fs::create_dir_all(board_build)
+        .with_context(|| format!("mkdir {}", board_build.display()))?;
+    let resolv = board_build.join("dns-resolv.conf");
+    std::fs::write(&resolv, b"nameserver 127.0.0.1\n")
+        .with_context(|| format!("write {}", resolv.display()))?;
+    Ok(resolv)
+}
+
+fn copy_command_env(outer: &mut Command, inner: &Command) {
+    for (key, value) in inner.get_envs() {
+        match value {
+            Some(value) => {
+                outer.env(key, value);
+            }
+            None => {
+                outer.env_remove(key);
+            }
+        }
+    }
+}
+
+fn mount_resolv(resolv: &Path) -> Result<()> {
+    let status = Command::new("mount")
+        .args(["--bind", &path_str(resolv), "/etc/resolv.conf"])
+        .status()
+        .context("mount resolv.conf")?;
+    if status.success() {
+        Ok(())
+    } else {
+        bail!("mount resolv.conf failed: {status}")
+    }
+}
+
+fn drop_and_exec(cmd: &[std::ffi::OsString]) -> Result<()> {
+    let uid =
+        std::env::var("SUDO_UID").context("SUDO_UID is required; qemu must not run as root")?;
+    let gid = std::env::var("SUDO_GID").context("SUDO_GID")?;
+    let mut drop_priv = Command::new("setpriv");
+    drop_priv.arg(format!("--reuid={uid}"));
+    drop_priv.arg(format!("--regid={gid}"));
+    drop_priv.args([
+        "--init-groups",
+        "--inh-caps=-all",
+        "--ambient-caps=-all",
+        "--",
+    ]);
+    drop_priv.args(cmd);
+    let err = std::os::unix::process::CommandExt::exec(&mut drop_priv);
+    bail!("exec setpriv: {err}")
 }
 
 /// QMP socket for [`QemuConfig::qmp`]. The smoke test connects here to send keys.
@@ -334,6 +419,9 @@ pub fn setup_test_helpers(ctx: &QemuContext) -> Result<Vec<std::process::Child>>
     if qemu.tcp_echo {
         helpers.push(start_tcp_echo_background(18080)?);
     }
+    if qemu.dns_one {
+        helpers.push(crate::dns_one::start_dns_one_background()?);
+    }
     Ok(helpers)
 }
 
@@ -473,6 +561,30 @@ mod tests {
         let line = format!("{cmd:?}");
         assert!(line.contains("qemu-xhci,id=xhci,addr=0x14.0x0"), "{line}");
         assert!(line.contains("usb-kbd,bus=xhci.0"), "{line}");
+    }
+
+    #[test]
+    fn dns_one_defaults_off() {
+        let qemu: QemuConfig = toml::from_str("net = \"user\"").unwrap();
+        assert!(!qemu.dns_one);
+    }
+
+    #[test]
+    fn dns_namespace_keeps_qemu_behind_sudo() {
+        let dir = std::env::temp_dir().join(format!("lerux-dns-{}", std::process::id()));
+        let mut inner = Command::new("qemu-system-aarch64");
+        inner.arg("-machine").arg("virt");
+        inner.env("PATH", "/usr/bin");
+        let outer = wrap_dns_namespace(&dir, &inner).expect("wrap");
+        let line = format!("{outer:?}");
+        assert!(line.contains("sudo"), "{line}");
+        assert!(line.contains("unshare"), "{line}");
+        assert!(line.contains("--mount"), "{line}");
+        assert!(line.contains("qemu-with-resolv"), "{line}");
+        assert!(line.contains("dns-resolv.conf"), "{line}");
+        assert!(line.contains("qemu-system-aarch64"), "{line}");
+        assert!(line.contains("-machine"), "{line}");
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

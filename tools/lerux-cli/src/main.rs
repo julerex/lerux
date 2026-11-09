@@ -13,6 +13,7 @@ mod config_cmd;
 mod deploy;
 mod dev_image;
 mod disk_img;
+mod dns_one;
 mod fat_esp;
 mod fetch;
 mod fetch_sddf;
@@ -44,6 +45,7 @@ mod tcp_echo;
 mod test;
 
 use std::{
+    ffi::OsString,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -195,6 +197,20 @@ enum Commands {
     HttpsOne {
         #[arg(default_value_t = 8443)]
         port: u16,
+    },
+    /// Answer `host` on `127.0.0.1:53` for the browser smoke.
+    DnsOne {
+        /// Bind directly. A permission failure is returned instead of calling sudo.
+        #[arg(long, hide = true, default_value_t = false)]
+        root: bool,
+    },
+    /// Bind-mount a resolv.conf, drop privileges, and exec QEMU.
+    #[command(hide = true)]
+    QemuWithResolv {
+        #[arg(long)]
+        resolv: PathBuf,
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
+        cmd: Vec<OsString>,
     },
     /// Probe whether something is listening on the TCP echo port.
     TcpEchoProbe {
@@ -454,6 +470,8 @@ fn dispatch(root: &Path, command: Commands) -> Result<()> {
         | Commands::TcpEcho { .. }
         | Commands::HttpOne { .. }
         | Commands::HttpsOne { .. }
+        | Commands::DnsOne { .. }
+        | Commands::QemuWithResolv { .. }
         | Commands::TcpEchoProbe { .. }) => dispatch_host(root, cmd),
         cmd @ (Commands::Run { .. }
         | Commands::Test { .. }
@@ -525,6 +543,8 @@ fn dispatch_host(root: &Path, command: Commands) -> Result<()> {
         Commands::TcpEcho { port } => tcp_echo::tcp_echo(port),
         Commands::HttpOne { port } => http_one::http_one(port),
         Commands::HttpsOne { port } => https_one::https_one(port),
+        Commands::DnsOne { root } => dns_one::dns_one(root),
+        Commands::QemuWithResolv { resolv, cmd } => qemu::qemu_with_resolv(&resolv, &cmd),
         Commands::TcpEchoProbe { port } => probe_tcp_echo(port),
         _ => unreachable!("host command"),
     }

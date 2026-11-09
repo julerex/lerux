@@ -13,6 +13,8 @@ mod screen;
 #[cfg(not(feature = "board-swift_sfx14_41g"))]
 mod usb;
 
+#[cfg(all(not(test), feature = "board-pc_z97_d3h"))]
+mod boot_line;
 #[cfg(all(not(test), feature = "hardware"))]
 mod device;
 #[cfg(all(not(test), feature = "hardware"))]
@@ -43,6 +45,8 @@ fn init() -> handler::HandlerImpl {
 
     use crate::screen::Screen;
 
+    #[cfg(feature = "board-pc_z97_d3h")]
+    boot_line::install();
     debug::init().expect("debug log");
     #[cfg(not(feature = "board-swift_sfx14_41g"))]
     log::info!("console-driver: vga text");
@@ -68,5 +72,8 @@ fn init() -> handler::HandlerImpl {
     device.sync_cursor(&screen);
     #[cfg(feature = "board-swift_sfx14_41g")]
     device::Device::sync_cursor(&screen);
+    // The banner replaces the log lines. Hold it before the shell prints the menu.
+    #[cfg(feature = "board-pc_z97_d3h")]
+    debug::after_boot_line();
     handler::HandlerImpl::new(device, screen, usb, IRQ, USB_IRQ, SHELL)
 }

@@ -17,8 +17,27 @@ static LINE: StaticLineBuf = StaticLineBuf::new();
 fn debug_write(s: &str) {
     // SAFETY: Microkit PDs are single-threaded; init() runs before any log call.
     unsafe {
-        LINE.push(s, |line| sel4::debug_print!("{line}\n"));
+        LINE.push(s, |line| {
+            sel4::debug_print!("{line}\n");
+            #[cfg(feature = "boot-line-gap")]
+            crate::gap::on_line(line);
+        });
     }
+}
+
+/// Run `hook` after each debug line is printed and before the five-second pause.
+///
+/// The desk console uses this to copy the line onto the VGA text page. The hook
+/// must not log: it runs inside the line buffer.
+#[cfg(feature = "boot-line-gap")]
+pub fn set_boot_line_hook(hook: fn(&str)) {
+    crate::gap::set_hook(hook);
+}
+
+/// Wait five seconds. The boot menu calls this after each line, which is not a log line.
+#[cfg(feature = "boot-line-gap")]
+pub fn after_boot_line() {
+    crate::gap::pause();
 }
 
 static LOGGER: Logger = LoggerBuilder::const_default()

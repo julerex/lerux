@@ -19,7 +19,7 @@ hardware = [
     "dep:sel4-microkit",
     "dep:sel4-microkit-simple-ipc",
 ]
-board-pc_z97_d3h = ["hardware"]
+board-pc_z97_d3h = ["hardware", "lerux-logging/boot-line-gap"]
 board-x86_64_generic_console = ["hardware"]
 board-x86_64_generic_usb_kbd = ["hardware"]
 board-swift_sfx14_41g = ["hardware", "dep:lerux-desk"]

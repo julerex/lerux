@@ -504,11 +504,10 @@ fn browse_name() {
 fn titled(body: &[u8]) -> &[u8] {
     if let Some(title) = page_title(body) {
         say_title(title);
-        body
     } else {
         say(b"title err\n");
-        &body[..0]
     }
+    body
 }
 
 #[cfg(any(

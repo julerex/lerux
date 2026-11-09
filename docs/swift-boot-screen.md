@@ -310,7 +310,7 @@ These are the other status words the Wi-Fi program can paint. Each one names a s
 | `fw start` | The "start running" command after that half got no answer |
 | `fw chip` | The card's chip id needs a different firmware pair than the one in this ISO |
 | `mac` | The radio setup after firmware, including the reset of the Wi-Fi block |
-| `wait` | Firmware and radio setup finished. The menu's `3 wifi` entry is useful only from here |
+| `wait` | Firmware and radio setup finished. Choosing `3 wifi` lists the names the radio can hear |
 
 `nvme` on row 23 and `bt` on row 24 are the disk and Bluetooth programs. They start only after the Wi-Fi startup returns, including when it returns by giving up.
 

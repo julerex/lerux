@@ -558,7 +558,7 @@ The network named by the [SSID](#ssid). [Association](#association) joins it. Th
 
 ### SSID
 
-The network name, 1 to 32 bytes. Menu item `3` asks for it. The shell paints `ssid ok` when it stores the name, then asks for the [PSK](#psk).
+The network name, 1 to 32 bytes. Menu item `3` lists the names the radio can hear, numbered, then asks for one. The shell paints `ssid ok` when it stores the name, then asks for the [PSK](#psk).
 
 _Avoid_: the [access point](#access-point) itself. This is the name.
 

@@ -984,21 +984,26 @@ pub fn read_survey_ssid(page: &[u8], index: usize) -> Option<&[u8]> {
     survey_name(page, index)
 }
 
-/// A listed name, or the 1-based index of one. A line that is neither is `None`.
+/// The printed row when `line` is a live number, otherwise a listed name.
+///
+/// The row is chosen first. A beacon named `2` must not capture the second
+/// row's passphrase. A line that is neither is `None`.
 #[must_use]
 pub fn survey_choice<'a>(page: &'a [u8], line: &[u8]) -> Option<&'a [u8]> {
     let n = read_survey_count(page)?;
+    if let Some(index) = menu_index(line) {
+        if index >= n {
+            return None;
+        }
+        return survey_name(page, index);
+    }
     for i in 0..n {
         let name = survey_name(page, i)?;
         if name == line {
             return Some(name);
         }
     }
-    let index = menu_index(line)?;
-    if index >= n {
-        return None;
-    }
-    survey_name(page, index)
+    None
 }
 
 fn survey_len(page: &[u8]) -> Option<usize> {
@@ -1268,8 +1273,9 @@ mod tests {
         assert_eq!(read_survey_ssid(&page, 0), Some(&b"2"[..]));
         assert_eq!(read_survey_ssid(&page, 1), Some(&b"alpha"[..]));
         assert_eq!(read_survey_ssid(&page, 2), Some(&b"zeta"[..]));
-        assert_eq!(survey_choice(&page, b"2"), Some(&b"2"[..]));
         assert_eq!(survey_choice(&page, b"1"), Some(&b"2"[..]));
+        assert_eq!(survey_choice(&page, b"2"), Some(&b"alpha"[..]));
+        assert_eq!(survey_choice(&page, b"3"), Some(&b"zeta"[..]));
         assert_eq!(survey_choice(&page, b"alpha"), Some(&b"alpha"[..]));
         assert!(survey_choice(&page, b"02").is_none());
         assert!(survey_choice(&page, b"other").is_none());

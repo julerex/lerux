@@ -161,7 +161,7 @@ microkit_board = "qemu_virt_aarch64"
 target = "aarch64-sel4-microkit"
 template = "browser-sddf.system.template"
 pds = ["sddf-blk-driver", "sddf-blk-virt", "sddf-fatfs", "sddf-net-driver", "sddf-net-virt-tx", "sddf-net-virt-rx", "sddf-net-copy", "sddf-serial-driver", "sddf-serial-virt-tx", "sddf-serial-virt-rx", "sddf-shell", "sddf-gpu-driver", "sddf-gpu-virt"]
-qemu = { disk = "rw", net = "user", https_one = true, gpu = true }
+qemu = { disk = "rw", net = "user", https_one = true, gpu = true, dns_one = true }
 ci = true
 system_vars = { virtio_mmio_phys_addr = "0xa003000", virtio_blk_irq = 78, virtio_net_irq = 79, virtio_gpu_irq = 77, serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33 }
 
@@ -171,7 +171,7 @@ microkit_board = "qemu_virt_riscv64"
 target = "riscv64-sel4-microkit"
 template = "browser-sddf.system.template"
 pds = ["sddf-blk-driver", "sddf-blk-virt", "sddf-fatfs", "sddf-net-driver", "sddf-net-virt-tx", "sddf-net-virt-rx", "sddf-net-copy", "sddf-serial-driver", "sddf-serial-virt-tx", "sddf-serial-virt-rx", "sddf-shell", "sddf-gpu-driver", "sddf-gpu-virt"]
-qemu = { disk = "rw", net = "user", https_one = true, gpu = true }
+qemu = { disk = "rw", net = "user", https_one = true, gpu = true, dns_one = true }
 ci = false
 system_vars = {}
 

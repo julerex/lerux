@@ -68,6 +68,10 @@ pub struct QemuConfig {
     /// `qemu-xhci` at PCI 00:14.0 plus a USB HID boot keyboard.
     #[serde(default)]
     pub usb_kbd: bool,
+    /// Answer the guest resolver at `10.0.2.3` from a helper on `127.0.0.1:53`.
+    /// QEMU stays the calling user. Its mount namespace sees a private resolv.conf.
+    #[serde(default)]
+    pub dns_one: bool,
 }
 
 /// One entry of `support/boards.toml` — the single source of truth for the

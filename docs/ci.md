@@ -43,7 +43,7 @@ Local mirror: `just check` (format + clippy for host crates, plus `lerux profile
 | `net-sddf` | `just test-net-sddf` | aarch64 network driver, serial driver, network and serial virtualisers, one copier, and a smoltcp client |
 | `fetch-sddf` | `just test-fetch-sddf` | aarch64 filesystem and network roles; the shell fetches the https-one fixture |
 | `web-sddf` | `just test-web-sddf` | aarch64 filesystem and network roles; the shell serves the seeded hostname file |
-| `browser-sddf` | `just test` | aarch64 filesystem, network, and graphics roles; the shell prints a browser and maths menu, paints the fixture, then evaluates `(1+2)*3`. Bare `just test` is this smoke. |
+| `browser-sddf` | `just test` | aarch64 filesystem, network, and graphics roles; the shell prints a browser, maths, and name menu, paints the fixture, fetches it again by resolving `host` at `10.0.2.3` and following one redirect, then evaluates `(1+2)*3`. Bare `just test` is this smoke. |
 | `agent-sddf` | `just test-agent-sddf` | aarch64 filesystem and network roles; grok asks the agent to write and read a file |
 | `program-sddf` | `just test-program-sddf` | aarch64 filesystem and network roles; a signed WebAssembly module reads the hostname and allocates a socket |
 | `html` | `just test-html` | Phase 74: lerux-html subset parser (`lerux-html: nodes=8`) |

@@ -256,6 +256,13 @@ impl<T: Tcp> Sockets<T> {
         Ok(())
     }
 
+    /// Borrow the pipe. The socket phase stays as it is.
+    ///
+    /// The browser shell resolves a name on this pipe before it opens a socket.
+    pub fn with_pipe<R>(&mut self, body: impl FnOnce(&mut T) -> R) -> R {
+        body(&mut self.tcp)
+    }
+
     /// Receive at least one byte, or `Ok(0)` when the peer has closed.
     ///
     /// # Errors

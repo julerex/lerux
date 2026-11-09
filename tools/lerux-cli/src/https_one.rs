@@ -9,9 +9,10 @@
 //! `GET /` keeps the same `200 OK` body as [`crate::http_one`]. `GET /fixture.html`
 //! serves `support/browser/fixture.html`. `GET /paint.html` serves
 //! `support/browser/paint.html`. `GET /smoke.lrw` serves
-//! `support/prog/smoke.lrw`. Desk pages (`desk.html`, `desk-link.html`,
-//! `desk-form.html`) are not in `support/browser/`. Smoke server cert lives in
-//! `support/tls/`.
+//! `support/prog/smoke.lrw`. `GET /go` is a `302` whose `Location` is
+//! `/fixture.html` and whose body is empty. Desk pages (`desk.html`,
+//! `desk-link.html`, `desk-form.html`) are not in `support/browser/`. Smoke
+//! server cert lives in `support/tls/`.
 
 use std::{
     io::{Read, Write},
@@ -30,6 +31,7 @@ use rustls::{
 const RESPONSE: &[u8] = b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK";
 const NOT_FOUND: &[u8] =
     b"HTTP/1.1 404 Not Found\r\nContent-Length: 9\r\nConnection: close\r\n\r\nnot found";
+const GO: &[u8] = b"HTTP/1.1 302 Found\r\nLocation: /fixture.html\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
 
 /// Joint interactive smoke may GET twice (retries). One-shot boards still work.
 const TURNS: usize = 8;
@@ -168,6 +170,9 @@ fn http_response_for_path(path: &[u8], file_body: &[u8]) -> Vec<u8> {
     if path == b"/smoke.lrw" {
         return length_prefixed(b"application/octet-stream", file_body);
     }
+    if path == b"/go" {
+        return GO.to_vec();
+    }
     NOT_FOUND.to_vec()
 }
 
@@ -278,5 +283,19 @@ mod tests {
     fn unknown_path_is_404() {
         let r = http_response_for_path(b"/nope", b"x");
         assert!(r.starts_with(b"HTTP/1.1 404"));
+    }
+
+    #[test]
+    fn go_redirects_once_to_the_fixture() {
+        let r = http_response_for_path(b"/go", b"unused");
+        assert!(r.starts_with(b"HTTP/1.1 302"));
+        assert!(r
+            .windows(b"Location: /fixture.html".len())
+            .any(|w| w == b"Location: /fixture.html"));
+        assert!(r
+            .windows(b"Content-Length: 0".len())
+            .any(|w| w == b"Content-Length: 0"));
+        assert!(r.ends_with(b"\r\n\r\n"));
+        assert!(!r.windows(b"unused".len()).any(|w| w == b"unused"));
     }
 }

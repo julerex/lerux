@@ -39,6 +39,7 @@ userspace/crates/lerux-sddf/tests/serial_image.rs
 userspace/crates/lerux-sddf/tests/serial_queue.rs
 userspace/crates/lerux-serial-queue/src/lib.rs
 userspace/crates/lerux-swift/src/wifi.rs
+userspace/crates/lerux-tls/src/lib.rs
 userspace/crates/lerux-virtio-hal/src/lib.rs
 userspace/crates/lerux-virtio-pci/src/ecam.rs
 userspace/crates/lerux-virtio-pci/src/ioport.rs

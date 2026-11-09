@@ -8,7 +8,11 @@
 extern crate alloc;
 
 use alloc::{sync::Arc, vec, vec::Vec};
-use core::time::Duration;
+use core::{
+    cell::OnceCell,
+    sync::atomic::{AtomicBool, Ordering},
+    time::Duration,
+};
 
 use rustls::{
     client::UnbufferedClientConnection,
@@ -230,7 +234,64 @@ fn encrypt_into<Data>(
     Ok(())
 }
 
+/// One parsed client config for the life of the process.
+///
+/// The Mozilla roots are hundreds of kilobytes once they are parsed. Building
+/// that store on every handshake does not fit in the browser heap. `busy`
+/// lets host tests share the first build; the guest has one caller.
+struct ConfigSlot {
+    busy: AtomicBool,
+    ready: AtomicBool,
+    value: OnceCell<Arc<ClientConfig>>,
+}
+
+// SAFETY: `value` is written only by the thread that set `busy`, and other
+// threads read it only after `ready` is published with a release store.
+unsafe impl Sync for ConfigSlot {}
+
 fn client_config() -> Result<Arc<ClientConfig>, TlsError> {
+    static SLOT: ConfigSlot = ConfigSlot {
+        busy: AtomicBool::new(false),
+        ready: AtomicBool::new(false),
+        value: OnceCell::new(),
+    };
+    if let Some(cfg) = published(&SLOT) {
+        return Ok(cfg);
+    }
+    build_into(&SLOT)
+}
+
+fn published(slot: &ConfigSlot) -> Option<Arc<ClientConfig>> {
+    if slot.ready.load(Ordering::Acquire) {
+        slot.value.get().cloned()
+    } else {
+        None
+    }
+}
+
+fn build_into(slot: &ConfigSlot) -> Result<Arc<ClientConfig>, TlsError> {
+    while slot.busy.swap(true, Ordering::AcqRel) {
+        if let Some(cfg) = published(slot) {
+            return Ok(cfg);
+        }
+        core::hint::spin_loop();
+    }
+    let result = store_config(slot);
+    slot.busy.store(false, Ordering::Release);
+    result
+}
+
+fn store_config(slot: &ConfigSlot) -> Result<Arc<ClientConfig>, TlsError> {
+    if let Some(cfg) = slot.value.get() {
+        return Ok(Arc::clone(cfg));
+    }
+    let cfg = build_client_config()?;
+    let _ = slot.value.set(Arc::clone(&cfg));
+    slot.ready.store(true, Ordering::Release);
+    Ok(cfg)
+}
+
+fn build_client_config() -> Result<Arc<ClientConfig>, TlsError> {
     let provider = crypto_provider();
     let mut roots = RootCertStore::empty();
     roots
@@ -395,5 +456,14 @@ mod tests {
         assert_eq!(client.drive().expect("drive app"), Status::Connected);
         let n = client.read_plain(&mut plain);
         assert_eq!(&plain[..n], b"pong");
+    }
+
+    #[cfg(feature = "webpki-roots")]
+    #[test]
+    fn roots_share_one_store_with_the_smoke_ca() {
+        assert!(!webpki_roots::TLS_SERVER_ROOTS.is_empty());
+        let first = ClientSession::new("host").expect("first session");
+        let second = ClientSession::new("host").expect("second session");
+        let _ = (first, second);
     }
 }

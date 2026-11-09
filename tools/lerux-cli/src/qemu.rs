@@ -2,8 +2,9 @@
 //!
 //! The board entry is the whole interface: arch picks the base machine,
 //! `disk`/`net`/`sp804`/`tcp_echo`/`http_one`/`https_one`/`grok_one`/`gpu`/`dns_one`
-//! pick devices and host helpers. `dns_one` runs QEMU inside a mount namespace
-//! whose `resolv.conf` points at the local helper. QEMU's uid does not change.
+//! pick devices and host helpers. `dns_one` points QEMU's open of
+//! `/etc/resolv.conf` at a file that names the local helper. QEMU stays the
+//! process the smoke waits on.
 
 use std::{
     path::{Path, PathBuf},
@@ -95,37 +96,22 @@ pub fn qemu_command(ctx: &QemuContext) -> Result<Command> {
     cmd.env("PATH", path);
     cmd.stdin(std::process::Stdio::inherit());
     if qemu.dns_one {
-        cmd = wrap_dns_namespace(&board_build, &cmd)?;
+        apply_dns_resolv(&ctx.root, &board_build, &mut cmd)?;
     }
     Ok(cmd)
 }
 
-/// Bind-mount `resolv` over `/etc/resolv.conf`, drop to the sudo caller, and exec.
+/// Point libslirp at `dns-one` without changing the machine resolver.
 ///
-/// A user namespace on this machine cannot open `/dev/kvm`, so the namespace is
-/// a root mount namespace. `setpriv` restores the calling uid before QEMU
-/// starts, which keeps the writable disk image owned by that user.
-pub(crate) fn qemu_with_resolv(resolv: &Path, cmd: &[std::ffi::OsString]) -> Result<()> {
-    if cmd.is_empty() {
-        bail!("qemu-with-resolv needs the qemu command");
-    }
-    mount_resolv(resolv)?;
-    drop_and_exec(cmd)
-}
-
-fn wrap_dns_namespace(board_build: &Path, inner: &Command) -> Result<Command> {
+/// libslirp calls `fopen64("/etc/resolv.conf")` and uses the first
+/// nameserver. `LD_PRELOAD` sends that one open to `dns-resolv.conf`. QEMU
+/// remains the spawned process, so the smoke's `Child::kill` stops it.
+fn apply_dns_resolv(root: &Path, board_build: &Path, cmd: &mut Command) -> Result<()> {
     let resolv = write_dns_resolv(board_build)?;
-    let mut outer = Command::new("sudo");
-    outer.args(["-n", "--preserve-env=PATH", "unshare", "--mount", "--"]);
-    outer.arg(std::env::current_exe().context("current exe")?);
-    outer.args(["qemu-with-resolv", "--resolv"]);
-    outer.arg(&resolv);
-    outer.arg("--");
-    outer.arg(inner.get_program());
-    outer.args(inner.get_args());
-    copy_command_env(&mut outer, inner);
-    outer.stdin(std::process::Stdio::inherit());
-    Ok(outer)
+    let preload = ensure_resolv_preload(root, board_build)?;
+    cmd.env("LERUX_RESOLV_CONF", &resolv);
+    cmd.env("LD_PRELOAD", preload_env(&preload));
+    Ok(())
 }
 
 fn write_dns_resolv(board_build: &Path) -> Result<PathBuf> {
@@ -137,47 +123,60 @@ fn write_dns_resolv(board_build: &Path) -> Result<PathBuf> {
     Ok(resolv)
 }
 
-fn copy_command_env(outer: &mut Command, inner: &Command) {
-    for (key, value) in inner.get_envs() {
-        match value {
-            Some(value) => {
-                outer.env(key, value);
-            }
-            None => {
-                outer.env_remove(key);
-            }
-        }
+fn preload_env(preload: &Path) -> String {
+    match std::env::var("LD_PRELOAD") {
+        Ok(existing) if !existing.is_empty() => format!("{}:{existing}", path_str(preload)),
+        _ => path_str(preload),
     }
 }
 
-fn mount_resolv(resolv: &Path) -> Result<()> {
-    let status = Command::new("mount")
-        .args(["--bind", &path_str(resolv), "/etc/resolv.conf"])
+fn ensure_resolv_preload(root: &Path, board_build: &Path) -> Result<PathBuf> {
+    let src = root.join("tools/lerux-cli/resolv_preload.c");
+    if !src.is_file() {
+        bail!("missing {}", src.display());
+    }
+    std::fs::create_dir_all(board_build)
+        .with_context(|| format!("mkdir {}", board_build.display()))?;
+    let so = board_build.join("liblerux-resolv.so");
+    if preload_current(&src, &so)? {
+        return Ok(so);
+    }
+    let cc = compiler().context("cc is required to build the resolver preload")?;
+    let tmp = board_build.join("liblerux-resolv.so.tmp");
+    let _ = std::fs::remove_file(&tmp);
+    let status = Command::new(cc)
+        .args(["-shared", "-fPIC", "-O2", "-pthread", "-o"])
+        .arg(&tmp)
+        .arg(&src)
         .status()
-        .context("mount resolv.conf")?;
-    if status.success() {
-        Ok(())
-    } else {
-        bail!("mount resolv.conf failed: {status}")
+        .with_context(|| format!("run {cc} for {}", src.display()))?;
+    if !status.success() {
+        let _ = std::fs::remove_file(&tmp);
+        bail!("{cc} failed to compile {}", src.display());
     }
+    std::fs::rename(&tmp, &so).with_context(|| format!("install {}", so.display()))?;
+    Ok(so)
 }
 
-fn drop_and_exec(cmd: &[std::ffi::OsString]) -> Result<()> {
-    let uid =
-        std::env::var("SUDO_UID").context("SUDO_UID is required; qemu must not run as root")?;
-    let gid = std::env::var("SUDO_GID").context("SUDO_GID")?;
-    let mut drop_priv = Command::new("setpriv");
-    drop_priv.arg(format!("--reuid={uid}"));
-    drop_priv.arg(format!("--regid={gid}"));
-    drop_priv.args([
-        "--init-groups",
-        "--inh-caps=-all",
-        "--ambient-caps=-all",
-        "--",
-    ]);
-    drop_priv.args(cmd);
-    let err = std::os::unix::process::CommandExt::exec(&mut drop_priv);
-    bail!("exec setpriv: {err}")
+fn compiler() -> Option<&'static str> {
+    ["cc", "gcc", "clang"]
+        .into_iter()
+        .find(|name| crate::process::command_on_path(name))
+}
+
+fn preload_current(src: &Path, so: &Path) -> Result<bool> {
+    if !so.is_file() {
+        return Ok(false);
+    }
+    let src_time = std::fs::metadata(src)
+        .with_context(|| format!("stat {}", src.display()))?
+        .modified()
+        .context("resolver preload source mtime")?;
+    let so_time = std::fs::metadata(so)
+        .with_context(|| format!("stat {}", so.display()))?
+        .modified()
+        .context("resolver preload mtime")?;
+    Ok(so_time >= src_time)
 }
 
 /// QMP socket for [`QemuConfig::qmp`]. The smoke test connects here to send keys.
@@ -569,21 +568,79 @@ mod tests {
         assert!(!qemu.dns_one);
     }
 
+    fn cmd_env(cmd: &Command, key: &str) -> String {
+        cmd.get_envs()
+            .find(|(name, _)| *name == key)
+            .and_then(|(_, value)| value)
+            .map(|value| value.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    }
+
     #[test]
-    fn dns_namespace_keeps_qemu_behind_sudo() {
+    fn dns_command_points_qemu_at_the_local_resolver() {
         let dir = std::env::temp_dir().join(format!("lerux-dns-{}", std::process::id()));
-        let mut inner = Command::new("qemu-system-aarch64");
-        inner.arg("-machine").arg("virt");
-        inner.env("PATH", "/usr/bin");
-        let outer = wrap_dns_namespace(&dir, &inner).expect("wrap");
-        let line = format!("{outer:?}");
-        assert!(line.contains("sudo"), "{line}");
-        assert!(line.contains("unshare"), "{line}");
-        assert!(line.contains("--mount"), "{line}");
-        assert!(line.contains("qemu-with-resolv"), "{line}");
-        assert!(line.contains("dns-resolv.conf"), "{line}");
+        let _ = std::fs::remove_dir_all(&dir);
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let mut cmd = Command::new("qemu-system-aarch64");
+        cmd.arg("-nographic");
+        apply_dns_resolv(&root, &dir, &mut cmd).expect("resolv");
+        let line = format!("{cmd:?}");
         assert!(line.contains("qemu-system-aarch64"), "{line}");
-        assert!(line.contains("-machine"), "{line}");
+        assert!(line.contains("-nographic"), "{line}");
+        assert!(!line.contains("sudo"), "{line}");
+        assert!(!line.contains("unshare"), "{line}");
+        let resolv = cmd_env(&cmd, "LERUX_RESOLV_CONF");
+        assert!(resolv.ends_with("dns-resolv.conf"), "{resolv}");
+        assert_eq!(
+            std::fs::read(&resolv).expect("resolv bytes"),
+            b"nameserver 127.0.0.1\n"
+        );
+        assert!(
+            cmd_env(&cmd, "LD_PRELOAD").contains("liblerux-resolv.so"),
+            "{}",
+            cmd_env(&cmd, "LD_PRELOAD")
+        );
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn resolv_preload_serves_the_smoke_file() {
+        let dir = std::env::temp_dir().join(format!("lerux-resolv-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("mkdir");
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let so = ensure_resolv_preload(&root, &dir).expect("preload");
+        let fake = dir.join("dns-resolv.conf");
+        std::fs::write(&fake, b"nameserver 203.0.113.53\n").expect("write resolv");
+        let reader = dir.join("read-resolv.c");
+        std::fs::write(
+            &reader,
+            b"#define _FILE_OFFSET_BITS 64\n#include <stdio.h>\nint main(void){char b[64];FILE *f=fopen(\"/etc/resolv.conf\",\"r\");if(!f||!fgets(b,sizeof b,f))return 2;fputs(b,stdout);return 0;}\n",
+        )
+        .expect("write reader");
+        let bin = dir.join("read-resolv");
+        let cc = compiler().expect("cc");
+        let compiled = Command::new(cc)
+            .args(["-O2", "-o"])
+            .arg(&bin)
+            .arg(&reader)
+            .status()
+            .expect("compile reader");
+        assert!(compiled.success(), "reader compile");
+        let hooked = Command::new(&bin)
+            .env("LD_PRELOAD", &so)
+            .env("LERUX_RESOLV_CONF", &fake)
+            .output()
+            .expect("run reader");
+        assert!(
+            hooked.status.success(),
+            "hooked reader: {}",
+            String::from_utf8_lossy(&hooked.stderr)
+        );
+        assert_eq!(hooked.stdout, b"nameserver 203.0.113.53\n");
+        let plain = Command::new(&bin).output().expect("plain reader");
+        assert!(plain.status.success(), "plain reader");
+        assert_ne!(plain.stdout, hooked.stdout);
         let _ = std::fs::remove_dir_all(dir);
     }
 

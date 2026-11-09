@@ -45,7 +45,6 @@ mod tcp_echo;
 mod test;
 
 use std::{
-    ffi::OsString,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -203,14 +202,6 @@ enum Commands {
         /// Bind directly. A permission failure is returned instead of calling sudo.
         #[arg(long, hide = true, default_value_t = false)]
         root: bool,
-    },
-    /// Bind-mount a resolv.conf, drop privileges, and exec QEMU.
-    #[command(hide = true)]
-    QemuWithResolv {
-        #[arg(long)]
-        resolv: PathBuf,
-        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
-        cmd: Vec<OsString>,
     },
     /// Probe whether something is listening on the TCP echo port.
     TcpEchoProbe {
@@ -471,7 +462,6 @@ fn dispatch(root: &Path, command: Commands) -> Result<()> {
         | Commands::HttpOne { .. }
         | Commands::HttpsOne { .. }
         | Commands::DnsOne { .. }
-        | Commands::QemuWithResolv { .. }
         | Commands::TcpEchoProbe { .. }) => dispatch_host(root, cmd),
         cmd @ (Commands::Run { .. }
         | Commands::Test { .. }
@@ -544,7 +534,6 @@ fn dispatch_host(root: &Path, command: Commands) -> Result<()> {
         Commands::HttpOne { port } => http_one::http_one(port),
         Commands::HttpsOne { port } => https_one::https_one(port),
         Commands::DnsOne { root } => dns_one::dns_one(root),
-        Commands::QemuWithResolv { resolv, cmd } => qemu::qemu_with_resolv(&resolv, &cmd),
         Commands::TcpEchoProbe { port } => probe_tcp_echo(port),
         _ => unreachable!("host command"),
     }

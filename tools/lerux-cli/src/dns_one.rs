@@ -2,9 +2,9 @@
 //!
 //! Listens on `127.0.0.1:53`. The name `host` gets one A record for the QEMU
 //! user-net gateway. Every other name is NXDOMAIN. libslirp forwards guest
-//! packets for `10.0.2.3:53` to the first nameserver in the QEMU process's
-//! `resolv.conf`. The launcher bind-mounts that file, so the rest of the
-//! machine keeps its own resolver.
+//! packets for `10.0.2.3:53` to the first nameserver in the file QEMU opens
+//! as `/etc/resolv.conf`. The launcher points that open at a file naming
+//! `127.0.0.1`, so the rest of the machine keeps its own resolver.
 //!
 //! Binding port 53 needs a privileged helper. The parent keeps the helper's
 //! stdin open and closes it to stop the server, including when the helper

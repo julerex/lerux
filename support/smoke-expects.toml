@@ -155,6 +155,7 @@ script_timeout_secs = 180
 # following result line, so the expression rides in the same send.
 script = [
   { send = "browser\r", expect = "pixel 000000ff" },
+  { send = "name\r", expect = "pixel 000000ff\ndns 10.0.2.2" },
   { send = "maths\r(1+2)*3\r", expect = "maths 9" },
   { send = "quit\r", expect = "1 browser" },
 ]
@@ -166,6 +167,7 @@ script_timeout_secs = 180
 # Same prompt constraint as the aarch64 browser image.
 script = [
   { send = "browser\r", expect = "pixel 000000ff" },
+  { send = "name\r", expect = "pixel 000000ff\ndns 10.0.2.2" },
   { send = "maths\r(1+2)*3\r", expect = "maths 9" },
   { send = "quit\r", expect = "1 browser" },
 ]

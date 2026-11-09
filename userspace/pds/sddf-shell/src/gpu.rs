@@ -7,7 +7,7 @@
 use core::{
     cell::UnsafeCell,
     mem::MaybeUninit,
-    sync::atomic::{AtomicU32, Ordering},
+    sync::atomic::{AtomicBool, AtomicU32, Ordering},
 };
 
 use sel4_microkit::{Channel, ChannelSet};
@@ -37,6 +37,8 @@ unsafe impl Sync for QueueCell {}
 
 static QUEUE: QueueCell = QueueCell(UnsafeCell::new(MaybeUninit::uninit()));
 static NEXT_ID: AtomicU32 = AtomicU32::new(1);
+/// The driver keeps one 2D resource and rejects a second create.
+static RESOURCE_READY: AtomicBool = AtomicBool::new(false);
 
 pub fn install() {
     let mut handle = gpu_queue_handle_t {
@@ -80,6 +82,14 @@ pub fn show_page(html: &[u8]) -> Result<PixelLine, ()> {
 }
 
 fn present_page(page: &PaintedPage, rect: gpu_rect_t) -> Result<(), ()> {
+    if !RESOURCE_READY.load(Ordering::Acquire) {
+        create_frame(page, rect)?;
+        RESOURCE_READY.store(true, Ordering::Release);
+    }
+    transfer_frame(rect)
+}
+
+fn create_frame(page: &PaintedPage, rect: gpu_rect_t) -> Result<(), ()> {
     let mut created = gpu_req_new(gpu_req_code_t::GPU_REQ_RESOURCE_CREATE_2D, next_id());
     created.payload.resource_create_2d = gpu_req_resource_create_2d_t {
         resource_id: RESOURCE_ID,
@@ -102,7 +112,10 @@ fn present_page(page: &PaintedPage, rect: gpu_rect_t) -> Result<(), ()> {
         scanout_id: 0,
         rect,
     };
-    submit(scanout)?;
+    submit(scanout)
+}
+
+fn transfer_frame(rect: gpu_rect_t) -> Result<(), ()> {
     let mut transfer = gpu_req_new(gpu_req_code_t::GPU_REQ_TRANSFER_TO_2D, next_id());
     transfer.payload.transfer_to_2d = gpu_req_transfer_to_2d_t {
         resource_id: RESOURCE_ID,
@@ -115,8 +128,7 @@ fn present_page(page: &PaintedPage, rect: gpu_rect_t) -> Result<(), ()> {
         resource_id: RESOURCE_ID,
         rect,
     };
-    submit(flush)?;
-    Ok(())
+    submit(flush)
 }
 
 fn copy_frame(page: &PaintedPage) {

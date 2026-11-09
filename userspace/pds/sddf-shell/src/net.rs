@@ -1,7 +1,9 @@
 //! Dynamic Host Configuration Protocol, one Transmission Control Protocol
 //! socket, and a Transport Layer Security fetch of the host fixture.
 //!
-//! The worker owns the stack. `fetch_body` does not run on the root cothread.
+//! The browser image also queries `host` on the fixed resolver and follows
+//! one relative redirect. The worker owns the stack. `fetch_body` does not
+//! run on the root cothread.
 
 extern crate alloc;
 
@@ -11,6 +13,10 @@ use alloc::boxed::Box;
 
 use sel4_microkit::{Channel, ChannelSet};
 
+#[cfg(feature = "browser-net")]
+use smoltcp::socket::dns::{self, GetQueryResultError};
+#[cfg(feature = "browser-net")]
+use smoltcp::wire::DnsQueryType;
 use smoltcp::{
     iface::{Interface, SocketHandle, SocketSet, SocketStorage},
     socket::{
@@ -79,6 +85,10 @@ const CHAT_LINE: &[u8] = b"chat\n";
     )
 ))]
 const HTTP_GET: &[u8] = b"GET /fixture.html HTTP/1.1\r\nHost: host\r\nConnection: close\r\n\r\n";
+#[cfg(feature = "browser-net")]
+const HTTP_GO: &[u8] = b"GET /go HTTP/1.1\r\nHost: host\r\nConnection: close\r\n\r\n";
+#[cfg(feature = "browser-net")]
+const DNS_SERVER: Ipv4Address = Ipv4Address::new(10, 0, 2, 3);
 #[cfg(any(
     feature = "board-qemu_virt_aarch64_web_sddf",
     feature = "board-qemu_virt_riscv64_web_sddf",
@@ -159,6 +169,17 @@ pub fn fetch_body(out: &mut [u8]) -> Result<usize, ()> {
     })();
     let _ = sockets.close(fd);
     result
+}
+
+/// Resolve `host`, follow one relative redirect, and return that address
+/// with the final body.
+#[cfg(feature = "browser-net")]
+pub(crate) fn fetch_named(out: &mut [u8]) -> Result<([u8; 4], usize), ()> {
+    let sockets = sockets()?;
+    let addr = sockets.with_pipe(Stack::resolve_host)?;
+    let path = redirect_path(sockets, addr)?;
+    let n = follow_path(sockets, addr, path.bytes(), out)?;
+    Ok((addr, n))
 }
 
 /// The baked-in smoke certificate authority loads.
@@ -242,6 +263,8 @@ struct Stack {
     sockets: SocketSet<'static>,
     dhcp: SocketHandle,
     tcp: SocketHandle,
+    #[cfg(feature = "browser-net")]
+    dns: SocketHandle,
     ms: u64,
     op_start: u64,
     local_port: u16,
@@ -266,24 +289,19 @@ impl Stack {
             &mut device,
             Instant::from_millis(0),
         );
-        let storage: &'static mut [SocketStorage<'static>] =
-            Box::leak(Box::new([SocketStorage::EMPTY; 4]));
-        let mut sockets = SocketSet::new(storage);
-        let mut dhcp = dhcpv4::Socket::new();
-        dhcp.set_retry_config(dhcp_retry());
-        let dhcp = sockets.add(dhcp);
-        let rx: &'static mut [u8] = Box::leak(Box::new([0u8; 16_384]));
-        let tx: &'static mut [u8] = Box::leak(Box::new([0u8; 16_384]));
-        let tcp = sockets.add(tcp::Socket::new(
-            SocketBuffer::new(rx),
-            SocketBuffer::new(tx),
-        ));
+        let mut sockets = empty_sockets();
+        let dhcp = add_dhcp(&mut sockets);
+        let tcp = add_tcp(&mut sockets);
+        #[cfg(feature = "browser-net")]
+        let dns = add_dns(&mut sockets);
         Self {
             device,
             iface,
             sockets,
             dhcp,
             tcp,
+            #[cfg(feature = "browser-net")]
+            dns,
             ms: 0,
             op_start: 0,
             local_port: LOCAL_PORT,
@@ -364,6 +382,100 @@ impl Stack {
     fn within_budget(&self) -> bool {
         self.ms.saturating_sub(self.op_start) < LIMIT_MS
     }
+
+    #[cfg(feature = "browser-net")]
+    fn resolve_host(&mut self) -> Result<[u8; 4], ()> {
+        let query = self.start_dns()?;
+        let start = self.ms;
+        loop {
+            self.poll_iface();
+            match self.dns_result(query) {
+                DnsPoll::Wait => {}
+                DnsPoll::Addr(addr) => return Ok(addr),
+                DnsPoll::Fail => return Err(()),
+            }
+            if self.ms.saturating_sub(start) >= LIMIT_MS {
+                self.cancel_dns(query);
+                return Err(());
+            }
+            self.advance();
+        }
+    }
+
+    #[cfg(feature = "browser-net")]
+    fn cancel_dns(&mut self, query: dns::QueryHandle) {
+        self.sockets
+            .get_mut::<dns::Socket>(self.dns)
+            .cancel_query(query);
+    }
+
+    #[cfg(feature = "browser-net")]
+    fn start_dns(&mut self) -> Result<dns::QueryHandle, ()> {
+        let handle = self.dns;
+        let iface = &mut self.iface;
+        let sockets = &mut self.sockets;
+        sockets
+            .get_mut::<dns::Socket>(handle)
+            .start_query(iface.context(), "host", DnsQueryType::A)
+            .map_err(|_| ())
+    }
+
+    #[cfg(feature = "browser-net")]
+    fn dns_result(&mut self, query: dns::QueryHandle) -> DnsPoll {
+        match self
+            .sockets
+            .get_mut::<dns::Socket>(self.dns)
+            .get_query_result(query)
+        {
+            Ok(addrs) => first_ipv4(&addrs),
+            Err(GetQueryResultError::Pending) => DnsPoll::Wait,
+            Err(GetQueryResultError::Failed) => DnsPoll::Fail,
+        }
+    }
+}
+
+fn empty_sockets() -> SocketSet<'static> {
+    let storage: &'static mut [SocketStorage<'static>] =
+        Box::leak(Box::new([SocketStorage::EMPTY; 4]));
+    SocketSet::new(storage)
+}
+
+fn add_dhcp(sockets: &mut SocketSet<'static>) -> SocketHandle {
+    let mut dhcp = dhcpv4::Socket::new();
+    dhcp.set_retry_config(dhcp_retry());
+    sockets.add(dhcp)
+}
+
+fn add_tcp(sockets: &mut SocketSet<'static>) -> SocketHandle {
+    let rx: &'static mut [u8] = Box::leak(Box::new([0u8; 16_384]));
+    let tx: &'static mut [u8] = Box::leak(Box::new([0u8; 16_384]));
+    sockets.add(tcp::Socket::new(
+        SocketBuffer::new(rx),
+        SocketBuffer::new(tx),
+    ))
+}
+
+#[cfg(feature = "browser-net")]
+fn add_dns(sockets: &mut SocketSet<'static>) -> SocketHandle {
+    let queries: &'static mut [Option<dns::DnsQuery>] = Box::leak(Box::new([None]));
+    let server = IpAddress::Ipv4(DNS_SERVER);
+    sockets.add(dns::Socket::new(&[server], queries))
+}
+
+#[cfg(feature = "browser-net")]
+enum DnsPoll {
+    Wait,
+    Addr([u8; 4]),
+    Fail,
+}
+
+#[cfg(feature = "browser-net")]
+fn first_ipv4(addrs: &[IpAddress]) -> DnsPoll {
+    let Some(addr) = addrs.first() else {
+        return DnsPoll::Fail;
+    };
+    let IpAddress::Ipv4(v4) = *addr;
+    DnsPoll::Addr(v4.octets())
 }
 
 impl Tcp for Stack {
@@ -497,47 +609,295 @@ fn instant(ms: u64) -> Instant {
     )
 ))]
 fn http_body(sockets: &mut Sockets<Stack>, fd: SockFd, out: &mut [u8]) -> Result<usize, ()> {
-    let mut session = ClientSession::new("host").map_err(|_| ())?;
-    let mut requested = false;
     let mut raw = [0u8; 1024];
-    let mut raw_len = 0usize;
+    let n = http_exchange(sockets, fd, HTTP_GET, &mut raw)?;
+    copy_body(&raw[..n], out).ok_or(())
+}
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf",
+    any(
+        feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-qemu_virt_riscv64_browser_sddf"
+    )
+))]
+struct HttpRead {
+    raw_len: usize,
+    requested: bool,
+}
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf",
+    any(
+        feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-qemu_virt_riscv64_browser_sddf"
+    )
+))]
+fn http_exchange(
+    sockets: &mut Sockets<Stack>,
+    fd: SockFd,
+    request: &[u8],
+    raw: &mut [u8],
+) -> Result<usize, ()> {
+    let mut session = ClientSession::new("host").map_err(|_| ())?;
+    let mut state = HttpRead {
+        raw_len: 0,
+        requested: false,
+    };
     for _ in 0..48 {
-        if let Some(n) = copy_body(&raw[..raw_len], out) {
-            return Ok(n);
+        if response_ready(&raw[..state.raw_len]) {
+            return Ok(state.raw_len);
         }
-        match session.drive().map_err(|_| ())? {
-            Status::WantSend => {
-                let pending = session.take_outgoing();
-                sockets.send(fd, &pending).map_err(|_| ())?;
-            }
-            Status::WantRecv => feed(&mut session, sockets, fd)?,
-            Status::Connected => {
-                let mut plain = [0u8; 256];
-                let n = session.read_plain(&mut plain);
-                if n > 0 {
-                    if raw_len + n > raw.len() {
-                        return Err(());
-                    }
-                    raw[raw_len..raw_len + n].copy_from_slice(&plain[..n]);
-                    raw_len += n;
-                    continue;
-                }
-                if !requested {
-                    session.write_plain(HTTP_GET).map_err(|_| ())?;
-                    requested = true;
-                }
-                // `drive` stays on `Connected` while ciphertext sits in the session.
-                if session.has_outgoing() {
-                    let pending = session.take_outgoing();
-                    sockets.send(fd, &pending).map_err(|_| ())?;
-                    continue;
-                }
-                feed(&mut session, sockets, fd)?;
-            }
-            Status::Closed => return Err(()),
-        }
+        step_tls(&mut session, sockets, fd, request, raw, &mut state)?;
     }
-    copy_body(&raw[..raw_len], out).ok_or(())
+    if response_ready(&raw[..state.raw_len]) {
+        Ok(state.raw_len)
+    } else {
+        Err(())
+    }
+}
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf",
+    feature = "browser-net"
+))]
+fn step_tls(
+    session: &mut ClientSession,
+    sockets: &mut Sockets<Stack>,
+    fd: SockFd,
+    request: &[u8],
+    raw: &mut [u8],
+    state: &mut HttpRead,
+) -> Result<(), ()> {
+    match session.drive().map_err(|_| ())? {
+        Status::WantSend => send_pending(session, sockets, fd),
+        Status::WantRecv => feed(session, sockets, fd),
+        Status::Connected => on_connected(session, sockets, fd, request, raw, state),
+        Status::Closed => Err(()),
+    }
+}
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf",
+    feature = "browser-net"
+))]
+fn on_connected(
+    session: &mut ClientSession,
+    sockets: &mut Sockets<Stack>,
+    fd: SockFd,
+    request: &[u8],
+    raw: &mut [u8],
+    state: &mut HttpRead,
+) -> Result<(), ()> {
+    if take_plain(session, raw, state)? {
+        return Ok(());
+    }
+    if !state.requested {
+        session.write_plain(request).map_err(|_| ())?;
+        state.requested = true;
+    }
+    // `drive` stays on `Connected` while ciphertext sits in the session.
+    if session.has_outgoing() {
+        return send_pending(session, sockets, fd);
+    }
+    feed(session, sockets, fd)
+}
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf",
+    feature = "browser-net"
+))]
+fn take_plain(
+    session: &mut ClientSession,
+    raw: &mut [u8],
+    state: &mut HttpRead,
+) -> Result<bool, ()> {
+    let mut plain = [0u8; 256];
+    let n = session.read_plain(&mut plain);
+    if n == 0 {
+        return Ok(false);
+    }
+    let end = state.raw_len.checked_add(n).ok_or(())?;
+    if end > raw.len() {
+        return Err(());
+    }
+    raw[state.raw_len..end].copy_from_slice(&plain[..n]);
+    state.raw_len = end;
+    Ok(true)
+}
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf",
+    feature = "browser-net"
+))]
+fn send_pending(
+    session: &mut ClientSession,
+    sockets: &mut Sockets<Stack>,
+    fd: SockFd,
+) -> Result<(), ()> {
+    let pending = session.take_outgoing();
+    sockets.send(fd, &pending).map_err(|_| ())?;
+    Ok(())
+}
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf",
+    feature = "browser-net"
+))]
+fn response_ready(raw: &[u8]) -> bool {
+    let Some(split) = raw.windows(4).position(|window| window == b"\r\n\r\n") else {
+        return false;
+    };
+    let Some(len) = content_length(&raw[..split]) else {
+        return false;
+    };
+    raw.len() >= split + 4 + len
+}
+
+#[cfg(feature = "browser-net")]
+struct RelPath {
+    buf: [u8; 64],
+    len: usize,
+}
+
+#[cfg(feature = "browser-net")]
+impl RelPath {
+    fn from_response(raw: &[u8]) -> Result<Self, ()> {
+        if http_status(raw) != Some(302) {
+            return Err(());
+        }
+        let path = location_path(raw)?;
+        let mut buf = [0u8; 64];
+        buf[..path.len()].copy_from_slice(path);
+        Ok(Self {
+            buf,
+            len: path.len(),
+        })
+    }
+
+    fn bytes(&self) -> &[u8] {
+        &self.buf[..self.len]
+    }
+}
+
+#[cfg(feature = "browser-net")]
+fn redirect_path(sockets: &mut Sockets<Stack>, addr: [u8; 4]) -> Result<RelPath, ()> {
+    let mut raw = [0u8; 1024];
+    let n = connect_exchange(sockets, addr, HTTP_GO, &mut raw)?;
+    RelPath::from_response(&raw[..n])
+}
+
+#[cfg(feature = "browser-net")]
+fn follow_path(
+    sockets: &mut Sockets<Stack>,
+    addr: [u8; 4],
+    path: &[u8],
+    out: &mut [u8],
+) -> Result<usize, ()> {
+    let mut raw = [0u8; 1024];
+    let mut request = [0u8; 128];
+    let nreq = write_get(path, &mut request)?;
+    let n = connect_exchange(sockets, addr, &request[..nreq], &mut raw)?;
+    if http_status(&raw[..n]) != Some(200) {
+        return Err(());
+    }
+    copy_body(&raw[..n], out).ok_or(())
+}
+
+#[cfg(feature = "browser-net")]
+fn connect_exchange(
+    sockets: &mut Sockets<Stack>,
+    addr: [u8; 4],
+    request: &[u8],
+    raw: &mut [u8],
+) -> Result<usize, ()> {
+    let fd = sockets.socket().map_err(|_| ())?;
+    let result = (|| {
+        sockets.connect(fd, addr, FIXTURE_PORT).map_err(|_| ())?;
+        http_exchange(sockets, fd, request, raw)
+    })();
+    let _ = sockets.close(fd);
+    result
+}
+
+#[cfg(feature = "browser-net")]
+fn write_get(path: &[u8], out: &mut [u8]) -> Result<usize, ()> {
+    let prefix = b"GET ";
+    let suffix = b" HTTP/1.1\r\nHost: host\r\nConnection: close\r\n\r\n";
+    let n = prefix.len() + path.len() + suffix.len();
+    if n > out.len() {
+        return Err(());
+    }
+    out[..prefix.len()].copy_from_slice(prefix);
+    let mid = prefix.len() + path.len();
+    out[prefix.len()..mid].copy_from_slice(path);
+    out[mid..n].copy_from_slice(suffix);
+    Ok(n)
+}
+
+#[cfg(feature = "browser-net")]
+fn http_status(raw: &[u8]) -> Option<u16> {
+    let line_end = raw.iter().position(|&byte| byte == b'\r')?;
+    let mut parts = raw[..line_end].split(|&byte| byte == b' ');
+    let version = parts.next()?;
+    if !version.starts_with(b"HTTP/") {
+        return None;
+    }
+    let code = parts.next()?;
+    if code.len() != 3 || !code.iter().all(u8::is_ascii_digit) {
+        return None;
+    }
+    let mut value = 0u16;
+    for &byte in code {
+        value = value
+            .saturating_mul(10)
+            .saturating_add(u16::from(byte - b'0'));
+    }
+    Some(value)
+}
+
+#[cfg(feature = "browser-net")]
+fn location_path(raw: &[u8]) -> Result<&[u8], ()> {
+    let key = b"\r\nLocation: ";
+    let start = raw
+        .windows(key.len())
+        .position(|window| window == key)
+        .ok_or(())?
+        + key.len();
+    let rest = raw.get(start..).ok_or(())?;
+    let end = rest.iter().position(|&byte| byte == b'\r').ok_or(())?;
+    let path = rest.get(..end).ok_or(())?;
+    if relative_path(path) {
+        Ok(path)
+    } else {
+        Err(())
+    }
+}
+
+#[cfg(feature = "browser-net")]
+fn relative_path(path: &[u8]) -> bool {
+    if path.is_empty() || path.len() > 64 || path[0] != b'/' {
+        return false;
+    }
+    if path.len() >= 2 && path[1] == b'/' {
+        return false;
+    }
+    path.iter()
+        .all(|&byte| byte != b' ' && byte != b'\r' && byte != b'\n' && byte != b':')
 }
 
 #[cfg(any(

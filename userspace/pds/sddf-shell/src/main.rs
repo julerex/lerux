@@ -485,6 +485,95 @@ fn browse() {
     feature = "board-qemu_virt_aarch64_browser_sddf",
     feature = "board-qemu_virt_riscv64_browser_sddf"
 ))]
+fn browse_name() {
+    let mut body = [0u8; 512];
+    let Ok((addr, n)) = net::fetch_named(&mut body) else {
+        say(b"dns err\n");
+        return;
+    };
+    match gpu::show_page(titled(&body[..n])) {
+        Ok(line) => say_painted(line.as_bytes(), addr),
+        Err(()) => say(b"pixel err\n"),
+    }
+}
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+))]
+fn titled(body: &[u8]) -> &[u8] {
+    if let Some(title) = page_title(body) {
+        say_title(title);
+        body
+    } else {
+        say(b"title err\n");
+        &body[..0]
+    }
+}
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+))]
+fn say_painted(pixel: &[u8], addr: [u8; 4]) {
+    let mut line = [0u8; 40];
+    let n = copy_into(&mut line, 0, pixel);
+    let n = write_dns(&mut line, n, addr);
+    say(&line[..n]);
+}
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+))]
+fn write_dns(buf: &mut [u8], mut at: usize, addr: [u8; 4]) -> usize {
+    at = copy_into(buf, at, b"dns ");
+    for (i, octet) in addr.iter().enumerate() {
+        if i > 0 {
+            at = copy_into(buf, at, b".");
+        }
+        at = write_dec(buf, at, *octet);
+    }
+    copy_into(buf, at, b"\n")
+}
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+))]
+fn copy_into(buf: &mut [u8], at: usize, bytes: &[u8]) -> usize {
+    let n = bytes.len().min(buf.len().saturating_sub(at));
+    buf[at..at + n].copy_from_slice(&bytes[..n]);
+    at + n
+}
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+))]
+fn write_dec(buf: &mut [u8], mut at: usize, mut value: u8) -> usize {
+    let mut tmp = [0u8; 3];
+    let mut digits = 0usize;
+    loop {
+        tmp[digits] = b'0' + (value % 10);
+        digits += 1;
+        value /= 10;
+        if value == 0 {
+            break;
+        }
+    }
+    while digits > 0 {
+        digits -= 1;
+        let byte = [tmp[digits]];
+        at = copy_into(buf, at, &byte);
+    }
+    at
+}
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+))]
 fn page_title(body: &[u8]) -> Option<&[u8]> {
     let open = b"<title>";
     let close = b"</title>";
@@ -504,7 +593,7 @@ fn page_title(body: &[u8]) -> Option<&[u8]> {
     feature = "board-qemu_virt_aarch64_browser_sddf",
     feature = "board-qemu_virt_riscv64_browser_sddf"
 ))]
-const MENU: &[u8] = b"1 browser\n2 maths\n";
+const MENU: &[u8] = b"1 browser\n2 maths\n3 name\n";
 
 #[cfg(any(
     feature = "board-qemu_virt_aarch64_browser_sddf",
@@ -518,6 +607,7 @@ fn app_menu() {
         match trim(&line[..len]) {
             b"1" | b"browser" => browse(),
             b"2" | b"maths" => maths_repl(),
+            b"3" | b"name" => browse_name(),
             _ => say(b"err\n"),
         }
     }

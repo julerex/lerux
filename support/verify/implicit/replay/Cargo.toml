@@ -1,0 +1,14 @@
+[workspace]
+
+[package]
+name = "implicit-machines"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+description = "Source probes and host calls for the implicit state-machine checks."
+
+[dependencies]
+lerux-input = { path = "../../../../userspace/crates/lerux-input" }
+lerux-ladybird-html = { path = "../../../../lerux-ladybird/crates/lerux-ladybird-html" }
+lerux-swift = { path = "../../../../userspace/crates/lerux-swift" }

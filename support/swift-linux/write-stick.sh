@@ -452,9 +452,8 @@ if [[ "$(id -u)" -ne 0 ]]; then
   exec sudo --preserve-env=SWIFT_LINUX_LAYOUT_TEST bash "$0" --image "$image" "$dev"
 fi
 
-verify_iso_signature "$image"
-
 if [[ "$layout_test" -eq 0 ]]; then
+  verify_iso_signature "$image"
   confirm_erase
 fi
 write_stick

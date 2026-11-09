@@ -35,3 +35,7 @@
 
 # Python
 __pycache__/
+
+# TLC fingerprints and a config regenerated beside a spec
+/support/verify/**/states/
+*.probed.cfg

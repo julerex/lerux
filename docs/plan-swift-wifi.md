@@ -1,8 +1,8 @@
 # Swift Wi-Fi plan
 
-Last updated: 2026-11-08
+Last updated: 2026-11-09
 
-**Status:** Phase 1 is done. The 8 November 2026 photograph of the ASPM clear left the stall at `fw sem`, so link power is eliminated. The Phase 4 capture shows Linux loads firmware on this unit. The first write that differed was `HIF_REMAP_L1`, and `rr` / `wr` now keep its high half. The next photograph is a cold boot of that image. Phases 2 through 5 are the Swift radio. Phases 6 through 8 are the application path and do not need the laptop. Phase 9 is an alternative route, not a step.
+**Status:** Phase 1 is done. The 8 November 2026 photograph of the ASPM clear left the stall at `fw sem`, so link power is eliminated. The Phase 4 capture shows Linux loads firmware on this unit. The first write that differed was `HIF_REMAP_L1`, and `rr` / `wr` now keep its high half. The next photograph is a cold boot of that image. Phases 2 through 5 are the Swift radio. Phase 6 is done on QEMU. Phases 7 and 8 are the application path and do not need the laptop. Phase 9 is an alternative route, not a step.
 
 **Goal:** A lerux application on the Acer Swift X reaches a host on the internet over the MT7921 radio. [plan-lionsos.md](plan-lionsos.md) Milestone 27 stays the radio exit (`ping ok`). This plan is the route from the current stall to that exit, and from that exit to an application.
 
@@ -87,7 +87,7 @@ Only after Phases 1 to 4. Three steps are not in Linux and were added on hypothe
 
 **Exit:** The browser image on `qemu_virt_aarch64_browser_sddf` resolves a name through DNS at `10.0.2.3`, verifies a certificate against a bundled root set, and follows one redirect.
 
-None of this needs the laptop. The shell hardcodes `10.0.2.2` and the TLS name `host`. Add a DNS client over the existing UDP path, a root store (`webpki-roots` or the equivalent for the pinned TLS crate), and `Location` handling to the fetch. The smoke stays `pixel 000000ff` and `maths 9`; a second script step fetches by name.
+Done. `name` resolves `host` through DNS at `10.0.2.3`, verifies the smoke certificate against the bundled Mozilla roots plus the smoke CA, follows one relative redirect from `/go` to `/fixture.html`, and prints `dns 10.0.2.2` after `pixel 000000ff`. The `browser` command still uses the hardcoded gateway. A later paint transfers and flushes the one resource. The RISC-V browser expects the same script and stays `ci = false`.
 
 ## Phase 7 — Compose the fetch roles into the Swift image
 

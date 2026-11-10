@@ -85,6 +85,8 @@ const DEVICE_SPIN: usize = 10_000_000;
 
 const PCI_VENDOR: u8 = 0x00;
 const PCI_COMMAND: u8 = 0x04;
+const PCI_REVISION: u8 = 0x08;
+const PCI_SUBSYSTEM: u8 = 0x2c;
 const PCI_CAP_PTR: u8 = 0x34;
 const CMD_MEMORY: u32 = 1 << 1;
 const CMD_BUS_MASTER: u32 = 1 << 2;
@@ -162,8 +164,9 @@ const _: () = {
 };
 
 impl Engine {
-    /// Claim `8086:10d3` at the compiled BDF, program BAR0, reset, bring the
-    /// link up, install `mac` into the receive address, and publish both rings.
+    /// Claim the compiled BDF when it is `8086:10d3`, or `8086:153b` revision 0
+    /// subsystem `1458:e000`, program BAR0, reset, bring the link up, install
+    /// `mac` into the receive address, and publish both rings.
     ///
     /// Call once. A second call would reset the NIC under live rings.
     pub fn open(map: E1000eMap, mac: [u8; 6]) -> Result<Self, OpenError> {
@@ -599,9 +602,15 @@ impl Pci {
 
 fn claim_device(pci: &Pci) -> Result<ClaimedNic, OpenError> {
     let id = pci.read_config(PCI_VENDOR);
-    let vendor = (id & 0xffff) as u16;
-    let device = (id >> 16) as u16;
+    let revision = pci.read_config(PCI_REVISION);
+    let subsystem = pci.read_config(PCI_SUBSYSTEM);
     UnclaimedNic::compiled()
-        .claim(vendor, device)
+        .claim(
+            (id & 0xffff) as u16,
+            (id >> 16) as u16,
+            (revision & 0xff) as u8,
+            (subsystem & 0xffff) as u16,
+            (subsystem >> 16) as u16,
+        )
         .map_err(|_| OpenError)
 }

@@ -369,6 +369,7 @@ Secondary to the Acer Swift X. The metal target being driven is `swift_sfx14_41g
 
 Not started.
 
+- Landed: `UnclaimedNic::claim` accepts `8086:153b` revision `0`, subsystem `1458:e000`. `8086:10d3` stays accepted at the compiled QEMU address `00:04.0`. The QEMU 82574 smoke does not prove the I217 physical-layer path.
 - The Ethernet driver also accepts `8086:153b` at `00:19.0`, revision `0`, subsystem `1458:e000`. That is the I217-V recorded in [context.md](context.md). Memory is `0xf7e00000` (128 KiB) and `0xf7e3c000` (4 KiB). I/O is `0xf080`. The QEMU 82574 smoke does not prove that physical-layer path.
 - Read the Z97 Serial ATA configuration space on the desk, then add that identifier beside `8086:2922`.
 - The RTL8852BE probe stays a configuration-space read. There is no Intel display-engine driver and no Radeon driver. The desk image composes this Ethernet driver in the network-driver role.

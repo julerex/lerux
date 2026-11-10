@@ -1,12 +1,24 @@
-//! 82574 facts for the standalone QEMU q35 smoke.
+//! 82574 and I217-V identity for the Ethernet program.
 //!
 //! Register offsets live in the driver engine. This module is the window,
-//! the identity, and the ready line.
+//! the identity, and the ready line. The QEMU map stays the 82574 window.
+//! Accepting the I217-V id does not exercise that part's physical layer.
 
 use crate::{table::SpelledAddr, PciAddress};
 
-/// QEMU `e1000e`. Milestone 22's I217 (`8086:153b`) is not accepted here.
+/// QEMU `e1000e` (82574), `8086:10d3`.
+///
+/// [`UnclaimedNic::claim`] accepts this id at the compiled address `00:04.0`.
 pub const QEMU_82574: (u16, u16) = (0x8086, 0x10d3);
+
+/// I217-V on the Z97 onboard LAN, `8086:153b`.
+pub const I217_V: (u16, u16) = (0x8086, 0x153b);
+
+/// Revision of [`I217_V`] recorded at `00:19.0`.
+pub const I217_REVISION: u8 = 0;
+
+/// Subsystem `1458:e000` of [`I217_V`] recorded at `00:19.0`.
+pub const I217_SUBSYSTEM: (u16, u16) = (0x1458, 0xe000);
 
 pub const READY_LINE: &str = "e1000e: ready";
 
@@ -72,13 +84,34 @@ impl UnclaimedNic {
         self.0
     }
 
-    /// Vendor and device only. There is no class argument.
+    /// Accept the QEMU 82574, or the recorded I217-V.
+    ///
+    /// `8086:10d3` matches on vendor and device. Revision and subsystem are
+    /// not part of that match, and the returned address is this value's
+    /// address. For [`Self::compiled`] that is `00:04.0`.
+    ///
+    /// `8086:153b` matches only when `revision` is [`I217_REVISION`] and the
+    /// subsystem is [`I217_SUBSYSTEM`]. Other Intel ids, including `8086:100e`,
+    /// are rejected. There is no class argument.
     ///
     /// # Errors
     ///
-    /// Returns [`RejectedId`] when `vendor` and `device` are not the QEMU 82574 id.
-    pub const fn claim(self, vendor: u16, device: u16) -> Result<ClaimedNic, RejectedId> {
-        if vendor == QEMU_82574.0 && device == QEMU_82574.1 {
+    /// Returns [`RejectedId`] when the id is neither the 82574 nor that I217-V.
+    pub const fn claim(
+        self,
+        vendor: u16,
+        device: u16,
+        revision: u8,
+        subsystem_vendor: u16,
+        subsystem_device: u16,
+    ) -> Result<ClaimedNic, RejectedId> {
+        let qemu = vendor == QEMU_82574.0 && device == QEMU_82574.1;
+        let i217 = vendor == I217_V.0
+            && device == I217_V.1
+            && revision == I217_REVISION
+            && subsystem_vendor == I217_SUBSYSTEM.0
+            && subsystem_device == I217_SUBSYSTEM.1;
+        if qemu || i217 {
             Ok(ClaimedNic(self.0))
         } else {
             Err(RejectedId { vendor, device })
@@ -101,7 +134,7 @@ mod tests {
     #[test]
     fn claim_accepts_82574() {
         let claimed = UnclaimedNic::compiled()
-            .claim(0x8086, 0x10d3)
+            .claim(0x8086, 0x10d3, 0x5a, 0x1af4, 0x1100)
             .expect("82574");
         assert_eq!(claimed.address().bus(), 0);
         assert_eq!(claimed.address().device(), 4);
@@ -110,19 +143,43 @@ mod tests {
     }
 
     #[test]
+    fn claim_accepts_i217() {
+        let claimed = UnclaimedNic::compiled()
+            .claim(
+                I217_V.0,
+                I217_V.1,
+                I217_REVISION,
+                I217_SUBSYSTEM.0,
+                I217_SUBSYSTEM.1,
+            )
+            .expect("I217-V");
+        assert_eq!(I217_V, (0x8086, 0x153b));
+        assert_eq!(I217_REVISION, 0);
+        assert_eq!(I217_SUBSYSTEM, (0x1458, 0xe000));
+        assert_eq!(claimed.address(), UnclaimedNic::compiled().address());
+    }
+
+    #[test]
     fn claim_rejects_other_intel_nics() {
         assert_eq!(
-            UnclaimedNic::compiled().claim(0x8086, 0x153b),
+            UnclaimedNic::compiled().claim(0x8086, 0x100e, 0, 0x1458, 0xe000),
+            Err(RejectedId {
+                vendor: 0x8086,
+                device: 0x100e,
+            })
+        );
+        assert_eq!(
+            UnclaimedNic::compiled().claim(0x8086, 0x153b, 1, 0x1458, 0xe000),
             Err(RejectedId {
                 vendor: 0x8086,
                 device: 0x153b,
             })
         );
         assert_eq!(
-            UnclaimedNic::compiled().claim(0x8086, 0x100e),
+            UnclaimedNic::compiled().claim(0x8086, 0x153b, 0, 0x8086, 0xe000),
             Err(RejectedId {
                 vendor: 0x8086,
-                device: 0x100e,
+                device: 0x153b,
             })
         );
     }

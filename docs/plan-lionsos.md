@@ -393,7 +393,7 @@ The Acer Swift X SFX14-41G is the metal target being driven. The Gigabyte Z97-D3
 
 **Exit:** The panel shows `1 browser` and `2 maths`, and the built-in keyboard produces `maths 3`.
 
-Board `swift_sfx14_41g` uses Microkit `x86_64_generic` and `console-swift.system.template`. There is no `serial-driver`. The keyboard is the i8042, pin 1, vector 49. `console-driver` keeps the VGA text path for `pc_z97_d3h` and paints 32-bit pixels on this board. `just iso` packs this image. `just iso pc_z97_d3h` packs the Z97 image. `browser` still prints `browser unavailable`. `ci = false`. On 2026-10-30 the panel showed `hello lerux`, `1 browser`, and `2 maths`. The shell copied the disk page onto that console as `nvme: absent`. That photo did not include `maths 3`.
+Board `swift_sfx14_41g` uses Microkit `x86_64_generic` and `console-swift.system.template`. There is no `serial-driver`. The keyboard is the i8042, pin 1, vector 49. `console-driver` keeps the VGA text path for `pc_z97_d3h` and paints 32-bit pixels on this board. `just iso` packs this image. `just iso pc_z97_d3h` packs the Z97 image. `browser` paints the Lenna test page from `support/browser/lenna.html` over the console until `quit`. The Z97 still prints `browser unavailable`. `ci = false`. On 2026-10-30 the panel showed `hello lerux`, `1 browser`, and `2 maths`. The shell copied the disk page onto that console as `nvme: absent`. That photo did not include `maths 3`.
 
 ## Milestone 26 — Swift PCI lines
 

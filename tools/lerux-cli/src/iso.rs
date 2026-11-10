@@ -384,6 +384,7 @@ fn print_usb_instructions(board: &str, iso: &Path) {
         println!(
             "Screen: the GOP mode line, then \"1 browser\", \"2 maths\", and \"3 wifi\". This laptop has no COM port."
         );
+        println!("1 or browser opens the Lenna test page. quit returns the menu.");
         println!("Expect: 1 browser");
         return;
     }

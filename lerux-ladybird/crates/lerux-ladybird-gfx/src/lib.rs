@@ -3,8 +3,8 @@
 //! The frame is 320 by 64, tightly packed, little-endian B, G, R, A.
 //! [`Bitmap`] fills a rectangle, blits a rectangle, sets one pixel, and
 //! samples the first pixel that is not opaque white. The bitmap font covers
-//! the fixture strings `lerux` and `lerux-http-fixture`. One set bit is one
-//! pixel.
+//! the fixture strings `lerux`, `lerux-http-fixture`, and `Lenna`. One set
+//! bit is one pixel.
 //!
 //! [`ControlPage`] is the shared control region: a state, a title length, and
 //! a title buffer. The bitmap is a separate region of [`FRAME_BYTES`] bytes.

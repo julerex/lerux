@@ -413,6 +413,8 @@ version = "0.1.0"
 dependencies = [
  "embedded-hal-nb",
  "lerux-calc",
+ "lerux-desk",
+ "lerux-ladybird-image",
  "lerux-logging",
  "lerux-swift",
  "sel4-microkit",
@@ -1219,6 +1221,10 @@ version = "0.1.0"
 [[package]]
 name = "lerux-ladybird-image"
 version = "0.1.0"
+dependencies = [
+ "lerux-ladybird-gfx",
+ "lerux-ladybird-html",
+]
 
 [[package]]
 name = "lerux-ladybird-js"

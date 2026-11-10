@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted for `wasmi` in the LionsOS runtime. Milestone 17 deleted the postcard `program-runtime`. The live protection domain is `program` (`sddf-program.elf`) on `qemu_virt_aarch64_program_sddf`.
+Accepted for `wasmi` in the LionsOS runtime and for WebAssembly a page runs. The postcard `program-runtime` protection domain is not in the tree. Milestone 17 stays in [`plan-lionsos.md`](../plan-lionsos.md) and is the postcard guest-model removal. The live runtime protection domain is `program` (`sddf-program.elf`) on `qemu_virt_aarch64_program_sddf`. The browser path is [`../../lerux-ladybird/PLAN.md`](../../lerux-ladybird/PLAN.md) milestone 18. The engine is a Rust library, not a port of Ladybird, Chromium, or WebKit C++.
 
 ## Date
 
@@ -10,7 +10,7 @@ Accepted for `wasmi` in the LionsOS runtime. Milestone 17 deleted the postcard `
 
 ## Context
 
-A LionsOS image has one WebAssembly runtime protection domain with filesystem and network access. Milestone 14 is that role. [ADR-010](010-program-runtime.md) fixed the `LRW1` envelope and put a closed opcode list in `lerux-prog`, and it rejected `wasmi` because a general engine was larger than the smoke module. The milestone exit deletes that list. Milestone 17 then deleted the postcard `program-runtime` protection domain.
+A LionsOS image has one WebAssembly runtime protection domain with filesystem and network access. Milestone 14 is that role. [ADR-010](010-program-runtime.md) fixed the `LRW1` envelope and put a closed opcode list in `lerux-prog`, and it rejected `wasmi` because a general engine was larger than the smoke module. The milestone exit deletes that list. The postcard `program-runtime` protection domain is not in the tree. Milestone 17 stays as the postcard guest-model removal.
 
 ## Decision
 
@@ -20,7 +20,7 @@ The runtime is `wasmi` 2.0.0 inside `lerux-wasm`. The crate is `no_std`. The ena
 
 `qemu_virt_aarch64_program_sddf` is the fetch image with `program` (`sddf-program.elf`) in place of the shell. That protection domain is the serial client, the filesystem client, and the network client. The module imports `lerux.read`, `lerux.socket`, and `lerux.log`. `lerux.read` reads `/config/hostname` through `lerux-posix`. `lerux.socket` allocates the one socket. The pipe does not connect, and the image does not start Dynamic Host Configuration Protocol. The network queues are still mapped, and `net_buffers_init` runs once on the transmit free queue.
 
-Milestone 17 deleted `program-runtime`. There is one runtime protection domain, and it is `program`.
+There is one runtime protection domain on the LionsOS image, and it is `program`. The browser's WebAssembly calls go through the same `lerux-wasm` library. Milestone 17 stays.
 
 ## Alternatives considered
 

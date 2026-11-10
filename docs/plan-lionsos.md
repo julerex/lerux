@@ -1,8 +1,8 @@
 # Lerux in Rust, on the LionsOS architecture
 
-Last updated: 2026-10-28
+Last updated: 2026-11-10
 
-**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is done and is the file-descriptor library. Milestone 6 is done and is the shell on that filesystem image. Milestone 7 is done and is the network-role image. Milestone 8 is done and is the socket and fetch image. Milestone 9 is done and is the timer and static status on the filesystem image. Milestone 10 is done and is the remaining shell commands on the fetch image. Milestone 11 is done and is the web image that serves the seeded hostname file. Milestone 12 is done and is the virtio graphics driver, virtualiser, and browser image. Milestone 13 is done and is the agent image. Milestone 14 is done and is the WebAssembly runtime protection domain. Milestone 15 is done and is package selection from the template. Milestone 16 is done and is the same protection-domain roles on QEMU RISC-V and QEMU x86. Milestone 17 is done and is the removal of the postcard guest model. Milestone 18 is done and is a real paint of the fetched fixture on the browser image. Milestone 19 is done and is the Advanced Host Controller Interface disk. Milestone 20 is done and is the QEMU 82574. Milestone 21 is done and is that disk and that Ethernet device on one q35 image. Milestone 22 is not started. It binds those drivers on the Z97. Milestones run in order. Implement one milestone per pass, after the previous smoke is green.
+**Status:** Milestone 1 is done and is the shared-structure crate. Milestone 2 is done and is the serial-role image. Milestone 3 is done and is the cothread runtime. Milestone 4 is done and is the block and filesystem image. Milestone 5 is done and is the file-descriptor library. Milestone 6 is done and is the shell on that filesystem image. Milestone 7 is done and is the network-role image. Milestone 8 is done and is the socket and fetch image. Milestone 9 is done and is the timer and static status on the filesystem image. Milestone 10 is done and is the remaining shell commands on the fetch image. Milestone 11 is done and is the web image that serves the seeded hostname file. Milestone 12 is done and is the virtio graphics driver, virtualiser, and browser image. Milestone 13 is done and is the agent image. Milestone 14 is done and is the WebAssembly runtime protection domain. Milestone 15 is done and is package selection from the template. Milestone 16 is done and is the same protection-domain roles on QEMU RISC-V and QEMU x86. Milestone 17 stays in this plan. It is done and is the removal of the postcard guest model (`lerux-interface-types`, `LERUXFS`, postcard `SerialClient` and `NetRequest`). It did not remove the Ladybird-shaped browser domains or the postcard servers those specs still name. Milestone 18 is done and is a real paint of the fetched fixture on the browser image. Milestone 19 is done and is the Advanced Host Controller Interface disk. Milestone 20 is done and is the QEMU 82574. Milestone 21 is done and is that disk and that Ethernet device on one q35 image. Milestone 22 is not started. It binds those drivers on the Z97 and stays secondary. The metal target being driven is the Acer Swift X SFX14-41G (`swift_sfx14_41g`), milestones 24 through 29. The Gigabyte Z97-D3H desk page and the RPi4 workstation lab stay secondary. Milestones run in order. Implement one milestone per pass, after the previous smoke is green.
 
 **Goal:** Every lerux guest protection domain stays Rust, and the queues, configuration pages, filesystem messages, and component graph are the same ones LionsOS uses.
 
@@ -19,7 +19,7 @@ Last updated: 2026-10-28
 - Guest code stays `#![no_std]` Rust. It includes no C. It does not call musl, lwIP, MicroPython, or the WebAssembly Micro Runtime.
 - Shared structs use `#[repr(C)]`. A host test fails when `size_of` or `offset_of` disagrees with the header. `fs_cmd_t` and `fs_msg_t` are 64 bytes, which the header asserts.
 - Queue indexes use the same acquire and release pairing as the header comments. The producer is the only writer of the tail. The consumer is the only writer of the head. Use that pairing on every new queue, which is the symmetric-multiprocessing branch of the header, including on a single processor.
-- A new guest component discovers its queues from a configuration memory region whose magic and fields match the header (`serial_driver_config_t`, `serial_virt_tx_config_t`, `serial_virt_rx_config_t`, `serial_client_config_t`, and the network, block, and filesystem equivalents). A handwritten `Channel::new` is not the protocol. Milestone 17 removed the postcard image. `hello` and `serial-driver` remain.
+- A new guest component discovers its queues from a configuration memory region whose magic and fields match the header (`serial_driver_config_t`, `serial_virt_tx_config_t`, `serial_virt_rx_config_t`, `serial_client_config_t`, and the network, block, and filesystem equivalents). A handwritten `Channel::new` is not the protocol. Milestone 17 stays. It removed the postcard guest model (`lerux-interface-types`, `LERUXFS`, postcard `SerialClient` and `NetRequest`). `hello` and `serial-driver` remain. The Ladybird-shaped domains stay in [`desk-browser.md`](desk-browser.md) and [`../lerux-ladybird/PLAN.md`](../lerux-ladybird/PLAN.md).
 - Postcard request types are not added. An old protection domain stays on postcard only until the milestone that replaces it deletes it.
 - Do not modify `deps/workspace/` by hand. Do not vendor the C trees into git.
 - The installed kit is Microkit 2.3.0, seL4 16.0.0, and rust-sel4 `v5.0.0`. Those three pins move together. rust-sel4 5.0.0 is the release that supports this kit. Queue layouts do not depend on the kit version.
@@ -301,13 +301,15 @@ Landed:
 
 **Exit:** Guest code has no `lerux_interface_types` dependency, no `LERUXFS`, and no postcard `SerialClient` or `NetRequest`. `docs/ci.md` lists the new recipes. `just test` is the Rust serial-and-filesystem workstation smoke. `just check` still lints the host tool.
 
+This milestone stays. Its scope is that postcard guest model. It does not remove the Ladybird-shaped browser domains, and it does not remove the postcard servers [`desk-browser.md`](desk-browser.md) and [`../lerux-ladybird/PLAN.md`](../lerux-ladybird/PLAN.md) still name (`browser-ui`, `web-content`, `request-server`, `tls-proxy`, `net-server`, `display-server`, `fs-server`). [`../lerux-ladybird/PLAN.md`](../lerux-ladybird/PLAN.md) has its own milestone 17, Forms, and that milestone stays too. The two lists are not the same milestone.
+
 Done.
 
 Landed:
 
-- Guest code under `userspace/` has no `lerux-interface-types` dependency, no `LERUXFS`, and no `NetRequest`. The postcard protection domains and the crates `lerux-interface-types`, `lerux-ipc`, `lerux-fs`, `lerux-fat`, and `lerux-service-async` are deleted. Device-framework images, `hello`, and the drivers that did not use those crates stay. The logging serial sink stays for `hello` and the cothread client.
+- Guest code under `userspace/` has no `lerux-interface-types` dependency, no `LERUXFS`, and no `NetRequest`. The crates `lerux-interface-types`, `lerux-ipc`, `lerux-fs`, `lerux-fat`, and `lerux-service-async` are not in the tree. Device-framework images, `hello`, and the drivers that did not use those crates stay. The logging serial sink stays for `hello` and the cothread client. The Ladybird-shaped domains stay in the browser specs named above.
 - `just test` with no `BOARD` boots `qemu_virt_aarch64_fs_sddf`. `just build` still defaults to `qemu_virt_aarch64`. The continuous integration hello job is `BOARD=qemu_virt_aarch64 just test`. The smoke include list is 19 jobs. `docs/ci.md` and the README use that count.
-- `pc_z97_d3h` and the postcard workstation boards are gone. Their shells were postcard protection domains.
+- The Gigabyte Z97-D3H stays a secondary desk page. This milestone does not remove it, and it does not remove the postcard servers the browser specs still name. The metal target being driven is the Acer Swift X.
 - A board `lerux_image::render_board` accepts, including every name ending in `_sddf` and `x86_64_generic_fs_ahci`, takes its system description from that renderer. The `template` string on those rows is not a file in `userspace/systems/templates`, and `system_vars` on those rows are not substituted. Postcard boards still read the template file.
 - Checked on 2026-10-21. `just check` passed. `just check-pd` passed (51 aarch64 crate combinations and 37 x86_64 crate combinations). On a fresh `support/disk.img`, `just test` printed `lerux shell ready`, the scripted shell lines, and `reboot`.
 
@@ -361,6 +363,8 @@ Done. `just test-x86-fetch-native` printed `ahci: port 0`, `e1000e: ready`, and 
 
 ## Milestone 22 — Desk
 
+Secondary to the Acer Swift X. The metal target being driven is `swift_sfx14_41g`, milestones 24–29. This milestone binds the same disk and Ethernet programs on the Gigabyte Z97-D3H. The RPi4 workstation lab stays secondary as well.
+
 **Exit:** The same two programs accept the recorded desk devices. This milestone cannot close on QEMU.
 
 Not started.
@@ -378,6 +382,8 @@ Not started.
 - On QEMU RISC-V the virtio memory-mapped guest virtual address equals the physical page (`0x10_001_000`, `0x10_002_000`, `0x10_003_000`). AArch64 uses the high window `0x6_000_000_000` for the same role. Copying that window onto RISC-V stops the boot. Leave the identity map in place until Microkit can place a high guest map on this architecture. `riscv_virtio_guest_address_matches_the_physical_page` locks the rule.
 
 ## Milestone 24 — Swift mode line
+
+The Acer Swift X SFX14-41G is the metal target being driven. The Gigabyte Z97-D3H desk page (milestone 22) and the RPi4 workstation lab stay secondary.
 
 **Exit:** The internal panel shows one line with the framebuffer address, pitch, width, height, and the red, green, and blue shifts.
 

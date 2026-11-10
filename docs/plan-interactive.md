@@ -1,8 +1,8 @@
 # PLAN — Interactive surface (phases 71–80)
 
-Last updated: 2026-09-26 (phases 71–80 done)
+Last updated: 2026-11-10 (phases 71–80 done)
 
-**Status:** This page is the phase record. Milestone 17 deleted those protection domains and `lerux-interface-types`. New work does not add postcard types. The current browser command is `just test-browser-sddf`. The desk-browser spec names `browser-ui`, `web-content`, `request-server`, `tls-proxy`, and `net-server` again; those crates are not in this tree.
+**Status:** This page is the phase record for phases 71–80. Milestone 17 stays in [`plan-lionsos.md`](plan-lionsos.md). It removed the postcard guest model (`lerux-interface-types`, `LERUXFS`, postcard `SerialClient` and `NetRequest`). It did not remove the Ladybird-shaped domains or the postcard servers the browser specs still name. Those stay in [`desk-browser.md`](desk-browser.md) and [`../lerux-ladybird/PLAN.md`](../lerux-ladybird/PLAN.md), including that plan's milestone 17 (Forms). New work does not add postcard types. The current browser command is `just test-browser-sddf`. JavaScript and WebAssembly are approved.
 
 Related: [`plan.md`](plan.md) (roadmap 1–82), [`plan-qemu.md`](plan-qemu.md) (phases 61–70, done), [`plan-arch.md`](plan-arch.md) (phases 50–60 + Physical RPi4 lab), [`plan-au-ts.md`](plan-au-ts.md) (sDDF inspiration), [`context.md`](context.md), [ADR-009](decisions/009-interactive-surface.md).
 
@@ -10,7 +10,7 @@ Related: [`plan.md`](plan.md) (roadmap 1–82), [`plan-qemu.md`](plan-qemu.md) (
 
 Phases 1–70 delivered an Arch-like **workflow** on QEMU and forbade graphics. This program *moves toward* two products that need an interactive surface:
 
-1. A **fully-Rust web browser** inspired by [Ladybird](https://github.com/LadybirdBrowser/ladybird) — independent engines and process isolation, not Chromium/WebKit, not Ladybird C++.
+1. A **fully-Rust web browser** modelled on [Ladybird](https://github.com/LadybirdBrowser/ladybird): the same engine shape and process isolation, rewritten in Rust, not a port of the Ladybird, Chromium, or WebKit C++ sources.
 2. A **Grok Build clone** inspired by [xai-org/grok-build](https://github.com/xai-org/grok-build) — agent loop, tool taxonomy, serial TUI, not the host `grok` binary.
 
 Same rule as au-ts: **steal the idea, not the code**. Local reference trees stay outside this repo:
@@ -36,15 +36,19 @@ Every deliverable is **completable on QEMU virt aarch64**. No board on the desk,
 
 Lifted: **QEMU software framebuffer** owned by `display-server`. Apps present via a shared bitmap MR. The desk's VESA framebuffer on the Intel graphics is [ADR-013](decisions/013-desk-intel-scanout.md). That path is the firmware option ROM, not a display-engine driver.
 
+Approved:
+
+- JavaScript and WebAssembly. The script engine follows Ladybird's LibJS stages in `lerux-ladybird-js`. WebAssembly is ordinary Wasm through `wasmi` in `lerux-wasm` ([ADR-012](decisions/012-ordinary-webassembly.md)), including modules a page runs. See [`desk-browser.md`](desk-browser.md) and [`../lerux-ladybird/PLAN.md`](../lerux-ladybird/PLAN.md) milestones 13, 14, and 18. The engines are a Rust rewrite of that shape, not a port of Ladybird, Chromium, or WebKit C++.
+
 Still forbidden:
 
-- Linux/POSIX ABI, musl, `fork`/`exec`, unmodified third-party binaries (including `grok` and Ladybird)
+- Linux/POSIX ABI, musl, `fork`/`exec`, unmodified third-party binaries (including `grok` and the Ladybird C++ tree)
 - Microkit **static** PD set — one `web-content`, no extra tabs at runtime
-- JS / Wasm engines (needs a future ADR)
+- `wasmtime`, the WebAssembly Micro Runtime, SpiderMonkey, and compiling Ladybird's C++ workspace
 - GPU compositor, Wayland, virtio-gpu 3D, libvmm / guest Linux
 - MCP stdio servers, Landlock/Seatbelt, live xAI in CI
 - Vendoring Ladybird, Servo, or grok-build into `deps/`
-- GENET / eMMC / HDMI / on-device REPL — [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated)
+- Treating the RPi4 lab or the Z97 desk page as the metal target being driven. That target is the Acer Swift X. The [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated) and the Z97 desk page stay secondary.
 
 ---
 
@@ -78,7 +82,7 @@ From Ladybird `Documentation/ProcessArchitecture.md` and `Services/`:
 | RequestServer | HTTP(S)/WS/DNS; WebContent has no NIC | `request-server` in front of `tls-proxy` / `net-server` |
 | ImageDecoder | decode one image in a fresh process | deferred |
 | Compositor | GPU/OpenGL present | skip; `display-server` software blit |
-| WasmCompiler / WebWorker | later | out of 71–80. The executor landed as [Phase 81](plan.md#phase-81--signed-wasm-runtime); the on-guest compiler and WebWorker stay later |
+| WasmCompiler / WebWorker | approved shape | out of 71–80. Scripts and WebAssembly are approved in [`../lerux-ladybird/PLAN.md`](../lerux-ladybird/PLAN.md) (milestones 13, 14, 18, and 19). The engine is `wasmi` ([ADR-012](decisions/012-ordinary-webassembly.md)), rewritten in Rust, not a port of Ladybird, Chromium, or WebKit C++ |
 
 `web-content` **cannot** use the network or filesystem except through `request-server`. That is ADR-003/007 with a Ladybird name.
 

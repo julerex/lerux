@@ -13,13 +13,13 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [swift-boot-screen.md](swift-boot-screen.md) | Plain-language guide to the Swift X Wi-Fi stall: where the ring, the note, the doorbell, and the IOMMU live, how to read the screen lines, and the dump rows 31 to 66 |
 | [swift-wifi-assessment.md](swift-wifi-assessment.md) | Assessment of the Swift X bring-up against Linux v6.8 `mt76`: what is verified, the remaining suspects in order, and the gap between `ping ok` and applications on the internet |
 | [plan-swift-wifi.md](plan-swift-wifi.md) | Phased plan from the `fw sem` stall to an application on the internet over the Swift radio |
-| [plan.md](plan.md) | Roadmap and cross-arch smoke parity (phases 1–82, done); [Physical RPi4 lab](plan.md#physical-rpi4-lab-hardware-gated) |
-| [plan-lionsos.md](plan-lionsos.md) | LionsOS structures in a Rust guest (milestones 1–21 done; 22 is the Z97 bind) |
-| [plan-arch.md](plan-arch.md) | Phases 50–60 living checklist; [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated) (hardware-gated) |
+| [plan.md](plan.md) | Roadmap and cross-arch smoke parity (phases 1–82, done). The metal target being driven is the Acer Swift X. The Z97 desk page and the [Physical RPi4 lab](plan.md#physical-rpi4-lab-hardware-gated) stay secondary |
+| [plan-lionsos.md](plan-lionsos.md) | LionsOS structures in a Rust guest. Milestone 17 stays (postcard guest model). The metal target being driven is the Acer Swift X (milestones 24–29). Milestone 22, the Z97 bind, stays secondary |
+| [plan-arch.md](plan-arch.md) | Phases 50–60 living checklist. The Acer Swift X is the metal target being driven. [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated) stays secondary |
 | [plan-qemu.md](plan-qemu.md) | Phases 61–70 living checklist (QEMU-only workstation deepening; done) |
-| [plan-interactive.md](plan-interactive.md) | Phases 71–80 record: QEMU interactive surface. Milestone 17 deleted those protection domains |
-| [../lerux-ladybird/PLAN.md](../lerux-ladybird/PLAN.md) | Ladybird-shaped browser libraries and protection domains. Milestone 1 adds the crates and an empty document on a page |
-| [desk-browser.md](desk-browser.md) | Desk browser spec: one public page on this Z97, from the typed address to the motherboard HDMI port |
+| [plan-interactive.md](plan-interactive.md) | Phases 71–80 record: QEMU interactive surface. Milestone 17 stays and did not remove those domains. JavaScript and WebAssembly are approved |
+| [../lerux-ladybird/PLAN.md](../lerux-ladybird/PLAN.md) | Browser modelled on Ladybird and rewritten in Rust, not a port of Ladybird, Chromium, or WebKit C++. Milestone 17 of this file is Forms and stays |
+| [desk-browser.md](desk-browser.md) | Secondary Z97 desk page: one public page, from the typed address to the motherboard HDMI port. The Acer Swift X is the metal target being driven |
 | [plan-qip.md](plan-qip.md) | Investigation: QIP component contracts and whether a host belongs in lerux. No decision yet. |
 | [bluechip.md](bluechip.md) | Investigation: emulating the Anduril BlueChip laptop (Snapdragon X), the lerux port gap, and a QEMU proxy board. No decision yet. |
 | [config.md](config.md) | Phase 54: config key schema, secrets, boot policy |

@@ -1,16 +1,16 @@
 # lerux-ladybird
 
-Last updated: 2026-10-31
+Last updated: 2026-11-10
 
 **Status:** Milestone 5 has landed. Milestones 6 through 20 have not. Milestones run in order. Implement one milestone per pass, and only after the previous milestone's exit holds. This file is the plan. Milestone 1 adds the library crates. It adds no protection domain and no continuous-integration job. Milestone 2 parses an `https` URL in `lerux-ladybird-url`. Milestone 3 paints a frame bitmap and one glyph in `lerux-ladybird-gfx`. Milestone 4 parses the fixture in `lerux-ladybird-html` and the title text is `lerux`. Milestone 5 parses a style sheet into rules, selectors, and declarations in `lerux-ladybird-web`. There is no computed style.
 
-**Goal:** A browser named lerux-ladybird, written in Rust, `#![no_std]` plus `alloc`, that runs as lerux protection domains. Its process split and its path from a load to pixels follow [Ladybird](https://github.com/LadybirdBrowser/ladybird). The code is written in this tree.
+**Goal:** A browser named lerux-ladybird, written in Rust, `#![no_std]` plus `alloc`, that runs as lerux protection domains. It is modelled on [Ladybird](https://github.com/LadybirdBrowser/ladybird)'s engine shape and process isolation and rewritten in Rust. It is not a port of the Ladybird, Chromium, or WebKit C++ sources. Its process split and its path from a load to pixels follow Ladybird. The code is written in this tree. JavaScript and WebAssembly are in this plan (milestones 13, 14, and 18). Milestone 17 of this file is Forms and stays. It is not [docs/plan-lionsos.md](../docs/plan-lionsos.md) milestone 17, which also stays and is the postcard guest-model removal.
 
 **Architecture:** Ladybird splits the browser into separate processes and builds a page through a fixed pipeline: fetch, HTML parse, CSS object model, style, a layout tree that is separate from the document, a paintable tree, stacking contexts, then paint. JavaScript is a sibling library: lexer, parser, abstract syntax tree, bytecode, then a garbage-collected interpreter. lerux keeps that split. Microkit's protection-domain set is static, so each Ladybird process that this plan includes is one protection domain, created at boot.
 
 Upstream documents and directories below are the reference for the milestone that names them. Read that document before editing. A developer machine may also have a checkout at `/home/julian/repos/github_orgs/LadybirdBrowser/ladybird`. That checkout stays outside this repo. So do the upstream sources. Nothing from either tree is copied into git.
 
-The live browser smoke stays `just test-browser-sddf`. It uses `lerux-html` and `lerux-web`. This tree does not depend on those crates and does not grow them. [`docs/desk-browser.md`](../docs/desk-browser.md) stays the metal-boot spec. Milestone 20 names the seam and does not implement that spec.
+The live browser smoke stays `just test-browser-sddf`. It uses `lerux-html` and `lerux-web`. This tree does not depend on those crates and does not grow them. [`docs/desk-browser.md`](../docs/desk-browser.md) stays the Z97 desk-page spec. That page is secondary. The metal target being driven is the Acer Swift X. Milestone 20 names the seam and does not implement that spec.
 
 Related: [`docs/plan-interactive.md`](../docs/plan-interactive.md) (phases 71–80, the earlier Ladybird-shaped protection domains), [`docs/plan-lionsos.md`](../docs/plan-lionsos.md) milestones 12 and 18 (the live graphics smoke), [ADR-009](../docs/decisions/009-interactive-surface.md), [ADR-012](../docs/decisions/012-ordinary-webassembly.md).
 

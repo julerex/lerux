@@ -60,7 +60,7 @@ Channel numbers come from profile `[[channel]]` manifests; PPC callees outrank c
 
 ### Interactive trust map (phases 72–80)
 
-Those boards are a phase record. Milestone 17 deleted `display-server`, `request-server`, `browser-ui`, `web-content`, and the postcard `agent`. The live browser image is `qemu_virt_aarch64_browser_sddf`: the shell owns smoltcp and `lerux-tls`, and paints through the graphics client queues. The desk-browser spec names the Ladybird-shaped set again.
+Those boards are a phase record. Milestone 17 stays and did not remove `display-server`, `request-server`, `browser-ui`, `web-content`, or the postcard servers the browser specs still name. The live browser image is `qemu_virt_aarch64_browser_sddf`: the shell owns smoltcp and `lerux-tls`, and paints through the graphics client queues. The desk-browser spec and [`../lerux-ladybird/PLAN.md`](../lerux-ladybird/PLAN.md) keep the Ladybird-shaped set. The browser is modelled on Ladybird and rewritten in Rust, not a port of Ladybird, Chromium, or WebKit C++.
 
 The table below is the phase-72–80 trust map. Those protection domains are not in this tree.
 
@@ -80,7 +80,7 @@ The live residual is that the browser shell owns smoltcp. A later smoke should c
 |--------|--------|------------|
 | Untrusted app corrupts FS DMA / disk | **Mitigated** | Apps use `fs_cmd_t` only; only `fatfs` and `blk_driver` map the data region |
 | Untrusted app sniffs NIC DMA | **Mitigated** (QEMU virtio-net all arches) | Unified-dma; apps have no DMA map (ADR-003, Phase 61) |
-| App crash takes down services | **Partial** | Separate PDs; `just test-debug` crashes a child. Milestone 17 deleted the isolation board |
+| App crash takes down services | **Partial** | Separate PDs; `just test-debug` crashes a child. There is no isolation board for a follow-on filesystem round-trip. Milestone 17 stays |
 | Shell over-privileged surface | **Partial** | Profile tiers (`admin` / `admin-core` / `appliance`); `lerux profile audit`; shell still holds many ends on admin images |
 | Secrets on disk writable by shell | **Mitigated (ACL)** | `secret.*` Set/Delete is supervisor-only (`ConfigResponse::Denied` for shell) |
 | Secrets on disk readable by any FS client | **Partial** | Path prefix `/config/secrets/`; no encryption; FS RPC clients can still open paths |
@@ -91,7 +91,7 @@ The live residual is that the browser shell owns smoltcp. A later smoke should c
 
 ## Isolation smoke (automated)
 
-`just test-debug` still nests `crash-demo` under `debug-handler` and logs the fault. Milestone 17 deleted `qemu_virt_aarch64_isolation`, so there is no follow-on filesystem round-trip after that crash.
+`just test-debug` still nests `crash-demo` under `debug-handler` and logs the fault. There is no `qemu_virt_aarch64_isolation` board, so there is no follow-on filesystem round-trip after that crash. Milestone 17 stays and is the postcard guest-model removal.
 
 Production images stay flat (no debug parent) per ADR-005. Isolation is a property of the protection-domain layout.
 

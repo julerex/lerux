@@ -67,7 +67,7 @@ Test modes for `lerux test`:
 | `qemu` | `--mode qemu` | Force QEMU (fails on hardware-only boards) |
 | `hw-serial` | `--mode hw-serial` or `LERUX_TEST_MODE=hw-serial` | Read serial device; requires `LERUX_HW_SERIAL` |
 
-**Golden path (RPi4 workstation):**
+**Golden path (RPi4 workstation, secondary):** The metal target being driven is the Acer Swift X. This path is the RPi4 lab.
 
 ```bash
 # 1. Deploy loader.img to SD boot (Phase 52)

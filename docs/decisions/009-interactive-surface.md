@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted (Phase 71; phases 72–80 done). Milestone 17 deleted those protection domains and `lerux-interface-types`. The current browser command is `just test-browser-sddf`. The desk-browser spec names the Ladybird-shaped set again.
+Accepted (Phase 71; phases 72–80 done). Milestone 17 stays in [`plan-lionsos.md`](../plan-lionsos.md). It removed the postcard guest model (`lerux-interface-types`, `LERUXFS`, postcard `SerialClient` and `NetRequest`). It did not remove the Ladybird-shaped domains or the postcard servers this record names. Those stay in the desk-browser spec and [`../../lerux-ladybird/PLAN.md`](../../lerux-ladybird/PLAN.md). The current browser command is `just test-browser-sddf`. JavaScript and WebAssembly are approved.
 
 ## Date
 
@@ -10,11 +10,11 @@ Accepted (Phase 71; phases 72–80 done). Milestone 17 deleted those protection 
 
 ## Context
 
-Phases 1–70 delivered a QEMU workstation with typed postcard RPC, static Microkit images, and no POSIX ABI. The documented hard ceiling still said **no desktop / GPU** ([`plan-qemu.md`](../plan-qemu.md), [`plan-arch.md`](../plan-arch.md): “do not start with graphics”) and deferred language VMs.
+Phases 1–70 delivered a QEMU workstation with typed postcard RPC, static Microkit images, and no POSIX ABI. The documented hard ceiling still said **no desktop / GPU** ([`plan-qemu.md`](../plan-qemu.md), [`plan-arch.md`](../plan-arch.md): “do not start with graphics”) and deferred language VMs. JavaScript and WebAssembly are approved; that deferral is not the current ceiling.
 
 Phases 71–80 want to *move toward*:
 
-1. A **fully-Rust web browser** inspired by [Ladybird](https://github.com/LadybirdBrowser/ladybird) (independent engines, process isolation; not Chromium/WebKit).
+1. A **fully-Rust web browser** modelled on [Ladybird](https://github.com/LadybirdBrowser/ladybird): the same engine shape and process isolation, rewritten in Rust, not a port of the Ladybird, Chromium, or WebKit C++ sources.
 2. A **Grok Build clone** inspired by [xai-org/grok-build](https://github.com/xai-org/grok-build) (agent loop, tool taxonomy, serial TUI).
 
 Neither upstream tree is a candidate to vendor or compile for seL4. Ladybird is C++ (with small Rust FFI islands) and spawns processes on demand. Grok Build is a `std`/tokio TUI that spawns subprocesses and sandboxes them with Landlock/Seatbelt. Both fights are the same one [`plan-au-ts.md`](../plan-au-ts.md) already resolved for sDDF: **steal the idea, not the code**.
@@ -43,7 +43,7 @@ Constraints that still hold:
 
    `web-content` has **no** `NetClient` / `TlsClient` / `FsClient`. It speaks `HttpRequest` to `request-server` and paints into the bitmap MR. That is Ladybird’s load-bearing isolation, expressed as Microkit channels.
 
-3. **Engines are from-scratch Rust subsets** (`lerux-html` + CSS/layout/paint) under `#![no_std]` + `alloc`. Do not embed Servo (std, threads, SpiderMonkey, GPU). Do not compile Ladybird’s workspace. JS / Wasm need a future ADR.
+3. **Engines are a Rust rewrite of Ladybird's shape** under `#![no_std]` + `alloc`. The browser is modelled on Ladybird's engine shape and process isolation and rewritten in Rust. It is not a port of the Ladybird, Chromium, or WebKit C++ sources. Do not embed Servo (std, threads, SpiderMonkey, GPU). Do not compile Ladybird’s workspace. JavaScript and WebAssembly are approved. The script engine follows Ladybird's LibJS stages in `lerux-ladybird-js` ([`../../lerux-ladybird/PLAN.md`](../../lerux-ladybird/PLAN.md)). WebAssembly is ordinary Wasm through `wasmi` in `lerux-wasm` ([ADR-012](012-ordinary-webassembly.md)), including the browser module path in that plan. `wasmtime` and the WebAssembly Micro Runtime stay out. Phases 71–80 shipped HTML and CSS only; that record is not a ceiling against script or Wasm.
 
 4. **Agent is a PD + serial TUI + tools over existing IPC.** Steal Grok Build’s loop (prompt → tool-calls → tools → model) and the core tool kinds **Read, Edit, Write, ListDir, Search, Execute, WebFetch**. Reimplement them on `FsRequest`, shell `run` (Phase 69), and `request-server`. Isolation **is** the PD set — not Landlock. Do not port `xai-grok-pager`, tokio, ratatui, or MCP stdio servers.
 
@@ -86,7 +86,7 @@ Constraints that still hold:
 - `alloc` is expected in `display-server`, `web-content`, `request-server`, `browser-ui`, and `agent` (already used by `tls-proxy` / `net-server` / `fs-server`).
 - Framebuffer MRs are large (~2 MiB at 800×600×32). Channel numbers still come from the profile manifest (AGENTS.md).
 - New PDs sit in the **bulk** QoS band; PPC callees outrank callers (ADR-006). `web-content` must not outrank `request-server` / `display-server` if it PPCs them.
-- [`plan-arch.md`](../plan-arch.md) “do not start with graphics” is **superseded for QEMU software framebuffer only**. GPU, JS, POSIX, and libvmm remain forbidden.
+- [`plan-arch.md`](../plan-arch.md) “do not start with graphics” is **superseded for QEMU software framebuffer only**. A GPU compositor, POSIX, and libvmm remain forbidden. JavaScript and WebAssembly are approved, as in decision 3.
 - The desk's firmware framebuffer is [ADR-013](013-desk-intel-scanout.md). QEMU images still present through `display-server`.
 - [`security.md`](../security.md) gains a planned trust row: `web-content` and `agent` are untrusted; `request-server` and `display-server` are trusted services.
 - Living checklist: [`plan-interactive.md`](../plan-interactive.md).

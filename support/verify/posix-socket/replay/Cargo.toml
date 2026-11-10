@@ -1,0 +1,13 @@
+[workspace]
+
+[package]
+name = "posix-socket"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+description = "Errno check for the one-socket table. Calls the real lerux-posix functions."
+
+[dependencies]
+lerux-posix = { path = "../../../../userspace/crates/lerux-posix" }
+lerux-sddf = { path = "../../../../userspace/crates/lerux-sddf" }

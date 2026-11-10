@@ -217,6 +217,22 @@ Read Milestone 12 in [docs/plan-lionsos.md](docs/plan-lionsos.md). This image is
 - `just test` and `just test-browser-sddf` expect `1 browser`, then the script sends `browser` and expects `pixel 000000ff`, sends `name` and expects `pixel 000000ff` followed by `dns 10.0.2.2`, sends `maths` and `(1+2)*3` and expects `maths 9`, and sends `quit` and expects `1 browser`. Keep `lerux shell ready`, `1 browser`, `maths 9`, `maths err`, `title lerux`, `pixel 000000ff`, `title err`, `pixel err`, `dns 10.0.2.2`, and `dns err` out of `expect` and `assert` messages.
 - The one-shot ready lines print before the menu. Leave them.
 
+## Ladybird image (`qemu_virt_aarch64_ladybird`)
+
+Read Milestone 9 in [lerux-ladybird/PLAN.md](lerux-ladybird/PLAN.md). `web_content` parses the baked fixture, styles it, lays it out, and paints with `PaintableTree` into the shared bitmap. `browser_ui` copies that bitmap through the graphics client queues and prints the title line and the pixel line. It does not parse HTML. It is not the filesystem shell and it does not print the `1 browser` menu. Block and network protection domains stay off this board. `ci` stays false.
+
+- Protection domains are `gpu_driver`, `serial_driver`, `serial_virt_tx`, `serial_virt_rx`, `gpu_virt`, `web_content`, and `browser_ui`. Programs use hyphens (`sddf-gpu-driver.elf`, `sddf-gpu-virt.elf`, `sddf-web-content.elf`, `sddf-browser-ui.elf`). Microkit names use underscores.
+- Graphics regions start at `0x7_000_000`, the same map as the browser image. Virtio-gpu is the only virtio device. A lone virtio device would attach at `+0xe00`. The command passes `virtio-gpu-device,bus=virtio-mmio-bus.29` so the guest still sees `+0xa00` and interrupt 77. Do not set `xres` or `yres`. There is no virtio-net and no virtio-blk.
+- The control page is `ladybird_control` at `0x9_000_000`. The bitmap is `ladybird_bitmap` at `0x9_001_000` for `FRAME_BYTES` (`0x1_4000`). `web_content` maps only those two regions. It maps no network queue, no serial queue, and no graphics queue. `browser_ui` maps the four serial client regions, the four graphics client regions, and the two shared pages. It does not map virtio memory-mapped input/output.
+- Serial channel ids match the serial image. Graphics channel ids match `gpu_image` on the driver and the virtualiser. `browser_ui` transmit is 0, receive is 1, graphics is 2 (`BROWSER_UI_GPU_CHANNEL`), and the paint notification is 3 (`BROWSER_UI_PAINT_CHANNEL`). `web_content` has one channel, 0 (`WEB_CONTENT_PAINT_CHANNEL`). The device interrupt is channel 0 on `gpu_driver`, line 77, and channel 0 on `serial_driver`, line 33.
+- The fixture is `support/browser/fixture.html`, baked into `web_content`. The worker parses it, applies an empty author sheet, lays it out, and paints. It writes the title, a release fence, the painted state, then notifies `browser_ui`.
+- `browser_ui` waits on the paint channel, prints `title` and the title bytes, copies the bitmap after display info returns, and then prints the pixel line. A failed graphics submit does not print the pixel line. It does not print `lerux shell ready`.
+- Priorities and budgets are the drivers at 4 and 4000, the virtualisers at 3 and 3000, `web_content` at 2 and 2000, and `browser_ui` at 1 and 1000. The period equals the budget.
+- The `web_content` heap is 1 MiB. Its worker stack is `0x4000`. `browser_ui` uses the same worker stack. The protection-domain stack attribute stays `0x10_000`. Assertions stay on the root. Do not panic inside a cothread. Do not add `lerux-logging` or `lerux-interface-types`. `browser_ui` does not depend on `lerux-ladybird-web` or `lerux-ladybird-html`.
+- `just test-ladybird` expects `title lerux` and then `pixel 000000ff`. Keep those strings, and `lerux shell ready`, out of `expect` and `assert` messages.
+- The one-shot ready lines print before the title. Leave them.
+- The graphics driver completes virtio commands by polling the used ring. The serial log does not show that interrupt 77 ran.
+
 ## Desk console (`pc_z97_d3h`)
 
 The on-screen menu is `console-shell`. It is not the filesystem shell. `console-driver` paints `hello lerux` and speaks the existing serial byte protocol. The shell writes the same bytes to that driver and to `serial-driver` on COM1.

@@ -1,9 +1,9 @@
 use core::mem::{align_of, offset_of, size_of};
 
 use lerux_ladybird_gfx::{
-    control_page_zeroed, glyph, Bitmap, Color, ControlPage, Rect, CONTROL_REGION_SIZE,
-    CONTROL_STATE_IDLE, CONTROL_STATE_PAINTED, FRAME_BYTES, FRAME_HEIGHT, FRAME_WIDTH,
-    GLYPH_HEIGHT, GLYPH_WIDTH, TITLE_CAP,
+    control_page_zeroed, glyph, Bitmap, Color, ControlPage, Rect, BITMAP_VADDR,
+    CONTROL_REGION_SIZE, CONTROL_STATE_IDLE, CONTROL_STATE_PAINTED, CONTROL_VADDR, FRAME_BYTES,
+    FRAME_HEIGHT, FRAME_WIDTH, GLYPH_HEIGHT, GLYPH_WIDTH, TITLE_CAP,
 };
 
 fn frame() -> Vec<u8> {
@@ -203,4 +203,12 @@ fn control_page_is_zeroed_then_assigned() {
 
     page.title_len = u32::MAX;
     assert_eq!(page.title().len(), TITLE_CAP);
+}
+
+#[test]
+fn control_page_and_bitmap_are_adjacent() {
+    let page = u64::try_from(CONTROL_REGION_SIZE).expect("page size");
+    assert_eq!(CONTROL_VADDR + page, BITMAP_VADDR);
+    let frame = u64::try_from(FRAME_BYTES).expect("frame size");
+    assert!(frame > page);
 }

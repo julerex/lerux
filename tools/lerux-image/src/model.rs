@@ -25,6 +25,7 @@ pub enum ImageKind {
     Net,
     Fetch,
     Browser,
+    Ladybird,
     Agent,
     Program,
 }

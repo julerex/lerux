@@ -1,8 +1,8 @@
 //! Key-downs for the desk keyboard.
 //!
 //! A bare Ctrl transition is not an event. Shift and Caps Lock stay in the
-//! decoder and change [`Key::Char`].
-
+//! decoder and change [`Key::Char`]. An ASCII letter is uppercase exactly when
+//! those modifiers differ. A digit is unchanged by that rule.
 #![no_std]
 
 #[cfg(test)]
@@ -209,13 +209,77 @@ fn base_char(code: u8) -> Option<u8> {
         .map(|entry| entry.1)
 }
 
+// verusfmt owns the proof block. rustfmt would reindent it.
+#[rustfmt::skip]
+mod case {
+    // The verifier's expansion names `vstd` and `int`. A normal build erases
+    // that expansion, so the imports are unused unless `verus` is verifying.
+    // Protection-domain builds leave the feature off.
+    #[cfg(feature = "verus")]
+    #[allow(unused_imports)]
+    use verus_builtin::*;
+    use verus_builtin_macros::verus;
+    #[cfg(feature = "verus")]
+    #[allow(unused_imports)]
+    use vstd::prelude::*;
+
+    verus! {
+
+/// `ch` is `A`–`Z` or `a`–`z`.
+pub open spec fn is_ascii_letter(ch: u8) -> bool {
+    (b'A' <= ch && ch <= b'Z') || (b'a' <= ch && ch <= b'z')
+}
+
+/// `ch` is `A`–`Z`.
+pub open spec fn is_ascii_uppercase(ch: u8) -> bool {
+    b'A' <= ch && ch <= b'Z'
+}
+
+/// `ch` is `0`–`9`.
+pub open spec fn is_ascii_digit(ch: u8) -> bool {
+    b'0' <= ch && ch <= b'9'
+}
+
+/// Uppercase an ASCII letter when Shift and Caps Lock disagree.
+///
+/// [`u8::to_ascii_uppercase`] subtracts `b'a' - b'A'` on `b'a'..=b'z'` and
+/// leaves every other byte alone. Shift XOR Caps Lock is `shift != caps`,
+/// so that map runs exactly when the modifiers differ.
+pub fn letter_case(ch: u8, shift: bool, caps: bool) -> (out: u8)
+    ensures
+        (b'a' <= ch && ch <= b'z') ==> (is_ascii_uppercase(out) == (shift != caps)),
+        (b'a' <= ch && ch <= b'z' && shift != caps) ==> out == ch - (b'a' - b'A'),
+        (b'A' <= ch && ch <= b'Z') ==> out == ch,
+        (is_ascii_letter(ch) && shift == caps) ==> out == ch,
+        is_ascii_digit(ch) ==> out == ch,
+{
+    if shift == caps {
+        ch
+    } else {
+        uppercase_ascii(ch)
+    }
+}
+
+/// [`u8::to_ascii_uppercase`] for one byte.
+fn uppercase_ascii(ch: u8) -> (out: u8)
+    ensures
+        (b'a' <= ch && ch <= b'z') ==> (is_ascii_uppercase(out) && out == ch - (b'a' - b'A')),
+        (b'A' <= ch && ch <= b'Z') ==> out == ch,
+        is_ascii_digit(ch) ==> out == ch,
+        !(b'a' <= ch && ch <= b'z') ==> out == ch,
+{
+    match ch {
+        b'a'..=b'z' => ch - (b'a' - b'A'),
+        _ => ch,
+    }
+}
+
+} // verus!
+}
+
 fn apply_shift(state: Set1State, ch: u8) -> u8 {
     if ch.is_ascii_alphabetic() {
-        if state.shift() ^ state.caps {
-            ch.to_ascii_uppercase()
-        } else {
-            ch
-        }
+        case::letter_case(ch, state.shift(), state.caps)
     } else if state.shift() {
         match ch {
             b'1' => b'!',
@@ -353,6 +417,26 @@ mod tests {
         let event = push_bytes(&[0xE0, 0x4D]).expect("0xE0 then 0x4D pops as Right");
         assert_eq!(event.key, Key::Right);
         assert!(!event.ctrl);
+    }
+
+    #[test]
+    fn letter_case_is_to_ascii_uppercase_under_shift_xor_caps() {
+        for ch in 0u8..=255 {
+            for shift in [false, true] {
+                for caps in [false, true] {
+                    let expected = if shift ^ caps {
+                        ch.to_ascii_uppercase()
+                    } else {
+                        ch
+                    };
+                    assert_eq!(
+                        case::letter_case(ch, shift, caps),
+                        expected,
+                        "case of {ch:#x} shift {shift} caps {caps}"
+                    );
+                }
+            }
+        }
     }
 
     #[test]

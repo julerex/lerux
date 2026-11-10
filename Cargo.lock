@@ -1264,6 +1264,11 @@ dependencies = [
 [[package]]
 name = "lerux-machine"
 version = "0.1.0"
+dependencies = [
+ "verus_builtin",
+ "verus_builtin_macros",
+ "vstd",
+]
 
 [[package]]
 name = "lerux-posix"

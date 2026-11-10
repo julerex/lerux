@@ -1,20 +1,38 @@
 //! Advanced Host Controller Interface facts for QEMU q35.
+// The verifier's expansion names `vstd` and `int`. A normal build
+// erases that expansion, so the imports are unused unless `verus`
+// is verifying. Protection-domain builds leave the feature off.
+#[cfg(feature = "verus")]
+#[allow(unused_imports)]
+use verus_builtin::*;
+use verus_builtin_macros::verus;
+#[cfg(feature = "verus")]
+#[allow(unused_imports)]
+use vstd::prelude::*;
 
 use crate::table::SpelledAddr;
 
+verus! {
+
 pub const QEMU_ICH9_AHCI: (u16, u16) = (0x8086, 0x2922);
+
 pub const AHCI_CLASS: u32 = 0x01_06_01;
-pub const AHCI_PORT: u8 = 0;
-pub const READY_LINE: &str = "ahci: port 0";
+
 /// Guest vector chosen beside serial 48 and virtio block 49; not a measured pin.
 pub const AHCI_IOAPIC_VECTOR: u8 = 51;
 
-/// Local APIC address written into an MSI capability.
-pub const MSI_ADDRESS: u32 = 0xfee0_0000;
-
 /// seL4 delivers SDF vector V as V + 0x30. The kernel does not rewrite the message.
 #[must_use]
-pub const fn msi_data(sdf_vector: u8) -> u32 {
+pub const fn msi_data(sdf_vector: u8) -> (data: u32)
+    ensures
+        data == (sdf_vector as u32) + 0x30,
+        sdf_vector == 51 ==> data == 0x63,
+        sdf_vector == AHCI_IOAPIC_VECTOR ==> data == 0x63,
+{
+    proof {
+        assert(AHCI_IOAPIC_VECTOR == 51);
+        assert(sdf_vector == 51 ==> (sdf_vector as u32) + 0x30 == 0x63) by (bit_vector);
+    }
     (sdf_vector as u32) + 0x30
 }
 
@@ -27,11 +45,7 @@ pub struct PciAddress {
 
 impl PciAddress {
     pub(crate) const fn new(bus: u8, device: u8, function: u8) -> Self {
-        Self {
-            bus,
-            device,
-            function,
-        }
+        Self { bus, device, function }
     }
 
     #[must_use]
@@ -77,7 +91,11 @@ impl Unclaimed {
     /// # Errors
     ///
     /// Returns [`RejectedClass`] when `class` is not [`AHCI_CLASS`].
-    pub const fn claim(self, class: u32) -> Result<Claimed, RejectedClass> {
+    pub const fn claim(self, class: u32) -> (result: Result<Claimed, RejectedClass>)
+        ensures
+            (result is Ok) <==> (class == AHCI_CLASS),
+            result matches Err(RejectedClass { found }) ==> found == class,
+    {
         if class == AHCI_CLASS {
             Ok(Claimed(self.0))
         } else {
@@ -85,6 +103,36 @@ impl Unclaimed {
         }
     }
 }
+
+/// QEMU's ICH9 AHCI controller stays vendor `0x8086`, device `0x2922`.
+pub proof fn lemma_qemu_ich9_ahci()
+    ensures
+        QEMU_ICH9_AHCI == (0x8086u16, 0x2922u16),
+{
+}
+
+/// The class code accepted by [`Unclaimed::claim`] is `0x01_06_01`.
+pub proof fn lemma_ahci_class()
+    ensures
+        AHCI_CLASS == 0x01_06_01,
+{
+}
+
+/// SDF vector 51 is the recorded AHCI vector, and its MSI data word is `0x63`.
+pub proof fn lemma_msi_data_recorded_vector()
+    ensures
+        AHCI_IOAPIC_VECTOR == 51,
+        (AHCI_IOAPIC_VECTOR as u32) + 0x30 == 0x63,
+{
+    assert((51u8 as u32) + 0x30 == 0x63) by (bit_vector);
+}
+
+} // verus!
+pub const AHCI_PORT: u8 = 0;
+pub const READY_LINE: &str = "ahci: port 0";
+
+/// Local APIC address written into an MSI capability.
+pub const MSI_ADDRESS: u32 = 0xfee0_0000;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AhciMap {
@@ -143,8 +191,10 @@ mod tests {
 
     #[test]
     fn msi_data_matches_sel4_irq_offset() {
+        const RECORDED: u32 = msi_data(51);
         assert_eq!(msi_data(50), 98);
         assert_eq!(msi_data(AHCI_IOAPIC_VECTOR), 99);
+        assert_eq!(RECORDED, 0x63);
     }
 
     #[test]

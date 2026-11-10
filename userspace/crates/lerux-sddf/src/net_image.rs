@@ -226,14 +226,23 @@ pub fn client_config() -> net_client_config_t {
     config
 }
 
+/// `net_client_config_t` with the caller's channel ids.
+///
+/// [`client_config`] uses the serial client's receive and transmit channels.
+/// A protection domain that does not own those channels passes its own ids.
+#[must_use]
+pub fn client_config_for(rx_channel: u8, tx_channel: u8) -> net_client_config_t {
+    let mut config = client_config();
+    config.rx.id = rx_channel;
+    config.tx.id = tx_channel;
+    config
+}
+
 /// `net_client_config_t` for the shell, whose serial and filesystem channels
 /// already use 0, 1, and 2.
 #[must_use]
 pub fn shell_client_config() -> net_client_config_t {
-    let mut config = client_config();
-    config.rx.id = SHELL_NET_RX_CHANNEL;
-    config.tx.id = SHELL_NET_TX_CHANNEL;
-    config
+    client_config_for(SHELL_NET_RX_CHANNEL, SHELL_NET_TX_CHANNEL)
 }
 
 /// Copy a configuration struct into `dst`.

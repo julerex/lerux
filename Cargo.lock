@@ -1148,6 +1148,7 @@ dependencies = [
  "flate2",
  "lerux-image",
  "lerux-ladybird-gfx",
+ "lerux-ladybird-http",
  "lerux-sddf",
  "lerux-wasm",
  "rand",
@@ -1200,6 +1201,7 @@ name = "lerux-image"
 version = "0.1.0"
 dependencies = [
  "lerux-ladybird-gfx",
+ "lerux-ladybird-http",
  "lerux-machine",
  "lerux-sddf",
 ]
@@ -1219,6 +1221,9 @@ version = "0.1.0"
 [[package]]
 name = "lerux-ladybird-http"
 version = "0.1.0"
+dependencies = [
+ "lerux-ladybird-url",
+]
 
 [[package]]
 name = "lerux-ladybird-image"
@@ -2240,6 +2245,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "sddf-request-server"
+version = "0.1.0"
+dependencies = [
+ "lerux-cothread",
+ "lerux-image",
+ "lerux-ladybird-http",
+ "lerux-posix",
+ "lerux-sddf",
+ "lerux-tls",
+ "sel4-microkit",
+ "smoltcp",
+]
+
+[[package]]
 name = "sddf-serial-client"
 version = "0.1.0"
 dependencies = [
@@ -2313,6 +2332,7 @@ dependencies = [
  "lerux-cothread",
  "lerux-ladybird-gfx",
  "lerux-ladybird-html",
+ "lerux-ladybird-http",
  "lerux-ladybird-web",
  "sel4-microkit",
 ]

@@ -1399,7 +1399,8 @@ fn ladybird_image(arch: Arch) -> Image {
     Image {
         groups: vec![
             serial.regions,
-            virtio_regions(false, false, true),
+            virtio_regions(false, true, true),
+            net_regions(false),
             gpu_regions(),
             ladybird_shared_regions(),
         ],
@@ -1410,17 +1411,29 @@ fn ladybird_image(arch: Arch) -> Image {
 
 fn ladybird_domains(slots: Vec<Slot>, irq: Irq, arch: Arch) -> Vec<Domain> {
     vec![
+        net_driver(arch, false, Some(budget(4000)), 4),
         gpu_driver(arch, Some(budget(4000))),
         serial_driver(slots, irq, Some(budget(4000))),
+        net_virt_tx(Some(budget(3000))),
+        net_virt_rx(Some(budget(3000))),
         serial_virt_tx(Some(budget(3000))),
         serial_virt_rx(Some(budget(3000))),
         gpu_virt(Some(budget(3000))),
+        net_copy(Some(budget(2000))),
         domain(
             "web_content",
             2,
             Some(budget(2000)),
             "sddf-web-content.elf",
-            cached(&["ladybird_control", "ladybird_bitmap"]),
+            ladybird_shared_slots(),
+            None,
+        ),
+        domain(
+            "request_server",
+            2,
+            Some(budget(2000)),
+            "sddf-request-server.elf",
+            ladybird_request_slots(),
             None,
         ),
         domain(
@@ -1432,6 +1445,24 @@ fn ladybird_domains(slots: Vec<Slot>, irq: Irq, arch: Arch) -> Vec<Domain> {
             None,
         ),
     ]
+}
+
+fn ladybird_shared_slots() -> Vec<Slot> {
+    cached(&[
+        "ladybird_control",
+        "ladybird_bitmap",
+        lerux_ladybird_http::REQUEST_REGION,
+        lerux_ladybird_http::BODY_REGION,
+    ])
+}
+
+fn ladybird_request_slots() -> Vec<Slot> {
+    let mut slots = net_client_slots();
+    slots.extend(cached(&[
+        lerux_ladybird_http::REQUEST_REGION,
+        lerux_ladybird_http::BODY_REGION,
+    ]));
+    slots
 }
 
 fn ladybird_ui_slots() -> Vec<Slot> {
@@ -1450,6 +1481,9 @@ fn ladybird_ui_slots() -> Vec<Slot> {
 fn ladybird_links() -> Vec<Link> {
     // Assignment walks this order. Serial and graphics ids stay the constants
     // in `serial_image` and `gpu_image`. `browser_ui` then gets 0, 1, 2, and 3.
+    // Network ids stay the constants in `net_image`. `request_server` then gets
+    // 0 for the request, 1 for receive, and 2 for transmit. `web_content`'s
+    // request channel is 1 because paint already owns 0.
     link_rows(&[
         ("serial_driver", "serial_virt_tx", 0),
         ("serial_driver", "serial_virt_rx", 1),
@@ -1458,6 +1492,12 @@ fn ladybird_links() -> Vec<Link> {
         ("gpu_driver", "gpu_virt", 4),
         ("gpu_virt", "browser_ui", 5),
         ("web_content", "browser_ui", 6),
+        ("net_driver", "net_virt_rx", 7),
+        ("net_driver", "net_virt_tx", 8),
+        ("net_virt_rx", "net_copy", 9),
+        ("web_content", "request_server", 10),
+        ("net_copy", "request_server", 11),
+        ("net_virt_tx", "request_server", 12),
     ])
 }
 
@@ -1472,6 +1512,16 @@ fn ladybird_shared_regions() -> Vec<Region> {
             "ladybird_bitmap",
             region_bytes(lerux_ladybird_gfx::FRAME_BYTES),
             lerux_ladybird_gfx::BITMAP_VADDR,
+        ),
+        ram(
+            lerux_ladybird_http::REQUEST_REGION,
+            region_bytes(lerux_ladybird_http::REQUEST_REGION_SIZE),
+            lerux_ladybird_http::REQUEST_VADDR,
+        ),
+        ram(
+            lerux_ladybird_http::BODY_REGION,
+            region_bytes(lerux_ladybird_http::BODY_CAP),
+            lerux_ladybird_http::BODY_VADDR,
         ),
     ]
 }

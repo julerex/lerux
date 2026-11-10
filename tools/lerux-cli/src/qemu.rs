@@ -300,9 +300,11 @@ fn aarch64_command(qemu: &QemuConfig, loader: &Path, disk: &Path, window: bool) 
 fn aarch64_gpu_device(qemu: &QemuConfig) -> &'static str {
     // The first free virtio-mmio transport is bus 31 at +0xe00, guest IRQ 79.
     // This guest still reads virtio-gpu at +0xa00, which is bus 29 and IRQ 77.
+    // With a block device, net, blk, and gpu occupy buses 31, 30, and 29.
+    // Without a block device, an unpinned gpu would take the next free bus.
     // `virtio-gpu-device,help` has no address property. `bus` is the generic
     // device option the riscv command already passes.
-    if qemu.disk == DiskMode::None && qemu.net == NetMode::None {
+    if qemu.disk == DiskMode::None {
         "virtio-gpu-device,bus=virtio-mmio-bus.29"
     } else {
         "virtio-gpu-device"
@@ -671,6 +673,20 @@ mod tests {
         let blk = line.find("virtio-blk-device").expect("blk device");
         let gpu = line.find("virtio-gpu-device").expect("gpu device");
         assert!(net < blk && blk < gpu, "{line}");
+    }
+
+    #[test]
+    fn net_without_disk_keeps_gpu_on_bus_29() {
+        let line = render_aarch64("net = \"user\"\ngpu = true", false);
+        assert!(line.contains("virtio-net-device"), "{line}");
+        assert!(
+            line.contains("virtio-gpu-device,bus=virtio-mmio-bus.29"),
+            "{line}"
+        );
+        assert!(!line.contains("virtio-blk-device"), "{line}");
+        let net = line.find("virtio-net-device").expect("net device");
+        let gpu = line.find("virtio-gpu-device").expect("gpu device");
+        assert!(net < gpu, "{line}");
     }
 
     #[test]

@@ -7,3 +7,6 @@ description = "Ladybird LibHTTP and LibRequests"
 
 [lints]
 workspace = true
+
+[dependencies]
+lerux-ladybird-url = { path = "../lerux-ladybird-url" }

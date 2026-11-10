@@ -5,9 +5,34 @@ pub(super) struct Tokenizer<'a> {
 
 pub(super) enum DataToken<'a> {
     Doctype,
-    StartTag { name: &'a str },
-    EndTag { name: &'a str },
+    StartTag {
+        name: &'a str,
+        attributes: Attributes<'a>,
+    },
+    EndTag {
+        name: &'a str,
+    },
     Characters(&'a str),
+}
+
+/// The attributes a selector reads. The first occurrence of each name wins.
+#[derive(Default)]
+pub(super) struct Attributes<'a> {
+    pub(super) id: Option<&'a str>,
+    pub(super) class: Option<&'a str>,
+}
+
+impl<'a> Attributes<'a> {
+    fn keep(&mut self, name: &str, value: &'a str) {
+        let slot = if name.eq_ignore_ascii_case("id") {
+            &mut self.id
+        } else if name.eq_ignore_ascii_case("class") {
+            &mut self.class
+        } else {
+            return;
+        };
+        slot.get_or_insert(value);
+    }
 }
 
 pub(super) struct RawSpan<'a> {
@@ -90,32 +115,64 @@ impl<'a> Tokenizer<'a> {
     }
 
     fn take_tag(&mut self) -> DataToken<'a> {
-        let bytes = self.input.as_bytes();
-        let end_tag = bytes.get(self.pos + 1) == Some(&b'/');
-        let name_at = self.pos + usize::from(end_tag) + 1;
-        let mut name_end = name_at;
-        while name_end < bytes.len() && !ends_name(bytes[name_end]) {
-            name_end += 1;
-        }
-        let name = &self.input[name_at..name_end];
-        self.pos = name_end;
-        self.skip_through(b'>');
+        let end_tag = self.input.as_bytes().get(self.pos + 1) == Some(&b'/');
+        self.pos += usize::from(end_tag) + 1;
+        let name = self.take_while(|byte| !ends_name(byte));
+        let attributes = self.take_attributes();
         if end_tag {
             DataToken::EndTag { name }
         } else {
-            DataToken::StartTag { name }
+            DataToken::StartTag { name, attributes }
         }
     }
 
-    fn take_until(&mut self, byte: u8) -> &'a str {
+    fn take_attributes(&mut self) -> Attributes<'a> {
+        let mut attributes = Attributes::default();
+        loop {
+            self.take_while(|byte| byte.is_ascii_whitespace() || byte == b'/');
+            match self.input.as_bytes().get(self.pos) {
+                None => return attributes,
+                Some(b'>') => {
+                    self.pos += 1;
+                    return attributes;
+                }
+                Some(_) => {}
+            }
+            let name = self.take_while(|byte| !ends_name(byte) && byte != b'=');
+            self.take_while(|byte| byte.is_ascii_whitespace());
+            let mut value = "";
+            if self.input.as_bytes().get(self.pos) == Some(&b'=') {
+                self.pos += 1;
+                self.take_while(|byte| byte.is_ascii_whitespace());
+                value = self.take_value();
+            }
+            attributes.keep(name, value);
+        }
+    }
+
+    fn take_value(&mut self) -> &'a str {
+        let Some(&quote @ (b'"' | b'\'')) = self.input.as_bytes().get(self.pos) else {
+            return self.take_while(|byte| !byte.is_ascii_whitespace() && byte != b'>');
+        };
+        self.pos += 1;
+        let value = self.take_until(quote);
+        self.pos = (self.pos + 1).min(self.input.len());
+        value
+    }
+
+    fn take_while(&mut self, keep: impl Fn(u8) -> bool) -> &'a str {
         let rest = &self.input[self.pos..];
         let end = rest
             .bytes()
-            .position(|item| item == byte)
+            .position(|item| !keep(item))
             .unwrap_or(rest.len());
         let text = &rest[..end];
         self.pos += end;
         text
+    }
+
+    fn take_until(&mut self, byte: u8) -> &'a str {
+        self.take_while(|item| item != byte)
     }
 
     fn skip_through(&mut self, byte: u8) {

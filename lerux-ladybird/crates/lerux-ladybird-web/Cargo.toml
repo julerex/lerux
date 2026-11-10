@@ -6,6 +6,7 @@ license = "MIT"
 description = "Ladybird LibWeb"
 
 [dependencies]
+lerux-ladybird-gfx = { path = "../lerux-ladybird-gfx" }
 lerux-ladybird-html = { path = "../lerux-ladybird-html" }
 
 [lints]

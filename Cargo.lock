@@ -1232,6 +1232,7 @@ version = "0.1.0"
 name = "lerux-ladybird-web"
 version = "0.1.0"
 dependencies = [
+ "lerux-ladybird-gfx",
  "lerux-ladybird-html",
 ]
 

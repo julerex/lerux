@@ -1219,6 +1219,10 @@ version = "0.1.0"
 [[package]]
 name = "lerux-ladybird-image"
 version = "0.1.0"
+dependencies = [
+ "lerux-ladybird-gfx",
+ "lerux-ladybird-html",
+]
 
 [[package]]
 name = "lerux-ladybird-js"

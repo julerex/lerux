@@ -5,8 +5,9 @@
 //! compound, and the first compound has [`Combinator::None`]. Combinators are
 //! descendant and child. A compound holds type, class, and id selectors.
 //!
-//! A declaration stores a property and a value. There is no computed style.
-//! A custom property, and any value that still names `var()`, is unresolved.
+//! A declaration stores a property and a value as written. The `style`
+//! module computes values. A custom property, and any value that still names
+//! `var()`, is unresolved.
 //! The accepted properties are `color`, `background-color`, `font-size`,
 //! `display`, `margin`, `padding`, and `width`. Any other property is kept
 //! as an unknown declaration.

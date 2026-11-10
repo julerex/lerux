@@ -277,6 +277,63 @@ fn first_title_without_text_is_empty() {
     assert_eq!(document.title_text(), "");
 }
 
+fn classes<'a>(element: &Element<'a>) -> Vec<&'a str> {
+    element.classes().collect()
+}
+
+#[test]
+fn tag_name_folds_but_id_and_class_keep_their_case() {
+    let document = Document::parse("<P ID=Main CLASS=\" Note  big\tx \">t</P>");
+    let paragraph = element(&document, "p");
+    assert_eq!(paragraph.id(), Some("Main"));
+    assert_eq!(classes(&paragraph), ["Note", "big", "x"]);
+    assert_eq!(text_child(&paragraph), "t");
+}
+
+#[test]
+fn element_without_id_or_class_has_neither() {
+    let document = Document::parse("<p title=x lang=en é=ü>t</p>");
+    let paragraph = element(&document, "p");
+    assert_eq!(paragraph.id(), None);
+    assert!(classes(&paragraph).is_empty());
+    assert_eq!(text_child(&paragraph), "t");
+}
+
+#[test]
+fn first_id_and_first_class_win() {
+    let document = Document::parse("<p id=a class=b id=c class=d>t</p>");
+    let paragraph = element(&document, "p");
+    assert_eq!(paragraph.id(), Some("a"));
+    assert_eq!(classes(&paragraph), ["b"]);
+}
+
+#[test]
+fn quoted_value_keeps_a_greater_than_sign_and_spaces() {
+    let document = Document::parse("<p class='a>b' id = \"c d\">t</p>");
+    let paragraph = element(&document, "p");
+    assert_eq!(classes(&paragraph), ["a>b"]);
+    assert_eq!(paragraph.id(), Some("c d"));
+    assert_eq!(text_child(&paragraph), "t");
+    assert!(paragraph.children().nth(1).is_none());
+}
+
+#[test]
+fn attribute_without_a_value_is_empty() {
+    let document = Document::parse("<p class id=x>t</p>");
+    let paragraph = element(&document, "p");
+    assert!(classes(&paragraph).is_empty());
+    assert_eq!(paragraph.id(), Some("x"));
+}
+
+#[test]
+fn body_and_title_keep_their_class() {
+    let document = Document::parse("<title class=t>lerux</title><body class=note><p>x</p></body>");
+    assert_eq!(document.title_text(), "lerux");
+    assert_eq!(classes(&element(&document, "title")), ["t"]);
+    assert_eq!(classes(&element(&document, "body")), ["note"]);
+    assert!(classes(&element(&document, "p")).is_empty());
+}
+
 #[test]
 fn whitespace_under_an_unknown_element_follows_the_open_mode() {
     let in_head = Document::parse("<head><div>\n</div></head>");

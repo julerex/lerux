@@ -80,6 +80,7 @@ members = [
     "lerux-ladybird/crates/lerux-ladybird-image",
     "lerux-ladybird/pds/browser-ui",
     "lerux-ladybird/pds/web-content",
+    "lerux-ladybird/pds/request-server",
 ]
 
 [workspace.dependencies]

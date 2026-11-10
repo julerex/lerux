@@ -196,7 +196,7 @@ test-web-sddf-x86:
 test-browser-sddf:
     BOARD=qemu_virt_aarch64_browser_sddf just test
 
-# Milestone 9: web_content paints the baked fixture. Sibling smoke: just test-ladybird
+# Milestone 10: request_server fetches the fixture. Sibling smoke: just test-ladybird
 test-ladybird:
     BOARD=qemu_virt_aarch64_ladybird just test
 

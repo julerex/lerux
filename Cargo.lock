@@ -2322,6 +2322,7 @@ dependencies = [
 name = "sddf-shell"
 version = "0.1.0"
 dependencies = [
+ "embedded-hal-nb",
  "lerux-calc",
  "lerux-cothread",
  "lerux-image",
@@ -2330,6 +2331,7 @@ dependencies = [
  "lerux-tls",
  "lerux-web",
  "sel4-microkit",
+ "sel4-microkit-driver-adapters",
  "smoltcp",
 ]
 

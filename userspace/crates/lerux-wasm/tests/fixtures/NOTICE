@@ -1,0 +1,19 @@
+rgb-to-hex.wasm
+
+Copyright 2026 Patrick George Wyndham Smith
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+Source: https://github.com/patrickgwsmith/qip text/rgb-to-hex.wasm
+Commit: d6eb92d20133e815f672947554513096dc82cf15
+SHA-256: 028ad63d61fdcf8b97c61090c4671eb83b96721f7a910276c3af91aeb2752d4c

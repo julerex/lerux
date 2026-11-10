@@ -18,4 +18,11 @@ wasmi = { version = "2", default-features = false, features = [
 
 [dev-dependencies]
 ed25519-dalek = { version = "2", features = ["rand_core"] }
+# Same features as the library dependency. A broader set here would
+# enable those features for the protection domain as well.
+wasmi = { version = "2", default-features = false, features = [
+    "validate",
+    "prefer-btree-collections",
+    "portable-dispatch",
+] }
 wat = "1"

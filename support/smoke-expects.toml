@@ -160,6 +160,10 @@ script = [
   { send = "quit\r", expect = "1 browser" },
 ]
 
+[boards.qemu_virt_aarch64_ladybird]
+expects = ["title lerux", "pixel 000000ff"]
+timeout_secs = 180
+
 [boards.qemu_virt_riscv64_browser_sddf]
 expects = ["1 browser"]
 timeout_secs = 180

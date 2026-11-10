@@ -78,7 +78,7 @@ fn pages_for(crate_name: &str, board_features: &[&str]) -> Result<Vec<Page>, Ima
         "sddf-serial-driver" => vec![Page::SerialDriver],
         "sddf-serial-virt-tx" => vec![Page::SerialVirtTx],
         "sddf-serial-virt-rx" => vec![Page::SerialVirtRx],
-        "sddf-serial-client" | "sddf-grok" => vec![Page::SerialClient],
+        "sddf-serial-client" | "sddf-grok" | "sddf-browser-ui" => vec![Page::SerialClient],
         "sddf-blk-driver" | "sddf-ahci-driver" => vec![Page::BlkDriver],
         "sddf-blk-virt" => vec![Page::BlkVirt],
         "sddf-fatfs" => vec![Page::BlkClient, Page::FsServer],

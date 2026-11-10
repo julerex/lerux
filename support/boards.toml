@@ -12,7 +12,8 @@
 #                                   Every workflow board has ci = true. A ci = true
 #                                   board can stay out of that list; name it in
 #                                   docs/ci.md. For a board lerux-image renders
-#                                   (names ending in _sddf, x86_64_generic_fs_ahci,
+#                                   (names ending in _sddf, qemu_virt_aarch64_ladybird,
+#                                   x86_64_generic_fs_ahci,
 #                                   x86_64_generic_net_e1000e, and
 #                                   x86_64_generic_fetch_native),
 #                                   template is not a file and system_vars are not
@@ -164,6 +165,18 @@ pds = ["sddf-blk-driver", "sddf-blk-virt", "sddf-fatfs", "sddf-net-driver", "sdd
 qemu = { disk = "rw", net = "user", https_one = true, gpu = true, dns_one = true }
 ci = true
 system_vars = { virtio_mmio_phys_addr = "0xa003000", virtio_blk_irq = 78, virtio_net_irq = 79, virtio_gpu_irq = 77, serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33 }
+
+# Milestone 9: web_content paints the baked fixture. No block device and no network.
+# Virtio-gpu is pinned to bus 29 so the guest still sees +0xa00 and IRQ 77.
+[qemu_virt_aarch64_ladybird]
+arch = "aarch64"
+microkit_board = "qemu_virt_aarch64"
+target = "aarch64-sel4-microkit"
+template = "ladybird.system.template"
+pds = ["sddf-serial-driver", "sddf-serial-virt-tx", "sddf-serial-virt-rx", "sddf-gpu-driver", "sddf-gpu-virt", "sddf-web-content", "sddf-browser-ui"]
+qemu = { gpu = true }
+ci = false
+system_vars = { virtio_mmio_phys_addr = "0xa003000", virtio_gpu_irq = 77, serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33 }
 
 [qemu_virt_riscv64_browser_sddf]
 arch = "riscv64"

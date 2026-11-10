@@ -1,4 +1,7 @@
 lerux-ladybird/crates/lerux-ladybird-gfx/src/control.rs
+lerux-ladybird/pds/browser-ui/src/gpu.rs
+lerux-ladybird/pds/browser-ui/src/main.rs
+lerux-ladybird/pds/web-content/src/main.rs
 support/prog/smoke.rs
 support/verify/serial-tx-backpressure/replay/src/main.rs
 tools/lerux-cli/src/agent_sddf.rs

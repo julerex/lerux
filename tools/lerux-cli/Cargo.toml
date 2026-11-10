@@ -31,3 +31,4 @@ rand = "0.8"
 lerux-wasm = { path = "../../userspace/crates/lerux-wasm" }
 lerux-sddf = { path = "../../userspace/crates/lerux-sddf" }
 lerux-image = { path = "../lerux-image" }
+lerux-ladybird-gfx = { path = "../../lerux-ladybird/crates/lerux-ladybird-gfx" }

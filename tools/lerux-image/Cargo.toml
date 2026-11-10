@@ -7,5 +7,6 @@ edition = "2024"
 workspace = true
 
 [dependencies]
+lerux-ladybird-gfx = { path = "../../lerux-ladybird/crates/lerux-ladybird-gfx" }
 lerux-machine = { path = "../../userspace/crates/lerux-machine", features = ["system-description"] }
 lerux-sddf = { path = "../../userspace/crates/lerux-sddf" }

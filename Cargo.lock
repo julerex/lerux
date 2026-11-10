@@ -413,6 +413,8 @@ version = "0.1.0"
 dependencies = [
  "embedded-hal-nb",
  "lerux-calc",
+ "lerux-desk",
+ "lerux-ladybird-image",
  "lerux-logging",
  "lerux-swift",
  "sel4-microkit",

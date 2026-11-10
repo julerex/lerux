@@ -8,7 +8,9 @@ use sel4::with_ipc_buffer_mut;
 use sel4_microkit::{memory_region_symbol, var};
 
 #[cfg(feature = "board-swift_sfx14_41g")]
-use lerux_desk::{fill_background, paint_cell, panel_mode, Pen, CELL_PX, FRAMEBUFFER_BYTES};
+use lerux_desk::{
+    fill_background, paint_cell, panel_mode, Pen, BROWSER_HOLD, CELL_PX, FRAMEBUFFER_BYTES,
+};
 
 use crate::screen::{Screen, CELLS};
 #[cfg(feature = "board-swift_sfx14_41g")]
@@ -168,7 +170,7 @@ impl Device {
         }
         #[cfg(feature = "board-swift_sfx14_41g")]
         {
-            if !self.panel.live || index >= CELLS {
+            if !self.panel.live || held() || index >= CELLS {
                 return;
             }
             let frame =
@@ -266,6 +268,13 @@ fn framebuffer_bytes() -> usize {
     usize::try_from(FRAMEBUFFER_BYTES).expect("framebuffer fits")
 }
 
+/// True while the shell's browser owns the panel.
+#[cfg(feature = "board-swift_sfx14_41g")]
+fn held() -> bool {
+    let hold = memory_region_symbol!(browser_hold_vaddr: *mut u8).as_ptr();
+    unsafe { hold.read_volatile() == BROWSER_HOLD }
+}
+
 #[cfg(feature = "board-swift_sfx14_41g")]
 fn panel_from_system() -> Panel {
     let mode_ptr = memory_region_symbol!(mode_record_vaddr: *mut u8).as_ptr();
@@ -285,7 +294,7 @@ fn panel_from_system() -> Panel {
     } else {
         (0, 0, 0, 0, 0, 0)
     };
-    if live {
+    if live && !held() {
         // SAFETY: Microkit mapped `framebuffer` read-write for FRAMEBUFFER_BYTES
         // bytes. This runs once during init, before the handler borrows the panel.
         let frame = unsafe { core::slice::from_raw_parts_mut(frame, framebuffer_bytes()) };

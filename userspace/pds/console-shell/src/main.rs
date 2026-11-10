@@ -2,8 +2,10 @@
 //!
 //! Channel 0 is `console_driver` (keyboard bytes in, screen bytes out).
 //! On the desk, channel 1 is `serial_driver` (the same output bytes on COM1).
-//! On the Swift X, channel 1 is the read-only `NVMe` result. This image
-//! has no page painter, so the browser choice reports that it is unavailable.
+//! The desk and the QEMU console have no page painter, so the browser choice
+//! reports that it is unavailable. On the Swift X, channel 1 is the read-only
+//! `NVMe` result, and the browser choice paints the Lenna test page over the
+//! console until `quit`.
 
 #![no_std]
 #![no_main]
@@ -18,6 +20,10 @@ use sel4_microkit::{protection_domain, Channel, ChannelSet, Handler, Infallible,
 use sel4_microkit_driver_adapters::serial::client::Client;
 
 use lerux_calc::{eval, write_i64, Error};
+#[cfg(feature = "board-swift_sfx14_41g")]
+use lerux_desk::{panel_mode, BROWSER_HOLD};
+#[cfg(feature = "board-swift_sfx14_41g")]
+use lerux_ladybird_image::{paint_page, Shifts};
 #[cfg(feature = "board-swift_sfx14_41g")]
 use lerux_swift::{
     key_ok, read_survey_count, read_survey_ssid, survey_choice, write_key, write_survey, SCAN_MAX,
@@ -44,6 +50,8 @@ enum Mode {
     Ssid,
     #[cfg(feature = "board-swift_sfx14_41g")]
     Psk,
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    Browser,
 }
 
 struct HandlerImpl {
@@ -62,7 +70,11 @@ struct HandlerImpl {
     overflow: bool,
 }
 
-#[protection_domain]
+#[cfg_attr(
+    feature = "board-swift_sfx14_41g",
+    protection_domain(heap_size = 4 * 1024 * 1024)
+)]
+#[cfg_attr(not(feature = "board-swift_sfx14_41g"), protection_domain)]
 fn init() -> HandlerImpl {
     let mut shell = HandlerImpl {
         screen: Client::new(CONSOLE),
@@ -88,7 +100,7 @@ fn init() -> HandlerImpl {
 impl HandlerImpl {
     #[cfg(feature = "board-swift_sfx14_41g")]
     fn emit_disk(&mut self) {
-        if self.disk_done {
+        if self.disk_done || self.mode == Mode::Browser {
             return;
         }
         let bytes = disk_payload();
@@ -163,7 +175,7 @@ impl HandlerImpl {
         match byte {
             b'\n' => {}
             b'\r' => {
-                self.emit(b"\n");
+                self.echo(b"\n");
                 let overflow = self.overflow;
                 let len = self.len;
                 self.len = 0;
@@ -179,16 +191,25 @@ impl HandlerImpl {
             0x7f => {
                 if self.len > 0 && !self.overflow {
                     self.len -= 1;
-                    self.emit(&[0x08, b' ', 0x08]);
+                    self.echo(&[0x08, b' ', 0x08]);
                 }
             }
             _ if self.len == LINE_MAX => self.overflow = true,
             byte => {
                 self.line[self.len] = byte;
                 self.len += 1;
-                self.emit(&[byte]);
+                self.echo(&[byte]);
             }
         }
+    }
+
+    /// The browser's page covers the console, so its keys are not drawn.
+    fn echo(&mut self, bytes: &[u8]) {
+        #[cfg(feature = "board-swift_sfx14_41g")]
+        if self.mode == Mode::Browser {
+            return;
+        }
+        self.emit(bytes);
     }
 
     fn dispatch(&mut self, raw: &[u8]) {
@@ -199,16 +220,15 @@ impl HandlerImpl {
             Mode::Ssid => self.dispatch_ssid(line),
             #[cfg(feature = "board-swift_sfx14_41g")]
             Mode::Psk => self.dispatch_psk(line),
+            #[cfg(feature = "board-swift_sfx14_41g")]
+            Mode::Browser => self.dispatch_browser(line),
             Mode::Maths => self.dispatch_maths(line),
         }
     }
 
     fn dispatch_menu(&mut self, line: &[u8]) {
         match line {
-            b"1" | b"browser" => {
-                self.emit(b"browser unavailable\n");
-                self.emit(MENU);
-            }
+            b"1" | b"browser" => self.open_browser(),
             b"2" | b"maths" => {
                 self.mode = Mode::Maths;
                 self.emit(b"maths> ");
@@ -228,6 +248,37 @@ impl HandlerImpl {
             }
             _ => self.reject(),
         }
+    }
+
+    #[cfg(not(feature = "board-swift_sfx14_41g"))]
+    fn open_browser(&mut self) {
+        self.emit(b"browser unavailable\n");
+        self.emit(MENU);
+    }
+
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    fn open_browser(&mut self) {
+        set_hold(BROWSER_HOLD);
+        if paint_browser() {
+            self.mode = Mode::Browser;
+        } else {
+            set_hold(0);
+            self.emit(b"browser err\n");
+            self.emit(MENU);
+        }
+    }
+
+    /// The clear makes the console repaint every cell over the page.
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    fn dispatch_browser(&mut self, line: &[u8]) {
+        if line != b"quit" {
+            return;
+        }
+        set_hold(0);
+        self.mode = Mode::Menu;
+        self.emit(b"\x1b[2J");
+        self.emit(MENU);
+        self.emit_disk();
     }
 
     #[cfg(feature = "board-swift_sfx14_41g")]
@@ -333,6 +384,8 @@ impl HandlerImpl {
             }
             #[cfg(feature = "board-swift_sfx14_41g")]
             Mode::Ssid | Mode::Psk => self.wifi_err(),
+            #[cfg(feature = "board-swift_sfx14_41g")]
+            Mode::Browser => {}
         }
     }
 
@@ -382,6 +435,30 @@ fn request_survey() -> bool {
 fn key_page() -> &'static mut [u8] {
     let ptr = memory_region_symbol!(wifi_key_vaddr: *mut u8).as_ptr();
     unsafe { core::slice::from_raw_parts_mut(ptr, 0x1000) }
+}
+
+#[cfg(feature = "board-swift_sfx14_41g")]
+fn set_hold(value: u8) {
+    let ptr = memory_region_symbol!(browser_hold_vaddr: *mut u8).as_ptr();
+    unsafe { ptr.write_volatile(value) }
+}
+
+#[cfg(feature = "board-swift_sfx14_41g")]
+fn paint_browser() -> bool {
+    let record = memory_region_symbol!(mode_record_vaddr: *mut u8).as_ptr();
+    let record = unsafe { core::slice::from_raw_parts(record, 40) };
+    let Some(mode) = panel_mode(record) else {
+        return false;
+    };
+    let pitch = mode.pitch() as usize;
+    let frame = memory_region_symbol!(fb_vaddr: *mut u8).as_ptr();
+    let frame = unsafe { core::slice::from_raw_parts_mut(frame, pitch * mode.height() as usize) };
+    let shifts = Shifts {
+        red: mode.red_shift(),
+        green: mode.green_shift(),
+        blue: mode.blue_shift(),
+    };
+    paint_page(frame, pitch, shifts).is_ok()
 }
 
 #[cfg(feature = "board-swift_sfx14_41g")]

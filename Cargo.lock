@@ -1349,6 +1349,9 @@ name = "lerux-web"
 version = "0.1.0"
 dependencies = [
  "lerux-html",
+ "verus_builtin",
+ "verus_builtin_macros",
+ "vstd",
 ]
 
 [[package]]

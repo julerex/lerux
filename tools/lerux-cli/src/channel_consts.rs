@@ -91,7 +91,18 @@ pub fn parse_named_channel_consts(source: &str) -> Vec<(String, u8)> {
 }
 
 fn crate_dir_for_pd(root: &Path, pd_crate: &str) -> PathBuf {
-    root.join("userspace/pds").join(pd_crate)
+    let pds = root.join("userspace/pds");
+    let direct = pds.join(pd_crate);
+    if direct.is_dir() {
+        return direct;
+    }
+    // Profile names follow the system description (`shell`, `net-virt-tx`).
+    // The crate directory keeps the sddf- prefix (`sddf-shell`).
+    let prefixed = pds.join(format!("sddf-{pd_crate}"));
+    if prefixed.is_dir() {
+        return prefixed;
+    }
+    direct
 }
 
 fn collect_rs_sources(dir: &Path) -> Result<String> {
@@ -260,6 +271,9 @@ fn const_name_to_peer_sdf(name: &str) -> Option<String> {
         "SP804_DRIVER" | "TIMER_DRIVER" => "sp804_driver",
         "VIRTIO_BLK_DRIVER" | "BLK_DRIVER" => "virtio_blk_driver",
         "VIRTIO_NET_DRIVER" | "NET_DRIVER" => "virtio_net_driver",
+        "NET_VIRT_TX" => "net_virt_tx",
+        "NET_VIRT_RX" => "net_virt_rx",
+        "NET_COPY" => "net_copy",
         "GENET_DRIVER" => "genet_driver",
         "EMMC2_DRIVER" => "emmc2_driver",
         "DISPLAY_SERVER" => "display_server",

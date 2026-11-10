@@ -29,6 +29,8 @@ board-qemu_virt_aarch64_fs_sddf = []
 board-qemu_virt_riscv64_fs_sddf = []
 board-x86_64_generic_fs_sddf = []
 board-x86_64_generic_fs_ahci = ["board-x86_64_generic_fs_sddf"]
+console-out = ["dep:embedded-hal-nb", "dep:sel4-microkit-driver-adapters"]
+board-swift_sfx14_41g = ["board-x86_64_generic_fetch_sddf", "console-out"]
 
 [dependencies]
 lerux-calc = { path = "../../crates/lerux-calc" }
@@ -37,7 +39,9 @@ lerux-posix = { path = "../../crates/lerux-posix" }
 lerux-sddf = { path = "../../crates/lerux-sddf" }
 lerux-tls = { path = "../../crates/lerux-tls", optional = true }
 lerux-web = { path = "../../crates/lerux-web", optional = true }
+embedded-hal-nb = { workspace = true, optional = true }
 sel4-microkit = { workspace = true }
+sel4-microkit-driver-adapters = { workspace = true, optional = true }
 smoltcp = { workspace = true, optional = true, features = [
     "medium-ethernet",
     "proto-ipv4",

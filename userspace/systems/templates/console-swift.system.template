@@ -6,7 +6,9 @@
   Microkit allows 0xcf8 in one protection domain. The probe writes the six
   headers and sets bus master on the NVMe, xHCI, and MT7921 functions, and on
   the root port above the MT7921. Firmware assigned those base addresses. The
-  other domains read that page.
+  other domains read that page. The shell is the fetch client: console-driver
+  is its byte output, and swift_mt7921 occupies the network driver slot.
+  Channel ids are support/profiles/swift.toml.
 -->
 <system>
     <memory_region name="mode_record" size="0x1000" phys_addr="0x1fe0000" />
@@ -28,8 +30,23 @@
     <!-- Starts where the WFDMA rings end. Byte 0 is 1 while the shell's browser owns the panel. -->
     <memory_region name="browser_hold" size="0x1000" phys_addr="0x1fa0000" />
     <memory_region name="disk_result" size="0x1000" phys_addr="0x1fc0000" />
-    <!-- Between the disk result and the mode record. The shell asks for a survey, then writes the network name and passphrase. -->
+    <!-- Between the disk result and the mode record. The radio still reads this page. -->
     <memory_region name="wifi_key" size="0x1000" phys_addr="0x1fd0000" />
+    <!-- Fetch network queues. Addresses match lerux-sddf net_image. -->
+    <memory_region name="net_rx_drv_free" size="0x1_000" />
+    <memory_region name="net_rx_drv_active" size="0x1_000" />
+    <memory_region name="net_tx_drv_free" size="0x1_000" />
+    <memory_region name="net_tx_drv_active" size="0x1_000" />
+    <memory_region name="net_rx_copy_free" size="0x1_000" />
+    <memory_region name="net_rx_copy_active" size="0x1_000" />
+    <memory_region name="net_rx_client_free" size="0x1_000" />
+    <memory_region name="net_rx_client_active" size="0x1_000" />
+    <memory_region name="net_tx_client_free" size="0x1_000" />
+    <memory_region name="net_tx_client_active" size="0x1_000" />
+    <memory_region name="net_rx_data" size="0x8_000" />
+    <memory_region name="net_tx_data" size="0x8_000" />
+    <memory_region name="net_rx_client_data" size="0x8_000" />
+    <memory_region name="net_rx_meta" size="0x1_000" />
 
     <protection_domain name="console_driver" priority="6" stack_size="0x10_000">
         <program_image path="console-driver.elf" />
@@ -58,6 +75,12 @@
         <map mr="mt7921_regs" vaddr="0x82000000" perms="rw" cached="false" setvar_vaddr="mt7921_regs_vaddr" />
         <map mr="wifi_dma" vaddr="0x1f60000" perms="rw" cached="false" setvar_vaddr="wifi_dma_vaddr" />
         <map mr="wifi_key" vaddr="0x1fd0000" perms="rw" cached="true" setvar_vaddr="wifi_key_vaddr" />
+        <map mr="net_rx_drv_free" vaddr="0x5_000_000" perms="rw" cached="true" />
+        <map mr="net_rx_drv_active" vaddr="0x5_001_000" perms="rw" cached="true" />
+        <map mr="net_tx_drv_free" vaddr="0x5_002_000" perms="rw" cached="true" />
+        <map mr="net_tx_drv_active" vaddr="0x5_003_000" perms="rw" cached="true" />
+        <map mr="net_rx_data" vaddr="0x5_010_000" perms="rw" cached="true" />
+        <map mr="net_tx_data" vaddr="0x5_020_000" perms="rw" cached="true" />
         <irq id="0" pcidev="03:00.0" handle="1" vector="51" />
     </protection_domain>
 
@@ -84,13 +107,48 @@
         <irq id="1" pcidev="04:00.4" handle="2" vector="54" />
     </protection_domain>
 
+    <protection_domain name="net_virt_tx" priority="3" stack_size="0x10_000">
+        <program_image path="sddf-net-virt-tx.elf" />
+        <map mr="net_tx_drv_free" vaddr="0x5_002_000" perms="rw" cached="true" />
+        <map mr="net_tx_drv_active" vaddr="0x5_003_000" perms="rw" cached="true" />
+        <map mr="net_tx_client_free" vaddr="0x5_008_000" perms="rw" cached="true" />
+        <map mr="net_tx_client_active" vaddr="0x5_009_000" perms="rw" cached="true" />
+        <map mr="net_tx_data" vaddr="0x5_020_000" perms="rw" cached="true" />
+    </protection_domain>
+
+    <protection_domain name="net_virt_rx" priority="3" stack_size="0x10_000">
+        <program_image path="sddf-net-virt-rx.elf" />
+        <map mr="net_rx_drv_free" vaddr="0x5_000_000" perms="rw" cached="true" />
+        <map mr="net_rx_drv_active" vaddr="0x5_001_000" perms="rw" cached="true" />
+        <map mr="net_rx_copy_free" vaddr="0x5_004_000" perms="rw" cached="true" />
+        <map mr="net_rx_copy_active" vaddr="0x5_005_000" perms="rw" cached="true" />
+        <map mr="net_rx_data" vaddr="0x5_010_000" perms="rw" cached="true" />
+        <map mr="net_rx_meta" vaddr="0x5_040_000" perms="rw" cached="true" />
+    </protection_domain>
+
+    <protection_domain name="net_copy" priority="2" stack_size="0x10_000">
+        <program_image path="sddf-net-copy.elf" />
+        <map mr="net_rx_copy_free" vaddr="0x5_004_000" perms="rw" cached="true" />
+        <map mr="net_rx_copy_active" vaddr="0x5_005_000" perms="rw" cached="true" />
+        <map mr="net_rx_data" vaddr="0x5_010_000" perms="rw" cached="true" />
+        <map mr="net_rx_client_free" vaddr="0x5_006_000" perms="rw" cached="true" />
+        <map mr="net_rx_client_active" vaddr="0x5_007_000" perms="rw" cached="true" />
+        <map mr="net_rx_client_data" vaddr="0x5_030_000" perms="rw" cached="true" />
+    </protection_domain>
+
     <protection_domain name="shell" priority="1" stack_size="0x10_000">
-        <program_image path="console-shell.elf" />
+        <program_image path="sddf-shell.elf" />
         <map mr="mode_record" vaddr="0x3fff0000" perms="r" cached="false" setvar_vaddr="mode_record_vaddr" />
         <map mr="framebuffer" vaddr="0x40000000" perms="rw" cached="false" setvar_vaddr="fb_vaddr" />
         <map mr="browser_hold" vaddr="0x3ffc0000" perms="rw" cached="true" setvar_vaddr="browser_hold_vaddr" />
         <map mr="disk_result" vaddr="0x3ffe0000" perms="r" cached="true" setvar_vaddr="disk_result_vaddr" />
         <map mr="wifi_key" vaddr="0x1fd0000" perms="rw" cached="true" setvar_vaddr="wifi_key_vaddr" />
+        <map mr="net_rx_client_free" vaddr="0x5_006_000" perms="rw" cached="true" />
+        <map mr="net_rx_client_active" vaddr="0x5_007_000" perms="rw" cached="true" />
+        <map mr="net_tx_client_free" vaddr="0x5_008_000" perms="rw" cached="true" />
+        <map mr="net_tx_client_active" vaddr="0x5_009_000" perms="rw" cached="true" />
+        <map mr="net_rx_client_data" vaddr="0x5_030_000" perms="rw" cached="true" />
+        <map mr="net_tx_data" vaddr="0x5_020_000" perms="rw" cached="true" />
     </protection_domain>
 
     <channel>
@@ -103,6 +161,22 @@
     </channel>
     <channel>
         <end pd="swift_mt7921" id="1" />
-        <end pd="shell" id="2" />
+        <end pd="net_virt_rx" id="0" />
+    </channel>
+    <channel>
+        <end pd="swift_mt7921" id="2" />
+        <end pd="net_virt_tx" id="0" />
+    </channel>
+    <channel>
+        <end pd="net_virt_rx" id="1" />
+        <end pd="net_copy" id="0" />
+    </channel>
+    <channel>
+        <end pd="net_copy" id="1" />
+        <end pd="shell" id="3" />
+    </channel>
+    <channel>
+        <end pd="net_virt_tx" id="1" />
+        <end pd="shell" id="4" />
     </channel>
 </system>

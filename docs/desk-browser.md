@@ -1,8 +1,8 @@
 # Desk browser
 
-Written 2026-10-22. This is the spec for booting lerux on this desk and showing one public page on the monitor. The decisions are recorded under [`.scratch/desk-browser/`](../.scratch/desk-browser/map.md). Building the browser is later work.
+Written 2026-10-22. Updated 2026-11-10. This is the spec for showing one public page on the Gigabyte Z97-D3H monitor. That desk page stays secondary. The metal target being driven is the Acer Swift X SFX14-41G (`swift_sfx14_41g`). The RPi4 workstation lab stays secondary as well. The decisions are recorded under [`.scratch/desk-browser/`](../.scratch/desk-browser/map.md). Building the browser is later work.
 
-The desk is the Gigabyte Z97-D3H (`pc_z97_d3h`). The monitor cable is on the motherboard HDMI port. The product is a metal boot of the image below. Terms live in [`context.md`](context.md). Scanout is [ADR-013](decisions/013-desk-intel-scanout.md), which amends [ADR-009](decisions/009-interactive-surface.md) for this board. QEMU images still present through `display-server`.
+The desk this spec describes is the Gigabyte Z97-D3H (`pc_z97_d3h`). The monitor cable is on the motherboard HDMI port. The product on this page is a metal boot of the image below. Terms live in [`context.md`](context.md). Scanout is [ADR-013](decisions/013-desk-intel-scanout.md), which amends [ADR-009](decisions/009-interactive-surface.md) for this board. QEMU images still present through `display-server`. The browser is modelled on Ladybird's engine shape and process isolation and rewritten in Rust. It is not a port of the Ladybird, Chromium, or WebKit C++ sources.
 
 ## Satisfaction
 
@@ -18,7 +18,7 @@ The reference browsers are Firefox 158.0.1, first offered on the Release channel
 
 A certificate is accepted when both of those builds would accept it, using the trust anchors each ships and no added certificates. `tls-proxy` on the desk image holds those anchors.
 
-`lerux-html` and `lerux-web` grow until `web-content` can show this page. Ladybird, Servo, `wasmtime`, and the WebAssembly Micro Runtime stay out.
+`lerux-html` and `lerux-web` grow until `web-content` can show this page, including the scripts and WebAssembly that page runs. JavaScript and WebAssembly are approved. The engine is the Rust rewrite in [`../lerux-ladybird/PLAN.md`](../lerux-ladybird/PLAN.md), modelled on Ladybird, not a port of the Ladybird, Chromium, or WebKit C++ sources. Servo, `wasmtime`, and the WebAssembly Micro Runtime stay out. Milestone 17 of that plan is Forms and stays.
 
 ## What the page shows
 

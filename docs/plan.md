@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-10-21. Numbered phases 1–82 below are done. The active rewrite is [plan-lionsos.md](plan-lionsos.md). Milestones 1 through 18 of that plan are done.
+Last updated: 2026-11-10. Numbered phases 1–82 below are done. The active rewrite is [plan-lionsos.md](plan-lionsos.md). Milestones 1 through 18 of that plan are done. The metal target being driven is the Acer Swift X SFX14-41G (`swift_sfx14_41g`), milestones 24–29 of that plan. The Gigabyte Z97-D3H desk page and the [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated) stay secondary. JavaScript and WebAssembly are approved. The browser is modelled on Ladybird's engine shape and process isolation and rewritten in Rust, not a port of the Ladybird, Chromium, or WebKit C++ sources.
 
 ## Phase 1 — Bring-up
 
@@ -588,11 +588,11 @@ Completable **without a board**. Living checklist: **[`plan-qemu.md`](plan-qemu.
 | 69 | Batch runner (on-disk shell scripts) | done |
 | 70 | QEMU developer loop | done |
 
-Near-term priority for 61–70 was **61 → 62 → 64**. That program, [phases 71–80](#phases-71-80--interactive-surface), and [phases 81–82](#phases-81-82--follow-ons) are done. What remains is on-device: [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated).
+Near-term priority for 61–70 was **61 → 62 → 64**. That program, [phases 71–80](#phases-71-80--interactive-surface), and [phases 81–82](#phases-81-82--follow-ons) are done. The metal target being driven is the Acer Swift X in [plan-lionsos.md](plan-lionsos.md) milestones 24–29. The Z97 desk page and the [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated) stay secondary.
 
 ## Phases 71–80 — Interactive surface ✅
 
-QEMU-only **browser + agent** program. Steal Ladybird process topology and Grok Build’s tool loop; do not port C++/std binaries. Living checklist: **[`plan-interactive.md`](plan-interactive.md)**. ADR: **[ADR-009](decisions/009-interactive-surface.md)**.
+QEMU-only **browser + agent** program. The browser is modelled on Ladybird's engine shape and process isolation and rewritten in Rust. It is not a port of the Ladybird, Chromium, or WebKit C++ sources. Steal Grok Build’s tool loop; do not port C++/std binaries. JavaScript and WebAssembly are approved ([ADR-012](decisions/012-ordinary-webassembly.md), [`../lerux-ladybird/PLAN.md`](../lerux-ladybird/PLAN.md)). Living checklist: **[`plan-interactive.md`](plan-interactive.md)**. ADR: **[ADR-009](decisions/009-interactive-surface.md)**. Milestone 17 of [plan-lionsos.md](plan-lionsos.md) stays; it removed the postcard guest model and did not remove these domains.
 
 ## Phase 71 — ADR + domain language ✅
 
@@ -686,7 +686,7 @@ The on-guest compiler (a protection domain that reads a small Rust subset and em
 
 ## Phase 82 — Z97 on-screen shell ✅
 
-2026-09-26. The Gigabyte Z97-D3H image shows a shell on the monitor. COM1 remains the log. Install path: [`boards.md`](boards.md#gigabyte-z97-d3h-install-path).
+2026-09-26. The Gigabyte Z97-D3H image shows a shell on the monitor. This desk page stays secondary. The metal target being driven is the Acer Swift X. COM1 remains the log. Install path: [`boards.md`](boards.md#gigabyte-z97-d3h-install-path).
 
 - [x] `console-driver` owns the VGA text page at `0xb8000` (blue field, `hello lerux` on the first line) and the PS/2 keyboard (data `0x60`, command `0x64`, IRQ1). CRTC ports `0x3d4`/`0x3d5` place a block cursor on the shell line.
 - [x] The shell’s channel 0 speaks the serial byte protocol to `console-driver`. `log-server` still forwards the log to COM1 (`0x3f8`).
@@ -707,7 +707,7 @@ The same image also arms one USB HID boot keyboard on the xHCI controller at PCI
 
 ## Physical RPi4 lab (hardware-gated)
 
-On-device work extracted from Phases 39, 51, and 52. Software for those phases is done. Canonical checklist: **[`plan-arch.md` § Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated)**.
+Secondary. The metal target being driven is the Acer Swift X. This lab is on-device work extracted from Phases 39, 51, and 52. Software for those phases is done. Canonical checklist: **[`plan-arch.md` § Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated)**.
 
 - [ ] Lab REPL sign-off (`ls` / `cat` / `fetch` / `edit`) + fill [boards.md](boards.md#rpi4-workstation-install-path-phase-52) grid
 - [ ] `just test-hw` on real metal

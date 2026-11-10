@@ -2,7 +2,7 @@
 
 ## Status
 
-Superseded (Milestone 17). Milestone 17 removed `tls-proxy`. `lerux-tls` is linked into the shell and the agent and trusts the smoke certificate authority. The desk-browser spec names a `tls-proxy` again; that protection domain is not in the tree.
+Superseded on the device-framework images, where `lerux-tls` is linked into the shell and the agent and trusts the smoke certificate authority. Milestone 17 stays in [`plan-lionsos.md`](../plan-lionsos.md) and did not remove `tls-proxy` from the plan. The desk-browser spec still names it. That protection domain is not in the tree yet.
 
 ## Date
 

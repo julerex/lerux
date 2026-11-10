@@ -2,6 +2,8 @@
 
 Board names are the `BOARD=` value for `just run`, `just test`, and `just build`. Metadata lives in [`support/boards.toml`](../support/boards.toml). `just build` and `just run` default to `qemu_virt_aarch64`. Bare `just test` boots `qemu_virt_aarch64_browser_sddf`. Bare `just iso` packs `swift_sfx14_41g`.
 
+The metal target being driven is the Acer Swift X SFX14-41G (`swift_sfx14_41g`). The Gigabyte Z97-D3H desk page (`pc_z97_d3h`) and the RPi4 workstation lab (`rpi4b_4gb`) stay secondary.
+
 aarch64 init and composed images need the patched SP804 QEMU in [`ci.md`](ci.md#patched-qemu); RISC-V init uses stock QEMU with the Goldfish RTC and `rdtime`, and x86 init uses stock QEMU with the CMOS RTC and TSC.
 
 **System profiles** (Phase 35) live in `support/profiles/*.toml` (e.g. `workstation`, `minimal`). They declare the PD list, template, and channel manifest. Use `lerux profile build <name>` (it resolves to a board via `default_board` or `--board`). Board entries in `boards.toml` still define hardware details + qemu config; profile tooling selects compositions on top of boards.
@@ -36,7 +38,7 @@ aarch64 init and composed images need the patched SP804 QEMU in [`ci.md`](ci.md#
 | `rpi4b_4gb` | aarch64 | `BOARD=rpi4b_4gb just image` | hello + serial (PL011; hardware only) |
 | `pc_z97_d3h_rtl8852be` | x86_64 | `BOARD=pc_z97_d3h_rtl8852be just image` | COM1 plus a config-space read of the RTL8852BE (hardware only) |
 
-Milestone 17 deleted the postcard boards. Their rows, including `qemu_virt_aarch64_browser` and `just test-browser`, are gone. The live browser smoke is `just test-browser-sddf`.
+Milestone 17 stays in [plan-lionsos.md](plan-lionsos.md). It removed the postcard guest model and did not remove the Ladybird-shaped domains or the postcard servers the browser specs still name. The live browser smoke is `just test-browser-sddf`.
 
 ## SDK boards
 
@@ -317,7 +319,7 @@ This board has no native disk or Ethernet driver. QEMU `workstation-x86` is virt
 
 `qemu_virt_aarch64_program_sddf` (Milestone 14) is the fetch image with `program` in place of the shell. The module reads `/config/hostname` and allocates a socket through `lerux-posix`. A bad signature prints `program: rejected` and is not instantiated. The signed module then prints `lerux-wasm: ran`. See [ADR-012](decisions/012-ordinary-webassembly.md).
 
-The postcard net, request, paint, browser, agent, and filesystem boards are gone. Milestone 17 deleted `net-server`, `request-server`, `tls-proxy`, `display-server`, and `lerux-interface-types`. The live browser image is `qemu_virt_aarch64_browser_sddf`.
+Milestone 17 stays. It removed `lerux-interface-types` with the postcard guest model. It did not remove `net-server`, `request-server`, `tls-proxy`, or `display-server` from the browser specs. The live browser image is `qemu_virt_aarch64_browser_sddf`.
 
 ### x86 HTTP inbound (operational notes)
 

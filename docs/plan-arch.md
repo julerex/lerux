@@ -1,6 +1,6 @@
 # PLAN — Arch-level functionality (phases 50–60)
 
-Last updated: 2026-10-22 (native disk and Ethernet are milestones 19–22 in plan-lionsos.md)
+Last updated: 2026-11-10 (the metal target being driven is the Acer Swift X; the Z97 desk page and this RPi4 lab stay secondary)
 
 Related: [`plan.md`](plan.md) (roadmap 1–82), [`plan-qemu.md`](plan-qemu.md) (phases 61–70, done), [`plan-interactive.md`](plan-interactive.md) (phases 71–80), [`plan-au-ts.md`](plan-au-ts.md) (sDDF/LionsOS inspiration track), [`context.md`](context.md) (domain language).
 
@@ -29,13 +29,13 @@ This plan maps **Arch Linux workflow and capability surface** onto that constrai
 | Config | `config-server` FS-backed under `/config/` |
 | Apps | `edit`, `chat-client`, `http-file-browser` |
 | Multiarch bring-up | aarch64 / riscv64 / x86 serial+echo+virtio smokes |
-| Hardware | RPi4 serial/net/blk/workstation profiles (on-device gate: [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated)) |
+| Hardware | Acer Swift X is the metal target being driven ([plan-lionsos.md](plan-lionsos.md) milestones 24–29). The Z97 desk page and the RPi4 serial/net/blk/workstation profiles stay secondary (on-device gate: [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated)) |
 
 ### Hard ceiling (do not plan as “become Arch”)
 
 - No Linux/POSIX ABI, musl, `fork`/`exec`, unmodified third-party binaries
 - Microkit **static** PD set at image build time — “install package” = pin + rebuild `loader.img`, not runtime ELF load
-- No full desktop (Wayland/X) or guest VMM unless a future ADR opens them. QEMU software framebuffer + a from-scratch HTML/CSS subset is [ADR-009](decisions/009-interactive-surface.md) / [`plan-interactive.md`](plan-interactive.md), not a Linux GUI stack.
+- No full desktop (Wayland/X) or guest VMM unless a future ADR opens them. QEMU software framebuffer is [ADR-009](decisions/009-interactive-surface.md) / [`plan-interactive.md`](plan-interactive.md), not a Linux GUI stack. JavaScript and WebAssembly are approved. The browser is modelled on Ladybird and rewritten in Rust, not a port of Ladybird, Chromium, or WebKit C++.
 
 ---
 
@@ -245,7 +245,7 @@ Each row = interface types + PD + package fragment + smoke.
 
 Packages installable via Phase 55: **edit**, **chat-client**, **http-file-browser**, **backup**, **fetch-client** (≥5).
 
-Heavy GUI browsers and language ecosystems were deferred here. Phases 71–80 shipped a subset HTML/CSS engine and a Grok-shaped agent as PDs ([`plan-interactive.md`](plan-interactive.md)). JS stays out. The closed Wasm subset in `program-runtime` is [Phase 81](plan.md#phase-81--signed-wasm-runtime) ([ADR-010](decisions/010-program-runtime.md)).
+Heavy GUI browsers and language ecosystems were deferred in phases 50–60. Phases 71–80 shipped a subset HTML/CSS engine and a Grok-shaped agent as PDs ([`plan-interactive.md`](plan-interactive.md)). JavaScript and WebAssembly are approved. The browser is modelled on Ladybird's engine shape and process isolation and rewritten in Rust, not a port of the Ladybird, Chromium, or WebKit C++ sources. Ordinary WebAssembly is [ADR-012](decisions/012-ordinary-webassembly.md). Scripts and page Wasm are [`../lerux-ladybird/PLAN.md`](../lerux-ladybird/PLAN.md). The `LRW1` envelope is [Phase 81](plan.md#phase-81--signed-wasm-runtime) ([ADR-010](decisions/010-program-runtime.md)).
 
 ### Exit
 
@@ -310,9 +310,9 @@ Do **not** start MCS, GPU/Wayland, or POSIX. (QEMU software framebuffer is [ADR-
 
 ## Physical RPi4 lab (hardware-gated)
 
-Work that **cannot close on QEMU**. Phases 37, 39, 47, and 52 shipped the profiles, native drivers, deploy path, first-boot seed, and `just test-hw` harness. This section is the remaining on-device gate.
+Secondary. The metal target being driven is the Acer Swift X. Work here **cannot close on QEMU**. Phases 37, 39, 47, and 52 shipped the profiles, native drivers, deploy path, first-boot seed, and `just test-hw` harness.
 
-QEMU phases [61–70](plan-qemu.md), [71–80](plan-interactive.md), and [81](plan.md#phase-81--signed-wasm-runtime) are done. [Phase 82](plan.md#phase-82--z97-on-screen-shell) shipped the Z97 VGA shell. This lab is the remaining on-device gate.
+QEMU phases [61–70](plan-qemu.md), [71–80](plan-interactive.md), and [81](plan.md#phase-81--signed-wasm-runtime) are done. [Phase 82](plan.md#phase-82--z97-on-screen-shell) shipped the Z97 VGA shell, which stays a secondary desk page. This lab stays secondary too.
 
 Procedure and empty result grid: [`boards.md` — RPi4 workstation install path](boards.md#rpi4-workstation-install-path-phase-52).
 
@@ -372,9 +372,9 @@ That is Arch’s **workflow and completeness**, reimplemented as static Microkit
 
 ## Near-term priority
 
-Numbered phases 1–82 are done. Remaining work is [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated) when a board is on the desk, and [Milestones 19–22](plan-lionsos.md#milestone-19--advanced-host-controller-interface-disk) for a native disk and Ethernet device on QEMU q35 and the Z97. The QEMU software framebuffer shipped in [phases 71–80](plan-interactive.md).
+Numbered phases 1–82 are done. The metal target being driven is the Acer Swift X ([plan-lionsos.md](plan-lionsos.md) milestones 24–29). [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated) and the Z97 bind ([Milestones 19–22](plan-lionsos.md#milestone-19--advanced-host-controller-interface-disk)) stay secondary. The QEMU software framebuffer shipped in [phases 71–80](plan-interactive.md).
 
-JS, GPU compositors, and libvmm still need a new ADR.
+GPU compositors and libvmm still need a new ADR. JavaScript and WebAssembly are approved.
 
 ---
 
@@ -408,4 +408,4 @@ Each phase should add or extend **one** profile board smoke rather than only uni
 
 ## Summary
 
-Phases **1–60** built the **kernel of an Arch-like workflow** (profiles, init, shell, FS/net, packages, multi-arch workstation, hardening). Phases **61–70** deepened QEMU ([`plan-qemu.md`](plan-qemu.md), done). Phases **71–80** shipped the interactive surface ([`plan-interactive.md`](plan-interactive.md), done). [Phase 81](plan.md#phase-81--signed-wasm-runtime) shipped signed Wasm execution ([ADR-010](decisions/010-program-runtime.md)). [Phase 82](plan.md#phase-82--z97-on-screen-shell) shipped the Z97 VGA shell. On-device truth is [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated). Native disk and Ethernet are [Milestones 19–22](plan-lionsos.md#milestone-19--advanced-host-controller-interface-disk). All of it as **ported Rust PDs and host tooling**, never as a Linux compatibility layer.
+Phases **1–60** built the **kernel of an Arch-like workflow** (profiles, init, shell, FS/net, packages, multi-arch workstation, hardening). Phases **61–70** deepened QEMU ([`plan-qemu.md`](plan-qemu.md), done). Phases **71–80** shipped the interactive surface ([`plan-interactive.md`](plan-interactive.md), done). [Phase 81](plan.md#phase-81--signed-wasm-runtime) shipped signed Wasm execution ([ADR-010](decisions/010-program-runtime.md)). [Phase 82](plan.md#phase-82--z97-on-screen-shell) shipped the Z97 VGA shell, which stays a secondary desk page. The metal target being driven is the Acer Swift X. [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated) stays secondary. Native disk and Ethernet on QEMU q35 and the Z97 are [Milestones 19–22](plan-lionsos.md#milestone-19--advanced-host-controller-interface-disk). All of it as **Rust protection domains and host tooling**, never as a Linux compatibility layer.

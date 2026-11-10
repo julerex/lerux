@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted for the `LRW1` envelope. Decision 2, the closed interpreter, is superseded by [ADR-012](012-ordinary-webassembly.md). Milestone 17 deleted the `program-runtime` protection domain. The live check is `sddf-program` on `qemu_virt_aarch64_program_sddf`.
+Accepted for the `LRW1` envelope. Decision 2, the closed interpreter, is superseded by [ADR-012](012-ordinary-webassembly.md). The postcard `program-runtime` protection domain is not in the tree. Milestone 17 stays in [`plan-lionsos.md`](../plan-lionsos.md) and is the postcard guest-model removal. The live check is `sddf-program` on `qemu_virt_aarch64_program_sddf`. JavaScript and WebAssembly are approved.
 
 ## Date
 

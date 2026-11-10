@@ -2,7 +2,7 @@
 
 Companion to [ADR-003](decisions/003-net-virtualiser.md).
 
-Milestone 17 deleted `userspace/pds/net-server` and the postcard `NetRequest` path. There is no `net-server`. Two client paths remain.
+Device-framework images have no `net-server`. Milestone 17 stays and removed postcard `NetRequest` with the postcard guest model. The desk-browser spec still names `net-server`. Two client paths remain.
 
 ## Device-framework images
 

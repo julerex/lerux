@@ -377,9 +377,10 @@ Not started.
 
 **Exit:** A RISC-V virtio memory-mapped window can use a high guest virtual address, and the identity map is no longer required for boot.
 
-Not started.
+Done. `just test-fs-sddf-riscv` printed `blk_driver: ready`, then `lerux shell ready`.
 
-- On QEMU RISC-V the virtio memory-mapped guest virtual address equals the physical page (`0x10_001_000`, `0x10_002_000`, `0x10_003_000`). AArch64 uses the high window `0x6_000_000_000` for the same role. Copying that window onto RISC-V stops the boot. Leave the identity map in place until Microkit can place a high guest map on this architecture. `riscv_virtio_guest_address_matches_the_physical_page` locks the rule.
+- Microkit 2.3.0 accepts a `<map vaddr>` below `pd_map_max_vaddr` in `tool/microkit/src/sel4.rs`. That limit is the protection-domain stack bottom, under `seL4_UserVSpaceTop`. seL4 16.0.0 Sv39 sets `seL4_UserTop` to `0x3_fff_fff_000` in `libsel4/sel4_arch_include/riscv64/sel4/sel4_arch/constants.h`. The AArch64 window `0x6_000_000_000` is above that top, so the tool rejects it.
+- The QEMU physical pages stay `0x10_001_000`, `0x10_002_000`, and `0x10_003_000`. The guest window starts at `0x2_000_000_000`, one page per role. `riscv_virtio_guest_address_uses_the_high_window` locks those guest addresses.
 
 ## Milestone 24 — Swift mode line
 

@@ -232,9 +232,25 @@ pub fn virtio_node(arch: Arch, role: VirtioRole) -> Option<VirtioNode> {
     }
 }
 
-/// Guest virtual address equals the physical page. The `AArch64` high window
-/// does not boot on QEMU RISC-V. Milestone 23 records the exit if Microkit can
-/// place a high guest map. Until then, keep the identity.
+/// First page of the virtio-mmio guest window.
+///
+/// Microkit 2.3.0 rejects a `<map vaddr>` at or above `pd_map_max_vaddr`
+/// (`tool/microkit/src/sel4.rs`), the protection-domain stack bottom under
+/// `seL4_UserVSpaceTop`. seL4 16.0.0 Sv39 sets `seL4_UserTop` to
+/// `0x3_fff_fff_000`. The `AArch64` window `0x6_000_000_000` is above that top.
+/// This window is below it. Each role takes the next page. The physical page
+/// stays the QEMU address.
+const RISCV64_VIRTIO_MMIO_GUEST: u64 = 0x2_000_000_000;
+
+const fn riscv64_virtio_guest(role: VirtioRole) -> u64 {
+    let page = match role {
+        VirtioRole::Blk => 0,
+        VirtioRole::Net => 1,
+        VirtioRole::Gpu => 2,
+    };
+    RISCV64_VIRTIO_MMIO_GUEST + page * SERIAL_MMIO_SIZE
+}
+
 const fn riscv64_virtio_mmio(role: VirtioRole) -> MmioDevice {
     let (name, phys, irq, setvar) = match role {
         VirtioRole::Blk => (
@@ -260,7 +276,7 @@ const fn riscv64_virtio_mmio(role: VirtioRole) -> MmioDevice {
         window: MmioWindow {
             name,
             phys,
-            vaddr: phys.value(),
+            vaddr: riscv64_virtio_guest(role),
             size: SERIAL_MMIO_SIZE,
         },
         offset: RISCV64_VIRTIO_MMIO_OFFSET,
@@ -477,17 +493,22 @@ mod tests {
     }
 
     #[test]
-    fn riscv_virtio_guest_address_matches_the_physical_page() {
-        for role in [VirtioRole::Blk, VirtioRole::Net, VirtioRole::Gpu] {
+    fn riscv_virtio_guest_address_uses_the_high_window() {
+        // seL4 16.0.0 Sv39 `seL4_UserTop`. Microkit's map limit sits under this.
+        const USER_TOP: u64 = 0x3_fff_fff_000;
+        let expected = [
+            (VirtioRole::Blk, 0x2_000_000_000),
+            (VirtioRole::Net, 0x2_000_001_000),
+            (VirtioRole::Gpu, 0x2_000_002_000),
+        ];
+        for (role, guest) in expected {
             let Some(VirtioNode::Mmio(device)) = virtio_node(Arch::Riscv64, role) else {
                 panic!("riscv virtio node");
             };
-            assert_eq!(
-                device.window.vaddr,
-                device.window.phys.value(),
-                "riscv virtio guest map stays the physical page"
-            );
+            assert_eq!(device.window.vaddr, guest);
+            assert_ne!(device.window.vaddr, device.window.phys.value());
             assert_ne!(device.window.vaddr, 0x6_000_000_000);
+            assert!(device.window.vaddr + device.window.size <= USER_TOP);
         }
     }
 }

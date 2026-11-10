@@ -170,7 +170,8 @@ mod tests {
             .expect("riscv filesystem image");
         assert!(xml.contains("phys_addr=\"0x10_001_000\""));
         assert!(xml.contains("phys_addr=\"0x1_000_0000\""));
-        assert!(xml.contains("vaddr=\"0x10_001_000\""));
+        assert!(xml.contains("vaddr=\"0x2_000_000_000\""));
+        assert!(!xml.contains("vaddr=\"0x10_001_000\""));
         assert!(xml.contains("vaddr=\"0x41_000_000\""));
         assert!(xml.contains("<irq irq=\"1\" id=\"0\" />"));
         assert!(xml.contains("<irq irq=\"10\" id=\"0\" />"));
@@ -195,7 +196,8 @@ mod tests {
             .expect("riscv network image");
         assert!(xml.contains("phys_addr=\"0x10_002_000\""));
         assert!(xml.contains("phys_addr=\"0x1_000_0000\""));
-        assert!(xml.contains("vaddr=\"0x10_002_000\""));
+        assert!(xml.contains("vaddr=\"0x2_000_001_000\""));
+        assert!(!xml.contains("vaddr=\"0x10_002_000\""));
         assert!(xml.contains("vaddr=\"0x40_000_000\""));
         assert!(xml.contains("<irq irq=\"2\" id=\"0\" />"));
         assert!(xml.contains("<irq irq=\"10\" id=\"0\" />"));
@@ -241,6 +243,9 @@ mod tests {
         assert!(xml.contains("phys_addr=\"0x10_001_000\""));
         assert!(xml.contains("phys_addr=\"0x10_002_000\""));
         assert!(xml.contains("phys_addr=\"0x10_003_000\""));
+        assert!(xml.contains("vaddr=\"0x2_000_000_000\""));
+        assert!(xml.contains("vaddr=\"0x2_000_001_000\""));
+        assert!(xml.contains("vaddr=\"0x2_000_002_000\""));
         assert!(xml.contains("phys_addr=\"0x1_000_0000\""));
         assert!(xml.contains("vaddr=\"0x42_000_000\""));
         assert!(xml.contains("<irq irq=\"3\" id=\"0\" />"));

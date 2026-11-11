@@ -29,6 +29,7 @@ mod image_sign;
 mod install;
 mod iso;
 mod iso_host;
+mod ladybird;
 mod libclang;
 mod net_sddf;
 mod path;

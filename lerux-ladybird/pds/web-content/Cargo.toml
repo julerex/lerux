@@ -1,0 +1,16 @@
+[package]
+name = "sddf-web-content"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[lints]
+workspace = true
+
+[dependencies]
+lerux-cothread = { path = "../../../userspace/crates/lerux-cothread" }
+lerux-ladybird-gfx = { path = "../../crates/lerux-ladybird-gfx" }
+lerux-ladybird-html = { path = "../../crates/lerux-ladybird-html" }
+lerux-ladybird-http = { path = "../../crates/lerux-ladybird-http" }
+lerux-ladybird-web = { path = "../../crates/lerux-ladybird-web" }
+sel4-microkit = { workspace = true }

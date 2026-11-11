@@ -101,6 +101,9 @@ const SDDF_SUFFIX: &str = "_sddf";
 /// [`ImageError::UnknownBoard`] when an `_sddf` or `net_e1000e` suffix does not
 /// name a known architecture and image.
 pub fn board_registration(board: &str) -> Result<Option<BoardId>, ImageError> {
+    if let Some(id) = ladybird_registration(board) {
+        return Ok(Some(id));
+    }
     if let Some(id) = net_e1000e_registration(board)? {
         return Ok(Some(id));
     }
@@ -111,6 +114,19 @@ pub fn board_registration(board: &str) -> Result<Option<BoardId>, ImageError> {
         return Ok(Some(id));
     }
     sddf_registration(board)
+}
+
+fn ladybird_registration(board: &str) -> Option<BoardId> {
+    if board == "qemu_virt_aarch64_ladybird" {
+        return Some(BoardId {
+            kind: ImageKind::Ladybird,
+            mode: None,
+            arch: Arch::Aarch64,
+            disk: DiskBackend::Virtio,
+            net: NetBackend::Virtio,
+        });
+    }
+    None
 }
 
 fn net_e1000e_registration(board: &str) -> Result<Option<BoardId>, ImageError> {
@@ -277,6 +293,7 @@ fn image(kind: ImageKind, arch: Arch) -> Result<Image, ImageError> {
         ImageKind::Net => net_image(arch, NetBackend::Virtio),
         ImageKind::Fetch => fetch_image(arch, "shell", "sddf-shell.elf", fetch_client_slots()),
         ImageKind::Browser => browser_image(arch),
+        ImageKind::Ladybird => ladybird_image(arch),
         ImageKind::Agent => agent_image(arch),
         ImageKind::Program => {
             fetch_image(arch, "program", "sddf-program.elf", fetch_client_slots())
@@ -718,14 +735,14 @@ fn browser_image(arch: Arch) -> Image {
         domains: vec![
             blk_driver_domain(blk.driver_slots, blk.irq, None, 4, blk.program),
             net_driver_with_irq(arch, false, net_irq, None, 4),
-            gpu_driver(arch),
+            gpu_driver(arch, None),
             serial_driver(serial.slots, serial.irq, None),
             blk_virt(None),
             net_virt_tx(None),
             net_virt_rx(None),
             serial_virt_tx(None),
             serial_virt_rx(None),
-            gpu_virt(),
+            gpu_virt(None),
             fatfs(None),
             net_copy(None),
             domain("shell", 1, None, "sddf-shell.elf", slots, None),
@@ -1377,9 +1394,145 @@ fn net_copy(qos: Option<Qos>) -> Domain {
     )
 }
 
-fn gpu_driver(arch: Arch) -> Domain {
+fn ladybird_image(arch: Arch) -> Image {
+    let serial = serial_attachment(arch);
+    Image {
+        groups: vec![
+            serial.regions,
+            virtio_regions(false, true, true),
+            net_regions(false),
+            gpu_regions(),
+            ladybird_shared_regions(),
+        ],
+        domains: ladybird_domains(serial.slots, serial.irq, arch),
+        links: ladybird_links(),
+    }
+}
+
+fn ladybird_domains(slots: Vec<Slot>, irq: Irq, arch: Arch) -> Vec<Domain> {
+    vec![
+        net_driver(arch, false, Some(budget(4000)), 4),
+        gpu_driver(arch, Some(budget(4000))),
+        serial_driver(slots, irq, Some(budget(4000))),
+        net_virt_tx(Some(budget(3000))),
+        net_virt_rx(Some(budget(3000))),
+        serial_virt_tx(Some(budget(3000))),
+        serial_virt_rx(Some(budget(3000))),
+        gpu_virt(Some(budget(3000))),
+        net_copy(Some(budget(2000))),
+        domain(
+            "web_content",
+            2,
+            Some(budget(2000)),
+            "sddf-web-content.elf",
+            ladybird_shared_slots(),
+            None,
+        ),
+        domain(
+            "request_server",
+            2,
+            Some(budget(2000)),
+            "sddf-request-server.elf",
+            ladybird_request_slots(),
+            None,
+        ),
+        domain(
+            "browser_ui",
+            1,
+            Some(budget(1000)),
+            "sddf-browser-ui.elf",
+            ladybird_ui_slots(),
+            None,
+        ),
+    ]
+}
+
+fn ladybird_shared_slots() -> Vec<Slot> {
+    cached(&[
+        "ladybird_control",
+        "ladybird_bitmap",
+        lerux_ladybird_http::REQUEST_REGION,
+        lerux_ladybird_http::BODY_REGION,
+    ])
+}
+
+fn ladybird_request_slots() -> Vec<Slot> {
+    let mut slots = net_client_slots();
+    slots.extend(cached(&[
+        lerux_ladybird_http::REQUEST_REGION,
+        lerux_ladybird_http::BODY_REGION,
+    ]));
+    slots
+}
+
+fn ladybird_ui_slots() -> Vec<Slot> {
+    let mut slots = serial_client_slots();
+    slots.extend(cached(&[
+        "gpu_client_events",
+        "gpu_client_req",
+        "gpu_client_resp",
+        "gpu_client_data",
+        "ladybird_control",
+        "ladybird_bitmap",
+    ]));
+    slots
+}
+
+fn ladybird_links() -> Vec<Link> {
+    // Assignment walks this order. Serial and graphics ids stay the constants
+    // in `serial_image` and `gpu_image`. `browser_ui` then gets 0, 1, 2, and 3.
+    // Network ids stay the constants in `net_image`. `request_server` then gets
+    // 0 for the request, 1 for receive, and 2 for transmit. `web_content`'s
+    // request channel is 1 because paint already owns 0.
+    link_rows(&[
+        ("serial_driver", "serial_virt_tx", 0),
+        ("serial_driver", "serial_virt_rx", 1),
+        ("serial_virt_tx", "browser_ui", 2),
+        ("serial_virt_rx", "browser_ui", 3),
+        ("gpu_driver", "gpu_virt", 4),
+        ("gpu_virt", "browser_ui", 5),
+        ("web_content", "browser_ui", 6),
+        ("net_driver", "net_virt_rx", 7),
+        ("net_driver", "net_virt_tx", 8),
+        ("net_virt_rx", "net_copy", 9),
+        ("web_content", "request_server", 10),
+        ("net_copy", "request_server", 11),
+        ("net_virt_tx", "request_server", 12),
+    ])
+}
+
+fn ladybird_shared_regions() -> Vec<Region> {
+    vec![
+        ram(
+            "ladybird_control",
+            region_bytes(lerux_ladybird_gfx::CONTROL_REGION_SIZE),
+            lerux_ladybird_gfx::CONTROL_VADDR,
+        ),
+        ram(
+            "ladybird_bitmap",
+            region_bytes(lerux_ladybird_gfx::FRAME_BYTES),
+            lerux_ladybird_gfx::BITMAP_VADDR,
+        ),
+        ram(
+            lerux_ladybird_http::REQUEST_REGION,
+            region_bytes(lerux_ladybird_http::REQUEST_REGION_SIZE),
+            lerux_ladybird_http::REQUEST_VADDR,
+        ),
+        ram(
+            lerux_ladybird_http::BODY_REGION,
+            region_bytes(lerux_ladybird_http::BODY_CAP),
+            lerux_ladybird_http::BODY_VADDR,
+        ),
+    ]
+}
+
+fn region_bytes(bytes: usize) -> u64 {
+    u64::try_from(bytes).expect("region size fits in u64")
+}
+
+fn gpu_driver(arch: Arch, qos: Option<Qos>) -> Domain {
     let VirtioNode::Mmio(device) =
-        virtio_node(arch, VirtioRole::Gpu).expect("browser image includes virtio-gpu")
+        virtio_node(arch, VirtioRole::Gpu).expect("this image includes virtio-gpu")
     else {
         panic!("virtio-gpu is memory-mapped on this board");
     };
@@ -1398,18 +1551,18 @@ fn gpu_driver(arch: Arch) -> Domain {
     domain(
         "gpu_driver",
         4,
-        None,
+        qos,
         "sddf-gpu-driver.elf",
         slots,
         Some(Irq::Line(device.irq)),
     )
 }
 
-fn gpu_virt() -> Domain {
+fn gpu_virt(qos: Option<Qos>) -> Domain {
     domain(
         "gpu_virt",
         3,
-        None,
+        qos,
         "sddf-gpu-virt.elf",
         cached(&[
             "gpu_driver_events",

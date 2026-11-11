@@ -369,6 +369,7 @@ Secondary to the Acer Swift X. The metal target being driven is `swift_sfx14_41g
 
 Not started.
 
+- Landed: `UnclaimedNic::claim` accepts `8086:153b` revision `0`, subsystem `1458:e000`. `8086:10d3` stays accepted at the compiled QEMU address `00:04.0`. The QEMU 82574 smoke does not prove the I217 physical-layer path.
 - The Ethernet driver also accepts `8086:153b` at `00:19.0`, revision `0`, subsystem `1458:e000`. That is the I217-V recorded in [context.md](context.md). Memory is `0xf7e00000` (128 KiB) and `0xf7e3c000` (4 KiB). I/O is `0xf080`. The QEMU 82574 smoke does not prove that physical-layer path.
 - Read the Z97 Serial ATA configuration space on the desk, then add that identifier beside `8086:2922`.
 - The RTL8852BE probe stays a configuration-space read. There is no Intel display-engine driver and no Radeon driver. The desk image composes this Ethernet driver in the network-driver role.
@@ -393,7 +394,7 @@ The Acer Swift X SFX14-41G is the metal target being driven. The Gigabyte Z97-D3
 
 **Exit:** The panel shows `1 browser` and `2 maths`, and the built-in keyboard produces `maths 3`.
 
-Board `swift_sfx14_41g` uses Microkit `x86_64_generic` and `console-swift.system.template`. There is no `serial-driver`. The keyboard is the i8042, pin 1, vector 49. `console-driver` keeps the VGA text path for `pc_z97_d3h` and paints 32-bit pixels on this board. `just iso` packs this image. `just iso pc_z97_d3h` packs the Z97 image. `browser` still prints `browser unavailable`. `ci = false`. On 2026-10-30 the panel showed `hello lerux`, `1 browser`, and `2 maths`. The shell copied the disk page onto that console as `nvme: absent`. That photo did not include `maths 3`.
+Board `swift_sfx14_41g` uses Microkit `x86_64_generic` and `console-swift.system.template`. There is no `serial-driver`. The keyboard is the i8042, pin 1, vector 49. `console-driver` keeps the VGA text path for `pc_z97_d3h` and paints 32-bit pixels on this board. `just iso` packs this image. `just iso pc_z97_d3h` packs the Z97 image. `browser` paints the Lenna test page from `support/browser/lenna.html` over the console until `quit`. The Z97 still prints `browser unavailable`. `ci = false`. On 2026-10-30 the panel showed `hello lerux`, `1 browser`, and `2 maths`. The shell copied the disk page onto that console as `nvme: absent`. That photo did not include `maths 3`.
 
 ## Milestone 26 — Swift PCI lines
 

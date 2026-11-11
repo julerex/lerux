@@ -11,11 +11,13 @@ workspace = true
 [features]
 board-pc_z97_d3h = ["dep:lerux-logging", "lerux-logging/boot-line-gap"]
 board-x86_64_generic_console = []
-board-swift_sfx14_41g = ["dep:lerux-swift"]
+board-swift_sfx14_41g = ["dep:lerux-swift", "dep:lerux-desk", "dep:lerux-ladybird-image"]
 
 [dependencies]
 embedded-hal-nb = { workspace = true }
 lerux-calc = { path = "../../crates/lerux-calc" }
+lerux-desk = { path = "../../crates/lerux-desk", optional = true }
+lerux-ladybird-image = { path = "../../../lerux-ladybird/crates/lerux-ladybird-image", optional = true }
 lerux-logging = { path = "../../crates/lerux-logging", optional = true }
 lerux-swift = { path = "../../crates/lerux-swift", optional = true }
 sel4-microkit = { workspace = true }

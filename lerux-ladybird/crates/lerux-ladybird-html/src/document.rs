@@ -1,4 +1,5 @@
 use alloc::{boxed::Box, string::String, vec::Vec};
+use core::str::SplitAsciiWhitespace;
 
 mod parse;
 mod tokenizer;
@@ -51,8 +52,15 @@ enum ParentLink {
 }
 
 enum NodeData {
-    Element { tag: Tag, children: Vec<NodeId> },
-    Text { data: String },
+    Element {
+        tag: Tag,
+        id: Option<Box<str>>,
+        class: Option<Box<str>>,
+        children: Vec<NodeId>,
+    },
+    Text {
+        data: String,
+    },
 }
 
 struct NodeRecord {
@@ -197,6 +205,20 @@ impl Document {
         children
     }
 
+    fn id_attribute(&self, node: NodeId) -> Option<&str> {
+        let NodeData::Element { id, .. } = &self.nodes[node.0].data else {
+            unreachable!("element id");
+        };
+        id.as_deref()
+    }
+
+    fn class_attribute(&self, node: NodeId) -> Option<&str> {
+        let NodeData::Element { class, .. } = &self.nodes[node.0].data else {
+            unreachable!("element id");
+        };
+        class.as_deref()
+    }
+
     fn text_data(&self, id: NodeId) -> &str {
         let NodeData::Text { data } = &self.nodes[id.0].data else {
             unreachable!("text id");
@@ -209,41 +231,62 @@ impl Document {
             ParentLink::Document => Parent::Document,
             ParentLink::Node(parent) => Parent::Element(Element {
                 document: self,
-                id: parent,
+                node: parent,
             }),
         }
     }
 
-    fn node(&self, id: NodeId) -> Node<'_> {
-        match &self.nodes[id.0].data {
-            NodeData::Element { .. } => Node::Element(Element { document: self, id }),
-            NodeData::Text { .. } => Node::Text(Text { document: self, id }),
+    fn node(&self, node: NodeId) -> Node<'_> {
+        match &self.nodes[node.0].data {
+            NodeData::Element { .. } => Node::Element(Element {
+                document: self,
+                node,
+            }),
+            NodeData::Text { .. } => Node::Text(Text {
+                document: self,
+                node,
+            }),
         }
     }
 }
 
 pub struct Element<'a> {
     document: &'a Document,
-    id: NodeId,
+    node: NodeId,
 }
 
 impl<'a> Element<'a> {
     /// Lowercase tag name.
     #[must_use]
     pub fn name(&self) -> &'a str {
-        self.document.tag(self.id).name()
+        self.document.tag(self.node).name()
+    }
+
+    /// The `id` attribute value as the start tag wrote it.
+    #[must_use]
+    pub fn id(&self) -> Option<&'a str> {
+        self.document.id_attribute(self.node)
+    }
+
+    /// The `class` attribute split on ASCII whitespace. Each token keeps its case.
+    #[must_use]
+    pub fn classes(&self) -> SplitAsciiWhitespace<'a> {
+        self.document
+            .class_attribute(self.node)
+            .unwrap_or_default()
+            .split_ascii_whitespace()
     }
 
     #[must_use]
     pub fn parent(&self) -> Parent<'a> {
-        self.document.parent_of(self.id)
+        self.document.parent_of(self.node)
     }
 
     #[must_use]
     pub fn children(&self) -> Children<'a> {
         Children {
             document: self.document,
-            ids: self.document.child_ids(self.id),
+            ids: self.document.child_ids(self.node),
             index: 0,
         }
     }
@@ -251,18 +294,18 @@ impl<'a> Element<'a> {
 
 pub struct Text<'a> {
     document: &'a Document,
-    id: NodeId,
+    node: NodeId,
 }
 
 impl<'a> Text<'a> {
     #[must_use]
     pub fn data(&self) -> &'a str {
-        self.document.text_data(self.id)
+        self.document.text_data(self.node)
     }
 
     #[must_use]
     pub fn parent(&self) -> Parent<'a> {
-        self.document.parent_of(self.id)
+        self.document.parent_of(self.node)
     }
 }
 

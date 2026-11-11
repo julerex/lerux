@@ -1,6 +1,6 @@
 //! Host registry for device-framework images.
 //!
-//! Seven images render from this table. Web reuses the fetch image.
+//! Eight images render from this table. Web reuses the fetch image.
 //! Protection-domain build scripts and the host writer call [`emit_pd_binding`].
 
 mod binding;

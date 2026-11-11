@@ -196,6 +196,10 @@ test-web-sddf-x86:
 test-browser-sddf:
     BOARD=qemu_virt_aarch64_browser_sddf just test
 
+# Milestone 10: request_server fetches the fixture. Sibling smoke: just test-ladybird
+test-ladybird:
+    BOARD=qemu_virt_aarch64_ladybird just test
+
 test-browser-sddf-riscv:
     BOARD=qemu_virt_riscv64_browser_sddf just test
 

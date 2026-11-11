@@ -1,8 +1,8 @@
 //! Built-in bitmap font for the fixture strings.
 //!
 //! The cell is 8 by 8. Bit 7 of each row is the leftmost pixel. There is no
-//! scale: one set bit is one pixel. The set is the characters in `lerux` and
-//! `lerux-http-fixture`.
+//! scale: one set bit is one pixel. The set is the characters in `lerux`,
+//! `lerux-http-fixture`, and `Lenna`.
 
 use crate::{Bitmap, Color};
 
@@ -31,6 +31,14 @@ const GLYPHS: &[Entry] = &[
         rows: [0x00, 0x00, 0x00, 0x7C, 0x00, 0x00, 0x00, 0x00],
     },
     Entry {
+        ch: b'L',
+        rows: [0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x7C, 0x00],
+    },
+    Entry {
+        ch: b'a',
+        rows: [0x00, 0x00, 0x3C, 0x06, 0x3E, 0x66, 0x3E, 0x00],
+    },
+    Entry {
         ch: b'e',
         rows: [0x00, 0x00, 0x38, 0x44, 0x7C, 0x40, 0x38, 0x00],
     },
@@ -49,6 +57,10 @@ const GLYPHS: &[Entry] = &[
     Entry {
         ch: b'l',
         rows: [0x30, 0x10, 0x10, 0x10, 0x10, 0x10, 0x38, 0x00],
+    },
+    Entry {
+        ch: b'n',
+        rows: [0x00, 0x00, 0x7C, 0x66, 0x66, 0x66, 0x66, 0x00],
     },
     Entry {
         ch: b'p',
@@ -72,7 +84,7 @@ const GLYPHS: &[Entry] = &[
     },
 ];
 
-const _: () = assert!(GLYPHS.len() == 11);
+const _: () = assert!(GLYPHS.len() == 14);
 const _: () = {
     let mut index = 1;
     while index < GLYPHS.len() {

@@ -78,6 +78,9 @@ members = [
     "lerux-ladybird/crates/lerux-ladybird-http",
     "lerux-ladybird/crates/lerux-ladybird-js",
     "lerux-ladybird/crates/lerux-ladybird-image",
+    "lerux-ladybird/pds/browser-ui",
+    "lerux-ladybird/pds/web-content",
+    "lerux-ladybird/pds/request-server",
 ]
 
 [workspace.dependencies]

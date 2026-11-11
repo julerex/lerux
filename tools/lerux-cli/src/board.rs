@@ -249,6 +249,29 @@ mod tests {
     }
 
     #[test]
+    fn swift_browser_and_console_share_the_hold_page() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let xml = crate::system::render_system(&root, "swift_sfx14_41g").expect("swift sdf");
+        assert!(xml.contains(
+            "<memory_region name=\"browser_hold\" size=\"0x1000\" phys_addr=\"0x1fa0000\" />"
+        ));
+        for name in ["console_driver", "shell"] {
+            let start = xml
+                .find(&format!("<protection_domain name=\"{name}\""))
+                .expect("domain");
+            let domain = &xml[start..];
+            let domain = &domain[..domain.find("</protection_domain>").expect("domain end")];
+            for map in [
+                "<map mr=\"browser_hold\" vaddr=\"0x3ffc0000\" perms=\"rw\"",
+                "<map mr=\"framebuffer\" vaddr=\"0x40000000\" perms=\"rw\"",
+                "<map mr=\"mode_record\" vaddr=\"0x3fff0000\" perms=\"r\"",
+            ] {
+                assert!(domain.contains(map), "{name} lacks {map}");
+            }
+        }
+    }
+
+    #[test]
     fn swift_image_skips_serial() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let xml = crate::system::render_system(&root, "swift_sfx14_41g").expect("swift sdf");

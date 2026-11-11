@@ -1,9 +1,9 @@
 use core::mem::{align_of, offset_of, size_of};
 
 use lerux_ladybird_gfx::{
-    control_page_zeroed, glyph, Bitmap, Color, ControlPage, Rect, CONTROL_REGION_SIZE,
-    CONTROL_STATE_IDLE, CONTROL_STATE_PAINTED, FRAME_BYTES, FRAME_HEIGHT, FRAME_WIDTH,
-    GLYPH_HEIGHT, GLYPH_WIDTH, TITLE_CAP,
+    control_page_zeroed, glyph, Bitmap, Color, ControlPage, Rect, BITMAP_VADDR,
+    CONTROL_REGION_SIZE, CONTROL_STATE_IDLE, CONTROL_STATE_PAINTED, CONTROL_VADDR, FRAME_BYTES,
+    FRAME_HEIGHT, FRAME_WIDTH, GLYPH_HEIGHT, GLYPH_WIDTH, TITLE_CAP,
 };
 
 fn frame() -> Vec<u8> {
@@ -131,7 +131,7 @@ fn frame_rejects_an_empty_side_or_a_short_buffer() {
 
 #[test]
 fn fixture_text_has_glyphs_and_other_characters_do_not() {
-    for ch in "lerux-http-fixture".chars() {
+    for ch in "lerux-http-fixture Lenna".chars().filter(|ch| *ch != ' ') {
         let mut storage = frame();
         let mut bitmap = Bitmap::frame(&mut storage).expect("frame");
         white(&mut bitmap);
@@ -140,9 +140,33 @@ fn fixture_text_has_glyphs_and_other_characters_do_not() {
             .paint(&mut bitmap, 0, 0, Color::BLACK);
         assert!(bitmap.pixel_line().is_some(), "{ch}");
     }
-    for ch in ['a', ' ', '0', 'L'] {
+    for ch in [' ', '0', 'A', 'N'] {
         assert!(glyph(ch).is_none(), "{ch}");
     }
+}
+
+#[test]
+fn capital_l_is_a_stem_and_a_foot() {
+    let mut storage = frame();
+    let mut bitmap = Bitmap::frame(&mut storage).expect("frame");
+    white(&mut bitmap);
+    glyph('L')
+        .expect("L")
+        .paint(&mut bitmap, 0, 0, Color::BLACK);
+    for y in 0..6 {
+        assert_eq!(bitmap.pixel(1, y), Some(Color::BLACK), "stem row {y}");
+        assert_eq!(
+            bitmap.pixel(2, y),
+            Some(Color::WHITE),
+            "beside the stem {y}"
+        );
+    }
+    for x in 1..6 {
+        assert_eq!(bitmap.pixel(x, 6), Some(Color::BLACK), "foot column {x}");
+    }
+    assert_eq!(bitmap.pixel(6, 6), Some(Color::WHITE));
+    assert_eq!(bitmap.pixel(0, 0), Some(Color::WHITE));
+    assert_ne!(glyph('L'), glyph('l'));
 }
 
 #[test]
@@ -179,4 +203,12 @@ fn control_page_is_zeroed_then_assigned() {
 
     page.title_len = u32::MAX;
     assert_eq!(page.title().len(), TITLE_CAP);
+}
+
+#[test]
+fn control_page_and_bitmap_are_adjacent() {
+    let page = u64::try_from(CONTROL_REGION_SIZE).expect("page size");
+    assert_eq!(CONTROL_VADDR + page, BITMAP_VADDR);
+    let frame = u64::try_from(FRAME_BYTES).expect("frame size");
+    assert!(frame > page);
 }

@@ -1,0 +1,17 @@
+[package]
+name = "sddf-browser-ui"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[lints]
+workspace = true
+
+[dependencies]
+lerux-cothread = { path = "../../../userspace/crates/lerux-cothread" }
+lerux-ladybird-gfx = { path = "../../crates/lerux-ladybird-gfx" }
+lerux-sddf = { path = "../../../userspace/crates/lerux-sddf" }
+sel4-microkit = { workspace = true }
+
+[build-dependencies]
+lerux-image = { path = "../../../tools/lerux-image" }

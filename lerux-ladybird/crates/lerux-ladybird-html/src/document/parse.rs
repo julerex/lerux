@@ -1,4 +1,4 @@
-use alloc::{borrow::ToOwned, vec::Vec};
+use alloc::{borrow::ToOwned, boxed::Box, vec::Vec};
 
 use super::{
     tokenizer::{DataToken, Tokenizer},
@@ -78,12 +78,14 @@ impl TreeBuilder<'_> {
     fn consume_ordinary(&mut self, token: &DataToken<'_>) {
         match token {
             DataToken::Doctype => {}
-            DataToken::StartTag { name } => {
+            DataToken::StartTag { name, attributes } => {
                 let Some(tag) = Tag::from_name(name) else {
                     return;
                 };
                 let id = self.append_node(NodeData::Element {
                     tag,
+                    id: attributes.id.map(Box::from),
+                    class: attributes.class.map(Box::from),
                     children: Vec::new(),
                 });
                 self.open.push(id);

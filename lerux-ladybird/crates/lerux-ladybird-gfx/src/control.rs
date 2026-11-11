@@ -18,6 +18,30 @@ pub const TITLE_CAP: usize = 64;
 /// One Microkit page. The struct sits at the start.
 pub const CONTROL_REGION_SIZE: usize = 0x1000;
 
+/// Virtual address of this page on `qemu_virt_aarch64_ladybird`.
+///
+/// `browser_ui` and `web_content` both map it. Microkit zeroes it.
+pub const CONTROL_VADDR: u64 = 0x9_000_000;
+
+/// Virtual address of the shared frame bitmap.
+///
+/// The region holds [`crate::FRAME_BYTES`] bytes, starting on the next page.
+pub const BITMAP_VADDR: u64 = 0x9_001_000;
+
+/// Paint notification on `web_content`. That domain has no other channel.
+pub const WEB_CONTENT_PAINT_CHANNEL: u8 = 0;
+
+/// Graphics virtualiser channel on `browser_ui`.
+///
+/// Serial transmit is 0 and serial receive is 1, so this channel is 2.
+pub const BROWSER_UI_GPU_CHANNEL: u8 = 2;
+
+/// Paint notification on `browser_ui`.
+pub const BROWSER_UI_PAINT_CHANNEL: u8 = 3;
+
+const _: () = assert!(CONTROL_REGION_SIZE == 0x1000);
+const _: () = assert!(CONTROL_VADDR + 0x1000 == BITMAP_VADDR);
+
 /// Control region. Fill with [`control_page_zeroed`], then assign fields.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

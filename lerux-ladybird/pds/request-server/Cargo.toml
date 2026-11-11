@@ -1,0 +1,26 @@
+[package]
+name = "sddf-request-server"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[lints]
+workspace = true
+
+[dependencies]
+lerux-cothread = { path = "../../../userspace/crates/lerux-cothread" }
+lerux-ladybird-http = { path = "../../crates/lerux-ladybird-http" }
+lerux-posix = { path = "../../../userspace/crates/lerux-posix" }
+lerux-sddf = { path = "../../../userspace/crates/lerux-sddf" }
+lerux-tls = { path = "../../../userspace/crates/lerux-tls" }
+sel4-microkit = { workspace = true }
+smoltcp = { workspace = true, features = [
+    "medium-ethernet",
+    "proto-ipv4",
+    "proto-dhcpv4",
+    "socket-dhcpv4",
+    "socket-tcp",
+] }
+
+[build-dependencies]
+lerux-image = { path = "../../../tools/lerux-image" }

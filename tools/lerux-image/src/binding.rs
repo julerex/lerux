@@ -27,6 +27,7 @@ pub(crate) enum Page {
     NetCopy,
     NetClient,
     NetShell,
+    NetRequest,
     TimerShell,
     FsSchedule,
 }
@@ -78,7 +79,7 @@ fn pages_for(crate_name: &str, board_features: &[&str]) -> Result<Vec<Page>, Ima
         "sddf-serial-driver" => vec![Page::SerialDriver],
         "sddf-serial-virt-tx" => vec![Page::SerialVirtTx],
         "sddf-serial-virt-rx" => vec![Page::SerialVirtRx],
-        "sddf-serial-client" | "sddf-grok" => vec![Page::SerialClient],
+        "sddf-serial-client" | "sddf-grok" | "sddf-browser-ui" => vec![Page::SerialClient],
         "sddf-blk-driver" | "sddf-ahci-driver" => vec![Page::BlkDriver],
         "sddf-blk-virt" => vec![Page::BlkVirt],
         "sddf-fatfs" => vec![Page::BlkClient, Page::FsServer],
@@ -89,6 +90,7 @@ fn pages_for(crate_name: &str, board_features: &[&str]) -> Result<Vec<Page>, Ima
         "sddf-net-copy" => vec![Page::NetCopy],
         "sddf-net-client" => vec![Page::SerialClient, Page::NetClient],
         "sddf-agent" => vec![Page::FsShell, Page::NetShell],
+        "sddf-request-server" => vec![Page::NetRequest],
         "sddf-program" => vec![Page::SerialClient, Page::FsShell, Page::NetShell],
         "sddf-shell" => shell_pages(board_features)?,
         _ => {
@@ -138,6 +140,7 @@ fn append_page(bytes: &mut Vec<u8>, page: Page) {
         Page::NetCopy => append_net(bytes, &net_image::copy_config()),
         Page::NetClient => append_net(bytes, &net_image::client_config()),
         Page::NetShell => append_net(bytes, &net_image::shell_client_config()),
+        Page::NetRequest => append_net(bytes, &request_net_config()),
         Page::TimerShell => append_timer(bytes, &timer::shell_client_config()),
         Page::FsSchedule => append_schedule(bytes),
     }
@@ -153,6 +156,13 @@ fn append_blk<T>(bytes: &mut Vec<u8>, value: &T) {
 
 fn append_fs<T>(bytes: &mut Vec<u8>, value: &T) {
     push(bytes, value, fs_image::fs_config_to_bytes);
+}
+
+fn request_net_config() -> lerux_sddf::net_client_config_t {
+    net_image::client_config_for(
+        lerux_ladybird_http::REQUEST_NET_RX_CHANNEL,
+        lerux_ladybird_http::REQUEST_NET_TX_CHANNEL,
+    )
 }
 
 fn append_net<T>(bytes: &mut Vec<u8>, value: &T) {

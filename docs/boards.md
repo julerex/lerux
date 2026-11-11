@@ -163,18 +163,17 @@ Living work list (what still needs a Pi): [`plan-arch.md` — Physical RPi4 lab]
 
 Board `swift_sfx14_41g` is the on-screen menu on the Acer Swift X SFX14-41G (Ryzen 5 5500U). It reuses Microkit `x86_64_generic` and `console-swift.system.template`. Names for this machine and its devices are in [GLOSSARY.md](../GLOSSARY.md#swift-x). The panel is the firmware GOP buffer. The keyboard is the built-in i8042 (ports `0x60` and `0x64`, I/O APIC pin 1, vector 49). This machine has no COM port and no `serial-driver`. This image has no QEMU model. Device roles are in [platforms.md](platforms.md#swift-x-devices). `just iso pc_z97_d3h` packs the [Gigabyte Z97-D3H](#gigabyte-z97-d3h-install-path) image.
 
-**USB ISO** (writes `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso` and does not touch a disk):
+**USB ISO** (`just iso` packs `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`; `just burn-iso` writes a USB stick):
 
 ```bash
 just fetch
 just fetch-sdk
 # or: just build-sdk
 just iso
-lsblk
-sudo dd if=build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso of=/dev/sdX bs=4M status=progress conv=fsync
+just burn-iso
 ```
 
-Replace `sdX` with the flash drive from `lsblk`. Do not overwrite the host OS disk. Reboot and open the firmware boot menu. Choose the USB entry that says UEFI (GRUB `EFI/BOOT/BOOTX64.EFI`). GRUB boots immediately. It Multiboot 2-loads `/boot/mb2-stub.elf` with modules `/boot/sel4.elf` and `/boot/loader.img`. The stub places the 64-bit kernel at 1 MiB after `ExitBootServices`.
+`just burn-iso` lists the USB sticks and asks which one to erase. `just burn-iso /dev/sdX` writes that stick. The command refuses the host OS disk. Reboot and open the firmware boot menu. Choose the USB entry that says UEFI (GRUB `EFI/BOOT/BOOTX64.EFI`). GRUB boots immediately. It Multiboot 2-loads `/boot/mb2-stub.elf` with modules `/boot/sel4.elf` and `/boot/loader.img`. The stub places the 64-bit kernel at 1 MiB after `ExitBootServices`.
 
 On 2026-10-29 the panel showed `fb 0x000000fc90000000 pitch 7680 1920x1080 r16 g8 b0`. On 2026-10-30 it then showed `hello lerux` and the menu `1 browser`, `2 maths`, and `3 wifi`. `1` or `browser` opens the test page `support/browser/lenna.html`. The page is 512 pixels wide and 520 tall, at the top left of the panel. The heading `Lenna` is black on a white strip 8 rows tall, and the picture `support/browser/lenna.png` is below it. The page does not clear the rest of the panel. The shell echoes no key on that page. `quit` clears the console and returns the menu. The console covers only the top 400 rows, so the last 120 rows of the picture stay on the panel. A picture that does not decode prints `browser err`. `2` or `maths` reads integer expressions until `quit`, which returns the menu. A value prints `maths N`. A bad line prints `maths err`. `3` or `wifi` lists the names the radio can hear, then prompts `ssid>` and `psk>`. The built-in keyboard types those lines.
 

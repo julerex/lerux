@@ -1,12 +1,12 @@
 # QIP investigation
 
-Last updated: 2026-10-26
+Last updated: 2026-11-10
 
-**Status:** Investigation plan. No incorporation decision. This document does not vendor a tree, change a protection domain, or amend an architecture decision record.
+**Status:** Investigation pass complete. The recommendation is option 3, a host test of one Content module. This document does not vendor a tree, change a protection domain, or amend an architecture decision record.
 
-**Source:** [patrickgwsmith/qip](https://github.com/patrickgwsmith/qip) at commit `b65cbad5aedf749581f606215f95378810251390` (2026-10-15, "Vectorize WGSL invocations and add Perlin and Atkinson demos"). The site is <https://qip.dev>. The license is Apache-2.0. The authoring language is Zig. The published artifact is a WebAssembly module. Confirm this commit is still `main` at the start of the investigation, and record a newer commit here if it is not.
+**Source:** [patrickgwsmith/qip](https://github.com/patrickgwsmith/qip) at commit `d6eb92d20133e815f672947554513096dc82cf15` (2026-11-10 10:19 SAST, "Map `<qip-play>` clicks through resize steps and label every surface"). The site is <https://qip.dev>. The license is Apache-2.0. The authoring language is Zig. The published artifact is a WebAssembly module. The previous pin was `b65cbad5aedf749581f606215f95378810251390` (2026-10-15). `main` had moved, so the size table below was measured again and the contract pages were read at the new commit.
 
-**Goal:** Decide whether any QIP contract or component belongs in lerux, and which host would run it. The next pass writes that recommendation into this file. It does not land a host.
+**Goal:** Decide whether any QIP contract or component belongs in lerux, and which host would run it. The recommendation below is that decision. It does not land a production host.
 
 ## What QIP is
 
@@ -46,7 +46,7 @@ The pointer on success must be below `0x80000000`, the range must lie in memory,
 
 The command-line host is `qipx` (`npm` package `@qip.dev/qipx`). `qip run` executes Content only. One published vector is `rgb(101, 79, 240)` through `text/rgb-to-hex.wasm`, which prints `#654ff0`. Pipelines are ordered modules. The host, not the module, matches media types between stages.
 
-Hard limits, from `docs/hard-limits.md`: the command-line host rejects `memory.grow` unless the caller opts in and sets a memory cap. A declared memory with no maximum fails that cap. The strict profile (no imports, one memory, a declared maximum, no `memory.grow`, no shared memory, no atomics, no start function, no indirect calls, an acyclic direct-call graph) is an optional checker component, `application/wasm/wasm-strict-profile.wasm`. It is not the default `qip run` policy. Single-instruction multiple-data opcodes are allowed in that strict profile. The checker components are themselves WebAssembly modules.
+Hard limits, from `docs/hard-limits.md` at this commit: the command-line host rejects `memory.grow` on every run, and no flag enables it. `--max-memory`, when set, rejects a declared minimum or maximum above that cap, and rejects a declared memory with no maximum. The pipeline rules in `docs/recipes.md` also refuse a memory that has no maximum before they validate a recipe. The strict profile (no imports, one memory, a declared maximum, no `memory.grow`, no shared memory, no atomics, no start function, no indirect calls, an acyclic direct-call graph) is an optional checker component, `application/wasm/wasm-strict-profile.wasm`. It is not the default `qip run` policy. Single-instruction multiple-data opcodes are allowed in that strict profile. The checker components are themselves WebAssembly modules.
 
 ## What lerux already decided
 
@@ -82,16 +82,16 @@ Blob sizes at the pinned commit, from the Git tree, before any instantiation:
 | `text/rgb-to-hex.wasm` | 972 | inside |
 | `image/png/png-to-bmp-b8g8r8a8-srgb.wasm` | 8905 | outside |
 | `image/png/png-to-bmp-b8g8r8a8-srgb-simd.wasm` | 12465 | outside |
-| `application/wasm/wasm-strict-profile.wasm` | 10382 | outside |
+| `application/wasm/wasm-strict-profile.wasm` | 10590 | outside |
 | `text/html/html-link-extractor.wasm` | 11143 | outside |
-| `text/html/html-page-wrap.wasm` | 17508 | outside |
+| `text/html/html-page-wrap.wasm` | 21972 | outside |
 | `text/markdown/commonmark.0.31.2.wasm` | 92647 | outside |
 | `text/markdown/gfm-commonmark.0.31.2.wasm` | 97828 | outside |
-| `image/svg+xml/svg-rasterize-to-ktx2-r8g8b8a8-srgb.wasm` | 289268 | outside |
+| `image/svg+xml/svg-rasterize-to-ktx2-r8g8b8a8-srgb.wasm` | 290256 | outside |
 | `image/svg+xml/svg-rasterize-skia-with-fonts-to-ktx2-r8g8b8a8-srgb.wasm` | 3439891 | outside |
-| `tui/qipdb.wasm` | 128680 | outside |
+| `tui/qipdb.wasm` | 130773 | outside |
 
-These are file sizes. Declared linear memory is additional and is not known until the next pass decodes the memory section. A file that fits the envelope can still declare a memory the 2 MiB heap cannot hold. A filename without `simd` is not evidence that the body lacks `simd` opcodes.
+These are file sizes at `d6eb92d20133e815f672947554513096dc82cf15`. Four rows moved with `main`: the strict-profile checker, `html-page-wrap`, the SVG rasterizer, and `tui/qipdb`. Declared linear memory is in the decode section. A file that fits the envelope can still declare a memory the 2 MiB heap cannot hold. A filename without `simd` is not evidence that the body lacks `simd` opcodes. The PNG module whose name has no `simd` has none; the sibling whose name has `simd` begins with `V128Load`.
 
 ## Options
 
@@ -151,6 +151,70 @@ One pass. Do these in order. The exit is an edit to the recommendation section b
 5. Decode the memory section of `text/markdown/commonmark.0.31.2.wasm` and of the PNG module that has no `simd` in its name. Compare the declared memory, the file size, and `wasmi`'s own structures with the 2 MiB heap. State whether option 5 is possible without a heap change.
 6. Write the recommendation: the chosen option, each declined option in one sentence, the measurements that forced the choice, and whether a later pass needs an architecture decision record before any production code. If the choice is option 3, name the module, the input, the expected output, and that the guest smoke is a follow-on. Stop.
 
+## Decode and host instantiation
+
+Measured at `d6eb92d20133e815f672947554513096dc82cf15`. Each module was decoded and not instantiated in that step. One memory each: wasm32, page 65536, not shared. Every import section is empty. No module contains `memory.grow` or a start section.
+
+| Module | Bytes | Memory min | Memory max | simd | `call_indirect` |
+| --- | --- | --- | --- | --- | --- |
+| `bytes/identity.wasm` | 135 | 67108864 | 67108864 | no | no |
+| `text/trim.wasm` | 322 | 4259840 | 67108864 | no | no |
+| `text/rgb-to-hex.wasm` | 972 | 196608 | 196608 | no | no |
+| `image/png/png-to-bmp-b8g8r8a8-srgb.wasm` | 8905 | 169476096 | 201326592 | no | no |
+| `image/png/png-to-bmp-b8g8r8a8-srgb-simd.wasm` | 12465 | 169476096 | 201326592 | yes, `V128Load` | no |
+| `application/wasm/wasm-strict-profile.wasm` | 10590 | 12189696 | 20971520 | no | no |
+| `text/html/html-link-extractor.wasm` | 11143 | 262144 | 67108864 | no | no |
+| `text/html/html-page-wrap.wasm` | 21972 | 1900544 | 67108864 | no | no |
+| `text/markdown/commonmark.0.31.2.wasm` | 92647 | 20381696 | 67108864 | no | yes |
+| `text/markdown/gfm-commonmark.0.31.2.wasm` | 97828 | 20381696 | 67108864 | no | yes |
+| `image/svg+xml/svg-rasterize-to-ktx2-r8g8b8a8-srgb.wasm` | 290256 | 102563840 | 134217728 | no | no |
+| `image/svg+xml/svg-rasterize-skia-with-fonts-to-ktx2-r8g8b8a8-srgb.wasm` | 3439891 | 570425344 | 570425344 | yes, `V128Load` | yes |
+| `tui/qipdb.wasm` | 130773 | 248578048 | 268435456 | no | yes |
+| `gui/mandelbrot.wasm` | 2206 | 2293760 | 67108864 | no | no |
+
+`gui/mandelbrot.wasm` is the smallest `gui/*.wasm` whose bytes contain `image/ktx2`. The declaration is `image/ktx2;vkFormat=R8G8B8A8_SRGB;colorPrimaries=BT709;transferFunction=SRGB`.
+
+Exports. `memory` is the linear memory. The other exports are functions.
+
+| Module | Exports |
+| --- | --- |
+| `bytes/identity.wasm` | `input_ptr () -> i32`, `input_bytes_cap () -> i32`, `output_bytes_cap () -> i32`, `render (i32) -> i64` |
+| `text/trim.wasm` | `input_ptr () -> i32`, `input_utf8_cap () -> i32`, `output_utf8_cap () -> i32`, `render (i32) -> i64` |
+| `text/rgb-to-hex.wasm` | `input_ptr () -> i32`, `input_utf8_cap () -> i32`, `output_utf8_cap () -> i32`, `render (i32) -> i64` |
+| `image/png/png-to-bmp-b8g8r8a8-srgb.wasm` | `input_ptr () -> i32`, `input_bytes_cap () -> i32`, `output_bytes_cap () -> i32`, `input_content_type_ptr () -> i32`, `input_content_type_size () -> i32`, `output_content_type_ptr () -> i32`, `output_content_type_size () -> i32`, `render (i32) -> i64` |
+| `image/png/png-to-bmp-b8g8r8a8-srgb-simd.wasm` | same export names and types as the PNG module above |
+| `application/wasm/wasm-strict-profile.wasm` | the PNG export list, plus `failure_modes_per_input_offset () -> i32` |
+| `text/html/html-link-extractor.wasm` | `input_ptr () -> i32`, `input_utf8_cap () -> i32`, `output_utf8_cap () -> i32`, `input_content_type_ptr () -> i32`, `input_content_type_size () -> i32`, `render (i32) -> i64` |
+| `text/html/html-page-wrap.wasm` | `input_ptr () -> i32`, `input_utf8_cap () -> i32`, `output_utf8_cap () -> i32`, `input_content_type_ptr () -> i32`, `input_content_type_size () -> i32`, `output_content_type_ptr () -> i32`, `output_content_type_size () -> i32`, `render (i32) -> i64` |
+| `text/markdown/commonmark.0.31.2.wasm` | same export names and types as `html-page-wrap` |
+| `text/markdown/gfm-commonmark.0.31.2.wasm` | same export names and types as `html-page-wrap` |
+| `image/svg+xml/svg-rasterize-to-ktx2-r8g8b8a8-srgb.wasm` | `input_ptr () -> i32`, `input_utf8_cap () -> i32`, `output_bytes_cap () -> i32`, `failure_modes_per_input_offset () -> i32`, both content-type pointer and size pairs, `uniform_set_background_color_rgba (i32) -> i32`, `uniform_set_current_color_rgba (i32) -> i32`, `uniform_set_width (i32) -> i32`, `uniform_set_height (i32) -> i32`, `render (i32) -> i64` |
+| `image/svg+xml/svg-rasterize-skia-with-fonts-to-ktx2-r8g8b8a8-srgb.wasm` | `__wasm_call_ctors () -> ()`, `input_ptr () -> i32`, `input_bytes_cap () -> i32`, `output_bytes_cap () -> i32`, `failure_modes_per_input_offset () -> i32`, both content-type pointer and size pairs, `uniform_set_width (i32) -> i32`, `uniform_set_height (i32) -> i32`, `uniform_set_background_color_rgba (i32) -> i32`, `arena_peak_bytes () -> i32`, `arena_live_bytes () -> i32`, `arena_failed_allocation () -> i32`, `arena_free_unmatched_count () -> i32`, `render (i32) -> i64` |
+| `tui/qipdb.wasm` | `input_ptr () -> i32`, `input_bytes_cap () -> i32`, `output_utf8_cap () -> i32`, both content-type pointer and size pairs, `target_input_ptr () -> i32`, `begin_update_at (i64) -> ()`, `uniform_set_instruction_budget (i32) -> i32`, `uniform_set_columns (i32) -> i32`, `uniform_set_lines (i32) -> i32`, `key_event (i32, i32) -> i32`, `finish_update () -> i64`, `render (i32) -> i64` |
+| `gui/mandelbrot.wasm` | `input_ptr () -> i32`, `input_bytes_cap () -> i32`, `output_bytes_cap () -> i32`, `output_content_type_ptr () -> i32`, `output_content_type_size () -> i32`, `begin_update_at (i64) -> ()`, `key_event (i32, i32) -> i32`, `pointer_event (i32, i32, i32) -> i32`, `render (i32) -> i64`, `finish_update () -> i64` |
+
+The three modules inside the 4096-byte envelope were then instantiated on the host with `wasmi` 2.0.0 and the features `lerux-wasm` already enables: `validate`, `prefer-btree-collections`, and `portable-dispatch`. The linker was empty. Allocator figures are the sum of requested allocation sizes while the objects were alive. Those calls used the host machine's allocator. The protection-domain heap is 2097152 bytes, and `wasmi` allocates linear memory as one buffer of the declared minimum. A minimum above 2097152 bytes cannot be instantiated on that heap.
+
+| Module | Input | Packed result | Linear memory | Live bytes, module and instance | Module translation retained (peak) |
+| --- | --- | --- | --- | --- | --- |
+| `bytes/identity.wasm` | `lerux` | success, 5 bytes `lerux` at pointer 0 | 67108864 | 67116920 | 4148 (7120) |
+| `text/trim.wasm` | two spaces, `hello`, space, newline | success, 5 bytes `hello` at pointer 65538 | 4259840 | 4270602 | 4504 (7768) |
+| `text/rgb-to-hex.wasm` | `rgb(101, 79, 240)` | success, 7 bytes `#654ff0` at pointer 131072 | 196608 | 206430 | 5324 (8780) |
+
+Getters: identity `input_ptr` 0 and both caps 67108864; trim `input_ptr` 65536 and both caps 4194304; `rgb-to-hex` `input_ptr` 65536, `input_utf8_cap` 65536, `output_utf8_cap` 7. The rejection bit was clear on all three calls.
+
+`text/markdown/commonmark.0.31.2.wasm` declares a minimum of 20381696 bytes. `Module::new` on the same `wasmi` features retained 148218 bytes and peaked at 154258. The file is 92647 bytes. The declared minimum alone is above the 2097152-byte heap, so option 5 is not possible without a heap change.
+
+`image/png/png-to-bmp-b8g8r8a8-srgb.wasm` is the PNG module whose name has no `simd`. Its code has no simd opcode. It declares a minimum of 169476096 bytes and a maximum of 201326592. `Module::new` retained 13652 bytes and peaked at 17960. That declared minimum is above the heap as well.
+
 ## Recommendation
 
-Pending. The investigation pass has not run.
+Option 3. The module is `text/rgb-to-hex.wasm`. The input is `rgb(101, 79, 240)`. The expected output is `#654ff0`. The guest smoke is a follow-on.
+
+The host test is `userspace/crates/lerux-wasm/tests/qip_content.rs`. The bytes are the 972-byte module from this commit, SHA-256 `028ad63d61fdcf8b97c61090c4671eb83b96721f7a910276c3af91aeb2752d4c`, with the Apache-2.0 notice beside the file. `run` still requires `start` and returns `Error::Export` for this module.
+
+Of the three modules inside the 4096-byte envelope, this is the one whose declared memory the 2 MiB heap can hold. The file is 972 bytes. It has no imports, no `memory.grow`, no simd opcode, no `call_indirect`, and no start section. The memory minimum and maximum are 196608 bytes, three pages. Translating it retained 5324 bytes. With the instance alive, 206430 bytes were live in total, and 196608 of those are the linear memory. The call returned success: pointer 131072, length 7, bytes `#654ff0`. Identity and trim also returned success on the host (`lerux`, and `hello` from a padded input), and their minima are 67108864 and 4259840 bytes.
+
+Option 1 is declined because `text/rgb-to-hex.wasm` instantiates under the current features, returns `#654ff0`, and its 196608-byte memory fits in the 2097152-byte heap. Option 2 is declined because the deciding measurement is that `wasmi` result, and a `qipx` fixture would leave the engine unmeasured. Option 4 is declined because the pass is choosing a host for one fitting Content module, while `wasm-strict-profile.wasm` is 10590 bytes and declares 12189696 bytes of memory. Option 5 is declined because CommonMark is 92647 bytes and declares a 20381696-byte minimum, so the pipeline needs a heap change and an architecture decision record before any production code. Option 6 is declined because `gui/mandelbrot.wasm`, the smallest `gui/*.wasm` that declares `image/ktx2`, declares a 2293760-byte minimum, and the graphical contract still waits on options 3 and 5.
+
+A later pass can add the Content entry point beside `run` in `lerux-wasm` without an architecture decision record. The module stays inside the 4096-byte envelope, the `wasmi` features, and the 2 MiB heap that ADR-010 and ADR-012 already record, and `sddf-program` keeps `start`. Production code that points the protection domain at `render`, raises the envelope, or grows the heap needs an architecture decision record before that code. The guest smoke is that follow-on.

@@ -1,0 +1,12 @@
+[workspace]
+
+[package]
+name = "bt-stage"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+description = "Stage-line check for the Swift Bluetooth panel. Calls the real line formatters."
+
+[dependencies]
+lerux-swift = { path = "../../../../userspace/crates/lerux-swift" }

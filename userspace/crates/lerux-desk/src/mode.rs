@@ -296,6 +296,10 @@ pub const BROWSER_HOLD: u8 = 1;
 /// panel. Microkit zeroes that page, so the console owns the panel at boot.
 pub const BROWSER_HOLD: u8 = 1;
 
+/// Byte 0 of the Swift `browser_hold` page while the shell's browser owns the
+/// panel. Microkit zeroes that page, so the console owns the panel at boot.
+pub const BROWSER_HOLD: u8 = 1;
+
 /// Geometry this image maps. seL4 clears the RAM frame at [`MODE_RECORD_PHYS`]
 /// on retype, so a missing record still describes the panel.
 #[must_use]

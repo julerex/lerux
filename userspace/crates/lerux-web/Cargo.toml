@@ -5,8 +5,24 @@ edition = "2024"
 license = "MIT"
 description = "no_std CSS subset, block-flow layout, and RGB888 paint for web-content"
 
+[package.metadata.verus]
+verify = true
+
 [lints]
 workspace = true
 
 [dependencies]
 lerux-html = { path = "../lerux-html" }
+# Pinned to the crates published with Verus 0.2026.10.18.7d82994.
+verus_builtin = "=0.0.0-2026-10-11-0230"
+verus_builtin_macros = "=0.0.0-2026-10-18-0147"
+
+# The verifier's expansion of `verus!` names `vstd`. The shell build leaves
+# this feature off, so it compiles the erased functions only.
+[dependencies.vstd]
+version = "=0.0.0-2026-10-18-0147"
+optional = true
+default-features = false
+
+[features]
+verus = ["dep:vstd"]

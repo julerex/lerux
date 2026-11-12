@@ -3011,6 +3011,7 @@ name = "swift-mt7921"
 version = "0.1.0"
 dependencies = [
  "lerux-desk",
+ "lerux-sddf",
  "lerux-swift",
  "sel4",
  "sel4-microkit",

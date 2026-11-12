@@ -1,0 +1,12 @@
+[workspace]
+
+[package]
+name = "cothread-contract"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+publish = false
+description = "Host replay of the cothread contract. Calls the real runtime."
+
+[dependencies]
+lerux-cothread = { path = "../../../../userspace/crates/lerux-cothread" }

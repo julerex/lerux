@@ -71,7 +71,7 @@ fn key_checked(body: &str) -> Result<bool, String> {
 }
 
 fn own_label(body: &str) -> bool {
-    let stages = ["Scan", "Auth", "Assoc", "Eapol", "Dhcp", "Ping"];
+    let stages = ["Scan", "Auth", "Assoc", "Eapol"];
     let mut from = 0;
     for stage in stages {
         let paint = format!("paint(Stage::{stage})");
@@ -89,7 +89,9 @@ fn own_label(body: &str) -> bool {
         }
         from = after;
     }
-    body.contains("Stage::PingOk")
+    // The handshake ends on `Wait`. A failed scan that returns `Wait` misses
+    // `return Stage::Scan` above, so this line cannot hide that failure.
+    body[from..].contains("Stage::Wait")
 }
 
 fn host_calls() -> Result<(), String> {

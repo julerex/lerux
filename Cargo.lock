@@ -1137,6 +1137,11 @@ checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
 [[package]]
 name = "lerux-calc"
 version = "0.1.0"
+dependencies = [
+ "verus_builtin",
+ "verus_builtin_macros",
+ "vstd",
+]
 
 [[package]]
 name = "lerux-cli"
@@ -1175,6 +1180,9 @@ name = "lerux-desk"
 version = "0.1.0"
 dependencies = [
  "lerux-input",
+ "verus_builtin",
+ "verus_builtin_macros",
+ "vstd",
 ]
 
 [[package]]
@@ -1213,6 +1221,11 @@ version = "0.1.0"
 [[package]]
 name = "lerux-ladybird-gfx"
 version = "0.1.0"
+dependencies = [
+ "verus_builtin",
+ "verus_builtin_macros",
+ "vstd",
+]
 
 [[package]]
 name = "lerux-ladybird-html"
@@ -1349,6 +1362,9 @@ name = "lerux-web"
 version = "0.1.0"
 dependencies = [
  "lerux-html",
+ "verus_builtin",
+ "verus_builtin_macros",
+ "vstd",
 ]
 
 [[package]]
@@ -2306,6 +2322,7 @@ dependencies = [
 name = "sddf-shell"
 version = "0.1.0"
 dependencies = [
+ "embedded-hal-nb",
  "lerux-calc",
  "lerux-cothread",
  "lerux-image",
@@ -2314,6 +2331,7 @@ dependencies = [
  "lerux-tls",
  "lerux-web",
  "sel4-microkit",
+ "sel4-microkit-driver-adapters",
  "smoltcp",
 ]
 
@@ -2985,6 +3003,7 @@ name = "swift-mt7921"
 version = "0.1.0"
 dependencies = [
  "lerux-desk",
+ "lerux-sddf",
  "lerux-swift",
  "sel4",
  "sel4-microkit",

@@ -1,4 +1,4 @@
-use std::{env, fs, path::PathBuf, process::Command};
+use std::{env, fs, mem::size_of, path::PathBuf, process::Command};
 
 fn main() {
     let out = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));
@@ -28,6 +28,7 @@ fn main() {
     fs::write(out.join("patch.bin"), patch).expect("wifi blob");
     fs::write(out.join("patch_1a.bin"), patch_1a).expect("wifi blob");
     fs::write(out.join("ram_1a.bin"), ram_1a).expect("wifi blob");
+    write_net_config(&out);
     println!("cargo:rerun-if-changed=../../../support/swift-wifi.txt");
     println!("cargo:rerun-if-changed=../../../support/mt7921.bin");
     println!("cargo:rerun-if-changed=/usr/lib/firmware/mediatek/WIFI_RAM_CODE_MT7961_1.bin.zst");
@@ -38,6 +39,13 @@ fn main() {
         "cargo:rerun-if-changed=/usr/lib/firmware/mediatek/WIFI_MT7961_patch_mcu_1a_2_hdr.bin.zst"
     );
     println!("cargo:rerun-if-changed=/usr/lib/firmware/mediatek/WIFI_RAM_CODE_MT7961_1a.bin.zst");
+}
+
+fn write_net_config(out: &std::path::Path) {
+    let config = lerux_sddf::net_image::driver_config();
+    let mut bytes = vec![0u8; size_of::<lerux_sddf::net_driver_config_t>()];
+    lerux_sddf::net_image::net_config_to_bytes(&config, &mut bytes);
+    fs::write(out.join("net_driver.bin"), bytes).expect("net config");
 }
 
 fn load(support_file: &std::path::Path, fallback: Option<PathBuf>) -> Vec<u8> {

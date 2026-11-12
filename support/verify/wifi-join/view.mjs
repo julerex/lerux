@@ -3,8 +3,6 @@ const stopped = {
   auth: "Stopped while authenticating",
   assoc: "Stopped during association",
   eapol: "Stopped during the handshake",
-  dhcp: "Stopped while asking for an address",
-  ping: "Stopped while pinging",
 };
 
 const running = {
@@ -12,8 +10,6 @@ const running = {
   auth: "Authenticating",
   assoc: "Associated",
   eapol: "Handshake",
-  dhcp: "Asking for an address",
-  ping: "Pinging",
 };
 
 export const title = "Choosing a network and joining it";
@@ -21,7 +17,7 @@ export const title = "Choosing a network and joining it";
 export const state = (v) => {
   if (!v.booted && v.radio !== "online") return "Loading firmware";
   if (v.radio === "online" && v.via !== "ok") return "Online without finishing";
-  if (v.radio === "online") return "Ping answered";
+  if (v.radio === "online") return "Handshake finished";
   if (v.screen === "radio" && v.pass === "short") return "Radio started by a short passphrase";
   if (v.via === "fail") return stopped[v.radio] ?? "Stopped";
   if (v.screen === "ssid") return "Which network";
@@ -40,9 +36,7 @@ export const step = (action, from) => {
   if (action === "Advance" && from.radio === "scan") return "the access point answers";
   if (action === "Advance" && from.radio === "auth") return "the access point associates";
   if (action === "Advance" && from.radio === "assoc") return "the handshake starts";
-  if (action === "Advance" && from.radio === "eapol") return "the handshake finishes";
-  if (action === "Advance" && from.radio === "dhcp") return "an address arrives";
-  if (action === "ThePingAnswers") return "the ping is answered";
+  if (action === "TheHandshakeFinishes") return "the handshake finishes";
   if (action === "TheRadioStops") return "that step fails";
   return null;
 };

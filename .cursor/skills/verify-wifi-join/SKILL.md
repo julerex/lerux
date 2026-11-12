@@ -10,19 +10,19 @@ description: >
 
 ## Property
 
-A ping is online only after the join finishes, a passphrase `key_ok` rejects never starts the radio, and `ready` stays false until the firmware stage is `Wait`.
+The join is online only after the handshake finishes, a passphrase `key_ok` rejects never starts the radio, and `ready` stays false until the firmware stage is `Wait`.
 
 ## Harm
 
-The panel says the join finished when the scan, the handshake, or the address failed, or a short passphrase is written to the radio. The smoke types one good passphrase.
+The panel says the join finished when the scan or the handshake failed, or a short passphrase is written to the radio. The smoke types one good passphrase. The address and the ping belong to the shell.
 
 ## Result on this tree
 
-The check passes. TLC finds 20 distinct states. Each failed stage stays on that stage, a short passphrase returns to the menu, and firmware finishes before the menu offers wifi.
+The check passes. TLC finds 16 distinct states. Each failed stage stays on that stage, a short passphrase returns to the menu, and firmware finishes before the menu offers wifi.
 
 ## Counterexample the check catches
 
-In `Mac::associate`, change both `return Stage::Scan` lines to `return Stage::PingOk([0, 0, 0, 0])`. The check exits 1.
+In `Mac::associate`, change both `return Stage::Scan` lines to `return Stage::Wait`. The check exits 1.
 
 1. The firmware reaches `Wait`.
 2. You choose wifi, name a network, and type a passphrase.
@@ -49,18 +49,18 @@ Read every TLC result with `/statechart`. It shows each broken rule as its short
 | --- | --- |
 | Menu, network name, passphrase, quit | `dispatch_ssid`, `dispatch_psk`, `post_wifi` in `userspace/pds/console-shell/src/main.rs` |
 | Passphrase length | `key_ok` in `userspace/crates/lerux-swift/src/wpa.rs` |
-| Scan, auth, assoc, handshake, address, ping | `Mac::associate` in `userspace/pds/swift-mt7921/src/join.rs` |
+| Scan, auth, assoc, handshake | `Mac::associate` in `userspace/pds/swift-mt7921/src/join.rs` |
 | Handshake reply must be `[1]` | `associate` in `userspace/crates/lerux-swift/src/wifi.rs` |
 | Firmware gate | `mac.stage == Stage::Wait` in `userspace/pds/swift-mt7921/src/device.rs` |
 | Absent radio, missing firmware, empty passphrase, silent handshake | `bring_up` in `userspace/crates/lerux-swift/src/wifi.rs` |
 
 The four-way handshake inside `four_way` is one stage here (`Eapol`), not the four messages. The firmware words `own` through `mac` are the `Wait` gate, not a stage of their own.
 
-The labels a reader sees are in `support/verify/wifi-join/view.mjs`. The chart hides the step that stays on a stopped stage or on "Ping answered". If you change a step the reader can see, update that file so the labels stay in the reader's words.
+The labels a reader sees are in `support/verify/wifi-join/view.mjs`. The chart hides the step that stays on a stopped stage or on "Handshake finished". If you change a step the reader can see, update that file so the labels stay in the reader's words.
 
 ## Sync commit
 
-`e599121d159bd050d2e69547eb42bfcc7deb791b`
+`f4eef172662ea7db373f261516e5755fc28409ab`
 
 Move this hash forward only after you re-read the functions above, update the model so each step is still one branch, and re-run the check at the new commit.
 
@@ -70,7 +70,7 @@ Re-run the check. Exit 1 is a real break. Exit 2 means the probe lost the functi
 
 ## Bounds
 
-One network and one passphrase. The model does not cover the WPA message bytes, the DHCP packet layout, or a second scan. `bring_up` is called with a radio that never replies, so the success path of that host function is the crate's own test.
+One network and one passphrase. The model does not cover the WPA message bytes or a second scan. The address and the ping are not steps of `Mac::associate`. `bring_up` is called with a radio that never replies, so the success path of that host function is the crate's own test.
 
 ## Tools
 

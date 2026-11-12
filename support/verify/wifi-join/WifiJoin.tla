@@ -1,10 +1,10 @@
 ---- MODULE WifiJoin ----
 (* The Swift menu asks for a network and a passphrase, then the radio
-   walks scan, auth, assoc, the 4-way handshake, the address, and the ping.
-   `dispatch_psk` calls `key_ok` before `post_wifi`.
-   `Mac::associate` returns the stage it just entered when that step fails.
-   `wifi::associate` rejects a handshake reply other than one byte `1`.
-   `ready` stays false until `stage` is `Wait`. *)
+   walks scan, auth, assoc, and the 4-way handshake. The address and the
+   ping belong to the shell. `dispatch_psk` calls `key_ok` before `post_wifi`.
+   `Mac::associate` returns the stage it just entered when that step fails,
+   and `Wait` only after the handshake. `wifi::associate` rejects a handshake
+   reply other than one byte `1`. `ready` stays false until `stage` is `Wait`. *)
 
 CONSTANTS OwnLabel, EapolChecksReply, KeyChecked, FirmwareWaits
 
@@ -12,7 +12,7 @@ VARIABLES screen, radio, via, pass, booted
 
 vars == <<screen, radio, via, pass, booted>>
 
-Running == {"scan", "auth", "assoc", "eapol", "dhcp", "ping"}
+Running == {"scan", "auth", "assoc", "eapol"}
 
 Init ==
   /\ screen = "menu"
@@ -78,13 +78,11 @@ Advance(here, there) ==
 EnterAuth == Advance("scan", "auth")
 EnterAssoc == Advance("auth", "assoc")
 EnterEapol == Advance("assoc", "eapol")
-EnterDhcp == Advance("eapol", "dhcp")
-EnterPing == Advance("dhcp", "ping")
 
-ThePingAnswers ==
+TheHandshakeFinishes ==
   /\ screen = "radio"
   /\ via = "run"
-  /\ radio = "ping"
+  /\ radio = "eapol"
   /\ radio' = "online"
   /\ via' = "ok"
   /\ UNCHANGED <<screen, pass, booted>>
@@ -114,9 +112,7 @@ Next ==
   \/ EnterAuth
   \/ EnterAssoc
   \/ EnterEapol
-  \/ EnterDhcp
-  \/ EnterPing
-  \/ ThePingAnswers
+  \/ TheHandshakeFinishes
   \/ TheRadioStops
   \/ Park
 

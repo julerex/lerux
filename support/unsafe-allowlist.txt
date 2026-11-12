@@ -8,6 +8,7 @@ lerux-ladybird/pds/request-server/src/net_device.rs
 lerux-ladybird/pds/web-content/src/main.rs
 support/prog/smoke.rs
 support/verify/serial-tx-backpressure/replay/src/main.rs
+support/verify/cothread-contract/replay/src/main.rs
 tools/lerux-cli/src/agent_sddf.rs
 tools/lerux-cli/src/build_sdk.rs
 tools/lerux-cli/src/fetch_sddf.rs
@@ -115,6 +116,7 @@ userspace/pds/sp804-driver/src/main.rs
 userspace/pds/swift-bt/src/main.rs
 userspace/pds/swift-bt/src/xhci.rs
 userspace/pds/swift-mt7921/src/device.rs
+userspace/pds/swift-mt7921/src/ether.rs
 userspace/pds/swift-mt7921/src/join.rs
 userspace/pds/swift-mt7921/src/main.rs
 userspace/pds/swift-nvme/src/main.rs

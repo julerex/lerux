@@ -95,6 +95,8 @@ Done. `name` resolves `host` through DNS at `10.0.2.3`, verifies the smoke certi
 
 Template and channel work. The channel ids come from the profile manifest. The shell is the same crate as the fetch image, so the only new code is the console output in place of the serial client. The queue side can be proven on QEMU by composing the same roles over the e1000e driver on the q35 image first.
 
+Landed in `console-swift.system.template` and `support/profiles/swift.toml`. `net_virt_tx` and `net_virt_rx` are priority 3, `net_copy` is priority 2, and the shell is `sddf-shell` at priority 1. That shell reuses the fetch command set, so it links smoltcp, and its byte output is `console_driver` instead of the serial queues. `console_driver` stays priority 6. `swift_mt7921` stays priority 4 and keeps the driver queue maps: its channel 1 is the receive virtualiser and its channel 2 is the transmit virtualiser. The shell's network channels are 3 and 4, the same ids as the fetch image. This image has no filesystem server. The queue side is the existing q35 image `x86_64_generic_fetch_native`: the same virtualisers, copier, and smoltcp shell over e1000e at `00:04.0`. That guest path takes the e1000e interrupt (I/O APIC pin 10, vector 50, beside AHCI). A second template was not added. The console byte path and the radio in the driver slot still need the laptop. The driver does not enqueue frames yet.
+
 ## Phase 8 — The radio as an sDDF net driver
 
 **Exit:** `swift-mt7921` enqueues received Ethernet frames on the standard receive queue and dequeues transmit frames from the standard transmit queue; `ping ok` comes from the shell, not from the driver.

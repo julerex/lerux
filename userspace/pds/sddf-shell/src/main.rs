@@ -205,12 +205,38 @@ compile_error!(
 ))]
 compile_error!("the fetch image, the web image, and the browser image are separate boards");
 
+#[cfg(all(
+    any(feature = "board-swift_sfx14_41g", feature = "console-out"),
+    any(
+        feature = "board-qemu_virt_aarch64_fetch_sddf",
+        feature = "board-qemu_virt_aarch64_web_sddf",
+        feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-qemu_virt_aarch64_fs_sddf",
+        feature = "board-qemu_virt_riscv64_fetch_sddf",
+        feature = "board-qemu_virt_riscv64_web_sddf",
+        feature = "board-qemu_virt_riscv64_browser_sddf",
+        feature = "board-qemu_virt_riscv64_fs_sddf",
+        feature = "board-x86_64_generic_web_sddf",
+        feature = "board-x86_64_generic_fs_sddf",
+    )
+))]
+compile_error!(
+    "the Swift console image does not share a build with the fetch, web, browser, or filesystem image"
+);
+
 use core::{
     cell::UnsafeCell,
     mem::{size_of, MaybeUninit},
 };
 
+#[cfg(feature = "console-out")]
+use embedded_hal_nb::{
+    nb,
+    serial::{Read, Write},
+};
 use sel4_microkit::{protection_domain, Channel, ChannelSet, Handler, Infallible};
+#[cfg(feature = "console-out")]
+use sel4_microkit_driver_adapters::serial::client::Client;
 
 #[cfg(any(
     feature = "board-qemu_virt_aarch64_fs_sddf",
@@ -230,11 +256,15 @@ use lerux_sddf::{
         self, FS_COMMAND_QUEUE_VADDR, FS_COMPLETION_QUEUE_VADDR, FS_REGION_SIZE, FS_SHARE_VADDR,
         FS_SHELL_SERVER_CHANNEL,
     },
-    fs_queue_t, serial_cancel_consumer_signal, serial_client_config_t, serial_dequeue,
-    serial_enqueue, serial_handle_from_connection,
+    fs_queue_t, serial_client_config_t,
     serial_image::{self, CLIENT_RX_CHANNEL, CLIENT_TX_CHANNEL},
-    serial_queue_handle_t, serial_request_consumer_signal, serial_require_consumer_signal,
     LIONS_FS_MAGIC, SDDF_SERIAL_MAGIC,
+};
+
+#[cfg(not(feature = "console-out"))]
+use lerux_sddf::{
+    serial_cancel_consumer_signal, serial_dequeue, serial_enqueue, serial_handle_from_connection,
+    serial_queue_handle_t, serial_request_consumer_signal, serial_require_consumer_signal,
 };
 
 #[cfg(any(
@@ -249,9 +279,26 @@ use lerux_sddf::{
 };
 
 const CONFIG: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/config.bin"));
+#[cfg(not(feature = "console-out"))]
 const TX_CH: usize = CLIENT_TX_CHANNEL as usize;
+#[cfg(not(feature = "console-out"))]
 const RX_CH: usize = CLIENT_RX_CHANNEL as usize;
 const FS_CH: usize = FS_SHELL_SERVER_CHANNEL as usize;
+/// Console byte channel. `console_driver` aliases `serial_driver` in the channel check.
+#[cfg(feature = "console-out")]
+const SERIAL_DRIVER: Channel = Channel::new(0);
+/// Receive copier. The literal matches `SHELL_NET_RX_CHANNEL`.
+#[cfg(feature = "net-client")]
+const NET_COPY: Channel = Channel::new(3);
+/// Transmit virtualiser. The literal matches `SHELL_NET_TX_CHANNEL`.
+#[cfg(feature = "net-client")]
+const NET_VIRT_TX: Channel = Channel::new(4);
+
+#[cfg(feature = "net-client")]
+const _: () = {
+    assert!(lerux_sddf::net_image::SHELL_NET_RX_CHANNEL == 3);
+    assert!(lerux_sddf::net_image::SHELL_NET_TX_CHANNEL == 4);
+};
 #[cfg(feature = "net-client")]
 const STACK_SIZE: usize = 0x1_0000;
 #[cfg(not(feature = "net-client"))]
@@ -284,17 +331,31 @@ static STACKS: Stacks = Stacks(UnsafeCell::new(
     [const { Stack([0; STACK_SIZE]) }; STACK_SLOTS],
 ));
 
+#[cfg(not(feature = "console-out"))]
 struct Io {
     tx: serial_queue_handle_t,
     rx: serial_queue_handle_t,
 }
 
+#[cfg(not(feature = "console-out"))]
 struct IoCell(UnsafeCell<MaybeUninit<Io>>);
 
 // SAFETY: init writes this cell before the worker starts. The root does not read it again.
+#[cfg(not(feature = "console-out"))]
 unsafe impl Sync for IoCell {}
 
+#[cfg(not(feature = "console-out"))]
 static IO: IoCell = IoCell(UnsafeCell::new(MaybeUninit::uninit()));
+
+#[cfg(feature = "console-out")]
+struct ConsoleCell(UnsafeCell<MaybeUninit<Client>>);
+
+// SAFETY: init writes this cell before the worker starts. One kernel thread uses it.
+#[cfg(feature = "console-out")]
+unsafe impl Sync for ConsoleCell {}
+
+#[cfg(feature = "console-out")]
+static CONSOLE: ConsoleCell = ConsoleCell(UnsafeCell::new(MaybeUninit::uninit()));
 
 struct FilesCell(UnsafeCell<MaybeUninit<Files>>);
 
@@ -661,9 +722,16 @@ fn read_seed(buf: &mut [u8]) -> usize {
     read.unwrap_or(0)
 }
 
+#[cfg(not(feature = "console-out"))]
 fn io() -> &'static Io {
     // SAFETY: init wrote this cell before spawning the worker.
     unsafe { (*IO.0.get()).assume_init_ref() }
+}
+
+#[cfg(feature = "console-out")]
+fn console() -> &'static mut Client {
+    // SAFETY: init wrote this cell before spawning the worker. The worker is the user.
+    unsafe { (*CONSOLE.0.get()).assume_init_mut() }
 }
 
 fn say(bytes: &[u8]) {
@@ -676,6 +744,7 @@ fn say(bytes: &[u8]) {
     emit(bytes);
 }
 
+#[cfg(not(feature = "console-out"))]
 fn emit(bytes: &[u8]) {
     let tx = &io().tx;
     for &byte in bytes {
@@ -690,6 +759,21 @@ fn emit(bytes: &[u8]) {
     Channel::new(TX_CH).notify();
 }
 
+#[cfg(feature = "console-out")]
+fn emit(bytes: &[u8]) {
+    let screen = console();
+    for &byte in bytes {
+        loop {
+            match screen.write(byte) {
+                Ok(()) => break,
+                Err(nb::Error::WouldBlock) => core::hint::spin_loop(),
+                Err(nb::Error::Other(_)) => return,
+            }
+        }
+    }
+}
+
+#[cfg(not(feature = "console-out"))]
 fn read_byte() -> u8 {
     let rx = &io().rx;
     loop {
@@ -706,6 +790,18 @@ fn read_byte() -> u8 {
     }
 }
 
+#[cfg(feature = "console-out")]
+fn read_byte() -> u8 {
+    loop {
+        match console().read() {
+            Ok(byte) => return byte,
+            Err(nb::Error::WouldBlock | nb::Error::Other(_)) => {
+                microkit_cothread_wait_on_channel(SERIAL_DRIVER.index());
+            }
+        }
+    }
+}
+
 fn read_line(buf: &mut [u8]) -> usize {
     let mut len = 0;
     let mut overflow = false;
@@ -715,7 +811,17 @@ fn read_line(buf: &mut [u8]) -> usize {
             continue;
         }
         if byte == b'\r' {
+            #[cfg(feature = "console-out")]
+            emit(b"\n");
             return if overflow { 0 } else { len };
+        }
+        #[cfg(feature = "console-out")]
+        if byte == 0x7f {
+            if len > 0 && !overflow {
+                len -= 1;
+                emit(&[0x08, b' ', 0x08]);
+            }
+            continue;
         }
         if len == buf.len() {
             overflow = true;
@@ -723,6 +829,8 @@ fn read_line(buf: &mut [u8]) -> usize {
         }
         buf[len] = byte;
         len += 1;
+        #[cfg(feature = "console-out")]
+        emit(&[byte]);
     }
 }
 
@@ -1477,7 +1585,13 @@ fn init() -> HandlerImpl {
         feature = "board-x86_64_generic_fs_sddf"
     ))]
     install_status(serial_len + fs_len);
+    #[cfg(not(feature = "console-out"))]
     install_serial(&serial);
+    #[cfg(feature = "console-out")]
+    {
+        let _ = serial;
+        install_console();
+    }
     spawn_worker();
     HandlerImpl
 }
@@ -1509,11 +1623,18 @@ fn client_pages(serial_len: usize, fs_len: usize) -> serial_client_config_t {
     serial
 }
 
+#[cfg(not(feature = "console-out"))]
 fn install_serial(serial: &serial_client_config_t) {
     // SAFETY: the template maps this client's transmit and receive regions.
     let tx = unsafe { serial_handle_from_connection(&serial.tx) };
     let rx = unsafe { serial_handle_from_connection(&serial.rx) };
     unsafe { (*IO.0.get()).write(Io { tx, rx }) };
+}
+
+#[cfg(feature = "console-out")]
+fn install_console() {
+    // SAFETY: init is the only writer, and the worker has not started.
+    unsafe { (*CONSOLE.0.get()).write(Client::new(SERIAL_DRIVER)) };
 }
 
 fn spawn_worker() {
@@ -1531,9 +1652,15 @@ impl Handler for HandlerImpl {
     type Error = Infallible;
 
     fn notified(&mut self, channels: ChannelSet) -> Result<(), Self::Error> {
+        #[cfg(not(feature = "console-out"))]
         if channels.contains(Channel::new(TX_CH)) {
             microkit_cothread_recv_ntfn(TX_CH);
         }
+        #[cfg(feature = "console-out")]
+        if channels.contains(SERIAL_DRIVER) {
+            microkit_cothread_recv_ntfn(SERIAL_DRIVER.index());
+        }
+        #[cfg(not(feature = "console-out"))]
         if channels.contains(Channel::new(RX_CH)) {
             microkit_cothread_recv_ntfn(RX_CH);
         }
@@ -1541,7 +1668,9 @@ impl Handler for HandlerImpl {
             microkit_cothread_recv_ntfn(FS_CH);
         }
         #[cfg(feature = "net-client")]
-        net::on_notify(channels);
+        if channels.contains(NET_COPY) || channels.contains(NET_VIRT_TX) {
+            net::on_notify(channels);
+        }
         #[cfg(any(
             feature = "board-qemu_virt_aarch64_browser_sddf",
             feature = "board-qemu_virt_riscv64_browser_sddf"

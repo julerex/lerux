@@ -1137,6 +1137,11 @@ checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
 [[package]]
 name = "lerux-calc"
 version = "0.1.0"
+dependencies = [
+ "verus_builtin",
+ "verus_builtin_macros",
+ "vstd",
+]
 
 [[package]]
 name = "lerux-cli"

@@ -8,6 +8,7 @@ lerux-ladybird/pds/request-server/src/net_device.rs
 lerux-ladybird/pds/web-content/src/main.rs
 support/prog/smoke.rs
 support/verify/serial-tx-backpressure/replay/src/main.rs
+support/verify/cothread-contract/replay/src/main.rs
 tools/lerux-cli/src/agent_sddf.rs
 tools/lerux-cli/src/build_sdk.rs
 tools/lerux-cli/src/fetch_sddf.rs

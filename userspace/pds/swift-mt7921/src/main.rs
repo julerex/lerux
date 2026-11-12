@@ -9,6 +9,7 @@
 //! `mac` when that step fails, and `wait` when the
 //! firmware has reached the normal state. The shell then asks for a survey.
 //! This domain writes the names it hears and, after the passphrase, associates.
+//! An empty name list still replaces row 22 with `rx`, `ok`, and `done`.
 //! The shell notifies channel 1 for both. Channel 0 stays the MSI.
 //! Association paints `scan`, `auth`, `assoc`, and `eapol`, then returns to
 //! `wait`. The shell owns the address and the ping. Received Ethernet frames
@@ -47,7 +48,7 @@ use lerux_swift::{
     bar_line, class_code,
     dump::PANEL_COLS,
     format_report, load_header, memory_bar,
-    mt7921::{survey_requested, write_slot_line, Sem, Stage},
+    mt7921::{read_survey_mark, survey_requested, write_slot_line, Sem, Stage},
     paint_row, read_key, vendor_device, working_line, WaitMark, WifiReport, MT7921_BAR, MT7921_BDF,
     MT7921_IDS,
 };
@@ -256,6 +257,21 @@ fn paint_stage(stage: Stage) {
     }
 }
 
+/// Row 22 keeps the survey counts after `wait`. A menu scroll erases that row,
+/// so the shell prints the same bytes.
+#[cfg(not(test))]
+fn paint_survey_mark() {
+    let Some(mark) = read_survey_mark(key_page()) else {
+        return;
+    };
+    let mut line = [b' '; 48];
+    let prefix = b"mt7921: ";
+    line[..prefix.len()].copy_from_slice(prefix);
+    let n = mark.len().min(line.len() - prefix.len());
+    line[prefix.len()..prefix.len() + n].copy_from_slice(&mark[..n]);
+    paint(&line);
+}
+
 #[cfg(not(test))]
 fn paint(text: &[u8]) {
     paint_at(ROW, text);
@@ -334,6 +350,7 @@ impl HandlerImpl {
             paint_stage(Stage::Scan);
             mac.survey(key_page());
             paint_stage(Stage::Wait);
+            paint_survey_mark();
         } else if let Some((name, name_len, pass, pass_len)) = posted_key() {
             let stage = mac.associate(&name[..name_len], &pass[..pass_len], paint_stage);
             paint_stage(stage);

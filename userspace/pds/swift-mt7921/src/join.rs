@@ -5,7 +5,7 @@
 //! association stays up.
 
 use lerux_swift::{
-    mt7921::{frame_off, write_survey_list, Stage, SCAN_DONE, SCAN_MAX},
+    mt7921::{frame_off, write_survey_list, write_survey_mark, Stage, SCAN_DONE, SCAN_MAX},
     wpa::{
         assoc_ok, auth_ok, beacon_ssid, ccmp_decrypt, derive_ptk, eapol_in_msdu, match_beacon,
         message1, message2, message3, message4, pmk, write_assoc, write_auth, write_qos_data,
@@ -90,7 +90,8 @@ impl Mac {
     /// Wildcard scan. Heard names are written for the shell, in byte order.
     ///
     /// A scan that does not start leaves the request tag, so the shell reports
-    /// `wifi err` instead of an empty list.
+    /// `wifi err` instead of an empty list. The mark under the list counts
+    /// data buffers, names kept, and whether the firmware signaled scan-done.
     pub(crate) fn survey(&mut self, page: &mut [u8]) {
         if !self.start_scan(&[]) {
             return;
@@ -98,17 +99,28 @@ impl Mac {
         let mut names = [[0u8; 32]; SCAN_MAX];
         let mut lens = [0u8; SCAN_MAX];
         let mut count = 0usize;
+        let mut rx = 0u32;
+        let mut ok = 0u32;
+        let mut done = false;
+        let mut fc = None;
         let mut frame = [0u8; 1600];
         for _ in 0..scan_budget() {
-            if let Some(n) = self.poll_data()
-                && let Some(m) = copy_frame(n, &mut frame)
-                && let Some(ssid) = beacon_ssid(&frame[..m])
-            {
-                count = remember(&mut names, &mut lens, count, ssid);
+            if let Some(n) = self.poll_data() {
+                rx = rx.saturating_add(1);
+                if let Some(m) = copy_frame(n, &mut frame) {
+                    if fc.is_none() && m > 0 {
+                        fc = Some(frame[0]);
+                    }
+                    if let Some(ssid) = beacon_ssid(&frame[..m]) {
+                        ok = ok.saturating_add(1);
+                        count = remember(&mut names, &mut lens, count, ssid);
+                    }
+                }
             }
             if let Some(n) = self.poll_mcu()
                 && scan_done(Mac::rx_bytes(n))
             {
+                done = true;
                 break;
             }
             core::hint::spin_loop();
@@ -119,6 +131,7 @@ impl Mac {
             refs[i] = &names[i][..n];
         }
         let _ = write_survey_list(page, &refs[..count]);
+        let _ = write_survey_mark(page, rx, ok, done, fc);
     }
 
     fn open_auth(&mut self, ap: &FoundAp) -> bool {

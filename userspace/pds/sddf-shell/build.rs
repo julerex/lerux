@@ -1,5 +1,6 @@
 fn main() {
     reject_mixed_filesystem_boards();
+    reject_swift_sharing_a_build();
     reject_fetch_sharing_a_build();
     reject_web_against_filesystem();
     reject_web_against_fetch();
@@ -27,6 +28,27 @@ fn reject_mixed_filesystem_boards() {
         )
     ))]
     compile_error!("filesystem board features are mutually exclusive");
+}
+
+fn reject_swift_sharing_a_build() {
+    #[cfg(all(
+        any(feature = "board-swift_sfx14_41g", feature = "console-out"),
+        any(
+            feature = "board-qemu_virt_aarch64_fetch_sddf",
+            feature = "board-qemu_virt_aarch64_web_sddf",
+            feature = "board-qemu_virt_aarch64_browser_sddf",
+            feature = "board-qemu_virt_aarch64_fs_sddf",
+            feature = "board-qemu_virt_riscv64_fetch_sddf",
+            feature = "board-qemu_virt_riscv64_web_sddf",
+            feature = "board-qemu_virt_riscv64_browser_sddf",
+            feature = "board-qemu_virt_riscv64_fs_sddf",
+            feature = "board-x86_64_generic_web_sddf",
+            feature = "board-x86_64_generic_fs_sddf",
+        )
+    ))]
+    compile_error!(
+        "the Swift console image does not share a build with the fetch, web, browser, or filesystem image"
+    );
 }
 
 fn reject_fetch_sharing_a_build() {

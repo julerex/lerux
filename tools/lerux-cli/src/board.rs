@@ -237,7 +237,7 @@ mod tests {
         assert!(xml.contains("pin=\"1\""));
         assert!(xml.contains("vector=\"49\""));
         assert!(xml.contains("console-driver.elf"));
-        assert!(xml.contains("console-shell.elf"));
+        assert!(xml.contains("sddf-shell.elf"));
         assert!(xml.contains("swift-pci-probe.elf"));
         assert!(xml.contains("swift-mt7921.elf"));
         assert!(xml.contains("swift-nvme.elf"));
@@ -269,6 +269,30 @@ mod tests {
                 assert!(domain.contains(map), "{name} lacks {map}");
             }
         }
+    }
+
+    #[test]
+    fn swift_image_holds_the_fetch_net_roles() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let xml = crate::system::render_system(&root, "swift_sfx14_41g").expect("swift sdf");
+        assert!(!xml.contains("console-shell.elf"));
+        assert!(xml.contains("sddf-net-virt-tx.elf"));
+        assert!(xml.contains("sddf-net-virt-rx.elf"));
+        assert!(xml.contains("sddf-net-copy.elf"));
+        assert!(xml.contains("name=\"console_driver\" priority=\"6\""));
+        assert!(xml.contains("name=\"swift_mt7921\" priority=\"4\""));
+        assert!(xml.contains("name=\"shell\" priority=\"1\""));
+        assert!(xml.contains("name=\"net_virt_tx\" priority=\"3\""));
+        assert!(xml.contains("name=\"net_virt_rx\" priority=\"3\""));
+        assert!(xml.contains("name=\"net_copy\" priority=\"2\""));
+        assert!(xml.contains("vaddr=\"0x5_000_000\""));
+        assert!(xml.contains("vaddr=\"0x5_030_000\""));
+        assert!(xml.contains("pd=\"shell\" id=\"0\" pp=\"true\""));
+        assert!(xml.contains("pd=\"shell\" id=\"3\""));
+        assert!(xml.contains("pd=\"shell\" id=\"4\""));
+        assert!(xml.contains("pd=\"swift_mt7921\" id=\"1\""));
+        assert!(xml.contains("pd=\"swift_mt7921\" id=\"2\""));
+        assert_eq!(xml.matches("addr=\"0xcf8\"").count(), 1);
     }
 
     #[test]

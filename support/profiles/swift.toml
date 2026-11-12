@@ -1,0 +1,67 @@
+# Swift X SFX14-41G. The fetch network roles sit on the panel image.
+# Channel ids match lerux-sddf::net_image and the named Channel consts in sddf-shell.
+
+template = "console-swift.system.template"
+pds = [
+  "console-driver",
+  "swift-pci-probe",
+  "swift-mt7921",
+  "swift-nvme",
+  "swift-bt",
+  "net-virt-tx",
+  "net-virt-rx",
+  "net-copy",
+  "shell",
+]
+description = "Swift panel with the fetch network virtualisers and copier"
+default_board = "swift_sfx14_41g"
+trust_class = "minimal"
+
+[[channel]]
+name = "shell_console"
+ends = [
+  { pd = "console_driver", id = 1 },
+  { pd = "shell", id = 0, pp = true },
+]
+
+[[channel]]
+name = "shell_nvme"
+ends = [
+  { pd = "swift_nvme", id = 1 },
+  { pd = "shell", id = 1 },
+]
+
+[[channel]]
+name = "net_driver_rx"
+ends = [
+  { pd = "swift_mt7921", id = 1 },
+  { pd = "net_virt_rx", id = 0 },
+]
+
+[[channel]]
+name = "net_driver_tx"
+ends = [
+  { pd = "swift_mt7921", id = 2 },
+  { pd = "net_virt_tx", id = 0 },
+]
+
+[[channel]]
+name = "net_rx_copy"
+ends = [
+  { pd = "net_virt_rx", id = 1 },
+  { pd = "net_copy", id = 0 },
+]
+
+[[channel]]
+name = "shell_net_rx"
+ends = [
+  { pd = "net_copy", id = 1 },
+  { pd = "shell", id = 3 },
+]
+
+[[channel]]
+name = "shell_net_tx"
+ends = [
+  { pd = "net_virt_tx", id = 1 },
+  { pd = "shell", id = 4 },
+]

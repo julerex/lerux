@@ -499,7 +499,7 @@ arch = "x86_64"
 microkit_board = "x86_64_generic"
 target = "x86_64-sel4-microkit"
 template = "console-swift.system.template"
-pds = ["console-shell", "console-driver", "swift-pci-probe", "swift-mt7921", "swift-nvme", "swift-bt"]
+pds = ["sddf-shell", "console-driver", "swift-pci-probe", "swift-mt7921", "swift-nvme", "swift-bt", "sddf-net-virt-tx", "sddf-net-virt-rx", "sddf-net-copy"]
 system_vars = { fb_phys = "0xfc90000000", fb_bytes = "0x7e9000" }
 ci = false
 

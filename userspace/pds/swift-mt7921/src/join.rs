@@ -1,19 +1,25 @@
 //! WPA2-PSK association. The metal path does not send the scripted Ethernet EAPOL.
+//!
+//! DHCP and ICMP belong to the shell. This driver keeps per-frame CCMP, the
+//! 802.11 to Ethernet translation, and an empty protected frame so the
+//! association stays up.
 
 use lerux_swift::{
-    dhcp_router, dhcp_yiaddr, icmp_reply,
     mt7921::{frame_off, write_survey_list, Stage, SCAN_DONE, SCAN_MAX},
     wpa::{
-        assoc_ok, auth_ok, beacon_ssid, ccmp_decrypt, ccmp_encrypt, derive_ptk, eapol_in_msdu,
-        ethernet_from_msdu, llc_from_ethernet, match_beacon, message1, message2, message3,
-        message4, pmk, write_assoc, write_auth, write_qos_data, FoundAp,
+        assoc_ok, auth_ok, beacon_ssid, ccmp_decrypt, derive_ptk, eapol_in_msdu, match_beacon,
+        message1, message2, message3, message4, pmk, write_assoc, write_auth, write_qos_data,
+        FoundAp,
     },
-    write_discover, write_echo, write_request,
 };
 
-use crate::device::{assoc_budget, scan_budget, Mac};
+use crate::{
+    device::{assoc_budget, scan_budget, Mac},
+    ether::{write_keepalive, Net, Note, TxFrame},
+};
 
-const BCAST: [u8; 6] = [0xff; 6];
+/// Quiet services between association keepalives.
+const KEEP_EVERY: u32 = 32;
 
 impl Mac {
     pub fn associate(&mut self, ssid: &[u8], psk: &[u8], mut paint: impl FnMut(Stage)) -> Stage {
@@ -37,15 +43,26 @@ impl Mac {
         let Some(tk) = self.four_way(&ap, ssid, psk) else {
             return Stage::Eapol;
         };
-        paint(Stage::Dhcp);
-        let Some((addr, gateway)) = self.lease(&ap, &tk) else {
-            return Stage::Dhcp;
-        };
-        paint(Stage::Ping);
-        if !self.echo(&ap, &tk, addr, gateway) {
-            return Stage::Ping;
+        self.open_link(ap.bssid, tk);
+        self.send_keepalive();
+        Stage::Wait
+    }
+
+    /// Move Ethernet frames between the radio and the standard network queues.
+    ///
+    /// The queue pages are not loaded until this runs, and this runs only after
+    /// the handshake. The firmware download never reaches it.
+    pub(crate) fn pump(&mut self, net: &Net) -> Note {
+        if self.link().is_none() {
+            return Note::quiet();
         }
-        Stage::PingOk(addr)
+        let rx = self.receive(net);
+        let tx = self.transmit(net);
+        self.keepalive_if_idle(rx || tx);
+        Note {
+            rx: rx && net.note_rx(),
+            tx: tx && net.note_tx(),
+        }
     }
 
     fn find_ap(&mut self, ssid: &[u8]) -> Option<FoundAp> {
@@ -143,42 +160,83 @@ impl Mac {
         Some(ptk.tk)
     }
 
-    fn lease(&mut self, ap: &FoundAp, tk: &[u8; 16]) -> Option<([u8; 4], [u8; 4])> {
-        let sta = self.sta();
-        let mut ether = [0u8; 400];
-        let n = write_discover(&mut ether, &sta);
-        self.send_ether(ap.bssid, sta, tk, &ether[..n])?;
-        let (yiaddr, server) = self.wait_dhcp(sta, tk, 2, &mut ether)?;
-        let n = write_request(&mut ether, &sta, yiaddr, server);
-        self.send_ether(ap.bssid, sta, tk, &ether[..n])?;
-        let (addr, _) = self.wait_dhcp(sta, tk, 5, &mut ether)?;
-        let gateway = dhcp_router(&ether).unwrap_or([addr[0], addr[1], addr[2], 1]);
-        Some((addr, gateway))
+    fn receive(&mut self, net: &Net) -> bool {
+        let mut moved = false;
+        let mut frame = [0u8; 1600];
+        while net.rx_has_room() {
+            let Some(n) = self.poll_data() else {
+                break;
+            };
+            let Some(m) = copy_frame(n, &mut frame) else {
+                continue;
+            };
+            let queued = self
+                .link()
+                .is_some_and(|link| net.enqueue_received(link, &frame[..m]));
+            if queued {
+                moved = true;
+            }
+        }
+        moved
     }
 
-    fn echo(&mut self, ap: &FoundAp, tk: &[u8; 16], addr: [u8; 4], gateway: [u8; 4]) -> bool {
-        let sta = self.sta();
-        let mut ether = [0u8; 64];
-        let n = write_echo(&mut ether, &sta, addr, gateway);
-        if self.send_ether(ap.bssid, sta, tk, &ether[..n]).is_none() {
+    fn transmit(&mut self, net: &Net) -> bool {
+        let mut moved = false;
+        let mut wifi = [0u8; 1600];
+        loop {
+            let taken = {
+                let Some(link) = self.link() else {
+                    break;
+                };
+                net.dequeue_transmit(link, &mut wifi)
+            };
+            let n = match taken {
+                TxFrame::Empty => break,
+                TxFrame::Dropped => 0,
+                TxFrame::Wifi(n) => n,
+            };
+            moved = true;
+            if n > 0 {
+                let _ = self.tx_80211(&wifi[..n]);
+            }
+        }
+        moved
+    }
+
+    fn keepalive_if_idle(&mut self, busy: bool) {
+        if self.keepalive_due(busy) {
+            self.send_keepalive();
+        }
+    }
+
+    fn keepalive_due(&mut self, busy: bool) -> bool {
+        let Some(link) = self.link() else {
+            return false;
+        };
+        if busy {
+            link.quiet = 0;
             return false;
         }
-        let mut frame = [0u8; 1600];
-        let mut plain = [0u8; 400];
-        let mut rebuilt = [0u8; 400];
-        for _ in 0..assoc_budget() {
-            if let Some(len) = self.poll_data()
-                && let Some(m) = copy_frame(len, &mut frame)
-                && let Some(body) = msdu(&frame[..m], Some(tk), &mut plain)
-                && let Some(en) = ethernet_from_msdu(body, &sta, &mut rebuilt)
-                && icmp_reply(&rebuilt[..en])
-            {
-                return true;
-            }
-            let _ = self.poll_mcu();
-            core::hint::spin_loop();
+        link.quiet = link.quiet.wrapping_add(1);
+        if link.quiet < KEEP_EVERY {
+            return false;
         }
-        false
+        link.quiet = 0;
+        true
+    }
+
+    fn send_keepalive(&mut self) {
+        let mut frame = [0u8; 64];
+        let n = {
+            let Some(link) = self.link() else {
+                return;
+            };
+            let Some(n) = write_keepalive(link, &mut frame) else {
+                return;
+            };
+            n
+        };
+        let _ = self.tx_80211(&frame[..n]);
     }
 
     fn wait_frame(&mut self, spins: u32, mut pred: impl FnMut(&[u8]) -> bool) -> bool {
@@ -217,30 +275,6 @@ impl Mac {
         None
     }
 
-    fn wait_dhcp(
-        &mut self,
-        sta: [u8; 6],
-        tk: &[u8; 16],
-        kind: u8,
-        ether: &mut [u8],
-    ) -> Option<([u8; 4], [u8; 4])> {
-        let mut frame = [0u8; 1600];
-        let mut plain = [0u8; 400];
-        for _ in 0..assoc_budget() {
-            if let Some(n) = self.poll_data()
-                && let Some(m) = copy_frame(n, &mut frame)
-                && let Some(body) = msdu(&frame[..m], Some(tk), &mut plain)
-                && let Some(en) = ethernet_from_msdu(body, &sta, ether)
-                && let Some(pair) = dhcp_yiaddr(&ether[..en], kind)
-            {
-                return Some(pair);
-            }
-            let _ = self.poll_mcu();
-            core::hint::spin_loop();
-        }
-        None
-    }
-
     fn send_eapol(&mut self, bssid: [u8; 6], sta: [u8; 6], eapol: &[u8]) -> Option<()> {
         let mut llc = [0u8; 280];
         if eapol.len() + 8 > llc.len() {
@@ -251,22 +285,6 @@ impl Mac {
         llc[7] = 0x8e;
         llc[8..8 + eapol.len()].copy_from_slice(eapol);
         self.send_plain(bssid, sta, bssid, &llc[..8 + eapol.len()])
-    }
-
-    fn send_ether(
-        &mut self,
-        bssid: [u8; 6],
-        sta: [u8; 6],
-        tk: &[u8; 16],
-        ether: &[u8],
-    ) -> Option<()> {
-        let mut llc = [0u8; 400];
-        let n = llc_from_ethernet(ether, &mut llc)?;
-        let mut da = BCAST;
-        if ether.len() >= 6 {
-            da.copy_from_slice(&ether[..6]);
-        }
-        self.send_protected(bssid, sta, da, tk, &llc[..n])
     }
 
     fn send_plain(&mut self, bssid: [u8; 6], sta: [u8; 6], da: [u8; 6], msdu: &[u8]) -> Option<()> {
@@ -280,25 +298,6 @@ impl Mac {
             self.next_seq_wifi(),
             false,
         )?;
-        self.tx_80211(&frame[..n]).then_some(())
-    }
-
-    fn send_protected(
-        &mut self,
-        bssid: [u8; 6],
-        sta: [u8; 6],
-        da: [u8; 6],
-        tk: &[u8; 16],
-        msdu: &[u8],
-    ) -> Option<()> {
-        let seq = self.next_seq_wifi();
-        let mut hdr = [0u8; 26];
-        write_qos_data(&mut hdr, &bssid, &sta, &da, &[], seq, true)?;
-        let mut body = [0u8; 500];
-        let pn = self.next_pn();
-        let clen = ccmp_encrypt(tk, &hdr, pn, msdu, &mut body)?;
-        let mut frame = [0u8; 560];
-        let n = write_qos_data(&mut frame, &bssid, &sta, &da, &body[..clen], seq, true)?;
         self.tx_80211(&frame[..n]).then_some(())
     }
 }

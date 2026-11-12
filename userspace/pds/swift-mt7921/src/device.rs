@@ -29,6 +29,8 @@ use lerux_swift::{
     CLIENT_MAC,
 };
 
+use crate::ether::Link;
+
 pub(crate) const DMA_PHYS: u32 = 0x01f6_0000;
 const RING_N: u32 = 8;
 /// `MT7921_TX_MCU_RING_SIZE`. One page holds 256 descriptors.
@@ -105,6 +107,9 @@ pub struct Mac {
     last_len: usize,
     pn: u64,
     wifi_seq: u16,
+    /// Set only after the 4-way handshake. The firmware path leaves this empty,
+    /// so it never loads the network queues.
+    link: Option<Link>,
     before: [u32; DUMP_REGS.len()],
     after: Snapshot,
 }
@@ -178,6 +183,7 @@ impl Mac {
             last_len: 0,
             pn: 1,
             wifi_seq: 1,
+            link: None,
             before: [0; DUMP_REGS.len()],
             after: Snapshot::empty(),
         };
@@ -249,6 +255,22 @@ impl Mac {
 
     pub fn sta(&self) -> [u8; 6] {
         self.sta
+    }
+
+    /// Remember the pairwise key. Counters continue from the handshake.
+    pub(crate) fn open_link(&mut self, bssid: [u8; 6], tk: [u8; 16]) {
+        self.link = Some(Link {
+            bssid,
+            sta: self.sta,
+            tk,
+            pn: self.pn,
+            seq: self.wifi_seq,
+            quiet: 0,
+        });
+    }
+
+    pub(crate) fn link(&mut self) -> Option<&mut Link> {
+        self.link.as_mut()
     }
 
     fn start(&mut self, images: &Images) -> Result<(), Stage> {
@@ -761,12 +783,6 @@ impl Mac {
         let seq = self.wifi_seq;
         self.wifi_seq = self.wifi_seq.wrapping_add(1);
         seq
-    }
-
-    pub(crate) fn next_pn(&mut self) -> u64 {
-        let pn = self.pn;
-        self.pn = self.pn.wrapping_add(1);
-        pn
     }
 
     fn response(&self) -> &'static [u8] {

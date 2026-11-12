@@ -1221,6 +1221,11 @@ dependencies = [
 [[package]]
 name = "lerux-ladybird-gfx"
 version = "0.1.0"
+dependencies = [
+ "verus_builtin",
+ "verus_builtin_macros",
+ "vstd",
+]
 
 [[package]]
 name = "lerux-ladybird-html"

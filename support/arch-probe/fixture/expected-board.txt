@@ -1,0 +1,16 @@
+identity: Acer Swift X SFX14-41G
+board: Acer Orion_CA
+bios: unknown
+cpu: AuthenticAMD family 23 model 104 AMD Ryzen 5 5500U
+secure_boot: 0
+framebuffer: phys 0xfc90000000 size 0x7e9000 pitch 7680 1920x1080 bpp 32 r16 g8 b0
+framebuffer_source: efifb
+boot_vga: none
+i8042: yes
+irq1: bus_irq 1 global_irq 1
+serial: port 0x3f8 irq 4
+iommu: amd 0xfdf00000
+mcfg: unknown
+nvme: 0000:02:00.0 1c5c:174a bar0 0xd1500000 size 0x4000 parent 0000:00:01.2
+e820: usable 0x0-0x9fbff
+e820: reserved 0x9fc00-0x9ffff

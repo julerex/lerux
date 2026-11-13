@@ -1,0 +1,4 @@
+vendor_id: AuthenticAMD
+cpu family: 23
+model: 104
+model name: AMD Ryzen 5 5500U

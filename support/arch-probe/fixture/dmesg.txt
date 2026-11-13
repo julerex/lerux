@@ -1,0 +1,8 @@
+BIOS-e820: [mem 0x0000000000000000-0x000000000009fbff] usable
+BIOS-e820: [mem 0x000000000009fc00-0x000000000009ffff] reserved
+ACPI: INT_SRC_OVR (bus 0 bus_irq 1 global_irq 1 high edge)
+i8042: PNP: PS/2 Controller [PNP0303:KBD]
+efifb: framebuffer at 0xfc90000000, using 8100k, total 8100k
+efifb: mode is 1920x1080x32, linelength=7680, pages=1
+efifb: Truecolor: size=8:8:8:8, shift=16:8:0:24
+AMD-Vi: Using IOMMU at 0xfdf00000

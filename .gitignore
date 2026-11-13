@@ -11,6 +11,8 @@
 # Names the Swift. The diff is written into docs/plan-swift-wifi.md.
 /support/swift-linux/out/
 /support/swift-linux/swift-linux-out/
+# Names the machine the desk probe was run on.
+/support/arch-probe/out/
 /support/mb2-stub/mb2-stub.elf
 /loader.img
 /sel4.elf

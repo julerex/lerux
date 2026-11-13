@@ -1,0 +1,3 @@
+serinfo:1.0 driver revision:
+0: uart:16550A port:000003F8 irq:4 tx:0 rx:0
+1: uart:unknown port:000002F8 irq:3

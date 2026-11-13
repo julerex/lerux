@@ -1,32 +1,10 @@
 # Linux probe of the Swift MT7921
 
-One USB stick holds the official Arch install image and `capture.sh`. Boot it on the Acer, with the card's driver held until the script loads it. The output is the Phase 4 record in [docs/plan-swift-wifi.md](../../docs/plan-swift-wifi.md): `lspci -vvv` for the MT7921 and its root port, the `dmesg` lines matching `mt7921|AMD-Vi`, and the `mt76:reg_rr` / `mt76:reg_wr` trace of that probe.
+The stick is `just burn-arch-probe`, documented in [support/arch-probe/README.md](../arch-probe/README.md). That recipe writes the Arch install image, the desk probe, and `capture.sh`. This file is the radio trace. Boot it on the Acer, with the card's driver held until the script loads it. The output is the Phase 4 record in [docs/plan-swift-wifi.md](../../docs/plan-swift-wifi.md): `lspci -vvv` for the MT7921 and its root port, the `dmesg` lines matching `mt7921|AMD-Vi`, and the `mt76:reg_rr` / `mt76:reg_wr` trace of that probe.
 
 Arch is enough. The install image already contains `linux-firmware` (the MT7961 patch and RAM image), `pciutils`, and `kmod`. It has no network until this driver comes up, so the script does not install `trace-cmd`. It reads the same two events from the kernel tracer.
 
-`just iso` is a different stick. That one is the lerux image. This recipe does not build lerux.
-
-## Make the stick
-
-Plug in the USB stick and run:
-
-```bash
-just iso-arch-and-capture
-```
-
-The command waits if the stick is not in yet. It then lists the USB sticks and asks for a number. The list is whole disks whose transport is `usb`. On this machine `sda` and `sdb` are internal SATA disks. The stick needs room for the Arch image (about 1.3 GiB) plus 1 GiB for the capture.
-
-The command then:
-
-1. Downloads the current Arch x86_64 image into `build/archiso/`, checks its sha256 against the published list, and checks the signature with the Arch keyring.
-2. Asks for your password, prints the stick, and waits until you type the device path back. Any other answer stops before writing.
-3. Writes the image, then adds a FAT partition named `CAPTURE` in the free space and copies `capture.sh`, this file, and `BOOT.txt` onto it.
-
-`just iso-arch-and-capture /dev/sdX` uses that stick directly. The same checks apply.
-
-A second run uses the cached image when the published checksum still matches. The stick is erased either way, including an earlier `swift-linux-out`.
-
-Unplug the stick when the recipe prints `wrote CAPTURE`.
+`just iso` is a different stick. That one is the lerux image. This trace does not build lerux.
 
 ## On the Acer
 

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Write the current Arch install image and capture.sh onto one USB stick.
+# Write the current Arch install image, the desk probe, and capture.sh onto one USB stick.
 #
 # With no device, the command lists USB sticks and asks for a number. Passing
 # /dev/sdX uses that stick and skips the list. Either way the stick is erased.
@@ -21,13 +21,13 @@ min_stick_extra=$((1024 * 1024 * 1024))
 min_partition=$((512 * 1024 * 1024))
 
 die() {
-  echo "iso-arch-and-capture: $*" >&2
+  echo "burn-arch-probe: $*" >&2
   exit 1
 }
 
 usage() {
-  echo "usage: just iso-arch-and-capture" >&2
-  echo "       just iso-arch-and-capture /dev/sdX" >&2
+  echo "usage: just burn-arch-probe" >&2
+  echo "       just burn-arch-probe /dev/sdX" >&2
   echo "With no device, USB sticks are listed and the stick you number is erased." >&2
 }
 
@@ -59,7 +59,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 layout_test=0
-if [[ "${SWIFT_LINUX_LAYOUT_TEST:-}" == 1 ]]; then
+if [[ "${ARCH_PROBE_LAYOUT_TEST:-}" == 1 ]]; then
   layout_test=1
 fi
 
@@ -191,22 +191,22 @@ collect_usb() {
 choose_device() {
   local choice i index
   if ! have_terminal; then
-    die "name the stick: just iso-arch-and-capture /dev/sdX"
+    die "name the stick: just burn-arch-probe /dev/sdX"
   fi
   collect_usb
   if [[ ${#usb_paths[@]} -eq 0 ]]; then
-    echo "iso-arch-and-capture: plug in the USB stick" >&2
+    echo "burn-arch-probe: plug in the USB stick" >&2
     while [[ ${#usb_paths[@]} -eq 0 ]]; do
       sleep 1
       collect_usb
     done
   fi
   while true; do
-    echo "iso-arch-and-capture: USB sticks" >&2
+    echo "burn-arch-probe: USB sticks" >&2
     for i in "${!usb_paths[@]}"; do
       printf '  %d  %s  %s  %s\n' "$((i + 1))" "${usb_paths[$i]}" "$(human_bytes "${usb_sizes[$i]}")" "${usb_models[$i]}" >&2
     done
-    echo "iso-arch-and-capture: type a number to erase that stick, or q to stop" >&2
+    echo "burn-arch-probe: type a number to erase that stick, or q to stop" >&2
     choice=$(read_answer) || die "stopped"
     choice=$(trim_answer "$choice")
     [[ "$choice" == "q" ]] && die "stopped"
@@ -214,21 +214,21 @@ choose_device() {
       index=$((10#$choice))
       if (( index >= 1 && index <= ${#usb_paths[@]} )); then
         dev=${usb_paths[$((index - 1))]}
-        echo "iso-arch-and-capture: selected $dev" >&2
+        echo "burn-arch-probe: selected $dev" >&2
         return 0
       fi
     fi
     for i in "${!usb_paths[@]}"; do
       if [[ "$choice" == "${usb_paths[$i]}" ]]; then
         dev=$choice
-        echo "iso-arch-and-capture: selected $dev" >&2
+        echo "burn-arch-probe: selected $dev" >&2
         return 0
       fi
     done
-    echo "iso-arch-and-capture: type a number from the list" >&2
+    echo "burn-arch-probe: type a number from the list" >&2
     collect_usb
     if [[ ${#usb_paths[@]} -eq 0 ]]; then
-      echo "iso-arch-and-capture: plug in the USB stick" >&2
+      echo "burn-arch-probe: plug in the USB stick" >&2
       while [[ ${#usb_paths[@]} -eq 0 ]]; do
         sleep 1
         collect_usb
@@ -264,7 +264,7 @@ fetch_iso() {
   local cache="$root/build/archiso"
   local sums name hash iso sig actual attempt
   mkdir -p "$cache"
-  echo "iso-arch-and-capture: downloading the checksum list" >&2
+  echo "burn-arch-probe: downloading the checksum list" >&2
   curl_get "$mirror/sha256sums.txt" "$cache/sha256sums.txt"
   name=$(dated_iso_name "$cache/sha256sums.txt")
   [[ -n "$name" ]] || die "sha256sums.txt has no dated Arch iso"
@@ -273,11 +273,11 @@ fetch_iso() {
   iso="$cache/$name"
   sig="$cache/$name.sig"
   if [[ -f "$iso" && "$(file_sha256 "$iso")" == "$hash" ]]; then
-    echo "iso-arch-and-capture: using cached $iso" >&2
+    echo "burn-arch-probe: using cached $iso" >&2
   else
     rm -f "$iso"
     for attempt in 1 2; do
-      echo "iso-arch-and-capture: downloading $name" >&2
+      echo "burn-arch-probe: downloading $name" >&2
       curl_get "$mirror/$name" "$iso"
       actual=$(file_sha256 "$iso")
       if [[ "$actual" == "$hash" ]]; then
@@ -285,10 +285,10 @@ fetch_iso() {
       fi
       rm -f "$iso"
       [[ "$attempt" -eq 1 ]] || die "checksum mismatch for $name"
-      echo "iso-arch-and-capture: checksum mismatch, downloading again" >&2
+      echo "burn-arch-probe: checksum mismatch, downloading again" >&2
     done
   fi
-  echo "iso-arch-and-capture: downloading the signature" >&2
+  echo "burn-arch-probe: downloading the signature" >&2
   curl_get "$mirror/$name.sig" "$sig"
   printf '%s\n' "$iso"
 }
@@ -297,16 +297,16 @@ verify_iso_signature() {
   local iso=$1
   local sig="${iso}.sig"
   [[ -f "$sig" ]] || die "signature file not found: $sig"
-  echo "iso-arch-and-capture: checking the signature" >&2
+  echo "burn-arch-probe: checking the signature" >&2
   if ! gpg --batch --no-tty --trust-model always --homedir /etc/pacman.d/gnupg --verify "$sig" "$iso"; then
     die "signature check failed. Update archlinux-keyring and run this again"
   fi
 }
 
 confirm_erase() {
-  echo "iso-arch-and-capture: this erases $dev:"
+  echo "burn-arch-probe: this erases $dev:"
   lsblk -o NAME,SIZE,TRAN,MODEL,LABEL,MOUNTPOINTS "$dev"
-  echo "iso-arch-and-capture: type $dev to continue"
+  echo "burn-arch-probe: type $dev to continue"
   local typed
   typed=$(read_answer) || die "stopped"
   typed=$(trim_answer "$typed")
@@ -378,28 +378,33 @@ write_boot_note() {
   local dest=$1
   cat > "$dest/BOOT.txt" <<'EOF'
 Arch is on this stick. These files are on the partition labelled CAPTURE.
-Leave the stick plugged in for the whole capture.
+Leave the stick plugged in for the whole probe.
 
 At the Arch menu, press e and add this to the end of the kernel line:
 
-    modprobe.blacklist=mt7921e
+    nomodeset
 
 Press Enter to boot. At the root prompt:
 
     mkdir -p /mnt/stick
     mount /dev/disk/by-label/CAPTURE /mnt/stick
-    bash /mnt/stick/capture.sh
+    bash /mnt/stick/probe.sh
 
-The last line is the verdict. The results are swift-linux-out on this
-same partition. Then run:
+The last line is the directory written on this partition, under
+arch-probe-out. Then run:
 
     poweroff
+
+The Swift radio trace is a different boot. Power off, boot this stick again,
+and add modprobe.blacklist=mt7921e instead of nomodeset. Then run
+bash /mnt/stick/capture.sh. That writes swift-linux-out.
+module_blacklist=mt7921e blocks the manual load as well.
 EOF
 }
 
 write_stick() {
   local node bytes mnt
-  echo "iso-arch-and-capture: writing the image"
+  echo "burn-arch-probe: writing the image"
   unmount_disk
   dd if="$image" of="$dev" bs=4M conv=fsync status=progress
   sync
@@ -408,19 +413,20 @@ write_stick() {
   wait_for_node "$node"
   bytes=$(lsblk -dbno SIZE "$node")
   [[ "$bytes" -ge "$min_partition" ]] || die "capture partition is only $bytes bytes; use a larger stick"
-  echo "iso-arch-and-capture: formatting $node"
+  echo "burn-arch-probe: formatting $node"
   mkfs.vfat -F 32 -n CAPTURE "$node"
   mnt=$(mktemp -d)
   mount -t vfat "$node" "$mnt"
-  cp "$here/capture.sh" "$here/README.md" "$mnt/"
+  cp "$here/probe.sh" "$here/summarize.sh" "$here/README.md" "$mnt/"
+  cp "$root/support/swift-linux/capture.sh" "$mnt/capture.sh"
   write_boot_note "$mnt"
   sync
   umount "$mnt"
   rmdir "$mnt"
-  echo "iso-arch-and-capture: wrote CAPTURE on $node"
-  echo "iso-arch-and-capture: on the Acer, add modprobe.blacklist=mt7921e, then:"
+  echo "burn-arch-probe: wrote CAPTURE on $node"
+  echo "burn-arch-probe: at the Arch menu, append nomodeset to the kernel line, then:"
   echo "    mount /dev/disk/by-label/CAPTURE /mnt/stick"
-  echo "    bash /mnt/stick/capture.sh"
+  echo "    bash /mnt/stick/probe.sh"
 }
 
 require_tools
@@ -448,8 +454,8 @@ if (( device_bytes < image_bytes + min_stick_extra )); then
 fi
 
 if [[ "$(id -u)" -ne 0 ]]; then
-  echo "iso-arch-and-capture: asking for root to write $dev" >&2
-  exec sudo --preserve-env=SWIFT_LINUX_LAYOUT_TEST bash "$0" --image "$image" "$dev"
+  echo "burn-arch-probe: asking for root to write $dev" >&2
+  exec sudo --preserve-env=ARCH_PROBE_LAYOUT_TEST bash "$0" --image "$image" "$dev"
 fi
 
 if [[ "$layout_test" -eq 0 ]]; then

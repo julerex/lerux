@@ -18,6 +18,12 @@ The Gigabyte GA-Z97-D3H on this desk. Haswell processor and an Intel 9-series ch
 
 _Avoid_: [q35](#q35), [Swift X](#swift-x)
 
+### Inspiron N5010
+
+The Dell Inspiron N5010 probed on 2026-11-14. Arrandale Core i5-460M and an Intel HM57 chipset. The record is [support/arch-probe/machines/inspiron-n5010.md](support/arch-probe/machines/inspiron-n5010.md). There is no [Microkit](#microkit) board name and no image. The console on that boot was the [VGA text page](#vga-text-page). The keyboard is the [i8042](#i8042).
+
+_Avoid_: [q35](#q35), [Z97 desk](#z97-desk), [Swift X](#swift-x)
+
 ## Serial
 
 ### COM1

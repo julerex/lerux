@@ -1,0 +1,4 @@
+vendor: Acer
+product: Swift X SFX14-41G
+board_vendor: Acer
+board_name: Orion_CA

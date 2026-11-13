@@ -28,3 +28,5 @@ cargo test -p lerux-machine --features system-description
 cargo test -p lerux-image
 # Phase 60 Track D: PPC priority + service-class band checks (host, no QEMU)
 cargo run -q -p lerux-cli -- profile check-qos
+# Desk probe summary. The fixture is the Swift framebuffer and the Z97 COM1 line.
+bash support/arch-probe/summarize.sh --check

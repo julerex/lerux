@@ -2,7 +2,7 @@
 
 Board names are the `BOARD=` value for `just run`, `just test`, and `just build`. Metadata lives in [`support/boards.toml`](../support/boards.toml). `just build` and `just run` default to `qemu_virt_aarch64`. Bare `just test` boots `qemu_virt_aarch64_browser_sddf`. Bare `just iso` packs `swift_sfx14_41g`.
 
-The metal target being driven is the Acer Swift X SFX14-41G (`swift_sfx14_41g`). The Gigabyte Z97-D3H desk page (`pc_z97_d3h`) and the RPi4 workstation lab (`rpi4b_4gb`) stay secondary.
+The metal target being driven is the Acer Swift X SFX14-41G (`swift_sfx14_41g`). The Gigabyte Z97-D3H desk page (`pc_z97_d3h`) and the RPi4 workstation lab (`rpi4b_4gb`) stay secondary. A probe of the Dell Inspiron N5010 is recorded in [support/arch-probe/machines/inspiron-n5010.md](../support/arch-probe/machines/inspiron-n5010.md). That machine has no image.
 
 aarch64 init and composed images need the patched SP804 QEMU in [`ci.md`](ci.md#patched-qemu); RISC-V init uses stock QEMU with the Goldfish RTC and `rdtime`, and x86 init uses stock QEMU with the CMOS RTC and TSC.
 

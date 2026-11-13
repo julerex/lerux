@@ -1,12 +1,12 @@
 # QIP investigation
 
-Last updated: 2026-10-26
+Last updated: 2026-11-13
 
-**Status:** Investigation plan. No incorporation decision. This document does not vendor a tree, change a protection domain, or amend an architecture decision record.
+**Status:** The investigation pass has run. The choice is option 3. A host test of `lerux-wasm` calls `render` on `text/rgb-to-hex.wasm`. No protection domain changed. No architecture decision record changed.
 
-**Source:** [patrickgwsmith/qip](https://github.com/patrickgwsmith/qip) at commit `b65cbad5aedf749581f606215f95378810251390` (2026-10-15, "Vectorize WGSL invocations and add Perlin and Atkinson demos"). The site is <https://qip.dev>. The license is Apache-2.0. The authoring language is Zig. The published artifact is a WebAssembly module. Confirm this commit is still `main` at the start of the investigation, and record a newer commit here if it is not.
+**Source:** [patrickgwsmith/qip](https://github.com/patrickgwsmith/qip). The investigation pin was commit `b65cbad5aedf749581f606215f95378810251390` (2026-10-15, "Vectorize WGSL invocations and add Perlin and Atkinson demos"). On 2026-11-13 `main` was commit `e09009b82d88e8d8b330c3bd3fc629d507405be6` (2026-11-12, "Add qipgui command and Q3 2026 sources to the ARR chart page"). The measurements below are at that later commit. The site is <https://qip.dev>. The license is Apache-2.0. The authoring language is Zig. The published artifact is a WebAssembly module.
 
-**Goal:** Decide whether any QIP contract or component belongs in lerux, and which host would run it. The next pass writes that recommendation into this file. It does not land a host.
+**Goal:** Decide whether any QIP contract or component belongs in lerux, and which host would run it. The recommendation is below. The guest smoke is a follow-on.
 
 ## What QIP is
 
@@ -82,16 +82,16 @@ Blob sizes at the pinned commit, from the Git tree, before any instantiation:
 | `text/rgb-to-hex.wasm` | 972 | inside |
 | `image/png/png-to-bmp-b8g8r8a8-srgb.wasm` | 8905 | outside |
 | `image/png/png-to-bmp-b8g8r8a8-srgb-simd.wasm` | 12465 | outside |
-| `application/wasm/wasm-strict-profile.wasm` | 10382 | outside |
+| `application/wasm/wasm-strict-profile.wasm` | 10590 | outside |
 | `text/html/html-link-extractor.wasm` | 11143 | outside |
-| `text/html/html-page-wrap.wasm` | 17508 | outside |
+| `text/html/html-page-wrap.wasm` | 21972 | outside |
 | `text/markdown/commonmark.0.31.2.wasm` | 92647 | outside |
 | `text/markdown/gfm-commonmark.0.31.2.wasm` | 97828 | outside |
-| `image/svg+xml/svg-rasterize-to-ktx2-r8g8b8a8-srgb.wasm` | 289268 | outside |
+| `image/svg+xml/svg-rasterize-to-ktx2-r8g8b8a8-srgb.wasm` | 290256 | outside |
 | `image/svg+xml/svg-rasterize-skia-with-fonts-to-ktx2-r8g8b8a8-srgb.wasm` | 3439891 | outside |
-| `tui/qipdb.wasm` | 128680 | outside |
+| `tui/qipdb.wasm` | 130773 | outside |
 
-These are file sizes. Declared linear memory is additional and is not known until the next pass decodes the memory section. A file that fits the envelope can still declare a memory the 2 MiB heap cannot hold. A filename without `simd` is not evidence that the body lacks `simd` opcodes.
+These are file sizes at commit `e09009b82d88e8d8b330c3bd3fc629d507405be6`. Declared linear memory is in the recommendation. A file that fits the envelope can still declare a memory the 2 MiB heap cannot hold. A filename without `simd` is not evidence that the body lacks `simd` opcodes. The PNG module with no `simd` in its name has no SIMD opcode. The CommonMark module's file contains the letters `simd` and has no SIMD opcode.
 
 ## Options
 
@@ -153,4 +153,34 @@ One pass. Do these in order. The exit is an edit to the recommendation section b
 
 ## Recommendation
 
-Pending. The investigation pass has not run.
+Option 3. `lerux-wasm` gains `render_signed` beside `run`. The module is `text/rgb-to-hex.wasm` from commit `e09009b82d88e8d8b330c3bd3fc629d507405be6`, 972 bytes, packed as `LRW1` and checked with the smoke key. The input is `rgb(101, 79, 240)`. The output is `#654ff0`. The host test is `content_render_returns_the_published_hex`. The guest smoke is a follow-on. `sddf-program` still calls `start`.
+
+The file sizes that moved at the new commit are the strict-profile checker (10590), `html-page-wrap` (21972), the SVG rasterizer (290256), and `qipdb` (130773). Identity, trim, `rgb-to-hex`, both PNG modules, the link extractor, and both CommonMark modules kept the sizes from the 2026-10-15 pin. The Skia rasterizer is still 3439891 bytes.
+
+`wasmi` 2.0.0 with `validate`, `prefer-btree-collections`, and `portable-dispatch` decoded every row. A page is 65536 bytes. The ADR-012 heap is 2 MiB, 2097152 bytes.
+
+| Module | Memory | What the engine did |
+| --- | --- | --- |
+| `bytes/identity.wasm` | 1024 pages, 67108864 bytes | Instantiated and copied the input. The declared memory is larger than the heap. |
+| `text/trim.wasm` | 65 pages, 4259840 bytes | `  hello  ` rendered `hello`. The declared memory is larger than the heap. |
+| `text/rgb-to-hex.wasm` | 3 pages, 196608 bytes | `rgb(101, 79, 240)` rendered `#654ff0`. No imports, no `memory.grow`, no indirect call, no SIMD opcode, no start function. |
+| `image/png/png-to-bmp-b8g8r8a8-srgb.wasm` | 2586 pages, 169476096 bytes | Parsed. No SIMD opcode. The declared memory is larger than the heap. |
+| `image/png/png-to-bmp-b8g8r8a8-srgb-simd.wasm` | 2586 pages | Parse failed: SIMD support is not enabled. 27 SIMD opcodes. |
+| `text/markdown/commonmark.0.31.2.wasm` | 311 pages, 20381696 bytes | Parsed. Two `call_indirect` opcodes and no SIMD opcode. The declared memory is larger than the heap. |
+| `gui/mandelbrot.wasm` | 35 pages, 2293760 bytes | The one small `gui/*.wasm` whose bytes contain `image/ktx2`. Output type `image/ktx2;vkFormat=R8G8B8A8_SRGB;colorPrimaries=BT709;transferFunction=SRGB`. It also exports `begin_update_at`, `finish_update`, `key_event`, and `pointer_event`. `render(0)` returned a KTX2 frame of 614624 bytes. The declared memory is larger than the heap. |
+
+`rgb-to-hex` is the envelope module whose file, declared memory, and `wasmi` module fit under that heap.
+
+Rules the choice uses. A success result has bit 63 clear, the output pointer in bits 62 through 32, and the byte count in bits 31 through 0, and the pointer is below `0x80000000`. The command-line host rejects `memory.grow` with no opt-in, and a declared memory with no maximum fails the memory cap. `rgb-to-hex` declares a maximum of 3 pages and contains no `memory.grow`. The strict profile allows SIMD instructions. These `wasmi` features do not, which is why the SIMD PNG does not parse. A pipeline matches an `image/ktx2` profile by its parameters. The browser frame is `B8G8R8A8`. The small GUI module declares `R8G8B8A8_SRGB`.
+
+Option 1 stays closed. `rgb-to-hex` instantiates under the current features and its 3 pages fit the heap, so the stop condition does not hold.
+
+Option 2 stays closed. A fixture tool on the developer machine would not call `wasmi`. The result this pass needs is that engine call.
+
+Option 4 stays closed. The QIP strict profile allows SIMD, and ADR-012 leaves the `simd` feature off. A Rust copy of that checker would admit modules this engine cannot parse.
+
+Option 5 stays closed. CommonMark is 92647 bytes with a 311-page memory and two indirect calls. The PNG module with no SIMD opcodes still declares 2586 pages. Neither fits the 4096-byte envelope or the 2 MiB heap, so a pipeline in front of the desk fetch is not possible without a heap change.
+
+Option 6 stays closed. `gui/mandelbrot.wasm` fits the envelope and returns a KTX2 frame, and its 35-page memory is above 2 MiB. The content type is the `R8G8B8A8_SRGB` profile. The time-and-events exports are a second contract. The browser image has no timer.
+
+This pass does not amend ADR-009, ADR-010, or ADR-012. `render_signed` is a library entry point and `run` is unchanged. A guest smoke that calls `render` from `sddf-program` needs a note in ADR-012 first. That record describes `start` and the `lerux.read`, `lerux.socket`, and `lerux.log` imports. The fixture bytes stay under the Apache-2.0 notice in `userspace/crates/lerux-wasm/tests/fixtures/NOTICE`.

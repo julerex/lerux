@@ -1,4 +1,4 @@
-//! Instantiate an ordinary WebAssembly module and call its `start` export.
+//! Instantiate an ordinary WebAssembly module and call `start` or Content `render`.
 //!
 //! `wasmi` is built without `std`. B-tree collections avoid a random source,
 //! which a protection domain does not have. Portable dispatch avoids a tail
@@ -142,4 +142,139 @@ fn store_bytes<H>(caller: &mut Caller<'_, HostPtr<H>>, ptr: i32, bytes: &[u8]) -
     };
     slot.copy_from_slice(bytes);
     true
+}
+
+/// Instantiate `wasm` and call Content `render(input_len) -> i64`.
+///
+/// The module has no `lerux` imports. On success, `output` receives the
+/// returned range and the result is that byte count. Bit 63 of the `i64`
+/// is a rejection: the host copies nothing.
+///
+/// # Errors
+///
+/// Returns [`Error::Module`] when `wasm` is not a module this engine can
+/// instantiate, or the returned range is outside linear memory. Returns
+/// [`Error::Export`] when `render` or the required input getter is missing.
+/// Returns [`Error::Trap`] when `render` traps, the input is longer than the
+/// declared capacity, or a UTF-8 input is not UTF-8. Returns
+/// [`Error::Rejected`] when `render` sets the rejection bit. Returns
+/// [`Error::Truncated`] when `input` does not fit in an `i32` or `output`
+/// is shorter than the rendered bytes.
+pub fn render(wasm: &[u8], input: &[u8], output: &mut [u8]) -> Result<usize, Error> {
+    let input_len = i32::try_from(input.len()).map_err(|_| Error::Truncated)?;
+    let engine = Engine::default();
+    let module = Module::new(&engine, wasm).map_err(|_| Error::Module)?;
+    let mut store = Store::new(&engine, ());
+    let linker = Linker::new(&engine);
+    let instance = linker
+        .instantiate_and_start(&mut store, &module)
+        .map_err(|_| Error::Module)?;
+    let memory = instance.get_memory(&store, "memory").ok_or(Error::Module)?;
+    write_input(instance, &mut store, memory, input)?;
+    let packed = call_render(instance, &mut store, input_len)?;
+    copy_output(&store, memory, packed, output)
+}
+
+fn write_input(
+    instance: wasmi::Instance,
+    store: &mut Store<()>,
+    memory: Memory,
+    input: &[u8],
+) -> Result<(), Error> {
+    let utf8 = export_i32(instance, store, "input_utf8_cap")?;
+    let bytes = export_i32(instance, store, "input_bytes_cap")?;
+    let Some(cap) = one_cap(utf8, bytes, input)? else {
+        return Ok(());
+    };
+    fits(cap, input.len())?;
+    if input.is_empty() {
+        return Ok(());
+    }
+    let ptr = export_i32(instance, store, "input_ptr")?.ok_or(Error::Export)?;
+    copy_at(store, memory, ptr, input)
+}
+
+fn one_cap(utf8: Option<i32>, bytes: Option<i32>, input: &[u8]) -> Result<Option<i32>, Error> {
+    match (utf8, bytes) {
+        (Some(cap), None) => {
+            if core::str::from_utf8(input).is_err() {
+                return Err(Error::Trap);
+            }
+            Ok(Some(cap))
+        }
+        (None, Some(cap)) => Ok(Some(cap)),
+        (None, None) if input.is_empty() => Ok(None),
+        _ => Err(Error::Export),
+    }
+}
+
+fn fits(cap: i32, len: usize) -> Result<(), Error> {
+    let cap = usize::try_from(cap).map_err(|_| Error::Module)?;
+    if len > cap {
+        Err(Error::Trap)
+    } else {
+        Ok(())
+    }
+}
+
+fn export_i32(
+    instance: wasmi::Instance,
+    store: &mut Store<()>,
+    name: &str,
+) -> Result<Option<i32>, Error> {
+    let Ok(func) = instance.get_typed_func::<(), i32>(&*store, name) else {
+        return Ok(None);
+    };
+    func.call(store, ())
+        .map(Some)
+        .map_err(|err| trap_or_module(&err))
+}
+
+fn copy_at(store: &mut Store<()>, memory: Memory, ptr: i32, bytes: &[u8]) -> Result<(), Error> {
+    let start = usize::try_from(ptr).map_err(|_| Error::Module)?;
+    let end = start.checked_add(bytes.len()).ok_or(Error::Module)?;
+    let slot = memory
+        .data_mut(store)
+        .get_mut(start..end)
+        .ok_or(Error::Module)?;
+    slot.copy_from_slice(bytes);
+    Ok(())
+}
+
+fn call_render(
+    instance: wasmi::Instance,
+    store: &mut Store<()>,
+    input_len: i32,
+) -> Result<i64, Error> {
+    let func = instance
+        .get_typed_func::<i32, i64>(&*store, "render")
+        .map_err(|_| Error::Export)?;
+    func.call(store, input_len)
+        .map_err(|err| trap_or_module(&err))
+}
+
+fn copy_output(
+    store: &Store<()>,
+    memory: Memory,
+    packed: i64,
+    output: &mut [u8],
+) -> Result<usize, Error> {
+    let bits = u64::try_from(packed).map_err(|_| Error::Rejected)?;
+    let ptr = usize::try_from(bits >> 32).map_err(|_| Error::Module)?;
+    let len = usize::try_from(bits & 0xffff_ffff).map_err(|_| Error::Module)?;
+    if len > output.len() {
+        return Err(Error::Truncated);
+    }
+    let end = ptr.checked_add(len).ok_or(Error::Module)?;
+    let src = memory.data(store).get(ptr..end).ok_or(Error::Module)?;
+    output[..len].copy_from_slice(src);
+    Ok(len)
+}
+
+fn trap_or_module(err: &wasmi::Error) -> Error {
+    if err.as_trap_code().is_some() {
+        Error::Trap
+    } else {
+        Error::Module
+    }
 }

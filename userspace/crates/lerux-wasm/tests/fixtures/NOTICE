@@ -1,0 +1,7 @@
+text/rgb-to-hex.wasm
+
+This file is the published module from https://github.com/patrickgwsmith/qip
+at commit e09009b82d88e8d8b330c3bd3fc629d507405be6, path text/rgb-to-hex.wasm.
+
+It is licensed under the Apache License, Version 2.0. The license text is
+LICENSE in this directory. The rest of lerux is MIT.

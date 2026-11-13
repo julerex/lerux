@@ -79,6 +79,10 @@ mod tests {
             web_src.contains("https://host:8443/fixture.html"),
             "web content loads the smoke url"
         );
+        assert!(
+            web_src.contains("https://host:8443/frames.html"),
+            "web content loads the frames url"
+        );
         assert_web_content_has_no_baked_fixture(root);
     }
 

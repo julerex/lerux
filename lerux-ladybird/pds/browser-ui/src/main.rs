@@ -1,8 +1,8 @@
 //! Browser UI for `qemu_virt_aarch64_ladybird`.
 //!
-//! The worker waits for `web_content` to paint, prints the title, copies the
-//! shared bitmap through the graphics client queues, and prints the sampled
-//! pixel. This domain does not parse HTML.
+//! The worker waits for each paint from `web_content`, prints the title,
+//! copies the shared bitmap, and prints the sampled pixel. This domain does
+//! not parse HTML.
 
 #![no_std]
 #![no_main]
@@ -22,7 +22,7 @@ use lerux_cothread::{
     microkit_cothread_wait_on_channel, microkit_cothread_yield, NULL_HANDLE, STACK_SLOTS,
 };
 use lerux_ladybird_gfx::{
-    Bitmap, ControlPage, BITMAP_VADDR, BROWSER_UI_GPU_CHANNEL, BROWSER_UI_PAINT_CHANNEL,
+    Bitmap, ControlPage, PixelLine, BITMAP_VADDR, BROWSER_UI_GPU_CHANNEL, BROWSER_UI_PAINT_CHANNEL,
     CONTROL_STATE_PAINTED, CONTROL_VADDR, FRAME_BYTES, TITLE_CAP,
 };
 use lerux_sddf::{
@@ -115,16 +115,22 @@ fn install_serial(config: &serial_client_config_t) {
 }
 
 extern "C" fn worker() {
-    microkit_cothread_wait_on_channel(PAINT_CH);
-    fence(Ordering::Acquire);
-    let Some(title) = painted_title() else {
-        return;
-    };
-    say_title(&title);
-    if gpu::present().is_err() {
-        return;
+    loop {
+        microkit_cothread_wait_on_channel(PAINT_CH);
+        fence(Ordering::Acquire);
+        let Some(title) = painted_title() else {
+            continue;
+        };
+        let pixel = sampled_line();
+        say_title(&title);
+        if gpu::present().is_err() {
+            return;
+        }
+        if let Some(line) = pixel {
+            emit(line.as_bytes());
+        }
+        Channel::new(PAINT_CH).notify();
     }
-    say_pixel();
 }
 
 fn painted_title() -> Option<Title> {
@@ -152,14 +158,8 @@ fn say_title(title: &Title) {
     emit(&line[..=end]);
 }
 
-fn say_pixel() {
-    let Some(bitmap) = Bitmap::frame(shared_bitmap()) else {
-        return;
-    };
-    let Some(line) = bitmap.pixel_line() else {
-        return;
-    };
-    emit(line.as_bytes());
+fn sampled_line() -> Option<PixelLine> {
+    Bitmap::frame(shared_bitmap())?.pixel_line()
 }
 
 fn shared_bitmap() -> &'static mut [u8] {

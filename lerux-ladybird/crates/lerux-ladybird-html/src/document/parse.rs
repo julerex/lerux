@@ -86,6 +86,8 @@ impl TreeBuilder<'_> {
                     tag,
                     id: attributes.id.map(Box::from),
                     class: attributes.class.map(Box::from),
+                    href: attributes.href.map(Box::from),
+                    src: attributes.src.map(Box::from),
                     children: Vec::new(),
                 });
                 self.open.push(id);

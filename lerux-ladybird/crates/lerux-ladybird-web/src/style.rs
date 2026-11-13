@@ -26,6 +26,8 @@ html { display: block; color: #000000; background-color: #ffffff; }
 head, title, style { display: none; }
 body { display: block; margin: 8px; color: #000000; background-color: #ffffff; }
 p { display: block; margin: 16px 0; }
+a { display: inline; color: #0000ff; }
+iframe { display: block; }
 ";
 
 /// The nodes of one document in tree order, each element with its computed style.

@@ -1260,6 +1260,7 @@ version = "0.1.0"
 dependencies = [
  "lerux-ladybird-gfx",
  "lerux-ladybird-html",
+ "lerux-ladybird-url",
 ]
 
 [[package]]
@@ -2351,6 +2352,7 @@ dependencies = [
  "lerux-ladybird-gfx",
  "lerux-ladybird-html",
  "lerux-ladybird-http",
+ "lerux-ladybird-url",
  "lerux-ladybird-web",
  "sel4-microkit",
 ]

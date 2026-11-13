@@ -20,6 +20,8 @@ pub(super) enum DataToken<'a> {
 pub(super) struct Attributes<'a> {
     pub(super) id: Option<&'a str>,
     pub(super) class: Option<&'a str>,
+    pub(super) href: Option<&'a str>,
+    pub(super) src: Option<&'a str>,
 }
 
 impl<'a> Attributes<'a> {
@@ -28,6 +30,10 @@ impl<'a> Attributes<'a> {
             &mut self.id
         } else if name.eq_ignore_ascii_case("class") {
             &mut self.class
+        } else if name.eq_ignore_ascii_case("href") {
+            &mut self.href
+        } else if name.eq_ignore_ascii_case("src") {
+            &mut self.src
         } else {
             return;
         };

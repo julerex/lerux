@@ -351,6 +351,9 @@ fn place_anonymous<'s, 'd>(
     }
 }
 
+/// HTML's default iframe height, in CSS pixels. The frame is shorter, so paint clips it.
+const IFRAME_HEIGHT: i32 = 150;
+
 fn layout_block<'s, 'd>(
     element: &'s StyledElement<'d>,
     border_x: i32,
@@ -359,13 +362,16 @@ fn layout_block<'s, 'd>(
 ) -> BlockBox<'s, 'd> {
     let padding = padding_px(element.style().padding());
     let content_width = content_width(element.style(), containing_width);
-    let (children, inner) = layout_contents(
+    let (children, mut inner) = layout_contents(
         element.children(),
         border_x + padding.left,
         border_y + padding.top,
         content_width,
         element.style().color(),
     );
+    if element.element().name() == "iframe" {
+        inner = inner.max(IFRAME_HEIGHT);
+    }
     BlockBox {
         element: element.element(),
         style: element.style(),

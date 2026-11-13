@@ -7,7 +7,7 @@
 use core::{
     cell::UnsafeCell,
     mem::MaybeUninit,
-    sync::atomic::{AtomicU32, Ordering},
+    sync::atomic::{AtomicBool, AtomicU32, Ordering},
 };
 
 use sel4_microkit::Channel;
@@ -36,6 +36,8 @@ unsafe impl Sync for QueueCell {}
 
 static QUEUE: QueueCell = QueueCell(UnsafeCell::new(MaybeUninit::uninit()));
 static NEXT_ID: AtomicU32 = AtomicU32::new(1);
+/// The driver keeps one resource. A second create returns an error.
+static FRAMED: AtomicBool = AtomicBool::new(false);
 
 pub fn install() {
     let mut handle = gpu_queue_handle_t {
@@ -59,7 +61,10 @@ pub fn present() -> Result<(), ()> {
     let rect = frame_rect();
     request_display()?;
     copy_frame();
-    create_frame(rect)?;
+    if !FRAMED.load(Ordering::Relaxed) {
+        create_frame(rect)?;
+        FRAMED.store(true, Ordering::Relaxed);
+    }
     transfer_frame(rect)
 }
 

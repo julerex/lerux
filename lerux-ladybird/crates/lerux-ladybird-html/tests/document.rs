@@ -335,6 +335,16 @@ fn body_and_title_keep_their_class() {
 }
 
 #[test]
+fn link_and_frame_keep_their_urls() {
+    let document =
+        Document::parse("<a href=second.html>go</a><iframe src=\"/child.html\"></iframe>");
+    assert_eq!(element(&document, "a").href(), Some("second.html"));
+    assert_eq!(element(&document, "iframe").src(), Some("/child.html"));
+    assert!(element(&document, "a").src().is_none());
+    assert!(element(&document, "iframe").href().is_none());
+}
+
+#[test]
 fn whitespace_under_an_unknown_element_follows_the_open_mode() {
     let in_head = Document::parse("<head><div>\n</div></head>");
     assert!(element(&in_head, "div").children().next().is_none());

@@ -56,6 +56,8 @@ enum NodeData {
         tag: Tag,
         id: Option<Box<str>>,
         class: Option<Box<str>>,
+        href: Option<Box<str>>,
+        src: Option<Box<str>>,
         children: Vec<NodeId>,
     },
     Text {
@@ -219,6 +221,20 @@ impl Document {
         class.as_deref()
     }
 
+    fn href_attribute(&self, node: NodeId) -> Option<&str> {
+        let NodeData::Element { href, .. } = &self.nodes[node.0].data else {
+            unreachable!("element id");
+        };
+        href.as_deref()
+    }
+
+    fn src_attribute(&self, node: NodeId) -> Option<&str> {
+        let NodeData::Element { src, .. } = &self.nodes[node.0].data else {
+            unreachable!("element id");
+        };
+        src.as_deref()
+    }
+
     fn text_data(&self, id: NodeId) -> &str {
         let NodeData::Text { data } = &self.nodes[id.0].data else {
             unreachable!("text id");
@@ -275,6 +291,18 @@ impl<'a> Element<'a> {
             .class_attribute(self.node)
             .unwrap_or_default()
             .split_ascii_whitespace()
+    }
+
+    /// The `href` attribute as the start tag wrote it.
+    #[must_use]
+    pub fn href(&self) -> Option<&'a str> {
+        self.document.href_attribute(self.node)
+    }
+
+    /// The `src` attribute as the start tag wrote it.
+    #[must_use]
+    pub fn src(&self) -> Option<&'a str> {
+        self.document.src_attribute(self.node)
     }
 
     #[must_use]

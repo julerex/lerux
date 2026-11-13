@@ -8,7 +8,9 @@
 //!
 //! `GET /` keeps the same `200 OK` body as [`crate::http_one`]. `GET /fixture.html`
 //! serves `support/browser/fixture.html`. `GET /paint.html` serves
-//! `support/browser/paint.html`. `GET /smoke.lrw` serves
+//! `support/browser/paint.html`. `GET /frames.html` serves
+//! `support/browser/frames.html`. `GET /child.html` serves
+//! `support/browser/child.html`. `GET /smoke.lrw` serves
 //! `support/prog/smoke.lrw`. `GET /go` is a `302` whose `Location` is
 //! `/fixture.html` and whose body is empty. Desk pages (`desk.html`,
 //! `desk-link.html`, `desk-form.html`) are not in `support/browser/`. Smoke
@@ -164,7 +166,11 @@ fn http_response_for_path(path: &[u8], file_body: &[u8]) -> Vec<u8> {
     if path == b"/" || path.is_empty() {
         return RESPONSE.to_vec();
     }
-    if path == b"/fixture.html" || path == b"/paint.html" {
+    if path == b"/fixture.html"
+        || path == b"/paint.html"
+        || path == b"/frames.html"
+        || path == b"/child.html"
+    {
         return length_prefixed(b"text/html; charset=utf-8", file_body);
     }
     if path == b"/smoke.lrw" {
@@ -190,6 +196,8 @@ fn load_browser_path(url_path: &[u8]) -> Result<Vec<u8>> {
     let (dir, name) = match url_path {
         b"/fixture.html" => ("browser", "fixture.html"),
         b"/paint.html" => ("browser", "paint.html"),
+        b"/frames.html" => ("browser", "frames.html"),
+        b"/child.html" => ("browser", "child.html"),
         b"/smoke.lrw" => ("prog", "smoke.lrw"),
         _ => return Ok(Vec::new()),
     };
@@ -277,6 +285,16 @@ mod tests {
         assert!(r
             .windows(b"<h1>lerux</h1>".len())
             .any(|w| w == b"<h1>lerux</h1>"));
+    }
+
+    #[test]
+    fn frames_and_child_embed_their_bodies() {
+        let frames = http_response_for_path(b"/frames.html", b"<iframe src=\"/child.html\">");
+        assert!(frames.starts_with(b"HTTP/1.1 200"));
+        assert!(frames.ends_with(b"<iframe src=\"/child.html\">"));
+        let child = http_response_for_path(b"/child.html", b"<a href=\"#mark\">x</a>");
+        assert!(child.starts_with(b"HTTP/1.1 200"));
+        assert!(child.ends_with(b"<a href=\"#mark\">x</a>"));
     }
 
     #[test]

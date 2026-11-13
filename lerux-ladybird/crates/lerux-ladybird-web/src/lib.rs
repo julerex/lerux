@@ -4,7 +4,7 @@
 //! [`StyledDocument`] is cold style: the computed style of every element.
 //! [`LayoutTree`] is the box tree built from that style.
 //! [`PaintableTree`] paints that box tree. One stacking context is rooted at
-//! the initial containing block.
+//! the initial containing block. [`Page`] is one top-level navigable.
 
 #![no_std]
 extern crate alloc;

@@ -161,7 +161,7 @@ script = [
 ]
 
 [boards.qemu_virt_aarch64_ladybird]
-expects = ["title lerux", "pixel 000000ff"]
+expects = ["title lerux", "pixel 000000ff", "pixel ff0000ff"]
 timeout_secs = 180
 
 [boards.qemu_virt_riscv64_browser_sddf]

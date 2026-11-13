@@ -1,14 +1,15 @@
 //! Web content for `qemu_virt_aarch64_ladybird`.
 //!
-//! The worker writes one URL into the shared request page, waits for the body,
-//! paints the shared bitmap, writes the title into the control page, and
-//! notifies `browser_ui`. This domain maps no network queue.
+//! The worker loads the fixture, paints it, then loads the frames document.
+//! That document's iframe is a second GET through the same request page.
+//! This domain maps no network queue.
 
 #![no_std]
 #![no_main]
 
 extern crate alloc;
 
+use alloc::string::{String, ToString};
 use core::{
     cell::UnsafeCell,
     sync::atomic::{fence, Ordering},
@@ -24,14 +25,15 @@ use lerux_ladybird_gfx::{
     Bitmap, ControlPage, BITMAP_VADDR, CONTROL_STATE_PAINTED, CONTROL_VADDR, FRAME_BYTES,
     WEB_CONTENT_PAINT_CHANNEL,
 };
-use lerux_ladybird_html::Document;
 use lerux_ladybird_http::{
     RequestPage, BODY_CAP, BODY_VADDR, REQUEST_STATE_ASK, REQUEST_STATE_OK, REQUEST_VADDR,
     WEB_CONTENT_REQUEST_CHANNEL,
 };
-use lerux_ladybird_web::{StyleSheet, StyledDocument};
+use lerux_ladybird_url::Url;
+use lerux_ladybird_web::Page;
 
-const DOCUMENT_URL: &[u8] = b"https://host:8443/fixture.html";
+const FIXTURE_URL: &str = "https://host:8443/fixture.html";
+const FRAMES_URL: &str = "https://host:8443/frames.html";
 const STACK_SIZE: usize = 0x4000;
 const PAINT_CH: usize = WEB_CONTENT_PAINT_CHANNEL as usize;
 const REQUEST_CH: usize = WEB_CONTENT_REQUEST_CHANNEL as usize;
@@ -67,29 +69,46 @@ impl Handler for HandlerImpl {
     type Error = Infallible;
 
     fn notified(&mut self, channels: ChannelSet) -> Result<(), Self::Error> {
-        if channels.contains(Channel::new(REQUEST_CH)) {
-            microkit_cothread_recv_ntfn(REQUEST_CH);
-        }
+        recv(channels, REQUEST_CH);
+        recv(channels, PAINT_CH);
         Ok(())
     }
 }
 
 extern "C" fn worker() {
-    let Some(html) = load_document() else {
+    let mut page = Page::new();
+    if !open(&mut page, FIXTURE_URL) {
         return;
+    }
+    let _ = open(&mut page, FRAMES_URL);
+}
+
+fn open(page: &mut Page, text: &str) -> bool {
+    let Ok(url) = Url::parse(text, None) else {
+        return false;
     };
-    let Ok(sheet) = StyleSheet::parse("") else {
-        return;
+    if !page.navigate(url, fetch) {
+        return false;
+    }
+    let Some(mut bitmap) = Bitmap::frame(shared_bitmap()) else {
+        return false;
     };
-    let document = Document::parse(html);
-    if paint_document(&document, &sheet) {
-        publish(document.title_text().as_bytes());
+    page.paint(&mut bitmap);
+    publish(page.document().title_text().as_bytes());
+    microkit_cothread_wait_on_channel(PAINT_CH);
+    true
+}
+
+fn recv(channels: ChannelSet, index: usize) {
+    if channels.contains(Channel::new(index)) {
+        microkit_cothread_recv_ntfn(index);
     }
 }
 
-fn load_document() -> Option<&'static str> {
+fn fetch(url: &Url) -> Option<String> {
+    let text = url.to_string();
     let page = request_page();
-    if !page.set_url(DOCUMENT_URL) {
+    if !page.set_url(text.as_bytes()) {
         return None;
     }
     fence(Ordering::Release);
@@ -101,18 +120,8 @@ fn load_document() -> Option<&'static str> {
         return None;
     }
     let body = &body_region()[..page.body_len()];
-    core::str::from_utf8(body).ok()
-}
-
-fn paint_document(document: &Document, sheet: &StyleSheet) -> bool {
-    let styled = StyledDocument::new(document, sheet);
-    let layout = styled.layout();
-    let tree = layout.paintables();
-    let Some(mut bitmap) = Bitmap::frame(shared_bitmap()) else {
-        return false;
-    };
-    tree.paint(&mut bitmap);
-    true
+    let text = core::str::from_utf8(body).ok()?;
+    Some(String::from(text))
 }
 
 fn publish(title: &[u8]) {

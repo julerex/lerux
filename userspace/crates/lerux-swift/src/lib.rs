@@ -23,8 +23,8 @@ pub use bt::{
     PortStop, XferFail,
 };
 pub use mt7921::{
-    read_key, read_survey_count, read_survey_ssid, survey_choice, write_key, write_survey,
-    FirmwareKind, Stage, SCAN_MAX,
+    read_key, read_survey_count, read_survey_mark, read_survey_ssid, survey_choice, write_key,
+    write_survey, write_survey_mark, FirmwareKind, Stage, SCAN_MAX,
 };
 pub use nvme::{
     io_allowed, io_rejected, load_named, report_bytes, write_result, DiskReport, NAMED_FILE,

@@ -917,9 +917,14 @@ pub const SCAN_MAX: usize = 16;
 const PAGE_SURVEY: u8 = 2;
 const PAGE_LIST: u8 = 3;
 const SURVEY_STRIDE: usize = 33;
+/// Byte after the name list. The length byte and the mark text follow.
+const SURVEY_MARK: usize = 4 + SCAN_MAX * SURVEY_STRIDE;
+const SURVEY_MARK_MAX: usize = 48;
+
+const _: () = assert!(SURVEY_MARK + 1 + SURVEY_MARK_MAX <= 0x1000);
 
 fn survey_span() -> usize {
-    4 + SCAN_MAX * SURVEY_STRIDE
+    SURVEY_MARK
 }
 
 /// The shell asks which names the radio can hear. The radio replaces this tag.
@@ -929,6 +934,9 @@ pub fn write_survey(page: &mut [u8]) -> bool {
     }
     page[..survey_span()].fill(0);
     page[0] = PAGE_SURVEY;
+    if page.len() > SURVEY_MARK {
+        page[SURVEY_MARK] = 0;
+    }
     true
 }
 
@@ -982,6 +990,95 @@ pub fn read_survey_ssid(page: &[u8], index: usize) -> Option<&[u8]> {
         return None;
     }
     survey_name(page, index)
+}
+
+/// `rx`, `ok`, and `done` for one survey.
+///
+/// `fc` is present only when buffers arrived and no name was kept. A copied
+/// frame contributes its control byte. `--` means `frame_off` rejected every buffer.
+#[must_use]
+pub fn format_survey_mark(out: &mut [u8], rx: u32, ok: u32, done: bool, fc: Option<u8>) -> usize {
+    format_survey_mark_at(out, rx, ok, done, fc).unwrap_or(0)
+}
+
+fn format_survey_mark_at(
+    out: &mut [u8],
+    rx: u32,
+    ok: u32,
+    done: bool,
+    fc: Option<u8>,
+) -> Option<usize> {
+    let mut n = 0;
+    n = write_bytes(out, n, b"rx ")?;
+    n = write_dec(out, n, rx)?;
+    n = write_bytes(out, n, b" ok ")?;
+    n = write_dec(out, n, ok)?;
+    n = write_bytes(out, n, b" done ")?;
+    n = write_bytes(out, n, if done { b"1" } else { b"0" })?;
+    if rx > 0 && ok == 0 {
+        n = write_bytes(out, n, b" fc ")?;
+        n = match fc {
+            Some(byte) => write_bytes(out, n, &hex_byte(byte))?,
+            None => write_bytes(out, n, b"--")?,
+        };
+    }
+    Some(n)
+}
+
+fn hex_byte(byte: u8) -> [u8; 2] {
+    [hex_nibble(byte >> 4), hex_nibble(byte)]
+}
+
+/// Store the mark after the name list. The shell prints these bytes.
+pub fn write_survey_mark(page: &mut [u8], rx: u32, ok: u32, done: bool, fc: Option<u8>) -> bool {
+    let mut line = [0u8; SURVEY_MARK_MAX];
+    let n = format_survey_mark(&mut line, rx, ok, done, fc);
+    if n == 0 || n > SURVEY_MARK_MAX || page.len() < SURVEY_MARK + 1 + n {
+        return false;
+    }
+    page[SURVEY_MARK] = fit_u8(n);
+    page[SURVEY_MARK + 1..SURVEY_MARK + 1 + n].copy_from_slice(&line[..n]);
+    true
+}
+
+#[must_use]
+pub fn read_survey_mark(page: &[u8]) -> Option<&[u8]> {
+    let len = usize::from(*page.get(SURVEY_MARK)?);
+    if len == 0 || len > SURVEY_MARK_MAX || page.len() < SURVEY_MARK + 1 + len {
+        return None;
+    }
+    Some(&page[SURVEY_MARK + 1..SURVEY_MARK + 1 + len])
+}
+
+fn write_bytes(out: &mut [u8], at: usize, bytes: &[u8]) -> Option<usize> {
+    let end = at.checked_add(bytes.len())?;
+    if end > out.len() {
+        return None;
+    }
+    out[at..end].copy_from_slice(bytes);
+    Some(end)
+}
+
+fn write_dec(out: &mut [u8], at: usize, value: u32) -> Option<usize> {
+    let mut digits = [0u8; 10];
+    let mut v = value;
+    let mut n = 0;
+    loop {
+        digits[n] = b'0' + u8::try_from(v % 10).ok()?;
+        n += 1;
+        v /= 10;
+        if v == 0 {
+            break;
+        }
+    }
+    let end = at.checked_add(n)?;
+    if end > out.len() {
+        return None;
+    }
+    for i in 0..n {
+        out[at + i] = digits[n - 1 - i];
+    }
+    Some(end)
 }
 
 /// The printed row when `line` is a live number, otherwise a listed name.
@@ -1283,5 +1380,30 @@ mod tests {
         assert_eq!(read_survey_count(&page), Some(0));
         assert!(write_key(&mut page, b"alpha", b"password"));
         assert!(read_survey_count(&page).is_none());
+    }
+
+    #[test]
+    fn survey_mark_records_an_empty_scan() {
+        let mut out = [0u8; SURVEY_MARK_MAX];
+        let n = format_survey_mark(&mut out, 0, 0, true, None);
+        assert_eq!(&out[..n], b"rx 0 ok 0 done 1");
+        let n = format_survey_mark(&mut out, 4, 0, true, Some(0x08));
+        assert_eq!(&out[..n], b"rx 4 ok 0 done 1 fc 08");
+        let n = format_survey_mark(&mut out, 4, 0, false, None);
+        assert_eq!(&out[..n], b"rx 4 ok 0 done 0 fc --");
+        let n = format_survey_mark(&mut out, 2, 2, true, Some(0x80));
+        assert_eq!(&out[..n], b"rx 2 ok 2 done 1");
+        let n = format_survey_mark(&mut out, u32::MAX, u32::MAX, false, Some(0xff));
+        assert!(n > 0 && n <= SURVEY_MARK_MAX);
+        let mut page = [0u8; 0x1000];
+        assert!(write_survey(&mut page));
+        assert!(read_survey_mark(&page).is_none());
+        assert!(write_survey_list(&mut page, &[]));
+        assert!(write_survey_mark(&mut page, 4, 0, true, Some(0x80)));
+        assert_eq!(read_survey_count(&page), Some(0));
+        assert_eq!(
+            read_survey_mark(&page),
+            Some(&b"rx 4 ok 0 done 1 fc 80"[..])
+        );
     }
 }

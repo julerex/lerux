@@ -26,7 +26,8 @@ use lerux_desk::{panel_mode, BROWSER_HOLD};
 use lerux_ladybird_image::{paint_page, Shifts};
 #[cfg(feature = "board-swift_sfx14_41g")]
 use lerux_swift::{
-    key_ok, read_survey_count, read_survey_ssid, survey_choice, write_key, write_survey, SCAN_MAX,
+    key_ok, read_survey_count, read_survey_mark, read_survey_ssid, survey_choice, write_key,
+    write_survey, SCAN_MAX,
 };
 
 const CONSOLE: Channel = Channel::new(0);
@@ -243,6 +244,7 @@ impl HandlerImpl {
                     return;
                 }
                 self.mode = Mode::Ssid;
+                self.show_survey_mark();
                 self.show_networks();
                 self.emit(b"ssid> ");
             }
@@ -303,6 +305,15 @@ impl HandlerImpl {
         self.ssid_len = name.len();
         self.mode = Mode::Psk;
         self.emit(b"ssid ok\npsk> ");
+    }
+
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    fn show_survey_mark(&mut self) {
+        let Some(mark) = read_survey_mark(key_page()) else {
+            return;
+        };
+        self.emit(mark);
+        self.emit(b"\n");
     }
 
     #[cfg(feature = "board-swift_sfx14_41g")]

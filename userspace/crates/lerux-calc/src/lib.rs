@@ -3,8 +3,8 @@
 //! A sum is products separated by `+` and `-`. A product is factors separated
 //! by `*` and `/`. A factor is a number, a parenthesised sum, or a factor with
 //! a leading `+` or `-`. Spaces are ignored. `+`, `-`, and `*` saturate.
-//! Division truncates toward zero and fails when the divisor is zero. A
-//! trailing character that is not a space fails.
+//! Division truncates toward zero and fails when the divisor is zero or the
+//! quotient does not fit in `i64`. A trailing character that is not a space fails.
 #![cfg_attr(not(test), no_std)]
 
 // The verifier's expansion names `vstd` and `int`. A normal build erases that
@@ -52,7 +52,7 @@ pub struct Error;
 /// # Errors
 ///
 /// Returns [`Error`] when the input is empty, unbalanced, has a trailing
-/// character, or divides by zero.
+/// character, divides by zero, or the quotient does not fit in `i64`.
 pub fn eval(input: &[u8]) -> Result<i64, Error> {
     let mut parser = Parser { s: input, i: 0 };
     let value = parser.parse_expr()?;
@@ -1107,10 +1107,9 @@ impl Parser<'_> {
                 Some(b'/') => {
                     self.bump();
                     let right = self.parse_factor()?;
-                    if right == 0 {
-                        return Err(Error);
-                    }
-                    value /= right;
+                    // `checked_div` is `None` for a zero divisor and for
+                    // `i64::MIN / -1`, whose quotient is not an `i64`.
+                    value = value.checked_div(right).ok_or(Error)?;
                 }
                 _ => break,
             }
@@ -1171,11 +1170,21 @@ mod tests {
     #[test]
     fn division() {
         assert_eq!(eval(b"6/2"), Ok(3));
+        assert_eq!(eval(b"-5/2"), Ok(-2));
     }
 
     #[test]
     fn division_by_zero_fails() {
         assert_eq!(eval(b"1/0"), Err(Error));
+    }
+
+    #[test]
+    fn division_overflow_fails() {
+        // `(-9223372036854775807)-1` is `i64::MIN`. Dividing that by `-1`
+        // is not an `i64`. The same path that rejects a zero divisor rejects
+        // it, instead of panicking inside the maths cothread.
+        assert_eq!(eval(b"((-9223372036854775807)-1)/1"), Ok(i64::MIN));
+        assert_eq!(eval(b"((-9223372036854775807)-1)/-1"), Err(Error));
     }
 
     #[test]

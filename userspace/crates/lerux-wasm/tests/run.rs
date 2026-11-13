@@ -8,7 +8,8 @@ use std::{
 
 use ed25519_dalek::{Signer, SigningKey};
 use lerux_wasm::{
-    encode, run, run_signed, signing_message, verify, Error, Imports, SIG_LEN, SMOKE_LOG,
+    encode, render_signed, run, run_signed, signing_message, verify, Error, Imports, SIG_LEN,
+    SMOKE_LOG,
 };
 
 struct Capture {
@@ -139,6 +140,30 @@ fn sum_not_two_does_not_log() {
     let wasm = verify(&blob, &smoke_vk()).unwrap();
     let host = execute(wasm).unwrap();
     assert_eq!(host.bytes, b"");
+}
+
+#[test]
+fn content_render_returns_the_published_hex() {
+    // Published QIP bytes, so the vector stays the one the investigation measured.
+    let wasm = include_bytes!("fixtures/rgb-to-hex.wasm");
+    assert!(wasm.len() <= lerux_wasm::MAX_WASM_LEN);
+    let blob = sign_wasm(wasm);
+    let mut output = [0u8; 8];
+    let n = render_signed(&blob, &smoke_vk(), b"rgb(101, 79, 240)", &mut output).expect("render");
+    assert_eq!(&output[..n], b"#654ff0");
+}
+
+#[test]
+fn content_render_rejects_a_bad_signature() {
+    let wasm = include_bytes!("fixtures/rgb-to-hex.wasm");
+    let mut blob = sign_wasm(wasm);
+    blob[7] ^= 0x01;
+    let mut output = [0u8; 8];
+    assert_eq!(
+        render_signed(&blob, &smoke_vk(), b"rgb(101, 79, 240)", &mut output),
+        Err(Error::Signature)
+    );
+    assert_eq!(output, [0; 8]);
 }
 
 #[test]

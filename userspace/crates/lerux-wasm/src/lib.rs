@@ -3,7 +3,8 @@
 //! A downloaded program is still an `LRW1` envelope: magic, version, the
 //! WebAssembly payload, and an ed25519 signature over the header and payload.
 //! [`run_signed`] checks that signature before [`run`] instantiates the module.
-//! A bad signature never instantiates it.
+//! [`render_signed`] checks the same signature, then calls the Content `render`
+//! export. A bad signature never instantiates the module.
 //!
 //! The payload is ordinary WebAssembly. This crate does not keep an opcode
 //! allowlist. Execution is the `wasmi` interpreter. The WebAssembly Micro
@@ -17,7 +18,7 @@ use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 
 mod exec;
 
-pub use exec::run;
+pub use exec::{render, run};
 
 /// ASCII magic at the start of a signed blob.
 pub const MAGIC: &[u8; 4] = b"LRW1";
@@ -73,10 +74,16 @@ pub enum Error {
     Signature,
     /// The bytes are not a module this runtime can instantiate.
     Module,
-    /// The module has no `start` export of type `() -> ()`.
+    /// The call's export is missing: `start` of type `() -> ()`, or `render`
+    /// of type `(i32) -> i64`.
     Export,
-    /// `start` trapped. The module was instantiated.
+    /// `start` or `render` trapped, or the input broke a Content precondition.
+    ///
+    /// A UTF-8 input that is not UTF-8, or an input longer than the declared
+    /// capacity, is that precondition. The module was not asked to recover.
     Trap,
+    /// `render` set the rejection bit. No output bytes were copied.
+    Rejected,
 }
 
 /// Host functions an ordinary module may import from `lerux`.
@@ -110,6 +117,25 @@ pub fn run_signed<H: Imports + 'static>(
 ) -> Result<(), Error> {
     let wasm = verify(blob, verifying_key)?;
     run(wasm, host)
+}
+
+/// Check the signature, call Content `render`, and copy the output bytes.
+///
+/// `run` is unchanged. This entry point does not define `lerux` imports.
+/// A module that imports anything fails to instantiate.
+///
+/// # Errors
+///
+/// Returns the errors of [`verify`] when the blob is rejected, and the errors
+/// of [`render`] when the payload does not render.
+pub fn render_signed(
+    blob: &[u8],
+    verifying_key: &[u8; 32],
+    input: &[u8],
+    output: &mut [u8],
+) -> Result<usize, Error> {
+    let wasm = verify(blob, verifying_key)?;
+    render(wasm, input, output)
 }
 
 /// Write the bytes that the signature covers: magic, version, length, WebAssembly.

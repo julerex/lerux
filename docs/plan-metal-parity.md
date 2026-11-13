@@ -26,7 +26,7 @@ That is the bar. A QEMU line does not close a metal milestone. A panel photo or 
 - **in review.** A pull request exists and the exit is not on `main`.
 - **done.** The exit line in this file was met, and the proof is named.
 
-Milestones 1–10 and 12 start as **not started**. Milestone 11 starts as **not started** for the metal browser. Ladybird milestones through the request server are already merged. Navigables is **in review** and is not a metal exit. Milestone 13 is stretch and is **not started**. It is not part of the bar.
+Milestones 1–10, 12, and 14 start as **not started**. Milestone 11 starts as **not started** for the metal browser. Ladybird milestones through the request server are already merged. Navigables is **in review** and is not a metal exit. Milestone 13 is stretch and is **not started**. It is not part of the bar. Milestone 14 is part of the bar: a lerux command for every rescue and diagnostic tool on the Arch live installer.
 
 ## Already true
 
@@ -70,7 +70,9 @@ Milestone 1 filesystem
         │
         ├── Milestone 11 browser (QEMU, then Z97, then Swift)
         │
-        └── Milestone 12 Pi lab (after the x86 sessions)
+        ├── Milestone 12 Pi lab (after the x86 sessions)
+        │
+        └── Milestone 14 rescue and diagnostic commands
 ```
 
 Milestone 13 sits after the bar.
@@ -423,6 +425,78 @@ Each Ladybird step has a host test and either `just test-ladybird` or `just test
 
 **RISC-V high virtio map.** LionsOS milestone 23. It waits on Microkit. The identity map stays. It is not a real-board milestone and does not move in this file.
 
+## Milestone 14 — Rescue and diagnostic commands
+
+**Status:** not started.
+
+**Arch capability.** The Arch installer USB is a temporary system. It contains the `base` metapackage and a separate rescue list, `configs/releng/packages.x86_64`. `pacstrap base` does not copy that rescue list onto the new disk. This milestone puts a lerux command for every one of those tools onto the Swift, Z97, and Pi images. The command is a protection domain or a shell built-in. It is not the Arch binary, and it does not link glibc.
+
+The names below are the ones named for that installer image. A tool already covered by an earlier milestone stays that command. It is listed so the set is complete.
+
+**Boards.** All three, on the console each board already has. A command that needs a device the board does not have prints the command name plus `err`.
+
+**Protection domains and templates.** `sddf-shell` and `console-shell`, plus one small protection domain only when the command needs its own device queue. No new postcard message. Channel numbers come from the profile. Do not vendor `smartmontools`, `nvme-cli`, `testdisk`, or any other Arch package.
+
+**Everyday diagnostics, from `base`.** These are on the live image because the live image contains `base`.
+
+- `ps`, `top`. The filesystem shell already prints `ps` and `qos`. `top` is the same table with a repeating read. `free` and `vmstat` print the protection-domain memory and fault counts the supervisor already knows. There is no `/proc`.
+- `pstree` prints the static protection-domain graph. There is no process tree to walk.
+- `fuser` prints which protection domain holds a file the filesystem server has open.
+- `lsblk` prints the block drivers that booted. `lscpu` prints the architecture and the core count the kernel reported. `dmesg` is Milestone 2. `findmnt` prints the one mounted volume. `fdisk` prints the partition table and does not write it.
+- `lspci` prints the configuration-space lines the board probe already has. On the Swift that is the six lines from LionsOS milestone 26. On the Z97 it is the devices Milestones 5 and 6 accepted.
+- `ip` and `ping` are Milestones 2 and 6 or 8. `ss` prints the open sockets the network client holds. A board with no network role prints `ss err`.
+- `journalctl` is `dmesg` with the same filters Milestone 2 already named (`--pd`, `-l`). `systemctl` is `ps` plus the ready or failed line for one protection domain. `systemd-analyze` prints the boot timestamps the shell already recorded. There is no systemd.
+
+**Disk health.**
+
+- `smartctl` reads the SMART page the block driver can return. The AHCI and NVMe drivers grow that read. A controller that has no SMART page prints `smartctl err`.
+- `nvme` reads identify and the log pages `swift-nvme` already uses. Admin format stays rejected. IO write stays rejected until the Milestone 9 follow-on.
+- `hdparm` and `sdparm` print the identify data for the Serial ATA disk. They do not change the write cache.
+- The SCSI inquiry in `sg3_utils` is `lsscsi` below, for a disk that speaks SCSI. The Z97 and the Swift are not SCSI disks. The command prints `err` there.
+
+**Hardware listing.**
+
+- `dmidecode` prints the firmware tables the boot stub already saved, or `dmidecode err` when the board has none.
+- `lsusb` prints the xHCI ports the image already enumerates. On the Swift that is the Bluetooth controller’s port line. On the Z97 it is the USB HID keyboard.
+- `lsscsi` prints `err` on these three boards. None of them boots from a SCSI HBA.
+- `ethtool` prints link, speed, and the hardware address for the I217 or the MT7921. It does not change offload flags in this milestone.
+
+**Partition and copy.** These commands read unless the operator names a dedicated lerux partition. They do not format a volume that still holds another operating system. That rule is the same one Milestones 5 and 9 already use.
+
+- `parted` and `gdisk` print the GUID partition table. `gpart` guesses a table when the header is damaged and prints the guess. It does not write the guess back.
+- `testdisk` walks a damaged table and prints the partitions it can still name. It does not write them.
+- `ddrescue` copies one named partition to another named partition on a second disk, and keeps a map of the sectors it could not read. The source is read-only.
+- `clonezilla`, `fsarchiver`, `partclone`, and `partimage` are one command, `partclone`. It copies a partition image to a file on the dedicated lerux partition, or back from that file. It does not become a second distribution.
+
+**Filesystems and volumes.** Read-only checkers first. A repair that writes is refused unless the operator names the dedicated lerux partition.
+
+- FAT is the filesystem Milestone 1 already serves. `dosfstools` is that server’s check command, `fsck`.
+- `e2fsprogs`, `btrfs-progs`, `xfsprogs`, and `ntfsprogs` are read-only identify and list commands for a partition whose boot sector says that type. The Swift named-file read already accepts a FAT root or an NTFS resident record. This milestone adds the type name and a directory list. It does not mount ext4, Btrfs, or XFS as the system volume.
+- `lvm2` and `mdadm` print `err` unless the partition table names an LVM physical volume or a Linux RAID member. These boards’ install images do not create either.
+- `cryptsetup` prints `err`. Disk encryption is not part of the bar. The command exists so the operator can see that the volume is locked, and it does not unlock it.
+
+**Memory.** `memtest86+` on Arch runs from the USB boot menu, before the installed system. The lerux ISO boot menu gains a `memtest` entry that writes a pattern over a reserved RAM window and prints pass or fail on the panel or VGA console, then returns to the menu. It does not start seL4.
+
+**Network traces.**
+
+- `ping` is already required on the I217 and on the MT7921.
+- `tcpdump` prints the headers of frames the network client already copied, up to a fixed cap. It does not put the NIC in promiscuous mode in this milestone.
+- `nmap` probes one named host and port and prints open or closed. It does not scan a range wider than that one target.
+- `dig` is the DNS lookup the fetch path already does, printed as the answer. A miss prints `dig err`.
+
+**Steps.**
+
+- Add each command to the shell command table from Milestone 2. A missing device prints the command name plus `err`. A successful read prints one line the smoke can match.
+- Host tests cover the parsers: a SMART page, a GUID header, a FAT boot sector, an NTFS boot sector, and a DNS answer. Golden lines go in `support/smoke-expects.toml`.
+- QEMU `just test-fs-sddf` and `just test-x86-fetch-native` run `lsblk`, `fdisk` (print only), `fsck`, `ss` or `ss err`, and `dig` or `dig err`.
+- The metal exits are `smartctl` and `lspci` on the Z97, `nvme` and `lspci` on the Swift, and `lsblk` on the Pi. Each prints the device that board already has.
+
+**QEMU.** `just test-fs-sddf` and `just test-x86-fetch-native` for the commands that do not need the real controller. `just check` and `just check-pd` for the shell change.
+
+**Metal evidence.** The Z97 shows `lspci` including `8086:153b` and a `smartctl` line from the Serial ATA disk. The Swift shows `lspci` including `14c3:7961` and `1c5c:174a`, and `nvme` identify. The Pi shows `lsblk` for the eMMC volume. A command that only passes on QEMU does not close the metal line.
+
+**Exit.** Every name in this milestone is a shell command on the three board images. The QEMU script covers the parsers. The three metal lines above have been seen. No Arch binary is linked, and no foreign operating-system volume is written.
+
 ## Order
 
 1. Milestone 1, then 2, then 3. They are QEMU and they unblock every board.
@@ -432,6 +506,7 @@ Each Ladybird step has a host test and either `just test-ladybird` or `just test
 5. Milestone 11’s QEMU Ladybird steps can run beside 5–10. The desk seam waits for Milestone 7. The Swift seam waits for Milestone 10.
 6. Milestone 12 waits for nothing in 5–11 except operator time. It stays secondary.
 7. Milestone 13 waits for 1–11.
+8. Milestone 14 waits for Milestone 2. The disk and PCI lines wait for the board session that owns that device (Milestone 7, 10, or 12).
 
 A metal boot is the exit only where the section says so. Milestones 1–4 close without one.
 
@@ -450,12 +525,13 @@ A metal boot is the exit only where the section says so. Milestones 1–4 close 
 | Host scripted radio | Milestone 8, regression only |
 | Panel or COM1 | The metal exit named on that milestone |
 | `just test-hw` on the Pi | Milestone 12 |
+| `just test-fs-sddf`, `just test-x86-fetch-native` | Milestone 14 parsers |
 
 Update the status word on a milestone in this file when its exit is met. Do not mark LionsOS 22–29 or Ladybird 11–20 done from this file. Those plans keep their own checkboxes.
 
 ## Explicit non-goals
 
-- Unmodified Arch packages, `pacman` inside the guest, glibc or musl userspace
+- Unmodified Arch packages, `pacman` inside the guest, glibc or musl userspace. Milestone 14 ports the command names. It does not link the Arch binaries.
 - A POSIX ABI, `fork`, `exec`, or a Linux root filesystem as the primary interface
 - Guest Linux or libvmm
 - Wayland, a compositor, or a driver for the GTX 1650 or the RX 560
@@ -469,4 +545,4 @@ Update the status word on a milestone in this file when its exit is met. Do not 
 
 ## Summary
 
-Milestones 1–4 rebuild the daily filesystem, shell, config, and host update on the LionsOS queues. Milestones 5–7 make the Z97 one session on its own Serial ATA controller and its I217. Milestones 8–10 make the Swift one session on its radio and a read-only SSD. Milestone 11 puts the Rust browser on QEMU and then on those two panels. Milestone 12 is the Pi lab, still secondary. Milestone 13 is what Arch also has and this bar does not require yet.
+Milestones 1–4 rebuild the daily filesystem, shell, config, and host update on the LionsOS queues. Milestones 5–7 make the Z97 one session on its own Serial ATA controller and its I217. Milestones 8–10 make the Swift one session on its radio and a read-only SSD. Milestone 11 puts the Rust browser on QEMU and then on those two panels. Milestone 12 is the Pi lab, still secondary. Milestone 13 is what Arch also has and this bar does not require yet. Milestone 14 is a lerux command for every rescue and diagnostic tool on the Arch live installer.

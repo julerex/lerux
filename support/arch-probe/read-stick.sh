@@ -41,6 +41,7 @@ done
 
 mnt=
 mounted=0
+own_mnt=0
 cleanup() {
   if [[ $mounted -eq 1 && -n $mnt ]]; then
     if [[ $(id -u) -eq 0 ]]; then
@@ -49,7 +50,7 @@ cleanup() {
       sudo umount "$mnt" || true
     fi
   fi
-  if [[ -n $mnt ]]; then
+  if [[ $own_mnt -eq 1 && -n $mnt ]]; then
     rmdir "$mnt" 2>/dev/null || true
   fi
 }
@@ -270,9 +271,19 @@ else
   choose_capture
 fi
 
-mnt=$(mktemp -d)
-run_root mount -o ro "$node" "$mnt"
-mounted=1
+# The desktop mounts CAPTURE as soon as the stick appears. A second mount
+# that asks for read-only is refused, because the filesystem is already
+# read-write. Copy from the mount that is already there.
+existing=$(findmnt -nr -o TARGET --source "$node" 2>/dev/null | head -n 1 || true)
+if [[ -n $existing && -d $existing ]]; then
+  echo "read-arch-probe: using the mount at $existing" >&2
+  mnt=$existing
+else
+  mnt=$(mktemp -d)
+  own_mnt=1
+  run_root mount -o ro "$node" "$mnt"
+  mounted=1
+fi
 if [[ ! -d $mnt/arch-probe-out ]]; then
   die "no arch-probe-out on $node. Run probe.sh on the desk first"
 fi

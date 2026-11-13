@@ -12,7 +12,7 @@ Shut the laptop down and leave it off for a few seconds. A restart out of a syst
 
 Plug the stick in. Power on and open the firmware boot menu the same way you boot the lerux stick. Choose the USB entry. If the firmware refuses the stick, turn secure boot off.
 
-At the Arch menu, highlight the install-medium entry and press `e`. Add this to the end of the line that contains `archisobasedir`:
+The install image has two menus. A blue menu titled Arch Linux, whose entry says `(x86_64, BIOS)`, edits with Tab: the kernel line appears along the bottom. A plain text list whose entry says `(x86_64, UEFI)` edits with `e`. Add this to the end of the line that contains `archisobasedir`:
 
 ```text
 modprobe.blacklist=mt7921e

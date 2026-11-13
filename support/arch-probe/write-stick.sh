@@ -324,6 +324,26 @@ unmount_disk() {
   done < <(lsblk -lnpo NAME "$dev")
 }
 
+# The desktop mounts a partition as soon as it appears. The free space often
+# still has the previous FAT, so that mount is the old filesystem and mkfs
+# refuses. Unmount and try again until the format sticks.
+format_capture() {
+  local node=$1 i err
+  for i in 1 2 3 4 5 6 7 8; do
+    unmount_disk
+    if err=$(mkfs.vfat -F 32 -n CAPTURE "$node" 2>&1); then
+      return 0
+    fi
+    if [[ "$err" != *"mounted filesystem"* ]]; then
+      printf '%s\n' "$err" >&2
+      die "could not format $node"
+    fi
+    sleep 0.3
+  done
+  printf '%s\n' "$err" >&2
+  die "could not format $node; a desktop mount kept coming back"
+}
+
 disk_label() {
   sfdisk -d "$1" | awk '/^label:/ { print $2; exit }'
 }
@@ -380,7 +400,8 @@ write_boot_note() {
 Arch is on this stick. These files are on the partition labelled CAPTURE.
 Leave the stick plugged in for the whole probe.
 
-At the Arch menu, press e and add this to the end of the kernel line:
+The blue Arch Linux menu edits with Tab. The plain text menu edits with e.
+Add this to the end of the kernel line:
 
     nomodeset
 
@@ -414,7 +435,7 @@ write_stick() {
   bytes=$(lsblk -dbno SIZE "$node")
   [[ "$bytes" -ge "$min_partition" ]] || die "capture partition is only $bytes bytes; use a larger stick"
   echo "burn-arch-probe: formatting $node"
-  mkfs.vfat -F 32 -n CAPTURE "$node"
+  format_capture "$node"
   mnt=$(mktemp -d)
   mount -t vfat "$node" "$mnt"
   cp "$here/probe.sh" "$here/summarize.sh" "$here/README.md" "$mnt/"
@@ -424,7 +445,7 @@ write_stick() {
   umount "$mnt"
   rmdir "$mnt"
   echo "burn-arch-probe: wrote CAPTURE on $node"
-  echo "burn-arch-probe: at the Arch menu, append nomodeset to the kernel line, then:"
+  echo "burn-arch-probe: on the blue menu press Tab, on the text menu press e, append nomodeset, then:"
   echo "    mount /dev/disk/by-label/CAPTURE /mnt/stick"
   echo "    bash /mnt/stick/probe.sh"
 }

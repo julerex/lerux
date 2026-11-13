@@ -106,3 +106,50 @@ fn iframe_is_fetched_after_the_parent_and_paints_its_pixels() {
     let line = bitmap.pixel_line().expect("sample");
     assert_eq!(line.as_bytes(), b"pixel ff0000ff\n");
 }
+
+#[test]
+fn a_failed_iframe_keeps_the_parent() {
+    let mut page = Page::new();
+    let loaded = page.navigate(url("https://host:8443/first.html"), |next| {
+        body_for(next.path())
+    });
+    assert!(loaded);
+    assert_eq!(page.document().title_text(), "one");
+
+    let bad_src = "<!DOCTYPE html><html><head><title>parent</title></head><body><iframe src=\"http://child.example/x\"></iframe></body></html>";
+    let mut loads = 0u32;
+    let loaded = page.navigate(url("https://host:8443/bad-src.html"), |next| {
+        loads += 1;
+        assert_eq!(next.path(), "/bad-src.html");
+        Some(bad_src.to_string())
+    });
+    assert!(loaded);
+    assert_eq!(loads, 1);
+    assert_eq!(page.document().title_text(), "parent");
+    assert_eq!(page.url().expect("url").path(), "/bad-src.html");
+
+    let missing = "<!DOCTYPE html><html><head><title>kept</title></head><body><iframe src=\"/missing.html\"></iframe></body></html>";
+    let mut paths = Vec::new();
+    let loaded = page.navigate(url("https://host:8443/kept.html"), |next| {
+        paths.push(next.path().to_string());
+        if next.path() == "/kept.html" {
+            Some(missing.to_string())
+        } else {
+            None
+        }
+    });
+    assert!(loaded);
+    assert_eq!(paths, ["/kept.html", "/missing.html"]);
+    assert_eq!(page.document().title_text(), "kept");
+    assert_eq!(page.url().expect("url").path(), "/kept.html");
+
+    let mut bytes = vec![0u8; FRAME_BYTES];
+    let mut bitmap = Bitmap::frame(&mut bytes).expect("frame");
+    page.paint(&mut bitmap);
+    assert!(bitmap.pixel_line().is_none());
+
+    let stayed = page.navigate(url("https://host:8443/gone.html"), |_| None);
+    assert!(!stayed);
+    assert_eq!(page.document().title_text(), "kept");
+    assert_eq!(page.url().expect("url").path(), "/kept.html");
+}

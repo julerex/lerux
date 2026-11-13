@@ -4,7 +4,8 @@
 //! keeps the scheme, host, port, path, and query updates the fragment and the
 //! scroll offset, and does not ask for a new body. One `iframe` is a child
 //! navigable. Its document is fetched after the parent and painted inside the
-//! parent's content box. A nested frame is left unloaded.
+//! parent's content box. A `src` that does not parse, or a child fetch that
+//! returns no body, leaves that child unloaded. A nested frame is left unloaded.
 
 use alloc::string::String;
 
@@ -60,8 +61,10 @@ impl Page {
     /// Replace this navigable with `url`.
     ///
     /// A fragment-only change keeps the document and does not call `load`.
-    /// Any other URL replaces the document, drops the previous child, and
-    /// fetches the first iframe. `load` returns the response body.
+    /// Any other URL replaces the document when `load` returns a body, drops
+    /// the previous child, and fetches the first iframe. A `src` that does
+    /// not parse, or a child `load` that returns no body, leaves the child
+    /// absent and still commits the parent. `load` returns the response body.
     #[must_use]
     pub fn navigate(&mut self, url: Url, mut load: impl FnMut(&Url) -> Option<String>) -> bool {
         if self
@@ -77,9 +80,7 @@ impl Page {
             return false;
         };
         let document = Document::parse(&html);
-        let Some(child) = load_child(&url, &document, &mut load) else {
-            return false;
-        };
+        let child = load_child(&url, &document, &mut load);
         self.url = Some(url);
         self.document = document;
         self.scroll = 0;
@@ -141,16 +142,20 @@ fn load_child(
     base: &Url,
     document: &Document,
     load: &mut impl FnMut(&Url) -> Option<String>,
-) -> Option<ChildLoad> {
+) -> ChildLoad {
     let Some(src) = first_iframe_src(document) else {
-        return Some(ChildLoad::Absent);
+        return ChildLoad::Absent;
     };
-    let url = Url::parse(src, Some(base)).ok()?;
+    let Ok(url) = Url::parse(src, Some(base)) else {
+        return ChildLoad::Absent;
+    };
     if same_document(base, &url) {
-        return Some(ChildLoad::Absent);
+        return ChildLoad::Absent;
     }
-    let html = load(&url)?;
-    Some(ChildLoad::Present(Document::parse(&html)))
+    let Some(html) = load(&url) else {
+        return ChildLoad::Absent;
+    };
+    ChildLoad::Present(Document::parse(&html))
 }
 
 fn same_document(left: &Url, right: &Url) -> bool {

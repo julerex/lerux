@@ -32,7 +32,7 @@ Unplug the stick when the recipe prints `wrote CAPTURE`.
 
 Plug the stick in. Power on and open the firmware boot menu the same way you boot the lerux stick. Choose the USB entry. If the firmware refuses the stick, turn secure boot off.
 
-At the Arch menu, highlight the install-medium entry and press `e`. Add this to the end of the line that contains `archisobasedir`:
+The install image has two menus. A blue menu titled Arch Linux, whose entry says `(x86_64, BIOS)`, edits with Tab: the kernel line appears along the bottom. A plain text list whose entry says `(x86_64, UEFI)` edits with `e`. Add this to the end of the line that contains `archisobasedir`:
 
 ```text
 nomodeset
@@ -66,7 +66,7 @@ Plug the stick into this machine and run:
 just read-arch-probe
 ```
 
-The command mounts `CAPTURE` read-only and copies each stamp into `support/arch-probe/out/<product>_<stamp>/`. It prints the path of `board.txt`. That directory is gitignored because the files name the machine.
+The command copies each stamp into `support/arch-probe/out/<product>_<stamp>/`. When the desktop has already mounted `CAPTURE`, that mount is used and left in place. Otherwise the partition is mounted read-only and unmounted afterwards. It prints the path of `board.txt`. That directory is gitignored: it is the raw capture, including PCI config space and ACPI tables. A machine kept in the tree is copied by hand into `support/arch-probe/machines/`. The Inspiron N5010 record is [machines/inspiron-n5010.md](machines/inspiron-n5010.md).
 
 `just read-arch-probe /dev/sdX` uses that stick directly. One CAPTURE partition is used without a prompt. Several are listed.
 

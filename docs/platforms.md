@@ -80,6 +80,20 @@ The Acer Swift X SFX14-41G (Ryzen 5 5500U, Orion_CA). The panel belongs to the R
 | Display | AMD Radeon at `04:00.0` | none beyond the firmware framebuffer | no |
 | Display | NVIDIA GTX 1650 at `01:00.0` | none | no |
 
+### Inspiron N5010
+
+The Dell Inspiron N5010 (Core i5-460M, HM57, BIOS A15). Probed 2026-11-14. The full record is [support/arch-probe/machines/inspiron-n5010.md](../support/arch-probe/machines/inspiron-n5010.md). The console on that boot was the VGA text page. The log has no EFI framebuffer. There is no image.
+
+| Category | Device | lerux driver | In the tree |
+|----------|--------|--------------|-------------|
+| Text console | VGA text page at `0xb8000`, 80 by 25, scanned by the integrated graphics | `console-driver` | yes, the crate. This machine has no image |
+| Keyboard | i8042 at `0x60` and `0x64`, IRQ 1 | `console-driver` | yes, the crate. This machine has no image |
+| Display | Integrated graphics, `8086:0046` at `00:02.0`. Memory `0xfa400000` size `0x400000`, aperture `0xc0000000` size `0x10000000` | none | no |
+| Disk | AHCI `8086:3b2f` at `00:1f.2`, memory `0xfbd06000` size `0x800`. Drive WDC WD5000BEVT-75A0RT0 | `sddf-ahci-driver` | no |
+| USB | EHCI `8086:3b3c` at `00:1a.0` and `8086:3b34` at `00:1d.0` | none | no |
+| Network | RTL810xE, `10ec:8136` at `13:00.0`, behind `00:1c.2` | none | no |
+| Wireless | BCM4313, `14e4:4727` at `12:00.0`, behind `00:1c.1` | none | no |
+
 ## Commands
 
 ```bash

@@ -1,6 +1,6 @@
 # PLAN.md — lerux roadmap
 
-Last updated: 2026-11-10. Numbered phases 1–82 below are done. The active rewrite is [plan-lionsos.md](plan-lionsos.md). Milestones 1 through 18 of that plan are done. The metal target being driven is the Acer Swift X SFX14-41G (`swift_sfx14_41g`), milestones 24–29 of that plan. The Gigabyte Z97-D3H desk page and the [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated) stay secondary. JavaScript and WebAssembly are approved. The browser is modelled on Ladybird's engine shape and process isolation and rewritten in Rust, not a port of the Ladybird, Chromium, or WebKit C++ sources.
+Last updated: 2026-11-10. Numbered phases 1–82 below are done. The active rewrite is [plan-lionsos.md](plan-lionsos.md). Milestones 1 through 18 of that plan are done. The metal target being driven is the Acer Swift X SFX14-41G (`swift_sfx14_41g`), milestones 24–29 of that plan. The Gigabyte Z97-D3H desk page and the [Physical RPi4 lab](#physical-rpi4-lab-hardware-gated) stay secondary. JavaScript and WebAssembly are approved. The browser is modelled on Ladybird's engine shape and process isolation and rewritten in Rust, not a port of the Ladybird, Chromium, or WebKit C++ sources. Arch parity for the Swift, the Z97, and the Pi is [plan-metal-parity.md](plan-metal-parity.md).
 
 ## Phase 1 — Bring-up
 

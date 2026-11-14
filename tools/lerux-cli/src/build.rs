@@ -304,11 +304,23 @@ pub(crate) fn iso_recipe(board: &str) -> String {
 }
 
 fn hardware_ready_message(board: &str, arch: &str) -> String {
-    let docs = if arch == "x86_64" {
+    let docs = if board == "inspiron_n5010" {
+        "docs/boards.md#dell-inspiron-n5010-install-path"
+    } else if arch == "x86_64" {
         "docs/boards.md#gigabyte-z97-d3h-install-path"
     } else {
         "docs/boards.md#rpi4-workstation-install-path-phase-52"
     };
+    if board == "inspiron_n5010" {
+        return format!(
+            "==> Hardware board {board:?}: image ready.\n\
+             \x20   ISO: {}  (build/{board}/{})\n\
+             \x20   This command does not write a disk. Do not dd the ISO onto the internal SATA disk.\n\
+             \x20   Docs: {docs}",
+            iso_recipe(board),
+            crate::iso::iso_file_name(board)
+        );
+    }
     let iso = if arch == "x86_64" {
         format!(
             "\n   ISO: {}  (build/{board}/{})",
@@ -357,5 +369,13 @@ mod tests {
         assert!(!msg.contains("deploy-rpi4"), "{msg}");
         let rpi = hardware_ready_message("rpi4b_4gb_workstation", "aarch64");
         assert!(!rpi.contains("just iso"), "{rpi}");
+        let inspiron = hardware_ready_message("inspiron_n5010", "x86_64");
+        assert!(inspiron.contains("just iso inspiron_n5010"), "{inspiron}");
+        assert!(
+            inspiron.contains("dell-inspiron-n5010-install-path"),
+            "{inspiron}"
+        );
+        assert!(!inspiron.contains("ttyUSB0"), "{inspiron}");
+        assert!(!inspiron.contains("gigabyte-z97"), "{inspiron}");
     }
 }

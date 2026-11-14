@@ -1,4 +1,4 @@
-//! Swift X has no USB keyboard in this image. The built-in keyboard is PS/2.
+//! This image does not bring up a USB keyboard. The built-in keyboard is the i8042.
 
 pub struct UsbKbd;
 

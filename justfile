@@ -78,7 +78,9 @@ image: build
     {{lerux}} image --board {{board}} --build-dir {{build_dir}} --config {{config}}
 
 # UEFI GRUB ISO. `just iso` rebuilds the Swift image, then packs it.
-# `just iso pc_z97_d3h` does the same for the Z97 desk. Does not write a disk.
+# `just iso pc_z97_d3h` does the same for the Z97 desk.
+# `just iso inspiron_n5010` packs the Inspiron N5010 VGA text image.
+# Does not write a disk.
 iso target="swift_sfx14_41g":
     {{lerux}} iso --board {{target}} --build-dir {{build_dir}} --config {{config}}
 

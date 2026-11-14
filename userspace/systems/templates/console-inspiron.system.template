@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Dell Inspiron N5010. The 2026-11-14 probe left the VGA text page at
+  0xb8000 and the built-in i8042 on IRQ 1. That boot recorded no serial
+  port, no xHCI, and no GOP framebuffer. The AHCI disk stays unmapped.
+-->
+<system>
+    <memory_region name="vga_text" size="0x1_000" phys_addr="0xb8000" />
+
+    <protection_domain name="console_driver" priority="2" stack_size="0x10_000">
+        <program_image path="console-driver.elf" />
+        <map mr="vga_text" vaddr="0xb8000" perms="rw" cached="false" setvar_vaddr="vga_text_vaddr" />
+        <ioport id="0" addr="0x3d4" size="2" setvar_id="crtc_ioport_id" setvar_addr="crtc_ioport_addr" />
+        <ioport id="1" addr="0x60" size="1" setvar_id="kbd_data_ioport_id" setvar_addr="kbd_data_ioport_addr" />
+        <ioport id="2" addr="0x64" size="1" setvar_id="kbd_cmd_ioport_id" setvar_addr="kbd_cmd_ioport_addr" />
+        <!-- ISA IRQ 1, edge. The probe recorded no IRQ 1 override. -->
+        <irq pin="1" vector="49" id="0" trigger="edge" polarity="high" />
+    </protection_domain>
+
+    <protection_domain name="shell" priority="1" stack_size="0x10_000">
+        <program_image path="console-shell.elf" />
+    </protection_domain>
+
+    <channel>
+        <end pd="console_driver" id="1" />
+        <end pd="shell" id="0" pp="true" />
+    </channel>
+</system>

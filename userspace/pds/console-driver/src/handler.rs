@@ -11,9 +11,9 @@ use sel4_microkit_simple_ipc as simple_ipc;
 
 use lerux_driver_protocols::serial::{ErrorResponse, NonBlocking, Request, SuccessResponse};
 
-#[cfg(feature = "board-swift_sfx14_41g")]
+#[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-inspiron_n5010"))]
 use crate::usb_off::UsbKbd;
-#[cfg(not(feature = "board-swift_sfx14_41g"))]
+#[cfg(not(any(feature = "board-swift_sfx14_41g", feature = "board-inspiron_n5010")))]
 use crate::xhci::UsbKbd;
 
 use crate::{
@@ -148,32 +148,32 @@ impl Handler for HandlerImpl {
     }
 }
 
-#[cfg(not(feature = "board-swift_sfx14_41g"))]
+#[cfg(not(any(feature = "board-swift_sfx14_41g", feature = "board-inspiron_n5010")))]
 fn usb_ready(usb: &UsbKbd) -> bool {
     usb.ready()
 }
 
-#[cfg(feature = "board-swift_sfx14_41g")]
+#[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-inspiron_n5010"))]
 fn usb_ready(_usb: &UsbKbd) -> bool {
     UsbKbd::ready()
 }
 
-#[cfg(not(feature = "board-swift_sfx14_41g"))]
+#[cfg(not(any(feature = "board-swift_sfx14_41g", feature = "board-inspiron_n5010")))]
 fn poll_usb(usb: &mut UsbKbd, buf: &mut [u8]) -> usize {
     usb.poll(buf)
 }
 
-#[cfg(feature = "board-swift_sfx14_41g")]
+#[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-inspiron_n5010"))]
 fn poll_usb(_usb: &mut UsbKbd, buf: &mut [u8]) -> usize {
     UsbKbd::poll(buf)
 }
 
-#[cfg(not(feature = "board-swift_sfx14_41g"))]
+#[cfg(not(any(feature = "board-swift_sfx14_41g", feature = "board-inspiron_n5010")))]
 fn ack_usb(usb: &mut UsbKbd) {
     usb.ack_irq();
 }
 
-#[cfg(feature = "board-swift_sfx14_41g")]
+#[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-inspiron_n5010"))]
 fn ack_usb(_usb: &mut UsbKbd) {
     UsbKbd::ack_irq();
 }

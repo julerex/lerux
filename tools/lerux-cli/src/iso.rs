@@ -378,16 +378,43 @@ fn print_usb_instructions(board: &str, iso: &Path) {
         iso.display()
     );
     if board == "swift_sfx14_41g" {
-        println!("Replace sdX with the flash drive from lsblk. Do not write the internal NVMe.");
-        println!("Firmware boot menu → the USB entry that says UEFI (GRUB EFI/BOOT/BOOTX64.EFI).");
-        println!("mb2-stub loads sel4.elf (64-bit) at 1 MiB after ExitBootServices.");
-        println!(
-            "Screen: the GOP mode line, then \"1 browser\", \"2 maths\", and \"3 wifi\". This laptop has no COM port."
-        );
-        println!("1 or browser opens the Lenna test page. quit returns the menu.");
-        println!("Expect: 1 browser");
-        return;
+        print_swift_usb();
+    } else if board == "inspiron_n5010" {
+        print_inspiron_usb();
+    } else {
+        print_desk_usb();
     }
+}
+
+fn print_swift_usb() {
+    println!("Replace sdX with the flash drive from lsblk. Do not write the internal NVMe.");
+    println!("Firmware boot menu → the USB entry that says UEFI (GRUB EFI/BOOT/BOOTX64.EFI).");
+    println!("mb2-stub loads sel4.elf (64-bit) at 1 MiB after ExitBootServices.");
+    println!(
+        "Screen: the GOP mode line, then \"1 browser\", \"2 maths\", and \"3 wifi\". This laptop has no COM port."
+    );
+    println!("1 or browser opens the Lenna test page. quit returns the menu.");
+    println!("Expect: 1 browser");
+}
+
+fn print_inspiron_usb() {
+    println!("Replace sdX with the flash drive from lsblk. Do not write the internal SATA disk.");
+    println!("Firmware boot menu → the USB entry that says UEFI (GRUB EFI/BOOT/BOOTX64.EFI).");
+    println!("mb2-stub loads sel4.elf (64-bit) at 1 MiB after ExitBootServices.");
+    println!(
+        "Screen: blue background, \"hello lerux\", then \"1 browser\" and \"2 maths\". The keyboard is the built-in i8042."
+    );
+    println!(
+        "This laptop has no COM port. The probe recorded no GOP framebuffer, so the image paints the VGA text page."
+    );
+    println!(
+        "1 or browser prints \"browser unavailable\". 2 or maths reads expressions until quit."
+    );
+    println!("The recorded boot was legacy BIOS. This ISO is UEFI only.");
+    println!("Full procedure: docs/boards.md#dell-inspiron-n5010-install-path");
+}
+
+fn print_desk_usb() {
     println!(
         "Replace sdX with the flash drive from lsblk. Do not use sda (Ubuntu SSD) or sdb (data disk)."
     );

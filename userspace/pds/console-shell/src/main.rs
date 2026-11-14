@@ -2,6 +2,7 @@
 //!
 //! Channel 0 is `console_driver` (keyboard bytes in, screen bytes out).
 //! On the desk, channel 1 is `serial_driver` (the same output bytes on COM1).
+//! The Inspiron N5010 image has no serial channel.
 //! The desk and the QEMU console have no page painter, so the browser choice
 //! reports that it is unavailable. On the Swift X, channel 1 is the read-only
 //! `NVMe` result, and the browser choice paints the Lenna test page over the
@@ -31,7 +32,7 @@ use lerux_swift::{
 };
 
 const CONSOLE: Channel = Channel::new(0);
-#[cfg(not(feature = "board-swift_sfx14_41g"))]
+#[cfg(not(any(feature = "board-swift_sfx14_41g", feature = "board-inspiron_n5010")))]
 const SERIAL: Channel = Channel::new(1);
 #[cfg(feature = "board-swift_sfx14_41g")]
 const DISK: Channel = Channel::new(1);
@@ -57,7 +58,7 @@ enum Mode {
 
 struct HandlerImpl {
     screen: Client,
-    #[cfg(not(feature = "board-swift_sfx14_41g"))]
+    #[cfg(not(any(feature = "board-swift_sfx14_41g", feature = "board-inspiron_n5010")))]
     com1: Client,
     #[cfg(feature = "board-swift_sfx14_41g")]
     disk_done: bool,
@@ -79,7 +80,7 @@ struct HandlerImpl {
 fn init() -> HandlerImpl {
     let mut shell = HandlerImpl {
         screen: Client::new(CONSOLE),
-        #[cfg(not(feature = "board-swift_sfx14_41g"))]
+        #[cfg(not(any(feature = "board-swift_sfx14_41g", feature = "board-inspiron_n5010")))]
         com1: Client::new(SERIAL),
         #[cfg(feature = "board-swift_sfx14_41g")]
         disk_done: false,
@@ -116,7 +117,7 @@ impl HandlerImpl {
     fn emit(&mut self, bytes: &[u8]) {
         for &byte in bytes {
             push(&mut self.screen, byte);
-            #[cfg(not(feature = "board-swift_sfx14_41g"))]
+            #[cfg(not(any(feature = "board-swift_sfx14_41g", feature = "board-inspiron_n5010")))]
             push(&mut self.com1, byte);
         }
     }
@@ -125,7 +126,7 @@ impl HandlerImpl {
     fn emit_boot(&mut self, bytes: &[u8]) {
         for &byte in bytes {
             push(&mut self.screen, byte);
-            #[cfg(not(feature = "board-swift_sfx14_41g"))]
+            #[cfg(not(any(feature = "board-swift_sfx14_41g", feature = "board-inspiron_n5010")))]
             push(&mut self.com1, byte);
             #[cfg(feature = "board-pc_z97_d3h")]
             if byte == b'\n' {

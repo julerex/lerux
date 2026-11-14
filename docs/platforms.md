@@ -82,14 +82,14 @@ The Acer Swift X SFX14-41G (Ryzen 5 5500U, Orion_CA). The panel belongs to the R
 
 ### Inspiron N5010
 
-The Dell Inspiron N5010 (Core i5-460M, HM57, BIOS A15). Probed 2026-11-14. The full record is [support/arch-probe/machines/inspiron-n5010.md](../support/arch-probe/machines/inspiron-n5010.md). The console on that boot was the VGA text page. The log has no EFI framebuffer. There is no image.
+The Dell Inspiron N5010 (Core i5-460M, HM57, BIOS A15). Probed 2026-11-14. The full record is [support/arch-probe/machines/inspiron-n5010.md](../support/arch-probe/machines/inspiron-n5010.md). The console on that boot was the VGA text page. The log has no EFI framebuffer. The image is `just iso inspiron_n5010`. It paints that page and does not map the disk.
 
 | Category | Device | lerux driver | In the tree |
 |----------|--------|--------------|-------------|
-| Text console | VGA text page at `0xb8000`, 80 by 25, scanned by the integrated graphics | `console-driver` | yes, the crate. This machine has no image |
-| Keyboard | i8042 at `0x60` and `0x64`, IRQ 1 | `console-driver` | yes, the crate. This machine has no image |
-| Display | Integrated graphics, `8086:0046` at `00:02.0`. Memory `0xfa400000` size `0x400000`, aperture `0xc0000000` size `0x10000000` | none | no |
-| Disk | AHCI `8086:3b2f` at `00:1f.2`, memory `0xfbd06000` size `0x800`. Drive WDC WD5000BEVT-75A0RT0 | `sddf-ahci-driver` | no |
+| Text console | VGA text page at `0xb8000`, 80 by 25, scanned by the integrated graphics | `console-driver` on `inspiron_n5010` | yes |
+| Keyboard | i8042 at `0x60` and `0x64`, IRQ 1 | `console-driver` on `inspiron_n5010` | yes |
+| Display | Integrated graphics, `8086:0046` at `00:02.0`. Memory `0xfa400000` size `0x400000`, aperture `0xc0000000` size `0x10000000` | none. No GOP address was recorded | no |
+| Disk | AHCI `8086:3b2f` at `00:1f.2`, memory `0xfbd06000` size `0x800`. Drive WDC WD5000BEVT-75A0RT0 | none on this image. The volume is not formatted | no |
 | USB | EHCI `8086:3b3c` at `00:1a.0` and `8086:3b34` at `00:1d.0` | none | no |
 | Network | RTL810xE, `10ec:8136` at `13:00.0`, behind `00:1c.2` | none | no |
 | Wireless | BCM4313, `14e4:4727` at `12:00.0`, behind `00:1c.1` | none | no |
@@ -102,6 +102,7 @@ just test-workstation-riscv    # Tier 2 RISC-V
 just test-workstation-x86      # Tier 2 x86
 just iso                                 # Swift X USB ISO → build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso
 just iso pc_z97_d3h                      # Z97-D3H USB ISO → build/pc_z97_d3h/lerux_pc_z97_d3h.iso
+just iso inspiron_n5010                  # Inspiron N5010 USB ISO → build/inspiron_n5010/lerux_inspiron_n5010.iso
 just deploy-pc DEST=/path/to/usb-fat      # Z97-D3H VGA shell onto a FAT volume (Multiboot 2)
 
 lerux profile build workstation

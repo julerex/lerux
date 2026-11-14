@@ -1,6 +1,6 @@
 # Dell Inspiron N5010
 
-Probed 2026-11-14 from the Arch stick (`archlinux-2026.11.01-x86_64.iso`), BIOS boot, with `nomodeset` on the kernel line. There is no lerux image for this machine. The retrieval copy under `support/arch-probe/out/` stays gitignored.
+Probed 2026-11-14 from the Arch stick (`archlinux-2026.11.01-x86_64.iso`), BIOS boot, with `nomodeset` on the kernel line. The image is `just iso inspiron_n5010`. It paints the VGA text page and does not map the disk. The retrieval copy under `support/arch-probe/out/` stays gitignored.
 
 | | |
 | --- | --- |

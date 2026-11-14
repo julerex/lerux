@@ -17,8 +17,7 @@ just fetch          # clone seL4 + microkit into deps/workspace/
 just fetch-sdk      # download prebuilt Microkit SDK 2.3.0
 # or: just build-sdk   # build the SDK from source instead
 just iso            # pack build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso
-lsblk               # find the flash drive (e.g. /dev/sdX) — not the OS disk
-sudo dd if=build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso of=/dev/sdX bs=4M status=progress conv=fsync
+just burn-iso       # write that ISO to a USB stick
 ```
 
 Reboot and open the firmware boot menu. Choose the USB entry that says **UEFI** (GRUB `EFI/BOOT/BOOTX64.EFI`). GRUB reads `/boot/grub/grub.cfg` and boots immediately. It Multiboot 2-loads `/boot/mb2-stub.elf` with modules `/boot/sel4.elf` and `/boot/loader.img`. The stub places the kernel at 1 MiB after `ExitBootServices`.

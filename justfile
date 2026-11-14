@@ -80,9 +80,17 @@ image: build
 # UEFI GRUB ISO. `just iso` rebuilds the Swift image, then packs it.
 # `just iso pc_z97_d3h` does the same for the Z97 desk.
 # `just iso inspiron_n5010` packs the Inspiron N5010 VGA text image.
-# Does not write a disk.
+# Does not write a disk. `just burn-iso` writes the Swift ISO.
 iso target="swift_sfx14_41g":
     {{lerux}} iso --board {{target}} --build-dir {{build_dir}} --config {{config}}
+
+# Erase a USB stick and write the Swift ISO from `just iso`.
+# This is the Acer image only. Z97 and Inspiron stay on the dd lines in docs/boards.md.
+# With no argument, lists USB sticks and asks which one to erase.
+# just burn-iso
+# just burn-iso /dev/sdX
+burn-iso *args:
+    bash "{{root}}/support/burn-iso.sh" --image "{{root}}/{{build_dir}}/swift_sfx14_41g/lerux_swift_sfx14_41g.iso" {{args}}
 
 # Erase a USB stick and write the Arch install image plus the desk probe.
 # With no argument, lists USB sticks and asks which one to erase.

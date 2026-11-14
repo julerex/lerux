@@ -245,6 +245,17 @@ The on-screen menu is `console-shell`. It is not the filesystem shell. `console-
 - `just test-x86-console` expects `1 browser`, then QMP keys `2`, Enter, `6`, `/`, `2`, Enter, and expects `maths 3`. `pc_z97_d3h` is the secondary Z97 desk image and stays out of the workflow. The metal target being driven is `swift_sfx14_41g`. The USB-keyboard QEMU board stays out. The template still maps the xHCI window at `0xf7e20000` and the DMA region at `0x62000000`.
 - Keep `1 browser`, `browser unavailable`, `maths 3`, and `maths err` out of `expect` and `assert` messages.
 
+## Inspiron console (`inspiron_n5010`)
+
+The on-screen menu is the same `console-shell` as the desk. The template is `console-inspiron.system.template`. `just iso` still packs `swift_sfx14_41g`. `just iso inspiron_n5010` packs this image. `ci = false`. There is no QEMU model.
+
+- Protection domains are `console_driver` and `shell` (`console-shell.elf`). The shell is priority 1. `console_driver` is priority 2. There is no `serial_driver`.
+- Shell channel 0 is the console, `pp="true"`. The keyboard interrupt is channel 0 on `console_driver` (I/O APIC pin 1, vector 49, edge, high). The probe recorded no IRQ 1 override.
+- The console is the VGA text page at `0xb8000`. The 2026-11-14 probe recorded no GOP framebuffer, so this image does not map one. It does not map the Z97 xHCI window or the Z97 DMA region.
+- The AHCI controller is `8086:3b2f` at `00:1f.2`. Leave it unmapped. Do not format the WDC WD5000BEVT-75A0RT0.
+- The menu is `1 browser` and `2 maths`. `browser` prints `browser unavailable`. The ISO is UEFI only. The recorded boot was legacy BIOS. A QEMU smoke does not close a metal boot.
+- Keep `1 browser`, `browser unavailable`, `maths 3`, and `maths err` out of `expect` and `assert` messages.
+
 ## Swift panel (`swift_sfx14_41g`)
 
 - The i8042 path and the USB HID path emit an uppercase ASCII byte when Shift XOR Caps Lock is set. The shell echoes that byte. `lerux-desk` paints it. A byte with no glyph row is the hollow box. A stored capital that shows the lowercase shape is a bitmap change. `just check` is the glyph proof because it runs the `lerux-desk` tests. The QEMU desk console paints VGA cells.

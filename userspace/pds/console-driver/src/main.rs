@@ -1,16 +1,23 @@
 //! VGA text console and keyboard for the on-screen shell.
 //!
 //! Channel 0 is the PS/2 IRQ. Channel 1 is the shell, speaking the serial byte
-//! protocol. Channel 2 is the xHCI MSI. COM1 stays with `serial-driver`.
+//! protocol. On the desk, channel 2 is the xHCI MSI and COM1 stays with
+//! `serial-driver`. The Inspiron image has neither.
 
 #![cfg_attr(not(test), no_std)]
 #![cfg_attr(not(test), no_main)]
 
-#[cfg(not(feature = "board-swift_sfx14_41g"))]
+#[cfg(all(
+    not(feature = "board-swift_sfx14_41g"),
+    not(feature = "board-inspiron_n5010")
+))]
 mod hid;
 mod scancode;
 mod screen;
-#[cfg(not(feature = "board-swift_sfx14_41g"))]
+#[cfg(all(
+    not(feature = "board-swift_sfx14_41g"),
+    not(feature = "board-inspiron_n5010")
+))]
 mod usb;
 
 #[cfg(all(not(test), feature = "board-pc_z97_d3h"))]
@@ -19,12 +26,17 @@ mod boot_line;
 mod device;
 #[cfg(all(not(test), feature = "hardware"))]
 mod handler;
-#[cfg(all(not(test), feature = "hardware", feature = "board-swift_sfx14_41g"))]
+#[cfg(all(
+    not(test),
+    feature = "hardware",
+    any(feature = "board-swift_sfx14_41g", feature = "board-inspiron_n5010")
+))]
 mod usb_off;
 #[cfg(all(
     not(test),
     feature = "hardware",
-    not(feature = "board-swift_sfx14_41g")
+    not(feature = "board-swift_sfx14_41g"),
+    not(feature = "board-inspiron_n5010")
 ))]
 mod xhci;
 
@@ -58,9 +70,12 @@ fn init() -> handler::HandlerImpl {
     } else {
         log::info!("console-driver: i8042 timeout");
     }
-    #[cfg(not(feature = "board-swift_sfx14_41g"))]
+    #[cfg(all(
+        not(feature = "board-swift_sfx14_41g"),
+        not(feature = "board-inspiron_n5010")
+    ))]
     let usb = xhci::UsbKbd::bring_up();
-    #[cfg(feature = "board-swift_sfx14_41g")]
+    #[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-inspiron_n5010"))]
     let usb = usb_off::UsbKbd::off();
     #[cfg(not(feature = "board-swift_sfx14_41g"))]
     device.enable_cursor();

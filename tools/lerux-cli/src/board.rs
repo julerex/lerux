@@ -314,6 +314,38 @@ mod tests {
     }
 
     #[test]
+    fn inspiron_image_is_vga_text_without_desk_devices() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let xml = crate::system::render_system(&root, "inspiron_n5010").expect("inspiron sdf");
+        assert!(xml.contains("phys_addr=\"0xb8000\""));
+        assert!(xml.contains("addr=\"0x3d4\""));
+        assert!(xml.contains("addr=\"0x60\""));
+        assert!(xml.contains("addr=\"0x64\""));
+        assert!(xml.contains("pin=\"1\""));
+        assert!(xml.contains("vector=\"49\""));
+        assert!(xml.contains("console-shell.elf"));
+        assert!(xml.contains("console-driver.elf"));
+        assert!(xml.contains("name=\"shell\" priority=\"1\""));
+        assert!(xml.contains("name=\"console_driver\" priority=\"2\""));
+        assert!(xml.contains("pd=\"shell\" id=\"0\" pp=\"true\""));
+        assert!(!xml.contains("serial-driver"));
+        assert!(!xml.contains("xhci"));
+        assert!(!xml.contains("pcidev"));
+        assert!(!xml.contains("0x3f8"));
+        assert!(!xml.contains("0xf7e2"));
+        assert!(!xml.contains("0x6200_0000"));
+        assert!(!xml.contains("0xfbd06000"));
+        let boards = load_boards(&root).unwrap();
+        let board = boards.get("inspiron_n5010").unwrap();
+        assert!(!board.ci);
+        assert!(board.qemu.is_none());
+        assert_eq!(
+            board.pds,
+            ["console-shell".to_string(), "console-driver".to_string()]
+        );
+    }
+
+    #[test]
     fn rtl8852be_probe_board_is_hardware_only() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let boards = load_boards(&root).unwrap();

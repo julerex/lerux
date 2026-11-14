@@ -522,3 +522,15 @@ target = "x86_64-sel4-microkit"
 template = "rtl8852be-probe.system.template"
 pds = ["rtl8852be-probe", "serial-driver"]
 system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48 }
+
+# Dell Inspiron N5010. Hardware only. VGA text and the built-in i8042.
+# The 2026-11-14 probe recorded no GOP framebuffer, no serial port, and no xHCI.
+# The AHCI disk is not mapped. `just iso` still defaults to the Swift X.
+[inspiron_n5010]
+arch = "x86_64"
+microkit_board = "x86_64_generic"
+target = "x86_64-sel4-microkit"
+template = "console-inspiron.system.template"
+pds = ["console-shell", "console-driver"]
+system_vars = {}
+ci = false

@@ -8,7 +8,7 @@ The seL4 kernel is **not vendored**. `just build-sdk` builds it from the checkou
 
 ## Quick start
 
-Build the Acer Swift X image as a UEFI USB ISO, write it to a flash drive, and boot that drive with **UEFI**. The board is `swift_sfx14_41g` (Acer Swift X SFX14-41G). Full procedure: [`docs/boards.md`](docs/boards.md#acer-swift-x-install-path). The Gigabyte Z97-D3H image is `just iso pc_z97_d3h` ([`docs/boards.md`](docs/boards.md#gigabyte-z97-d3h-install-path)).
+Build the Acer Swift X image as a UEFI USB ISO, write it to a flash drive, and boot that drive with **UEFI**. The board is `swift_sfx14_41g` (Acer Swift X SFX14-41G). Full procedure: [`docs/boards.md`](docs/boards.md#acer-swift-x-install-path). The Gigabyte Z97-D3H image is `just iso pc_z97_d3h` ([`docs/boards.md`](docs/boards.md#gigabyte-z97-d3h-install-path)). The Dell Inspiron N5010 image is `just iso inspiron_n5010` ([`docs/boards.md`](docs/boards.md#dell-inspiron-n5010-install-path)).
 
 **Prerequisites:** Linux, `git`, `just`, `rustup`, `cmake`, `ninja`, `libclang-dev`, `clang` (for the Multiboot 2 trampoline), and a USB flash drive. Packing the ISO needs `xorriso` and `grub-mkimage`. On Arch those packages are `libisoburn` and `grub` (`sudo pacman -S libisoburn grub`). Debian packages are `xorriso` and `grub-efi-amd64-bin`. Do not overwrite the host OS disk.
 

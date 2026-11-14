@@ -2,7 +2,7 @@
 
 Board names are the `BOARD=` value for `just run`, `just test`, and `just build`. Metadata lives in [`support/boards.toml`](../support/boards.toml). `just build` and `just run` default to `qemu_virt_aarch64`. Bare `just test` boots `qemu_virt_aarch64_browser_sddf`. Bare `just iso` packs `swift_sfx14_41g`.
 
-The metal target being driven is the Acer Swift X SFX14-41G (`swift_sfx14_41g`). The Gigabyte Z97-D3H desk page (`pc_z97_d3h`) and the RPi4 workstation lab (`rpi4b_4gb`) stay secondary. A probe of the Dell Inspiron N5010 is recorded in [support/arch-probe/machines/inspiron-n5010.md](../support/arch-probe/machines/inspiron-n5010.md). That machine has no image.
+The metal target being driven is the Acer Swift X SFX14-41G (`swift_sfx14_41g`). The Gigabyte Z97-D3H desk page (`pc_z97_d3h`) and the RPi4 workstation lab (`rpi4b_4gb`) stay secondary. The Dell Inspiron N5010 (`inspiron_n5010`) is a VGA text image from the probe in [support/arch-probe/machines/inspiron-n5010.md](../support/arch-probe/machines/inspiron-n5010.md). `just iso` still packs the Swift X.
 
 aarch64 init and composed images need the patched SP804 QEMU in [`ci.md`](ci.md#patched-qemu); RISC-V init uses stock QEMU with the Goldfish RTC and `rdtime`, and x86 init uses stock QEMU with the CMOS RTC and TSC.
 
@@ -33,6 +33,7 @@ aarch64 init and composed images need the patched SP804 QEMU in [`ci.md`](ci.md#
 | `x86_64_generic_console` | x86_64 | `just test-x86-console` | `serial_driver`, `console_driver`, `shell` (`console-shell.elf`) |
 | `pc_z97_d3h` | x86_64 | `BOARD=pc_z97_d3h just image` | same menu on the desk VGA text page (hardware only) |
 | `swift_sfx14_41g` | x86_64 | `just iso` | Swift X panel menu, PS/2, PCI lines, MT7921, read-only NVMe, Bluetooth (hardware only) |
+| `inspiron_n5010` | x86_64 | `just iso inspiron_n5010` | VGA text menu and the built-in i8042 (hardware only) |
 | `x86_64_generic_virtio` | x86_64 | `just test-x86-virtio` | hello + serial + virtio-pci blk/net |
 | `x86_64_generic_http` | x86_64 | `just test-x86-http` | serial + virtio-pci net + http-server |
 | `rpi4b_4gb` | aarch64 | `BOARD=rpi4b_4gb just image` | hello + serial (PL011; hardware only) |
@@ -61,6 +62,7 @@ Use `lerux image --board <name>` (or `BOARD=<name> just image`).
 - Serial: PL011 at 0xfe201000 (GPIO 14/15). Update IRQ in `boards.toml` if the platform IRQ mapping differs.
 - Full workstation (FS + net) on hardware requires native (non-virtio) block and network drivers; see `support/profiles/hardware-rpi4.toml`.
 - `swift_sfx14_41g`: Acer Swift X SFX14-41G. `just iso` packs the UEFI image. See [Acer Swift X install path](#acer-swift-x-install-path).
+- `inspiron_n5010`: Dell Inspiron N5010. `just iso inspiron_n5010` packs the UEFI image. See [Dell Inspiron N5010 install path](#dell-inspiron-n5010-install-path).
 - `pc_z97_d3h`: Gigabyte GA-Z97-D3H (Haswell). Microkit still uses `x86_64_generic`; deploy writes GRUB's `EFI/BOOT/BOOTX64.EFI`, `/boot/grub/grub.cfg`, and **`boot/mb2-stub.elf` + `boot/sel4.elf` + `boot/loader.img`** for UEFI Multiboot 2. The monitor shows the shell as VGA text on the firmware boot VGA card. The desk-browser spec makes that card the Intel HD Graphics 4600 on the motherboard HDMI port, with Initial Display Output set to `IGFX`. After the reboot on 2026-10-22, firmware reports that device as the boot VGA device. See [Gigabyte Z97-D3H install path](#gigabyte-z97-d3h-install-path) and [VGA text on the RX 560](#vga-text-on-the-rx-560).
 - `pc_z97_d3h_rtl8852be`: same motherboard, COM1 only. The probe reads root port `00:1c.6`, takes that port's secondary bus, and logs the endpoint vendor, device, and assigned BAR. It does not map the BAR, and it is not the shell ISO.
 
@@ -277,6 +279,26 @@ That writes GRUB's `EFI/BOOT/BOOTX64.EFI`, `/boot/grub/grub.cfg`, and `boot/mb2-
 | Ubuntu gone | You deployed onto `sda` — don't. Use USB. |
 
 This board has no native disk or Ethernet driver. QEMU `workstation-x86` is virtio-pci only. The native plan is [Milestones 19–22](plan-lionsos.md#milestone-19--advanced-host-controller-interface-disk).
+
+### Dell Inspiron N5010 install path
+
+Board `inspiron_n5010` is the on-screen menu on the Dell Inspiron N5010 (Core i5-460M, HM57, BIOS A15). It reuses Microkit `x86_64_generic` and `console-inspiron.system.template`. The probe is [support/arch-probe/machines/inspiron-n5010.md](../support/arch-probe/machines/inspiron-n5010.md). Device roles are in [platforms.md](platforms.md#inspiron-n5010). Acer Swift X remains the metal target `just iso` packs. This image has no QEMU model.
+
+The 2026-11-14 boot was legacy BIOS with `nomodeset`. The console was the VGA text page, 80 by 25, at `0xb8000`, scanned by the integrated graphics `8086:0046` at `00:02.0`. The log has no `efifb` or `vesafb` line, so this image does not map a GOP buffer. The keyboard is the built-in i8042 at `0x60` and `0x64`, I/O APIC pin 1, vector 49. The probe recorded no IRQ 1 override. There is no serial port and no xHCI controller. The shell is `console-shell`: `1 browser` prints `browser unavailable`, and `2 maths` is the `lerux-calc` session.
+
+The disk is the WDC WD5000BEVT-75A0RT0 on AHCI `8086:3b2f` at `00:1f.2`. This image does not map that controller and does not format the volume. Write the ISO only to a USB flash drive.
+
+**USB ISO** (writes `build/inspiron_n5010/lerux_inspiron_n5010.iso` and does not touch a disk):
+
+```bash
+just iso inspiron_n5010
+lsblk
+sudo dd if=build/inspiron_n5010/lerux_inspiron_n5010.iso of=/dev/sdX bs=4M status=progress conv=fsync
+```
+
+Replace `sdX` with the flash drive from `lsblk`. Do not write the internal SATA disk. The ISO is UEFI only, the same GRUB Multiboot 2 path as the Swift X and the Z97 desk: `EFI/BOOT/BOOTX64.EFI` loads `/boot/mb2-stub.elf` with modules `/boot/sel4.elf` and `/boot/loader.img`. The recorded boot did not publish a UEFI entry. A metal boot has to show whether firmware offers a USB entry that says UEFI. There is no BIOS El Torito entry.
+
+The menu, if the integrated graphics still scans the VGA text page, is a blue screen with `hello lerux`, then `1 browser` and `2 maths`. Type on the built-in keyboard. This laptop has no COM port. `just test-x86-console` boots a different machine (QEMU q35, COM1, and an xHCI window) and does not close this boot.
 
 ## QEMU profiles
 

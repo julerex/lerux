@@ -113,6 +113,7 @@ These boards have `ci = true`, so `just test-all` runs them. They are not in the
 
 These boards have `ci = false`. Milestone 16 added the QEMU RISC-V and QEMU x86 device-framework boards in this list. Each board joins the workflow only after `just check`, `just check-pd`, and that board's smoke have passed, in the same change as the include list and the handwritten counts. Marking the milestone done does not put the board in continuous integration. `rpi4b_4gb` and `pc_z97_d3h_rtl8852be` stay here until a hardware runner is the smoke.
 
+- `inspiron_n5010`
 - `pc_z97_d3h`
 - `pc_z97_d3h_rtl8852be`
 - `qemu_virt_aarch64_ladybird`

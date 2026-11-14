@@ -10,6 +10,7 @@ workspace = true
 
 [features]
 board-pc_z97_d3h = ["dep:lerux-logging", "lerux-logging/boot-line-gap"]
+board-inspiron_n5010 = []
 board-x86_64_generic_console = []
 board-swift_sfx14_41g = ["dep:lerux-swift", "dep:lerux-desk", "dep:lerux-ladybird-image"]
 

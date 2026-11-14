@@ -255,6 +255,7 @@ mod tests {
         assert!(xml.contains(
             "<memory_region name=\"browser_hold\" size=\"0x1000\" phys_addr=\"0x1fa0000\" />"
         ));
+        assert_eq!(xml.matches("setvar_vaddr=\"mode_record_vaddr\"").count(), 5);
         for name in ["console_driver", "shell"] {
             let start = xml
                 .find(&format!("<protection_domain name=\"{name}\""))
@@ -267,6 +268,19 @@ mod tests {
                 "<map mr=\"mode_record\" vaddr=\"0x3fff0000\" perms=\"r\"",
             ] {
                 assert!(domain.contains(map), "{name} lacks {map}");
+            }
+            for symbol in [
+                "mode_record_vaddr",
+                "fb_vaddr",
+                "browser_hold_vaddr",
+                "disk_result_vaddr",
+                "wifi_key_vaddr",
+            ] {
+                let patched = domain.contains(&format!("setvar_vaddr=\"{symbol}\""));
+                let console_reads = name == "console_driver"
+                    && symbol != "disk_result_vaddr"
+                    && symbol != "wifi_key_vaddr";
+                assert_eq!(patched, console_reads, "{name} setvar {symbol}");
             }
         }
     }

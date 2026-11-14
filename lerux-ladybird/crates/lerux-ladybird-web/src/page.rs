@@ -158,7 +158,8 @@ impl Page {
             return 0;
         };
         let styled = StyledDocument::new(&self.document, &sheet);
-        element_top(&styled.layout(), id).unwrap_or(0)
+        let sizes = image_sizes(&self.images);
+        element_top(&styled.layout_with(&sizes), id).unwrap_or(0)
     }
 }
 

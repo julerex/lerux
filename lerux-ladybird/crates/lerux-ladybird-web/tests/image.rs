@@ -66,3 +66,34 @@ fn a_rejected_image_leaves_the_rest_of_the_page() {
     let line = bitmap.pixel_line().expect("sample");
     assert_ne!(line.as_bytes(), b"pixel 05c809ff\n");
 }
+
+#[test]
+fn a_fragment_below_an_image_includes_the_image_height() {
+    let empty = fragment_scroll(None);
+    let tall = fragment_scroll(Some(40));
+    assert_eq!(tall.saturating_sub(empty), 40);
+}
+
+fn fragment_scroll(height: Option<i32>) -> i32 {
+    let mut page = Page::new();
+    let html =
+        "<!DOCTYPE html><html><body><img src=\"/grid.png\"><p id=\"mark\">x</p></body></html>";
+    let loaded = page.navigate_with(
+        url("https://host:8443/page.html"),
+        |_| Some(html.to_string()),
+        |_| height.map(raster),
+    );
+    assert!(loaded);
+    let loaded = page.navigate_with(url("https://host:8443/page.html#mark"), |_| None, |_| None);
+    assert!(loaded);
+    page.scroll()
+}
+
+fn raster(height: i32) -> Raster {
+    let pixels = usize::try_from(height).expect("height") * 16;
+    Raster {
+        width: 4,
+        height,
+        pixels: vec![0; pixels],
+    }
+}

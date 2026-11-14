@@ -202,7 +202,7 @@ test-web-sddf-x86:
 test-browser-sddf:
     BOARD=qemu_virt_aarch64_browser_sddf just test
 
-# Milestone 11: the fixture, then the iframe document. Sibling smoke: just test-ladybird
+# Milestone 12: the fixture, the iframe, then the image pixel. Sibling smoke: just test-ladybird
 test-ladybird:
     BOARD=qemu_virt_aarch64_ladybird just test
 

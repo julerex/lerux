@@ -91,6 +91,11 @@ impl TreeBuilder<'_> {
                     children: Vec::new(),
                 });
                 self.open.push(id);
+                // `img` is empty. The next element is a sibling, so a rejected
+                // picture does not hide the rest of the page.
+                if self.tag(id).name() == "img" {
+                    self.open.pop();
+                }
             }
             DataToken::EndTag { name } => {
                 let Some(id) = self.open.last().copied() else {

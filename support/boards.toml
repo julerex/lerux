@@ -166,7 +166,7 @@ qemu = { disk = "rw", net = "user", https_one = true, gpu = true, dns_one = true
 ci = true
 system_vars = { virtio_mmio_phys_addr = "0xa003000", virtio_blk_irq = 78, virtio_net_irq = 79, virtio_gpu_irq = 77, serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33 }
 
-# Milestone 10: request_server fetches the fixture. No block device.
+# Milestone 12: image_decoder decodes one PNG. No block device.
 # Virtio-net is the first device at +0xe00, interrupt 79.
 # Virtio-gpu stays pinned to bus 29 so the guest still sees +0xa00 and IRQ 77.
 [qemu_virt_aarch64_ladybird]
@@ -174,7 +174,7 @@ arch = "aarch64"
 microkit_board = "qemu_virt_aarch64"
 target = "aarch64-sel4-microkit"
 template = "ladybird.system.template"
-pds = ["sddf-serial-driver", "sddf-serial-virt-tx", "sddf-serial-virt-rx", "sddf-net-driver", "sddf-net-virt-tx", "sddf-net-virt-rx", "sddf-net-copy", "sddf-gpu-driver", "sddf-gpu-virt", "sddf-web-content", "sddf-request-server", "sddf-browser-ui"]
+pds = ["sddf-serial-driver", "sddf-serial-virt-tx", "sddf-serial-virt-rx", "sddf-net-driver", "sddf-net-virt-tx", "sddf-net-virt-rx", "sddf-net-copy", "sddf-gpu-driver", "sddf-gpu-virt", "sddf-web-content", "sddf-request-server", "sddf-image-decoder", "sddf-browser-ui"]
 qemu = { net = "user", https_one = true, gpu = true }
 ci = false
 system_vars = { virtio_mmio_phys_addr = "0xa003000", virtio_net_irq = 79, virtio_gpu_irq = 77, serial_mmio_phys_addr = "0x9_000_000", serial_irq = 33 }

@@ -33,3 +33,4 @@ lerux-sddf = { path = "../../userspace/crates/lerux-sddf" }
 lerux-image = { path = "../lerux-image" }
 lerux-ladybird-gfx = { path = "../../lerux-ladybird/crates/lerux-ladybird-gfx" }
 lerux-ladybird-http = { path = "../../lerux-ladybird/crates/lerux-ladybird-http" }
+lerux-ladybird-image = { path = "../../lerux-ladybird/crates/lerux-ladybird-image" }

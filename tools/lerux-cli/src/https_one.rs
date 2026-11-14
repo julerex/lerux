@@ -10,7 +10,9 @@
 //! serves `support/browser/fixture.html`. `GET /paint.html` serves
 //! `support/browser/paint.html`. `GET /frames.html` serves
 //! `support/browser/frames.html`. `GET /child.html` serves
-//! `support/browser/child.html`. `GET /smoke.lrw` serves
+//! `support/browser/child.html`. `GET /image.html` serves
+//! `support/browser/image.html`. `GET /grid.png` serves
+//! `support/browser/grid.png`. `GET /smoke.lrw` serves
 //! `support/prog/smoke.lrw`. `GET /go` is a `302` whose `Location` is
 //! `/fixture.html` and whose body is empty. Desk pages (`desk.html`,
 //! `desk-link.html`, `desk-form.html`) are not in `support/browser/`. Smoke
@@ -170,8 +172,12 @@ fn http_response_for_path(path: &[u8], file_body: &[u8]) -> Vec<u8> {
         || path == b"/paint.html"
         || path == b"/frames.html"
         || path == b"/child.html"
+        || path == b"/image.html"
     {
         return length_prefixed(b"text/html; charset=utf-8", file_body);
+    }
+    if path == b"/grid.png" {
+        return length_prefixed(b"image/png", file_body);
     }
     if path == b"/smoke.lrw" {
         return length_prefixed(b"application/octet-stream", file_body);
@@ -198,6 +204,8 @@ fn load_browser_path(url_path: &[u8]) -> Result<Vec<u8>> {
         b"/paint.html" => ("browser", "paint.html"),
         b"/frames.html" => ("browser", "frames.html"),
         b"/child.html" => ("browser", "child.html"),
+        b"/image.html" => ("browser", "image.html"),
+        b"/grid.png" => ("browser", "grid.png"),
         b"/smoke.lrw" => ("prog", "smoke.lrw"),
         _ => return Ok(Vec::new()),
     };
@@ -295,6 +303,12 @@ mod tests {
         let child = http_response_for_path(b"/child.html", b"<a href=\"#mark\">x</a>");
         assert!(child.starts_with(b"HTTP/1.1 200"));
         assert!(child.ends_with(b"<a href=\"#mark\">x</a>"));
+        let image = http_response_for_path(b"/image.html", b"<img src=\"/grid.png\">");
+        assert!(image.starts_with(b"HTTP/1.1 200"));
+        assert!(image.ends_with(b"<img src=\"/grid.png\">"));
+        let png = http_response_for_path(b"/grid.png", b"\x89PNG");
+        assert!(png.windows(b"image/png".len()).any(|w| w == b"image/png"));
+        assert!(png.ends_with(b"\x89PNG"));
     }
 
     #[test]

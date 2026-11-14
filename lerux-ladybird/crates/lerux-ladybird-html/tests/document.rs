@@ -26,6 +26,15 @@ fn text_child<'a>(element: &Element<'a>) -> &'a str {
 }
 
 #[test]
+fn img_does_not_keep_the_next_element() {
+    let document = Document::parse("<body><img src=\"/grid.png\"><p>x</p></body>");
+    let image = element(&document, "img");
+    assert_eq!(image.src(), Some("/grid.png"));
+    assert!(image.children().next().is_none());
+    assert_eq!(text_child(&element(&document, "p")), "x");
+}
+
+#[test]
 fn fixture_title_is_lerux() {
     let document = Document::parse(include_str!("../../../../support/browser/fixture.html"));
     assert_eq!(document.title_text(), "lerux");

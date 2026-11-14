@@ -53,9 +53,18 @@ impl<'d> StyledDocument<'d> {
     /// Lay this document out in the frame.
     #[must_use]
     pub fn layout(&self) -> LayoutTree<'_, 'd> {
+        self.layout_with(&[])
+    }
+
+    /// Lay this document out, using `images` as the intrinsic size of each `img`.
+    ///
+    /// Each entry is the element's index, then width and height in CSS pixels.
+    /// An `img` whose index is absent becomes an empty box.
+    #[must_use]
+    pub fn layout_with(&self, images: &[(usize, i32, i32)]) -> LayoutTree<'_, 'd> {
         let width = as_i32(FRAME_WIDTH);
         let height = as_i32(FRAME_HEIGHT);
-        let (children, _) = layout_contents(self.children(), 0, 0, width, Color::BLACK);
+        let (children, _) = layout_contents(self.children(), 0, 0, width, Color::BLACK, images);
         LayoutTree {
             frame: Rect::new(0, 0, width, height),
             children,
@@ -188,10 +197,17 @@ fn layout_contents<'s, 'd>(
     content_y: i32,
     content_width: i32,
     color: Color,
+    images: &[(usize, i32, i32)],
 ) -> (Vec<LayoutBox<'s, 'd>>, i32) {
     let pieces = pieces(nodes, color);
     if pieces.iter().any(Piece::is_block) {
-        place_blocks(&block_flows(&pieces), content_x, content_y, content_width)
+        place_blocks(
+            &block_flows(&pieces),
+            content_x,
+            content_y,
+            content_width,
+            images,
+        )
     } else {
         layout_lines(&inline_texts(&pieces), content_x, content_y)
     }
@@ -271,13 +287,14 @@ fn place_blocks<'s, 'd>(
     content_x: i32,
     content_y: i32,
     content_width: i32,
+    images: &[(usize, i32, i32)],
 ) -> (Vec<LayoutBox<'s, 'd>>, i32) {
     let mut children = Vec::new();
     let mut border_bottom = content_y;
     let mut previous_margin = None;
     for flow in flows {
         let border_y = border_bottom + collapse(previous_margin, margin_top(flow));
-        let placed = place_flow(flow, content_x, border_y, content_width);
+        let placed = place_flow(flow, content_x, border_y, content_width, images);
         border_bottom = bottom(&placed.layout);
         previous_margin = Some(placed.margin_bottom);
         children.push(placed.layout);
@@ -314,10 +331,11 @@ fn place_flow<'s, 'd>(
     content_x: i32,
     border_y: i32,
     content_width: i32,
+    images: &[(usize, i32, i32)],
 ) -> Placed<'s, 'd> {
     match flow {
         Flow::Inlines(texts) => place_anonymous(texts, content_x, border_y, content_width),
-        Flow::Block(element) => place_block(element, content_x, border_y, content_width),
+        Flow::Block(element) => place_block(element, content_x, border_y, content_width, images),
     }
 }
 
@@ -326,9 +344,10 @@ fn place_block<'s, 'd>(
     content_x: i32,
     border_y: i32,
     containing_width: i32,
+    images: &[(usize, i32, i32)],
 ) -> Placed<'s, 'd> {
     let border_x = content_x + element.style().margin().left;
-    let block = layout_block(element, border_x, border_y, containing_width);
+    let block = layout_block(element, border_x, border_y, containing_width, images);
     Placed {
         margin_bottom: element.style().margin().bottom,
         layout: LayoutBox::Block(block),
@@ -351,6 +370,13 @@ fn place_anonymous<'s, 'd>(
     }
 }
 
+fn image_size(images: &[(usize, i32, i32)], index: usize) -> (i32, i32) {
+    images
+        .iter()
+        .find(|image| image.0 == index)
+        .map_or((0, 0), |image| (image.1, image.2))
+}
+
 /// HTML's default iframe height, in CSS pixels. The frame is shorter, so paint clips it.
 const IFRAME_HEIGHT: i32 = 150;
 
@@ -359,7 +385,17 @@ fn layout_block<'s, 'd>(
     border_x: i32,
     border_y: i32,
     containing_width: i32,
+    images: &[(usize, i32, i32)],
 ) -> BlockBox<'s, 'd> {
+    if element.element().name() == "img" {
+        let (width, height) = image_size(images, element.element().index());
+        return BlockBox {
+            element: element.element(),
+            style: element.style(),
+            rect: Rect::new(border_x, border_y, width, height),
+            children: Vec::new(),
+        };
+    }
     let padding = padding_px(element.style().padding());
     let content_width = content_width(element.style(), containing_width);
     let (children, mut inner) = layout_contents(
@@ -368,6 +404,7 @@ fn layout_block<'s, 'd>(
         border_y + padding.top,
         content_width,
         element.style().color(),
+        images,
     );
     if element.element().name() == "iframe" {
         inner = inner.max(IFRAME_HEIGHT);

@@ -7,10 +7,10 @@
 //! parent's content box. A `src` that does not parse, or a child fetch that
 //! returns no body, leaves that child unloaded. A nested frame is left unloaded.
 
-use alloc::string::String;
+use alloc::{string::String, vec::Vec};
 
 use lerux_ladybird_gfx::{Bitmap, Color as BitmapColor, Rect, FRAME_BYTES};
-use lerux_ladybird_html::{Children, Document, Node};
+use lerux_ladybird_html::{Children, Document, Element, Node};
 use lerux_ladybird_url::Url;
 
 use crate::{
@@ -18,12 +18,20 @@ use crate::{
     StyleSheet, StyledDocument,
 };
 
+/// Packed B, G, R, A pixels for one replaced `img`.
+pub struct Raster {
+    pub width: i32,
+    pub height: i32,
+    pub pixels: Vec<u8>,
+}
+
 /// Hosts one top-level navigable.
 pub struct Page {
     url: Option<Url>,
     document: Document,
     scroll: i32,
     child: Option<Document>,
+    images: Vec<(usize, Raster)>,
 }
 
 impl Page {
@@ -39,6 +47,7 @@ impl Page {
             document: Document::empty(),
             scroll: 0,
             child: None,
+            images: Vec::new(),
         }
     }
 
@@ -65,8 +74,23 @@ impl Page {
     /// the previous child, and fetches the first iframe. A `src` that does
     /// not parse, or a child `load` that returns no body, leaves the child
     /// absent and still commits the parent. `load` returns the response body.
+    /// Images stay unloaded. [`Self::navigate_with`] supplies them.
     #[must_use]
-    pub fn navigate(&mut self, url: Url, mut load: impl FnMut(&Url) -> Option<String>) -> bool {
+    pub fn navigate(&mut self, url: Url, load: impl FnMut(&Url) -> Option<String>) -> bool {
+        self.navigate_with(url, load, |_| None)
+    }
+
+    /// [`Self::navigate`], and load each top-level `img` through `image`.
+    ///
+    /// `image` returns the decoded pixels. A missing or rejected picture leaves
+    /// that box empty and still commits the parent.
+    #[must_use]
+    pub fn navigate_with(
+        &mut self,
+        url: Url,
+        mut load: impl FnMut(&Url) -> Option<String>,
+        mut image: impl FnMut(&Url) -> Option<Raster>,
+    ) -> bool {
         if self
             .url
             .as_ref()
@@ -81,6 +105,7 @@ impl Page {
         };
         let document = Document::parse(&html);
         let child = load_child(&url, &document, &mut load);
+        let images = load_images(&url, &document, &mut image);
         self.url = Some(url);
         self.document = document;
         self.scroll = 0;
@@ -88,6 +113,7 @@ impl Page {
             ChildLoad::Absent => None,
             ChildLoad::Present(child) => Some(child),
         };
+        self.images = images;
         true
     }
 
@@ -109,9 +135,12 @@ impl Page {
             return;
         };
         let styled = StyledDocument::new(&self.document, &sheet);
-        let layout = styled.layout();
+        let sizes = image_sizes(&self.images);
+        let layout = styled.layout_with(&sizes);
         let iframe = iframe_rect(layout.children());
         layout.paintables().paint(bitmap);
+        blit_images(layout.children(), &self.images, bitmap);
+        bitmap.set_opaque();
         if let (Some(child), Some(rect)) = (&self.child, iframe) {
             paint_child(child, &sheet, bitmap, rect);
         }
@@ -136,6 +165,90 @@ impl Page {
 enum ChildLoad {
     Absent,
     Present(Document),
+}
+
+fn load_images(
+    base: &Url,
+    document: &Document,
+    load: &mut impl FnMut(&Url) -> Option<Raster>,
+) -> Vec<(usize, Raster)> {
+    let mut images = Vec::new();
+    collect_images(document.children(), base, load, &mut images);
+    images
+}
+
+fn collect_images(
+    nodes: Children<'_>,
+    base: &Url,
+    load: &mut impl FnMut(&Url) -> Option<Raster>,
+    images: &mut Vec<(usize, Raster)>,
+) {
+    for node in nodes {
+        let Node::Element(element) = node else {
+            continue;
+        };
+        if element.name() == "img"
+            && let Some(raster) = raster_for(&element, base, load)
+        {
+            images.push((element.index(), raster));
+        }
+        collect_images(element.children(), base, load, images);
+    }
+}
+
+fn raster_for(
+    element: &Element<'_>,
+    base: &Url,
+    load: &mut impl FnMut(&Url) -> Option<Raster>,
+) -> Option<Raster> {
+    let src = element.src()?;
+    let url = Url::parse(src, Some(base)).ok()?;
+    let raster = load(&url)?;
+    let pixels = raster.width.checked_mul(raster.height)?.checked_mul(4)?;
+    if raster.width <= 0
+        || raster.height <= 0
+        || raster.pixels.len() != usize::try_from(pixels).ok()?
+    {
+        return None;
+    }
+    Some(raster)
+}
+
+fn image_sizes(images: &[(usize, Raster)]) -> Vec<(usize, i32, i32)> {
+    images
+        .iter()
+        .map(|(index, raster)| (*index, raster.width, raster.height))
+        .collect()
+}
+
+fn blit_images(boxes: &[LayoutBox<'_, '_>], images: &[(usize, Raster)], bitmap: &mut Bitmap<'_>) {
+    for layout_box in boxes {
+        match layout_box {
+            LayoutBox::Block(block) => {
+                if block.element().name() == "img" {
+                    blit_one(block.element().index(), block.rect(), images, bitmap);
+                }
+                blit_images(block.children(), images, bitmap);
+            }
+            LayoutBox::Anonymous(anonymous) => blit_images(anonymous.children(), images, bitmap),
+            LayoutBox::Line(_) => {}
+        }
+    }
+}
+
+fn blit_one(index: usize, rect: Rect, images: &[(usize, Raster)], bitmap: &mut Bitmap<'_>) {
+    let Some((_, raster)) = images.iter().find(|(id, _)| *id == index) else {
+        return;
+    };
+    let mut pixels = raster.pixels.clone();
+    let Some(source) = Bitmap::new(
+        &mut pixels,
+        u32::try_from(raster.width).unwrap_or(0),
+        u32::try_from(raster.height).unwrap_or(0),
+    ) else {
+        return;
+    };
+    bitmap.blit_rect(rect, &source, Rect::new(0, 0, raster.width, raster.height));
 }
 
 fn load_child(

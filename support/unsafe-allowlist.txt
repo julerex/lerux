@@ -2,6 +2,7 @@ lerux-ladybird/crates/lerux-ladybird-gfx/src/control.rs
 lerux-ladybird/crates/lerux-ladybird-http/src/page.rs
 lerux-ladybird/pds/browser-ui/src/gpu.rs
 lerux-ladybird/pds/browser-ui/src/main.rs
+lerux-ladybird/pds/image-decoder/src/main.rs
 lerux-ladybird/pds/request-server/src/main.rs
 lerux-ladybird/pds/request-server/src/net.rs
 lerux-ladybird/pds/request-server/src/net_device.rs

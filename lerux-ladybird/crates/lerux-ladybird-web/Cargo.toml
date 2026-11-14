@@ -10,5 +10,8 @@ lerux-ladybird-gfx = { path = "../lerux-ladybird-gfx" }
 lerux-ladybird-html = { path = "../lerux-ladybird-html" }
 lerux-ladybird-url = { path = "../lerux-ladybird-url" }
 
+[dev-dependencies]
+lerux-ladybird-image = { path = "../lerux-ladybird-image" }
+
 [lints]
 workspace = true

@@ -1,0 +1,13 @@
+[package]
+name = "sddf-image-decoder"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[lints]
+workspace = true
+
+[dependencies]
+lerux-cothread = { path = "../../../userspace/crates/lerux-cothread" }
+lerux-ladybird-image = { path = "../../crates/lerux-ladybird-image" }
+sel4-microkit = { workspace = true }

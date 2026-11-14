@@ -1436,6 +1436,7 @@ fn ladybird_domains(slots: Vec<Slot>, irq: Irq, arch: Arch) -> Vec<Domain> {
             ladybird_request_slots(),
             None,
         ),
+        ladybird_image_decoder(),
         domain(
             "browser_ui",
             1,
@@ -1453,6 +1454,28 @@ fn ladybird_shared_slots() -> Vec<Slot> {
         "ladybird_bitmap",
         lerux_ladybird_http::REQUEST_REGION,
         lerux_ladybird_http::BODY_REGION,
+        lerux_ladybird_image::IMAGE_REGION,
+        lerux_ladybird_image::ENCODED_REGION,
+        lerux_ladybird_image::PIXEL_REGION,
+    ])
+}
+
+fn ladybird_image_decoder() -> Domain {
+    domain(
+        "image_decoder",
+        2,
+        Some(budget(2000)),
+        "sddf-image-decoder.elf",
+        ladybird_image_slots(),
+        None,
+    )
+}
+
+fn ladybird_image_slots() -> Vec<Slot> {
+    cached(&[
+        lerux_ladybird_image::IMAGE_REGION,
+        lerux_ladybird_image::ENCODED_REGION,
+        lerux_ladybird_image::PIXEL_REGION,
     ])
 }
 
@@ -1483,7 +1506,7 @@ fn ladybird_links() -> Vec<Link> {
     // in `serial_image` and `gpu_image`. `browser_ui` then gets 0, 1, 2, and 3.
     // Network ids stay the constants in `net_image`. `request_server` then gets
     // 0 for the request, 1 for receive, and 2 for transmit. `web_content`'s
-    // request channel is 1 because paint already owns 0.
+    // request channel is 1 because paint already owns 0. The image channel is 2.
     link_rows(&[
         ("serial_driver", "serial_virt_tx", 0),
         ("serial_driver", "serial_virt_rx", 1),
@@ -1498,6 +1521,7 @@ fn ladybird_links() -> Vec<Link> {
         ("web_content", "request_server", 10),
         ("net_copy", "request_server", 11),
         ("net_virt_tx", "request_server", 12),
+        ("web_content", "image_decoder", 13),
     ])
 }
 
@@ -1522,6 +1546,21 @@ fn ladybird_shared_regions() -> Vec<Region> {
             lerux_ladybird_http::BODY_REGION,
             region_bytes(lerux_ladybird_http::BODY_CAP),
             lerux_ladybird_http::BODY_VADDR,
+        ),
+        ram(
+            lerux_ladybird_image::IMAGE_REGION,
+            region_bytes(lerux_ladybird_image::IMAGE_REGION_SIZE),
+            lerux_ladybird_image::IMAGE_VADDR,
+        ),
+        ram(
+            lerux_ladybird_image::ENCODED_REGION,
+            region_bytes(lerux_ladybird_image::ENCODED_CAP),
+            lerux_ladybird_image::ENCODED_VADDR,
+        ),
+        ram(
+            lerux_ladybird_image::PIXEL_REGION,
+            region_bytes(lerux_ladybird_image::PIXEL_CAP),
+            lerux_ladybird_image::PIXEL_VADDR,
         ),
     ]
 }

@@ -81,6 +81,7 @@ members = [
     "lerux-ladybird/pds/browser-ui",
     "lerux-ladybird/pds/web-content",
     "lerux-ladybird/pds/request-server",
+    "lerux-ladybird/pds/image-decoder",
 ]
 
 [workspace.dependencies]

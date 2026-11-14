@@ -37,6 +37,9 @@ COPY userspace/pds /work/userspace/pds
 COPY userspace/crates /work/userspace/crates
 COPY lerux-ladybird/crates /work/lerux-ladybird/crates
 COPY lerux-ladybird/pds /work/lerux-ladybird/pds
+# lerux-cli builds lerux-ladybird-image. That crate embeds these two files.
+COPY support/browser/lenna.html /work/support/browser/lenna.html
+COPY support/browser/lenna.png /work/support/browser/lenna.png
 COPY Cargo.toml /work/Cargo.toml
 COPY Cargo.lock /work/Cargo.lock
 WORKDIR /work

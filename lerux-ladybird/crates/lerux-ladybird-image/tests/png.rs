@@ -108,6 +108,14 @@ fn assert_grid(image: &Image) {
 }
 
 #[test]
+fn the_guest_grid_names_its_top_left() {
+    let image = decode_png(include_bytes!("../../../../support/browser/grid.png")).expect("grid");
+    assert_eq!((image.width(), image.height()), (4, 5));
+    assert_eq!(rgba(&image, 0, 0), grid(0, 0));
+    assert_eq!(image.pixels()[..4], [0x05, 0xc8, 0x09, 0xff]);
+}
+
+#[test]
 fn lenna_matches_the_python_decode() {
     let image = decode_png(LENNA).expect("lenna");
     assert_eq!((image.width(), image.height()), (512, 512));

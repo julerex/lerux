@@ -13,6 +13,12 @@ extern crate std;
 mod inflate;
 mod page;
 mod png;
+mod slot;
 
 pub use page::{paint_page, PageError, Shifts};
 pub use png::{decode_png, Image, PngError};
+pub use slot::{
+    ImagePage, ENCODED_CAP, ENCODED_REGION, ENCODED_VADDR, IMAGE_DECODER_CHANNEL, IMAGE_REGION,
+    IMAGE_REGION_SIZE, IMAGE_STATE_ASK, IMAGE_STATE_ERR, IMAGE_STATE_IDLE, IMAGE_STATE_OK,
+    IMAGE_VADDR, PIXEL_CAP, PIXEL_REGION, PIXEL_VADDR, WEB_CONTENT_IMAGE_CHANNEL,
+};

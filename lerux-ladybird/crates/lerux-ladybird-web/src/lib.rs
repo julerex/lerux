@@ -22,7 +22,7 @@ pub use css::{
     StyleRule, StyleSheet, Value,
 };
 pub use layout::{AnonymousBox, BlockBox, LayoutBox, LayoutTree, LineBox};
-pub use page::Page;
+pub use page::{Page, Raster};
 pub use painting::{Hit, Paintable, PaintableBox, PaintableText, PaintableTree, StackingContext};
 pub use style::{
     Color, ComputedStyle, Display, Edges, StyledDocument, StyledElement, StyledNode, Width,

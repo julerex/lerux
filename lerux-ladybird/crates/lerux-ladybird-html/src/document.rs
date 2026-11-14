@@ -278,6 +278,12 @@ impl<'a> Element<'a> {
         self.document.tag(self.node).name()
     }
 
+    /// Index of this element in the document's node list.
+    #[must_use]
+    pub const fn index(&self) -> usize {
+        self.node.0
+    }
+
     /// The `id` attribute value as the start tag wrote it.
     #[must_use]
     pub fn id(&self) -> Option<&'a str> {

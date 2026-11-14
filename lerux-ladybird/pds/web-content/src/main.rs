@@ -2,14 +2,19 @@
 //!
 //! The worker loads the fixture, paints it, then loads the frames document.
 //! That document's iframe is a second GET through the same request page.
-//! This domain maps no network queue.
+//! The image document's `img` is another GET. The encoded bytes go to
+//! `image_decoder`, which writes the pixels back. This domain maps no
+//! network queue and does not decode the PNG.
 
 #![no_std]
 #![no_main]
 
 extern crate alloc;
 
-use alloc::string::{String, ToString};
+use alloc::{
+    string::{String, ToString},
+    vec::Vec,
+};
 use core::{
     cell::UnsafeCell,
     sync::atomic::{fence, Ordering},
@@ -29,14 +34,20 @@ use lerux_ladybird_http::{
     RequestPage, BODY_CAP, BODY_VADDR, REQUEST_STATE_ASK, REQUEST_STATE_OK, REQUEST_VADDR,
     WEB_CONTENT_REQUEST_CHANNEL,
 };
+use lerux_ladybird_image::{
+    ImagePage, ENCODED_CAP, ENCODED_VADDR, IMAGE_STATE_ASK, IMAGE_STATE_OK, IMAGE_VADDR, PIXEL_CAP,
+    PIXEL_VADDR, WEB_CONTENT_IMAGE_CHANNEL,
+};
 use lerux_ladybird_url::Url;
-use lerux_ladybird_web::Page;
+use lerux_ladybird_web::{Page, Raster};
 
 const FIXTURE_URL: &str = "https://host:8443/fixture.html";
 const FRAMES_URL: &str = "https://host:8443/frames.html";
+const IMAGE_URL: &str = "https://host:8443/image.html";
 const STACK_SIZE: usize = 0x4000;
 const PAINT_CH: usize = WEB_CONTENT_PAINT_CHANNEL as usize;
 const REQUEST_CH: usize = WEB_CONTENT_REQUEST_CHANNEL as usize;
+const IMAGE_CH: usize = WEB_CONTENT_IMAGE_CHANNEL as usize;
 
 #[repr(C, align(16))]
 struct Stack([u8; STACK_SIZE]);
@@ -71,6 +82,7 @@ impl Handler for HandlerImpl {
     fn notified(&mut self, channels: ChannelSet) -> Result<(), Self::Error> {
         recv(channels, REQUEST_CH);
         recv(channels, PAINT_CH);
+        recv(channels, IMAGE_CH);
         Ok(())
     }
 }
@@ -81,13 +93,14 @@ extern "C" fn worker() {
         return;
     }
     let _ = open(&mut page, FRAMES_URL);
+    let _ = open(&mut page, IMAGE_URL);
 }
 
 fn open(page: &mut Page, text: &str) -> bool {
     let Ok(url) = Url::parse(text, None) else {
         return false;
     };
-    if !page.navigate(url, fetch) {
+    if !page.navigate_with(url, fetch, load_image) {
         return false;
     }
     let Some(mut bitmap) = Bitmap::frame(shared_bitmap()) else {
@@ -106,6 +119,12 @@ fn recv(channels: ChannelSet, index: usize) {
 }
 
 fn fetch(url: &Url) -> Option<String> {
+    let bytes = fetch_bytes(url)?;
+    let text = core::str::from_utf8(&bytes).ok()?;
+    Some(String::from(text))
+}
+
+fn fetch_bytes(url: &Url) -> Option<Vec<u8>> {
     let text = url.to_string();
     let page = request_page();
     if !page.set_url(text.as_bytes()) {
@@ -119,9 +138,39 @@ fn fetch(url: &Url) -> Option<String> {
     if page.state != REQUEST_STATE_OK {
         return None;
     }
-    let body = &body_region()[..page.body_len()];
-    let text = core::str::from_utf8(body).ok()?;
-    Some(String::from(text))
+    Some(body_region()[..page.body_len()].to_vec())
+}
+
+fn load_image(url: &Url) -> Option<Raster> {
+    let bytes = fetch_bytes(url)?;
+    if bytes.len() > ENCODED_CAP {
+        return None;
+    }
+    encoded_region()[..bytes.len()].copy_from_slice(&bytes);
+    let page = image_page();
+    page.encoded_len = u32::try_from(bytes.len()).ok()?;
+    page.width = 0;
+    page.height = 0;
+    fence(Ordering::Release);
+    page.state = IMAGE_STATE_ASK;
+    Channel::new(IMAGE_CH).notify();
+    microkit_cothread_wait_on_channel(IMAGE_CH);
+    fence(Ordering::Acquire);
+    if page.state != IMAGE_STATE_OK {
+        return None;
+    }
+    let width = i32::try_from(page.width).ok()?;
+    let height = i32::try_from(page.height).ok()?;
+    let pixels = width.checked_mul(height)?.checked_mul(4)?;
+    let pixels = usize::try_from(pixels).ok()?;
+    if pixels > PIXEL_CAP {
+        return None;
+    }
+    Some(Raster {
+        width,
+        height,
+        pixels: pixel_region()[..pixels].to_vec(),
+    })
 }
 
 fn publish(title: &[u8]) {
@@ -147,6 +196,23 @@ fn request_page() -> &'static mut RequestPage {
     // SAFETY: the system description maps the request page at `REQUEST_VADDR`.
     // Microkit zeroes it. This domain and `request_server` take turns writing it.
     unsafe { &mut *(REQUEST_VADDR as *mut RequestPage) }
+}
+
+fn image_page() -> &'static mut ImagePage {
+    // SAFETY: the system description maps the image control page at `IMAGE_VADDR`.
+    // Microkit zeroes it. This domain and `image_decoder` take turns writing it.
+    unsafe { &mut *(IMAGE_VADDR as *mut ImagePage) }
+}
+
+fn encoded_region() -> &'static mut [u8] {
+    // SAFETY: the system description maps `ENCODED_CAP` bytes at `ENCODED_VADDR`.
+    unsafe { core::slice::from_raw_parts_mut(ENCODED_VADDR as *mut u8, ENCODED_CAP) }
+}
+
+fn pixel_region() -> &'static [u8] {
+    // SAFETY: the system description maps `PIXEL_CAP` bytes at `PIXEL_VADDR`.
+    // `image_decoder` finished writing them before the acquire fence above.
+    unsafe { core::slice::from_raw_parts(PIXEL_VADDR as *const u8, PIXEL_CAP) }
 }
 
 fn body_region() -> &'static [u8] {

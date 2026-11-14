@@ -15,8 +15,12 @@ mod tests {
         WEB_CONTENT_PAINT_CHANNEL,
     };
     use lerux_ladybird_http::{
-        BODY_REGION, BODY_VADDR, REQUEST_NET_RX_CHANNEL, REQUEST_NET_TX_CHANNEL, REQUEST_REGION,
-        REQUEST_SERVER_CHANNEL, REQUEST_VADDR, WEB_CONTENT_REQUEST_CHANNEL,
+        BODY_CAP, BODY_REGION, BODY_VADDR, REQUEST_NET_RX_CHANNEL, REQUEST_NET_TX_CHANNEL,
+        REQUEST_REGION, REQUEST_SERVER_CHANNEL, REQUEST_VADDR, WEB_CONTENT_REQUEST_CHANNEL,
+    };
+    use lerux_ladybird_image::{
+        ENCODED_REGION, ENCODED_VADDR, IMAGE_DECODER_CHANNEL, IMAGE_REGION, IMAGE_VADDR,
+        PIXEL_REGION, PIXEL_VADDR, WEB_CONTENT_IMAGE_CHANNEL,
     };
     use lerux_sddf::{gpu_image, net_image, serial_image};
 
@@ -36,6 +40,7 @@ mod tests {
         assert_budgets(&xml);
         assert_channels(&xml);
         assert_graphics_regions(&xml);
+        assert_image_regions(&xml);
         assert_web_content_maps_only_the_shared_pages(&xml);
         assert_browser_ui_maps_the_client_regions(&xml);
         assert_request_server_maps_the_client_queues(&xml);
@@ -44,6 +49,7 @@ mod tests {
 
     fn assert_manifests(root: &Path) {
         assert_web_manifest(root);
+        assert_image_manifest(root);
         assert_request_manifest(root);
     }
 
@@ -84,6 +90,32 @@ mod tests {
             "web content loads the frames url"
         );
         assert_web_content_has_no_baked_fixture(root);
+    }
+
+    fn assert_image_manifest(root: &Path) {
+        let web_src =
+            std::fs::read_to_string(root.join("lerux-ladybird/pds/web-content/src/main.rs"))
+                .expect("web content source");
+        let decoder =
+            std::fs::read_to_string(root.join("lerux-ladybird/pds/image-decoder/src/main.rs"))
+                .expect("image decoder source");
+        assert!(
+            web_src.contains("https://host:8443/image.html"),
+            "web content loads the image url"
+        );
+        assert!(
+            !web_src.contains("decode_png"),
+            "web content decodes the picture"
+        );
+        assert!(decoder.contains("decode_png"), "image decoder");
+        assert!(
+            decoder.contains("heap_size = 1024 * 1024"),
+            "image decoder heap"
+        );
+        assert!(
+            decoder.contains("STACK_SIZE: usize = 0x4000"),
+            "image decoder worker stack"
+        );
     }
 
     fn assert_request_manifest(root: &Path) {
@@ -173,14 +205,15 @@ mod tests {
             "sddf-net-virt-rx.elf",
             "sddf-net-copy.elf",
             "sddf-request-server.elf",
+            "sddf-image-decoder.elf",
         ] {
             assert!(xml.contains(&format!("path=\"{image}\"")), "{image}");
         }
         for absent in ["sddf-blk-driver.elf", "sddf-fatfs.elf", "sddf-shell.elf"] {
             assert!(!xml.contains(absent), "{absent}");
         }
-        assert_eq!(xml.matches("<protection_domain ").count(), 12);
-        assert_eq!(xml.matches("<channel>").count(), 13);
+        assert_eq!(xml.matches("<protection_domain ").count(), 13);
+        assert_eq!(xml.matches("<channel>").count(), 14);
         assert!(!xml.contains("pp="));
         assert!(!xml.contains("name=\"blk_"));
     }
@@ -215,6 +248,7 @@ mod tests {
             ("net_copy", 2, 2000),
             ("web_content", 2, 2000),
             ("request_server", 2, 2000),
+            ("image_decoder", 2, 2000),
             ("browser_ui", 1, 1000),
         ] {
             let line = format!(
@@ -252,6 +286,8 @@ mod tests {
             ("request_server", REQUEST_NET_RX_CHANNEL),
             ("net_virt_tx", net_image::VIRT_TX_CLIENT_CHANNEL),
             ("request_server", REQUEST_NET_TX_CHANNEL),
+            ("web_content", WEB_CONTENT_IMAGE_CHANNEL),
+            ("image_decoder", IMAGE_DECODER_CHANNEL),
         ] {
             assert!(
                 xml.contains(&format!("<end pd=\"{pd}\" id=\"{id}\" />")),
@@ -301,9 +337,29 @@ mod tests {
         )));
     }
 
+    fn assert_image_regions(xml: &str) {
+        assert_eq!(
+            IMAGE_VADDR,
+            BODY_VADDR + u64::try_from(BODY_CAP).expect("body cap")
+        );
+        for (region, addr) in [
+            (IMAGE_REGION, IMAGE_VADDR),
+            (ENCODED_REGION, ENCODED_VADDR),
+            (PIXEL_REGION, PIXEL_VADDR),
+        ] {
+            assert!(
+                xml.contains(&format!("mr=\"{region}\" vaddr=\"{}\"", hex_group(addr))),
+                "{region}"
+            );
+        }
+    }
+
     fn assert_web_content_maps_only_the_shared_pages(xml: &str) {
         let web = domain(xml, "web_content");
-        assert_eq!(web.matches("<map ").count(), 4);
+        assert_eq!(web.matches("<map ").count(), 7);
+        assert!(web.contains(&format!("mr=\"{IMAGE_REGION}\"")));
+        assert!(web.contains(&format!("mr=\"{ENCODED_REGION}\"")));
+        assert!(web.contains(&format!("mr=\"{PIXEL_REGION}\"")));
         assert!(web.contains("mr=\"ladybird_control\""));
         assert!(web.contains("mr=\"ladybird_bitmap\""));
         assert!(web.contains(&format!("mr=\"{REQUEST_REGION}\"")));
@@ -314,6 +370,16 @@ mod tests {
         assert!(!web.contains("serial_"));
         assert!(!web.contains("blk_"));
         assert!(!web.contains("<irq "));
+        let decoder = domain(xml, "image_decoder");
+        assert_eq!(decoder.matches("<map ").count(), 3);
+        assert!(decoder.contains(&format!("mr=\"{IMAGE_REGION}\"")));
+        assert!(decoder.contains(&format!("mr=\"{ENCODED_REGION}\"")));
+        assert!(decoder.contains(&format!("mr=\"{PIXEL_REGION}\"")));
+        assert!(!decoder.contains("net_"));
+        assert!(!decoder.contains("virtio"));
+        assert!(!decoder.contains("gpu_"));
+        assert!(!decoder.contains("serial_"));
+        assert!(!decoder.contains("<irq "));
     }
 
     fn assert_browser_ui_maps_the_client_regions(xml: &str) {

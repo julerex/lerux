@@ -138,11 +138,12 @@
 
     <protection_domain name="shell" priority="1" stack_size="0x10_000">
         <program_image path="sddf-shell.elf" />
-        <map mr="mode_record" vaddr="0x3fff0000" perms="r" cached="false" setvar_vaddr="mode_record_vaddr" />
-        <map mr="framebuffer" vaddr="0x40000000" perms="rw" cached="false" setvar_vaddr="fb_vaddr" />
-        <map mr="browser_hold" vaddr="0x3ffc0000" perms="rw" cached="true" setvar_vaddr="browser_hold_vaddr" />
-        <map mr="disk_result" vaddr="0x3ffe0000" perms="r" cached="true" setvar_vaddr="disk_result_vaddr" />
-        <map mr="wifi_key" vaddr="0x1fd0000" perms="rw" cached="true" setvar_vaddr="wifi_key_vaddr" />
+        <!-- The fetch shell sends bytes to console_driver. It does not read these pages. -->
+        <map mr="mode_record" vaddr="0x3fff0000" perms="r" cached="false" />
+        <map mr="framebuffer" vaddr="0x40000000" perms="rw" cached="false" />
+        <map mr="browser_hold" vaddr="0x3ffc0000" perms="rw" cached="true" />
+        <map mr="disk_result" vaddr="0x3ffe0000" perms="r" cached="true" />
+        <map mr="wifi_key" vaddr="0x1fd0000" perms="rw" cached="true" />
         <map mr="net_rx_client_free" vaddr="0x5_006_000" perms="rw" cached="true" />
         <map mr="net_rx_client_active" vaddr="0x5_007_000" perms="rw" cached="true" />
         <map mr="net_tx_client_free" vaddr="0x5_008_000" perms="rw" cached="true" />

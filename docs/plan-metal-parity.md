@@ -26,7 +26,7 @@ That is the bar. A QEMU line does not close a metal milestone. A panel photo or 
 - **in review.** A pull request exists and the exit is not on `main`.
 - **done.** The exit line in this file was met, and the proof is named.
 
-Milestones 1–10, 12, and 14 start as **not started**. Milestone 11 starts as **not started** for the metal browser. Ladybird milestones through the request server are already merged. Navigables is **in review** and is not a metal exit. Milestone 13 is stretch and is **not started**. It is not part of the bar. Milestone 14 is part of the bar: a lerux command for every rescue and diagnostic tool on the Arch live installer.
+Milestones 1–10, 12, and 14 start as **not started**. Milestone 11 starts as **not started** for the metal browser. Ladybird milestones through the request server are already merged. Navigables is **done** and is not a metal exit. Milestone 13 is stretch and is **not started**. It is not part of the bar. Milestone 14 is part of the bar: a lerux command for every rescue and diagnostic tool on the Arch live installer.
 
 ## Already true
 
@@ -357,7 +357,7 @@ Do not add a postcard message. New queue code uses `lerux-sddf`. Do not invent a
 
 ## Milestone 11 — Browser on QEMU pixels, then on the desk and the panel
 
-**Status:** not started for the metal browser. Ladybird milestones 1–10 are done (tree, URL, bitmap, DOM, CSS, cold style, layout, paint, web content, request server). Ladybird milestone 11 (navigables) is **in review** and is not a metal exit.
+**Status:** not started for the metal browser. Ladybird milestones 1–10 are done (tree, URL, bitmap, DOM, CSS, cold style, layout, paint, web content, request server). Ladybird milestone 11 (navigables) is **done** and is not a metal exit.
 
 **Arch capability.** A browser opens a page: a heading, an image, a link, and a form. Firefox is not the implementation. The engine stays the Rust rewrite shaped like Ladybird, in [`../lerux-ladybird/PLAN.md`](../lerux-ladybird/PLAN.md). Both “milestone 17” headings stay: LionsOS “Remove the old model” and Ladybird “Forms”. This plan’s Milestone 11 is the whole remaining browser track. It does not renumber Ladybird.
 
@@ -367,7 +367,7 @@ Do not add a postcard message. New queue code uses `lerux-sddf`. Do not invent a
 
 **Steps.** Continue Ladybird milestones in order. Do not start a later one before the earlier exit is on `main`.
 
-1. **Navigables** (Ladybird 11, in review). A host test loads a document, follows one link to a second document, and follows a fragment without a second load. `just test-ladybird` prints `title lerux`, `pixel 000000ff`, then `title frame` and `pixel ff0000ff` from the iframe. A failed iframe does not drop the parent that already loaded.
+1. **Navigables** (Ladybird 11, done). A host test loads a document, follows one link to a second document, and follows a fragment without a second load. `just test-ladybird` prints `title lerux`, `pixel 000000ff`, then `title frame` and `pixel ff0000ff` from the iframe. A failed iframe does not drop the parent that already loaded.
 2. **ImageDecoder** (Ladybird 12). The Lenna page is the local check: heading `Lenna` and the 512 by 512 image. PNG decode stays in-tree. The sampled pixels already recorded for that image stay the regression.
 3. **Script engine** (Ladybird 13) and **classic scripts** (Ladybird 14). JavaScript is approved. The engine is the one in the Ladybird plan, not a second runtime.
 4. **DOM bindings** (Ladybird 15), **chrome and keys** (Ladybird 16), **forms** (Ladybird 17). A form posts the way the desk-browser note in [`boards.md`](boards.md) already describes for the QEMU preview (`q=hi`).

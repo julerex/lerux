@@ -4,7 +4,7 @@ Last updated: 2026-11-09
 
 **Status:** Phase 1 is done. The 8 November 2026 photograph of the ASPM clear left the stall at `fw sem`, so link power is eliminated. The Phase 4 capture shows Linux loads firmware on this unit. The first write that differed was `HIF_REMAP_L1`, and `rr` / `wr` now keep its high half. The next photograph is a cold boot of that image. Phases 2 through 5 are the Swift radio. Phase 6 is done on QEMU. Phases 7 and 8 are the application path and do not need the laptop. Phase 9 is an alternative route, not a step.
 
-**Goal:** A lerux application on the Acer Swift X reaches a host on the internet over the MT7921 radio. [plan-lionsos.md](plan-lionsos.md) Milestone 27 stays the radio exit (`ping ok`). This plan is the route from the current stall to that exit, and from that exit to an application.
+**Goal:** A lerux application on the Acer Swift X reaches a host on the internet over the MT7921 radio. [plan-lionsos.md](plan-lionsos.md) Milestone 27 stays the radio exit (`ping ok`). This plan is the route from the current stall to that exit, and from that exit to an application. The typed session is [plan-arch-wifi.md](plan-arch-wifi.md). This plan stays the firmware sequence.
 
 **Why a separate plan:** [swift-wifi-assessment.md](swift-wifi-assessment.md) found the driver sequence faithful to Linux v6.8 and the debugging loop the problem: one or two bits of information per ISO cycle, on a machine with no serial port and no QEMU model. Each phase below is chosen to raise the information per boot or to move work off the laptop.
 

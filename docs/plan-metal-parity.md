@@ -291,6 +291,7 @@ Do not add a postcard message. New queue code uses `lerux-sddf`. Do not invent a
 
 **Steps.**
 
+- The typed session is [`plan-arch-wifi.md`](plan-arch-wifi.md). The menu lines below are the current image and stay until that plan’s first milestone is the session the image documents. This milestone’s exit stays the address and `ping ok`.
 - Follow [`plan-swift-wifi.md`](plan-swift-wifi.md) phases 2–8. Do not skip a phase because a host test passed.
 - The menu command `3` or `wifi`, once the radio line is `wait`, asks the radio which names it can hear. The shell prints each as `N name` in byte order, at most 16, then `ssid>`. A printed row number selects that row. Any other listed name, or any other line of 1 to 32 bytes, is the name. `ssid ok` follows, then `psk>`. `psk ok` is a passphrase of 8 to 63 bytes. `wifi err` is the rejection, including a survey the radio did not answer.
 - Empty `ssid>` means the scan command was posted and zero names were stored. It does not mean a beacon was rejected. The next boot that is diagnosing this prints the survey counters (`rx`, `ok`, `done`, and `fc` when frames arrived and none were kept). Those counters are a means, not the exit.

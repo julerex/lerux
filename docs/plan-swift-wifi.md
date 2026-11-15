@@ -10,7 +10,7 @@ Last updated: 2026-11-09
 
 ## Survey words
 
-`setup-wifi` prints a mark. The host is the `swift-mt7921` protection domain on the CPU. The station is the laptop's client identity at `bss_idx` 0. A channel is one frequency in the 21-entry channel domain. A beacon is an access point's announcement, and a scan frame is that beacon or a probe response. The data ring is the DMA ring at `WFDMA0 + 0x520`, where the card copies a scan frame for the host to read. `ch` and `bcn` are the firmware's finished-channel count and beacon count. `rx` is how many scan frames arrived on the data ring. The glossary entries are in [context.md](context.md#swift-radio-survey).
+`setup-wifi` prints a mark. The host is the `swift-mt7921` protection domain on the CPU. The station is the laptop's client identity at `bss_idx` 0. A channel is one frequency in the 21-entry channel domain. A beacon is an access point's announcement, and a scan frame is that beacon or a probe response. The data ring is the DMA ring at `WFDMA0 + 0x520`. `ch` and `bcn` are the firmware's finished-channel count and beacon count. `rx` is how many frames arrived on the data ring, and `ev` is how many arrived on an MCU ring. Most scan frames arrive on an MCU ring; see [swift-wifi-survey-retrospective.md](swift-wifi-survey-retrospective.md). The glossary entries are in [context.md](context.md#swift-radio-survey).
 
 ## Global constraints
 

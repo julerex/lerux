@@ -5,7 +5,10 @@
 //! association stays up.
 
 use lerux_swift::{
-    mt7921::{frame_off, read_scan_done, write_survey_list, write_survey_mark, Stage, SCAN_MAX},
+    mt7921::{
+        frame_off, is_rx_frame, read_scan_done, write_survey_list, write_survey_mark, Stage,
+        SurveyCounts, SCAN_MAX,
+    },
     wpa::{
         assoc_ok, auth_ok, beacon_ssid, ccmp_decrypt, derive_ptk, eapol_in_msdu, match_beacon,
         message1, message2, message3, message4, pmk, write_assoc, write_auth, write_qos_data,
@@ -73,24 +76,27 @@ impl Mac {
         let mut done = false;
         for _ in 0..scan_budget() {
             if let Some(n) = self.poll_data()
-                && let Some(m) = copy_frame(n, &mut frame)
-                && let Some(ap) = match_beacon(&frame[..m], ssid)
+                && let Some(ap) = beacon_for(n, &mut frame, ssid)
             {
                 return Some(ap);
             }
-            if let Some(n) = self.poll_mcu()
-                && read_scan_done(Mac::rx_bytes(n)).is_some()
-            {
-                done = true;
-                break;
+            if let Some(n) = self.poll_mcu() {
+                if read_scan_done(Mac::rx_bytes(n)).is_some() {
+                    done = true;
+                    break;
+                }
+                if is_rx_frame(Mac::rx_bytes(n))
+                    && let Some(ap) = beacon_for(n, &mut frame, ssid)
+                {
+                    return Some(ap);
+                }
             }
             core::hint::spin_loop();
         }
         if done {
             for _ in 0..drain_budget() {
-                if let Some(n) = self.poll_data()
-                    && let Some(m) = copy_frame(n, &mut frame)
-                    && let Some(ap) = match_beacon(&frame[..m], ssid)
+                if let Some(n) = self.poll_frame()
+                    && let Some(ap) = beacon_for(n, &mut frame, ssid)
                 {
                     return Some(ap);
                 }
@@ -100,12 +106,23 @@ impl Mac {
         None
     }
 
+    /// Next frame from the data ring or an MCU ring. Linux reads every
+    /// receive ring by packet type. Other MCU packets are dropped here.
+    fn poll_frame(&mut self) -> Option<usize> {
+        if let Some(n) = self.poll_data() {
+            return Some(n);
+        }
+        let n = self.poll_mcu()?;
+        is_rx_frame(Mac::rx_bytes(n)).then_some(n)
+    }
+
     /// Wildcard scan. Heard names are written for the shell, in byte order.
     ///
     /// A scan that does not start leaves the request tag, so the shell reports
     /// `wifi err` instead of an empty list. The mark under the list counts
-    /// data buffers, names kept, and whether the firmware signaled scan-done.
-    /// `ch` and `bcn` are that event's completed channels and beacon count.
+    /// data-ring frames, MCU-ring frames, names kept, and whether the firmware
+    /// signaled scan-done. `ch` and `bcn` are that event's completed channels
+    /// and beacon count.
     pub(crate) fn survey(&mut self, page: &mut [u8]) {
         if !self.start_scan(&[]) {
             return;
@@ -120,38 +137,38 @@ impl Mac {
             *slot = &name[..n];
         }
         let _ = write_survey_list(page, &refs[..heard.count]);
-        let _ = write_survey_mark(
-            page,
-            heard.rx,
-            heard.ok,
-            heard.done,
-            heard.fc,
-            heard.channels,
-            heard.beacons,
-        );
+        let _ = write_survey_mark(page, &heard.mark);
     }
 
     fn wait_survey(&mut self, heard: &mut Heard, frame: &mut [u8]) {
         for _ in 0..scan_budget() {
             if let Some(n) = self.poll_data() {
-                heard.keep(n, frame);
+                heard.data(n, frame);
             }
-            if let Some(n) = self.poll_mcu()
-                && let Some(report) = read_scan_done(Mac::rx_bytes(n))
-            {
-                heard.done = true;
-                heard.channels = report.channels;
-                heard.beacons = report.beacons;
-                break;
+            if let Some(n) = self.poll_mcu() {
+                if let Some(report) = read_scan_done(Mac::rx_bytes(n)) {
+                    heard.mark.done = true;
+                    heard.mark.channels = report.channels;
+                    heard.mark.beacons = report.beacons;
+                    break;
+                }
+                if is_rx_frame(Mac::rx_bytes(n)) {
+                    heard.event(n, frame);
+                }
             }
             core::hint::spin_loop();
         }
-        if !heard.done {
+        if !heard.mark.done {
             return;
         }
         for _ in 0..drain_budget() {
             if let Some(n) = self.poll_data() {
-                heard.keep(n, frame);
+                heard.data(n, frame);
+            }
+            if let Some(n) = self.poll_mcu()
+                && is_rx_frame(Mac::rx_bytes(n))
+            {
+                heard.event(n, frame);
             }
             core::hint::spin_loop();
         }
@@ -278,13 +295,12 @@ impl Mac {
     fn wait_frame(&mut self, spins: u32, mut pred: impl FnMut(&[u8]) -> bool) -> bool {
         let mut frame = [0u8; 1600];
         for _ in 0..spins {
-            if let Some(n) = self.poll_data()
+            if let Some(n) = self.poll_frame()
                 && let Some(m) = copy_frame(n, &mut frame)
                 && pred(&frame[..m])
             {
                 return true;
             }
-            let _ = self.poll_mcu();
             core::hint::spin_loop();
         }
         false
@@ -294,7 +310,7 @@ impl Mac {
         let mut frame = [0u8; 1600];
         let mut plain = [0u8; 400];
         for _ in 0..assoc_budget() {
-            if let Some(n) = self.poll_data()
+            if let Some(n) = self.poll_frame()
                 && let Some(m) = copy_frame(n, &mut frame)
                 && frame.get(4..10) == Some(&sta[..])
                 && let Some(body) = msdu(&frame[..m], tk, &mut plain)
@@ -305,7 +321,6 @@ impl Mac {
                 out[..n].copy_from_slice(eapol);
                 return Some(n);
             }
-            let _ = self.poll_mcu();
             core::hint::spin_loop();
         }
         None
@@ -343,28 +358,37 @@ struct Heard {
     names: [[u8; 32]; SCAN_MAX],
     lens: [u8; SCAN_MAX],
     count: usize,
-    rx: u32,
-    ok: u32,
-    fc: Option<u8>,
-    done: bool,
-    channels: u8,
-    beacons: u32,
+    mark: SurveyCounts,
 }
 
 impl Heard {
+    fn data(&mut self, slot: usize, frame: &mut [u8]) {
+        self.mark.rx = self.mark.rx.saturating_add(1);
+        self.keep(slot, frame);
+    }
+
+    fn event(&mut self, slot: usize, frame: &mut [u8]) {
+        self.mark.ev = self.mark.ev.saturating_add(1);
+        self.keep(slot, frame);
+    }
+
     fn keep(&mut self, slot: usize, frame: &mut [u8]) {
-        self.rx = self.rx.saturating_add(1);
         let Some(m) = copy_frame(slot, frame) else {
             return;
         };
-        if self.fc.is_none() && m > 0 {
-            self.fc = Some(frame[0]);
+        if self.mark.fc.is_none() && m > 0 {
+            self.mark.fc = Some(frame[0]);
         }
         if let Some(ssid) = beacon_ssid(&frame[..m]) {
-            self.ok = self.ok.saturating_add(1);
+            self.mark.ok = self.mark.ok.saturating_add(1);
             self.count = remember(&mut self.names, &mut self.lens, self.count, ssid);
         }
     }
+}
+
+fn beacon_for(n: usize, frame: &mut [u8], ssid: &[u8]) -> Option<FoundAp> {
+    let m = copy_frame(n, frame)?;
+    match_beacon(&frame[..m], ssid)
 }
 
 fn remember(names: &mut [[u8; 32]], lens: &mut [u8], count: usize, ssid: &[u8]) -> usize {

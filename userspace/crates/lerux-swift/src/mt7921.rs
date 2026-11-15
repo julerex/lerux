@@ -1035,6 +1035,27 @@ fn header_len(frame: &[u8]) -> usize {
     }
 }
 
+const PKT_TYPE_NORMAL: u32 = 2;
+const PKT_TYPE_RX_EVENT: u32 = 7;
+const PKT_TYPE_NORMAL_MCU: u32 = 8;
+
+/// True when `mt7921_queue_rx_skb` passes this packet to `mt7921_mac_fill_rx`.
+///
+/// That is `PKT_TYPE_NORMAL`, or `PKT_TYPE_RX_EVENT` with flag 1, which Linux
+/// renames `PKT_TYPE_NORMAL_MCU`. Linux applies this to every receive ring,
+/// the MCU rings included. The type is RXD0 bits 31:27 and the flag is 19:16.
+#[must_use]
+pub fn is_rx_frame(buf: &[u8]) -> bool {
+    let Some(word) = buf.get(..4) else {
+        return false;
+    };
+    let rxd0 = u32::from_le_bytes([word[0], word[1], word[2], word[3]]);
+    let kind = rxd0 >> 27;
+    let flag = (rxd0 >> 16) & 0xf;
+    matches!(kind, PKT_TYPE_NORMAL | PKT_TYPE_NORMAL_MCU)
+        || (kind == PKT_TYPE_RX_EVENT && flag == 1)
+}
+
 /// Skip the connac2 RXD groups the way `mt7921_mac_fill_rx` does.
 #[must_use]
 pub fn frame_off(buf: &[u8]) -> Option<usize> {
@@ -1122,7 +1143,7 @@ const PAGE_LIST: u8 = 3;
 const SURVEY_STRIDE: usize = 33;
 /// Byte after the name list. The length byte and the mark text follow.
 const SURVEY_MARK: usize = 4 + SCAN_MAX * SURVEY_STRIDE;
-const SURVEY_MARK_MAX: usize = 64;
+const SURVEY_MARK_MAX: usize = 80;
 
 const _: () = assert!(SURVEY_MARK + 1 + SURVEY_MARK_MAX <= 0x1000);
 const _: () = assert!(SURVEY_REPORT_MAX > SURVEY_MARK_MAX);
@@ -1196,53 +1217,58 @@ pub fn read_survey_ssid(page: &[u8], index: usize) -> Option<&[u8]> {
     survey_name(page, index)
 }
 
-/// `rx`, `ok`, and `done` for one survey.
+/// Counters for one survey, in the order the mark prints them.
+#[derive(Clone, Copy, Default)]
+pub struct SurveyCounts {
+    /// Completions on the data ring.
+    pub rx: u32,
+    /// Frames that arrived on an MCU ring. See [`is_rx_frame`].
+    pub ev: u32,
+    /// Frames whose network name was kept.
+    pub ok: u32,
+    /// The firmware signaled scan-done.
+    pub done: bool,
+    /// Control byte of the first copied frame.
+    pub fc: Option<u8>,
+    /// Channels the firmware finished.
+    pub channels: u8,
+    /// `beacon_scan_num` from scan-done.
+    pub beacons: u32,
+}
+
+/// `rx`, `ev`, `ok`, and `done` for one survey.
 ///
-/// `fc` is present only when buffers arrived and no name was kept. A copied
-/// frame contributes its control byte. `--` means `frame_off` rejected every buffer.
+/// `fc` is present only when frames arrived and no name was kept. A copied
+/// frame contributes its control byte. `--` means `frame_off` rejected every frame.
 /// `ch` and `bcn` follow a scan-done event: channels the firmware finished,
 /// and `beacon_scan_num`.
 #[must_use]
-pub fn format_survey_mark(
-    out: &mut [u8],
-    rx: u32,
-    ok: u32,
-    done: bool,
-    fc: Option<u8>,
-    channels: u8,
-    beacons: u32,
-) -> usize {
-    format_survey_mark_at(out, rx, ok, done, fc, channels, beacons).unwrap_or(0)
+pub fn format_survey_mark(out: &mut [u8], counts: &SurveyCounts) -> usize {
+    format_survey_mark_at(out, counts).unwrap_or(0)
 }
 
-fn format_survey_mark_at(
-    out: &mut [u8],
-    rx: u32,
-    ok: u32,
-    done: bool,
-    fc: Option<u8>,
-    channels: u8,
-    beacons: u32,
-) -> Option<usize> {
+fn format_survey_mark_at(out: &mut [u8], counts: &SurveyCounts) -> Option<usize> {
     let mut n = 0;
     n = write_bytes(out, n, b"rx ")?;
-    n = write_dec(out, n, rx)?;
+    n = write_dec(out, n, counts.rx)?;
+    n = write_bytes(out, n, b" ev ")?;
+    n = write_dec(out, n, counts.ev)?;
     n = write_bytes(out, n, b" ok ")?;
-    n = write_dec(out, n, ok)?;
+    n = write_dec(out, n, counts.ok)?;
     n = write_bytes(out, n, b" done ")?;
-    n = write_bytes(out, n, if done { b"1" } else { b"0" })?;
-    if rx > 0 && ok == 0 {
+    n = write_bytes(out, n, if counts.done { b"1" } else { b"0" })?;
+    if (counts.rx > 0 || counts.ev > 0) && counts.ok == 0 {
         n = write_bytes(out, n, b" fc ")?;
-        n = match fc {
+        n = match counts.fc {
             Some(byte) => write_bytes(out, n, &hex_byte(byte))?,
             None => write_bytes(out, n, b"--")?,
         };
     }
-    if done {
+    if counts.done {
         n = write_bytes(out, n, b" ch ")?;
-        n = write_dec(out, n, u32::from(channels))?;
+        n = write_dec(out, n, u32::from(counts.channels))?;
         n = write_bytes(out, n, b" bcn ")?;
-        n = write_dec(out, n, beacons)?;
+        n = write_dec(out, n, counts.beacons)?;
     }
     Some(n)
 }
@@ -1252,17 +1278,9 @@ fn hex_byte(byte: u8) -> [u8; 2] {
 }
 
 /// Store the mark after the name list. The shell prints these bytes.
-pub fn write_survey_mark(
-    page: &mut [u8],
-    rx: u32,
-    ok: u32,
-    done: bool,
-    fc: Option<u8>,
-    channels: u8,
-    beacons: u32,
-) -> bool {
+pub fn write_survey_mark(page: &mut [u8], counts: &SurveyCounts) -> bool {
     let mut line = [0u8; SURVEY_MARK_MAX];
-    let n = format_survey_mark(&mut line, rx, ok, done, fc, channels, beacons);
+    let n = format_survey_mark(&mut line, counts);
     if n == 0 || n > SURVEY_MARK_MAX || page.len() < SURVEY_MARK + 1 + n {
         return false;
     }
@@ -2218,31 +2236,69 @@ mod tests {
         assert!(read_survey_count(&page).is_none());
     }
 
+    fn counts(
+        rx: u32,
+        ev: u32,
+        ok: u32,
+        done: bool,
+        fc: Option<u8>,
+        ch: u8,
+        bcn: u32,
+    ) -> SurveyCounts {
+        SurveyCounts {
+            rx,
+            ev,
+            ok,
+            done,
+            fc,
+            channels: ch,
+            beacons: bcn,
+        }
+    }
+
     #[test]
     fn survey_mark_records_an_empty_scan() {
         let mut out = [0u8; SURVEY_MARK_MAX];
-        let n = format_survey_mark(&mut out, 0, 0, true, None, 0, 0);
-        assert_eq!(&out[..n], b"rx 0 ok 0 done 1 ch 0 bcn 0");
-        let n = format_survey_mark(&mut out, 4, 0, true, Some(0x08), 21, 4);
-        assert_eq!(&out[..n], b"rx 4 ok 0 done 1 fc 08 ch 21 bcn 4");
-        let n = format_survey_mark(&mut out, 4, 0, false, None, 21, 4);
-        assert_eq!(&out[..n], b"rx 4 ok 0 done 0 fc --");
-        let n = format_survey_mark(&mut out, 2, 2, true, Some(0x80), 13, 2);
-        assert_eq!(&out[..n], b"rx 2 ok 2 done 1 ch 13 bcn 2");
-        let n = format_survey_mark(&mut out, u32::MAX, u32::MAX, false, Some(0xff), 0, 0);
+        let n = format_survey_mark(&mut out, &counts(0, 0, 0, true, None, 0, 0));
+        assert_eq!(&out[..n], b"rx 0 ev 0 ok 0 done 1 ch 0 bcn 0");
+        let n = format_survey_mark(&mut out, &counts(4, 0, 0, true, Some(0x08), 21, 4));
+        assert_eq!(&out[..n], b"rx 4 ev 0 ok 0 done 1 fc 08 ch 21 bcn 4");
+        let n = format_survey_mark(&mut out, &counts(4, 0, 0, false, None, 21, 4));
+        assert_eq!(&out[..n], b"rx 4 ev 0 ok 0 done 0 fc --");
+        let n = format_survey_mark(&mut out, &counts(2, 0, 2, true, Some(0x80), 13, 2));
+        assert_eq!(&out[..n], b"rx 2 ev 0 ok 2 done 1 ch 13 bcn 2");
+        let n = format_survey_mark(&mut out, &counts(0, 3, 0, true, Some(0x80), 21, 12));
+        assert_eq!(&out[..n], b"rx 0 ev 3 ok 0 done 1 fc 80 ch 21 bcn 12");
+        let max = counts(u32::MAX, u32::MAX, u32::MAX, false, Some(0xff), 0, 0);
+        let n = format_survey_mark(&mut out, &max);
         assert!(n > 0 && n <= SURVEY_MARK_MAX);
-        let n = format_survey_mark(&mut out, u32::MAX, 0, true, Some(0xff), 255, u32::MAX);
+        let max = counts(u32::MAX, u32::MAX, 0, true, Some(0xff), 255, u32::MAX);
+        let n = format_survey_mark(&mut out, &max);
         assert!(n > 0 && n <= SURVEY_MARK_MAX);
         let mut page = [0u8; 0x1000];
         assert!(write_survey(&mut page));
         assert!(read_survey_mark(&page).is_none());
         assert!(write_survey_list(&mut page, &[]));
-        assert!(write_survey_mark(&mut page, 4, 0, true, Some(0x80), 21, 4));
+        assert!(write_survey_mark(
+            &mut page,
+            &counts(4, 0, 0, true, Some(0x80), 21, 4)
+        ));
         assert_eq!(read_survey_count(&page), Some(0));
         assert_eq!(
             read_survey_mark(&page),
-            Some(&b"rx 4 ok 0 done 1 fc 80 ch 21 bcn 4"[..])
+            Some(&b"rx 4 ev 0 ok 0 done 1 fc 80 ch 21 bcn 4"[..])
         );
+    }
+
+    #[test]
+    fn frames_are_recognized_on_any_ring() {
+        let word = |kind: u32, flag: u32| ((kind << 27) | (flag << 16) | 0x40).to_le_bytes();
+        assert!(is_rx_frame(&word(2, 0)));
+        assert!(is_rx_frame(&word(7, 1)));
+        assert!(is_rx_frame(&word(8, 0)));
+        assert!(!is_rx_frame(&word(7, 0)));
+        assert!(!is_rx_frame(&word(6, 0)));
+        assert!(!is_rx_frame(&[0u8; 3]));
     }
 
     #[test]
@@ -2258,7 +2314,10 @@ mod tests {
     fn survey_report_lists_names_in_byte_order() {
         let mut page = [0u8; 0x1000];
         assert!(write_survey_list(&mut page, &[b"zeta", b"alpha", b"2"]));
-        assert!(write_survey_mark(&mut page, 3, 3, true, None, 21, 3));
+        assert!(write_survey_mark(
+            &mut page,
+            &counts(3, 0, 3, true, None, 21, 3)
+        ));
         let mut out = [0u8; SURVEY_REPORT_MAX];
         let n = format_survey_report(&page, &mut out).unwrap();
         assert_eq!(&out[..n], b"1 2\n2 alpha\n3 zeta\n");
@@ -2272,14 +2331,23 @@ mod tests {
         assert!(format_survey_report(&page, &mut out).is_none());
         assert!(write_survey_list(&mut page, &[]));
         assert!(format_survey_report(&page, &mut out).is_none());
-        assert!(write_survey_mark(&mut page, 0, 0, true, None, 0, 0));
+        assert!(write_survey_mark(
+            &mut page,
+            &counts(0, 0, 0, true, None, 0, 0)
+        ));
         let n = format_survey_report(&page, &mut out).unwrap();
-        assert_eq!(&out[..n], b"rx 0 ok 0 done 1 ch 0 bcn 0\n");
-        assert!(write_survey_mark(&mut page, 4, 0, true, Some(0x80), 21, 4));
+        assert_eq!(&out[..n], b"rx 0 ev 0 ok 0 done 1 ch 0 bcn 0\n");
+        assert!(write_survey_mark(
+            &mut page,
+            &counts(4, 0, 0, true, Some(0x80), 21, 4)
+        ));
         let n = format_survey_report(&page, &mut out).unwrap();
-        assert_eq!(&out[..n], b"rx 4 ok 0 done 1 fc 80 ch 21 bcn 4\n");
-        assert!(write_survey_mark(&mut page, 4, 0, false, None, 0, 0));
+        assert_eq!(&out[..n], b"rx 4 ev 0 ok 0 done 1 fc 80 ch 21 bcn 4\n");
+        assert!(write_survey_mark(
+            &mut page,
+            &counts(4, 0, 0, false, None, 0, 0)
+        ));
         let n = format_survey_report(&page, &mut out).unwrap();
-        assert_eq!(&out[..n], b"rx 4 ok 0 done 0 fc --\n");
+        assert_eq!(&out[..n], b"rx 4 ev 0 ok 0 done 0 fc --\n");
     }
 }

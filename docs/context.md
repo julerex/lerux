@@ -200,10 +200,10 @@ The `setup-wifi` mark uses these words. The same paragraph is in [plan-metal-par
 : The first field of an 802.11 frame, two bytes. The driver classifies the frame from the first byte with the protocol-version bits cleared (`byte & 0xfc`). `0x80` is a beacon. `0x50` is a probe response.
 
 **scan frame**
-: A beacon (frame control `0x80`) or a probe response (frame control `0x50`) from the survey. `beacon_ssid` reads the network name from either. The host learns a name from a scan frame only after the card has copied that frame onto the data ring.
+: A beacon (frame control `0x80`) or a probe response (frame control `0x50`) from the survey. `beacon_ssid` reads the network name from either. The host learns a name from a scan frame only after the card has copied that frame onto a receive ring. On this survey most scan frames arrive on an MCU ring.
 
 **data ring**
-: The receive DMA ring whose registers are `RX_DATA_BASE` (`WFDMA0 + 0x520`). The card writes a finished scan frame there, and `poll_data` reads it. `rx` counts those completions. Scan-done, including `ch` and `bcn`, is read from the MCU rings: `WFDMA0 + 0x500` before N9 is ready, and `WFDMA0 + 0x540` once it is. A mark with `bcn` greater than 0 and `rx` 0 means the firmware counted beacons and copied no scan frame onto the data ring. Linux programs `MT_DMA_DCR0` so the data ring accepts a 1536-byte frame, and sends `SET_RX_FILTER` mode 1 with `FILTER_ENABLE` before the scan. An unassociated station also clears `DROP_OTHER_BEACON`. The image that programmed the DMA length and sent only the mode 1 filter still printed `rx 0` with `bcn 14`.
+: The receive DMA ring whose registers are `RX_DATA_BASE` (`WFDMA0 + 0x520`). `poll_data` reads it, and `rx` counts its completions. It is not the only ring that carries frames. The MCU rings are `WFDMA0 + 0x500` before N9 is ready and `WFDMA0 + 0x540` once it is. Linux reads every receive ring by packet type: type 2, or type 7 with flag 1, is a frame, and any other packet is an MCU event. `ev` counts frames that arrive on an MCU ring. Scan-done, including `ch` and `bcn`, is an MCU event. The boot that printed `rx 1 ev 16 ok 12 done 1 ch 21 bcn 15` listed the networks. Earlier images read only scan-done from the MCU rings and printed `rx 0`. See [swift-wifi-survey-retrospective.md](swift-wifi-survey-retrospective.md).
 
 ## Boundaries
 

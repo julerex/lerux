@@ -11,7 +11,7 @@ use lerux_sddf::{
     net_buff_desc_t, net_cancel_signal_active, net_cancel_signal_free, net_connection_resource_t,
     net_dequeue_active, net_dequeue_free, net_driver_config_t, net_enqueue_active,
     net_enqueue_free,
-    net_image::{NET_DATA_SIZE, NET_RX_DATA_VADDR, NET_TX_DATA_VADDR},
+    net_image::{CLIENT_MAC as SHELL_MAC, NET_DATA_SIZE, NET_RX_DATA_VADDR, NET_TX_DATA_VADDR},
     net_queue_empty_active, net_queue_empty_free, net_queue_handle_t, net_queue_init,
     net_request_signal_active, net_request_signal_free, net_require_signal_active,
     net_require_signal_free, NET_BUFFER_SIZE,
@@ -234,6 +234,10 @@ fn wifi_to_ethernet(link: &Link, frame: &[u8], out: &mut [u8]) -> Option<usize> 
     sa.copy_from_slice(frame.get(16..22)?);
     if da != link.sta && da[0] & 0x01 == 0 {
         return None;
+    }
+    // The virtualiser keeps the shell address. The station address is the card's.
+    if da == link.sta {
+        da = SHELL_MAC.addr;
     }
     if out.len() < 12 + payload.len() {
         return None;
@@ -471,7 +475,9 @@ mod tests {
         let down = ethernet(link.sta, [0x02, 0, 0, 0, 0, 9], b"radio-frame");
         let wifi = protect_from_ds(&link, &down);
         assert!(fix.net.enqueue_received(&link, &wifi));
-        assert_eq!(read_rx(&mut fix), down);
+        let mut delivered = down.clone();
+        delivered[..6].copy_from_slice(&SHELL_MAC.addr);
+        assert_eq!(read_rx(&mut fix), delivered);
 
         let up = ethernet([0x02, 0, 0, 0, 0, 9], link.sta, b"uplink-body");
         write_tx(&mut fix, &up);

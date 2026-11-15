@@ -45,7 +45,7 @@ use lerux_sddf::{net_driver_config_t, net_image::net_config_from_bytes, SDDF_NET
 #[cfg(not(test))]
 use lerux_swift::{
     bar_line, class_code, format_report, load_header, memory_bar,
-    mt7921::{read_survey_mark, survey_requested, write_slot_line, Sem, Stage},
+    mt7921::{read_survey_mark, survey_requested, write_join, write_slot_line, Sem, Stage},
     paint_row, read_key, vendor_device, working_line, WaitMark, WifiReport, MT7921_BAR, MT7921_BDF,
     MT7921_IDS,
 };
@@ -343,7 +343,9 @@ impl HandlerImpl {
             paint_survey_mark();
         } else if let Some((name, name_len, pass, pass_len)) = posted_key() {
             let stage = mac.associate(&name[..name_len], &pass[..pass_len], paint_stage);
+            let up = stage == Stage::Wait;
             paint_stage(stage);
+            let _ = write_join(key_page(), up);
         }
     }
 

@@ -1118,6 +1118,24 @@ pub fn write_key(page: &mut [u8], ssid: &[u8], psk: &[u8]) -> bool {
     true
 }
 
+/// Byte 3 is the association result. `write_key` leaves it clear.
+const JOIN_UP: u8 = 1;
+
+/// The radio sets this after `associate` returns. `up` is a finished handshake.
+pub fn write_join(page: &mut [u8], up: bool) -> bool {
+    if page.len() < 4 || page[0] != 1 {
+        return false;
+    }
+    page[3] = if up { JOIN_UP } else { 2 };
+    true
+}
+
+/// True when the radio finished the handshake for the posted key.
+#[must_use]
+pub fn join_up(page: &[u8]) -> bool {
+    page.len() >= 4 && page[0] == 1 && page[3] == JOIN_UP
+}
+
 #[must_use]
 pub fn read_key(page: &[u8]) -> Option<(&[u8], &[u8])> {
     if page.len() < 128 || page[0] != 1 {
@@ -1917,6 +1935,11 @@ mod tests {
         let (ssid, psk) = read_key(&page).unwrap();
         assert_eq!(ssid, b"home");
         assert_eq!(psk, b"password");
+        assert!(!join_up(&page));
+        assert!(write_join(&mut page, true));
+        assert!(join_up(&page));
+        assert!(write_join(&mut page, false));
+        assert!(!join_up(&page));
         assert!(!write_key(&mut page, b"", b"password"));
     }
 

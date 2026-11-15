@@ -1,6 +1,6 @@
 # Glossary
 
-Words for the machines in this repo, the devices on the [Swift X](#swift-x), and the mechanisms a [driver](#driver) uses to program them. A linked name jumps to the heading that defines it. The [MT7921](#mt7921) line, from the [patch semaphore](#patch-semaphore) through [ping](#ping), is under [Wi-Fi bring-up](#wi-fi-bring-up).
+Words for the machines in this repo, the devices on the [Swift X](#swift-x), and the mechanisms a [driver](#driver) uses to program them. A linked name jumps to the heading that defines it. The [MT7921](#mt7921) line, from the [patch semaphore](#patch-semaphore) through [ping](#ping), is under [Wi-Fi bring-up](#wi-fi-bring-up). The installer measured in [docs/arch-live-image.md](docs/arch-live-image.md) is under [Arch live image](#arch-live-image).
 
 The shell, the browser, and the agent stay in [docs/context.md](docs/context.md). Which [protection domain](#protection-domain) programs which device is in [docs/platforms.md](docs/platforms.md#x86-device-map) and [docs/platforms.md](docs/platforms.md#swift-x-devices).
 
@@ -86,21 +86,27 @@ The path that reads a framebuffer and sends those pixels to a panel or a port. O
 
 The PS/2 keyboard controller. The data [I/O port](#io-port) is `0x60` and the command [I/O port](#io-port) is `0x64`. The [Swift X](#swift-x) built-in keyboard and the [Z97 desk](#z97-desk) rear combo port both use this controller. On the [Swift X](#swift-x) the [interrupt](#interrupt) is [I/O APIC](#io-apic) pin 1, vector 49.
 
+### USB
+
+The bus a stick, a keyboard, or a plug-in adapter uses. The host controller on the [Z97 desk](#z97-desk) and the [Swift X](#swift-x) speaks [xHCI](#xhci). The [Arch live image](#arch-live-image) carries [firmware](#firmware) for [USB](#usb) Wi-Fi adapters from [Marvell](#marvell), [MediaTek](#mediatek-firmware), and [Ralink](#ralink).
+
+_Avoid_: [xHCI](#xhci). [xHCI](#xhci) is the register layout of the host controller. [USB](#usb) is the bus.
+
 ### xHCI
 
-The register layout of a USB 3 host controller. The [Z97 desk](#z97-desk) controller is Intel, at [PCI](#pci) `00:14.0`. The [Swift X](#swift-x) controllers are the [AMD xHCI](#amd-xhci) functions. QEMU's device is [qemu-xhci](#qemu-xhci).
+The register layout of a [USB](#usb) 3 host controller. The [Z97 desk](#z97-desk) controller is Intel, at [PCI](#pci) `00:14.0`. The [Swift X](#swift-x) controllers are the [AMD xHCI](#amd-xhci) functions. QEMU's device is [qemu-xhci](#qemu-xhci).
 
 _Avoid_: [HCI](#hci)
 
 ### qemu-xhci
 
-QEMU's own USB 3 host controller. The USB keyboard smoke attaches it.
+QEMU's own [USB](#usb) 3 host controller. The [USB](#usb) keyboard smoke attaches it.
 
 _Avoid_: [xHCI](#xhci), as a name for the [Z97 desk](#z97-desk) part or an [AMD xHCI](#amd-xhci) function
 
 ### USB boot keyboard
 
-A keyboard that speaks the human interface device boot protocol, so keys can be read without a general USB device stack. The [Z97 desk](#z97-desk) image accepts one on the Intel [xHCI](#xhci). The [Swift X](#swift-x) menu uses the [i8042](#i8042).
+A keyboard that speaks the human interface device boot protocol, so keys can be read without a general [USB](#usb) device stack. The [Z97 desk](#z97-desk) image accepts one on the Intel [xHCI](#xhci). The [Swift X](#swift-x) menu uses the [i8042](#i8042).
 
 ### AMD xHCI
 
@@ -346,19 +352,19 @@ A program this image did not compile, and that still has to run before a device 
 
 Platform [firmware](#firmware) is [UEFI](#uefi) on the [Swift X](#swift-x) and the [Z97 desk](#z97-desk). On QEMU it is [SeaBIOS](#seabios) or [OVMF](#ovmf). It assigns each [BAR](#base-address-register), chooses the boot display, and owns the machine until [ExitBootServices](#exitbootservices).
 
-Device [firmware](#firmware) is a blob a [driver](#driver) copies onto a chip so an on-chip processor can run. The [MT7921](#mt7921) needs a [patch image](#patch-image) and a [RAM image](#ram-image). An empty pair paints `mt7921: firmware err`. Bluetooth uses `support/mt7921-bt.bin`, which is a different blob. An empty Bluetooth blob paints `bt: firmware err`.
+Device [firmware](#firmware) is a blob a [driver](#driver) copies onto a chip so an on-chip processor can run. The [MT7921](#mt7921) needs a [patch image](#patch-image) and a [RAM image](#ram-image). An empty pair paints `mt7921: firmware err`. Bluetooth uses `support/mt7921-bt.bin`, which is a different blob. An empty Bluetooth blob paints `bt: firmware err`. The [Arch live image](#arch-live-image) carries device [firmware](#firmware) for many vendors in one tree. The [MT7921](#mt7921) [patch image](#patch-image) and [RAM image](#ram-image) are the `WIFI_MT7961` files in [MediaTek firmware](#mediatek-firmware).
 
 _Avoid_: the [seL4](#sel4) kernel. The [mb2-stub](#mb2-stub) loads the kernel. Device [firmware](#firmware) is the blob linked into the [protection domain](#protection-domain).
 
 ### UEFI
 
-The [firmware](#firmware) interface the [Swift X](#swift-x) and the [Z97 desk](#z97-desk) boot. The USB boot entry has to say [UEFI](#uefi). [GRUB](#grub) is `EFI/BOOT/BOOTX64.EFI`. There is no BIOS [El Torito](#el-torito) entry.
+The [firmware](#firmware) interface the [Swift X](#swift-x) and the [Z97 desk](#z97-desk) boot. The [USB](#usb) boot entry has to say [UEFI](#uefi). [GRUB](#grub) is `EFI/BOOT/BOOTX64.EFI`. There is no [BIOS](#bios) [El Torito](#el-torito) entry.
 
 ### ISO
 
 The image `just make-lerux-iso` writes for the [Swift X](#swift-x). The file is `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`. The recipe's own status line includes `Wrote ISO`. [GRUB](#grub) is the loader on that image. The boot entry has to say [UEFI](#uefi).
 
-_Avoid_: [OVMF](#ovmf). That is the [firmware](#firmware) QEMU uses for an x86 [ISO](#iso). This file is the [Swift X](#swift-x) image.
+_Avoid_: [OVMF](#ovmf), and the [Arch live image](#arch-live-image). [OVMF](#ovmf) is the [firmware](#firmware) QEMU uses for an x86 [ISO](#iso). The [Arch live image](#arch-live-image) is the Arch installer. This entry is the [Swift X](#swift-x) image.
 
 ### metal boot
 
@@ -366,13 +372,19 @@ A boot of the [ISO](#iso) on the [Swift X](#swift-x) itself. The panel is the on
 
 ### GRUB
 
-The [UEFI](#uefi) loader at `EFI/BOOT/BOOTX64.EFI` on the [ISO](#iso). It loads the [mb2-stub](#mb2-stub). There is no BIOS [El Torito](#el-torito) entry.
+The [UEFI](#uefi) loader at `EFI/BOOT/BOOTX64.EFI` on the [ISO](#iso). It loads the [mb2-stub](#mb2-stub). There is no [BIOS](#bios) [El Torito](#el-torito) entry.
+
+### BIOS
+
+The [firmware](#firmware) interface that starts a boot sector. [SeaBIOS](#seabios) is the [BIOS](#bios) QEMU runs. The [Arch live image](#arch-live-image) starts [syslinux](#syslinux) from a [BIOS](#bios) boot record. The [Swift X](#swift-x) and the [Z97 desk](#z97-desk) boot [UEFI](#uefi).
+
+_Avoid_: [UEFI](#uefi)
 
 ### El Torito
 
-The BIOS boot record used for optical discs. The [Swift X](#swift-x) [ISO](#iso) does not use one. The USB entry has to say [UEFI](#uefi).
+The [BIOS](#bios) boot record used for optical discs. The [Swift X](#swift-x) [ISO](#iso) does not use one. The [USB](#usb) entry has to say [UEFI](#uefi).
 
-_Avoid_: [SeaBIOS](#seabios)
+_Avoid_: [SeaBIOS](#seabios). [SeaBIOS](#seabios) is a [BIOS](#bios) implementation. [El Torito](#el-torito) is the boot record.
 
 ### GOP
 
@@ -593,3 +605,125 @@ The address request after [EAPOL](#eapol). The paint word is `dhcp`. The bring-u
 One [ICMP](#ping) echo after [DHCP](#dhcp). An address and then `ping ok` is the end of this bring-up. The host test that prints `ip 192.168.1.20 ping ok` drives a scripted radio. A [metal boot](#metal-boot) is the one that counts.
 
 _Avoid_: treating the host test as that boot.
+
+## Arch live image
+
+### Arch live image
+
+The official Arch Linux installer written to a USB stick. The measured file is `archlinux-2026.11.01-x86_64.iso`, 1256.5 MiB, Linux 7.2.11. The size breakdown is [docs/arch-live-image.md](docs/arch-live-image.md). BIOS boot reads the kernel from the image's file tree. [UEFI](#uefi) boot reads the same kernel from the appended [FAT](#fat) partition.
+
+_Avoid_: [ISO](#iso). That file is the [Swift X](#swift-x) image `just make-lerux-iso` writes.
+
+### squashfs
+
+A read-only compressed filesystem. The [Arch live image](#arch-live-image) stores the live system in `airootfs.sfs`, 1044.0 MiB, compressed with [xz](#xz). The files inside that archive add up to 2146 MiB before compression.
+
+_Avoid_: the [ISO](#iso) filesystem. [squashfs](#squashfs) is the live root packed inside the [Arch live image](#arch-live-image).
+
+### xz
+
+The compression on `airootfs.sfs`, and on the second half of the [initramfs](#initramfs). It shrinks programs, libraries, and text. A file that is already [zstd](#zstd) stays about the same size.
+
+### zstd
+
+The compression Arch uses on a [kernel module](#kernel-module) and on most device [firmware](#firmware) blobs. The suffix is `.zst`. [xz](#xz) does not shrink those files a second time, which is why [firmware](#firmware) dominates the [squashfs](#squashfs).
+
+### initramfs
+
+The early userspace archive loaded beside [vmlinuz](#vmlinuz). On the [Arch live image](#arch-live-image) the file is `initramfs-linux.img`, 82.5 MiB, stored once in the image file tree and once in the [FAT](#fat) partition. It holds [CPU microcode](#cpu-microcode), the [kernel modules](#kernel-module) needed to reach the [squashfs](#squashfs), and an [xz](#xz) archive of libraries. Its job is to mount that [squashfs](#squashfs) as the live root.
+
+_Avoid_: [vmlinuz](#vmlinuz)
+
+### vmlinuz
+
+The compressed Linux kernel file a bootloader loads. On the [Arch live image](#arch-live-image) it is 16.4 MiB. One copy is in the image file tree, one copy is in the [FAT](#fat) partition, and a third copy sits inside the [squashfs](#squashfs) because the `linux` package installed it there.
+
+_Avoid_: [initramfs](#initramfs). That archive is the userspace wrapped around this file.
+
+### kernel module
+
+A file of Linux kernel code loaded after [vmlinuz](#vmlinuz) has started. The name ends in `.ko`. Arch stores each one with [zstd](#zstd), so the [Arch live image](#arch-live-image) has `.ko.zst` files. The [squashfs](#squashfs) keeps the full set, 145 MiB, so the installer can drive the disk, the filesystem, and the network card it finds. The [initramfs](#initramfs) keeps a smaller set, 42.6 MiB, the modules needed before the [squashfs](#squashfs) is mounted.
+
+_Avoid_: [driver](#driver). A [driver](#driver) in this repo is a [protection domain](#protection-domain). A kernel module is the Linux file that does the corresponding job on the [Arch live image](#arch-live-image).
+
+### CPU microcode
+
+A patch the processor applies to itself during boot. The [Arch live image](#arch-live-image) stores Intel's patch in the [initramfs](#initramfs), 16.9 MiB, and again under `firmware/intel-ucode` inside the [squashfs](#squashfs). AMD's patch is 0.3 MiB.
+
+_Avoid_: device [firmware](#firmware). [CPU microcode](#cpu-microcode) patches the processor. Device [firmware](#firmware) runs on a chip outside the processor.
+
+### FAT
+
+The filesystem on a [UEFI](#uefi) system partition. The [Arch live image](#arch-live-image) appends a 109.0 MiB [FAT](#fat) partition. [UEFI](#uefi) [firmware](#firmware) reads [vmlinuz](#vmlinuz) and the [initramfs](#initramfs) from it. [systemd-boot](#systemd-boot) is the loader on that partition.
+
+### systemd-boot
+
+The [UEFI](#uefi) bootloader on the [Arch live image](#arch-live-image). The file is `EFI/BOOT/BOOTx64.EFI`, 0.15 MiB, inside the [FAT](#fat) partition.
+
+_Avoid_: [GRUB](#grub). [GRUB](#grub) is the loader on the lerux [ISO](#iso). The [Arch live image](#arch-live-image) uses [systemd-boot](#systemd-boot) for [UEFI](#uefi) and [syslinux](#syslinux) for BIOS. The GRUB package inside the live root is there so the installer can write a bootloader onto the target disk.
+
+### syslinux
+
+The [BIOS](#bios) bootloader on the [Arch live image](#arch-live-image). It reads [vmlinuz](#vmlinuz) and the [initramfs](#initramfs) from the image file tree.
+
+_Avoid_: [El Torito](#el-torito). [El Torito](#el-torito) is the boot record. [syslinux](#syslinux) is the program that record starts. Also [GRUB](#grub), which is the loader on the lerux [ISO](#iso).
+
+### Marvell
+
+The vendor of `linux-firmware-marvell`. On the [Arch live image](#arch-live-image) the `mrvl/` directory is 77 MiB, and about 71 MiB of it is [Prestera](#prestera) switch [firmware](#firmware). The rest is older Marvell Wi-Fi: Libertas [USB](#usb) and [SDIO](#sdio) cards, the 88W8366, 8687, and 8764, and the 88W8864, 8897, and 8997 combo chips.
+
+_Avoid_: [MT7921](#mt7921), [RTL8852BE](#rtl8852be)
+
+### Prestera
+
+Marvell's Ethernet switch chips. The [Arch live image](#arch-live-image) carries five switch [firmware](#firmware) images, versions 2.0 through 4.1, including a 64-bit Arm build. The Linux `prestera` driver loads one of them onto a switch. They are in the installer because `linux-firmware-marvell` is one package.
+
+### SDIO
+
+Secure Digital I/O. A Wi-Fi chip wired to the pins of an SD card slot. [Marvell](#marvell) and [MediaTek firmware](#mediatek-firmware) both include [SDIO](#sdio) blobs on the [Arch live image](#arch-live-image).
+
+_Avoid_: [NVMe](#nvme), [Advanced Host Controller Interface](#advanced-host-controller-interface). Those are disk controllers.
+
+### SoC
+
+A system on a chip. One package that holds a processor and the controllers around it. [MediaTek firmware](#mediatek-firmware) includes blobs for Filogic router [SoCs](#soc) and for Chromebook [SoCs](#soc).
+
+### Ralink
+
+The Wi-Fi vendor MediaTek bought. [MediaTek firmware](#mediatek-firmware) still carries Ralink's [PCI](#pci) and [USB](#usb) blobs, the `rt*.bin` files such as RT2860 and RT3070.
+
+### SOF
+
+Sound Open Firmware. Open [firmware](#firmware) for an audio [DSP](#dsp), loaded by the Linux `snd-sof` driver, plus a topology file that names how that machine's speakers and microphones are wired. On the [Arch live image](#arch-live-image) the Intel files under `intel/sof`, `intel/sof-ipc4`, and the topology directories are 55 MiB. The package is `sof-firmware`. `sof-ipc4` is the newer command protocol, used by Intel's later audio [DSP](#dsp). A few MediaTek topologies live in [MediaTek firmware](#mediatek-firmware) and are separate from this 55 MiB.
+
+_Avoid_: platform [firmware](#firmware). [SOF](#sof) runs on the audio [DSP](#dsp) after Linux has booted.
+
+### DSP
+
+A digital signal processor. A small processor built to run a steady stream of audio or radio samples. [SOF](#sof) is the [firmware](#firmware) loaded onto the audio [DSP](#dsp).
+
+_Avoid_: [MCU](#mcu). The [MCU](#mcu) is the processor inside the [MT7921](#mt7921).
+
+### MediaTek firmware
+
+The `linux-firmware-mediatek` package. On the [Arch live image](#arch-live-image) the `mediatek/` directory is 37 MiB. It holds [firmware](#firmware) for MediaTek and [Ralink](#ralink) devices: older [USB](#usb) and [PCI](#pci) Wi-Fi, Wi-Fi 6 and Wi-Fi 7 chips, the Bluetooth half of the combo chips, Filogic router [SoCs](#soc), and the control processor on MediaTek Chromebook [SoCs](#soc). The [MT7921](#mt7921) [patch image](#patch-image) and [RAM image](#ram-image) are the `WIFI_MT7961` files in this package. The 37 MiB is the whole vendor set.
+
+_Avoid_: reading the 37 MiB as the [Swift X](#swift-x) radio alone.
+
+### udev hardware database
+
+The compiled file `/usr/lib/udev/hwdb.bin`. udev is the device manager in systemd. When a device appears, udev reads this file and attaches properties: a vendor name, a model name, a keyboard layout. The text sources are the `*.hwdb` files, and `systemd-hwdb` compiles them into this one file. On the [Arch live image](#arch-live-image) it is 13.2 MiB and sits in the [xz](#xz) half of the [initramfs](#initramfs).
+
+_Avoid_: [configuration space](#configuration-space). That is the [PCI](#pci) register block. This database is a userspace lookup table.
+
+### GPU
+
+A graphics processor. The chip that turns drawing commands into pixels. A recent NVIDIA [GPU](#gpu) runs a [GSP](#gsp). AMD [GPU](#gpu) [firmware](#firmware) and Intel graphics [firmware](#firmware) are separate slices of the [Arch live image](#arch-live-image).
+
+_Avoid_: [Swift Radeon](#swift-radeon), [HD Graphics 4600](#hd-graphics-4600), [GTX 1650](#gtx-1650). Those are particular chips. [GPU](#gpu) is the kind of chip.
+
+### GSP
+
+The [GPU](#gpu) System Processor on a recent NVIDIA [GPU](#gpu). A Linux [kernel module](#kernel-module) loads a [GSP](#gsp) blob onto that processor, and the processor schedules work on the [GPU](#gpu). The largest single file in the [Arch live image](#arch-live-image) is one [GSP](#gsp) blob, 49 MiB, for the GA102 chip. The image also carries a [GSP](#gsp) blob for TU102.
+
+_Avoid_: [GTX 1650](#gtx-1650). That card is a different NVIDIA chip, and this repo leaves it unmapped.

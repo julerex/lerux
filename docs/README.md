@@ -9,7 +9,8 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [../AGENTS.md](../AGENTS.md) | LLM agent instructions for idiomatic Rust in this repo |
 | [context.md](context.md) | Domain language and architectural decisions |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Dependency hierarchy and call graph across lerux, rust-sel4, Microkit, and seL4 |
-| [../GLOSSARY.md](../GLOSSARY.md) | Machine names, driver words, the Acer Swift X devices, and the Wi-Fi bring-up line. Each mention links to its entry |
+| [../GLOSSARY.md](../GLOSSARY.md) | Machine names, driver words, the Acer Swift X devices, the Wi-Fi bring-up line, and the Arch live image. Each mention links to its entry |
+| [arch-live-image.md](arch-live-image.md) | What fills the official Arch Linux live installer, measured from the 2026.11.01 image |
 | [swift-boot-screen.md](swift-boot-screen.md) | Plain-language guide to the Swift X Wi-Fi stall: where the ring, the note, the doorbell, and the IOMMU live, how to read the screen lines, and the dump rows 31 to 66 |
 | [swift-wifi-assessment.md](swift-wifi-assessment.md) | Assessment of the Swift X bring-up against Linux v6.8 `mt76`: what is verified, the remaining suspects in order, and the gap between `ping ok` and applications on the internet |
 | [plan-swift-wifi.md](plan-swift-wifi.md) | Phased plan from the `fw sem` stall to an application on the internet over the Swift radio |

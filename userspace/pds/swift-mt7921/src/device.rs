@@ -14,22 +14,23 @@ use lerux_swift::{
         efuse_block_byte, efuse_mac, ext_cmd, ext_query, firmware_kind, is_uni_cmd, map_reg,
         mcu_header_len, parse_nic_cap, patch_regions, patch_status, prefetch, ram_regions,
         remap_l1, ring_regs, uni_cmd, uni_event_ok, write_bss_info, write_chan,
-        write_channel_domain, write_clc, write_dev_info, write_eeprom_mode, write_efuse_block,
-        write_efuse_read, write_fw_log, write_mac_enable, write_mcu_header, write_mcu_txd,
-        write_rts, write_rx_filter_enable, write_scan, write_txwi, wtbl_word, FirmwareKind, Map,
-        RegOp, Region, Sem, Stage, TxStop, BSS_INFO_LEN, CHANNEL_DOMAIN_LEN, CONN_ON_LPCTL,
-        CONN_ON_MISC, DEV_INFO_LEN, DMASHDL_BYPASS, DMASHDL_ENABLE, DMASHDL_SW, DMA_DONE, DUMMY_CR,
-        DUMP_PREFETCH, DUMP_REGS, DUMP_RINGS, EE_HW_TYPE, EFUSE_BLOCK_LEN, FW_N9_RDY, FW_SCATTER,
-        FW_START, GLO_CFG, GLO_CFG_CHAIN, GLO_CFG_CLK, GLO_CFG_EXT0, GLO_CFG_LE, GLO_CFG_OMIT_RX,
-        GLO_CFG_OMIT_RX_PFET, GLO_CFG_OMIT_TX, GLO_CFG_RX_BUSY, GLO_CFG_RX_EN, GLO_CFG_TX_BUSY,
-        GLO_CFG_TX_EN, GLO_CFG_TX_WB, HIF_REMAP_L1, HOST_CLR_OWN, HOST_INT_ENA, HOST_OWN_SYNC,
-        HOST_SET_OWN, HW_CHIPID, HW_REV, IRQ_MASK, L0S_DIS, LAST_SEC0, LPCR_DRV_OWN, LPCR_FW_OWN,
-        MCU2HOST, MCU_TXD_LEN, MCU_WAKE, MDP_DAMSDU, MDP_DCR0, MDP_DCR1, MDP_HDR_TRANS,
-        NEED_REINIT, PATCH_FINISH, PATCH_IS_DL, PATCH_NOT_DL, PATCH_REL, PATCH_SEM, PCIE_MAC_INT,
-        PCIE_MAC_PM, PRI_DLY, RST_DMASHDL, RST_DTX_PTR, RST_LOGIC, RXD_LEN, RX_DATA_BASE,
-        RX_EVENT_BASE, RX_FILTER_LEN, RX_WA_BASE, SCAN_REQ_LEN, SWDEF_MODE, TOP_LPCR, TXD_LEN,
-        TXP_LEN, TX_RING_BASE, WFDMA_RST, WFSYS_INIT_DONE, WFSYS_RST, WFSYS_RST_B, WTBL_BUSY,
-        WTBL_RESERVED, WTBL_UPDATE,
+        write_channel_domain, write_clc, write_clear_other_beacon, write_dev_info,
+        write_eeprom_mode, write_efuse_block, write_efuse_read, write_fw_log, write_mac_enable,
+        write_mcu_header, write_mcu_txd, write_rts, write_rx_filter_enable, write_scan, write_txwi,
+        wtbl_word, FirmwareKind, Map, RegOp, Region, Sem, Stage, TxStop, BSS_INFO_LEN,
+        CHANNEL_DOMAIN_LEN, CONN_ON_LPCTL, CONN_ON_MISC, DEV_INFO_LEN, DMASHDL_BYPASS,
+        DMASHDL_ENABLE, DMASHDL_SW, DMA_DONE, DUMMY_CR, DUMP_PREFETCH, DUMP_REGS, DUMP_RINGS,
+        EE_HW_TYPE, EFUSE_BLOCK_LEN, FW_N9_RDY, FW_SCATTER, FW_START, GLO_CFG, GLO_CFG_CHAIN,
+        GLO_CFG_CLK, GLO_CFG_EXT0, GLO_CFG_LE, GLO_CFG_OMIT_RX, GLO_CFG_OMIT_RX_PFET,
+        GLO_CFG_OMIT_TX, GLO_CFG_RX_BUSY, GLO_CFG_RX_EN, GLO_CFG_TX_BUSY, GLO_CFG_TX_EN,
+        GLO_CFG_TX_WB, HIF_REMAP_L1, HOST_CLR_OWN, HOST_INT_ENA, HOST_OWN_SYNC, HOST_SET_OWN,
+        HW_CHIPID, HW_REV, IRQ_MASK, L0S_DIS, LAST_SEC0, LPCR_DRV_OWN, LPCR_FW_OWN, MCU2HOST,
+        MCU_TXD_LEN, MCU_WAKE, MDP_DAMSDU, MDP_DCR0, MDP_DCR1, MDP_HDR_TRANS, NEED_REINIT,
+        PATCH_FINISH, PATCH_IS_DL, PATCH_NOT_DL, PATCH_REL, PATCH_SEM, PCIE_MAC_INT, PCIE_MAC_PM,
+        PRI_DLY, RST_DMASHDL, RST_DTX_PTR, RST_LOGIC, RXD_LEN, RX_DATA_BASE, RX_EVENT_BASE,
+        RX_FILTER_LEN, RX_WA_BASE, SCAN_REQ_LEN, SWDEF_MODE, TOP_LPCR, TXD_LEN, TXP_LEN,
+        TX_RING_BASE, WFDMA_RST, WFSYS_INIT_DONE, WFSYS_RST, WFSYS_RST_B, WTBL_BUSY, WTBL_RESERVED,
+        WTBL_UPDATE,
     },
     CLIENT_MAC,
 };
@@ -822,16 +823,18 @@ impl Mac {
     /// `MCU_EVENT_SCAN_DONE`, not a command ack.
     ///
     /// The station is registered once, then the channel domain goes out,
-    /// then the mode 1 receive filter. Linux leaves the other-beacon drop
-    /// at the firmware value for this scan.
+    /// then the mode 1 receive filter, then the other-beacon drop is cleared.
     ///
-    /// A boot that printed `ch 21 bcn 16` with `rx 0` had finished every
-    /// channel and counted beacons. The data ring's DMA length was still 0.
-    /// The following image reached `wait` and the shell printed `wifi err`.
-    /// That image posted the rate-power table and `KeepFullPwr 0` after the
-    /// last command that waited for a reply.
+    /// A boot that printed `rx 0 ok 0 done 1 ch 21 bcn 14` had the DMA length
+    /// and the mode 1 filter. The firmware counted the beacons and copied none.
+    /// `mt7921_mcu_set_beacon_filter(false)` clears that drop for an
+    /// unassociated station.
     pub(crate) fn start_scan(&mut self, ssid: &[u8]) -> bool {
-        if !self.add_station() || !self.channel_domain() || !self.rx_filter() {
+        if !self.add_station()
+            || !self.channel_domain()
+            || !self.rx_filter()
+            || !self.pass_beacons()
+        {
             return false;
         }
         let seq = self.next_seq();
@@ -872,6 +875,15 @@ impl Mac {
     fn rx_filter(&mut self) -> bool {
         let mut body = [0u8; RX_FILTER_LEN];
         if !write_rx_filter_enable(&mut body) {
+            return false;
+        }
+        self.command(ce_cmd(0x0a), &body, false)
+    }
+
+    /// `mt7921_mcu_set_beacon_filter(false)`. Linux does not wait.
+    fn pass_beacons(&mut self) -> bool {
+        let mut body = [0u8; RX_FILTER_LEN];
+        if !write_clear_other_beacon(&mut body) {
             return false;
         }
         self.command(ce_cmd(0x0a), &body, false)

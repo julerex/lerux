@@ -789,6 +789,22 @@ pub fn write_rx_filter_enable(out: &mut [u8]) -> bool {
     true
 }
 
+/// `SET_RX_FILTER` bitmap clear of `MT_WF_RFCR_DROP_OTHER_BEACON`.
+///
+/// Mode 2 updates one bit. `bit_op` bit 1 clears it. This is the command
+/// `mt7921_mcu_set_beacon_filter` sends when the station is not associated.
+/// The firmware can count those beacons and still drop them before the host.
+pub fn write_clear_other_beacon(out: &mut [u8]) -> bool {
+    if out.len() < RX_FILTER_LEN {
+        return false;
+    }
+    out[..RX_FILTER_LEN].fill(0);
+    out[4] = 2;
+    out[12..16].copy_from_slice(&(1u32 << 11).to_le_bytes());
+    out[16] = 1 << 1;
+    true
+}
+
 /// True when a unified command reply is success for `cid`.
 ///
 /// The event follows the connac2 RXD: command id, then a little-endian status.
@@ -2023,6 +2039,20 @@ mod tests {
         assert_eq!(buf[12], 0);
         assert_eq!(buf[16], 0);
         assert!(!write_rx_filter_enable(&mut [0u8; 8]));
+    }
+
+    #[test]
+    fn other_beacon_drop_is_cleared() {
+        let mut buf = [0u8; RX_FILTER_LEN];
+        assert!(write_clear_other_beacon(&mut buf));
+        assert_eq!(buf[4], 2);
+        assert_eq!(
+            u32::from_le_bytes([buf[12], buf[13], buf[14], buf[15]]),
+            1 << 11
+        );
+        assert_eq!(buf[16], 1 << 1);
+        assert_eq!(u32::from_le_bytes([buf[8], buf[9], buf[10], buf[11]]), 0);
+        assert!(!write_clear_other_beacon(&mut [0u8; 8]));
     }
 
     #[test]

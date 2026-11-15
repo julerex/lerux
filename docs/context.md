@@ -203,7 +203,7 @@ The `setup-wifi` mark uses these words. The same paragraph is in [plan-metal-par
 : A beacon (frame control `0x80`) or a probe response (frame control `0x50`) from the survey. `beacon_ssid` reads the network name from either. The host learns a name from a scan frame only after the card has copied that frame onto the data ring.
 
 **data ring**
-: The receive DMA ring whose registers are `RX_DATA_BASE` (`WFDMA0 + 0x520`). The card writes a finished scan frame there, and `poll_data` reads it. `rx` counts those completions. Scan-done, including `ch` and `bcn`, is read from the MCU rings: `WFDMA0 + 0x500` before N9 is ready, and `WFDMA0 + 0x540` once it is. A mark with `bcn` greater than 0 and `rx` 0 means the firmware counted beacons and copied no scan frame onto the data ring. Linux programs `MT_DMA_DCR0` so the data ring accepts a 1536-byte frame, and sends `SET_RX_FILTER` mode 1 with `FILTER_ENABLE` before the scan. The other-beacon drop stays at the firmware value.
+: The receive DMA ring whose registers are `RX_DATA_BASE` (`WFDMA0 + 0x520`). The card writes a finished scan frame there, and `poll_data` reads it. `rx` counts those completions. Scan-done, including `ch` and `bcn`, is read from the MCU rings: `WFDMA0 + 0x500` before N9 is ready, and `WFDMA0 + 0x540` once it is. A mark with `bcn` greater than 0 and `rx` 0 means the firmware counted beacons and copied no scan frame onto the data ring. Linux programs `MT_DMA_DCR0` so the data ring accepts a 1536-byte frame, and sends `SET_RX_FILTER` mode 1 with `FILTER_ENABLE` before the scan. An unassociated station also clears `DROP_OTHER_BEACON`. The image that programmed the DMA length and sent only the mode 1 filter still printed `rx 0` with `bcn 14`.
 
 ## Boundaries
 

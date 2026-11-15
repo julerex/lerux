@@ -234,6 +234,8 @@ use embedded_hal_nb::{
     nb,
     serial::{Read, Write},
 };
+#[cfg(feature = "board-swift_sfx14_41g")]
+use sel4_microkit::memory_region_symbol;
 use sel4_microkit::{protection_domain, Channel, ChannelSet, Handler, Infallible};
 #[cfg(feature = "console-out")]
 use sel4_microkit_driver_adapters::serial::client::Client;
@@ -278,6 +280,9 @@ use lerux_sddf::{
     TIMER_CLIENT_CHANNEL,
 };
 
+#[cfg(feature = "board-swift_sfx14_41g")]
+use lerux_swift::{format_survey_report, write_survey, SURVEY_REPORT_MAX};
+
 const CONFIG: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/config.bin"));
 #[cfg(not(feature = "console-out"))]
 const TX_CH: usize = CLIENT_TX_CHANNEL as usize;
@@ -293,6 +298,9 @@ const NET_COPY: Channel = Channel::new(3);
 /// Transmit virtualiser. The literal matches `SHELL_NET_TX_CHANNEL`.
 #[cfg(feature = "net-client")]
 const NET_VIRT_TX: Channel = Channel::new(4);
+/// Survey notify. The radio's channel 3 runs the same handler as a passphrase.
+#[cfg(feature = "board-swift_sfx14_41g")]
+const SWIFT_MT7921: Channel = Channel::new(5);
 
 #[cfg(feature = "net-client")]
 const _: () = {
@@ -858,6 +866,10 @@ fn dispatch(line: &[u8]) {
     if dispatch_fs_board(cmd, rest) {
         return;
     }
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    if dispatch_swift(cmd, rest) {
+        return;
+    }
     say(b"err\n");
 }
 
@@ -873,6 +885,55 @@ fn dispatch_file(cmd: &[u8], rest: &[u8]) -> bool {
         _ => return false,
     }
     true
+}
+
+#[cfg(feature = "board-swift_sfx14_41g")]
+fn dispatch_swift(cmd: &[u8], rest: &[u8]) -> bool {
+    if cmd != b"setup-wifi" {
+        return false;
+    }
+    cmd_setup_wifi(rest);
+    true
+}
+
+/// Ask the radio which names it can hear.
+///
+/// The radio is priority 4 and this shell is priority 1, so the survey
+/// finishes before `notify` returns. A stored name is `N name`. Zero names
+/// are the survey mark. A survey the radio did not answer is `wifi err`.
+#[cfg(feature = "board-swift_sfx14_41g")]
+fn cmd_setup_wifi(rest: &[u8]) {
+    if !rest.is_empty() || !write_survey(key_page()) {
+        say(b"wifi err\n");
+        return;
+    }
+    SWIFT_MT7921.notify();
+    discard_pending();
+    let mut out = [0u8; SURVEY_REPORT_MAX];
+    if let Some(n) = format_survey_report(key_page(), &mut out) {
+        say(&out[..n]);
+    } else {
+        say(b"wifi err\n");
+    }
+}
+
+/// Drop keys queued while the radio ran the survey.
+#[cfg(feature = "board-swift_sfx14_41g")]
+fn discard_pending() {
+    loop {
+        match console().read() {
+            Ok(_) => {}
+            Err(nb::Error::WouldBlock | nb::Error::Other(_)) => return,
+        }
+    }
+}
+
+/// The template maps this page read-write at `0x1fd0000`. The radio is the other writer.
+#[cfg(feature = "board-swift_sfx14_41g")]
+fn key_page() -> &'static mut [u8] {
+    let ptr = memory_region_symbol!(wifi_key_vaddr: *mut u8).as_ptr();
+    // SAFETY: this domain maps `wifi_key` for its whole life. The slice is not held across `notify`.
+    unsafe { core::slice::from_raw_parts_mut(ptr, 0x1000) }
 }
 
 #[cfg(any(

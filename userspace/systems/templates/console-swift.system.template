@@ -143,7 +143,8 @@
         <map mr="framebuffer" vaddr="0x40000000" perms="rw" cached="false" />
         <map mr="browser_hold" vaddr="0x3ffc0000" perms="rw" cached="true" />
         <map mr="disk_result" vaddr="0x3ffe0000" perms="r" cached="true" />
-        <map mr="wifi_key" vaddr="0x1fd0000" perms="rw" cached="true" />
+        <!-- Survey names and the mark. setup-wifi reads this page. -->
+        <map mr="wifi_key" vaddr="0x1fd0000" perms="rw" cached="true" setvar_vaddr="wifi_key_vaddr" />
         <map mr="net_rx_client_free" vaddr="0x5_006_000" perms="rw" cached="true" />
         <map mr="net_rx_client_active" vaddr="0x5_007_000" perms="rw" cached="true" />
         <map mr="net_tx_client_free" vaddr="0x5_008_000" perms="rw" cached="true" />
@@ -179,5 +180,9 @@
     <channel>
         <end pd="net_virt_tx" id="1" />
         <end pd="shell" id="4" />
+    </channel>
+    <channel>
+        <end pd="swift_mt7921" id="3" />
+        <end pd="shell" id="5" />
     </channel>
 </system>

@@ -277,10 +277,12 @@ mod tests {
                 "wifi_key_vaddr",
             ] {
                 let patched = domain.contains(&format!("setvar_vaddr=\"{symbol}\""));
-                let console_reads = name == "console_driver"
-                    && symbol != "disk_result_vaddr"
-                    && symbol != "wifi_key_vaddr";
-                assert_eq!(patched, console_reads, "{name} setvar {symbol}");
+                let reads = match name {
+                    "console_driver" => symbol != "disk_result_vaddr" && symbol != "wifi_key_vaddr",
+                    "shell" => symbol == "wifi_key_vaddr",
+                    _ => false,
+                };
+                assert_eq!(patched, reads, "{name} setvar {symbol}");
             }
         }
     }
@@ -306,6 +308,8 @@ mod tests {
         assert!(xml.contains("pd=\"shell\" id=\"4\""));
         assert!(xml.contains("pd=\"swift_mt7921\" id=\"1\""));
         assert!(xml.contains("pd=\"swift_mt7921\" id=\"2\""));
+        assert!(xml.contains("pd=\"swift_mt7921\" id=\"3\""));
+        assert!(xml.contains("pd=\"shell\" id=\"5\""));
         assert_eq!(xml.matches("addr=\"0xcf8\"").count(), 1);
     }
 

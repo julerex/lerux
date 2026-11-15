@@ -2341,6 +2341,7 @@ dependencies = [
  "lerux-image",
  "lerux-posix",
  "lerux-sddf",
+ "lerux-swift",
  "lerux-tls",
  "lerux-web",
  "sel4-microkit",

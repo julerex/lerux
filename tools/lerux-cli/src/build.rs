@@ -1,5 +1,5 @@
 use std::{
-    fs,
+    env, fs,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -168,6 +168,13 @@ fn pd_cargo_command(
 
     let include = format!("{sdk}/board/{microkit_board}/{config}/include");
     cmd.env("SEL4_INCLUDE_DIRS", include);
+    // `just make-lerux-iso` sets this from `git describe --always --dirty`.
+    // The console-driver build script reruns when it changes.
+    if let Ok(describe) = env::var("LERUX_GIT_DESCRIBE")
+        && !describe.is_empty()
+    {
+        cmd.env("LERUX_GIT_DESCRIBE", describe);
+    }
     cmd.env("RUST_TARGET_PATH", root.join("support/targets"));
     cmd.env("RUSTC_BOOTSTRAP", "1");
     cmd

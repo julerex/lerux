@@ -12,8 +12,9 @@ pub const ATTR: u16 = 0x1f00;
 
 /// Painted on row 0 before the shell prompt.
 ///
-/// The Swift panel carries the short git describe the image was built from.
-/// Z97 and Inspiron stay `hello lerux`.
+/// The Swift panel carries `LERUX_GIT_DESCRIBE` from `just make-lerux-iso`
+/// (`git describe --always --dirty`, one leading `v` removed). Z97 and
+/// Inspiron stay `hello lerux`.
 #[cfg(feature = "board-swift_sfx14_41g")]
 pub const BANNER: &[u8] = concat!("hello lerux v", env!("LERUX_GIT_DESCRIBE")).as_bytes();
 #[cfg(not(feature = "board-swift_sfx14_41g"))]

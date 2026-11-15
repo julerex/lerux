@@ -9,7 +9,7 @@
 //! `mac` when that step fails, and `wait` when the
 //! firmware has reached the normal state. The shell then asks for a survey.
 //! This domain writes the names it hears and, after the passphrase, associates.
-//! An empty name list still replaces row 22 with `rx`, `ok`, and `done`.
+//! An empty name list still replaces the stage row with `rx`, `ok`, and `done`.
 //! The shell notifies channel 3 for that survey and for a passphrase.
 //! Channel 1 is the receive virtualiser and runs the same handler.
 //! Channel 0 stays the MSI. Channel 2 is the transmit virtualiser.
@@ -56,17 +56,17 @@ use device::{Images, Mac};
 use ether::Net;
 
 #[cfg(not(test))]
-const ROW: usize = 22;
+const ROW_SLOT: usize = lerux_desk::ROW_WIFI;
 #[cfg(not(test))]
-const ROW_SLOT: usize = 17;
+const ROW_CMD: usize = lerux_desk::ROW_WIFI + 1;
 #[cfg(not(test))]
-const ROW_CMD: usize = 18;
+const ROW_DESC: usize = lerux_desk::ROW_WIFI + 2;
 #[cfg(not(test))]
-const ROW_DESC: usize = 19;
+const ROW_BELL: usize = lerux_desk::ROW_WIFI + 3;
 #[cfg(not(test))]
-const ROW_BELL: usize = 20;
+const ROW_FETCH: usize = lerux_desk::ROW_WIFI + 4;
 #[cfg(not(test))]
-const ROW_FETCH: usize = 21;
+const ROW: usize = lerux_desk::ROW_WIFI + 5;
 #[cfg(not(test))]
 const PHASE_FETCH: u8 = 4;
 #[cfg(not(test))]

@@ -3,8 +3,8 @@
 //! Windows assigned these bus numbers. A line that reads `ffff` is a location
 //! this boot did not find. Firmware assigned the `NVMe`, xHCI, and MT7921 base
 //! addresses. This domain sets bus master and does not move those addresses.
-//! Row 15 reads the MT7921 command word back after bus master is set.
-//! Row 16 reads the exclusion range back after that programming.
+//! The command row reads the MT7921 command word back after bus master is set.
+//! The next row reads the exclusion range back after that programming.
 //! The Wi-Fi root port gets memory space and bus master, and ASPM is cleared
 //! on the MT7921 and that port. The panel does not paint the photograph dump
 //! that used to start on row 31.
@@ -29,9 +29,9 @@ use lerux_swift::{
 };
 
 const BASE_IOPORT_CAP: u64 = 394;
-const ROW: usize = lerux_desk::CONSOLE_ROWS;
-const ROW_CMD: usize = 15;
-const ROW_EXCL: usize = 16;
+const ROW: usize = lerux_desk::ROW_PCI;
+const ROW_CMD: usize = lerux_desk::ROW_CMD;
+const ROW_EXCL: usize = lerux_desk::ROW_EXCL;
 
 struct HandlerImpl;
 

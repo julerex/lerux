@@ -4,17 +4,20 @@
 //! plus keyboard ports `0x60` and `0x64`. Scan-code translation stays in
 //! [`crate::scancode`].
 
+#[cfg(feature = "board-swift_sfx14_41g")]
+use core::cell::Cell;
+
 use sel4::with_ipc_buffer_mut;
 use sel4_microkit::{memory_region_symbol, var};
 
 #[cfg(feature = "board-swift_sfx14_41g")]
 use lerux_desk::{
-    fill_background, paint_cell, panel_mode, Pen, BROWSER_HOLD, CELL_PX, FRAMEBUFFER_BYTES,
+    fill_background, paint_cell, paint_underline, panel_mode, Pen, BROWSER_HOLD, FRAMEBUFFER_BYTES,
 };
 
-use crate::screen::{Screen, CELLS};
 #[cfg(feature = "board-swift_sfx14_41g")]
-use crate::screen::{COLS, ROWS};
+use crate::screen::COLS;
+use crate::screen::{Screen, CELLS};
 
 #[cfg(feature = "board-swift_sfx14_41g")]
 struct Panel {
@@ -27,6 +30,7 @@ struct Panel {
     green: u8,
     blue: u8,
     live: bool,
+    cursor: Cell<Option<usize>>,
 }
 
 /// Microkit assigns `IOPort` caps from this `CNode` slot (same base as COM1).
@@ -112,24 +116,40 @@ impl Device {
     }
 
     #[cfg(not(feature = "board-swift_sfx14_41g"))]
-    pub fn enable_cursor(&self) {
-        // Start line 0, end line 15, disable-bit clear: a block cursor.
-        self.crtc(0x0a, 0x00);
+    pub(crate) fn enable_cursor(&self) {
+        // Scanlines 13 through 15, disable-bit clear: an underline.
+        self.crtc(0x0a, 0x0d);
         self.crtc(0x0b, 0x0f);
     }
 
     #[cfg(feature = "board-swift_sfx14_41g")]
-    pub fn enable_cursor() {}
+    #[expect(
+        clippy::unused_self,
+        reason = "the underline is drawn later in sync_cursor"
+    )]
+    pub(crate) fn enable_cursor(&self) {}
 
     #[cfg(not(feature = "board-swift_sfx14_41g"))]
-    pub fn sync_cursor(&self, screen: &Screen) {
+    pub(crate) fn sync_cursor(&self, screen: &Screen) {
         let pos = u16::try_from(screen.cursor_index()).expect("cursor fits");
         self.crtc(0x0e, (pos >> 8) as u8);
         self.crtc(0x0f, (pos & 0xff) as u8);
     }
 
     #[cfg(feature = "board-swift_sfx14_41g")]
-    pub fn sync_cursor(_screen: &Screen) {}
+    pub(crate) fn sync_cursor(&self, screen: &Screen) {
+        let next = screen.cursor_index();
+        if let Some(prev) = self.panel.cursor.replace(Some(next))
+            && prev != next
+            && prev < CELLS
+        {
+            self.write_cell(prev, screen.cells()[prev]);
+        }
+        if next < CELLS {
+            self.write_cell(next, screen.cells()[next]);
+            self.underline(next, screen.cells()[next]);
+        }
+    }
 
     /// Enable scan set 1 and IRQ1. A missing controller still leaves the banner up.
     pub fn init_keyboard(&self) -> bool {
@@ -188,8 +208,33 @@ impl Device {
                 index % COLS,
                 index / COLS,
                 (value & 0xff) as u8,
+                (value >> 8) as u8,
             );
         }
+    }
+
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    fn underline(&self, index: usize, value: u16) {
+        if !self.panel.live || held() || index >= CELLS {
+            return;
+        }
+        // SAFETY: the same mapped framebuffer `write_cell` paints. The underline
+        // covers the bottom two pixels of one cell.
+        let frame = unsafe { core::slice::from_raw_parts_mut(self.panel.frame, self.panel.len) };
+        paint_underline(
+            frame,
+            Pen {
+                pitch: self.panel.pitch,
+                width: self.panel.width,
+                height: self.panel.height,
+                red: self.panel.red,
+                green: self.panel.green,
+                blue: self.panel.blue,
+            },
+            index % COLS,
+            index / COLS,
+            (value >> 8) as u8,
+        );
     }
 
     #[cfg(not(feature = "board-swift_sfx14_41g"))]
@@ -306,9 +351,7 @@ fn panel_from_system() -> Panel {
             green,
             blue,
         };
-        let mut console = pen;
-        console.height = ROWS * CELL_PX;
-        fill_background(frame, console);
+        fill_background(frame, pen);
     }
     Panel {
         frame,
@@ -320,5 +363,6 @@ fn panel_from_system() -> Panel {
         green,
         blue,
         live,
+        cursor: Cell::new(None),
     }
 }

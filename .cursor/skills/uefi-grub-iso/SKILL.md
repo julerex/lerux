@@ -17,7 +17,7 @@ GRUB Multiboot 2-loads `support/mb2-stub` (`/boot/mb2-stub.elf`). Module tag 0 i
 
 `sel4.elf` stays linked at 1 MiB. GRUB loads the stub, which is linked at 32 MiB. After `ExitBootServices` the stub copies the kernel to 1 MiB. [ADR-014](../../../docs/decisions/014-uefi-mb2-stub.md) records Limine's check, which runs before `ExitBootServices` and panics with "Could not find viable load address". It does not record a GRUB measurement. Upstream Microkit loads `sel4.elf` with GRUB, and GRUB's relocator copies into that address after boot services exit. This tree keeps the stub because it paints the GOP mode line and writes the mode record before seL4. A direct GRUB load of `sel4.elf` was not tried on the Acer.
 
-`just iso` rebuilds the Swift image, then packs it. `just iso pc_z97_d3h` does the same for the desk. `just iso inspiron_n5010` packs the Inspiron N5010 VGA text image. That probe recorded no GOP address, so the image maps `0xb8000` and leaves the AHCI disk unmapped. `--no-build` packs the `loader.img` already on disk. `just image` follows `BOARD`, which defaults to `qemu_virt_aarch64`, so it leaves the Swift loader untouched. The stub and `grub.cfg` are the same bytes on every board. UEFI only. There is no BIOS El Torito entry. The N5010 probe was a legacy BIOS boot, so a metal UEFI boot is still open.
+`just make-lerux-iso` rebuilds the Swift image, then packs it. `just make-lerux-iso pc_z97_d3h` does the same for the desk. `just make-lerux-iso inspiron_n5010` packs the Inspiron N5010 VGA text image. That probe recorded no GOP address, so the image maps `0xb8000` and leaves the AHCI disk unmapped. `--no-build` packs the `loader.img` already on disk. `just image` follows `BOARD`, which defaults to `qemu_virt_aarch64`, so it leaves the Swift loader untouched. The stub and `grub.cfg` are the same bytes on every board. UEFI only. There is no BIOS El Torito entry. The N5010 probe was a legacy BIOS boot, so a metal UEFI boot is still open.
 
 A missing `grub-mkimage` fails before an older ISO is reused. The recipe stamp covers the menu and the module list. An ISO that is only newer than its payloads can still be the previous bootloader.
 
@@ -35,7 +35,7 @@ An underscore under the first glyph is the firmware text cursor in the rows just
 
 The file to flash is `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`. Its mtime is not the check. Read `build/swift_sfx14_41g/system.system`. The framebuffer region is `phys_addr="0xfc90000000"`, `size="0x7e9000"`, and `page_size="0x1000"`. That region identifies the panel mapping. On 2026-10-29 a 22:42 ISO was packed from a 16:29 loader that still had `phys_addr="0x1fd0000"` and `size="0x1000"`. The panel showed the stub's mode line and the menu stayed off.
 
-`just iso` relinks `swift-mt7921` and decompresses the host firmware on that rebuild. `support/mt7921.bin` overrides the primary RAM image. An unchanged framebuffer line does not prove those blobs. Compare the linked blobs, and take the recipe's own status line, including past `Wrote ISO`.
+`just make-lerux-iso` relinks `swift-mt7921` and decompresses the host firmware on that rebuild. `support/mt7921.bin` overrides the primary RAM image. An unchanged framebuffer line does not prove those blobs. Compare the linked blobs, and take the recipe's own status line, including past `Wrote ISO`.
 
 The address is 2 MiB-aligned. `0x7e9000` is 2025 pages of 4 KiB and is not a multiple of 2 MiB. The template sets `page_size="0x1000"` so Microkit keeps 4 KiB pages. A Microkit assemble that accepts this region does not prove seL4 has a device untyped for it. The menu on the metal panel is the proof.
 
@@ -47,7 +47,7 @@ When that `system.system` is the one inside the ISO and the panel still shows on
 
 ## What QEMU does not prove
 
-OVMF's GOP buffer on `x86_64_generic` is below 4 GiB. The recorded address is `0x80000000`. `Got framebuffer info in multiboot2` and `lerux: Hello from Rust on seL4 Microkit!` prove the tag and COM1. They do not prove the high paint or the Swift panel. The metal boot of `just iso` is that proof. Read `build/smoke-logs/x86_64_generic.serial.log` for the QEMU half.
+OVMF's GOP buffer on `x86_64_generic` is below 4 GiB. The recorded address is `0x80000000`. `Got framebuffer info in multiboot2` and `lerux: Hello from Rust on seL4 Microkit!` prove the tag and COM1. They do not prove the high paint or the Swift panel. The metal boot of `just make-lerux-iso` is that proof. Read `build/smoke-logs/x86_64_generic.serial.log` for the QEMU half.
 
 ## Header, FAT, and the 1 MiB modules
 

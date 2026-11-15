@@ -17,8 +17,7 @@
 //! `wait`. The shell owns the address and the ping. Received Ethernet frames
 //! are enqueued on the standard receive queue, and transmit frames are
 //! dequeued from the standard transmit queue.
-//! Rows 51 to 65 are the register, ring, descriptor, and command dump that
-//! `dump` paints once the boot attempt has returned, on success or failure.
+//! The register dump that used to occupy rows 51 to 65 is not painted.
 
 #![cfg_attr(not(test), no_std)]
 #![cfg_attr(not(test), no_main)]
@@ -28,8 +27,6 @@ mod ether;
 
 #[cfg(not(test))]
 mod device;
-#[cfg(not(test))]
-mod dump;
 #[cfg(not(test))]
 mod join;
 
@@ -47,9 +44,7 @@ use lerux_desk::FRAMEBUFFER_BYTES;
 use lerux_sddf::{net_driver_config_t, net_image::net_config_from_bytes, SDDF_NET_MAGIC};
 #[cfg(not(test))]
 use lerux_swift::{
-    bar_line, class_code,
-    dump::PANEL_COLS,
-    format_report, load_header, memory_bar,
+    bar_line, class_code, format_report, load_header, memory_bar,
     mt7921::{read_survey_mark, survey_requested, write_slot_line, Sem, Stage},
     paint_row, read_key, vendor_device, working_line, WaitMark, WifiReport, MT7921_BAR, MT7921_BDF,
     MT7921_IDS,
@@ -136,7 +131,6 @@ fn init() -> HandlerImpl {
     let mac = Mac::boot(regs, dma, &images);
     beat_disarm();
     paint_stage(mac.stage());
-    dump::paint_mac_dump(mac.before(), mac.after());
     HandlerImpl {
         mac: Some(mac),
         net,
@@ -289,15 +283,6 @@ fn paint_at(row: usize, text: &[u8]) {
     line[..n].copy_from_slice(&text[..n]);
     let width = n.max(24);
     paint_line(row, &line[..width]);
-}
-
-/// A dump row, padded to the panel width so a repaint erases the old row.
-#[cfg(not(test))]
-pub(crate) fn paint_full(row: usize, text: &[u8]) {
-    let mut line = [b' '; PANEL_COLS];
-    let n = text.len().min(PANEL_COLS);
-    line[..n].copy_from_slice(&text[..n]);
-    paint_line(row, &line);
 }
 
 #[cfg(not(test))]

@@ -1,5 +1,5 @@
 use std::{
-    fs,
+    env, fs,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -168,6 +168,13 @@ fn pd_cargo_command(
 
     let include = format!("{sdk}/board/{microkit_board}/{config}/include");
     cmd.env("SEL4_INCLUDE_DIRS", include);
+    // `just make-lerux-iso` sets this from `git describe --always --dirty`.
+    // The console-driver build script reruns when it changes.
+    if let Ok(describe) = env::var("LERUX_GIT_DESCRIBE")
+        && !describe.is_empty()
+    {
+        cmd.env("LERUX_GIT_DESCRIBE", describe);
+    }
     cmd.env("RUST_TARGET_PATH", root.join("support/targets"));
     cmd.env("RUSTC_BOOTSTRAP", "1");
     cmd
@@ -297,9 +304,9 @@ pub fn test_all(root: &Path, build_dir: &str, config: &str) -> Result<()> {
 
 pub(crate) fn iso_recipe(board: &str) -> String {
     if board == "swift_sfx14_41g" {
-        "just iso".to_string()
+        "just make-lerux-iso".to_string()
     } else {
-        format!("just iso {board}")
+        format!("just make-lerux-iso {board}")
     }
 }
 
@@ -364,13 +371,16 @@ mod tests {
     fn hardware_ready_message_points_at_z97_docs() {
         let msg = hardware_ready_message("pc_z97_d3h", "x86_64");
         assert!(msg.contains("lerux deploy --board pc_z97_d3h"), "{msg}");
-        assert!(msg.contains("just iso"), "{msg}");
+        assert!(msg.contains("just make-lerux-iso"), "{msg}");
         assert!(msg.contains("gigabyte-z97-d3h-install-path"), "{msg}");
         assert!(!msg.contains("deploy-rpi4"), "{msg}");
         let rpi = hardware_ready_message("rpi4b_4gb_workstation", "aarch64");
-        assert!(!rpi.contains("just iso"), "{rpi}");
+        assert!(!rpi.contains("just make-lerux-iso"), "{rpi}");
         let inspiron = hardware_ready_message("inspiron_n5010", "x86_64");
-        assert!(inspiron.contains("just iso inspiron_n5010"), "{inspiron}");
+        assert!(
+            inspiron.contains("just make-lerux-iso inspiron_n5010"),
+            "{inspiron}"
+        );
         assert!(
             inspiron.contains("dell-inspiron-n5010-install-path"),
             "{inspiron}"

@@ -11,15 +11,15 @@ Last updated: 2026-11-09
 ## Global constraints
 
 - Leave the firmware download order in `userspace/pds/swift-mt7921/src/device.rs` as it is until a boot shows a word that names a later step. A readback is a change of information, not a change of sequence.
-- The panel is 120 columns by 67 rows. The console owns rows 0 to 24. The probe owns rows 25 to 30. Rows 31 to 65 are the dump, laid out by `lerux_swift::dump`, and row 66 is the `END OF OUTPUT` marker, so a photograph that shows it shows the whole panel. A row is at most 120 bytes. A new value is a byte formatter in `lerux-swift` with a host test of the exact bytes.
+- The panel is 120 columns. The console owns rows 0 to 24. The probe owns rows 25 to 30. The image does not paint rows 31 to 66. Those rows were the photograph dump and the end marker. `lerux_swift::dump` still lays them out for a host test. Do not paint them. A new value on a row that is still painted is a byte formatter in `lerux-swift` with a host test of the exact bytes.
 - A photograph of the panel is the record of a boot. Every number on it is in hexadecimal with no `0x`. Keep the row and column of each field stable between ISOs, so two photographs can be compared.
-- `just check`, `just check-pd`, and `just iso` are sequential. `just iso` is the image that goes on the stick, and it rebuilds the Swift protection domains before packing.
+- `just check`, `just check-pd`, and `just make-lerux-iso` are sequential. `just make-lerux-iso` is the image that goes on the stick, and it rebuilds the Swift protection domains before packing.
 
 ## Phase 1 — Full-panel dump and root-port readback
 
 **Exit:** One photograph of the Swift panel holds the MT7921 configuration space, the Wi-Fi root-port configuration space, the NVMe root-port configuration space, the IOMMU registers, the WFDMA register block before and after the boot attempt, the six ring blocks, the prefetch table, the posted descriptor, the semaphore command, and the first receive descriptor.
 
-Done. `swift-pci-probe` finds the bus 0 bridge whose secondary bus is 3, sets memory space and bus master on it the way Linux `pci_enable_bridge` does, and paints the word before the write beside the word after it on row 31. The three 256-byte configuration spaces are rows 32 to 49. The IOMMU registers are row 50. `swift-mt7921` reads `DUMP_REGS` just before the patch semaphore and again, with the rings, the prefetch table, and the DMA words, when `start` returns, then paints rows 51 to 65. Row 66 is the end marker. The row map is in [swift-boot-screen.md](swift-boot-screen.md#the-dump-rows-31-to-66).
+Done for the 8 November photograph. `swift-pci-probe` still finds the bus 0 bridge whose secondary bus is 3 and sets memory space and bus master on it the way Linux `pci_enable_bridge` does. It still clears ASPM. The current image does not paint row 31, the configuration spaces, the IOMMU row, rows 51 to 65, or the end marker. `swift-mt7921` still reads `DUMP_REGS` just before the patch semaphore and again when `start` returns. The old row map is in [swift-boot-screen.md](swift-boot-screen.md#the-dump-rows-31-to-66).
 
 The first photograph (8 November 2026) read `rp 00:02.2 sec 03 cmd 0007>0007`: the root port already forwarded, so suspect 1 is eliminated. The same boot showed `nvme: missing` and `bt: port 3 desc`, so the disk and the USB controller both fetch from the reserved window and the Wi-Fi card is the odd one out of three. The card read `lnk 0142 pm 0008`: D0, with ASPM L1 and clock power management on. Both root ports read `lnk 0042`. The upload was 1024 pixels across, so rows 32 to 66 were not legible and the Phase 2 comparison waits for a closer photograph.
 

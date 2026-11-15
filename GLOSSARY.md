@@ -20,7 +20,7 @@ _Avoid_: [q35](#q35), [Swift X](#swift-x)
 
 ### Inspiron N5010
 
-The Dell Inspiron N5010 probed on 2026-11-14. Arrandale Core i5-460M and an Intel HM57 chipset. The record is [support/arch-probe/machines/inspiron-n5010.md](support/arch-probe/machines/inspiron-n5010.md). The [Microkit](#microkit) board name is `inspiron_n5010`. `just iso inspiron_n5010` packs the image. The console on that boot was the [VGA text page](#vga-text-page). The keyboard is the [i8042](#i8042). The probe recorded no [GOP](#gop) framebuffer and no serial port. The AHCI disk is not mapped.
+The Dell Inspiron N5010 probed on 2026-11-14. Arrandale Core i5-460M and an Intel HM57 chipset. The record is [support/arch-probe/machines/inspiron-n5010.md](support/arch-probe/machines/inspiron-n5010.md). The [Microkit](#microkit) board name is `inspiron_n5010`. `just make-lerux-iso inspiron_n5010` packs the image. The console on that boot was the [VGA text page](#vga-text-page). The keyboard is the [i8042](#i8042). The probe recorded no [GOP](#gop) framebuffer and no serial port. The AHCI disk is not mapped.
 
 _Avoid_: [q35](#q35), [Z97 desk](#z97-desk), [Swift X](#swift-x)
 
@@ -356,7 +356,7 @@ The [firmware](#firmware) interface the [Swift X](#swift-x) and the [Z97 desk](#
 
 ### ISO
 
-The image `just iso` writes for the [Swift X](#swift-x). The file is `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`. The recipe's own status line includes `Wrote ISO`. [GRUB](#grub) is the loader on that image. The boot entry has to say [UEFI](#uefi).
+The image `just make-lerux-iso` writes for the [Swift X](#swift-x). The file is `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`. The recipe's own status line includes `Wrote ISO`. [GRUB](#grub) is the loader on that image. The boot entry has to say [UEFI](#uefi).
 
 _Avoid_: [OVMF](#ovmf). That is the [firmware](#firmware) QEMU uses for an x86 [ISO](#iso). This file is the [Swift X](#swift-x) image.
 
@@ -408,7 +408,7 @@ The Multiboot 2 trampoline linked at 32 MiB. [GRUB](#grub) loads it under [UEFI]
 
 ### Swift X
 
-The Acer [Swift X](#swift-x) SFX14-41G, Ryzen 5 5500U. The [Microkit](#microkit) board name is `swift_sfx14_41g`. There is no [COM1](#com1), no serial [driver](#driver), and no QEMU model. The keyboard is the built-in [i8042](#i8042). The panel is the [GOP](#gop) buffer of the [Swift Radeon](#swift-radeon). `just iso` packs this image.
+The Acer [Swift X](#swift-x) SFX14-41G, Ryzen 5 5500U. The [Microkit](#microkit) board name is `swift_sfx14_41g`. There is no [COM1](#com1), no serial [driver](#driver), and no QEMU model. The keyboard is the built-in [i8042](#i8042). The panel is the [GOP](#gop) buffer of the [Swift Radeon](#swift-radeon). `just make-lerux-iso` packs this image.
 
 _Avoid_: [Z97 desk](#z97-desk), [q35](#q35)
 

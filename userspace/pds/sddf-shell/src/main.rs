@@ -281,7 +281,7 @@ use lerux_sddf::{
 };
 
 #[cfg(feature = "board-swift_sfx14_41g")]
-use lerux_swift::{format_survey_report, write_survey, SURVEY_REPORT_MAX};
+use lerux_swift::{format_survey_report, is_setup_wifi, write_survey, SURVEY_REPORT_MAX};
 
 const CONFIG: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/config.bin"));
 #[cfg(not(feature = "console-out"))]
@@ -844,7 +844,7 @@ fn read_line(buf: &mut [u8]) -> usize {
 
 fn dispatch(line: &[u8]) {
     let Some((cmd, rest)) = split_first(line) else {
-        say(b"err\n");
+        say(b"err empty\n");
         return;
     };
     if dispatch_file(cmd, rest) {
@@ -870,7 +870,33 @@ fn dispatch(line: &[u8]) {
     if dispatch_swift(cmd, rest) {
         return;
     }
-    say(b"err\n");
+    say_named_err(cmd, b"unknown");
+}
+
+/// `name err reason`, so a failed line names the command and why it failed.
+fn say_named_err(cmd: &[u8], reason: &[u8]) {
+    let mut out = [0u8; 96];
+    let mut n = 0;
+    for &byte in cmd {
+        if n + 1 >= 64 {
+            break;
+        }
+        out[n] = if byte.is_ascii_graphic() { byte } else { b'?' };
+        n += 1;
+    }
+    for &byte in b" err " {
+        out[n] = byte;
+        n += 1;
+    }
+    for &byte in reason {
+        if n + 1 >= out.len() {
+            break;
+        }
+        out[n] = byte;
+        n += 1;
+    }
+    out[n] = b'\n';
+    say(&out[..=n]);
 }
 
 fn dispatch_file(cmd: &[u8], rest: &[u8]) -> bool {
@@ -889,7 +915,7 @@ fn dispatch_file(cmd: &[u8], rest: &[u8]) -> bool {
 
 #[cfg(feature = "board-swift_sfx14_41g")]
 fn dispatch_swift(cmd: &[u8], rest: &[u8]) -> bool {
-    if cmd != b"setup-wifi" {
+    if !is_setup_wifi(cmd) {
         return false;
     }
     cmd_setup_wifi(rest);
@@ -901,10 +927,16 @@ fn dispatch_swift(cmd: &[u8], rest: &[u8]) -> bool {
 /// The radio is priority 4 and this shell is priority 1, so the survey
 /// finishes before `notify` returns. A stored name is `N name`. Zero names
 /// are the survey mark. A survey the radio did not answer is `wifi err`.
+/// Extra words and a page the shell cannot mark are `setup-wifi err` plus
+/// the reason.
 #[cfg(feature = "board-swift_sfx14_41g")]
 fn cmd_setup_wifi(rest: &[u8]) {
-    if !rest.is_empty() || !write_survey(key_page()) {
-        say(b"wifi err\n");
+    if !rest.is_empty() {
+        say(b"setup-wifi err args\n");
+        return;
+    }
+    if !write_survey(key_page()) {
+        say(b"setup-wifi err page\n");
         return;
     }
     SWIFT_MT7921.notify();

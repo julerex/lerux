@@ -1,7 +1,7 @@
 #!/bin/bash
 # Write the lerux ISO onto one USB stick.
 #
-# The default image is the Acer Swift X ISO from `just iso`:
+# The default image is the Acer Swift X ISO from `just make-lerux-iso`:
 # build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso
 #
 # With no device, the command lists USB sticks and asks for a number. Passing
@@ -21,7 +21,7 @@ usage() {
   echo "usage: just burn-lerux-iso" >&2
   echo "       just burn-lerux-iso /dev/sdX" >&2
   echo "With no device, USB sticks are listed and the stick you number is erased." >&2
-  echo "The image is build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso from just iso." >&2
+  echo "The image is build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso from just make-lerux-iso." >&2
   echo "That is the Swift image. Z97 and Inspiron images are not this default." >&2
 }
 
@@ -302,7 +302,7 @@ unmount_disk() {
 }
 
 require_image() {
-  [[ -f "$image" ]] || die "image not found: $image (run: just iso)"
+  [[ -f "$image" ]] || die "image not found: $image (run: just make-lerux-iso)"
   [[ -s "$image" ]] || die "image is empty: $image"
 }
 

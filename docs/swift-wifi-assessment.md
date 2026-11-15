@@ -36,7 +36,7 @@ A live USB on the Swift gives, in a single boot, more than the last ten ISO cycl
 - `dmesg | grep -E 'mt7921|AMD-Vi'`: confirms this exact unit downloads firmware under Linux at all (`ASIC revision: 7961…`, `WM Firmware Version`), and whether the IOMMU is enabled.
 - `trace-cmd record -e mt76:reg_rr -e mt76:reg_wr modprobe mt7921e`. `mt76` has `reg_rr` and `reg_wr` tracepoints in `mmio.c`, so this yields the exact register-level sequence and values of a successful bring-up on this hardware, in BAR offsets. Diffing that trace against the lerux sequence is the fastest way to find the difference.
 
-Separately, raise the information per boot: the panel can hold far more than one line. Paint the whole WFDMA block, the descriptor, the endpoint and root-port configuration headers, and the IOMMU registers as a hex block and photograph it, instead of adding one readback per pull request. Rows 31 to 66 of the panel now do this; the layout is in [swift-boot-screen.md](swift-boot-screen.md#the-dump-rows-31-to-66).
+Separately, raise the information per boot: the panel can hold far more than one line. The 8 November image painted the WFDMA block, the descriptor, the endpoint and root-port configuration headers, and the IOMMU registers as a hex block. The current image does not paint rows 31 to 66. The old layout is in [swift-boot-screen.md](swift-boot-screen.md#the-dump-rows-31-to-66).
 
 ## The bigger picture: `ping ok` is not "apps on the internet"
 

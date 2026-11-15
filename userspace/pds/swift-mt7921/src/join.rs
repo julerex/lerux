@@ -5,7 +5,7 @@
 //! association stays up.
 
 use lerux_swift::{
-    mt7921::{frame_off, write_survey_list, write_survey_mark, Stage, SCAN_DONE, SCAN_MAX},
+    mt7921::{frame_off, read_scan_done, write_survey_list, write_survey_mark, Stage, SCAN_MAX},
     wpa::{
         assoc_ok, auth_ok, beacon_ssid, ccmp_decrypt, derive_ptk, eapol_in_msdu, match_beacon,
         message1, message2, message3, message4, pmk, write_assoc, write_auth, write_qos_data,
@@ -78,7 +78,7 @@ impl Mac {
                 return Some(ap);
             }
             if let Some(n) = self.poll_mcu()
-                && scan_done(Mac::rx_bytes(n))
+                && read_scan_done(Mac::rx_bytes(n)).is_some()
             {
                 return None;
             }
@@ -92,6 +92,7 @@ impl Mac {
     /// A scan that does not start leaves the request tag, so the shell reports
     /// `wifi err` instead of an empty list. The mark under the list counts
     /// data buffers, names kept, and whether the firmware signaled scan-done.
+    /// `ch` and `bcn` are that event's completed channels and beacon count.
     pub(crate) fn survey(&mut self, page: &mut [u8]) {
         if !self.start_scan(&[]) {
             return;
@@ -102,6 +103,7 @@ impl Mac {
         let mut rx = 0u32;
         let mut ok = 0u32;
         let mut done = false;
+        let (mut channels, mut beacons) = (0u8, 0u32);
         let mut fc = None;
         let mut frame = [0u8; 1600];
         for _ in 0..scan_budget() {
@@ -118,9 +120,10 @@ impl Mac {
                 }
             }
             if let Some(n) = self.poll_mcu()
-                && scan_done(Mac::rx_bytes(n))
+                && let Some(report) = read_scan_done(Mac::rx_bytes(n))
             {
                 done = true;
+                (channels, beacons) = (report.channels, report.beacons);
                 break;
             }
             core::hint::spin_loop();
@@ -131,7 +134,7 @@ impl Mac {
             refs[i] = &names[i][..n];
         }
         let _ = write_survey_list(page, &refs[..count]);
-        let _ = write_survey_mark(page, rx, ok, done, fc);
+        let _ = write_survey_mark(page, rx, ok, done, fc, channels, beacons);
     }
 
     fn open_auth(&mut self, ap: &FoundAp) -> bool {
@@ -327,17 +330,6 @@ fn remember(names: &mut [[u8; 32]], lens: &mut [u8], count: usize, ssid: &[u8]) 
     names[count][..ssid.len()].copy_from_slice(ssid);
     lens[count] = u8::try_from(ssid.len()).expect("ssid length");
     count + 1
-}
-
-fn scan_done(bytes: &[u8]) -> bool {
-    let Some(word) = bytes.get(..4) else {
-        return false;
-    };
-    let Ok(word) = word.try_into() else {
-        return false;
-    };
-    let kind = u32::from_le_bytes(word) >> 27;
-    kind == 7 && bytes.get(28) == Some(&SCAN_DONE)
 }
 
 fn copy_frame(n: usize, out: &mut [u8]) -> Option<usize> {

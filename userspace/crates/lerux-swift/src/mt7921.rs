@@ -702,6 +702,30 @@ pub const PATCH_NOT_DL: u8 = 2;
 pub const PATCH_REL: u8 = 3;
 pub const SCAN_DONE: u8 = 0x0d;
 
+/// Completed channels and `beacon_scan_num` from `mt76_connac_hw_scan_done`.
+pub struct ScanDone {
+    pub channels: u8,
+    pub beacons: u32,
+}
+
+/// `MCU_EVENT_SCAN_DONE`. The payload follows the connac2 RXD.
+///
+/// A short event still counts: the caller has to stop, and missing counts stay 0.
+#[must_use]
+pub fn read_scan_done(buf: &[u8]) -> Option<ScanDone> {
+    let word = buf.get(..4)?;
+    let kind = u32::from_le_bytes(word.try_into().ok()?) >> 27;
+    if kind != 7 || buf.get(28) != Some(&SCAN_DONE) {
+        return None;
+    }
+    let channels = buf.get(RXD_LEN + 4).copied().unwrap_or(0);
+    let beacons = buf
+        .get(RXD_LEN + 8..RXD_LEN + 12)
+        .and_then(|bytes| bytes.try_into().ok())
+        .map_or(0, u32::from_le_bytes);
+    Some(ScanDone { channels, beacons })
+}
+
 const SCAN_SSID: usize = 36;
 const SCAN_CH: usize = 2;
 
@@ -773,6 +797,42 @@ pub fn write_scan(out: &mut [u8], ssid: &[u8], seq: u8) -> bool {
         out[ext_flag] = 1;
     }
     true
+}
+
+/// Bytes in [`write_channel_domain`]. One header, then one record per scan channel.
+pub const CHANNEL_DOMAIN_LEN: usize = 12 + SCAN_CHANNELS.len() * 8;
+
+const _: () = assert!(SCAN_CHANNELS.len() <= 32);
+
+/// `mt76_connac_mcu_set_channel_domain` for the channels [`write_scan`] names.
+///
+/// `alpha2` is `00`, the world domain Linux keeps until a country hint.
+/// 2.4 GHz is 20/40 MHz. 5 GHz is 20/40/80/160 MHz. Channel flags stay 0.
+#[must_use]
+pub fn write_channel_domain(out: &mut [u8]) -> Option<usize> {
+    let n2 = SCAN_CHANNELS.iter().filter(|(band, _)| *band == 1).count();
+    let n5 = SCAN_CHANNELS.iter().filter(|(band, _)| *band == 2).count();
+    if n2 + n5 != SCAN_CHANNELS.len() || out.len() < CHANNEL_DOMAIN_LEN {
+        return None;
+    }
+    out[..CHANNEL_DOMAIN_LEN].fill(0);
+    out[0] = b'0';
+    out[1] = b'0';
+    out[5] = 3;
+    out[6] = 3;
+    out[8] = fit_u8(n2);
+    out[9] = fit_u8(n5);
+    let mut at = 12;
+    for band in [1u8, 2] {
+        for (entry_band, channel) in SCAN_CHANNELS {
+            if *entry_band != band {
+                continue;
+            }
+            out[at..at + 2].copy_from_slice(&u16::from(*channel).to_le_bytes());
+            at += 8;
+        }
+    }
+    Some(CHANNEL_DOMAIN_LEN)
 }
 
 /// `mt76_connac2_mac_write_txwi` for one 802.11 frame on the ALTX queue.
@@ -923,7 +983,7 @@ const PAGE_LIST: u8 = 3;
 const SURVEY_STRIDE: usize = 33;
 /// Byte after the name list. The length byte and the mark text follow.
 const SURVEY_MARK: usize = 4 + SCAN_MAX * SURVEY_STRIDE;
-const SURVEY_MARK_MAX: usize = 48;
+const SURVEY_MARK_MAX: usize = 64;
 
 const _: () = assert!(SURVEY_MARK + 1 + SURVEY_MARK_MAX <= 0x1000);
 const _: () = assert!(SURVEY_REPORT_MAX > SURVEY_MARK_MAX);
@@ -1001,9 +1061,19 @@ pub fn read_survey_ssid(page: &[u8], index: usize) -> Option<&[u8]> {
 ///
 /// `fc` is present only when buffers arrived and no name was kept. A copied
 /// frame contributes its control byte. `--` means `frame_off` rejected every buffer.
+/// `ch` and `bcn` follow a scan-done event: channels the firmware finished,
+/// and `beacon_scan_num`.
 #[must_use]
-pub fn format_survey_mark(out: &mut [u8], rx: u32, ok: u32, done: bool, fc: Option<u8>) -> usize {
-    format_survey_mark_at(out, rx, ok, done, fc).unwrap_or(0)
+pub fn format_survey_mark(
+    out: &mut [u8],
+    rx: u32,
+    ok: u32,
+    done: bool,
+    fc: Option<u8>,
+    channels: u8,
+    beacons: u32,
+) -> usize {
+    format_survey_mark_at(out, rx, ok, done, fc, channels, beacons).unwrap_or(0)
 }
 
 fn format_survey_mark_at(
@@ -1012,6 +1082,8 @@ fn format_survey_mark_at(
     ok: u32,
     done: bool,
     fc: Option<u8>,
+    channels: u8,
+    beacons: u32,
 ) -> Option<usize> {
     let mut n = 0;
     n = write_bytes(out, n, b"rx ")?;
@@ -1027,6 +1099,12 @@ fn format_survey_mark_at(
             None => write_bytes(out, n, b"--")?,
         };
     }
+    if done {
+        n = write_bytes(out, n, b" ch ")?;
+        n = write_dec(out, n, u32::from(channels))?;
+        n = write_bytes(out, n, b" bcn ")?;
+        n = write_dec(out, n, beacons)?;
+    }
     Some(n)
 }
 
@@ -1035,9 +1113,17 @@ fn hex_byte(byte: u8) -> [u8; 2] {
 }
 
 /// Store the mark after the name list. The shell prints these bytes.
-pub fn write_survey_mark(page: &mut [u8], rx: u32, ok: u32, done: bool, fc: Option<u8>) -> bool {
+pub fn write_survey_mark(
+    page: &mut [u8],
+    rx: u32,
+    ok: u32,
+    done: bool,
+    fc: Option<u8>,
+    channels: u8,
+    beacons: u32,
+) -> bool {
     let mut line = [0u8; SURVEY_MARK_MAX];
-    let n = format_survey_mark(&mut line, rx, ok, done, fc);
+    let n = format_survey_mark(&mut line, rx, ok, done, fc, channels, beacons);
     if n == 0 || n > SURVEY_MARK_MAX || page.len() < SURVEY_MARK + 1 + n {
         return false;
     }
@@ -1399,6 +1485,49 @@ mod tests {
     }
 
     #[test]
+    fn channel_domain_lists_the_scan_channels() {
+        let mut buf = [0u8; CHANNEL_DOMAIN_LEN];
+        let n = write_channel_domain(&mut buf).unwrap();
+        let n2 = SCAN_CHANNELS.iter().filter(|(band, _)| *band == 1).count();
+        let n5 = SCAN_CHANNELS.iter().filter(|(band, _)| *band == 2).count();
+        assert_eq!(n, CHANNEL_DOMAIN_LEN);
+        assert_eq!(&buf[..2], b"00");
+        assert_eq!(buf[5], 3);
+        assert_eq!(buf[6], 3);
+        assert_eq!(buf[8], u8::try_from(n2).unwrap());
+        assert_eq!(buf[9], u8::try_from(n5).unwrap());
+        assert_eq!(
+            u16::from_le_bytes([buf[12], buf[13]]),
+            u16::from(SCAN_CHANNELS[0].1)
+        );
+        let at = 12 + n2 * 8;
+        assert_eq!(
+            u16::from_le_bytes([buf[at], buf[at + 1]]),
+            u16::from(SCAN_CHANNELS[n2].1)
+        );
+        assert!(write_channel_domain(&mut [0u8; 8]).is_none());
+    }
+
+    #[test]
+    fn scan_done_reads_channels_and_beacons() {
+        let mut buf = [0u8; RXD_LEN + 12];
+        assert!(read_scan_done(&buf).is_none());
+        buf[..4].copy_from_slice(&(7u32 << 27).to_le_bytes());
+        buf[28] = SCAN_DONE;
+        buf[RXD_LEN + 4] = 21;
+        buf[RXD_LEN + 8..RXD_LEN + 12].copy_from_slice(&4u32.to_le_bytes());
+        let done = read_scan_done(&buf).unwrap();
+        assert_eq!(done.channels, 21);
+        assert_eq!(done.beacons, 4);
+        buf[28] = 0;
+        assert!(read_scan_done(&buf).is_none());
+        buf[28] = SCAN_DONE;
+        let short = read_scan_done(&buf[..32]).unwrap();
+        assert_eq!(short.channels, 0);
+        assert_eq!(short.beacons, 0);
+    }
+
+    #[test]
     fn survey_page_lists_names_in_byte_order() {
         let mut page = [0u8; 0x1000];
         assert!(write_survey(&mut page));
@@ -1424,25 +1553,27 @@ mod tests {
     #[test]
     fn survey_mark_records_an_empty_scan() {
         let mut out = [0u8; SURVEY_MARK_MAX];
-        let n = format_survey_mark(&mut out, 0, 0, true, None);
-        assert_eq!(&out[..n], b"rx 0 ok 0 done 1");
-        let n = format_survey_mark(&mut out, 4, 0, true, Some(0x08));
-        assert_eq!(&out[..n], b"rx 4 ok 0 done 1 fc 08");
-        let n = format_survey_mark(&mut out, 4, 0, false, None);
+        let n = format_survey_mark(&mut out, 0, 0, true, None, 0, 0);
+        assert_eq!(&out[..n], b"rx 0 ok 0 done 1 ch 0 bcn 0");
+        let n = format_survey_mark(&mut out, 4, 0, true, Some(0x08), 21, 4);
+        assert_eq!(&out[..n], b"rx 4 ok 0 done 1 fc 08 ch 21 bcn 4");
+        let n = format_survey_mark(&mut out, 4, 0, false, None, 21, 4);
         assert_eq!(&out[..n], b"rx 4 ok 0 done 0 fc --");
-        let n = format_survey_mark(&mut out, 2, 2, true, Some(0x80));
-        assert_eq!(&out[..n], b"rx 2 ok 2 done 1");
-        let n = format_survey_mark(&mut out, u32::MAX, u32::MAX, false, Some(0xff));
+        let n = format_survey_mark(&mut out, 2, 2, true, Some(0x80), 13, 2);
+        assert_eq!(&out[..n], b"rx 2 ok 2 done 1 ch 13 bcn 2");
+        let n = format_survey_mark(&mut out, u32::MAX, u32::MAX, false, Some(0xff), 0, 0);
+        assert!(n > 0 && n <= SURVEY_MARK_MAX);
+        let n = format_survey_mark(&mut out, u32::MAX, 0, true, Some(0xff), 255, u32::MAX);
         assert!(n > 0 && n <= SURVEY_MARK_MAX);
         let mut page = [0u8; 0x1000];
         assert!(write_survey(&mut page));
         assert!(read_survey_mark(&page).is_none());
         assert!(write_survey_list(&mut page, &[]));
-        assert!(write_survey_mark(&mut page, 4, 0, true, Some(0x80)));
+        assert!(write_survey_mark(&mut page, 4, 0, true, Some(0x80), 21, 4));
         assert_eq!(read_survey_count(&page), Some(0));
         assert_eq!(
             read_survey_mark(&page),
-            Some(&b"rx 4 ok 0 done 1 fc 80"[..])
+            Some(&b"rx 4 ok 0 done 1 fc 80 ch 21 bcn 4"[..])
         );
     }
 
@@ -1459,7 +1590,7 @@ mod tests {
     fn survey_report_lists_names_in_byte_order() {
         let mut page = [0u8; 0x1000];
         assert!(write_survey_list(&mut page, &[b"zeta", b"alpha", b"2"]));
-        assert!(write_survey_mark(&mut page, 3, 3, true, None));
+        assert!(write_survey_mark(&mut page, 3, 3, true, None, 21, 3));
         let mut out = [0u8; SURVEY_REPORT_MAX];
         let n = format_survey_report(&page, &mut out).unwrap();
         assert_eq!(&out[..n], b"1 2\n2 alpha\n3 zeta\n");
@@ -1473,13 +1604,13 @@ mod tests {
         assert!(format_survey_report(&page, &mut out).is_none());
         assert!(write_survey_list(&mut page, &[]));
         assert!(format_survey_report(&page, &mut out).is_none());
-        assert!(write_survey_mark(&mut page, 0, 0, true, None));
+        assert!(write_survey_mark(&mut page, 0, 0, true, None, 0, 0));
         let n = format_survey_report(&page, &mut out).unwrap();
-        assert_eq!(&out[..n], b"rx 0 ok 0 done 1\n");
-        assert!(write_survey_mark(&mut page, 4, 0, true, Some(0x80)));
+        assert_eq!(&out[..n], b"rx 0 ok 0 done 1 ch 0 bcn 0\n");
+        assert!(write_survey_mark(&mut page, 4, 0, true, Some(0x80), 21, 4));
         let n = format_survey_report(&page, &mut out).unwrap();
-        assert_eq!(&out[..n], b"rx 4 ok 0 done 1 fc 80\n");
-        assert!(write_survey_mark(&mut page, 4, 0, false, None));
+        assert_eq!(&out[..n], b"rx 4 ok 0 done 1 fc 80 ch 21 bcn 4\n");
+        assert!(write_survey_mark(&mut page, 4, 0, false, None, 0, 0));
         let n = format_survey_report(&page, &mut out).unwrap();
         assert_eq!(&out[..n], b"rx 4 ok 0 done 0 fc --\n");
     }

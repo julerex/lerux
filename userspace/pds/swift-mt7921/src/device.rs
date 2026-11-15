@@ -12,19 +12,20 @@ use lerux_swift::{
     mt7921::{
         ce_cmd, desc_ctrl, desc_len, download_cmd, efuse_mac, ext_cmd, ext_query, firmware_kind,
         map_reg, patch_regions, patch_status, prefetch, ram_regions, remap_l1, ring_regs,
-        write_chan, write_eeprom_mode, write_efuse_read, write_mac_enable, write_mcu_txd,
-        write_rts, write_scan, write_txwi, wtbl_word, FirmwareKind, Map, Region, Sem, Stage,
-        TxStop, CONN_ON_LPCTL, CONN_ON_MISC, DMASHDL_BYPASS, DMASHDL_ENABLE, DMASHDL_SW, DMA_DONE,
-        DUMMY_CR, DUMP_PREFETCH, DUMP_REGS, DUMP_RINGS, FW_N9_RDY, FW_SCATTER, FW_START, GLO_CFG,
-        GLO_CFG_CHAIN, GLO_CFG_CLK, GLO_CFG_EXT0, GLO_CFG_LE, GLO_CFG_OMIT_RX,
-        GLO_CFG_OMIT_RX_PFET, GLO_CFG_OMIT_TX, GLO_CFG_RX_BUSY, GLO_CFG_RX_EN, GLO_CFG_TX_BUSY,
-        GLO_CFG_TX_EN, GLO_CFG_TX_WB, HIF_REMAP_L1, HOST_CLR_OWN, HOST_INT_ENA, HOST_OWN_SYNC,
-        HOST_SET_OWN, HW_CHIPID, HW_REV, IRQ_MASK, L0S_DIS, LAST_SEC0, LPCR_DRV_OWN, LPCR_FW_OWN,
-        MCU2HOST, MCU_TXD_LEN, MCU_WAKE, MDP_DAMSDU, MDP_DCR0, MDP_DCR1, MDP_HDR_TRANS,
-        NEED_REINIT, PATCH_FINISH, PATCH_IS_DL, PATCH_NOT_DL, PATCH_REL, PATCH_SEM, PCIE_MAC_INT,
-        PCIE_MAC_PM, PRI_DLY, RST_DMASHDL, RST_DTX_PTR, RST_LOGIC, RXD_LEN, RX_DATA_BASE,
-        RX_EVENT_BASE, RX_WA_BASE, SCAN_REQ_LEN, SWDEF_MODE, TOP_LPCR, TXD_LEN, TXP_LEN,
-        TX_RING_BASE, WFDMA_RST, WFSYS_INIT_DONE, WFSYS_RST, WFSYS_RST_B, WTBL_BUSY, WTBL_UPDATE,
+        write_chan, write_channel_domain, write_eeprom_mode, write_efuse_read, write_mac_enable,
+        write_mcu_txd, write_rts, write_scan, write_txwi, wtbl_word, FirmwareKind, Map, Region,
+        Sem, Stage, TxStop, CHANNEL_DOMAIN_LEN, CONN_ON_LPCTL, CONN_ON_MISC, DMASHDL_BYPASS,
+        DMASHDL_ENABLE, DMASHDL_SW, DMA_DONE, DUMMY_CR, DUMP_PREFETCH, DUMP_REGS, DUMP_RINGS,
+        FW_N9_RDY, FW_SCATTER, FW_START, GLO_CFG, GLO_CFG_CHAIN, GLO_CFG_CLK, GLO_CFG_EXT0,
+        GLO_CFG_LE, GLO_CFG_OMIT_RX, GLO_CFG_OMIT_RX_PFET, GLO_CFG_OMIT_TX, GLO_CFG_RX_BUSY,
+        GLO_CFG_RX_EN, GLO_CFG_TX_BUSY, GLO_CFG_TX_EN, GLO_CFG_TX_WB, HIF_REMAP_L1, HOST_CLR_OWN,
+        HOST_INT_ENA, HOST_OWN_SYNC, HOST_SET_OWN, HW_CHIPID, HW_REV, IRQ_MASK, L0S_DIS, LAST_SEC0,
+        LPCR_DRV_OWN, LPCR_FW_OWN, MCU2HOST, MCU_TXD_LEN, MCU_WAKE, MDP_DAMSDU, MDP_DCR0, MDP_DCR1,
+        MDP_HDR_TRANS, NEED_REINIT, PATCH_FINISH, PATCH_IS_DL, PATCH_NOT_DL, PATCH_REL, PATCH_SEM,
+        PCIE_MAC_INT, PCIE_MAC_PM, PRI_DLY, RST_DMASHDL, RST_DTX_PTR, RST_LOGIC, RXD_LEN,
+        RX_DATA_BASE, RX_EVENT_BASE, RX_WA_BASE, SCAN_REQ_LEN, SWDEF_MODE, TOP_LPCR, TXD_LEN,
+        TXP_LEN, TX_RING_BASE, WFDMA_RST, WFSYS_INIT_DONE, WFSYS_RST, WFSYS_RST_B, WTBL_BUSY,
+        WTBL_UPDATE,
     },
     CLIENT_MAC,
 };
@@ -720,7 +721,13 @@ impl Mac {
 
     /// Active scan. An empty name is the wildcard survey. The completion is
     /// `MCU_EVENT_SCAN_DONE`, not a command ack.
+    ///
+    /// The channel domain goes out first. Without it the firmware posts
+    /// scan-done and the data ring stays empty.
     pub(crate) fn start_scan(&mut self, ssid: &[u8]) -> bool {
+        if !self.channel_domain() {
+            return false;
+        }
         let seq = self.next_seq();
         {
             let cmd = &mut scratch().cmd;
@@ -733,6 +740,16 @@ impl Mac {
             }
         }
         self.tx_bounce(TX_MCU, MCU_TXD_LEN + SCAN_REQ_LEN)
+    }
+
+    /// `MCU_CE_CMD(SET_CHAN_DOMAIN)`. Linux sends this from `__mt7921_start`
+    /// and does not wait for a reply.
+    fn channel_domain(&mut self) -> bool {
+        let mut body = [0u8; CHANNEL_DOMAIN_LEN];
+        let Some(n) = write_channel_domain(&mut body) else {
+            return false;
+        };
+        self.command(ce_cmd(0x0f), &body[..n], false)
     }
 
     fn poll_rx(&mut self, which: usize) -> Option<usize> {

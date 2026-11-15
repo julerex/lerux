@@ -293,7 +293,7 @@ Do not add a postcard message. New queue code uses `lerux-sddf`. Do not invent a
 
 - Follow [`plan-swift-wifi.md`](plan-swift-wifi.md) phases 2–8. Do not skip a phase because a host test passed.
 - The menu command `3` or `wifi`, once the radio line is `wait`, asks the radio which names it can hear. The shell prints each as `N name` in byte order, at most 16, then `ssid>`. A printed row number selects that row. Any other listed name, or any other line of 1 to 32 bytes, is the name. `ssid ok` follows, then `psk>`. `psk ok` is a passphrase of 8 to 63 bytes. `wifi err` is the rejection, including a survey the radio did not answer.
-- Empty `ssid>` means the scan command was posted and zero names were stored. It does not mean a beacon was rejected. The next boot that is diagnosing this prints the survey counters (`rx`, `ok`, `done`, and `fc` when frames arrived and none were kept). Those counters are a means, not the exit.
+- Empty `ssid>` means the scan command was posted and zero names were stored. It does not mean a beacon was rejected. The survey mark prints `rx`, `ok`, `done`, and `fc` when frames arrived and none were kept. A finished scan also prints `ch` and `bcn` from the scan-done event. The driver sends the channel domain before the scan. Those counters are a means, not the exit.
 - After a name is chosen, the stage line is `scan`, `auth`, `assoc`, `eapol`, `dhcp`, then `ping`. A not-ready notify repaints the current stage and keeps no key for the next boot.
 - Association is PBKDF2-HMAC-SHA1 and an HMAC-MD5 MIC. Frames the radio accepts are enqueued on an sDDF transmit queue.
 - The host test drives a scripted radio to `ip 192.168.1.20` and `ping ok`. That test stays. It does not close the milestone.

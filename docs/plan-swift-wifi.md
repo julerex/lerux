@@ -8,6 +8,10 @@ Last updated: 2026-11-09
 
 **Why a separate plan:** [swift-wifi-assessment.md](swift-wifi-assessment.md) found the driver sequence faithful to Linux v6.8 and the debugging loop the problem: one or two bits of information per ISO cycle, on a machine with no serial port and no QEMU model. Each phase below is chosen to raise the information per boot or to move work off the laptop.
 
+## Survey words
+
+`setup-wifi` prints a mark. The host is the `swift-mt7921` protection domain on the CPU. The station is the laptop's client identity at `bss_idx` 0. A channel is one frequency in the 21-entry channel domain. A beacon is an access point's announcement, and a scan frame is that beacon or a probe response. The data ring is the DMA ring at `WFDMA0 + 0x520`, where the card copies a scan frame for the host to read. `ch` and `bcn` are the firmware's finished-channel count and beacon count. `rx` is how many scan frames arrived on the data ring. The glossary entries are in [context.md](context.md#swift-radio-survey).
+
 ## Global constraints
 
 - Leave the firmware download order in `userspace/pds/swift-mt7921/src/device.rs` as it is until a boot shows a word that names a later step. A readback is a change of information, not a change of sequence.

@@ -171,6 +171,28 @@ The guest does **not** target a Linux or POSIX syscall ABI. Remaining protection
 **lerux-web**
 : `#![no_std]`+`alloc` layout and paint, modelled on Ladybird and rewritten in Rust, not a port of Servo or of Ladybird, Chromium, or WebKit C++. Phases 71–80 painted a fixed CSS subset and hosted no JavaScript. JavaScript and WebAssembly are approved. The live browser shell uses it on `qemu_virt_aarch64_browser_sddf`. The desk-browser spec grows it to the shared layout, script, WebAssembly, and media behavior of the reference browsers.
 
+## Swift radio survey
+
+The `setup-wifi` mark uses these words. The same paragraph is in [plan-metal-parity.md](plan-metal-parity.md) Milestone 8.
+
+**host**
+: On this survey, the CPU side. It is the `swift-mt7921` protection domain. It posts the scan commands and reads frames the card has copied into RAM. `rx` counts frames this side received. The developer machine is also called the host in the build docs, and a public name is the host of a public page. Those are separate.
+
+**station**
+: The laptop's Wi-Fi client identity. The driver registers one station at `bss_idx` 0 before the survey, using the address from the card. The firmware uses that identity for the scan and for a later association. Linux v6.8 sends the same pair from `mt7921_add_interface`: `DEV_INFO_UPDATE`, then `BSS_INFO_UPDATE`.
+
+**channel**
+: One frequency in the survey list. The list is 13 channels on 2.4 GHz and 8 on 5 GHz, 21 in all. The channel domain is that list, sent to the firmware before the scan. `ch` is `complete_channel_num` from the scan-done event: how many of those channels the firmware finished.
+
+**beacon**
+: An 802.11 announcement an access point transmits, carrying its name. `bcn` is `beacon_scan_num` from the same scan-done event: how many beacons the firmware counted. The count includes beacons the host never received.
+
+**scan frame**
+: A beacon (frame control `0x80`) or a probe response (frame control `0x50`) from the survey. `beacon_ssid` reads the network name from either. The host learns a name from a scan frame only after the card has copied that frame onto the data ring.
+
+**data ring**
+: The receive DMA ring whose registers are `RX_DATA_BASE` (`WFDMA0 + 0x520`). The card writes a finished scan frame there, and `poll_data` reads it. `rx` counts those completions. Scan-done, including `ch` and `bcn`, is read from the MCU rings: `WFDMA0 + 0x500` before N9 is ready, and `WFDMA0 + 0x540` once it is. A mark with `bcn` greater than 0 and `rx` 0 means the firmware counted beacons and copied no scan frame onto the data ring. The other-beacon drop is the firmware filter that withholds those frames from the ring. The driver clears it before the scan.
+
 ## Boundaries
 
 - **In scope:** Rust protection-domain crates, `.system` files, build/CI, docs, host profile tooling, QEMU software framebuffer (ADR-009), JavaScript in `lerux-ladybird-js`, ordinary WebAssembly through `wasmi` in `lerux-wasm` (ADR-010, ADR-012, and the browser module path in [`../lerux-ladybird/PLAN.md`](../lerux-ladybird/PLAN.md)). The desk-browser spec grows `lerux-html` and `lerux-web` to show a public page, including its script and WebAssembly. The browser is modelled on Ladybird and rewritten in Rust.

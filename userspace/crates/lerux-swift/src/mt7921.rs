@@ -745,6 +745,8 @@ pub fn write_uni_txd(buf: &mut [u8], cmd: u32, seq: u8, payload: usize) -> bool 
 pub const DEV_INFO_LEN: usize = 16;
 /// Bytes in [`write_bss_info`].
 pub const BSS_INFO_LEN: usize = 36;
+/// Bytes in [`write_clear_other_beacon`].
+pub const RX_FILTER_LEN: usize = 68;
 
 /// `DEV_INFO_UPDATE` for omac 0. `mac` is the station address.
 pub fn write_dev_info(out: &mut [u8], mac: &[u8; 6]) -> bool {
@@ -771,6 +773,21 @@ pub fn write_bss_info(out: &mut [u8]) -> bool {
     out[8] = 1;
     out[12..16].copy_from_slice(&CONN_INFRA_STA.to_le_bytes());
     out[16] = 1;
+    true
+}
+
+/// `SET_RX_FILTER` bitmap clear of `MT_WF_RFCR_DROP_OTHER_BEACON`.
+///
+/// Mode 2 updates one bit. `bit_op` bit 1 clears it. The card counts beacons
+/// from other networks, and this bit drops them before the host sees them.
+pub fn write_clear_other_beacon(out: &mut [u8]) -> bool {
+    if out.len() < RX_FILTER_LEN {
+        return false;
+    }
+    out[..RX_FILTER_LEN].fill(0);
+    out[4] = 2;
+    out[12..16].copy_from_slice(&(1u32 << 11).to_le_bytes());
+    out[16] = 1 << 1;
     true
 }
 
@@ -1651,6 +1668,19 @@ mod tests {
         assert_eq!(bss[16], 1);
         assert!(!write_dev_info(&mut [0u8; 8], &mac));
         assert!(!write_bss_info(&mut [0u8; 8]));
+    }
+
+    #[test]
+    fn other_beacon_drop_is_cleared() {
+        let mut buf = [0u8; RX_FILTER_LEN];
+        assert!(write_clear_other_beacon(&mut buf));
+        assert_eq!(buf[4], 2);
+        assert_eq!(
+            u32::from_le_bytes([buf[12], buf[13], buf[14], buf[15]]),
+            1 << 11
+        );
+        assert_eq!(buf[16], 1 << 1);
+        assert!(!write_clear_other_beacon(&mut [0u8; 8]));
     }
 
     #[test]

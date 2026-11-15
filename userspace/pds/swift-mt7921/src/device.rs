@@ -13,20 +13,21 @@ use lerux_swift::{
         ce_cmd, desc_ctrl, desc_len, download_cmd, efuse_mac, ext_cmd, ext_query, firmware_kind,
         is_uni_cmd, map_reg, mcu_header_len, patch_regions, patch_status, prefetch, ram_regions,
         remap_l1, ring_regs, uni_cmd, uni_event_ok, write_bss_info, write_chan,
-        write_channel_domain, write_dev_info, write_eeprom_mode, write_efuse_read,
-        write_mac_enable, write_mcu_header, write_mcu_txd, write_rts, write_scan, write_txwi,
-        wtbl_word, FirmwareKind, Map, Region, Sem, Stage, TxStop, BSS_INFO_LEN, CHANNEL_DOMAIN_LEN,
-        CONN_ON_LPCTL, CONN_ON_MISC, DEV_INFO_LEN, DMASHDL_BYPASS, DMASHDL_ENABLE, DMASHDL_SW,
-        DMA_DONE, DUMMY_CR, DUMP_PREFETCH, DUMP_REGS, DUMP_RINGS, FW_N9_RDY, FW_SCATTER, FW_START,
-        GLO_CFG, GLO_CFG_CHAIN, GLO_CFG_CLK, GLO_CFG_EXT0, GLO_CFG_LE, GLO_CFG_OMIT_RX,
-        GLO_CFG_OMIT_RX_PFET, GLO_CFG_OMIT_TX, GLO_CFG_RX_BUSY, GLO_CFG_RX_EN, GLO_CFG_TX_BUSY,
-        GLO_CFG_TX_EN, GLO_CFG_TX_WB, HIF_REMAP_L1, HOST_CLR_OWN, HOST_INT_ENA, HOST_OWN_SYNC,
-        HOST_SET_OWN, HW_CHIPID, HW_REV, IRQ_MASK, L0S_DIS, LAST_SEC0, LPCR_DRV_OWN, LPCR_FW_OWN,
-        MCU2HOST, MCU_TXD_LEN, MCU_WAKE, MDP_DAMSDU, MDP_DCR0, MDP_DCR1, MDP_HDR_TRANS,
-        NEED_REINIT, PATCH_FINISH, PATCH_IS_DL, PATCH_NOT_DL, PATCH_REL, PATCH_SEM, PCIE_MAC_INT,
-        PCIE_MAC_PM, PRI_DLY, RST_DMASHDL, RST_DTX_PTR, RST_LOGIC, RXD_LEN, RX_DATA_BASE,
-        RX_EVENT_BASE, RX_WA_BASE, SCAN_REQ_LEN, SWDEF_MODE, TOP_LPCR, TXD_LEN, TXP_LEN,
-        TX_RING_BASE, WFDMA_RST, WFSYS_INIT_DONE, WFSYS_RST, WFSYS_RST_B, WTBL_BUSY, WTBL_UPDATE,
+        write_channel_domain, write_clear_other_beacon, write_dev_info, write_eeprom_mode,
+        write_efuse_read, write_mac_enable, write_mcu_header, write_mcu_txd, write_rts, write_scan,
+        write_txwi, wtbl_word, FirmwareKind, Map, Region, Sem, Stage, TxStop, BSS_INFO_LEN,
+        CHANNEL_DOMAIN_LEN, CONN_ON_LPCTL, CONN_ON_MISC, DEV_INFO_LEN, DMASHDL_BYPASS,
+        DMASHDL_ENABLE, DMASHDL_SW, DMA_DONE, DUMMY_CR, DUMP_PREFETCH, DUMP_REGS, DUMP_RINGS,
+        FW_N9_RDY, FW_SCATTER, FW_START, GLO_CFG, GLO_CFG_CHAIN, GLO_CFG_CLK, GLO_CFG_EXT0,
+        GLO_CFG_LE, GLO_CFG_OMIT_RX, GLO_CFG_OMIT_RX_PFET, GLO_CFG_OMIT_TX, GLO_CFG_RX_BUSY,
+        GLO_CFG_RX_EN, GLO_CFG_TX_BUSY, GLO_CFG_TX_EN, GLO_CFG_TX_WB, HIF_REMAP_L1, HOST_CLR_OWN,
+        HOST_INT_ENA, HOST_OWN_SYNC, HOST_SET_OWN, HW_CHIPID, HW_REV, IRQ_MASK, L0S_DIS, LAST_SEC0,
+        LPCR_DRV_OWN, LPCR_FW_OWN, MCU2HOST, MCU_TXD_LEN, MCU_WAKE, MDP_DAMSDU, MDP_DCR0, MDP_DCR1,
+        MDP_HDR_TRANS, NEED_REINIT, PATCH_FINISH, PATCH_IS_DL, PATCH_NOT_DL, PATCH_REL, PATCH_SEM,
+        PCIE_MAC_INT, PCIE_MAC_PM, PRI_DLY, RST_DMASHDL, RST_DTX_PTR, RST_LOGIC, RXD_LEN,
+        RX_DATA_BASE, RX_EVENT_BASE, RX_FILTER_LEN, RX_WA_BASE, SCAN_REQ_LEN, SWDEF_MODE, TOP_LPCR,
+        TXD_LEN, TXP_LEN, TX_RING_BASE, WFDMA_RST, WFSYS_INIT_DONE, WFSYS_RST, WFSYS_RST_B,
+        WTBL_BUSY, WTBL_UPDATE,
     },
     CLIENT_MAC,
 };
@@ -730,11 +731,14 @@ impl Mac {
     /// Active scan. An empty name is the wildcard survey. The completion is
     /// `MCU_EVENT_SCAN_DONE`, not a command ack.
     ///
-    /// The station is registered once, then the channel domain goes out.
-    /// A boot that printed `ch 21 bcn 3` with `rx 0` had finished every
-    /// channel and counted beacons, and the data ring stayed empty.
+    /// The station is registered once, then the channel domain goes out,
+    /// then the other-beacon drop is cleared.
+    ///
+    /// Registering the station raised the firmware count from `bcn 3` to
+    /// `bcn 16` and left `rx 0`. The card had counted the beacons and had
+    /// not been told to copy them to the host.
     pub(crate) fn start_scan(&mut self, ssid: &[u8]) -> bool {
-        if !self.add_station() || !self.channel_domain() {
+        if !self.add_station() || !self.channel_domain() || !self.pass_beacons() {
             return false;
         }
         let seq = self.next_seq();
@@ -767,6 +771,17 @@ impl Mac {
         }
         self.bss = true;
         true
+    }
+
+    /// `MCU_CE_CMD(SET_RX_FILTER)` clear of the other-beacon drop.
+    /// Linux sends this from `mt7921_mcu_set_beacon_filter` and does not
+    /// wait for a reply.
+    fn pass_beacons(&mut self) -> bool {
+        let mut body = [0u8; RX_FILTER_LEN];
+        if !write_clear_other_beacon(&mut body) {
+            return false;
+        }
+        self.command(ce_cmd(0x0a), &body, false)
     }
 
     /// `MCU_CE_CMD(SET_CHAN_DOMAIN)`. Linux sends this from `__mt7921_start`

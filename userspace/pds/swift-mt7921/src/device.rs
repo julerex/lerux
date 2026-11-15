@@ -11,21 +11,22 @@ use lerux_swift::{
     dump::WORDS_PER_ROW,
     mt7921::{
         ce_cmd, desc_ctrl, desc_len, download_cmd, efuse_mac, ext_cmd, ext_query, firmware_kind,
-        map_reg, patch_regions, patch_status, prefetch, ram_regions, remap_l1, ring_regs,
-        write_chan, write_channel_domain, write_eeprom_mode, write_efuse_read, write_mac_enable,
-        write_mcu_txd, write_rts, write_scan, write_txwi, wtbl_word, FirmwareKind, Map, Region,
-        Sem, Stage, TxStop, CHANNEL_DOMAIN_LEN, CONN_ON_LPCTL, CONN_ON_MISC, DMASHDL_BYPASS,
-        DMASHDL_ENABLE, DMASHDL_SW, DMA_DONE, DUMMY_CR, DUMP_PREFETCH, DUMP_REGS, DUMP_RINGS,
-        FW_N9_RDY, FW_SCATTER, FW_START, GLO_CFG, GLO_CFG_CHAIN, GLO_CFG_CLK, GLO_CFG_EXT0,
-        GLO_CFG_LE, GLO_CFG_OMIT_RX, GLO_CFG_OMIT_RX_PFET, GLO_CFG_OMIT_TX, GLO_CFG_RX_BUSY,
-        GLO_CFG_RX_EN, GLO_CFG_TX_BUSY, GLO_CFG_TX_EN, GLO_CFG_TX_WB, HIF_REMAP_L1, HOST_CLR_OWN,
-        HOST_INT_ENA, HOST_OWN_SYNC, HOST_SET_OWN, HW_CHIPID, HW_REV, IRQ_MASK, L0S_DIS, LAST_SEC0,
-        LPCR_DRV_OWN, LPCR_FW_OWN, MCU2HOST, MCU_TXD_LEN, MCU_WAKE, MDP_DAMSDU, MDP_DCR0, MDP_DCR1,
-        MDP_HDR_TRANS, NEED_REINIT, PATCH_FINISH, PATCH_IS_DL, PATCH_NOT_DL, PATCH_REL, PATCH_SEM,
-        PCIE_MAC_INT, PCIE_MAC_PM, PRI_DLY, RST_DMASHDL, RST_DTX_PTR, RST_LOGIC, RXD_LEN,
-        RX_DATA_BASE, RX_EVENT_BASE, RX_WA_BASE, SCAN_REQ_LEN, SWDEF_MODE, TOP_LPCR, TXD_LEN,
-        TXP_LEN, TX_RING_BASE, WFDMA_RST, WFSYS_INIT_DONE, WFSYS_RST, WFSYS_RST_B, WTBL_BUSY,
-        WTBL_UPDATE,
+        is_uni_cmd, map_reg, mcu_header_len, patch_regions, patch_status, prefetch, ram_regions,
+        remap_l1, ring_regs, uni_cmd, uni_event_ok, write_bss_info, write_chan,
+        write_channel_domain, write_dev_info, write_eeprom_mode, write_efuse_read,
+        write_mac_enable, write_mcu_header, write_mcu_txd, write_rts, write_scan, write_txwi,
+        wtbl_word, FirmwareKind, Map, Region, Sem, Stage, TxStop, BSS_INFO_LEN, CHANNEL_DOMAIN_LEN,
+        CONN_ON_LPCTL, CONN_ON_MISC, DEV_INFO_LEN, DMASHDL_BYPASS, DMASHDL_ENABLE, DMASHDL_SW,
+        DMA_DONE, DUMMY_CR, DUMP_PREFETCH, DUMP_REGS, DUMP_RINGS, FW_N9_RDY, FW_SCATTER, FW_START,
+        GLO_CFG, GLO_CFG_CHAIN, GLO_CFG_CLK, GLO_CFG_EXT0, GLO_CFG_LE, GLO_CFG_OMIT_RX,
+        GLO_CFG_OMIT_RX_PFET, GLO_CFG_OMIT_TX, GLO_CFG_RX_BUSY, GLO_CFG_RX_EN, GLO_CFG_TX_BUSY,
+        GLO_CFG_TX_EN, GLO_CFG_TX_WB, HIF_REMAP_L1, HOST_CLR_OWN, HOST_INT_ENA, HOST_OWN_SYNC,
+        HOST_SET_OWN, HW_CHIPID, HW_REV, IRQ_MASK, L0S_DIS, LAST_SEC0, LPCR_DRV_OWN, LPCR_FW_OWN,
+        MCU2HOST, MCU_TXD_LEN, MCU_WAKE, MDP_DAMSDU, MDP_DCR0, MDP_DCR1, MDP_HDR_TRANS,
+        NEED_REINIT, PATCH_FINISH, PATCH_IS_DL, PATCH_NOT_DL, PATCH_REL, PATCH_SEM, PCIE_MAC_INT,
+        PCIE_MAC_PM, PRI_DLY, RST_DMASHDL, RST_DTX_PTR, RST_LOGIC, RXD_LEN, RX_DATA_BASE,
+        RX_EVENT_BASE, RX_WA_BASE, SCAN_REQ_LEN, SWDEF_MODE, TOP_LPCR, TXD_LEN, TXP_LEN,
+        TX_RING_BASE, WFDMA_RST, WFSYS_INIT_DONE, WFSYS_RST, WFSYS_RST_B, WTBL_BUSY, WTBL_UPDATE,
     },
     CLIENT_MAC,
 };
@@ -105,6 +106,9 @@ pub struct Mac {
     ready: bool,
     stage: Stage,
     sta: [u8; 6],
+    /// `bss_idx` 0 is registered. Without it the firmware counts beacons and
+    /// copies none onto the data ring.
+    bss: bool,
     last_len: usize,
     pn: u64,
     wifi_seq: u16,
@@ -182,6 +186,7 @@ impl Mac {
             ready: false,
             stage: Stage::Own,
             sta: CLIENT_MAC,
+            bss: false,
             last_len: 0,
             pn: 1,
             wifi_seq: 1,
@@ -585,25 +590,28 @@ impl Mac {
             return Err(Sem::Tx(self.tx_stop(TX_MCU)));
         }
         let seq = self.seq;
-        if self.wait_seq(seq) {
-            Ok(())
-        } else {
-            Err(Sem::Rx)
+        if !self.wait_seq(seq) {
+            return Err(Sem::Rx);
         }
+        if is_uni_cmd(cmd) && !uni_event_ok(self.response(), (cmd & 0xff) as u8) {
+            return Err(Sem::Rx);
+        }
+        Ok(())
     }
 
     fn post_mcu(&mut self, cmd: u32, payload: &[u8]) -> bool {
         let seq = self.next_seq();
-        let total = MCU_TXD_LEN + payload.len();
+        let hdr = mcu_header_len(cmd);
+        let total = hdr + payload.len();
         if total > BOUNCE {
             return false;
         }
         {
             let cmd_buf = &mut scratch().cmd;
-            if !write_mcu_txd(cmd_buf, cmd, seq, payload.len()) {
+            if !write_mcu_header(cmd_buf, cmd, seq, payload.len()) {
                 return false;
             }
-            cmd_buf[MCU_TXD_LEN..total].copy_from_slice(payload);
+            cmd_buf[hdr..total].copy_from_slice(payload);
         }
         crate::step_cmd();
         self.tx_bounce(TX_MCU, total)
@@ -722,10 +730,11 @@ impl Mac {
     /// Active scan. An empty name is the wildcard survey. The completion is
     /// `MCU_EVENT_SCAN_DONE`, not a command ack.
     ///
-    /// The channel domain goes out first. Without it the firmware posts
-    /// scan-done and the data ring stays empty.
+    /// The station is registered once, then the channel domain goes out.
+    /// A boot that printed `ch 21 bcn 3` with `rx 0` had finished every
+    /// channel and counted beacons, and the data ring stayed empty.
     pub(crate) fn start_scan(&mut self, ssid: &[u8]) -> bool {
-        if !self.channel_domain() {
+        if !self.add_station() || !self.channel_domain() {
             return false;
         }
         let seq = self.next_seq();
@@ -740,6 +749,24 @@ impl Mac {
             }
         }
         self.tx_bounce(TX_MCU, MCU_TXD_LEN + SCAN_REQ_LEN)
+    }
+
+    /// `mt76_connac_mcu_uni_add_dev` for one station. Both replies must
+    /// report status 0. A later scan keeps the registration.
+    fn add_station(&mut self) -> bool {
+        if self.bss {
+            return true;
+        }
+        let mut dev = [0u8; DEV_INFO_LEN];
+        let mut bss = [0u8; BSS_INFO_LEN];
+        if !write_dev_info(&mut dev, &self.sta) || !write_bss_info(&mut bss) {
+            return false;
+        }
+        if !self.command(uni_cmd(0x01), &dev, true) || !self.command(uni_cmd(0x02), &bss, true) {
+            return false;
+        }
+        self.bss = true;
+        true
     }
 
     /// `MCU_CE_CMD(SET_CHAN_DOMAIN)`. Linux sends this from `__mt7921_start`

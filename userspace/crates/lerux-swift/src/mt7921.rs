@@ -367,6 +367,8 @@ pub const DMA_DONE: u32 = 1 << 31;
 pub const LAST_SEC0: u32 = 1 << 30;
 pub const RXD_LEN: usize = 36;
 pub const MCU_TXD_LEN: usize = 64;
+/// `sizeof(struct mt76_connac2_mcu_uni_txd)`.
+pub const UNI_TXD_LEN: usize = 48;
 pub const TXD_LEN: usize = 32;
 pub const TXP_LEN: usize = 32;
 pub const DESC_LEN: usize = 16;
@@ -481,7 +483,12 @@ pub const PATCH_SEM: u32 = 0x10;
 pub const FW_SCATTER: u32 = 0xee;
 pub const EXT_CID: u32 = 0xed;
 const CE: u32 = 1 << 18;
+const UNI: u32 = 1 << 17;
 const QUERY: u32 = 1 << 16;
+/// `MCU_CMD_UNI_EXT_ACK`: reply, unified command, set.
+const UNI_EXT_ACK: u8 = 0x07;
+/// `CONNECTION_INFRA_STA`.
+const CONN_INFRA_STA: u32 = 1 | (1 << 16);
 
 #[must_use]
 pub fn ext_cmd(id: u32) -> u32 {
@@ -496,6 +503,37 @@ pub fn ext_query(id: u32) -> u32 {
 #[must_use]
 pub fn ce_cmd(id: u32) -> u32 {
     id | CE
+}
+
+/// `MCU_UNI_CMD`. The header is [`write_uni_txd`], shorter than [`write_mcu_txd`].
+#[must_use]
+pub fn uni_cmd(id: u32) -> u32 {
+    id | UNI
+}
+
+#[must_use]
+pub fn is_uni_cmd(cmd: u32) -> bool {
+    cmd & UNI != 0
+}
+
+/// Bytes before the payload. A unified command uses the 48-byte header.
+#[must_use]
+pub fn mcu_header_len(cmd: u32) -> usize {
+    if is_uni_cmd(cmd) {
+        UNI_TXD_LEN
+    } else {
+        MCU_TXD_LEN
+    }
+}
+
+/// Header for `cmd`. The payload length is the bytes that follow the header.
+#[must_use]
+pub fn write_mcu_header(buf: &mut [u8], cmd: u32, seq: u8, payload: usize) -> bool {
+    if is_uni_cmd(cmd) {
+        write_uni_txd(buf, cmd, seq, payload)
+    } else {
+        write_mcu_txd(buf, cmd, seq, payload)
+    }
 }
 
 /// `mt76_connac_mcu_init_download` command choice for MT7921.
@@ -679,6 +717,73 @@ pub fn write_mcu_txd(buf: &mut [u8], cmd: u32, seq: u8, payload: usize) -> bool 
     buf[41] = ext;
     buf[42] = 0;
     true
+}
+
+/// Unified MCU header. Payload follows at [`UNI_TXD_LEN`].
+///
+/// `len` counts every byte after the eight-dword TXD, including this header.
+pub fn write_uni_txd(buf: &mut [u8], cmd: u32, seq: u8, payload: usize) -> bool {
+    if buf.len() < UNI_TXD_LEN {
+        return false;
+    }
+    buf[..UNI_TXD_LEN].fill(0);
+    let total = UNI_TXD_LEN + payload;
+    let tx0 = u32::from(low_u16(total)) | (2 << 23) | (0x20 << 25);
+    let tx1: u32 = 1 << 31 | (1 << 16);
+    buf[..4].copy_from_slice(&tx0.to_le_bytes());
+    buf[4..8].copy_from_slice(&tx1.to_le_bytes());
+    let body = low_u16(total - TXD_LEN);
+    buf[32..34].copy_from_slice(&body.to_le_bytes());
+    buf[34..36].copy_from_slice(&u16::from((cmd & 0xff) as u8).to_le_bytes());
+    buf[37] = 0xa0;
+    buf[39] = seq;
+    buf[43] = UNI_EXT_ACK;
+    true
+}
+
+/// Bytes in [`write_dev_info`].
+pub const DEV_INFO_LEN: usize = 16;
+/// Bytes in [`write_bss_info`].
+pub const BSS_INFO_LEN: usize = 36;
+
+/// `DEV_INFO_UPDATE` for omac 0. `mac` is the station address.
+pub fn write_dev_info(out: &mut [u8], mac: &[u8; 6]) -> bool {
+    if out.len() < DEV_INFO_LEN {
+        return false;
+    }
+    out[..DEV_INFO_LEN].fill(0);
+    out[6..8].copy_from_slice(&12u16.to_le_bytes());
+    out[8] = 1;
+    out[10..16].copy_from_slice(mac);
+    true
+}
+
+/// `BSS_INFO_UPDATE` basic TLV for an unassociated station at `bss_idx` 0.
+///
+/// The wlan index stays 0. `mt7921_add_interface` assigns the table index
+/// after this command returns, so the firmware sees 0.
+pub fn write_bss_info(out: &mut [u8]) -> bool {
+    if out.len() < BSS_INFO_LEN {
+        return false;
+    }
+    out[..BSS_INFO_LEN].fill(0);
+    out[6..8].copy_from_slice(&32u16.to_le_bytes());
+    out[8] = 1;
+    out[12..16].copy_from_slice(&CONN_INFRA_STA.to_le_bytes());
+    out[16] = 1;
+    true
+}
+
+/// True when a unified command reply is success for `cid`.
+///
+/// The event follows the connac2 RXD: command id, then a little-endian status.
+/// Status 0 is success.
+#[must_use]
+pub fn uni_event_ok(buf: &[u8], cid: u8) -> bool {
+    let Some(event) = buf.get(RXD_LEN..RXD_LEN + 8) else {
+        return false;
+    };
+    event[0] == cid && event[4..8] == [0, 0, 0, 0]
 }
 
 #[must_use]
@@ -1506,6 +1611,57 @@ mod tests {
             u16::from(SCAN_CHANNELS[n2].1)
         );
         assert!(write_channel_domain(&mut [0u8; 8]).is_none());
+    }
+
+    #[test]
+    fn uni_header_is_shorter_than_the_mcu_header() {
+        let mut buf = [0u8; 64];
+        let cmd = uni_cmd(0x01);
+        assert!(is_uni_cmd(cmd));
+        assert_eq!(mcu_header_len(cmd), UNI_TXD_LEN);
+        assert!(write_mcu_header(&mut buf, cmd, 4, DEV_INFO_LEN));
+        let len = u16::from_le_bytes([buf[32], buf[33]]);
+        assert_eq!(
+            len,
+            u16::try_from(UNI_TXD_LEN - TXD_LEN + DEV_INFO_LEN).unwrap()
+        );
+        assert_eq!(u16::from_le_bytes([buf[34], buf[35]]), 1);
+        assert_eq!(buf[37], 0xa0);
+        assert_eq!(buf[39], 4);
+        assert_eq!(buf[43], 0x07);
+        assert!(!write_uni_txd(&mut [0u8; 16], cmd, 1, 0));
+    }
+
+    #[test]
+    fn station_registration_is_bss_zero() {
+        let mac = [0x02, 0x11, 0x22, 0x33, 0x44, 0x55];
+        let mut dev = [0u8; DEV_INFO_LEN];
+        assert!(write_dev_info(&mut dev, &mac));
+        assert_eq!(u16::from_le_bytes([dev[6], dev[7]]), 12);
+        assert_eq!(dev[8], 1);
+        assert_eq!(&dev[10..16], &mac);
+        let mut bss = [0u8; BSS_INFO_LEN];
+        assert!(write_bss_info(&mut bss));
+        assert_eq!(u16::from_le_bytes([bss[6], bss[7]]), 32);
+        assert_eq!(bss[8], 1);
+        assert_eq!(
+            u32::from_le_bytes([bss[12], bss[13], bss[14], bss[15]]),
+            0x1_0001
+        );
+        assert_eq!(bss[16], 1);
+        assert!(!write_dev_info(&mut [0u8; 8], &mac));
+        assert!(!write_bss_info(&mut [0u8; 8]));
+    }
+
+    #[test]
+    fn uni_event_status_zero_matches_the_command() {
+        let mut buf = [0u8; RXD_LEN + 8];
+        assert!(!uni_event_ok(&buf, 1));
+        buf[RXD_LEN] = 1;
+        assert!(uni_event_ok(&buf, 1));
+        assert!(!uni_event_ok(&buf, 2));
+        buf[RXD_LEN + 4] = 1;
+        assert!(!uni_event_ok(&buf, 1));
     }
 
     #[test]

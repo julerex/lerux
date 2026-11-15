@@ -914,6 +914,10 @@ pub fn read_key(page: &[u8]) -> Option<(&[u8], &[u8])> {
 /// Names kept from one survey. The shell prints one line each.
 pub const SCAN_MAX: usize = 16;
 
+/// Room for [`SCAN_MAX`] lines of `NN `, a 32-byte name, and a newline.
+/// A survey mark is shorter than that.
+pub const SURVEY_REPORT_MAX: usize = SCAN_MAX * 36;
+
 const PAGE_SURVEY: u8 = 2;
 const PAGE_LIST: u8 = 3;
 const SURVEY_STRIDE: usize = 33;
@@ -922,6 +926,7 @@ const SURVEY_MARK: usize = 4 + SCAN_MAX * SURVEY_STRIDE;
 const SURVEY_MARK_MAX: usize = 48;
 
 const _: () = assert!(SURVEY_MARK + 1 + SURVEY_MARK_MAX <= 0x1000);
+const _: () = assert!(SURVEY_REPORT_MAX > SURVEY_MARK_MAX);
 
 fn survey_span() -> usize {
     SURVEY_MARK
@@ -1048,6 +1053,31 @@ pub fn read_survey_mark(page: &[u8]) -> Option<&[u8]> {
         return None;
     }
     Some(&page[SURVEY_MARK + 1..SURVEY_MARK + 1 + len])
+}
+
+/// Bytes `setup-wifi` prints after the radio stores a list.
+///
+/// Each stored name is one line: the 1-based row, a space, the name, and a
+/// newline, in the list's byte order. Zero names are the survey mark and a
+/// newline. `None` means the page has no list, or it lists no name and has no mark.
+#[must_use]
+pub fn format_survey_report(page: &[u8], out: &mut [u8]) -> Option<usize> {
+    let count = read_survey_count(page)?;
+    if count == 0 {
+        let mark = read_survey_mark(page)?;
+        let n = write_bytes(out, 0, mark)?;
+        return write_bytes(out, n, b"\n");
+    }
+    let mut n = 0;
+    for i in 0..count {
+        let name = read_survey_ssid(page, i)?;
+        let index = u32::try_from(i.checked_add(1)?).ok()?;
+        n = write_dec(out, n, index)?;
+        n = write_bytes(out, n, b" ")?;
+        n = write_bytes(out, n, name)?;
+        n = write_bytes(out, n, b"\n")?;
+    }
+    Some(n)
 }
 
 fn write_bytes(out: &mut [u8], at: usize, bytes: &[u8]) -> Option<usize> {
@@ -1405,5 +1435,34 @@ mod tests {
             read_survey_mark(&page),
             Some(&b"rx 4 ok 0 done 1 fc 80"[..])
         );
+    }
+
+    #[test]
+    fn survey_report_lists_names_in_byte_order() {
+        let mut page = [0u8; 0x1000];
+        assert!(write_survey_list(&mut page, &[b"zeta", b"alpha", b"2"]));
+        assert!(write_survey_mark(&mut page, 3, 3, true, None));
+        let mut out = [0u8; SURVEY_REPORT_MAX];
+        let n = format_survey_report(&page, &mut out).unwrap();
+        assert_eq!(&out[..n], b"1 2\n2 alpha\n3 zeta\n");
+    }
+
+    #[test]
+    fn survey_report_prints_the_mark_when_no_name_is_stored() {
+        let mut page = [0u8; 0x1000];
+        assert!(write_survey(&mut page));
+        let mut out = [0u8; SURVEY_REPORT_MAX];
+        assert!(format_survey_report(&page, &mut out).is_none());
+        assert!(write_survey_list(&mut page, &[]));
+        assert!(format_survey_report(&page, &mut out).is_none());
+        assert!(write_survey_mark(&mut page, 0, 0, true, None));
+        let n = format_survey_report(&page, &mut out).unwrap();
+        assert_eq!(&out[..n], b"rx 0 ok 0 done 1\n");
+        assert!(write_survey_mark(&mut page, 4, 0, true, Some(0x80)));
+        let n = format_survey_report(&page, &mut out).unwrap();
+        assert_eq!(&out[..n], b"rx 4 ok 0 done 1 fc 80\n");
+        assert!(write_survey_mark(&mut page, 4, 0, false, None));
+        let n = format_survey_report(&page, &mut out).unwrap();
+        assert_eq!(&out[..n], b"rx 4 ok 0 done 0 fc --\n");
     }
 }

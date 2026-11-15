@@ -10,7 +10,9 @@
 //! firmware has reached the normal state. The shell then asks for a survey.
 //! This domain writes the names it hears and, after the passphrase, associates.
 //! An empty name list still replaces row 22 with `rx`, `ok`, and `done`.
-//! The shell notifies channel 1 for both. Channel 0 stays the MSI.
+//! The shell notifies channel 3 for that survey and for a passphrase.
+//! Channel 1 is the receive virtualiser and runs the same handler.
+//! Channel 0 stays the MSI. Channel 2 is the transmit virtualiser.
 //! Association paints `scan`, `auth`, `assoc`, and `eapol`, then returns to
 //! `wait`. The shell owns the address and the ping. Received Ethernet frames
 //! are enqueued on the standard receive queue, and transmit frames are
@@ -80,6 +82,9 @@ static PHASE: AtomicU8 = AtomicU8::new(0);
 const IRQ: Channel = Channel::new(0);
 #[cfg(not(test))]
 const KEY: Channel = Channel::new(1);
+/// `setup-wifi` and a posted passphrase. Channel 1 stays the receive virtualiser.
+#[cfg(not(test))]
+const SHELL: Channel = Channel::new(3);
 
 #[cfg(not(test))]
 const PATCH: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/patch.bin"));
@@ -330,7 +335,7 @@ impl Handler for HandlerImpl {
         if channels.contains(IRQ) {
             IRQ.irq_ack().expect("ack mt7921");
         }
-        if channels.contains(KEY) {
+        if channels.contains(KEY) || channels.contains(SHELL) {
             self.on_key();
         }
         self.pump();

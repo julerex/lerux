@@ -272,6 +272,7 @@ fn const_name_to_peer_sdf(name: &str) -> Option<String> {
         "VIRTIO_BLK_DRIVER" | "BLK_DRIVER" => "virtio_blk_driver",
         "VIRTIO_NET_DRIVER" | "NET_DRIVER" => "virtio_net_driver",
         "NET_VIRT_TX" => "net_virt_tx",
+        "SWIFT_MT7921" => "swift_mt7921",
         "NET_VIRT_RX" => "net_virt_rx",
         "NET_COPY" => "net_copy",
         "GENET_DRIVER" => "genet_driver",

@@ -65,3 +65,10 @@ ends = [
   { pd = "net_virt_tx", id = 1 },
   { pd = "shell", id = 4 },
 ]
+
+[[channel]]
+name = "shell_wifi"
+ends = [
+  { pd = "swift_mt7921", id = 3 },
+  { pd = "shell", id = 5 },
+]

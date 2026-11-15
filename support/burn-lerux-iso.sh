@@ -13,13 +13,13 @@
 set -euo pipefail
 
 die() {
-  echo "burn-iso: $*" >&2
+  echo "burn-lerux-iso: $*" >&2
   exit 1
 }
 
 usage() {
-  echo "usage: just burn-iso" >&2
-  echo "       just burn-iso /dev/sdX" >&2
+  echo "usage: just burn-lerux-iso" >&2
+  echo "       just burn-lerux-iso /dev/sdX" >&2
   echo "With no device, USB sticks are listed and the stick you number is erased." >&2
   echo "The image is build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso from just iso." >&2
   echo "That is the Swift image. Z97 and Inspiron images are not this default." >&2
@@ -230,22 +230,22 @@ collect_usb() {
 choose_device() {
   local choice i index
   if ! have_terminal; then
-    die "name the stick: just burn-iso /dev/sdX"
+    die "name the stick: just burn-lerux-iso /dev/sdX"
   fi
   collect_usb
   if [[ ${#usb_paths[@]} -eq 0 ]]; then
-    echo "burn-iso: plug in the USB stick" >&2
+    echo "burn-lerux-iso: plug in the USB stick" >&2
     while [[ ${#usb_paths[@]} -eq 0 ]]; do
       sleep 1
       collect_usb
     done
   fi
   while true; do
-    echo "burn-iso: USB sticks" >&2
+    echo "burn-lerux-iso: USB sticks" >&2
     for i in "${!usb_paths[@]}"; do
       printf '  %d  %s  %s  %s\n' "$((i + 1))" "${usb_paths[$i]}" "$(human_bytes "${usb_sizes[$i]}")" "${usb_models[$i]}" >&2
     done
-    echo "burn-iso: type a number to erase that stick, or q to stop" >&2
+    echo "burn-lerux-iso: type a number to erase that stick, or q to stop" >&2
     choice=$(read_answer) || die "stopped"
     choice=$(trim_answer "$choice")
     [[ "$choice" == "q" ]] && die "stopped"
@@ -253,21 +253,21 @@ choose_device() {
       index=$((10#$choice))
       if (( index >= 1 && index <= ${#usb_paths[@]} )); then
         dev=${usb_paths[$((index - 1))]}
-        echo "burn-iso: selected $dev" >&2
+        echo "burn-lerux-iso: selected $dev" >&2
         return 0
       fi
     fi
     for i in "${!usb_paths[@]}"; do
       if [[ "$choice" == "${usb_paths[$i]}" ]]; then
         dev=$choice
-        echo "burn-iso: selected $dev" >&2
+        echo "burn-lerux-iso: selected $dev" >&2
         return 0
       fi
     done
-    echo "burn-iso: type a number from the list" >&2
+    echo "burn-lerux-iso: type a number from the list" >&2
     collect_usb
     if [[ ${#usb_paths[@]} -eq 0 ]]; then
-      echo "burn-iso: plug in the USB stick" >&2
+      echo "burn-lerux-iso: plug in the USB stick" >&2
       while [[ ${#usb_paths[@]} -eq 0 ]]; do
         sleep 1
         collect_usb
@@ -281,9 +281,9 @@ stick_bytes() {
 }
 
 confirm_erase() {
-  echo "burn-iso: this erases $dev:"
+  echo "burn-lerux-iso: this erases $dev:"
   lsblk -o NAME,SIZE,TRAN,MODEL,LABEL,MOUNTPOINTS "$dev"
-  echo "burn-iso: type $dev to continue"
+  echo "burn-lerux-iso: type $dev to continue"
   local typed
   typed=$(read_answer) || die "stopped"
   typed=$(trim_answer "$typed")
@@ -316,13 +316,13 @@ require_room() {
 }
 
 write_image() {
-  echo "burn-iso: writing $image"
+  echo "burn-lerux-iso: writing $image"
   unmount_disk
   dd if="$image" of="$dev" bs=4M conv=fsync status=progress
   sync
   blockdev --flushbufs "$dev" 2>/dev/null || true
   blockdev --rereadpt "$dev" 2>/dev/null || true
-  echo "burn-iso: wrote $image to $dev"
+  echo "burn-lerux-iso: wrote $image to $dev"
 }
 
 require_tools
@@ -337,7 +337,7 @@ if [[ -z "$dev" ]]; then
 fi
 require_room
 if [[ "$(id -u)" -ne 0 ]]; then
-  echo "burn-iso: asking for root to write $dev" >&2
+  echo "burn-lerux-iso: asking for root to write $dev" >&2
   exec sudo bash "$0" --image "$image" "$dev"
 fi
 confirm_erase

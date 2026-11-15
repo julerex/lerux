@@ -1,8 +1,8 @@
 # Boards
 
-Board names are the `BOARD=` value for `just run`, `just test`, and `just build`. Metadata lives in [`support/boards.toml`](../support/boards.toml). `just build` and `just run` default to `qemu_virt_aarch64`. Bare `just test` boots `qemu_virt_aarch64_browser_sddf`. Bare `just iso` packs `swift_sfx14_41g`.
+Board names are the `BOARD=` value for `just run`, `just test`, and `just build`. Metadata lives in [`support/boards.toml`](../support/boards.toml). `just build` and `just run` default to `qemu_virt_aarch64`. Bare `just test` boots `qemu_virt_aarch64_browser_sddf`. Bare `just make-lerux-iso` packs `swift_sfx14_41g`.
 
-The metal target being driven is the Acer Swift X SFX14-41G (`swift_sfx14_41g`). The Gigabyte Z97-D3H desk page (`pc_z97_d3h`) and the RPi4 workstation lab (`rpi4b_4gb`) stay secondary. The Dell Inspiron N5010 (`inspiron_n5010`) is a VGA text image from the probe in [support/arch-probe/machines/inspiron-n5010.md](../support/arch-probe/machines/inspiron-n5010.md). `just iso` still packs the Swift X.
+The metal target being driven is the Acer Swift X SFX14-41G (`swift_sfx14_41g`). The Gigabyte Z97-D3H desk page (`pc_z97_d3h`) and the RPi4 workstation lab (`rpi4b_4gb`) stay secondary. The Dell Inspiron N5010 (`inspiron_n5010`) is a VGA text image from the probe in [support/arch-probe/machines/inspiron-n5010.md](../support/arch-probe/machines/inspiron-n5010.md). `just make-lerux-iso` still packs the Swift X.
 
 aarch64 init and composed images need the patched SP804 QEMU in [`ci.md`](ci.md#patched-qemu); RISC-V init uses stock QEMU with the Goldfish RTC and `rdtime`, and x86 init uses stock QEMU with the CMOS RTC and TSC.
 
@@ -32,8 +32,8 @@ aarch64 init and composed images need the patched SP804 QEMU in [`ci.md`](ci.md#
 | `x86_64_generic` | x86_64 | `BOARD=x86_64_generic just test` | hello + serial (COM1) |
 | `x86_64_generic_console` | x86_64 | `just test-x86-console` | `serial_driver`, `console_driver`, `shell` (`console-shell.elf`) |
 | `pc_z97_d3h` | x86_64 | `BOARD=pc_z97_d3h just image` | same menu on the desk VGA text page (hardware only) |
-| `swift_sfx14_41g` | x86_64 | `just iso` | Swift X panel menu, PS/2, PCI lines, MT7921, read-only NVMe, Bluetooth (hardware only) |
-| `inspiron_n5010` | x86_64 | `just iso inspiron_n5010` | VGA text menu and the built-in i8042 (hardware only) |
+| `swift_sfx14_41g` | x86_64 | `just make-lerux-iso` | Swift X panel menu, PS/2, PCI lines, MT7921, read-only NVMe, Bluetooth (hardware only) |
+| `inspiron_n5010` | x86_64 | `just make-lerux-iso inspiron_n5010` | VGA text menu and the built-in i8042 (hardware only) |
 | `x86_64_generic_virtio` | x86_64 | `just test-x86-virtio` | hello + serial + virtio-pci blk/net |
 | `x86_64_generic_http` | x86_64 | `just test-x86-http` | serial + virtio-pci net + http-server |
 | `rpi4b_4gb` | aarch64 | `BOARD=rpi4b_4gb just image` | hello + serial (PL011; hardware only) |
@@ -61,8 +61,8 @@ Use `lerux image --board <name>` (or `BOARD=<name> just image`).
 - `rpi4b_4gb`: Raspberry Pi 4 Model B (4 GB). Requires U-Boot on SD card. See seL4 docs for initial bring-up and `fatload` / `go`.
 - Serial: PL011 at 0xfe201000 (GPIO 14/15). Update IRQ in `boards.toml` if the platform IRQ mapping differs.
 - Full workstation (FS + net) on hardware requires native (non-virtio) block and network drivers; see `support/profiles/hardware-rpi4.toml`.
-- `swift_sfx14_41g`: Acer Swift X SFX14-41G. `just iso` packs the UEFI image. See [Acer Swift X install path](#acer-swift-x-install-path).
-- `inspiron_n5010`: Dell Inspiron N5010. `just iso inspiron_n5010` packs the UEFI image. See [Dell Inspiron N5010 install path](#dell-inspiron-n5010-install-path).
+- `swift_sfx14_41g`: Acer Swift X SFX14-41G. `just make-lerux-iso` packs the UEFI image. See [Acer Swift X install path](#acer-swift-x-install-path).
+- `inspiron_n5010`: Dell Inspiron N5010. `just make-lerux-iso inspiron_n5010` packs the UEFI image. See [Dell Inspiron N5010 install path](#dell-inspiron-n5010-install-path).
 - `pc_z97_d3h`: Gigabyte GA-Z97-D3H (Haswell). Microkit still uses `x86_64_generic`; deploy writes GRUB's `EFI/BOOT/BOOTX64.EFI`, `/boot/grub/grub.cfg`, and **`boot/mb2-stub.elf` + `boot/sel4.elf` + `boot/loader.img`** for UEFI Multiboot 2. The monitor shows the shell as VGA text on the firmware boot VGA card. The desk-browser spec makes that card the Intel HD Graphics 4600 on the motherboard HDMI port, with Initial Display Output set to `IGFX`. After the reboot on 2026-10-22, firmware reports that device as the boot VGA device. See [Gigabyte Z97-D3H install path](#gigabyte-z97-d3h-install-path) and [VGA text on the RX 560](#vga-text-on-the-rx-560).
 - `pc_z97_d3h_rtl8852be`: same motherboard, COM1 only. The probe reads root port `00:1c.6`, takes that port's secondary bus, and logs the endpoint vendor, device, and assigned BAR. It does not map the BAR, and it is not the shell ISO.
 
@@ -163,19 +163,19 @@ Living work list (what still needs a Pi): [`plan-arch.md` — Physical RPi4 lab]
 
 ### Acer Swift X install path
 
-Board `swift_sfx14_41g` is the on-screen menu on the Acer Swift X SFX14-41G (Ryzen 5 5500U). It reuses Microkit `x86_64_generic` and `console-swift.system.template`. Names for this machine and its devices are in [GLOSSARY.md](../GLOSSARY.md#swift-x). The panel is the firmware GOP buffer. The keyboard is the built-in i8042 (ports `0x60` and `0x64`, I/O APIC pin 1, vector 49). This machine has no COM port and no `serial-driver`. This image has no QEMU model. Device roles are in [platforms.md](platforms.md#swift-x-devices). `just iso pc_z97_d3h` packs the [Gigabyte Z97-D3H](#gigabyte-z97-d3h-install-path) image.
+Board `swift_sfx14_41g` is the on-screen menu on the Acer Swift X SFX14-41G (Ryzen 5 5500U). It reuses Microkit `x86_64_generic` and `console-swift.system.template`. Names for this machine and its devices are in [GLOSSARY.md](../GLOSSARY.md#swift-x). The panel is the firmware GOP buffer. The keyboard is the built-in i8042 (ports `0x60` and `0x64`, I/O APIC pin 1, vector 49). This machine has no COM port and no `serial-driver`. This image has no QEMU model. Device roles are in [platforms.md](platforms.md#swift-x-devices). `just make-lerux-iso pc_z97_d3h` packs the [Gigabyte Z97-D3H](#gigabyte-z97-d3h-install-path) image.
 
-**USB ISO** (`just iso` packs `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`; `just burn-lerux-iso` writes a USB stick):
+**USB ISO** (`just make-lerux-iso` packs `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`; `just burn-lerux-iso` writes a USB stick):
 
 ```bash
 just fetch
 just fetch-sdk
 # or: just build-sdk
-just iso
+just make-lerux-iso
 just burn-lerux-iso
 ```
 
-`just burn-lerux-iso` lists the USB sticks and asks which one to erase. `just burn-lerux-iso /dev/sdX` writes that stick. The command refuses the host OS disk. It writes the Swift ISO, including when the last `just iso` target was the Z97 desk or the Inspiron. Reboot and open the firmware boot menu. Choose the USB entry that says UEFI (GRUB `EFI/BOOT/BOOTX64.EFI`). GRUB boots immediately. It Multiboot 2-loads `/boot/mb2-stub.elf` with modules `/boot/sel4.elf` and `/boot/loader.img`. The stub places the 64-bit kernel at 1 MiB after `ExitBootServices`.
+`just burn-lerux-iso` lists the USB sticks and asks which one to erase. `just burn-lerux-iso /dev/sdX` writes that stick. The command refuses the host OS disk. It writes the Swift ISO, including when the last `just make-lerux-iso` target was the Z97 desk or the Inspiron. Reboot and open the firmware boot menu. Choose the USB entry that says UEFI (GRUB `EFI/BOOT/BOOTX64.EFI`). GRUB boots immediately. It Multiboot 2-loads `/boot/mb2-stub.elf` with modules `/boot/sel4.elf` and `/boot/loader.img`. The stub places the 64-bit kernel at 1 MiB after `ExitBootServices`.
 
 On 2026-10-29 the panel showed `fb 0x000000fc90000000 pitch 7680 1920x1080 r16 g8 b0`. On 2026-10-30 it then showed `hello lerux` and the menu `1 browser`, `2 maths`, and `3 wifi`. `1` or `browser` opens the test page `support/browser/lenna.html`. The page is 512 pixels wide and 520 tall, at the top left of the panel. The heading `Lenna` is black on a white strip 8 rows tall, and the picture `support/browser/lenna.png` is below it. The page does not clear the rest of the panel. The shell echoes no key on that page. `quit` clears the console and returns the menu. The console covers only the top 400 rows, so the last 120 rows of the picture stay on the panel. A picture that does not decode prints `browser err`. `2` or `maths` reads integer expressions until `quit`, which returns the menu. A value prints `maths N`. A bad line prints `maths err`. `3` or `wifi` lists the names the radio can hear, then prompts `ssid>` and `psk>`. The built-in keyboard types those lines.
 
@@ -217,7 +217,7 @@ An AMD modesetting driver would matter only if lerux itself programmed this card
 **USB ISO** (writes `build/pc_z97_d3h/lerux_pc_z97_d3h.iso` and does not touch a disk):
 
 ```bash
-just iso pc_z97_d3h
+just make-lerux-iso pc_z97_d3h
 lsblk
 sudo dd if=build/pc_z97_d3h/lerux_pc_z97_d3h.iso of=/dev/sdX bs=4M status=progress conv=fsync
 ```
@@ -242,7 +242,7 @@ That writes GRUB's `EFI/BOOT/BOOTX64.EFI`, `/boot/grub/grub.cfg`, and `boot/mb2-
 | 1. SDK | `MICROKIT_BOARDS=…,x86_64_generic just build-sdk` or `just fetch-sdk` (already required for QEMU x86) |
 | 2. Serial hardware | Gigabyte **COMA** 9-pin header → DB9 cable → laptop USB-serial at **115200 8N1**. There is no rear DB9. Prove the link from Linux (`/dev/ttyS0` is `0x3F8` IRQ 4) before seL4. |
 | 3. Image | `BOARD=pc_z97_d3h just image` (or deploy builds it) |
-| 4. Media | `just iso pc_z97_d3h`, then `dd` the ISO onto the flash drive (not `sda` or `sdb`). Or `DEST=/path/to/usb-fat just deploy-pc` to write the same GRUB layout onto a mounted volume. |
+| 4. Media | `just make-lerux-iso pc_z97_d3h`, then `dd` the ISO onto the flash drive (not `sda` or `sdb`). Or `DEST=/path/to/usb-fat just deploy-pc` to write the same GRUB layout onto a mounted volume. |
 | 5. Boot | Firmware boot menu (F12) → the USB entry that says UEFI (GRUB `EFI/BOOT/BOOTX64.EFI`). GRUB is Multiboot 2: kernel `/boot/mb2-stub.elf`, modules `/boot/sel4.elf` and `/boot/loader.img`. |
 | 6. Host smoke | From the **laptop**: `LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD=pc_z97_d3h just test-hw` |
 | 7. Back to Ubuntu | Reboot and pick the default Ubuntu EFI entry. |
@@ -270,8 +270,8 @@ That writes GRUB's `EFI/BOOT/BOOTX64.EFI`, `/boot/grub/grub.cfg`, and `boot/mb2-
 |---------|----------------|
 | GRUB menu, then a flashing cursor and no blue screen | The console PD did not run. Kernel output is still COM1 (COMA header, 115200 8N1). |
 | Prompt is visible, keys do nothing | Serial shows `xhci none` or `xhci no keyboard`, and the combo port has no PS/2 keyboard. A boot keyboard on a hub is not seen. If the log already says `usb keyboard`, the xHCI interrupt did not arrive. |
-| Boot stops while loading `sel4.elf` at 1 MiB | An old ISO that Multiboot 2-boots the kernel ELF directly. Rebuild with `just iso pc_z97_d3h` so the menu loads `/boot/mb2-stub.elf`, then modules `/boot/sel4.elf` and `/boot/loader.img`. |
-| Boot stops loading the `sel4.elf` module | The module was only in the ISO9660 session. Rebuild with `just iso pc_z97_d3h` and rewrite the USB stick. The EFI system partition is `boot/esp.img` and holds `mb2-stub.elf`, `sel4.elf`, and `loader.img`. |
+| Boot stops while loading `sel4.elf` at 1 MiB | An old ISO that Multiboot 2-boots the kernel ELF directly. Rebuild with `just make-lerux-iso pc_z97_d3h` so the menu loads `/boot/mb2-stub.elf`, then modules `/boot/sel4.elf` and `/boot/loader.img`. |
+| Boot stops loading the `sel4.elf` module | The module was only in the ISO9660 session. Rebuild with `just make-lerux-iso pc_z97_d3h` and rewrite the USB stick. The EFI system partition is `boot/esp.img` and holds `mb2-stub.elf`, `sel4.elf`, and `loader.img`. |
 | HDMI picture never changes | The cable is not on the firmware primary VGA device, or this was the UEFI entry. Until Initial Display Output is `IGFX`, that device is still the RX 560. This image does not modeset. See [VGA text on the RX 560](#vga-text-on-the-rx-560). |
 | Kernel on serial, no prompt | COM1 IRQ pin/polarity; try `trigger="edge"` on the serial irq in the SDF |
 | Silent serial | Cable on COMA header (TX/RX swapped); 115200 8N1; seL4 debug UART vs PD |
@@ -281,7 +281,7 @@ This board has no native disk or Ethernet driver. QEMU `workstation-x86` is virt
 
 ### Dell Inspiron N5010 install path
 
-Board `inspiron_n5010` is the on-screen menu on the Dell Inspiron N5010 (Core i5-460M, HM57, BIOS A15). It reuses Microkit `x86_64_generic` and `console-inspiron.system.template`. The probe is [support/arch-probe/machines/inspiron-n5010.md](../support/arch-probe/machines/inspiron-n5010.md). Device roles are in [platforms.md](platforms.md#inspiron-n5010). Acer Swift X remains the metal target `just iso` packs. This image has no QEMU model.
+Board `inspiron_n5010` is the on-screen menu on the Dell Inspiron N5010 (Core i5-460M, HM57, BIOS A15). It reuses Microkit `x86_64_generic` and `console-inspiron.system.template`. The probe is [support/arch-probe/machines/inspiron-n5010.md](../support/arch-probe/machines/inspiron-n5010.md). Device roles are in [platforms.md](platforms.md#inspiron-n5010). Acer Swift X remains the metal target `just make-lerux-iso` packs. This image has no QEMU model.
 
 The 2026-11-14 boot was legacy BIOS with `nomodeset`. The console was the VGA text page, 80 by 25, at `0xb8000`, scanned by the integrated graphics `8086:0046` at `00:02.0`. The log has no `efifb` or `vesafb` line, so this image does not map a GOP buffer. The keyboard is the built-in i8042 at `0x60` and `0x64`, I/O APIC pin 1, vector 49. The probe recorded no IRQ 1 override. There is no serial port and no xHCI controller. The shell is `console-shell`: `1 browser` prints `browser unavailable`, and `2 maths` is the `lerux-calc` session.
 
@@ -290,7 +290,7 @@ The disk is the WDC WD5000BEVT-75A0RT0 on AHCI `8086:3b2f` at `00:1f.2`. This im
 **USB ISO** (writes `build/inspiron_n5010/lerux_inspiron_n5010.iso` and does not touch a disk):
 
 ```bash
-just iso inspiron_n5010
+just make-lerux-iso inspiron_n5010
 lsblk
 sudo dd if=build/inspiron_n5010/lerux_inspiron_n5010.iso of=/dev/sdX bs=4M status=progress conv=fsync
 ```

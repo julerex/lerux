@@ -110,21 +110,22 @@ pub struct Mac {
     /// Set only after the 4-way handshake. The firmware path leaves this empty,
     /// so it never loads the network queues.
     link: Option<Link>,
+    /// Read just before the first MCU command. The panel no longer paints it.
     before: [u32; DUMP_REGS.len()],
+    /// Read when `start` returns. The panel no longer paints it.
     after: Snapshot,
 }
 
-/// Registers, ring blocks, and DMA words for the dump rows. `regs` follows
-/// `DUMP_REGS`, `rings` follows `DUMP_RINGS`, `prefetch` follows
-/// `DUMP_PREFETCH`. The descriptor and bounce words are read back from the
-/// DMA window, so they show what the card could have fetched.
-pub struct Snapshot {
-    pub regs: [u32; DUMP_REGS.len()],
-    pub rings: [[u32; 4]; DUMP_RINGS.len()],
-    pub prefetch: [[u32; WORDS_PER_ROW]; DUMP_PREFETCH.len()],
-    pub tx_desc: [u32; WORDS_PER_ROW],
-    pub bounce: [u32; BOUNCE_WORDS],
-    pub rx_desc: [u32; WORDS_PER_ROW],
+/// Registers, ring blocks, and DMA words read around the firmware load.
+/// The panel does not paint them. `regs` follows `DUMP_REGS`, `rings` follows
+/// `DUMP_RINGS`, `prefetch` follows `DUMP_PREFETCH`.
+struct Snapshot {
+    regs: [u32; DUMP_REGS.len()],
+    rings: [[u32; 4]; DUMP_RINGS.len()],
+    prefetch: [[u32; WORDS_PER_ROW]; DUMP_PREFETCH.len()],
+    tx_desc: [u32; WORDS_PER_ROW],
+    bounce: [u32; BOUNCE_WORDS],
+    rx_desc: [u32; WORDS_PER_ROW],
 }
 
 impl Snapshot {
@@ -188,7 +189,9 @@ impl Mac {
             after: Snapshot::empty(),
         };
         let outcome = mac.start(images);
-        mac.after = mac.snapshot();
+        // The panel no longer paints this readback. The read stays in the
+        // firmware sequence, so the value is not discarded.
+        mac.after = core::hint::black_box(mac.snapshot());
         mac.stage = match outcome {
             Ok(()) => Stage::Wait,
             Err(stage) => {
@@ -204,16 +207,6 @@ impl Mac {
 
     pub fn ready(&self) -> bool {
         self.ready
-    }
-
-    /// `DUMP_REGS` read just before the first MCU command.
-    pub fn before(&self) -> &[u32; DUMP_REGS.len()] {
-        &self.before
-    }
-
-    /// Everything the dump rows show, read when `start` returned.
-    pub fn after(&self) -> &Snapshot {
-        &self.after
     }
 
     fn read_regs(&mut self) -> [u32; DUMP_REGS.len()] {
@@ -304,7 +297,7 @@ impl Mac {
         self.set(DMASHDL_SW, DMASHDL_BYPASS);
         self.rebind();
         self.set(PCIE_MAC_PM, L0S_DIS);
-        self.before = self.read_regs();
+        self.before = core::hint::black_box(self.read_regs());
         self.load_patch(patch)?;
         self.load_ram(ram)?;
         if !self.poll(CONN_ON_MISC, FW_N9_RDY, FW_N9_RDY, N9_SPIN) {

@@ -77,14 +77,14 @@ build-pd crate:
 image: build
     {{lerux}} image --board {{board}} --build-dir {{build_dir}} --config {{config}}
 
-# UEFI GRUB ISO. `just iso` rebuilds the Swift image, then packs it.
-# `just iso pc_z97_d3h` does the same for the Z97 desk.
-# `just iso inspiron_n5010` packs the Inspiron N5010 VGA text image.
+# UEFI GRUB ISO. `just make-lerux-iso` rebuilds the Swift image, then packs it.
+# `just make-lerux-iso pc_z97_d3h` does the same for the Z97 desk.
+# `just make-lerux-iso inspiron_n5010` packs the Inspiron N5010 VGA text image.
 # Does not write a disk. `just burn-lerux-iso` writes the Swift ISO.
-iso target="swift_sfx14_41g":
+make-lerux-iso target="swift_sfx14_41g":
     {{lerux}} iso --board {{target}} --build-dir {{build_dir}} --config {{config}}
 
-# Erase a USB stick and write the Swift ISO from `just iso`.
+# Erase a USB stick and write the Swift ISO from `just make-lerux-iso`.
 # This is the Acer image only. Z97 and Inspiron stay on the dd lines in docs/boards.md.
 # With no argument, lists USB sticks and asks which one to erase.
 # just burn-lerux-iso

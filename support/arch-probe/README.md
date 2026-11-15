@@ -2,7 +2,7 @@
 
 One USB stick holds the official Arch install image and `probe.sh`. Boot it on a machine lerux has not been brought up on. The script records the firmware framebuffer, the PCI windows, the firmware memory map, and the keyboard and serial wiring a desk image hardcodes. It loads no modules and leaves internal disks unmounted.
 
-`just iso` is a different stick. That one is the lerux image. This recipe does not build lerux.
+`just make-lerux-iso` is a different stick. That one is the lerux image. This recipe does not build lerux.
 
 `support/arch-probe/fixture` is the host check for the summary. It is not a dump from a machine.
 

@@ -16,8 +16,8 @@ That is the bar. A QEMU line does not close a metal milestone. A panel photo or 
 
 ### The three boards
 
-- **Acer Swift X** (`swift_sfx14_41g`) is the main target. The image is `just iso`. There is no QEMU model and no COM port. The console is the firmware GOP panel. The keyboard is the built-in i8042.
-- **Gigabyte Z97-D3H** (`pc_z97_d3h`) is the desk. The image is `just iso pc_z97_d3h`. QEMU covers the VGA menu (`just test-x86-console`). The onboard Ethernet port is the I217-V. The RTL8852BE card (`pc_z97_d3h_rtl8852be`) stays a configuration-space probe.
+- **Acer Swift X** (`swift_sfx14_41g`) is the main target. The image is `just make-lerux-iso`. There is no QEMU model and no COM port. The console is the firmware GOP panel. The keyboard is the built-in i8042.
+- **Gigabyte Z97-D3H** (`pc_z97_d3h`) is the desk. The image is `just make-lerux-iso pc_z97_d3h`. QEMU covers the VGA menu (`just test-x86-console`). The onboard Ethernet port is the I217-V. The RTL8852BE card (`pc_z97_d3h_rtl8852be`) stays a configuration-space probe.
 - **Raspberry Pi 4** (`rpi4b_4gb`, workstation profile `rpi4b_4gb_workstation`) is secondary. It stays behind the two x86 boards. No second single-board computer is added until this one is signed off.
 
 ### Status words
@@ -198,7 +198,7 @@ Do not add a postcard message. New queue code uses `lerux-sddf`. Do not invent a
 
 - `lerux package install` and `lerux package upgrade` rebuild the selected board profile and print the pin digest.
 - The image build writes `loader.img.sha256`. `lerux verify-image` checks it before a flash instruction is printed.
-- [`boards.md`](boards.md) states one sequence for each board: build the image, verify the digest, write the media, boot. Swift stays `just iso` and the `dd` line. Z97 stays `just iso pc_z97_d3h` or `just deploy-pc`. Pi stays `just deploy-rpi4`. Do not invent a fourth writer.
+- [`boards.md`](boards.md) states one sequence for each board: build the image, verify the digest, write the media, boot. Swift stays `just make-lerux-iso` and the `dd` line. Z97 stays `just make-lerux-iso pc_z97_d3h` or `just deploy-pc`. Pi stays `just deploy-rpi4`. Do not invent a fourth writer.
 - Say, on each of those three pages, that the guest cannot install a package. The operator rebuilds on the host.
 - Do not add an on-device package manager.
 
@@ -340,7 +340,7 @@ Do not add a postcard message. New queue code uses `lerux-sddf`. Do not invent a
 
 **Steps.**
 
-- One ISO: `just iso`. The panel still shows the mode line’s geometry (1920 by 1080, pitch 7680, framebuffer `0xfc90000000`) and the menu `1 browser`, `2 maths`, `3 wifi`.
+- One ISO: `just make-lerux-iso`. The panel still shows the mode line’s geometry (1920 by 1080, pitch 7680, framebuffer `0xfc90000000`) and the menu `1 browser`, `2 maths`, `3 wifi`.
 - `2` or `maths` still runs `lerux-calc`. The proof on metal is `maths 3` from the built-in keyboard. LionsOS milestone 25 recorded the menu without that line.
 - `3 wifi` is Milestone 8. After `ping ok`, `ip` in the shell prints the same address.
 - The read-only disk is Milestone 9. `ls` and `cat` work. Writes print `err`.

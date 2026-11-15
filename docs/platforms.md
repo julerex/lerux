@@ -82,7 +82,7 @@ The Acer Swift X SFX14-41G (Ryzen 5 5500U, Orion_CA). The panel belongs to the R
 
 ### Inspiron N5010
 
-The Dell Inspiron N5010 (Core i5-460M, HM57, BIOS A15). Probed 2026-11-14. The full record is [support/arch-probe/machines/inspiron-n5010.md](../support/arch-probe/machines/inspiron-n5010.md). The console on that boot was the VGA text page. The log has no EFI framebuffer. The image is `just iso inspiron_n5010`. It paints that page and does not map the disk.
+The Dell Inspiron N5010 (Core i5-460M, HM57, BIOS A15). Probed 2026-11-14. The full record is [support/arch-probe/machines/inspiron-n5010.md](../support/arch-probe/machines/inspiron-n5010.md). The console on that boot was the VGA text page. The log has no EFI framebuffer. The image is `just make-lerux-iso inspiron_n5010`. It paints that page and does not map the disk.
 
 | Category | Device | lerux driver | In the tree |
 |----------|--------|--------------|-------------|
@@ -100,9 +100,9 @@ The Dell Inspiron N5010 (Core i5-460M, HM57, BIOS A15). Probed 2026-11-14. The f
 just test-workstation          # Tier 1 aarch64 (SP804 QEMU)
 just test-workstation-riscv    # Tier 2 RISC-V
 just test-workstation-x86      # Tier 2 x86
-just iso                                 # Swift X USB ISO → build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso
-just iso pc_z97_d3h                      # Z97-D3H USB ISO → build/pc_z97_d3h/lerux_pc_z97_d3h.iso
-just iso inspiron_n5010                  # Inspiron N5010 USB ISO → build/inspiron_n5010/lerux_inspiron_n5010.iso
+just make-lerux-iso                                 # Swift X USB ISO → build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso
+just make-lerux-iso pc_z97_d3h                      # Z97-D3H USB ISO → build/pc_z97_d3h/lerux_pc_z97_d3h.iso
+just make-lerux-iso inspiron_n5010                  # Inspiron N5010 USB ISO → build/inspiron_n5010/lerux_inspiron_n5010.iso
 just deploy-pc DEST=/path/to/usb-fat      # Z97-D3H VGA shell onto a FAT volume (Multiboot 2)
 
 lerux profile build workstation

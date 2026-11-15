@@ -43,9 +43,9 @@ lerux runs several small programs at once. Each one has its own memory. They sha
 
 | Priority | Program | What it paints |
 | --- | --- | --- |
-| 6 | Display | `hello lerux` and, later, the menu |
-| 5 | PCI probe | Device names below the menu, rows 15 and 16, rows 31–50 of the dump, and the end marker on row 66 |
-| 4 | Wi-Fi | Rows 17–22, and rows 51–65 of the dump |
+| 6 | Display | `hello lerux v` and the short git describe, then the shell |
+| 5 | PCI probe | Device names below the menu, and rows 15 and 16. It does not paint the dump |
+| 4 | Wi-Fi | Rows 17–22. It does not paint the dump |
 | 3 | Disk | Row 23, `nvme` |
 | 2 | Bluetooth | Row 24, `bt` |
 | 1 | Menu | `1 browser`, `2 maths`, `3 wifi` |
@@ -259,7 +259,7 @@ The Linux probe of 8 November 2026 is written up in [plan-swift-wifi.md](plan-sw
 
 ## The dump rows, 31 to 66
 
-Rows 31 to 65 are a hex dump meant to be photographed, and row 66 is the end marker. They are painted once per boot and the console redraw does not touch them. Each row is at most 120 characters: a label of eight characters, then up to twelve 8-digit words. The layout constants live in `userspace/crates/lerux-swift/src/dump.rs`.
+The current image does not paint rows 31 to 66. The last status line is `bt: port 3 desc` on row 24. Device-name rows 25 to 30 stay. Nothing after that line is a photograph dump or a register row. The layout below is what older photographs show, and the formatters remain in `userspace/crates/lerux-swift/src/dump.rs` so a host test can still check a row. Do not paint these rows on the panel. Each row is at most 120 characters: a label of eight characters, then up to twelve 8-digit words.
 
 | Rows | Painted by | What is there |
 | --- | --- | --- |
@@ -323,11 +323,10 @@ If you want to see the same facts in the source, these are the files. The screen
 | `userspace/pds/swift-mt7921/src/device.rs` | The startup sequence, the ring addresses, the doorbell, and the read of note 0 |
 | `userspace/pds/swift-mt7921/src/main.rs` | Which screen row gets `slot`, the four step lines, and `fw sem` |
 | `userspace/pds/swift-pci-probe/src/main.rs` | The IOMMU programming, the `cmd` row, and the `excl` row |
-| `userspace/pds/swift-pci-probe/src/dump.rs` | The root-port lookup and enable, the ASPM clear, rows 31 to 50, and the end marker on row 66 |
-| `userspace/pds/swift-mt7921/src/dump.rs` | Rows 51 to 65 |
+| `userspace/pds/swift-pci-probe/src/dump.rs` | The root-port lookup and enable, and the ASPM clear. It does not paint rows 31 to 66 |
 | `userspace/crates/lerux-swift/src/dump.rs` | The row layout, the hex row formatters, and the capability walk |
 | `userspace/crates/lerux-swift/src/mt7921.rs` | The register numbers, the 16-byte note layout, the text of `fw sem` and `slot`, and the `DUMP_REGS` name table |
 | `userspace/crates/lerux-swift/src/pci.rs` | The exclusion addresses and the text of `cmd` and `excl` |
 | `GLOSSARY.md` | Short definitions of the same words, linked to each other |
 
-The ISO you boot is `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`, produced by `just iso`. An older file on the USB stick does not contain a line that was added later. The `cmd` line is on the ISO built after that readback was added.
+The ISO you boot is `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`, produced by `just make-lerux-iso`. An older file on the USB stick does not contain a line that was added later. The `cmd` line is on the ISO built after that readback was added.

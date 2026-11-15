@@ -391,7 +391,7 @@ fn print_swift_usb() {
     println!("Firmware boot menu → the USB entry that says UEFI (GRUB EFI/BOOT/BOOTX64.EFI).");
     println!("mb2-stub loads sel4.elf (64-bit) at 1 MiB after ExitBootServices.");
     println!(
-        "Screen: the GOP mode line, then \"1 browser\", \"2 maths\", and \"3 wifi\". This laptop has no COM port."
+        "Screen: the GOP mode line, then \"hello lerux v\" and the short git describe. This laptop has no COM port."
     );
     println!("1 or browser opens the Lenna test page. quit returns the menu.");
     println!("Expect: 1 browser");

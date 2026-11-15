@@ -11,7 +11,15 @@ pub const CELLS: usize = COLS * ROWS;
 pub const ATTR: u16 = 0x1f00;
 
 /// Painted on row 0 before the shell prompt.
+///
+/// The Swift panel carries the short git describe the image was built from.
+/// Z97 and Inspiron stay `hello lerux`.
+#[cfg(feature = "board-swift_sfx14_41g")]
+pub const BANNER: &[u8] = concat!("hello lerux v", env!("LERUX_GIT_DESCRIBE")).as_bytes();
+#[cfg(not(feature = "board-swift_sfx14_41g"))]
 pub const BANNER: &[u8] = b"hello lerux";
+
+const _: () = assert!(BANNER.len() < COLS);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Ansi {
@@ -42,7 +50,7 @@ pub struct Screen {
 }
 
 impl Screen {
-    /// Blue field, `hello lerux` on the first line, cursor on the next line.
+    /// Blue field, the banner on the first line, cursor on the next line.
     pub fn with_banner() -> Self {
         let mut screen = Self::blank();
         for (index, &byte) in BANNER.iter().enumerate() {

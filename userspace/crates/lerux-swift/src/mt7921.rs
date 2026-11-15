@@ -1080,6 +1080,15 @@ pub fn format_survey_report(page: &[u8], out: &mut [u8]) -> Option<usize> {
     Some(n)
 }
 
+/// True when `cmd` is `setup-wifi` in either ASCII case.
+///
+/// The keyboard stores an uppercase letter when Shift or Caps Lock is set,
+/// and the shell echoes those stored bytes. The survey command is that name.
+#[must_use]
+pub fn is_setup_wifi(cmd: &[u8]) -> bool {
+    cmd.eq_ignore_ascii_case(b"setup-wifi")
+}
+
 fn write_bytes(out: &mut [u8], at: usize, bytes: &[u8]) -> Option<usize> {
     let end = at.checked_add(bytes.len())?;
     if end > out.len() {
@@ -1435,6 +1444,15 @@ mod tests {
             read_survey_mark(&page),
             Some(&b"rx 4 ok 0 done 1 fc 80"[..])
         );
+    }
+
+    #[test]
+    fn setup_wifi_matches_either_ascii_case() {
+        assert!(is_setup_wifi(b"setup-wifi"));
+        assert!(is_setup_wifi(b"SETUP-WIFI"));
+        assert!(is_setup_wifi(b"Setup-Wifi"));
+        assert!(!is_setup_wifi(b"setup-wifi "));
+        assert!(!is_setup_wifi(b"wifi"));
     }
 
     #[test]

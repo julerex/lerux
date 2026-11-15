@@ -10,24 +10,27 @@ use core::sync::atomic::{fence, Ordering};
 use lerux_swift::{
     dump::WORDS_PER_ROW,
     mt7921::{
-        ce_cmd, desc_ctrl, desc_len, download_cmd, efuse_mac, ext_cmd, ext_query, firmware_kind,
-        is_uni_cmd, map_reg, mcu_header_len, patch_regions, patch_status, prefetch, ram_regions,
+        band_init_ops, ce_cmd, clc_image, desc_ctrl, desc_len, download_cmd, each_world_rule,
+        efuse_block_byte, efuse_mac, ext_cmd, ext_query, firmware_kind, is_uni_cmd, map_reg,
+        mcu_header_len, parse_nic_cap, patch_regions, patch_status, prefetch, ram_regions,
         remap_l1, ring_regs, uni_cmd, uni_event_ok, write_bss_info, write_chan,
-        write_channel_domain, write_clear_other_beacon, write_dev_info, write_eeprom_mode,
-        write_efuse_read, write_mac_enable, write_mcu_header, write_mcu_txd, write_rts, write_scan,
-        write_txwi, wtbl_word, FirmwareKind, Map, Region, Sem, Stage, TxStop, BSS_INFO_LEN,
+        write_channel_domain, write_clc, write_dev_info, write_eeprom_mode, write_efuse_block,
+        write_efuse_read, write_fw_log, write_keep_full_power, write_mac_enable, write_mcu_header,
+        write_mcu_txd, write_rts, write_rx_filter_enable, write_scan, write_tx_power_batch,
+        write_txwi, wtbl_word, FirmwareKind, Map, RegOp, Region, Sem, Stage, TxStop, BSS_INFO_LEN,
         CHANNEL_DOMAIN_LEN, CONN_ON_LPCTL, CONN_ON_MISC, DEV_INFO_LEN, DMASHDL_BYPASS,
         DMASHDL_ENABLE, DMASHDL_SW, DMA_DONE, DUMMY_CR, DUMP_PREFETCH, DUMP_REGS, DUMP_RINGS,
-        FW_N9_RDY, FW_SCATTER, FW_START, GLO_CFG, GLO_CFG_CHAIN, GLO_CFG_CLK, GLO_CFG_EXT0,
-        GLO_CFG_LE, GLO_CFG_OMIT_RX, GLO_CFG_OMIT_RX_PFET, GLO_CFG_OMIT_TX, GLO_CFG_RX_BUSY,
-        GLO_CFG_RX_EN, GLO_CFG_TX_BUSY, GLO_CFG_TX_EN, GLO_CFG_TX_WB, HIF_REMAP_L1, HOST_CLR_OWN,
-        HOST_INT_ENA, HOST_OWN_SYNC, HOST_SET_OWN, HW_CHIPID, HW_REV, IRQ_MASK, L0S_DIS, LAST_SEC0,
-        LPCR_DRV_OWN, LPCR_FW_OWN, MCU2HOST, MCU_TXD_LEN, MCU_WAKE, MDP_DAMSDU, MDP_DCR0, MDP_DCR1,
-        MDP_HDR_TRANS, NEED_REINIT, PATCH_FINISH, PATCH_IS_DL, PATCH_NOT_DL, PATCH_REL, PATCH_SEM,
-        PCIE_MAC_INT, PCIE_MAC_PM, PRI_DLY, RST_DMASHDL, RST_DTX_PTR, RST_LOGIC, RXD_LEN,
-        RX_DATA_BASE, RX_EVENT_BASE, RX_FILTER_LEN, RX_WA_BASE, SCAN_REQ_LEN, SWDEF_MODE, TOP_LPCR,
-        TXD_LEN, TXP_LEN, TX_RING_BASE, WFDMA_RST, WFSYS_INIT_DONE, WFSYS_RST, WFSYS_RST_B,
-        WTBL_BUSY, WTBL_UPDATE,
+        EE_HW_TYPE, EFUSE_BLOCK_LEN, FW_N9_RDY, FW_SCATTER, FW_START, GLO_CFG, GLO_CFG_CHAIN,
+        GLO_CFG_CLK, GLO_CFG_EXT0, GLO_CFG_LE, GLO_CFG_OMIT_RX, GLO_CFG_OMIT_RX_PFET,
+        GLO_CFG_OMIT_TX, GLO_CFG_RX_BUSY, GLO_CFG_RX_EN, GLO_CFG_TX_BUSY, GLO_CFG_TX_EN,
+        GLO_CFG_TX_WB, HIF_REMAP_L1, HOST_CLR_OWN, HOST_INT_ENA, HOST_OWN_SYNC, HOST_SET_OWN,
+        HW_CHIPID, HW_REV, IRQ_MASK, L0S_DIS, LAST_SEC0, LPCR_DRV_OWN, LPCR_FW_OWN, MCU2HOST,
+        MCU_TXD_LEN, MCU_WAKE, MDP_DAMSDU, MDP_DCR0, MDP_DCR1, MDP_HDR_TRANS, NEED_REINIT,
+        PATCH_FINISH, PATCH_IS_DL, PATCH_NOT_DL, PATCH_REL, PATCH_SEM, PCIE_MAC_INT, PCIE_MAC_PM,
+        POWER_2G, POWER_5G, POWER_6G, PRI_DLY, RST_DMASHDL, RST_DTX_PTR, RST_LOGIC, RXD_LEN,
+        RX_DATA_BASE, RX_EVENT_BASE, RX_FILTER_LEN, RX_WA_BASE, SCAN_REQ_LEN, SKU_LEN, SWDEF_MODE,
+        TOP_LPCR, TXD_LEN, TXP_LEN, TX_POWER_BATCH, TX_POWER_HDR, TX_RING_BASE, WFDMA_RST,
+        WFSYS_INIT_DONE, WFSYS_RST, WFSYS_RST_B, WTBL_BUSY, WTBL_RESERVED, WTBL_UPDATE,
     },
     CLIENT_MAC,
 };
@@ -77,6 +80,8 @@ const N9_SPIN: u32 = 80_000_000;
 const MCU_SPIN: u32 = 40_000_000;
 /// A scan walks 2.4 GHz and 5 GHz. The completion event is the bound.
 const SCAN_SPIN: u32 = 200_000_000;
+/// Extra data-ring polls after scan-done. Linux keeps that ring running.
+const DRAIN_SPIN: u32 = 2_000_000;
 const ASSOC_SPIN: u32 = 40_000_000;
 
 #[derive(Clone, Copy)]
@@ -107,8 +112,11 @@ pub struct Mac {
     ready: bool,
     stage: Stage,
     sta: [u8; 6],
-    /// `bss_idx` 0 is registered. Without it the firmware counts beacons and
-    /// copies none onto the data ring.
+    /// Antenna mask from `GET_NIC_CAPAB`. One stream until that reply arrives.
+    antenna: u8,
+    /// Bit 0 is 6 GHz capability. Bit 1 makes `SET_CLC` wait for the event.
+    nic: u8,
+    /// `bss_idx` 0 is registered. The firmware command carries wireless index 0.
     bss: bool,
     last_len: usize,
     pn: u64,
@@ -187,6 +195,8 @@ impl Mac {
             ready: false,
             stage: Stage::Own,
             sta: CLIENT_MAC,
+            antenna: 1,
+            nic: 0,
             bss: false,
             last_len: 0,
             pn: 1,
@@ -311,7 +321,7 @@ impl Mac {
             return Err(Stage::Mac);
         }
         self.n9 = true;
-        self.mac_init()
+        self.mac_init(ram)
     }
 
     fn own(&mut self) -> Result<(), Stage> {
@@ -536,7 +546,10 @@ impl Mac {
         patch_status(self.response()).ok_or(Sem::Rx)
     }
 
-    fn mac_init(&mut self) -> Result<(), Stage> {
+    fn mac_init(&mut self, ram: &[u8]) -> Result<(), Stage> {
+        self.nic_cap()?;
+        self.send_clc(ram)?;
+        self.fw_log()?;
         let mut body = [0u8; 16];
         write_eeprom_mode(&mut body);
         if !self.command(ext_cmd(0x21), &body[..4], true) {
@@ -548,6 +561,11 @@ impl Mac {
             self.wr(WTBL_UPDATE, wtbl_word(i));
             let _ = self.poll(WTBL_UPDATE, WTBL_BUSY, 0, DMA_SPIN);
         }
+        for band in 0..2 {
+            for op in band_init_ops(band) {
+                self.apply(op);
+            }
+        }
         write_rts(&mut body);
         if !self.command(ext_cmd(0x3e), &body[..12], true) {
             return Err(Stage::Mac);
@@ -556,7 +574,8 @@ impl Mac {
         if !self.command(ext_cmd(0x46), &body[..4], true) {
             return Err(Stage::Mac);
         }
-        if !self.set_channel(1, 0) {
+        // `__mt7921_start` sends the channel domain, then `SET_RX_PATH`.
+        if !self.channel_domain() || !self.set_channel(1, 0) {
             return Err(Stage::Mac);
         }
         write_efuse_read(&mut body);
@@ -565,15 +584,120 @@ impl Mac {
         {
             self.sta = mac;
         }
+        self.tx_power()?;
+        self.deep_sleep()
+    }
+
+    fn nic_cap(&mut self) -> Result<(), Stage> {
+        if !self.command(ce_cmd(0x8a), &[], true) {
+            return Err(Stage::Mac);
+        }
+        let Some(cap) = parse_nic_cap(self.response()) else {
+            return Err(Stage::Mac);
+        };
+        self.antenna = cap.antenna_mask;
+        self.nic = u8::from(cap.has_6g) | (u8::from(cap.clc_event) << 1);
+        if let Some(mac) = cap.mac
+            && mac != [0; 6]
+            && mac != [0xff; 6]
+        {
+            self.sta = mac;
+        }
         Ok(())
     }
 
+    fn send_clc(&mut self, ram: &[u8]) -> Result<(), Stage> {
+        let mut body = [0u8; EFUSE_BLOCK_LEN];
+        if !write_efuse_block(&mut body, EE_HW_TYPE) || !self.command(ext_query(0x01), &body, true)
+        {
+            return Err(Stage::Mac);
+        }
+        let Some(hw) = efuse_block_byte(self.response(), EE_HW_TYPE) else {
+            return Err(Stage::Mac);
+        };
+        let Some(region) = clc_image(ram) else {
+            return Ok(());
+        };
+        let event = self.nic & 2 != 0;
+        let ok = each_world_rule(region, hw & 1, |idx, alpha, kind, data| {
+            let mut cmd = [0u8; 2048];
+            let Some(n) = write_clc(&mut cmd, idx, alpha, kind, data, event) else {
+                return false;
+            };
+            self.command(ce_cmd(0x5c), &cmd[..n], event)
+        });
+        if ok {
+            Ok(())
+        } else {
+            Err(Stage::Mac)
+        }
+    }
+
+    fn fw_log(&mut self) -> Result<(), Stage> {
+        let mut body = [0u8; 4];
+        if write_fw_log(&mut body) && self.command(ce_cmd(0xc5), &body, false) {
+            Ok(())
+        } else {
+            Err(Stage::Mac)
+        }
+    }
+
+    fn tx_power(&mut self) -> Result<(), Stage> {
+        let last = if self.nic & 1 != 0 {
+            POWER_6G[POWER_6G.len() - 1]
+        } else {
+            POWER_5G[POWER_5G.len() - 1]
+        };
+        self.tx_power_list(1, POWER_2G, last)?;
+        self.tx_power_list(2, POWER_5G, last)?;
+        if self.nic & 1 != 0 {
+            self.tx_power_list(3, POWER_6G, last)?;
+        }
+        Ok(())
+    }
+
+    fn tx_power_list(&mut self, band: u8, channels: &[u8], last: u8) -> Result<(), Stage> {
+        let mut batch = 0usize;
+        let mut body = [0u8; TX_POWER_HDR + TX_POWER_BATCH * SKU_LEN];
+        while let Some(n) = write_tx_power_batch(&mut body, band, channels, batch, last) {
+            if !self.command(ce_cmd(0x5d), &body[..n], false) {
+                return Err(Stage::Mac);
+            }
+            batch += 1;
+        }
+        Ok(())
+    }
+
+    fn deep_sleep(&mut self) -> Result<(), Stage> {
+        let mut body = [0u8; 328];
+        if write_keep_full_power(&mut body, true) && self.command(ce_cmd(0xca), &body, false) {
+            Ok(())
+        } else {
+            Err(Stage::Mac)
+        }
+    }
+
+    fn apply(&mut self, op: RegOp) {
+        match op {
+            RegOp::Or(addr, bits) => self.set(addr, bits),
+            RegOp::Clear(addr, bits) => self.clear(addr, bits),
+            RegOp::RxLen(addr, value) => self.rmw_len(addr, value),
+            RegOp::Field(addr, mask, value) => {
+                let cur = self.rr(addr);
+                self.wr(addr, (cur & !mask) | (value & mask));
+            }
+        }
+    }
+
     pub(crate) fn set_channel(&mut self, channel: u8, band: u8) -> bool {
-        let mut body = [0u8; 76];
-        if !write_chan(&mut body, channel, band) {
+        let mut rx_path = [0u8; 76];
+        let mut switch = [0u8; 76];
+        if !write_chan(&mut rx_path, channel, band, self.antenna, true)
+            || !write_chan(&mut switch, channel, band, self.antenna, false)
+        {
             return false;
         }
-        self.command(ext_cmd(0x4e), &body, true) && self.command(ext_cmd(0x08), &body, true)
+        self.command(ext_cmd(0x4e), &rx_path, true) && self.command(ext_cmd(0x08), &switch, true)
     }
 
     pub(crate) fn command(&mut self, cmd: u32, payload: &[u8], wait: bool) -> bool {
@@ -732,13 +856,13 @@ impl Mac {
     /// `MCU_EVENT_SCAN_DONE`, not a command ack.
     ///
     /// The station is registered once, then the channel domain goes out,
-    /// then the other-beacon drop is cleared.
+    /// then the mode 1 receive filter. Linux leaves the other-beacon drop
+    /// at the firmware value for this scan.
     ///
-    /// Registering the station raised the firmware count from `bcn 3` to
-    /// `bcn 16` and left `rx 0`. The card had counted the beacons and had
-    /// not been told to copy them to the host.
+    /// A boot that printed `ch 21 bcn 16` with `rx 0` had finished every
+    /// channel and counted beacons. The data ring's DMA length was still 0.
     pub(crate) fn start_scan(&mut self, ssid: &[u8]) -> bool {
-        if !self.add_station() || !self.channel_domain() || !self.pass_beacons() {
+        if !self.add_station() || !self.channel_domain() || !self.rx_filter() {
             return false;
         }
         let seq = self.next_seq();
@@ -770,15 +894,15 @@ impl Mac {
             return false;
         }
         self.bss = true;
+        self.wr(WTBL_UPDATE, wtbl_word(WTBL_RESERVED));
+        let _ = self.poll(WTBL_UPDATE, WTBL_BUSY, 0, DMA_SPIN);
         true
     }
 
-    /// `MCU_CE_CMD(SET_RX_FILTER)` clear of the other-beacon drop.
-    /// Linux sends this from `mt7921_mcu_set_beacon_filter` and does not
-    /// wait for a reply.
-    fn pass_beacons(&mut self) -> bool {
+    /// `mt7921_configure_filter` before a scan. Linux does not wait.
+    fn rx_filter(&mut self) -> bool {
         let mut body = [0u8; RX_FILTER_LEN];
-        if !write_clear_other_beacon(&mut body) {
+        if !write_rx_filter_enable(&mut body) {
             return false;
         }
         self.command(ce_cmd(0x0a), &body, false)
@@ -984,6 +1108,10 @@ impl Images {
 
 pub(crate) fn scan_budget() -> u32 {
     SCAN_SPIN
+}
+
+pub(crate) fn drain_budget() -> u32 {
+    DRAIN_SPIN
 }
 
 pub(crate) fn assoc_budget() -> u32 {

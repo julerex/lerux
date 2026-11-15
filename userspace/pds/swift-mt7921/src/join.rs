@@ -14,7 +14,7 @@ use lerux_swift::{
 };
 
 use crate::{
-    device::{assoc_budget, scan_budget, Mac},
+    device::{assoc_budget, drain_budget, scan_budget, Mac},
     ether::{write_keepalive, Net, Note, TxFrame},
 };
 
@@ -70,6 +70,7 @@ impl Mac {
             return None;
         }
         let mut frame = [0u8; 1600];
+        let mut done = false;
         for _ in 0..scan_budget() {
             if let Some(n) = self.poll_data()
                 && let Some(m) = copy_frame(n, &mut frame)
@@ -80,9 +81,21 @@ impl Mac {
             if let Some(n) = self.poll_mcu()
                 && read_scan_done(Mac::rx_bytes(n)).is_some()
             {
-                return None;
+                done = true;
+                break;
             }
             core::hint::spin_loop();
+        }
+        if done {
+            for _ in 0..drain_budget() {
+                if let Some(n) = self.poll_data()
+                    && let Some(m) = copy_frame(n, &mut frame)
+                    && let Some(ap) = match_beacon(&frame[..m], ssid)
+                {
+                    return Some(ap);
+                }
+                core::hint::spin_loop();
+            }
         }
         None
     }
@@ -97,44 +110,51 @@ impl Mac {
         if !self.start_scan(&[]) {
             return;
         }
-        let mut names = [[0u8; 32]; SCAN_MAX];
-        let mut lens = [0u8; SCAN_MAX];
-        let mut count = 0usize;
-        let mut rx = 0u32;
-        let mut ok = 0u32;
-        let mut done = false;
-        let (mut channels, mut beacons) = (0u8, 0u32);
-        let mut fc = None;
+        let mut heard = Heard::default();
         let mut frame = [0u8; 1600];
+        self.wait_survey(&mut heard, &mut frame);
+        let mut refs: [&[u8]; SCAN_MAX] = [&[]; SCAN_MAX];
+        let listed = heard.names.iter().zip(heard.lens.iter()).take(heard.count);
+        for (slot, (name, len)) in refs.iter_mut().zip(listed) {
+            let n = usize::from(*len);
+            *slot = &name[..n];
+        }
+        let _ = write_survey_list(page, &refs[..heard.count]);
+        let _ = write_survey_mark(
+            page,
+            heard.rx,
+            heard.ok,
+            heard.done,
+            heard.fc,
+            heard.channels,
+            heard.beacons,
+        );
+    }
+
+    fn wait_survey(&mut self, heard: &mut Heard, frame: &mut [u8]) {
         for _ in 0..scan_budget() {
             if let Some(n) = self.poll_data() {
-                rx = rx.saturating_add(1);
-                if let Some(m) = copy_frame(n, &mut frame) {
-                    if fc.is_none() && m > 0 {
-                        fc = Some(frame[0]);
-                    }
-                    if let Some(ssid) = beacon_ssid(&frame[..m]) {
-                        ok = ok.saturating_add(1);
-                        count = remember(&mut names, &mut lens, count, ssid);
-                    }
-                }
+                heard.keep(n, frame);
             }
             if let Some(n) = self.poll_mcu()
                 && let Some(report) = read_scan_done(Mac::rx_bytes(n))
             {
-                done = true;
-                (channels, beacons) = (report.channels, report.beacons);
+                heard.done = true;
+                heard.channels = report.channels;
+                heard.beacons = report.beacons;
                 break;
             }
             core::hint::spin_loop();
         }
-        let mut refs: [&[u8]; SCAN_MAX] = [&[]; SCAN_MAX];
-        for i in 0..count {
-            let n = usize::from(lens[i]);
-            refs[i] = &names[i][..n];
+        if !heard.done {
+            return;
         }
-        let _ = write_survey_list(page, &refs[..count]);
-        let _ = write_survey_mark(page, rx, ok, done, fc, channels, beacons);
+        for _ in 0..drain_budget() {
+            if let Some(n) = self.poll_data() {
+                heard.keep(n, frame);
+            }
+            core::hint::spin_loop();
+        }
     }
 
     fn open_auth(&mut self, ap: &FoundAp) -> bool {
@@ -315,6 +335,35 @@ impl Mac {
             false,
         )?;
         self.tx_80211(&frame[..n]).then_some(())
+    }
+}
+
+#[derive(Default)]
+struct Heard {
+    names: [[u8; 32]; SCAN_MAX],
+    lens: [u8; SCAN_MAX],
+    count: usize,
+    rx: u32,
+    ok: u32,
+    fc: Option<u8>,
+    done: bool,
+    channels: u8,
+    beacons: u32,
+}
+
+impl Heard {
+    fn keep(&mut self, slot: usize, frame: &mut [u8]) {
+        self.rx = self.rx.saturating_add(1);
+        let Some(m) = copy_frame(slot, frame) else {
+            return;
+        };
+        if self.fc.is_none() && m > 0 {
+            self.fc = Some(frame[0]);
+        }
+        if let Some(ssid) = beacon_ssid(&frame[..m]) {
+            self.ok = self.ok.saturating_add(1);
+            self.count = remember(&mut self.names, &mut self.lens, self.count, ssid);
+        }
     }
 }
 

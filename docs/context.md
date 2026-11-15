@@ -178,20 +178,32 @@ The `setup-wifi` mark uses these words. The same paragraph is in [plan-metal-par
 **host**
 : On this survey, the CPU side. It is the `swift-mt7921` protection domain. It posts the scan commands and reads frames the card has copied into RAM. `rx` counts frames this side received. The developer machine is also called the host in the build docs, and a public name is the host of a public page. Those are separate.
 
+**client identity**
+: The six-byte station address of this laptop. `mac_init` copies it from the card's efuse when that read returns an address. Otherwise it stays `CLIENT_MAC`, `02:14:c3:79:21:01`. Station registration sends those bytes in `write_dev_info`.
+
 **station**
 : The laptop's Wi-Fi client identity. The driver registers one station at `bss_idx` 0 before the survey, using the address from the card. The firmware uses that identity for the scan and for a later association. Linux v6.8 sends the same pair from `mt7921_add_interface`: `DEV_INFO_UPDATE`, then `BSS_INFO_UPDATE`.
 
 **channel**
 : One frequency in the survey list. The list is 13 channels on 2.4 GHz and 8 on 5 GHz, 21 in all. The channel domain is that list, sent to the firmware before the scan. `ch` is `complete_channel_num` from the scan-done event: how many of those channels the firmware finished.
 
+**access point**
+: The radio that transmits a network name. In a beacon its address is the BSSID, bytes 16 through 21. `match_beacon` stores that address with the channel from the DS parameter set when the name matches.
+
+**announcement**
+: A beacon. An access point transmits it so a station can learn the network name. The name is the SSID element, tag 0, after the 36-byte header. An empty name is a hidden network.
+
 **beacon**
 : An 802.11 announcement an access point transmits, carrying its name. `bcn` is `beacon_scan_num` from the same scan-done event: how many beacons the firmware counted. The count includes beacons the host never received.
+
+**frame control**
+: The first field of an 802.11 frame, two bytes. The driver classifies the frame from the first byte with the protocol-version bits cleared (`byte & 0xfc`). `0x80` is a beacon. `0x50` is a probe response.
 
 **scan frame**
 : A beacon (frame control `0x80`) or a probe response (frame control `0x50`) from the survey. `beacon_ssid` reads the network name from either. The host learns a name from a scan frame only after the card has copied that frame onto the data ring.
 
 **data ring**
-: The receive DMA ring whose registers are `RX_DATA_BASE` (`WFDMA0 + 0x520`). The card writes a finished scan frame there, and `poll_data` reads it. `rx` counts those completions. Scan-done, including `ch` and `bcn`, is read from the MCU rings: `WFDMA0 + 0x500` before N9 is ready, and `WFDMA0 + 0x540` once it is. A mark with `bcn` greater than 0 and `rx` 0 means the firmware counted beacons and copied no scan frame onto the data ring. The other-beacon drop is the firmware filter that withholds those frames from the ring. The driver clears it before the scan.
+: The receive DMA ring whose registers are `RX_DATA_BASE` (`WFDMA0 + 0x520`). The card writes a finished scan frame there, and `poll_data` reads it. `rx` counts those completions. Scan-done, including `ch` and `bcn`, is read from the MCU rings: `WFDMA0 + 0x500` before N9 is ready, and `WFDMA0 + 0x540` once it is. A mark with `bcn` greater than 0 and `rx` 0 means the firmware counted beacons and copied no scan frame onto the data ring. Linux programs `MT_DMA_DCR0` so the data ring accepts a 1536-byte frame, and sends `SET_RX_FILTER` mode 1 with `FILTER_ENABLE` before the scan. The other-beacon drop stays at the firmware value.
 
 ## Boundaries
 

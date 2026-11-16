@@ -6,8 +6,8 @@
 
 use lerux_swift::{
     mt7921::{
-        frame_off, is_rx_frame, read_scan_done, write_survey_list, write_survey_mark, Stage,
-        SurveyCounts, SCAN_MAX,
+        frame_off, is_rx_frame, read_scan_done, write_survey_list, write_survey_mark, AuthMiss,
+        Stage, SurveyCounts, SCAN_MAX,
     },
     wpa::{
         assoc_ok, auth_ok, beacon_ssid, ccmp_decrypt, derive_ptk, eapol_in_msdu, match_beacon,
@@ -75,40 +75,52 @@ impl Mac {
         }
     }
 
+    /// Directed scan. The access point is returned only after scan-done.
+    ///
+    /// The boot that stayed on `auth rx` posted authentication as soon as the
+    /// beacon arrived. The firmware scan was still hopping, so the descriptor
+    /// completed on a channel the access point was not using.
     fn find_ap(&mut self, ssid: &[u8]) -> Option<FoundAp> {
         if !self.start_scan(ssid) {
             return None;
         }
         let mut frame = [0u8; 1600];
+        let mut found = None;
         let mut done = false;
         for _ in 0..scan_budget() {
-            if let Some(n) = self.poll_data()
+            if found.is_none()
+                && let Some(n) = self.poll_data()
                 && let Some(ap) = beacon_for(n, &mut frame, ssid)
             {
-                return Some(ap);
+                found = Some(ap);
             }
             if let Some(n) = self.poll_mcu() {
                 if read_scan_done(Mac::rx_bytes(n)).is_some() {
                     done = true;
                     break;
                 }
-                if is_rx_frame(Mac::rx_bytes(n))
+                if found.is_none()
+                    && is_rx_frame(Mac::rx_bytes(n))
                     && let Some(ap) = beacon_for(n, &mut frame, ssid)
                 {
-                    return Some(ap);
+                    found = Some(ap);
                 }
             }
             core::hint::spin_loop();
         }
-        if done {
-            for _ in 0..drain_budget() {
-                if let Some(n) = self.poll_frame()
-                    && let Some(ap) = beacon_for(n, &mut frame, ssid)
-                {
-                    return Some(ap);
-                }
-                core::hint::spin_loop();
+        if !done {
+            return None;
+        }
+        if found.is_some() {
+            return found;
+        }
+        for _ in 0..drain_budget() {
+            if let Some(n) = self.poll_frame()
+                && let Some(ap) = beacon_for(n, &mut frame, ssid)
+            {
+                return Some(ap);
             }
+            core::hint::spin_loop();
         }
         None
     }
@@ -190,7 +202,30 @@ impl Mac {
 
     fn recv_auth(&mut self) -> bool {
         let sta = self.sta();
-        self.wait_frame(assoc_budget(), |got| auth_ok(got, &sta))
+        let mut frame = [0u8; 1600];
+        let mut miss = AuthMiss::default();
+        for _ in 0..assoc_budget() {
+            if let Some(n) = self.poll_data() {
+                miss.rx = miss.rx.saturating_add(1);
+                if copied_auth(n, &mut frame, &mut miss, sta) {
+                    self.remember_auth(miss);
+                    return true;
+                }
+            } else if let Some(n) = self.poll_mcu() {
+                if is_rx_frame(Mac::rx_bytes(n)) {
+                    miss.ev = miss.ev.saturating_add(1);
+                    if copied_auth(n, &mut frame, &mut miss, sta) {
+                        self.remember_auth(miss);
+                        return true;
+                    }
+                } else {
+                    miss.skip = miss.skip.saturating_add(1);
+                }
+            }
+            core::hint::spin_loop();
+        }
+        self.remember_auth(miss);
+        false
     }
 
     fn request_assoc(&mut self, ap: &FoundAp, ssid: &[u8]) -> bool {
@@ -412,6 +447,14 @@ fn remember(names: &mut [[u8; 32]], lens: &mut [u8], count: usize, ssid: &[u8]) 
     names[count][..ssid.len()].copy_from_slice(ssid);
     lens[count] = u8::try_from(ssid.len()).expect("ssid length");
     count + 1
+}
+
+fn copied_auth(n: usize, frame: &mut [u8], miss: &mut AuthMiss, sta: [u8; 6]) -> bool {
+    let Some(m) = copy_frame(n, frame) else {
+        return false;
+    };
+    miss.fc = Some(frame[0]);
+    auth_ok(&frame[..m], &sta)
 }
 
 fn copy_frame(n: usize, out: &mut [u8]) -> Option<usize> {

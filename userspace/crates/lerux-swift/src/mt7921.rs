@@ -1123,12 +1123,13 @@ pub fn write_channel_domain(out: &mut [u8]) -> Option<usize> {
 ///
 /// The MMIO path posts a management frame with cut-through format on the ALTX
 /// queue (`qid >= MT_TXQ_PSD`). The wireless index is [`PEER_WTBL`].
-pub fn write_txwi(txwi: &mut [u8], frame: &[u8], frame_phys: u32) -> bool {
+/// `band5` selects the fixed rate: CCK 1 Mbps below channel 15, OFDM 6 Mbps above.
+pub fn write_txwi(txwi: &mut [u8], frame: &[u8], frame_phys: u32, band5: bool) -> bool {
     if txwi.len() < TXD_LEN + TXP_LEN || frame.len() < 24 || frame.len() > 0x3fff {
         return false;
     }
     txwi[..TXD_LEN + TXP_LEN].fill(0);
-    write_txd(txwi, frame);
+    write_txd(txwi, frame, band5);
     txwi[32..34].copy_from_slice(&0x8000u16.to_le_bytes());
     txwi[40..44].copy_from_slice(&frame_phys.to_le_bytes());
     let len = fit_u16(frame.len()) | 0x8000;
@@ -1142,7 +1143,7 @@ const MT_LMAC_ALTX0: u32 = 0x10;
 /// TXD words before the TXP buffer pointer. `frame` is at least 24 bytes.
 ///
 /// Packet format is cut-through: `MT_TXD0_PKT_FMT` (bits 24:23) stays clear.
-fn write_txd(txwi: &mut [u8], frame: &[u8]) {
+fn write_txd(txwi: &mut [u8], frame: &[u8], band5: bool) {
     let total = frame.len() + TXD_LEN;
     let tx0 = u32::from(low_u16(total)) | (MT_LMAC_ALTX0 << 25);
     txwi[..4].copy_from_slice(&tx0.to_le_bytes());
@@ -1169,7 +1170,9 @@ fn write_txd(txwi: &mut [u8], frame: &[u8]) {
         tx3 |= 1;
     }
     if tx2 & (1 << 31) != 0 {
-        let rate = 0x40u32;
+        // `mt76_connac2_mac_tx_rate_val` on connac2 uses the lowest basic rate.
+        // That is CCK 1 Mbps on 2.4 GHz and OFDM 6 Mbps (`0x40`) on 5 GHz.
+        let rate = if band5 { 0x40u32 } else { 0 };
         let tx6 = (1u32 << 2) | (rate << 16);
         txwi[24..28].copy_from_slice(&tx6.to_le_bytes());
         tx3 |= 1 << 28;
@@ -1179,8 +1182,15 @@ fn write_txd(txwi: &mut [u8], frame: &[u8]) {
     txwi[28..32].copy_from_slice(&tx7.to_le_bytes());
 }
 
+/// Header length from `ieee80211_hdrlen`.
+///
+/// Bit 7 of the first frame-control byte is the `QoS` bit only on a data frame.
+/// On a management frame it is a subtype bit. Authentication is `0xb0`, so
+/// treating that bit as `QoS` reports 26 bytes and the MAC reads the algorithm
+/// field as part of the header.
 fn header_len(frame: &[u8]) -> usize {
-    if frame[0] & 0x80 != 0 {
+    let fc = frame[0];
+    if fc & 0x0c == 0x08 && fc & 0x80 != 0 {
         26
     } else {
         24
@@ -1445,6 +1455,43 @@ fn format_survey_mark_at(out: &mut [u8], counts: &SurveyCounts) -> Option<usize>
 
 fn hex_byte(byte: u8) -> [u8; 2] {
     [hex_nibble(byte >> 4), hex_nibble(byte)]
+}
+
+/// What the authentication wait kept instead of a matching reply.
+///
+/// `rx` and `ev` match the survey mark. `skip` counts MCU completions
+/// [`is_rx_frame`] rejected. `fc` is the last frame that copied, when one did.
+#[derive(Clone, Copy, Default)]
+pub struct AuthMiss {
+    pub rx: u16,
+    pub ev: u16,
+    pub skip: u16,
+    pub fc: Option<u8>,
+}
+
+/// Panel line for a posted authentication frame with no matching reply.
+///
+/// The stage word stays `auth rx`. The counts use the survey words, plus
+/// `skip` for an MCU completion that was not a frame.
+#[must_use]
+pub fn write_auth_miss(out: &mut [u8], miss: &AuthMiss) -> usize {
+    write_auth_miss_at(out, *miss).unwrap_or(0)
+}
+
+fn write_auth_miss_at(out: &mut [u8], miss: AuthMiss) -> Option<usize> {
+    let mut n = 0;
+    n = write_bytes(out, n, b"mt7921: auth rx fc ")?;
+    n = match miss.fc {
+        Some(byte) => write_bytes(out, n, &hex_byte(byte))?,
+        None => write_bytes(out, n, b"--")?,
+    };
+    n = write_bytes(out, n, b" rx ")?;
+    n = write_dec(out, n, u32::from(miss.rx))?;
+    n = write_bytes(out, n, b" ev ")?;
+    n = write_dec(out, n, u32::from(miss.ev))?;
+    n = write_bytes(out, n, b" skip ")?;
+    n = write_dec(out, n, u32::from(miss.skip))?;
+    Some(n)
 }
 
 /// Store the mark after the name list. The shell prints these bytes.
@@ -2234,13 +2281,57 @@ mod tests {
         let sta = [0x02, 0x11, 0x22, 0x33, 0x44, 0x55];
         let n = crate::wpa::write_auth(&mut frame, &bssid, &sta, 1);
         let mut txwi = [0u8; TXD_LEN + TXP_LEN];
-        assert!(write_txwi(&mut txwi, &frame[..n], 0x01f6_8000));
+        assert!(write_txwi(&mut txwi, &frame[..n], 0x01f6_8000, true));
         let tx0 = u32::from_le_bytes(txwi[0..4].try_into().expect("txd0"));
         let tx1 = u32::from_le_bytes(txwi[4..8].try_into().expect("txd1"));
+        let tx6 = u32::from_le_bytes(txwi[24..28].try_into().expect("txd6"));
         assert_eq!((tx0 >> 23) & 0x3, 0, "packet format");
         assert_eq!(tx0 >> 25, 0x10, "queue");
         assert_eq!(tx1 & 0x3ff, PEER_WTBL, "wireless index");
+        assert_eq!((tx1 >> 11) & 0x1f, 12, "management header words");
+        assert_eq!((tx6 >> 16) & 0x3fff, 0x40, "5 GHz rate");
         assert_eq!(u16::from_le_bytes([txwi[32], txwi[33]]), 0x8000);
+        assert!(write_txwi(&mut txwi, &frame[..n], 0x01f6_8000, false));
+        let tx6 = u32::from_le_bytes(txwi[24..28].try_into().expect("txd6"));
+        assert_eq!((tx6 >> 16) & 0x3fff, 0, "2.4 GHz rate");
+    }
+
+    #[test]
+    fn qos_data_header_is_thirteen_words() {
+        let mut frame = [0u8; 64];
+        let bssid = [0x02, 0x00, 0x00, 0x00, 0x00, 0x01];
+        let sta = [0x02, 0x11, 0x22, 0x33, 0x44, 0x55];
+        let n = crate::wpa::write_qos_data(&mut frame, &bssid, &sta, &bssid, b"hi", 1, false)
+            .expect("qos frame");
+        let mut txwi = [0u8; TXD_LEN + TXP_LEN];
+        assert!(write_txwi(&mut txwi, &frame[..n], 0x01f6_8000, false));
+        let tx1 = u32::from_le_bytes(txwi[4..8].try_into().expect("txd1"));
+        assert_eq!((tx1 >> 11) & 0x1f, 13, "qos header words");
+    }
+
+    #[test]
+    fn auth_miss_counts_each_ring() {
+        let mut out = [0u8; 64];
+        let n = write_auth_miss(
+            &mut out,
+            &AuthMiss {
+                rx: 0,
+                ev: 0,
+                skip: 0,
+                fc: None,
+            },
+        );
+        assert_eq!(&out[..n], b"mt7921: auth rx fc -- rx 0 ev 0 skip 0");
+        let n = write_auth_miss(
+            &mut out,
+            &AuthMiss {
+                rx: 2,
+                ev: 1,
+                skip: 4,
+                fc: Some(0xb0),
+            },
+        );
+        assert_eq!(&out[..n], b"mt7921: auth rx fc b0 rx 2 ev 1 skip 4");
     }
 
     #[test]

@@ -17,8 +17,8 @@ use lerux_swift::{
         write_channel_domain, write_clc, write_clear_other_beacon, write_dev_info,
         write_eeprom_mode, write_efuse_block, write_efuse_read, write_fw_log, write_mac_enable,
         write_mcu_header, write_mcu_txd, write_rts, write_rx_filter_enable, write_scan,
-        write_sta_rec, write_txwi, wtbl_word, FirmwareKind, Map, RegOp, Region, Sem, Stage, TxStop,
-        BSS_INFO_LEN, CHANNEL_DOMAIN_LEN, CONN_ON_LPCTL, CONN_ON_MISC, DEV_INFO_LEN,
+        write_sta_rec, write_txwi, wtbl_word, AuthMiss, FirmwareKind, Map, RegOp, Region, Sem,
+        Stage, TxStop, BSS_INFO_LEN, CHANNEL_DOMAIN_LEN, CONN_ON_LPCTL, CONN_ON_MISC, DEV_INFO_LEN,
         DMASHDL_BYPASS, DMASHDL_ENABLE, DMASHDL_SW, DMA_DONE, DUMMY_CR, DUMP_PREFETCH, DUMP_REGS,
         DUMP_RINGS, EE_HW_TYPE, EFUSE_BLOCK_LEN, FW_N9_RDY, FW_SCATTER, FW_START, GLO_CFG,
         GLO_CFG_CHAIN, GLO_CFG_CLK, GLO_CFG_EXT0, GLO_CFG_LE, GLO_CFG_OMIT_RX,
@@ -118,6 +118,10 @@ pub struct Mac {
     nic: u8,
     /// `bss_idx` 0 is registered. The firmware command carries wireless index 0.
     bss: bool,
+    /// Band from the last channel command. Zero is 2.4 GHz.
+    band: u8,
+    /// Counts from the last authentication wait. Painted when that wait fails.
+    auth_miss: AuthMiss,
     last_len: usize,
     pn: u64,
     wifi_seq: u16,
@@ -198,6 +202,8 @@ impl Mac {
             antenna: 1,
             nic: 0,
             bss: false,
+            band: 0,
+            auth_miss: AuthMiss::default(),
             last_len: 0,
             pn: 1,
             wifi_seq: 1,
@@ -657,6 +663,7 @@ impl Mac {
     }
 
     pub(crate) fn set_channel(&mut self, channel: u8, band: u8) -> bool {
+        self.band = band;
         let mut rx_path = [0u8; 76];
         let mut switch = [0u8; 76];
         if !write_chan(&mut rx_path, channel, band, self.antenna, true)
@@ -939,13 +946,21 @@ impl Mac {
         let phys = DMA_PHYS + u32_from(OFF_TX_FRAME);
         {
             let txwi = &mut scratch().cmd[..TXD_LEN + TXP_LEN];
-            if !write_txwi(txwi, frame, phys) {
+            if !write_txwi(txwi, frame, phys, self.band != 0) {
                 return false;
             }
         }
         dma_write(self.dma, OFF_TXWI, &scratch().cmd[..TXD_LEN + TXP_LEN]);
         dma_write(self.dma, OFF_TX_FRAME, frame);
         self.post_tx(TX_DATA, DMA_PHYS + u32_from(OFF_TXWI), TXD_LEN + TXP_LEN)
+    }
+
+    pub(crate) fn auth_miss(&self) -> AuthMiss {
+        self.auth_miss
+    }
+
+    pub(crate) fn remember_auth(&mut self, miss: AuthMiss) {
+        self.auth_miss = miss;
     }
 
     pub(crate) fn next_seq_wifi(&mut self) -> u16 {

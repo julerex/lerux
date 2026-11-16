@@ -13,7 +13,7 @@
 //! The shell notifies channel 3 for that survey and for a passphrase.
 //! Channel 1 is the receive virtualiser and runs the same handler.
 //! Channel 0 stays the MSI. Channel 2 is the transmit virtualiser.
-//! Association paints `scan`, `auth`, `assoc`, and `eapol`, then returns to
+//! Association paints `scan`, `auth tx`, `auth rx`, `assoc`, and `eapol`, then returns to
 //! `wait`. The shell owns the address and the ping. Received Ethernet frames
 //! are enqueued on the standard receive queue, and transmit frames are
 //! dequeued from the standard transmit queue.
@@ -45,7 +45,10 @@ use lerux_sddf::{net_driver_config_t, net_image::net_config_from_bytes, SDDF_NET
 #[cfg(not(test))]
 use lerux_swift::{
     bar_line, class_code, format_report, load_header, memory_bar,
-    mt7921::{read_survey_mark, survey_requested, write_join, write_slot_line, Sem, Stage},
+    mt7921::{
+        read_survey_mark, survey_requested, write_auth_miss, write_join, write_slot_line, Sem,
+        Stage,
+    },
     paint_row, read_key, vendor_device, working_line, WaitMark, WifiReport, MT7921_BAR, MT7921_BDF,
     MT7921_IDS,
 };
@@ -344,7 +347,13 @@ impl HandlerImpl {
         } else if let Some((name, name_len, pass, pass_len)) = posted_key() {
             let stage = mac.associate(&name[..name_len], &pass[..pass_len], paint_stage);
             let up = stage == Stage::Wait;
-            paint_stage(stage);
+            if stage == Stage::AuthRx {
+                let mut line = [0u8; 64];
+                let n = write_auth_miss(&mut line, &mac.auth_miss());
+                paint(&line[..n]);
+            } else {
+                paint_stage(stage);
+            }
             let _ = write_join(key_page(), up);
         }
     }

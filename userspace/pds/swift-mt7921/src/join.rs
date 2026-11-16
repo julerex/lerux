@@ -354,20 +354,31 @@ impl Mac {
     fn wait_eapol(&mut self, sta: [u8; 6], tk: Option<&[u8; 16]>, out: &mut [u8]) -> Option<usize> {
         let mut frame = [0u8; 1600];
         let mut plain = [0u8; 400];
+        let mut miss = AuthMiss::default();
         for _ in 0..assoc_budget() {
-            if let Some(n) = self.poll_frame()
-                && let Some(m) = copy_frame(n, &mut frame)
-                && frame.get(4..10) == Some(&sta[..])
-                && let Some(body) = msdu(&frame[..m], tk, &mut plain)
-                && let Some(eapol) = eapol_in_msdu(body)
-                && eapol.len() <= out.len()
-            {
-                let n = eapol.len();
-                out[..n].copy_from_slice(eapol);
-                return Some(n);
+            if let Some(n) = self.poll_data() {
+                miss.rx = miss.rx.saturating_add(1);
+                if let Some(got) = copied_eapol(n, &mut frame, &mut plain, &mut miss, sta, tk, out)
+                {
+                    self.remember_eapol(miss);
+                    return Some(got);
+                }
+            } else if let Some(n) = self.poll_mcu() {
+                if is_rx_frame(Mac::rx_bytes(n)) {
+                    miss.ev = miss.ev.saturating_add(1);
+                    if let Some(got) =
+                        copied_eapol(n, &mut frame, &mut plain, &mut miss, sta, tk, out)
+                    {
+                        self.remember_eapol(miss);
+                        return Some(got);
+                    }
+                } else {
+                    miss.skip = miss.skip.saturating_add(1);
+                }
             }
             core::hint::spin_loop();
         }
+        self.remember_eapol(miss);
         None
     }
 
@@ -448,6 +459,33 @@ fn remember(names: &mut [[u8; 32]], lens: &mut [u8], count: usize, ssid: &[u8]) 
     names[count][..ssid.len()].copy_from_slice(ssid);
     lens[count] = u8::try_from(ssid.len()).expect("ssid length");
     count + 1
+}
+
+fn copied_eapol(
+    n: usize,
+    frame: &mut [u8],
+    plain: &mut [u8],
+    miss: &mut AuthMiss,
+    sta: [u8; 6],
+    tk: Option<&[u8; 16]>,
+    out: &mut [u8],
+) -> Option<usize> {
+    let m = copy_frame(n, frame)?;
+    if m == 0 {
+        return None;
+    }
+    miss.fc = Some(frame[0]);
+    if frame.get(4..10) != Some(&sta[..]) {
+        return None;
+    }
+    let body = msdu(&frame[..m], tk, plain)?;
+    let eapol = eapol_in_msdu(body)?;
+    if eapol.len() > out.len() {
+        return None;
+    }
+    let n = eapol.len();
+    out[..n].copy_from_slice(eapol);
+    Some(n)
 }
 
 fn copied_auth(n: usize, frame: &mut [u8], miss: &mut AuthMiss, sta: [u8; 6]) -> bool {

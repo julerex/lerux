@@ -1118,7 +1118,7 @@ const SCAN_CHANNELS: &[(u8, u8)] = &[
     (2, 161),
 ];
 
-/// Active scan. Layout is `mt76_connac_hw_scan_req` in Linux v6.8.
+/// Active scan. Layout is `mt76_connac_hw_scan_req`.
 ///
 /// An empty `ssid` is the wildcard survey: `ssid_type` bit 0, `ssids_num` 0.
 /// A name is the directed scan association uses.
@@ -1555,12 +1555,21 @@ pub struct AuthMiss {
 /// `skip` for an MCU completion that was not a frame.
 #[must_use]
 pub fn write_auth_miss(out: &mut [u8], miss: &AuthMiss) -> usize {
-    write_auth_miss_at(out, *miss).unwrap_or(0)
+    write_miss_at(out, b"mt7921: auth rx fc ", *miss).unwrap_or(0)
 }
 
-fn write_auth_miss_at(out: &mut [u8], miss: AuthMiss) -> Option<usize> {
+/// Panel line when the four-way handshake returns without a key.
+///
+/// The stage word stays `eapol`. `rx`, `ev`, `skip`, and `fc` mean the same
+/// thing they mean on the `auth rx` line.
+#[must_use]
+pub fn write_eapol_miss(out: &mut [u8], miss: &AuthMiss) -> usize {
+    write_miss_at(out, b"mt7921: eapol fc ", *miss).unwrap_or(0)
+}
+
+fn write_miss_at(out: &mut [u8], prefix: &[u8], miss: AuthMiss) -> Option<usize> {
     let mut n = 0;
-    n = write_bytes(out, n, b"mt7921: auth rx fc ")?;
+    n = write_bytes(out, n, prefix)?;
     n = match miss.fc {
         Some(byte) => write_bytes(out, n, &hex_byte(byte))?,
         None => write_bytes(out, n, b"--")?,
@@ -1932,11 +1941,19 @@ pub fn clc_image(image: &[u8]) -> Option<&[u8]> {
 /// Header of one `SET_CLC` command, before the country rule.
 pub const CLC_HDR: usize = 76;
 
-/// One world-domain (`00`) rule from a CLC region.
+/// `MT792x_CLC_POWER`. The encapsulation bit is checked only for this index.
+const CLC_POWER: u8 = 0;
+/// `MT792x_CLC_REGD`. The loader stores it; `mt7921_mcu_set_clc` does not submit it.
+const CLC_REGD: u8 = 3;
+/// `MT792x_CLC_MAX_NUM`. `mt7921_load_clc` leaves a record at or past this index unused.
+const CLC_MAX: u8 = 4;
+
+/// World-domain (`00`) rules from a CLC region.
 ///
-/// `idx` 0 is the power block. Its encapsulation bit has to match `hw_encap`.
-/// A block the walker cannot measure returns `false` from the callback path
-/// by stopping the walk.
+/// `mt7921_load_clc` stores a record only while its index is below
+/// `MT792x_CLC_MAX_NUM`. `mt7921_mcu_set_clc` then skips `MT792x_CLC_REGD`.
+/// Index 0 is the power block, and its encapsulation bit has to match `hw_encap`.
+/// A record length the published parser rejects stops the walk.
 pub fn each_world_rule(
     region: &[u8],
     hw_encap: u8,
@@ -1950,7 +1967,9 @@ pub fn each_world_rule(
         }
         let idx = region[at + 4];
         let encap = region[at + 7] & 1;
-        let skip = idx == 0 && encap != (hw_encap & 1);
+        // A newer firmware may add a record this driver does not store.
+        let skip =
+            idx >= CLC_MAX || idx == CLC_REGD || (idx == CLC_POWER && encap != (hw_encap & 1));
         if !skip {
             let body = &region[at + 16..at + len];
             let mut rule = 0usize;
@@ -2415,6 +2434,26 @@ mod tests {
             },
         );
         assert_eq!(&out[..n], b"mt7921: auth rx fc b0 rx 2 ev 1 skip 4");
+        let n = write_eapol_miss(
+            &mut out,
+            &AuthMiss {
+                rx: 0,
+                ev: 0,
+                skip: 0,
+                fc: None,
+            },
+        );
+        assert_eq!(&out[..n], b"mt7921: eapol fc -- rx 0 ev 0 skip 0");
+        let n = write_eapol_miss(
+            &mut out,
+            &AuthMiss {
+                rx: 3,
+                ev: 1,
+                skip: 2,
+                fc: Some(0x88),
+            },
+        );
+        assert_eq!(&out[..n], b"mt7921: eapol fc 88 rx 3 ev 1 skip 2");
     }
 
     #[test]
@@ -2608,6 +2647,37 @@ mod tests {
         assert_eq!(&cmd[8..12], b"00-0");
         assert_eq!(cmd[CLC_HDR], 9);
         assert_eq!(cmd[CLC_HDR + 1], 8);
+    }
+
+    fn put_clc(out: &mut [u8], idx: u8) -> usize {
+        let len = 16 + 6 + 12;
+        out[..len].fill(0);
+        out[..4].copy_from_slice(&u32::try_from(len).unwrap().to_le_bytes());
+        out[4] = idx;
+        out[16] = b'0';
+        out[17] = b'0';
+        out[18] = b'-';
+        out[19] = b'0';
+        out[20..22].copy_from_slice(&12u16.to_le_bytes());
+        out[22] = 9;
+        len
+    }
+
+    #[test]
+    fn clc_walk_skips_records_the_driver_does_not_store() {
+        let mut region = [0u8; 34 * 5];
+        let mut at = 0usize;
+        for idx in [CLC_POWER, 1, CLC_REGD, 2, CLC_MAX] {
+            at += put_clc(&mut region[at..], idx);
+        }
+        let mut seen = [0u8; 4];
+        let mut n = 0usize;
+        assert!(each_world_rule(&region[..at], 0, |idx, _, _, _| {
+            seen[n] = idx;
+            n += 1;
+            true
+        }));
+        assert_eq!(&seen[..n], &[CLC_POWER, 1, 2]);
     }
 
     #[test]

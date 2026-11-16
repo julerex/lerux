@@ -46,8 +46,8 @@ use lerux_sddf::{net_driver_config_t, net_image::net_config_from_bytes, SDDF_NET
 use lerux_swift::{
     bar_line, class_code, format_report, load_header, memory_bar,
     mt7921::{
-        read_survey_mark, survey_requested, write_auth_miss, write_join, write_slot_line, Sem,
-        Stage,
+        read_survey_mark, survey_requested, write_auth_miss, write_eapol_miss, write_join,
+        write_slot_line, Sem, Stage,
     },
     paint_row, read_key, vendor_device, working_line, WaitMark, WifiReport, MT7921_BAR, MT7921_BDF,
     MT7921_IDS,
@@ -350,6 +350,10 @@ impl HandlerImpl {
             if stage == Stage::AuthRx {
                 let mut line = [0u8; 64];
                 let n = write_auth_miss(&mut line, &mac.auth_miss());
+                paint(&line[..n]);
+            } else if stage == Stage::Eapol {
+                let mut line = [0u8; 64];
+                let n = write_eapol_miss(&mut line, &mac.eapol_miss());
                 paint(&line[..n]);
             } else {
                 paint_stage(stage);

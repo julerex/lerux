@@ -122,6 +122,8 @@ pub struct Mac {
     band: u8,
     /// Counts from the last authentication wait. Painted when that wait fails.
     auth_miss: AuthMiss,
+    /// Counts from the last handshake wait. Painted when the handshake fails.
+    eapol_miss: AuthMiss,
     last_len: usize,
     pn: u64,
     wifi_seq: u16,
@@ -204,6 +206,7 @@ impl Mac {
             bss: false,
             band: 0,
             auth_miss: AuthMiss::default(),
+            eapol_miss: AuthMiss::default(),
             last_len: 0,
             pn: 1,
             wifi_seq: 1,
@@ -992,6 +995,14 @@ impl Mac {
 
     pub(crate) fn remember_auth(&mut self, miss: AuthMiss) {
         self.auth_miss = miss;
+    }
+
+    pub(crate) fn eapol_miss(&self) -> AuthMiss {
+        self.eapol_miss
+    }
+
+    pub(crate) fn remember_eapol(&mut self, miss: AuthMiss) {
+        self.eapol_miss = miss;
     }
 
     pub(crate) fn next_seq_wifi(&mut self) -> u16 {

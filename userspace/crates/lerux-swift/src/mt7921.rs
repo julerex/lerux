@@ -71,7 +71,12 @@ pub enum Stage {
     Mac,
     Wait,
     Scan,
-    Auth,
+    /// The open-system authentication frame did not leave the transmit ring.
+    ///
+    /// The boot that painted a single `auth` covered this return and [`Stage::AuthRx`].
+    AuthTx,
+    /// The authentication frame was posted and no matching reply arrived.
+    AuthRx,
     Assoc,
     Eapol,
     Dhcp,
@@ -102,7 +107,8 @@ impl Stage {
             Stage::Mac => b"mac",
             Stage::Wait => b"wait",
             Stage::Scan => b"scan",
-            Stage::Auth => b"auth",
+            Stage::AuthTx => b"auth tx",
+            Stage::AuthRx => b"auth rx",
             Stage::Assoc => b"assoc",
             Stage::Eapol => b"eapol",
             Stage::Dhcp => b"dhcp",
@@ -489,6 +495,7 @@ const QUERY: u32 = 1 << 16;
 const UNI_EXT_ACK: u8 = 0x07;
 /// `CONNECTION_INFRA_STA`.
 const CONN_INFRA_STA: u32 = 1 | (1 << 16);
+const CONN_INFRA_AP: u32 = 2 | (1 << 16);
 
 #[must_use]
 pub fn ext_cmd(id: u32) -> u32 {
@@ -776,6 +783,144 @@ pub fn write_bss_info(out: &mut [u8]) -> bool {
     true
 }
 
+const STA_REQ_HDR: usize = 8;
+const STA_BASIC: usize = 20;
+const STA_PHY: usize = 12;
+const STA_RA: usize = 16;
+const STA_STATE: usize = 12;
+const STA_WTBL_TLV: usize = 4;
+const WTBL_HDR: usize = 8;
+const WTBL_GENERIC_LEN: usize = 20;
+const WTBL_RX_LEN: usize = 12;
+const WTBL_HDR_TRANS_LEN: usize = 8;
+const WTBL_SMPS_LEN: usize = 8;
+const STA_WTBL: usize =
+    STA_WTBL_TLV + WTBL_HDR + WTBL_GENERIC_LEN + WTBL_RX_LEN + WTBL_HDR_TRANS_LEN + WTBL_SMPS_LEN;
+
+/// Bytes in [`write_sta_rec`].
+pub const STA_REC_LEN: usize = STA_REQ_HDR + STA_BASIC + STA_PHY + STA_RA + STA_STATE + STA_WTBL;
+
+/// `STA_REC_UPDATE` for the access point, sent before the authentication frame.
+///
+/// `mt7921_mac_sta_add` installs the peer at the first free wireless index.
+/// Index 0 is the global entry (`mt792x_init_wcid`), so the peer is [`PEER_WTBL`].
+/// The basic TLV is port-secure because `mt76_connac_mcu_sta_cmd` sets that
+/// when the station is enabled. The state TLV stays none. HT, VHT, and HE are
+/// absent, which is the `sta_tlv` path with those capabilities clear. The
+/// wireless-table TLVs are generic, receive, header translation, and SMPS.
+pub fn write_sta_rec(out: &mut [u8], bssid: &[u8; 6], band5: bool) -> Option<usize> {
+    if out.len() < STA_REC_LEN {
+        return None;
+    }
+    out[..STA_REC_LEN].fill(0);
+    let mut at = 0;
+    put_sta_header(out, &mut at);
+    put_sta_basic(out, &mut at, *bssid);
+    put_sta_rates(out, &mut at, band5);
+    put_sta_wtbl(out, &mut at, *bssid);
+    (at == STA_REC_LEN).then_some(at)
+}
+
+fn put_sta_header(out: &mut [u8], at: &mut usize) {
+    put_u8(out, at, 0);
+    put_u8(out, at, PEER_INDEX);
+    put_u16(out, at, 5);
+    put_u8(out, at, 1);
+    put_bytes(out, at, &[0; 3]);
+}
+
+fn put_sta_basic(out: &mut [u8], at: &mut usize, bssid: [u8; 6]) {
+    put_u16(out, at, 0);
+    put_u16(out, at, fit_u16(STA_BASIC));
+    put_u32(out, at, CONN_INFRA_AP);
+    put_u8(out, at, 2);
+    put_u8(out, at, 0);
+    put_u16(out, at, 0);
+    put_bytes(out, at, &bssid);
+    put_u16(out, at, 3);
+}
+
+fn put_sta_rates(out: &mut [u8], at: &mut usize, band5: bool) {
+    let phy = if band5 {
+        PHY_OFDM
+    } else {
+        PHY_HR_DSSS | PHY_ERP
+    };
+    let basic = if band5 { 0x0015u16 } else { 0x000f };
+    put_u16(out, at, 0x15);
+    put_u16(out, at, fit_u16(STA_PHY));
+    put_u16(out, at, basic);
+    put_u8(out, at, phy);
+    put_bytes(out, at, &[0; 5]);
+
+    let legacy = if band5 {
+        0xffu16 << 6
+    } else {
+        (0xffu16 << 6) | 0xf
+    };
+    put_u16(out, at, 1);
+    put_u16(out, at, fit_u16(STA_RA));
+    put_u16(out, at, legacy);
+    put_bytes(out, at, &[0; 10]);
+
+    put_u16(out, at, 7);
+    put_u16(out, at, fit_u16(STA_STATE));
+    put_u32(out, at, 0);
+    put_bytes(out, at, &[0; 4]);
+}
+
+fn put_sta_wtbl(out: &mut [u8], at: &mut usize, bssid: [u8; 6]) {
+    put_u16(out, at, 13);
+    put_u16(out, at, fit_u16(STA_WTBL));
+    put_u8(out, at, PEER_INDEX);
+    put_u8(out, at, 1);
+    put_u16(out, at, 4);
+    put_bytes(out, at, &[0; 4]);
+
+    put_u16(out, at, 0);
+    put_u16(out, at, fit_u16(WTBL_GENERIC_LEN));
+    put_bytes(out, at, &bssid);
+    put_bytes(out, at, &[0; 10]);
+
+    put_u16(out, at, 1);
+    put_u16(out, at, fit_u16(WTBL_RX_LEN));
+    put_u8(out, at, 0);
+    put_bytes(out, at, &[1, 1, 1]);
+    put_bytes(out, at, &[0; 4]);
+
+    put_u16(out, at, 6);
+    put_u16(out, at, fit_u16(WTBL_HDR_TRANS_LEN));
+    put_bytes(out, at, &[1, 0, 1, 0]);
+
+    put_u16(out, at, 13);
+    put_u16(out, at, fit_u16(WTBL_SMPS_LEN));
+    put_bytes(out, at, &[0; 4]);
+}
+
+const PHY_HR_DSSS: u8 = 1;
+const PHY_ERP: u8 = 2;
+const PHY_OFDM: u8 = 8;
+
+fn put_u8(out: &mut [u8], at: &mut usize, value: u8) {
+    out[*at] = value;
+    *at += 1;
+}
+
+fn put_u16(out: &mut [u8], at: &mut usize, value: u16) {
+    out[*at..*at + 2].copy_from_slice(&value.to_le_bytes());
+    *at += 2;
+}
+
+fn put_u32(out: &mut [u8], at: &mut usize, value: u32) {
+    out[*at..*at + 4].copy_from_slice(&value.to_le_bytes());
+    *at += 4;
+}
+
+fn put_bytes(out: &mut [u8], at: &mut usize, bytes: &[u8]) {
+    out[*at..*at + bytes.len()].copy_from_slice(bytes);
+    *at += bytes.len();
+}
+
 /// `SET_RX_FILTER` mode 1, the filter word `mt7921_configure_filter` sends
 /// before a scan. Mode 1 replaces the filter. `BIT(31)` is `FILTER_ENABLE`.
 /// Linux adds other-BSS, FCS-fail, and control only when mac80211 asks.
@@ -974,7 +1119,10 @@ pub fn write_channel_domain(out: &mut [u8]) -> Option<usize> {
     Some(CHANNEL_DOMAIN_LEN)
 }
 
-/// `mt76_connac2_mac_write_txwi` for one 802.11 frame on the ALTX queue.
+/// `mt76_connac2_mac_write_txwi` for one 802.11 frame.
+///
+/// The MMIO path posts a management frame with cut-through format on the ALTX
+/// queue (`qid >= MT_TXQ_PSD`). The wireless index is [`PEER_WTBL`].
 pub fn write_txwi(txwi: &mut [u8], frame: &[u8], frame_phys: u32) -> bool {
     if txwi.len() < TXD_LEN + TXP_LEN || frame.len() < 24 || frame.len() > 0x3fff {
         return false;
@@ -988,18 +1136,22 @@ pub fn write_txwi(txwi: &mut [u8], frame: &[u8], frame_phys: u32) -> bool {
     true
 }
 
+/// `MT_LMAC_ALTX0`. Management frames use this queue on the MMIO path.
+const MT_LMAC_ALTX0: u32 = 0x10;
+
 /// TXD words before the TXP buffer pointer. `frame` is at least 24 bytes.
+///
+/// Packet format is cut-through: `MT_TXD0_PKT_FMT` (bits 24:23) stays clear.
 fn write_txd(txwi: &mut [u8], frame: &[u8]) {
     let total = frame.len() + TXD_LEN;
-    let q = 0x10u32;
-    let tx0 = u32::from(low_u16(total)) | (2 << 23) | (q << 25);
+    let tx0 = u32::from(low_u16(total)) | (MT_LMAC_ALTX0 << 25);
     txwi[..4].copy_from_slice(&tx0.to_le_bytes());
     let fc = u16::from_le_bytes([frame[0], frame[1]]);
     let fc_kind = u32::from((fc & 0x000c) >> 2);
     let subtype = u32::from((fc & 0x00f0) >> 4);
     let hdr = header_len(frame);
     let words = u32::try_from(hdr / 2).expect("header words");
-    let tx1 = (1u32 << 31) | (words << 11) | (2 << 16);
+    let tx1 = (1u32 << 31) | (words << 11) | (2 << 16) | PEER_WTBL;
     txwi[4..8].copy_from_slice(&tx1.to_le_bytes());
     let multicast = frame[4] & 1 != 0;
     let mut tx2 = (fc_kind << 4) | subtype;
@@ -1500,6 +1652,9 @@ pub const EE_HW_TYPE: u32 = 0x55b;
 pub const EFUSE_BLOCK_LEN: usize = 24;
 /// Wireless-table index Linux assigns to the first station after registration.
 pub const WTBL_RESERVED: u32 = 19;
+/// First peer. Index 0 is the global management entry from `mt792x_init_wcid`.
+pub const PEER_WTBL: u32 = PEER_INDEX as u32;
+const PEER_INDEX: u8 = 1;
 
 /// `MCU_EXT_QUERY(EFUSE_ACCESS)` for the 16-byte block that holds `offset`.
 pub fn write_efuse_block(out: &mut [u8], offset: u32) -> bool {
@@ -1906,6 +2061,10 @@ mod tests {
         assert_eq!(&out[..n], b"mt7921: fw sem 2a");
         let n = Stage::FwScatter.paint(&mut out);
         assert_eq!(&out[..n], b"mt7921: fw scatter");
+        let n = Stage::AuthTx.paint(&mut out);
+        assert_eq!(&out[..n], b"mt7921: auth tx");
+        let n = Stage::AuthRx.paint(&mut out);
+        assert_eq!(&out[..n], b"mt7921: auth rx");
         let n = Stage::PingOk([192, 168, 1, 20]).paint(&mut out);
         assert_eq!(&out[..n], b"ip 192.168.1.20 ping ok");
     }
@@ -2066,6 +2225,44 @@ mod tests {
         assert_eq!(bss[16], 1);
         assert!(!write_dev_info(&mut [0u8; 8], &mac));
         assert!(!write_bss_info(&mut [0u8; 8]));
+    }
+
+    #[test]
+    fn auth_txd_is_cut_through_on_altx() {
+        let mut frame = [0u8; 64];
+        let bssid = [0x02, 0x00, 0x00, 0x00, 0x00, 0x01];
+        let sta = [0x02, 0x11, 0x22, 0x33, 0x44, 0x55];
+        let n = crate::wpa::write_auth(&mut frame, &bssid, &sta, 1);
+        let mut txwi = [0u8; TXD_LEN + TXP_LEN];
+        assert!(write_txwi(&mut txwi, &frame[..n], 0x01f6_8000));
+        let tx0 = u32::from_le_bytes(txwi[0..4].try_into().expect("txd0"));
+        let tx1 = u32::from_le_bytes(txwi[4..8].try_into().expect("txd1"));
+        assert_eq!((tx0 >> 23) & 0x3, 0, "packet format");
+        assert_eq!(tx0 >> 25, 0x10, "queue");
+        assert_eq!(tx1 & 0x3ff, PEER_WTBL, "wireless index");
+        assert_eq!(u16::from_le_bytes([txwi[32], txwi[33]]), 0x8000);
+    }
+
+    #[test]
+    fn sta_rec_names_the_ap() {
+        let bssid = [0x10, 0x20, 0x30, 0x40, 0x50, 0x60];
+        let mut body = [0u8; STA_REC_LEN];
+        assert_eq!(write_sta_rec(&mut body, &bssid, false), Some(STA_REC_LEN));
+        assert_eq!(body[1], 1);
+        assert_eq!(u16::from_le_bytes([body[2], body[3]]), 5);
+        assert_eq!(body[4], 1);
+        assert_eq!(
+            u32::from_le_bytes([body[12], body[13], body[14], body[15]]),
+            CONN_INFRA_AP
+        );
+        assert_eq!(body[16], 2);
+        assert_eq!(&body[20..26], &bssid);
+        assert_eq!(u16::from_le_bytes([body[26], body[27]]), 3);
+        assert_eq!(body[34], PHY_HR_DSSS | PHY_ERP);
+        let mut five = [0u8; STA_REC_LEN];
+        assert_eq!(write_sta_rec(&mut five, &bssid, true), Some(STA_REC_LEN));
+        assert_eq!(five[34], PHY_OFDM);
+        assert!(write_sta_rec(&mut [0u8; 8], &bssid, false).is_none());
     }
 
     #[test]

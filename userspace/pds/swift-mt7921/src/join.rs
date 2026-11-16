@@ -34,9 +34,16 @@ impl Mac {
         if !self.set_channel(ap.channel, band) {
             return Stage::Scan;
         }
-        paint(Stage::Auth);
-        if !self.open_auth(&ap) {
-            return Stage::Auth;
+        // The boot that stopped on `auth` had found the network. That word was
+        // both a transmit ring that did not take the frame and a wait that
+        // saw no matching authentication reply.
+        paint(Stage::AuthTx);
+        if !self.add_peer(ap.bssid, ap.channel > 14) || !self.post_auth(&ap) {
+            return Stage::AuthTx;
+        }
+        paint(Stage::AuthRx);
+        if !self.recv_auth() {
+            return Stage::AuthRx;
         }
         paint(Stage::Assoc);
         if !self.request_assoc(&ap, ssid) {
@@ -174,13 +181,15 @@ impl Mac {
         }
     }
 
-    fn open_auth(&mut self, ap: &FoundAp) -> bool {
+    fn post_auth(&mut self, ap: &FoundAp) -> bool {
         let sta = self.sta();
         let mut frame = [0u8; 64];
         let n = write_auth(&mut frame, &ap.bssid, &sta, self.next_seq_wifi());
-        if !self.tx_80211(&frame[..n]) {
-            return false;
-        }
+        self.tx_80211(&frame[..n])
+    }
+
+    fn recv_auth(&mut self) -> bool {
+        let sta = self.sta();
         self.wait_frame(assoc_budget(), |got| auth_ok(got, &sta))
     }
 

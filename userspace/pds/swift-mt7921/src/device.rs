@@ -16,21 +16,21 @@ use lerux_swift::{
         remap_l1, ring_regs, uni_cmd, uni_event_ok, write_bss_info, write_chan,
         write_channel_domain, write_clc, write_clear_other_beacon, write_dev_info,
         write_eeprom_mode, write_efuse_block, write_efuse_read, write_fw_log, write_mac_enable,
-        write_mcu_header, write_mcu_txd, write_rts, write_rx_filter_enable, write_scan, write_txwi,
-        wtbl_word, FirmwareKind, Map, RegOp, Region, Sem, Stage, TxStop, BSS_INFO_LEN,
-        CHANNEL_DOMAIN_LEN, CONN_ON_LPCTL, CONN_ON_MISC, DEV_INFO_LEN, DMASHDL_BYPASS,
-        DMASHDL_ENABLE, DMASHDL_SW, DMA_DONE, DUMMY_CR, DUMP_PREFETCH, DUMP_REGS, DUMP_RINGS,
-        EE_HW_TYPE, EFUSE_BLOCK_LEN, FW_N9_RDY, FW_SCATTER, FW_START, GLO_CFG, GLO_CFG_CHAIN,
-        GLO_CFG_CLK, GLO_CFG_EXT0, GLO_CFG_LE, GLO_CFG_OMIT_RX, GLO_CFG_OMIT_RX_PFET,
-        GLO_CFG_OMIT_TX, GLO_CFG_RX_BUSY, GLO_CFG_RX_EN, GLO_CFG_TX_BUSY, GLO_CFG_TX_EN,
-        GLO_CFG_TX_WB, HIF_REMAP_L1, HOST_CLR_OWN, HOST_INT_ENA, HOST_OWN_SYNC, HOST_SET_OWN,
-        HW_CHIPID, HW_REV, IRQ_MASK, L0S_DIS, LAST_SEC0, LPCR_DRV_OWN, LPCR_FW_OWN, MCU2HOST,
-        MCU_TXD_LEN, MCU_WAKE, MDP_DAMSDU, MDP_DCR0, MDP_DCR1, MDP_HDR_TRANS, NEED_REINIT,
-        PATCH_FINISH, PATCH_IS_DL, PATCH_NOT_DL, PATCH_REL, PATCH_SEM, PCIE_MAC_INT, PCIE_MAC_PM,
-        PRI_DLY, RST_DMASHDL, RST_DTX_PTR, RST_LOGIC, RXD_LEN, RX_DATA_BASE, RX_EVENT_BASE,
-        RX_FILTER_LEN, RX_WA_BASE, SCAN_REQ_LEN, SWDEF_MODE, TOP_LPCR, TXD_LEN, TXP_LEN,
-        TX_RING_BASE, WFDMA_RST, WFSYS_INIT_DONE, WFSYS_RST, WFSYS_RST_B, WTBL_BUSY, WTBL_RESERVED,
-        WTBL_UPDATE,
+        write_mcu_header, write_mcu_txd, write_rts, write_rx_filter_enable, write_scan,
+        write_sta_rec, write_txwi, wtbl_word, FirmwareKind, Map, RegOp, Region, Sem, Stage, TxStop,
+        BSS_INFO_LEN, CHANNEL_DOMAIN_LEN, CONN_ON_LPCTL, CONN_ON_MISC, DEV_INFO_LEN,
+        DMASHDL_BYPASS, DMASHDL_ENABLE, DMASHDL_SW, DMA_DONE, DUMMY_CR, DUMP_PREFETCH, DUMP_REGS,
+        DUMP_RINGS, EE_HW_TYPE, EFUSE_BLOCK_LEN, FW_N9_RDY, FW_SCATTER, FW_START, GLO_CFG,
+        GLO_CFG_CHAIN, GLO_CFG_CLK, GLO_CFG_EXT0, GLO_CFG_LE, GLO_CFG_OMIT_RX,
+        GLO_CFG_OMIT_RX_PFET, GLO_CFG_OMIT_TX, GLO_CFG_RX_BUSY, GLO_CFG_RX_EN, GLO_CFG_TX_BUSY,
+        GLO_CFG_TX_EN, GLO_CFG_TX_WB, HIF_REMAP_L1, HOST_CLR_OWN, HOST_INT_ENA, HOST_OWN_SYNC,
+        HOST_SET_OWN, HW_CHIPID, HW_REV, IRQ_MASK, L0S_DIS, LAST_SEC0, LPCR_DRV_OWN, LPCR_FW_OWN,
+        MCU2HOST, MCU_TXD_LEN, MCU_WAKE, MDP_DAMSDU, MDP_DCR0, MDP_DCR1, MDP_HDR_TRANS,
+        NEED_REINIT, PATCH_FINISH, PATCH_IS_DL, PATCH_NOT_DL, PATCH_REL, PATCH_SEM, PCIE_MAC_INT,
+        PCIE_MAC_PM, PEER_WTBL, PRI_DLY, RST_DMASHDL, RST_DTX_PTR, RST_LOGIC, RXD_LEN,
+        RX_DATA_BASE, RX_EVENT_BASE, RX_FILTER_LEN, RX_WA_BASE, SCAN_REQ_LEN, STA_REC_LEN,
+        SWDEF_MODE, TOP_LPCR, TXD_LEN, TXP_LEN, TX_RING_BASE, WFDMA_RST, WFSYS_INIT_DONE,
+        WFSYS_RST, WFSYS_RST_B, WTBL_BUSY, WTBL_RESERVED, WTBL_UPDATE,
     },
     CLIENT_MAC,
 };
@@ -869,6 +869,18 @@ impl Mac {
         self.wr(WTBL_UPDATE, wtbl_word(WTBL_RESERVED));
         let _ = self.poll(WTBL_UPDATE, WTBL_BUSY, 0, DMA_SPIN);
         true
+    }
+
+    /// `mt7921_mac_sta_add` for the access point named by the beacon.
+    /// The authentication frame uses `PEER_WTBL`.
+    pub(crate) fn add_peer(&mut self, bssid: [u8; 6], band5: bool) -> bool {
+        self.wr(WTBL_UPDATE, wtbl_word(PEER_WTBL));
+        let _ = self.poll(WTBL_UPDATE, WTBL_BUSY, 0, DMA_SPIN);
+        let mut body = [0u8; STA_REC_LEN];
+        let Some(n) = write_sta_rec(&mut body, &bssid, band5) else {
+            return false;
+        };
+        self.command(uni_cmd(0x03), &body[..n], true)
     }
 
     /// `mt7921_configure_filter` before a scan. Linux does not wait.

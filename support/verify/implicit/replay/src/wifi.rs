@@ -71,7 +71,7 @@ fn key_checked(body: &str) -> Result<bool, String> {
 }
 
 fn own_label(body: &str) -> bool {
-    let stages = ["Scan", "Auth", "Assoc", "Eapol"];
+    let stages = ["Scan", "AuthTx", "AuthRx", "Assoc", "Eapol"];
     let mut from = 0;
     for stage in stages {
         let paint = format!("paint(Stage::{stage})");

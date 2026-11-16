@@ -128,7 +128,7 @@ Arch’s stack underneath the same keystrokes is `iwctl`, `iwd`, nl80211, mac802
 - `connect` returns to `[iwd]# ` when `associate` finishes. A failure, including a SAE-only beacon, prints `Operation failed`. This path stays WPA-Personal: PBKDF2-HMAC-SHA1 and an HMAC-MD5 MIC.
 - On success the powered station is associated. The next `ip link` prints index 1, flags `BROADCAST,MULTICAST,UP,LOWER_UP`, `mtu 1500`, `state UP`, and `link/ether` with the station address and `brd ff:ff:ff:ff:ff:ff`. Before association the same line uses flags `NO-CARRIER,BROADCAST,MULTICAST,UP` and `state DOWN`. There is no `lo` line.
 - The worker starts `bring_up` after association and polls that socket while it waits for the next line. `connect` does not wait for the lease. `ping` in Milestone 3 waits up to the budget `bring_up` already uses.
-- The stage line on row 22 stays the radio’s report (`scan`, `auth`, `assoc`, `eapol`, then `wait`). The shell does not paint over it from the command transcript.
+- The stage line on row 22 stays the radio’s report (`scan`, `auth tx`, `auth rx`, `assoc`, `eapol`, then `wait`). The shell does not paint over it from the command transcript.
 
 **QEMU.** None for the radio. A host test of the command result covers `Operation failed` and the two `ip link` lines. The scripted-radio test that reaches `ip 192.168.1.20` and `ping ok` stays the Milestone 8 regression.
 

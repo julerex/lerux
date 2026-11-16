@@ -56,7 +56,7 @@ Userspace never programs the chip. `iwctl` talks to `iwd` over D-Bus. `iwd` talk
 
 ## What lerux does today
 
-The Swift template [`userspace/systems/templates/console-swift.system.template`](../userspace/systems/templates/console-swift.system.template) runs `sddf-shell`. After `lerux shell ready` the only radio command is `setup-wifi` in [`userspace/pds/sddf-shell/src/main.rs`](../userspace/pds/sddf-shell/src/main.rs). It posts one wildcard survey and prints `N name`, or the mark `rx`, `ev`, `ok`, `done`, and `fc` when frames arrived and no name was stored. It does not ask for a passphrase.
+The Swift template [`userspace/systems/templates/console-swift.system.template`](../userspace/systems/templates/console-swift.system.template) runs `sddf-shell`. After `lerux shell ready` the only radio command is `setup-wifi` in [`userspace/pds/sddf-shell/src/main.rs`](../userspace/pds/sddf-shell/src/main.rs). It posts one wildcard survey and prints `N name`, or the mark `rx`, `ev`, `ok`, `done`, and `fc` when frames arrived and no name was stored. A stored list continues with `ssid>`, the row number, `psk>`, and the passphrase. A finished handshake prints `psk ok`, then the address and `ping ok`.
 
 `console-shell` still implements `3 wifi`, `ssid>`, and `psk>`. That program is not the shell in the Swift template.
 

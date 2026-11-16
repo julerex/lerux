@@ -13,22 +13,22 @@ use lerux_swift::{
         band_init_ops, ce_cmd, clc_image, desc_ctrl, desc_len, download_cmd, each_world_rule,
         efuse_block_byte, efuse_mac, ext_cmd, ext_query, firmware_kind, is_uni_cmd, map_reg,
         mcu_header_len, parse_nic_cap, patch_regions, patch_status, prefetch, ram_regions,
-        remap_l1, ring_regs, uni_cmd, uni_event_ok, write_bss_info, write_chan,
-        write_channel_domain, write_clc, write_clear_other_beacon, write_dev_info,
-        write_eeprom_mode, write_efuse_block, write_efuse_read, write_fw_log, write_mac_enable,
-        write_mcu_header, write_mcu_txd, write_rts, write_rx_filter_enable, write_scan,
-        write_sta_rec, write_txwi, wtbl_word, AuthMiss, FirmwareKind, Map, RegOp, Region, Sem,
-        Stage, TxStop, BSS_INFO_LEN, CHANNEL_DOMAIN_LEN, CONN_ON_LPCTL, CONN_ON_MISC, DEV_INFO_LEN,
-        DMASHDL_BYPASS, DMASHDL_ENABLE, DMASHDL_SW, DMA_DONE, DUMMY_CR, DUMP_PREFETCH, DUMP_REGS,
-        DUMP_RINGS, EE_HW_TYPE, EFUSE_BLOCK_LEN, FW_N9_RDY, FW_SCATTER, FW_START, GLO_CFG,
-        GLO_CFG_CHAIN, GLO_CFG_CLK, GLO_CFG_EXT0, GLO_CFG_LE, GLO_CFG_OMIT_RX,
-        GLO_CFG_OMIT_RX_PFET, GLO_CFG_OMIT_TX, GLO_CFG_RX_BUSY, GLO_CFG_RX_EN, GLO_CFG_TX_BUSY,
-        GLO_CFG_TX_EN, GLO_CFG_TX_WB, HIF_REMAP_L1, HOST_CLR_OWN, HOST_INT_ENA, HOST_OWN_SYNC,
-        HOST_SET_OWN, HW_CHIPID, HW_REV, IRQ_MASK, L0S_DIS, LAST_SEC0, LPCR_DRV_OWN, LPCR_FW_OWN,
-        MCU2HOST, MCU_TXD_LEN, MCU_WAKE, MDP_DAMSDU, MDP_DCR0, MDP_DCR1, MDP_HDR_TRANS,
-        NEED_REINIT, PATCH_FINISH, PATCH_IS_DL, PATCH_NOT_DL, PATCH_REL, PATCH_SEM, PCIE_MAC_INT,
-        PCIE_MAC_PM, PEER_WTBL, PRI_DLY, RST_DMASHDL, RST_DTX_PTR, RST_LOGIC, RXD_LEN,
-        RX_DATA_BASE, RX_EVENT_BASE, RX_FILTER_LEN, RX_WA_BASE, SCAN_REQ_LEN, STA_REC_LEN,
+        remap_l1, ring_regs, uni_cmd, uni_event_ok, write_bss_connect, write_bss_info,
+        write_bss_rlm, write_chan, write_channel_domain, write_clc, write_clear_other_beacon,
+        write_dev_info, write_eeprom_mode, write_efuse_block, write_efuse_read, write_fw_log,
+        write_mac_enable, write_mcu_header, write_mcu_txd, write_rts, write_rx_filter_enable,
+        write_scan, write_sta_rec, write_txwi, wtbl_word, AuthMiss, FirmwareKind, Map, RegOp,
+        Region, Sem, Stage, TxStop, BSS_CONNECT_LEN, BSS_INFO_LEN, BSS_RLM_LEN, CHANNEL_DOMAIN_LEN,
+        CONN_ON_LPCTL, CONN_ON_MISC, DEV_INFO_LEN, DMASHDL_BYPASS, DMASHDL_ENABLE, DMASHDL_SW,
+        DMA_DONE, DUMMY_CR, DUMP_PREFETCH, DUMP_REGS, DUMP_RINGS, EE_HW_TYPE, EFUSE_BLOCK_LEN,
+        FW_N9_RDY, FW_SCATTER, FW_START, GLO_CFG, GLO_CFG_CHAIN, GLO_CFG_CLK, GLO_CFG_EXT0,
+        GLO_CFG_LE, GLO_CFG_OMIT_RX, GLO_CFG_OMIT_RX_PFET, GLO_CFG_OMIT_TX, GLO_CFG_RX_BUSY,
+        GLO_CFG_RX_EN, GLO_CFG_TX_BUSY, GLO_CFG_TX_EN, GLO_CFG_TX_WB, HIF_REMAP_L1, HOST_CLR_OWN,
+        HOST_INT_ENA, HOST_OWN_SYNC, HOST_SET_OWN, HW_CHIPID, HW_REV, IRQ_MASK, L0S_DIS, LAST_SEC0,
+        LPCR_DRV_OWN, LPCR_FW_OWN, MCU2HOST, MCU_TXD_LEN, MCU_WAKE, MDP_DAMSDU, MDP_DCR0, MDP_DCR1,
+        MDP_HDR_TRANS, NEED_REINIT, PATCH_FINISH, PATCH_IS_DL, PATCH_NOT_DL, PATCH_REL, PATCH_SEM,
+        PCIE_MAC_INT, PCIE_MAC_PM, PEER_WTBL, PRI_DLY, RST_DMASHDL, RST_DTX_PTR, RST_LOGIC,
+        RXD_LEN, RX_DATA_BASE, RX_EVENT_BASE, RX_FILTER_LEN, RX_WA_BASE, SCAN_REQ_LEN, STA_REC_LEN,
         SWDEF_MODE, TOP_LPCR, TXD_LEN, TXP_LEN, TX_RING_BASE, WFDMA_RST, WFSYS_INIT_DONE,
         WFSYS_RST, WFSYS_RST_B, WTBL_BUSY, WTBL_RESERVED, WTBL_UPDATE,
     },
@@ -884,7 +884,38 @@ impl Mac {
         self.wr(WTBL_UPDATE, wtbl_word(PEER_WTBL));
         let _ = self.poll(WTBL_UPDATE, WTBL_BUSY, 0, DMA_SPIN);
         let mut body = [0u8; STA_REC_LEN];
-        let Some(n) = write_sta_rec(&mut body, &bssid, band5) else {
+        let Some(n) = write_sta_rec(&mut body, &bssid, band5, false, 0) else {
+            return false;
+        };
+        self.command(uni_cmd(0x03), &body[..n], true)
+    }
+
+    /// `mt7921_mac_sta_event` for `MT76_STA_EVENT_ASSOC`, before the handshake.
+    ///
+    /// The BSS command names the access point on the interface index. The
+    /// channel context follows it. The peer wireless table is cleared, then
+    /// `STA_REC_UPDATE` installs state assoc with `aid`.
+    pub(crate) fn note_assoc(
+        &mut self,
+        bssid: [u8; 6],
+        channel: u8,
+        band5: bool,
+        aid: u16,
+    ) -> bool {
+        let mut bss = [0u8; BSS_CONNECT_LEN];
+        let mut rlm = [0u8; BSS_RLM_LEN];
+        if !write_bss_connect(&mut bss, &bssid, band5)
+            || !write_bss_rlm(&mut rlm, channel, u8::from(band5), self.antenna)
+        {
+            return false;
+        }
+        if !self.command(uni_cmd(0x02), &bss, true) || !self.command(uni_cmd(0x02), &rlm, true) {
+            return false;
+        }
+        self.wr(WTBL_UPDATE, wtbl_word(PEER_WTBL));
+        let _ = self.poll(WTBL_UPDATE, WTBL_BUSY, 0, DMA_SPIN);
+        let mut body = [0u8; STA_REC_LEN];
+        let Some(n) = write_sta_rec(&mut body, &bssid, band5, true, aid) else {
             return false;
         };
         self.command(uni_cmd(0x03), &body[..n], true)

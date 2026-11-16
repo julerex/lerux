@@ -752,6 +752,10 @@ pub fn write_uni_txd(buf: &mut [u8], cmd: u32, seq: u8, payload: usize) -> bool 
 pub const DEV_INFO_LEN: usize = 16;
 /// Bytes in [`write_bss_info`].
 pub const BSS_INFO_LEN: usize = 36;
+/// Bytes in [`write_bss_connect`]: the four-byte header, the basic TLV, and the QBSS TLV.
+pub const BSS_CONNECT_LEN: usize = 44;
+/// Bytes in [`write_bss_rlm`].
+pub const BSS_RLM_LEN: usize = 20;
 /// Bytes in [`write_rx_filter_enable`].
 pub const RX_FILTER_LEN: usize = 68;
 
@@ -783,6 +787,65 @@ pub fn write_bss_info(out: &mut [u8]) -> bool {
     true
 }
 
+/// `BSS_INFO_UPDATE` from `mt76_connac_mcu_uni_add_bss` once the station associates.
+///
+/// `conn_state` is 0 while the station is connecting. The BSSID is the access
+/// point. `bmc_tx_wlan_idx` and `sta_idx` are the interface entry
+/// [`WTBL_RESERVED`]. Beacon interval, DTIM, and the qos byte stay 0 because
+/// those beacon fields are not parsed. `phymode` is A on 5 GHz and B plus G on
+/// 2.4 GHz. `nonht_basic_phy` is OFDM on 5 GHz and HR/DSSS plus ERP on 2.4 GHz.
+pub fn write_bss_connect(out: &mut [u8], bssid: &[u8; 6], band5: bool) -> bool {
+    if out.len() < BSS_CONNECT_LEN {
+        return false;
+    }
+    out[..BSS_CONNECT_LEN].fill(0);
+    out[6..8].copy_from_slice(&32u16.to_le_bytes());
+    out[8] = 1;
+    out[12..16].copy_from_slice(&CONN_INFRA_STA.to_le_bytes());
+    out[18..24].copy_from_slice(bssid);
+    out[24..26].copy_from_slice(&VIF_WTBL.to_le_bytes());
+    let phymode = if band5 {
+        PHY_MODE_A
+    } else {
+        PHY_MODE_B | PHY_MODE_G
+    };
+    let legacy = if band5 {
+        PHY_OFDM
+    } else {
+        PHY_HR_DSSS | PHY_ERP
+    };
+    out[29] = phymode;
+    out[30..32].copy_from_slice(&VIF_WTBL.to_le_bytes());
+    out[32..34].copy_from_slice(&u16::from(legacy).to_le_bytes());
+    out[36..38].copy_from_slice(&15u16.to_le_bytes());
+    out[38..40].copy_from_slice(&8u16.to_le_bytes());
+    true
+}
+
+/// Channel context `mt76_connac_mcu_uni_set_chctx` sends at the end of the
+/// association BSS update.
+///
+/// The width is 20 MHz, the same width [`write_chan`] programs, so `bw` is 0,
+/// `ht_op_info` is 0, and the center channel equals the control channel.
+/// `tx_streams` is the number of set bits in `antenna`. `rx_streams` is that
+/// mask: Linux writes the popcount into the transmit field and the chain mask
+/// into the receive field, and this device programs both masks with one value.
+pub fn write_bss_rlm(out: &mut [u8], channel: u8, band: u8, antenna: u8) -> bool {
+    if out.len() < BSS_RLM_LEN {
+        return false;
+    }
+    out[..BSS_RLM_LEN].fill(0);
+    out[4..6].copy_from_slice(&2u16.to_le_bytes());
+    out[6..8].copy_from_slice(&16u16.to_le_bytes());
+    out[8] = channel;
+    out[9] = channel;
+    out[12] = u8::try_from(antenna.count_ones()).unwrap_or(0);
+    out[13] = antenna;
+    out[14] = 1;
+    out[17] = band;
+    true
+}
+
 const STA_REQ_HDR: usize = 8;
 const STA_BASIC: usize = 20;
 const STA_PHY: usize = 12;
@@ -800,24 +863,35 @@ const STA_WTBL: usize =
 /// Bytes in [`write_sta_rec`].
 pub const STA_REC_LEN: usize = STA_REQ_HDR + STA_BASIC + STA_PHY + STA_RA + STA_STATE + STA_WTBL;
 
-/// `STA_REC_UPDATE` for the access point, sent before the authentication frame.
+/// `STA_REC_UPDATE` for the access point.
 ///
-/// `mt7921_mac_sta_add` installs the peer at the first free wireless index.
+/// `mt7921_mac_sta_add` calls this with `assoc` false, before authentication.
 /// Index 0 is the global entry (`mt792x_init_wcid`), so the peer is [`PEER_WTBL`].
-/// The basic TLV is port-secure because `mt76_connac_mcu_sta_cmd` sets that
-/// when the station is enabled. The state TLV stays none. HT, VHT, and HE are
-/// absent, which is the `sta_tlv` path with those capabilities clear. The
-/// wireless-table TLVs are generic, receive, header translation, and SMPS.
-pub fn write_sta_rec(out: &mut [u8], bssid: &[u8; 6], band5: bool) -> Option<usize> {
+/// Extra info is version plus new, the state byte is none, and `aid` is 0.
+/// `mt7921_mac_sta_event` calls it again with `assoc` true after the association
+/// response. Extra info is version only, because `newly` is false for
+/// `MT76_STA_INFO_STATE_ASSOC`. The state byte is 2, and the generic
+/// wireless-table TLV stores `aid` as `partial_aid`. The basic TLV stays
+/// port-secure because the station is enabled. HT, VHT, and HE stay absent:
+/// `sta_tlv` adds them when the peer capabilities are set, and those
+/// capabilities are not parsed here.
+pub fn write_sta_rec(
+    out: &mut [u8],
+    bssid: &[u8; 6],
+    band5: bool,
+    assoc: bool,
+    aid: u16,
+) -> Option<usize> {
     if out.len() < STA_REC_LEN {
         return None;
     }
     out[..STA_REC_LEN].fill(0);
     let mut at = 0;
+    let (extra, state): (u16, u8) = if assoc { (1, 2) } else { (3, 0) };
     put_sta_header(out, &mut at);
-    put_sta_basic(out, &mut at, *bssid);
-    put_sta_rates(out, &mut at, band5);
-    put_sta_wtbl(out, &mut at, *bssid);
+    put_sta_basic(out, &mut at, *bssid, aid, extra);
+    put_sta_rates(out, &mut at, band5, state);
+    put_sta_wtbl(out, &mut at, *bssid, aid);
     (at == STA_REC_LEN).then_some(at)
 }
 
@@ -829,18 +903,18 @@ fn put_sta_header(out: &mut [u8], at: &mut usize) {
     put_bytes(out, at, &[0; 3]);
 }
 
-fn put_sta_basic(out: &mut [u8], at: &mut usize, bssid: [u8; 6]) {
+fn put_sta_basic(out: &mut [u8], at: &mut usize, bssid: [u8; 6], aid: u16, extra: u16) {
     put_u16(out, at, 0);
     put_u16(out, at, fit_u16(STA_BASIC));
     put_u32(out, at, CONN_INFRA_AP);
     put_u8(out, at, 2);
     put_u8(out, at, 0);
-    put_u16(out, at, 0);
+    put_u16(out, at, aid);
     put_bytes(out, at, &bssid);
-    put_u16(out, at, 3);
+    put_u16(out, at, extra);
 }
 
-fn put_sta_rates(out: &mut [u8], at: &mut usize, band5: bool) {
+fn put_sta_rates(out: &mut [u8], at: &mut usize, band5: bool, state: u8) {
     let phy = if band5 {
         PHY_OFDM
     } else {
@@ -866,10 +940,11 @@ fn put_sta_rates(out: &mut [u8], at: &mut usize, band5: bool) {
     put_u16(out, at, 7);
     put_u16(out, at, fit_u16(STA_STATE));
     put_u32(out, at, 0);
-    put_bytes(out, at, &[0; 4]);
+    put_u8(out, at, state);
+    put_bytes(out, at, &[0; 3]);
 }
 
-fn put_sta_wtbl(out: &mut [u8], at: &mut usize, bssid: [u8; 6]) {
+fn put_sta_wtbl(out: &mut [u8], at: &mut usize, bssid: [u8; 6], aid: u16) {
     put_u16(out, at, 13);
     put_u16(out, at, fit_u16(STA_WTBL));
     put_u8(out, at, PEER_INDEX);
@@ -880,7 +955,9 @@ fn put_sta_wtbl(out: &mut [u8], at: &mut usize, bssid: [u8; 6]) {
     put_u16(out, at, 0);
     put_u16(out, at, fit_u16(WTBL_GENERIC_LEN));
     put_bytes(out, at, &bssid);
-    put_bytes(out, at, &[0; 10]);
+    put_bytes(out, at, &[0; 6]);
+    put_u16(out, at, aid);
+    put_bytes(out, at, &[0; 2]);
 
     put_u16(out, at, 1);
     put_u16(out, at, fit_u16(WTBL_RX_LEN));
@@ -900,6 +977,9 @@ fn put_sta_wtbl(out: &mut [u8], at: &mut usize, bssid: [u8; 6]) {
 const PHY_HR_DSSS: u8 = 1;
 const PHY_ERP: u8 = 2;
 const PHY_OFDM: u8 = 8;
+const PHY_MODE_A: u8 = 1;
+const PHY_MODE_B: u8 = 2;
+const PHY_MODE_G: u8 = 4;
 
 fn put_u8(out: &mut [u8], at: &mut usize, value: u8) {
     out[*at] = value;
@@ -1699,6 +1779,9 @@ pub const EE_HW_TYPE: u32 = 0x55b;
 pub const EFUSE_BLOCK_LEN: usize = 24;
 /// Wireless-table index Linux assigns to the first station after registration.
 pub const WTBL_RESERVED: u32 = 19;
+/// Same index as [`WTBL_RESERVED`], stored in the BSS TLV's `u16` fields.
+const VIF_WTBL: u16 = 19;
+const _: () = assert!(WTBL_RESERVED == VIF_WTBL as u32);
 /// First peer. Index 0 is the global management entry from `mt792x_init_wcid`.
 pub const PEER_WTBL: u32 = PEER_INDEX as u32;
 const PEER_INDEX: u8 = 1;
@@ -2338,7 +2421,10 @@ mod tests {
     fn sta_rec_names_the_ap() {
         let bssid = [0x10, 0x20, 0x30, 0x40, 0x50, 0x60];
         let mut body = [0u8; STA_REC_LEN];
-        assert_eq!(write_sta_rec(&mut body, &bssid, false), Some(STA_REC_LEN));
+        assert_eq!(
+            write_sta_rec(&mut body, &bssid, false, false, 0),
+            Some(STA_REC_LEN)
+        );
         assert_eq!(body[1], 1);
         assert_eq!(u16::from_le_bytes([body[2], body[3]]), 5);
         assert_eq!(body[4], 1);
@@ -2347,13 +2433,75 @@ mod tests {
             CONN_INFRA_AP
         );
         assert_eq!(body[16], 2);
+        assert_eq!(u16::from_le_bytes([body[18], body[19]]), 0);
         assert_eq!(&body[20..26], &bssid);
         assert_eq!(u16::from_le_bytes([body[26], body[27]]), 3);
         assert_eq!(body[34], PHY_HR_DSSS | PHY_ERP);
+        assert_eq!(body[64], 0);
+        assert_eq!(u16::from_le_bytes([body[96], body[97]]), 0);
         let mut five = [0u8; STA_REC_LEN];
-        assert_eq!(write_sta_rec(&mut five, &bssid, true), Some(STA_REC_LEN));
+        assert_eq!(
+            write_sta_rec(&mut five, &bssid, true, true, 0x123),
+            Some(STA_REC_LEN)
+        );
         assert_eq!(five[34], PHY_OFDM);
-        assert!(write_sta_rec(&mut [0u8; 8], &bssid, false).is_none());
+        assert_eq!(u16::from_le_bytes([five[18], five[19]]), 0x123);
+        assert_eq!(u16::from_le_bytes([five[26], five[27]]), 1);
+        assert_eq!(five[64], 2);
+        assert_eq!(u16::from_le_bytes([five[96], five[97]]), 0x123);
+        assert!(write_sta_rec(&mut [0u8; 8], &bssid, false, false, 0).is_none());
+    }
+
+    #[test]
+    fn bss_connect_names_the_ap() {
+        let bssid = [0x10, 0x20, 0x30, 0x40, 0x50, 0x60];
+        let mut body = [0u8; BSS_CONNECT_LEN];
+        assert!(write_bss_connect(&mut body, &bssid, false));
+        assert_eq!(u16::from_le_bytes([body[6], body[7]]), 32);
+        assert_eq!(body[8], 1);
+        assert_eq!(
+            u32::from_le_bytes([body[12], body[13], body[14], body[15]]),
+            CONN_INFRA_STA
+        );
+        assert_eq!(body[16], 0);
+        assert_eq!(&body[18..24], &bssid);
+        assert_eq!(u16::from_le_bytes([body[24], body[25]]), 19);
+        assert_eq!(body[29], PHY_MODE_B | PHY_MODE_G);
+        assert_eq!(u16::from_le_bytes([body[30], body[31]]), 19);
+        assert_eq!(u16::from_le_bytes([body[32], body[33]]), 3);
+        assert_eq!(u16::from_le_bytes([body[36], body[37]]), 15);
+        assert_eq!(u16::from_le_bytes([body[38], body[39]]), 8);
+        assert_eq!(body[40], 0);
+        assert!(write_bss_connect(&mut body, &bssid, true));
+        assert_eq!(body[29], PHY_MODE_A);
+        assert_eq!(
+            u16::from_le_bytes([body[32], body[33]]),
+            u16::from(PHY_OFDM)
+        );
+        assert!(!write_bss_connect(&mut [0u8; 8], &bssid, false));
+    }
+
+    #[test]
+    fn bss_rlm_is_twenty_megahertz() {
+        let mut body = [0u8; BSS_RLM_LEN];
+        assert!(write_bss_rlm(&mut body, 6, 0, 0b11));
+        assert_eq!(u16::from_le_bytes([body[4], body[5]]), 2);
+        assert_eq!(u16::from_le_bytes([body[6], body[7]]), 16);
+        assert_eq!(body[8], 6);
+        assert_eq!(body[9], 6);
+        assert_eq!(body[10], 0);
+        assert_eq!(body[11], 0);
+        assert_eq!(body[12], 2);
+        assert_eq!(body[13], 0b11);
+        assert_eq!(body[14], 1);
+        assert_eq!(body[15], 0);
+        assert_eq!(body[17], 0);
+        assert!(write_bss_rlm(&mut body, 36, 1, 1));
+        assert_eq!(body[8], 36);
+        assert_eq!(body[12], 1);
+        assert_eq!(body[13], 1);
+        assert_eq!(body[17], 1);
+        assert!(!write_bss_rlm(&mut [0u8; 8], 6, 0, 1));
     }
 
     #[test]

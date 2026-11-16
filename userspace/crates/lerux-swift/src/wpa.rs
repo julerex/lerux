@@ -591,7 +591,24 @@ pub fn auth_ok(frame: &[u8], sta: &[u8; 6]) -> bool {
 
 #[must_use]
 pub fn assoc_ok(frame: &[u8], sta: &[u8; 6]) -> bool {
-    frame.len() >= 30 && frame[0] & 0xfc == 0x10 && frame[4..10] == sta[..] && frame[26] == 0
+    frame.len() >= 30
+        && frame[0] & 0xfc == 0x10
+        && frame[4..10] == sta[..]
+        && frame[26] == 0
+        && frame[27] == 0
+}
+
+/// Association id from a response [`assoc_ok`] has accepted.
+///
+/// mac80211 keeps the low 11 bits for a non-S1G station. The five high bits
+/// are reserved. An id of 0 is absent.
+#[must_use]
+pub fn assoc_aid(frame: &[u8]) -> Option<u16> {
+    if frame.len() < 30 {
+        return None;
+    }
+    let aid = u16::from_le_bytes([frame[28], frame[29]]) & 0x7ff;
+    (aid != 0).then_some(aid)
 }
 
 /// Open-system authentication, sequence 1.
@@ -811,6 +828,20 @@ mod tests {
         let found = match_beacon(&frame, b"home").unwrap();
         assert_eq!(found.bssid[0], 0xaa);
         assert_eq!(found.channel, 6);
+        let sta = [1, 2, 3, 4, 5, 6];
+        let mut resp = [0u8; 30];
+        resp[0] = 0x10;
+        resp[4..10].copy_from_slice(&sta);
+        resp[28] = 0xff;
+        resp[29] = 0xc0;
+        assert!(assoc_ok(&resp, &sta));
+        assert_eq!(assoc_aid(&resp), Some(0x00ff));
+        resp[26] = 1;
+        assert!(!assoc_ok(&resp, &sta));
+        resp[26] = 0;
+        resp[28] = 0;
+        resp[29] = 0xf8;
+        assert_eq!(assoc_aid(&resp), None);
         assert!(match_beacon(&frame, b"other").is_none());
         assert_eq!(beacon_ssid(&frame), Some(&b"home"[..]));
         frame[0] = 0x50;

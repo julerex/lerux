@@ -10,9 +10,9 @@ use lerux_swift::{
         Stage, SurveyCounts, SCAN_MAX,
     },
     wpa::{
-        assoc_ok, auth_ok, beacon_ssid, ccmp_decrypt, derive_ptk, eapol_in_msdu, match_beacon,
-        message1, message2, message3, message4, pmk, write_assoc, write_auth, write_qos_data,
-        FoundAp,
+        assoc_aid, assoc_ok, auth_ok, beacon_ssid, ccmp_decrypt, derive_ptk, eapol_in_msdu,
+        match_beacon, message1, message2, message3, message4, pmk, write_assoc, write_auth,
+        write_qos_data, FoundAp,
     },
 };
 
@@ -46,7 +46,10 @@ impl Mac {
             return Stage::AuthRx;
         }
         paint(Stage::Assoc);
-        if !self.request_assoc(&ap, ssid) {
+        let Some(aid) = self.request_assoc(&ap, ssid) else {
+            return Stage::Assoc;
+        };
+        if !self.note_assoc(ap.bssid, ap.channel, ap.channel > 14, aid) {
             return Stage::Assoc;
         }
         paint(Stage::Eapol);
@@ -228,16 +231,28 @@ impl Mac {
         false
     }
 
-    fn request_assoc(&mut self, ap: &FoundAp, ssid: &[u8]) -> bool {
+    fn request_assoc(&mut self, ap: &FoundAp, ssid: &[u8]) -> Option<u16> {
         let sta = self.sta();
         let mut frame = [0u8; 160];
-        let Some(n) = write_assoc(&mut frame, &ap.bssid, &sta, ssid, self.next_seq_wifi()) else {
-            return false;
-        };
+        let n = write_assoc(&mut frame, &ap.bssid, &sta, ssid, self.next_seq_wifi())?;
         if !self.tx_80211(&frame[..n]) {
-            return false;
+            return None;
         }
-        self.wait_frame(assoc_budget(), |got| assoc_ok(got, &sta))
+        self.wait_assoc(sta)
+    }
+
+    fn wait_assoc(&mut self, sta: [u8; 6]) -> Option<u16> {
+        let mut frame = [0u8; 1600];
+        for _ in 0..assoc_budget() {
+            if let Some(n) = self.poll_frame()
+                && let Some(m) = copy_frame(n, &mut frame)
+                && assoc_ok(&frame[..m], &sta)
+            {
+                return assoc_aid(&frame[..m]);
+            }
+            core::hint::spin_loop();
+        }
+        None
     }
 
     fn four_way(&mut self, ap: &FoundAp, ssid: &[u8], psk: &[u8]) -> Option<[u8; 16]> {
@@ -334,20 +349,6 @@ impl Mac {
             n
         };
         let _ = self.tx_80211(&frame[..n]);
-    }
-
-    fn wait_frame(&mut self, spins: u32, mut pred: impl FnMut(&[u8]) -> bool) -> bool {
-        let mut frame = [0u8; 1600];
-        for _ in 0..spins {
-            if let Some(n) = self.poll_frame()
-                && let Some(m) = copy_frame(n, &mut frame)
-                && pred(&frame[..m])
-            {
-                return true;
-            }
-            core::hint::spin_loop();
-        }
-        false
     }
 
     fn wait_eapol(&mut self, sta: [u8; 6], tk: Option<&[u8; 16]>, out: &mut [u8]) -> Option<usize> {

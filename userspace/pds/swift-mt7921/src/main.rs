@@ -14,7 +14,8 @@
 //! Channel 1 is the receive virtualiser and runs the same handler.
 //! Channel 0 stays the MSI. Channel 2 is the transmit virtualiser.
 //! Association paints `scan`, `auth tx`, `auth rx`, `assoc`, and `eapol`, then returns to
-//! `wait`. The shell owns the address and the ping. Received Ethernet frames
+//! `wait`. A failed `auth rx` or `eapol` also paints four detail rows under that
+//! line. The shell owns the address and the ping. Received Ethernet frames
 //! are enqueued on the standard receive queue, and transmit frames are
 //! dequeued from the standard transmit queue.
 //! The register dump that used to occupy rows 51 to 65 is not painted.
@@ -47,7 +48,8 @@ use lerux_swift::{
     bar_line, class_code, format_report, load_header, memory_bar,
     mt7921::{
         read_survey_mark, survey_requested, write_auth_miss, write_eapol_miss, write_join,
-        write_slot_line, Sem, Stage,
+        write_join_detail, write_slot_line, AuthMiss, Sem, Stage, JOIN_DETAIL_LINES,
+        JOIN_DETAIL_ROW,
     },
     paint_row, read_key, vendor_device, working_line, WaitMark, WifiReport, MT7921_BAR, MT7921_BDF,
     MT7921_IDS,
@@ -259,6 +261,15 @@ fn paint_stage(stage: Stage) {
     }
 }
 
+#[cfg(not(test))]
+fn paint_detail(miss: &AuthMiss, sta: [u8; 6]) {
+    let mut line = [0u8; 48];
+    for row in 0..JOIN_DETAIL_LINES {
+        let n = write_join_detail(&mut line, row, miss, &sta);
+        paint_at(JOIN_DETAIL_ROW + row, &line[..n]);
+    }
+}
+
 /// Row 22 keeps the survey counts after `wait`. A menu scroll erases that row,
 /// so the shell prints the same bytes.
 #[cfg(not(test))]
@@ -350,12 +361,16 @@ impl HandlerImpl {
             let up = stage == Stage::Wait;
             if stage == Stage::AuthRx {
                 let mut line = [0u8; 64];
-                let n = write_auth_miss(&mut line, &mac.auth_miss());
+                let miss = mac.auth_miss();
+                let n = write_auth_miss(&mut line, &miss);
                 paint(&line[..n]);
+                paint_detail(&miss, mac.sta());
             } else if stage == Stage::Eapol {
                 let mut line = [0u8; 64];
-                let n = write_eapol_miss(&mut line, &mac.eapol_miss());
+                let miss = mac.eapol_miss();
+                let n = write_eapol_miss(&mut line, &miss);
                 paint(&line[..n]);
+                paint_detail(&miss, mac.sta());
             } else {
                 paint_stage(stage);
             }

@@ -1607,7 +1607,8 @@ fn hex_byte(byte: u8) -> [u8; 2] {
 ///
 /// `rx` and `ev` match the survey mark. `skip` counts MCU completions
 /// [`is_rx_frame`] rejected. `tr` counts frames whose descriptor has header
-/// translation. `fc` is the last frame that copied, when one did.
+/// translation. The other fields describe the last copied payload, which the
+/// join detail rows print. `fc` is the first byte of that payload, when one copied.
 #[derive(Clone, Copy, Default)]
 pub struct AuthMiss {
     pub rx: u16,
@@ -1615,6 +1616,74 @@ pub struct AuthMiss {
     pub skip: u16,
     pub tr: u16,
     pub fc: Option<u8>,
+    /// Authentication sequence. 1 is the request this station sends.
+    pub sq: Option<u8>,
+    /// Authentication status. Linux accepts 0.
+    pub st: Option<u16>,
+    /// Authentication algorithm. 0 is open system.
+    pub alg: Option<u16>,
+    /// 1 when address 1 is the station. Header translation leaves this 0.
+    pub ad: u8,
+    /// 1 when this frame's descriptor has `MT_RXD2_NORMAL_HDR_TRANS`.
+    pub hdr: u8,
+    /// 1 when `SEC_MODE` says the IV and MIC are already gone.
+    pub pn: u8,
+    /// 1 when the payload format is an A-MSDU.
+    pub ms: u8,
+    /// Copied payload length.
+    pub len: u16,
+    /// 1 when `a1` and `a2` were taken from this frame.
+    pub addr: u8,
+    /// Address 1, or the Ethernet destination when `hdr` is 1.
+    pub a1: [u8; 6],
+    /// Address 2, or the Ethernet source when `hdr` is 1.
+    pub a2: [u8; 6],
+    /// Address 3. Empty when the frame is translated.
+    pub a3: [u8; 6],
+    head: [u8; 16],
+    head_n: u8,
+}
+
+/// Record one copied payload the way the join detail rows print it.
+///
+/// Sequence 1 is the open-system request. Linux accepts sequence 2 with
+/// status 0 from the access point. A translated frame stores the Ethernet
+/// destination and source instead of the 802.11 addresses.
+pub fn note_copied(miss: &mut AuthMiss, frame: &[u8], sta: &[u8; 6], layout: RxLayout) {
+    miss.hdr = u8::from(layout.translated());
+    miss.pn = u8::from(layout.plain());
+    miss.ms = u8::from(layout.amsdu());
+    miss.len = u16::try_from(frame.len()).unwrap_or(u16::MAX);
+    miss.ad = u8::from(!layout.translated() && frame.get(4..10) == Some(&sta[..]));
+    let n = frame.len().min(miss.head.len());
+    miss.head = [0; 16];
+    miss.head[..n].copy_from_slice(&frame[..n]);
+    miss.head_n = u8::try_from(n).unwrap_or(0);
+    if layout.translated() && frame.len() >= 12 {
+        miss.addr = 1;
+        miss.a1.copy_from_slice(&frame[0..6]);
+        miss.a2.copy_from_slice(&frame[6..12]);
+        miss.a3 = [0; 6];
+    } else if !layout.translated() && frame.len() >= 22 {
+        miss.addr = 1;
+        miss.a1.copy_from_slice(&frame[4..10]);
+        miss.a2.copy_from_slice(&frame[10..16]);
+        miss.a3.copy_from_slice(&frame[16..22]);
+    } else {
+        miss.addr = 0;
+        miss.a1 = [0; 6];
+        miss.a2 = [0; 6];
+        miss.a3 = [0; 6];
+    }
+    if !layout.translated() && frame.len() >= 30 && frame[0] & 0xfc == 0xb0 {
+        miss.alg = Some(u16::from_le_bytes([frame[24], frame[25]]));
+        miss.sq = Some(frame[26]);
+        miss.st = Some(u16::from_le_bytes([frame[28], frame[29]]));
+    } else {
+        miss.alg = None;
+        miss.sq = None;
+        miss.st = None;
+    }
 }
 
 /// Panel line for a posted authentication frame with no matching reply.
@@ -1623,7 +1692,28 @@ pub struct AuthMiss {
 /// `skip` for an MCU completion that was not a frame.
 #[must_use]
 pub fn write_auth_miss(out: &mut [u8], miss: &AuthMiss) -> usize {
-    write_miss_at(out, b"mt7921: auth rx fc ", *miss).unwrap_or(0)
+    let Some(n) = write_fc(out, b"mt7921: auth rx fc ", miss.fc) else {
+        return 0;
+    };
+    write_counts(out, n, miss).unwrap_or(n)
+}
+
+/// First of the four join-detail rows. They sit under the `mt7921` line.
+pub const JOIN_DETAIL_ROW: usize = 23;
+/// How many join-detail rows [`write_join_detail`] fills.
+pub const JOIN_DETAIL_LINES: usize = 4;
+
+/// One join-detail row. `row` is 0 through 3: the classification, the first
+/// two addresses, address 3 with the station, then the first payload bytes.
+#[must_use]
+pub fn write_join_detail(out: &mut [u8], row: usize, miss: &AuthMiss, sta: &[u8; 6]) -> usize {
+    let written = match row {
+        0 => write_detail_class(out, miss),
+        1 => write_detail_pair(out, miss),
+        2 => write_detail_sta(out, miss, *sta),
+        _ => write_detail_hex(out, miss),
+    };
+    written.unwrap_or(0)
 }
 
 /// Panel line when the four-way handshake returns without a key.
@@ -1632,8 +1722,11 @@ pub fn write_auth_miss(out: &mut [u8], miss: &AuthMiss) -> usize {
 /// thing they mean on the `auth rx` line. `tr` is the header-translation count.
 #[must_use]
 pub fn write_eapol_miss(out: &mut [u8], miss: &AuthMiss) -> usize {
-    let Some(n) = write_miss_at(out, b"mt7921: eapol fc ", *miss) else {
+    let Some(n) = write_fc(out, b"mt7921: eapol fc ", miss.fc) else {
         return 0;
+    };
+    let Some(n) = write_counts(out, n, miss) else {
+        return n;
     };
     let Some(n) = write_bytes(out, n, b" tr ") else {
         return n;
@@ -1641,13 +1734,98 @@ pub fn write_eapol_miss(out: &mut [u8], miss: &AuthMiss) -> usize {
     write_dec(out, n, u32::from(miss.tr)).unwrap_or(n)
 }
 
-fn write_miss_at(out: &mut [u8], prefix: &[u8], miss: AuthMiss) -> Option<usize> {
-    let mut n = 0;
-    n = write_bytes(out, n, prefix)?;
-    n = match miss.fc {
-        Some(byte) => write_bytes(out, n, &hex_byte(byte))?,
-        None => write_bytes(out, n, b"--")?,
+fn write_fc(out: &mut [u8], prefix: &[u8], fc: Option<u8>) -> Option<usize> {
+    let n = write_bytes(out, 0, prefix)?;
+    match fc {
+        Some(byte) => write_bytes(out, n, &hex_byte(byte)),
+        None => write_bytes(out, n, b"--"),
+    }
+}
+
+fn write_detail_class(out: &mut [u8], miss: &AuthMiss) -> Option<usize> {
+    let mut n = write_bytes(out, 0, b"sq ")?;
+    n = write_opt(out, n, miss.sq.map(u32::from))?;
+    n = write_bytes(out, n, b" st ")?;
+    n = write_opt(out, n, miss.st.map(u32::from))?;
+    n = write_bytes(out, n, b" alg ")?;
+    n = write_opt(out, n, miss.alg.map(u32::from))?;
+    n = write_bytes(out, n, b" ad ")?;
+    n = write_dec(out, n, u32::from(miss.ad))?;
+    n = write_bytes(out, n, b" hdr ")?;
+    n = write_dec(out, n, u32::from(miss.hdr))?;
+    n = write_bytes(out, n, b" pn ")?;
+    n = write_dec(out, n, u32::from(miss.pn))?;
+    n = write_bytes(out, n, b" ms ")?;
+    n = write_dec(out, n, u32::from(miss.ms))?;
+    n = write_bytes(out, n, b" len ")?;
+    write_dec(out, n, u32::from(miss.len))
+}
+
+fn write_detail_pair(out: &mut [u8], miss: &AuthMiss) -> Option<usize> {
+    let (left, right): (&[u8], &[u8]) = if miss.hdr == 1 {
+        (b"da ", b" sa ")
+    } else {
+        (b"a1 ", b" a2 ")
     };
+    let mut n = write_bytes(out, 0, left)?;
+    n = write_addr(out, n, miss.addr == 1, miss.a1)?;
+    n = write_bytes(out, n, right)?;
+    write_addr(out, n, miss.addr == 1, miss.a2)
+}
+
+fn write_detail_sta(out: &mut [u8], miss: &AuthMiss, sta: [u8; 6]) -> Option<usize> {
+    let mut n = write_bytes(out, 0, b"a3 ")?;
+    n = if miss.hdr == 1 || miss.addr == 0 {
+        write_bytes(out, n, b"--")?
+    } else {
+        write_mac(out, n, miss.a3)?
+    };
+    n = write_bytes(out, n, b" sta ")?;
+    write_mac(out, n, sta)
+}
+
+fn write_detail_hex(out: &mut [u8], miss: &AuthMiss) -> Option<usize> {
+    let n = write_bytes(out, 0, b"hex ")?;
+    if miss.head_n == 0 {
+        return write_bytes(out, n, b"--");
+    }
+    let end = usize::from(miss.head_n).min(miss.head.len());
+    write_hex(out, n, &miss.head[..end])
+}
+
+fn write_opt(out: &mut [u8], n: usize, value: Option<u32>) -> Option<usize> {
+    match value {
+        Some(value) => write_dec(out, n, value),
+        None => write_bytes(out, n, b"-"),
+    }
+}
+
+fn write_addr(out: &mut [u8], n: usize, present: bool, mac: [u8; 6]) -> Option<usize> {
+    if present {
+        write_mac(out, n, mac)
+    } else {
+        write_bytes(out, n, b"--")
+    }
+}
+
+fn write_mac(out: &mut [u8], mut n: usize, mac: [u8; 6]) -> Option<usize> {
+    for (i, byte) in mac.iter().enumerate() {
+        if i > 0 {
+            n = write_bytes(out, n, b":")?;
+        }
+        n = write_bytes(out, n, &hex_byte(*byte))?;
+    }
+    Some(n)
+}
+
+fn write_hex(out: &mut [u8], mut n: usize, bytes: &[u8]) -> Option<usize> {
+    for byte in bytes {
+        n = write_bytes(out, n, &hex_byte(*byte))?;
+    }
+    Some(n)
+}
+
+fn write_counts(out: &mut [u8], mut n: usize, miss: &AuthMiss) -> Option<usize> {
     n = write_bytes(out, n, b" rx ")?;
     n = write_dec(out, n, u32::from(miss.rx))?;
     n = write_bytes(out, n, b" ev ")?;
@@ -2491,25 +2669,60 @@ mod tests {
         let n = write_auth_miss(
             &mut out,
             &AuthMiss {
-                rx: 0,
-                ev: 0,
-                skip: 0,
-                tr: 0,
                 fc: None,
+                ..AuthMiss::default()
             },
         );
         assert_eq!(&out[..n], b"mt7921: auth rx fc -- rx 0 ev 0 skip 0");
         let n = write_auth_miss(
             &mut out,
             &AuthMiss {
-                rx: 2,
+                rx: 1,
                 ev: 1,
-                skip: 4,
-                tr: 9,
+                skip: 1,
                 fc: Some(0xb0),
+                ..AuthMiss::default()
             },
         );
-        assert_eq!(&out[..n], b"mt7921: auth rx fc b0 rx 2 ev 1 skip 4");
+        assert_eq!(&out[..n], b"mt7921: auth rx fc b0 rx 1 ev 1 skip 1");
+    }
+
+    #[test]
+    fn join_detail_names_the_rejected_auth_frame() {
+        let bssid = [0x02, 0x00, 0x00, 0x00, 0x00, 0x01];
+        let sta = [0x02, 0x11, 0x22, 0x33, 0x44, 0x55];
+        let mut frame = [0u8; 64];
+        let n = crate::wpa::write_auth(&mut frame, &bssid, &sta, 1);
+        let mut miss = AuthMiss::default();
+        note_copied(&mut miss, &frame[..n], &sta, rx_layout(&[]));
+        let mut out = [0u8; 64];
+        let n = write_join_detail(&mut out, 0, &miss, &sta);
+        assert_eq!(&out[..n], b"sq 1 st 0 alg 0 ad 0 hdr 0 pn 0 ms 0 len 30");
+        let n = write_join_detail(&mut out, 1, &miss, &sta);
+        assert_eq!(&out[..n], b"a1 02:00:00:00:00:01 a2 02:11:22:33:44:55");
+        let n = write_join_detail(&mut out, 2, &miss, &sta);
+        assert_eq!(&out[..n], b"a3 02:00:00:00:00:01 sta 02:11:22:33:44:55");
+        let n = write_join_detail(&mut out, 3, &miss, &sta);
+        assert_eq!(&out[..n], b"hex b0000000020000000001021122334455");
+    }
+
+    #[test]
+    fn join_detail_names_a_translated_frame() {
+        let sta = [0x02, 0x11, 0x22, 0x33, 0x44, 0x55];
+        let mut desc = [0u8; 24];
+        desc[9] = 1 << 5;
+        let mut frame = [0u8; 16];
+        frame[..6].copy_from_slice(&sta);
+        frame[6..12].copy_from_slice(&[0x02, 0, 0, 0, 0, 1]);
+        let mut miss = AuthMiss::default();
+        note_copied(&mut miss, &frame, &sta, rx_layout(&desc));
+        let mut out = [0u8; 64];
+        let n = write_join_detail(&mut out, 0, &miss, &sta);
+        assert_eq!(&out[..n], b"sq - st - alg - ad 0 hdr 1 pn 0 ms 0 len 16");
+        let n = write_join_detail(&mut out, 1, &miss, &sta);
+        assert_eq!(&out[..n], b"da 02:11:22:33:44:55 sa 02:00:00:00:00:01");
+        let n = write_join_detail(&mut out, 2, &miss, &sta);
+        assert_eq!(&out[..n], b"a3 -- sta 02:11:22:33:44:55");
     }
 
     #[test]
@@ -2518,11 +2731,8 @@ mod tests {
         let n = write_eapol_miss(
             &mut out,
             &AuthMiss {
-                rx: 0,
-                ev: 0,
-                skip: 0,
-                tr: 0,
                 fc: None,
+                ..AuthMiss::default()
             },
         );
         assert_eq!(&out[..n], b"mt7921: eapol fc -- rx 0 ev 0 skip 0 tr 0");
@@ -2534,6 +2744,7 @@ mod tests {
                 skip: 1,
                 tr: 19,
                 fc: Some(0x08),
+                ..AuthMiss::default()
             },
         );
         assert_eq!(&out[..n], b"mt7921: eapol fc 08 rx 9 ev 10 skip 1 tr 19");

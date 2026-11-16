@@ -6,8 +6,8 @@
 
 use lerux_swift::{
     mt7921::{
-        frame_off, is_rx_frame, read_scan_done, rx_layout, write_survey_list, write_survey_mark,
-        AuthMiss, Stage, SurveyCounts, SCAN_MAX,
+        frame_off, is_rx_frame, note_copied, read_scan_done, rx_layout, write_survey_list,
+        write_survey_mark, AuthMiss, Stage, SurveyCounts, SCAN_MAX,
     },
     wpa::{
         assoc_aid, assoc_ok, auth_ok, beacon_ssid, ccmp_decrypt, derive_ptk, eapol_in_ether,
@@ -480,6 +480,7 @@ fn copied_eapol(
         return None;
     }
     miss.fc = Some(frame[0]);
+    note_copied(miss, &frame[..m], &sta, layout);
     if layout.rejected() {
         return None;
     }
@@ -504,10 +505,15 @@ fn copied_eapol(
 }
 
 fn copied_auth(n: usize, frame: &mut [u8], miss: &mut AuthMiss, sta: [u8; 6]) -> bool {
+    let layout = rx_layout(Mac::rx_bytes(n));
     let Some(m) = copy_frame(n, frame) else {
         return false;
     };
+    if m == 0 {
+        return false;
+    }
     miss.fc = Some(frame[0]);
+    note_copied(miss, &frame[..m], &sta, layout);
     auth_ok(&frame[..m], &sta)
 }
 

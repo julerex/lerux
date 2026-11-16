@@ -52,7 +52,7 @@ lerux runs several small programs at once. Each one has its own memory. They sha
 
 The Wi-Fi program starts before the disk program and the Bluetooth program. Its startup includes a long wait for the card. Until that wait ends, the disk line and the Bluetooth line do not exist yet. The blank minute is that wait. The moving dots, and the lines under them, are there so the wait is visible.
 
-A later scroll of the menu redraws the whole picture from the menu's own record of the screen. That record does not contain rows 15–21. A full redraw erases them. The status word on row 22 is painted again by the Wi-Fi program, so it survives.
+A later scroll of the menu redraws the whole picture from the menu's own record of the screen. That record does not contain rows 15–21 or the join detail on rows 23–26. A full redraw erases them. The status word on row 22 is painted again by the Wi-Fi program, so it survives. The disk and Bluetooth programs do not paint rows 23 and 24 again after a failed join has used them.
 
 ## How to read the numbers
 
@@ -312,7 +312,7 @@ These are the other status words the Wi-Fi program can paint. Each one names a s
 | `mac` | The radio setup after firmware, including the reset of the Wi-Fi block |
 | `wait` | Firmware and radio setup finished. Choosing `3 wifi` lists the names the radio can hear |
 
-`nvme` on row 23 and `bt` on row 24 are the disk and Bluetooth programs. They start only after the Wi-Fi startup returns, including when it returns by giving up.
+`nvme` on row 23 and `bt` on row 24 are the disk and Bluetooth programs. They start only after the Wi-Fi startup returns, including when it returns by giving up. A failed `auth rx` or `eapol` replaces rows 23–26 with the rejected frame: the sequence and status, the addresses, this station, and the first 16 payload bytes. That covers the disk line, the Bluetooth line, and the first two device names until the next boot.
 
 ## Where this lives in the tree
 

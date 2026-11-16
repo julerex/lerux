@@ -281,11 +281,12 @@ fn paint(text: &[u8]) {
 
 #[cfg(not(test))]
 fn paint_at(row: usize, text: &[u8]) {
+    // The survey mark fills this row. A later status, including `eapol fc`,
+    // has to replace every cell or the old tail stays beside the new words.
     let mut line = [b' '; 48];
     let n = text.len().min(line.len());
     line[..n].copy_from_slice(&text[..n]);
-    let width = n.max(24);
-    paint_line(row, &line[..width]);
+    paint_line(row, &line);
 }
 
 #[cfg(not(test))]

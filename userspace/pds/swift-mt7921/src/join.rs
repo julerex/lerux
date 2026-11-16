@@ -6,13 +6,13 @@
 
 use lerux_swift::{
     mt7921::{
-        frame_off, is_rx_frame, read_scan_done, write_survey_list, write_survey_mark, AuthMiss,
-        Stage, SurveyCounts, SCAN_MAX,
+        frame_off, is_rx_frame, read_scan_done, rx_layout, write_survey_list, write_survey_mark,
+        AuthMiss, Stage, SurveyCounts, SCAN_MAX,
     },
     wpa::{
-        assoc_aid, assoc_ok, auth_ok, beacon_ssid, ccmp_decrypt, derive_ptk, eapol_in_msdu,
-        match_beacon, message1, message2, message3, message4, pmk, write_assoc, write_auth,
-        write_qos_data, FoundAp,
+        assoc_aid, assoc_ok, auth_ok, beacon_ssid, ccmp_decrypt, derive_ptk, eapol_in_ether,
+        eapol_in_msdu, match_beacon, message1, message2, message3, message4, pmk, write_assoc,
+        write_auth, write_qos_data, FoundAp,
     },
 };
 
@@ -470,16 +470,31 @@ fn copied_eapol(
     tk: Option<&[u8; 16]>,
     out: &mut [u8],
 ) -> Option<usize> {
+    let bytes = Mac::rx_bytes(n);
+    let layout = rx_layout(bytes);
+    if layout.translated() {
+        miss.tr = miss.tr.saturating_add(1);
+    }
     let m = copy_frame(n, frame)?;
     if m == 0 {
         return None;
     }
     miss.fc = Some(frame[0]);
-    if frame.get(4..10) != Some(&sta[..]) {
+    if layout.rejected() {
         return None;
     }
-    let body = msdu(&frame[..m], tk, plain)?;
-    let eapol = eapol_in_msdu(body)?;
+    let eapol = if layout.translated() {
+        if frame.get(..6) != Some(&sta[..]) {
+            return None;
+        }
+        eapol_in_ether(&frame[..m])?
+    } else {
+        if frame.get(4..10) != Some(&sta[..]) {
+            return None;
+        }
+        let body = msdu(&frame[..m], tk, plain, layout.plain(), layout.amsdu())?;
+        eapol_in_msdu(body)?
+    };
     if eapol.len() > out.len() {
         return None;
     }
@@ -505,7 +520,13 @@ fn copy_frame(n: usize, out: &mut [u8]) -> Option<usize> {
     Some(m)
 }
 
-fn msdu<'a>(frame: &[u8], tk: Option<&[u8; 16]>, out: &'a mut [u8]) -> Option<&'a [u8]> {
+fn msdu<'a>(
+    frame: &[u8],
+    tk: Option<&[u8; 16]>,
+    out: &'a mut [u8],
+    stripped: bool,
+    amsdu: bool,
+) -> Option<&'a [u8]> {
     if frame.len() < 24 {
         return None;
     }
@@ -514,14 +535,18 @@ fn msdu<'a>(frame: &[u8], tk: Option<&[u8; 16]>, out: &'a mut [u8]) -> Option<&'
     } else {
         24
     };
-    if frame[1] & 0x40 != 0 {
+    if frame[1] & 0x40 != 0 && !stripped {
         let n = ccmp_decrypt(tk?, hdr, frame, out)?;
-        Some(&out[..n])
-    } else {
-        let n = frame.len().saturating_sub(hdr).min(out.len());
-        out[..n].copy_from_slice(&frame[hdr..hdr + n]);
-        Some(&out[..n])
+        return Some(&out[..n]);
     }
+    // `fill_rx` removes two bytes after the 802.11 header of an A-MSDU.
+    let body_at = hdr + if amsdu { 2 } else { 0 };
+    if frame.len() < body_at {
+        return None;
+    }
+    let n = frame.len().saturating_sub(body_at).min(out.len());
+    out[..n].copy_from_slice(&frame[body_at..body_at + n]);
+    Some(&out[..n])
 }
 
 fn snonce() -> [u8; 32] {

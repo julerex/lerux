@@ -732,6 +732,17 @@ pub fn eapol_in_msdu(msdu: &[u8]) -> Option<&[u8]> {
     }
 }
 
+/// EAPOL body of an Ethernet frame. `mt7921_mac_fill_rx` delivers this layout
+/// when the receive descriptor has header translation.
+#[must_use]
+pub fn eapol_in_ether(frame: &[u8]) -> Option<&[u8]> {
+    if frame.len() >= 14 && frame[12] == 0x88 && frame[13] == 0x8e {
+        Some(&frame[14..])
+    } else {
+        None
+    }
+}
+
 #[must_use]
 pub fn key_ok(ssid: &[u8], psk: &[u8]) -> bool {
     !ssid.is_empty() && ssid.len() <= SSID_MAX && (PSK_MIN..=PSK_MAX).contains(&psk.len())
@@ -775,6 +786,18 @@ mod tests {
                 0xc5, 0x5a
             ]
         );
+    }
+
+    #[test]
+    fn eapol_in_ether_reads_the_translated_frame() {
+        let mut frame = [0u8; 16];
+        frame[12] = 0x88;
+        frame[13] = 0x8e;
+        frame[14] = 1;
+        frame[15] = 3;
+        assert_eq!(eapol_in_ether(&frame), Some(&[1, 3][..]));
+        frame[12] = 0x08;
+        assert!(eapol_in_ether(&frame).is_none());
     }
 
     #[test]

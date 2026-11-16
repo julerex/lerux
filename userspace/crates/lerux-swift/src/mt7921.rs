@@ -1331,6 +1331,72 @@ pub fn frame_off(buf: &[u8]) -> Option<usize> {
     }
 }
 
+/// How `mt7921_mac_fill_rx` classifies one connac2 receive descriptor.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct RxLayout(u8);
+
+const RX_TRANSLATED: u8 = 1;
+const RX_DROP: u8 = 2;
+const RX_PLAIN: u8 = 4;
+const RX_AMSDU: u8 = 8;
+
+impl RxLayout {
+    /// `MT_RXD2_NORMAL_HDR_TRANS`. The bytes after [`frame_off`] are Ethernet.
+    #[must_use]
+    pub fn translated(self) -> bool {
+        self.0 & RX_TRANSLATED != 0
+    }
+
+    /// Header translation together with `MT_RXD1_NORMAL_CM`. `fill_rx` rejects it.
+    #[must_use]
+    pub fn rejected(self) -> bool {
+        self.0 & RX_DROP != 0
+    }
+
+    /// `SEC_MODE` is set and neither `CLM` nor `CM` is. The IV and MIC are gone.
+    #[must_use]
+    pub fn plain(self) -> bool {
+        self.0 & RX_PLAIN != 0
+    }
+
+    /// `MT_RXD4_NORMAL_PAYLOAD_FORMAT` is non-zero. Two bytes follow the 802.11 header.
+    #[must_use]
+    pub fn amsdu(self) -> bool {
+        self.0 & RX_AMSDU != 0
+    }
+}
+
+/// Read the `fill_rx` flags from a connac2 receive descriptor.
+#[must_use]
+pub fn rx_layout(buf: &[u8]) -> RxLayout {
+    let Some(rxd1) = rx_word(buf, 4) else {
+        return RxLayout(0);
+    };
+    let Some(rxd2) = rx_word(buf, 8) else {
+        return RxLayout(0);
+    };
+    let mut flags = 0;
+    if rxd2 & (1 << 13) != 0 {
+        flags |= RX_TRANSLATED;
+        if rxd1 & (1 << 23) != 0 {
+            flags |= RX_DROP;
+        }
+    }
+    let sec = (rxd1 >> 16) & 0x1f;
+    if sec != 0 && rxd1 & ((1 << 23) | (1 << 24)) == 0 {
+        flags |= RX_PLAIN;
+    }
+    if rx_word(buf, 16).is_some_and(|rxd4| rxd4 & 3 != 0) {
+        flags |= RX_AMSDU;
+    }
+    RxLayout(flags)
+}
+
+fn rx_word(buf: &[u8], at: usize) -> Option<u32> {
+    let bytes = buf.get(at..at + 4)?;
+    Some(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+}
+
 #[must_use]
 /// `MT_DMA_CTL_SD_LEN0` is bits 29:16. The low half is the unused second segment.
 pub fn desc_ctrl(len: u32, last: bool) -> u32 {
@@ -1540,12 +1606,14 @@ fn hex_byte(byte: u8) -> [u8; 2] {
 /// What the authentication wait kept instead of a matching reply.
 ///
 /// `rx` and `ev` match the survey mark. `skip` counts MCU completions
-/// [`is_rx_frame`] rejected. `fc` is the last frame that copied, when one did.
+/// [`is_rx_frame`] rejected. `tr` counts frames whose descriptor has header
+/// translation. `fc` is the last frame that copied, when one did.
 #[derive(Clone, Copy, Default)]
 pub struct AuthMiss {
     pub rx: u16,
     pub ev: u16,
     pub skip: u16,
+    pub tr: u16,
     pub fc: Option<u8>,
 }
 
@@ -1561,10 +1629,16 @@ pub fn write_auth_miss(out: &mut [u8], miss: &AuthMiss) -> usize {
 /// Panel line when the four-way handshake returns without a key.
 ///
 /// The stage word stays `eapol`. `rx`, `ev`, `skip`, and `fc` mean the same
-/// thing they mean on the `auth rx` line.
+/// thing they mean on the `auth rx` line. `tr` is the header-translation count.
 #[must_use]
 pub fn write_eapol_miss(out: &mut [u8], miss: &AuthMiss) -> usize {
-    write_miss_at(out, b"mt7921: eapol fc ", *miss).unwrap_or(0)
+    let Some(n) = write_miss_at(out, b"mt7921: eapol fc ", *miss) else {
+        return 0;
+    };
+    let Some(n) = write_bytes(out, n, b" tr ") else {
+        return n;
+    };
+    write_dec(out, n, u32::from(miss.tr)).unwrap_or(n)
 }
 
 fn write_miss_at(out: &mut [u8], prefix: &[u8], miss: AuthMiss) -> Option<usize> {
@@ -2420,6 +2494,7 @@ mod tests {
                 rx: 0,
                 ev: 0,
                 skip: 0,
+                tr: 0,
                 fc: None,
             },
         );
@@ -2430,30 +2505,57 @@ mod tests {
                 rx: 2,
                 ev: 1,
                 skip: 4,
+                tr: 9,
                 fc: Some(0xb0),
             },
         );
         assert_eq!(&out[..n], b"mt7921: auth rx fc b0 rx 2 ev 1 skip 4");
+    }
+
+    #[test]
+    fn eapol_miss_counts_header_translation() {
+        let mut out = [0u8; 64];
         let n = write_eapol_miss(
             &mut out,
             &AuthMiss {
                 rx: 0,
                 ev: 0,
                 skip: 0,
+                tr: 0,
                 fc: None,
             },
         );
-        assert_eq!(&out[..n], b"mt7921: eapol fc -- rx 0 ev 0 skip 0");
+        assert_eq!(&out[..n], b"mt7921: eapol fc -- rx 0 ev 0 skip 0 tr 0");
         let n = write_eapol_miss(
             &mut out,
             &AuthMiss {
-                rx: 3,
-                ev: 1,
-                skip: 2,
-                fc: Some(0x88),
+                rx: 9,
+                ev: 10,
+                skip: 1,
+                tr: 19,
+                fc: Some(0x08),
             },
         );
-        assert_eq!(&out[..n], b"mt7921: eapol fc 88 rx 3 ev 1 skip 2");
+        assert_eq!(&out[..n], b"mt7921: eapol fc 08 rx 9 ev 10 skip 1 tr 19");
+    }
+
+    #[test]
+    fn fill_rx_names_header_translation() {
+        let mut buf = [0u8; 24];
+        buf[9] = 1 << 5;
+        let info = rx_layout(&buf);
+        assert!(info.translated());
+        assert!(!info.rejected());
+        buf[6] = 0x80;
+        assert!(rx_layout(&buf).rejected());
+        buf[6] = 1;
+        assert!(rx_layout(&buf).plain());
+        assert!(!rx_layout(&buf).rejected());
+        buf[7] = 1;
+        assert!(!rx_layout(&buf).plain());
+        buf[16] = 1;
+        assert!(rx_layout(&buf).amsdu());
+        assert!(!rx_layout(&[]).translated());
     }
 
     #[test]

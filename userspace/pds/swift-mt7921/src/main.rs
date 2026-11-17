@@ -15,7 +15,8 @@
 //! Channel 0 stays the MSI. Channel 2 is the transmit virtualiser.
 //! Association paints `scan`, `auth tx`, `auth rx`, `assoc`, and `eapol`, then returns to
 //! `wait`. A failed `auth rx` or `eapol` also paints four detail rows under that
-//! line. The shell owns the address and the ping. Received Ethernet frames
+//! line, then `END OF OUTPUT`, and blanks the device lines under that marker.
+//! The shell owns the address and the ping. Received Ethernet frames
 //! are enqueued on the standard receive queue, and transmit frames are
 //! dequeued from the standard transmit queue.
 //! The register dump that used to occupy rows 51 to 65 is not painted.
@@ -47,9 +48,9 @@ use lerux_sddf::{net_driver_config_t, net_image::net_config_from_bytes, SDDF_NET
 use lerux_swift::{
     bar_line, class_code, format_report, load_header, memory_bar,
     mt7921::{
-        read_survey_mark, survey_requested, write_auth_miss, write_eapol_miss, write_join,
-        write_join_detail, write_slot_line, AuthMiss, Sem, Stage, JOIN_DETAIL_LINES,
-        JOIN_DETAIL_ROW,
+        join_device_rows_to_clear, read_survey_mark, survey_requested, write_auth_miss,
+        write_eapol_miss, write_join, write_join_detail, write_slot_line, AuthMiss, Sem, Stage,
+        JOIN_DETAIL_LINES, JOIN_DETAIL_ROW, JOIN_END, JOIN_END_ROW,
     },
     paint_row, read_key, vendor_device, working_line, WaitMark, WifiReport, MT7921_BAR, MT7921_BDF,
     MT7921_IDS,
@@ -267,6 +268,10 @@ fn paint_detail(miss: &AuthMiss, sta: [u8; 6]) {
     for row in 0..JOIN_DETAIL_LINES {
         let n = write_join_detail(&mut line, row, miss, &sta);
         paint_at(JOIN_DETAIL_ROW + row, &line[..n]);
+    }
+    paint_at(JOIN_END_ROW, JOIN_END);
+    for row in join_device_rows_to_clear() {
+        paint_at(row, b"");
     }
 }
 

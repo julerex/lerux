@@ -206,6 +206,9 @@ pub fn message1(eapol: &[u8]) -> Option<([u8; 32], [u8; 8])> {
 }
 
 /// Message 2. `out` receives the EAPOL key frame. The MIC uses `kck`.
+///
+/// Key data is [`RSN_IE`], the element carried in the association request.
+/// An access point that does not see that element retransmits message 1.
 pub fn message2(
     out: &mut [u8],
     anonce: &[u8; 32],
@@ -213,7 +216,7 @@ pub fn message2(
     replay: &[u8; 8],
     kck: &[u8; 16],
 ) -> Option<usize> {
-    let n = write_eapol_key(out, KEY_PAIR | KEY_MIC, *replay, snonce, &[])?;
+    let n = write_eapol_key(out, KEY_PAIR | KEY_MIC, *replay, snonce, RSN_IE)?;
     let _ = anonce;
     seal_mic(out, n, kck);
     Some(n)
@@ -623,6 +626,13 @@ pub fn write_auth(out: &mut [u8], bssid: &[u8; 6], sta: &[u8; 6], seq: u16) -> u
     30
 }
 
+/// CCMP group and pairwise cipher, PSK authentication, management frame
+/// protection off. Message 2 repeats these bytes as its key data.
+const RSN_IE: &[u8] = &[
+    48, 20, 1, 0, 0x00, 0x0f, 0xac, 0x04, 1, 0, 0x00, 0x0f, 0xac, 0x04, 1, 0, 0x00, 0x0f, 0xac,
+    0x02, 0, 0,
+];
+
 /// Association request carrying the SSID and a CCMP/PSK RSN element.
 pub fn write_assoc(
     out: &mut [u8],
@@ -631,7 +641,8 @@ pub fn write_assoc(
     ssid: &[u8],
     seq: u16,
 ) -> Option<usize> {
-    if ssid.len() > SSID_MAX || out.len() < 36 + ssid.len() + 24 {
+    let need = 40 + ssid.len() + RSN_IE.len();
+    if ssid.len() > SSID_MAX || out.len() < need {
         return None;
     }
     write_mgmt(out, 0x00, *bssid, *sta, *bssid, seq);
@@ -648,16 +659,8 @@ pub fn write_assoc(
     out[n + 1] = 8;
     out[n + 2..n + 10].copy_from_slice(&[0x82, 0x84, 0x8b, 0x96, 0x0c, 0x12, 0x18, 0x24]);
     n += 10;
-    out[n] = 48;
-    out[n + 1] = 20;
-    out[n + 2..n + 4].copy_from_slice(&[1, 0]);
-    out[n + 4..n + 8].copy_from_slice(&[0x00, 0x0f, 0xac, 0x04]);
-    out[n + 8..n + 10].copy_from_slice(&[1, 0]);
-    out[n + 10..n + 14].copy_from_slice(&[0x00, 0x0f, 0xac, 0x04]);
-    out[n + 14..n + 16].copy_from_slice(&[1, 0]);
-    out[n + 16..n + 20].copy_from_slice(&[0x00, 0x0f, 0xac, 0x02]);
-    out[n + 20..n + 22].copy_from_slice(&[0, 0]);
-    n += 22;
+    out[n..n + RSN_IE.len()].copy_from_slice(RSN_IE);
+    n += RSN_IE.len();
     Some(n)
 }
 
@@ -670,6 +673,35 @@ fn write_mgmt(out: &mut [u8], subtype: u8, a1: [u8; 6], a2: [u8; 6], a3: [u8; 6]
     let sc = (seq << 4).to_le_bytes();
     out[22] = sc[0];
     out[23] = sc[1];
+}
+
+/// Data, To DS, no `QoS` header. The association request does not advertise
+/// WMM, and the access point's message 1 uses this frame type. `msdu` is the
+/// LLC payload.
+pub fn write_data(
+    out: &mut [u8],
+    bssid: &[u8; 6],
+    sta: &[u8; 6],
+    da: &[u8; 6],
+    msdu: &[u8],
+    seq: u16,
+    protect: bool,
+) -> Option<usize> {
+    let n = 24 + msdu.len();
+    if out.len() < n {
+        return None;
+    }
+    out[..n].fill(0);
+    out[0] = 0x08;
+    out[1] = if protect { 0x41 } else { 0x01 };
+    out[4..10].copy_from_slice(bssid);
+    out[10..16].copy_from_slice(sta);
+    out[16..22].copy_from_slice(da);
+    let sc = (seq << 4).to_le_bytes();
+    out[22] = sc[0];
+    out[23] = sc[1];
+    out[24..n].copy_from_slice(msdu);
+    Some(n)
 }
 
 /// `QoS` data, To DS. `msdu` is the LLC payload, already encrypted when `protect` is set.
@@ -832,9 +864,14 @@ mod tests {
         let (got_nonce, got_replay) = message1(&m1).unwrap();
         assert_eq!(got_nonce, anonce);
         assert_eq!(got_replay, replay);
-        let mut m2 = [0u8; 128];
+        let mut m2 = [0u8; 160];
         let n = message2(&mut m2, &anonce, &snonce, &replay, &ptk.kck).unwrap();
+        assert_eq!(n, 99 + RSN_IE.len());
+        assert_eq!(&m2[99..n], RSN_IE);
         assert!(mic_ok(&m2[..n], &ptk.kck));
+        let mut assoc = [0u8; 128];
+        let an = write_assoc(&mut assoc, &ap, &sta, b"IEEE", 1).unwrap();
+        assert!(assoc[..an].windows(RSN_IE.len()).any(|w| w == RSN_IE));
     }
 
     #[test]

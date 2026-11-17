@@ -20,7 +20,7 @@ When the host does not see a frame the device says it has, find where Linux rece
 
 For mt76 that path is `mt76_dma_rx_process` in `dma.c`, which calls `drv->rx_skb` for every queue, the MCU queues included, and then `mt7921_queue_rx_skb` in `mac.c`, which dispatches on the packet type in RXD0. A type-7 packet with flag 1 is renamed `PKT_TYPE_NORMAL_MCU` and handled as a frame. The name sounds like an MCU event. Read the dispatch, not the name.
 
-Download the core file when it is missing from the local Linux sources. A comparison of init and start commands that leaves the receive side out is not "matching Linux".
+Download the core file when it is missing from the local Linux sources, at the Linux tag the protection-domain header names. The running kernel and a newer mainline tag are different trees. A comparison of init and start commands that leaves the receive side out is not "matching Linux".
 
 ## Count every discard
 
@@ -39,3 +39,4 @@ When a belief is still a hypothesis, write it in the plan doc or on the pull req
 - When several boots in a row test variations of one theory, or a change is added, removed, and added again, stop and check the theory against the reference driver.
 - Read a boot line against what it can show. A panel that reached `wait` finished init, so a later `wifi err` is not an init failure.
 - A counter that rose after a change does not prove the change was needed. The Swift survey kept the other-beacon clear, the DMA receive length, and the station registration, and earlier images had no `ev` field to show whether any of them mattered. Name such changes as unproven when you report them.
+- A stop letter cannot falsify edits that share its image. Paint what was posted before changing key data, frame type, or the transmit queue.

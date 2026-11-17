@@ -70,7 +70,7 @@ Re-run the check. Exit 1 is a real break. Exit 2 means the probe lost the functi
 
 ## Bounds
 
-One network and one passphrase. The model does not cover the WPA message bytes or a second scan. The address and the ping are not steps of `Mac::associate`. `bring_up` is called with a radio that never replies, so the success path of that host function is the crate's own test.
+One network and one passphrase. The model does not cover the WPA message bytes, the transmit descriptor, or a second scan. Exit 0 certifies the stage machine only, including `four_way` remaining one `Eapol` stage, so `just check` does not prove the message bytes or the transmit descriptor. The address and the ping are not steps of `Mac::associate`. `bring_up` is called with a radio that never replies, so the success path of that host function is the crate's own test.
 
 ## Tools
 

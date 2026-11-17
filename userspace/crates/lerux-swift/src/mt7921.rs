@@ -1206,6 +1206,9 @@ pub fn write_channel_domain(out: &mut [u8]) -> Option<usize> {
 /// The MMIO path posts a management frame with cut-through format on the ALTX
 /// queue (`qid >= MT_TXQ_PSD`). The wireless index is [`PEER_WTBL`].
 /// `band5` selects the fixed rate: CCK 1 Mbps below channel 15, OFDM 6 Mbps above.
+/// A control-port frame uses the best-effort queue and that same fixed rate.
+/// mac80211 sets `IEEE80211_TX_CTL_USE_MINRATE` for ethertype `0x888e`, and a
+/// station that did not advertise WMM sends the frame as non-`QoS` data.
 pub fn write_txwi(txwi: &mut [u8], frame: &[u8], frame_phys: u32, band5: bool) -> bool {
     if txwi.len() < TXD_LEN + TXP_LEN || frame.len() < 24 || frame.len() > 0x3fff {
         return false;
@@ -1221,13 +1224,18 @@ pub fn write_txwi(txwi: &mut [u8], frame: &[u8], frame_phys: u32, band5: bool) -
 
 /// `MT_LMAC_ALTX0`. Management frames use this queue on the MMIO path.
 const MT_LMAC_ALTX0: u32 = 0x10;
+/// Best-effort LMAC queue. `mt76_connac_lmac_mapping` reverses the mac80211
+/// index, and `IEEE80211_AC_BE` is 2, so the hardware queue is 1.
+const MT_LMAC_AC_BE: u32 = 1;
 
 /// TXD words before the TXP buffer pointer. `frame` is at least 24 bytes.
 ///
 /// Packet format is cut-through: `MT_TXD0_PKT_FMT` (bits 24:23) stays clear.
 fn write_txd(txwi: &mut [u8], frame: &[u8], band5: bool) {
     let total = frame.len() + TXD_LEN;
-    let tx0 = u32::from(low_u16(total)) | (MT_LMAC_ALTX0 << 25);
+    let eapol = control_port(frame);
+    let queue = if eapol { MT_LMAC_AC_BE } else { MT_LMAC_ALTX0 };
+    let tx0 = u32::from(low_u16(total)) | (queue << 25);
     txwi[..4].copy_from_slice(&tx0.to_le_bytes());
     let fc = u16::from_le_bytes([frame[0], frame[1]]);
     let fc_kind = u32::from((fc & 0x000c) >> 2);
@@ -1242,7 +1250,7 @@ fn write_txd(txwi: &mut [u8], frame: &[u8], band5: bool) {
         tx2 |= 1 << 10;
     }
     let data = fc & 0x000c == 0x0008;
-    if !data || multicast {
+    if !data || multicast || eapol {
         tx2 |= 1 << 31;
         tx2 |= 1 << 13;
     }
@@ -1277,6 +1285,12 @@ fn header_len(frame: &[u8]) -> usize {
     } else {
         24
     }
+}
+
+/// LLC/SNAP plus ethertype `0x888e`, the control-port protocol.
+fn control_port(frame: &[u8]) -> bool {
+    let at = header_len(frame);
+    frame.get(at..at + 8) == Some(&[0xaa, 0xaa, 0x03, 0x00, 0x00, 0x00, 0x88, 0x8e])
 }
 
 const PKT_TYPE_NORMAL: u32 = 2;
@@ -1605,6 +1619,46 @@ fn hex_byte(byte: u8) -> [u8; 2] {
     [hex_nibble(byte >> 4), hex_nibble(byte)]
 }
 
+/// Where the four-way handshake returned without a key.
+///
+/// The panel row is 48 cells. Each word is two bytes and is printed
+/// immediately after `eapol`, before the counts.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum EapolStop {
+    /// No message 1 arrived.
+    #[default]
+    Wait1,
+    /// The copied frame was not message 1.
+    Msg1,
+    /// Message 2 did not fit in the buffer.
+    Build2,
+    /// Message 2 did not leave the transmit ring.
+    Tx2,
+    /// No message 3 arrived.
+    Wait3,
+    /// The copied frame was not message 3.
+    Msg3,
+    /// Message 4 did not fit in the buffer.
+    Build4,
+    /// Message 4 did not leave the transmit ring.
+    Tx4,
+}
+
+impl EapolStop {
+    fn word(self) -> &'static [u8] {
+        match self {
+            Self::Wait1 => b"w1",
+            Self::Msg1 => b"m1",
+            Self::Build2 => b"b2",
+            Self::Tx2 => b"t2",
+            Self::Wait3 => b"w3",
+            Self::Msg3 => b"m3",
+            Self::Build4 => b"b4",
+            Self::Tx4 => b"t4",
+        }
+    }
+}
+
 /// What the authentication wait kept instead of a matching reply.
 ///
 /// `rx` and `ev` match the survey mark. `skip` counts MCU completions
@@ -1618,6 +1672,8 @@ pub struct AuthMiss {
     pub skip: u16,
     pub tr: u16,
     pub fc: Option<u8>,
+    /// Handshake return. The authentication miss leaves this [`EapolStop::Wait1`].
+    pub stop: EapolStop,
     /// Authentication sequence. 1 is the request this station sends.
     pub sq: Option<u8>,
     /// Authentication status. Linux accepts 0.
@@ -1752,12 +1808,22 @@ pub fn write_join_detail(out: &mut [u8], row: usize, miss: &AuthMiss, sta: &[u8;
 
 /// Panel line when the four-way handshake returns without a key.
 ///
-/// The stage word stays `eapol`. `rx`, `ev`, `skip`, and `fc` mean the same
-/// thing they mean on the `auth rx` line. `tr` is the header-translation count.
+/// The stage word stays `eapol`. The next two letters are [`EapolStop`].
+/// `rx`, `ev`, `skip`, and `fc` mean the same thing they mean on the `auth rx`
+/// line. `tr` is the header-translation count.
 #[must_use]
 pub fn write_eapol_miss(out: &mut [u8], miss: &AuthMiss) -> usize {
-    let Some(n) = write_fc(out, b"mt7921: eapol fc ", miss.fc) else {
+    let Some(n) = write_bytes(out, 0, b"mt7921: eapol ") else {
         return 0;
+    };
+    let Some(n) = write_bytes(out, n, miss.stop.word()) else {
+        return n;
+    };
+    let Some(n) = write_bytes(out, n, b" fc ") else {
+        return n;
+    };
+    let Some(n) = write_fc_value(out, n, miss.fc) else {
+        return n;
     };
     let Some(n) = write_counts(out, n, miss) else {
         return n;
@@ -1770,6 +1836,10 @@ pub fn write_eapol_miss(out: &mut [u8], miss: &AuthMiss) -> usize {
 
 fn write_fc(out: &mut [u8], prefix: &[u8], fc: Option<u8>) -> Option<usize> {
     let n = write_bytes(out, 0, prefix)?;
+    write_fc_value(out, n, fc)
+}
+
+fn write_fc_value(out: &mut [u8], n: usize, fc: Option<u8>) -> Option<usize> {
     match fc {
         Some(byte) => write_bytes(out, n, &hex_byte(byte)),
         None => write_bytes(out, n, b"--"),
@@ -2695,8 +2765,35 @@ mod tests {
             .expect("qos frame");
         let mut txwi = [0u8; TXD_LEN + TXP_LEN];
         assert!(write_txwi(&mut txwi, &frame[..n], 0x01f6_8000, false));
+        let tx0 = u32::from_le_bytes(txwi[0..4].try_into().expect("txd0"));
         let tx1 = u32::from_le_bytes(txwi[4..8].try_into().expect("txd1"));
+        let tx2 = u32::from_le_bytes(txwi[8..12].try_into().expect("txd2"));
         assert_eq!((tx1 >> 11) & 0x1f, 13, "qos header words");
+        assert_eq!(tx0 >> 25, 0x10, "ordinary data stays on ALTX");
+        assert_eq!(tx2 & (1 << 31), 0, "ordinary data is not a fixed rate");
+    }
+
+    #[test]
+    fn eapol_txd_uses_best_effort_and_fixed_rate() {
+        let mut frame = [0u8; 64];
+        let bssid = [0x02, 0x00, 0x00, 0x00, 0x00, 0x01];
+        let sta = [0x02, 0x11, 0x22, 0x33, 0x44, 0x55];
+        let msdu = [0xaa, 0xaa, 0x03, 0x00, 0x00, 0x00, 0x88, 0x8e, 1, 3];
+        let n = crate::wpa::write_data(&mut frame, &bssid, &sta, &bssid, &msdu, 1, false)
+            .expect("eapol frame");
+        let mut txwi = [0u8; TXD_LEN + TXP_LEN];
+        assert!(write_txwi(&mut txwi, &frame[..n], 0x01f6_8000, false));
+        let tx0 = u32::from_le_bytes(txwi[0..4].try_into().expect("txd0"));
+        let tx1 = u32::from_le_bytes(txwi[4..8].try_into().expect("txd1"));
+        let tx2 = u32::from_le_bytes(txwi[8..12].try_into().expect("txd2"));
+        let tx3 = u32::from_le_bytes(txwi[12..16].try_into().expect("txd3"));
+        let tx6 = u32::from_le_bytes(txwi[24..28].try_into().expect("txd6"));
+        assert_eq!(tx0 >> 25, 1, "best-effort queue");
+        assert_eq!((tx1 >> 11) & 0x1f, 12, "data header words");
+        assert_eq!(tx2 & (1 << 31), 1 << 31, "fixed rate");
+        assert_eq!(tx2 & (1 << 13), 1 << 13, "htc valid");
+        assert_eq!(tx3 & (1 << 28), 1 << 28, "block ack disabled");
+        assert_eq!((tx6 >> 16) & 0x3fff, 0, "2.4 GHz rate");
     }
 
     #[test]
@@ -2805,7 +2902,7 @@ mod tests {
                 ..AuthMiss::default()
             },
         );
-        assert_eq!(&out[..n], b"mt7921: eapol fc -- rx 0 ev 0 skip 0 tr 0");
+        assert_eq!(&out[..n], b"mt7921: eapol w1 fc -- rx 0 ev 0 skip 0 tr 0");
         let n = write_eapol_miss(
             &mut out,
             &AuthMiss {
@@ -2817,7 +2914,42 @@ mod tests {
                 ..AuthMiss::default()
             },
         );
-        assert_eq!(&out[..n], b"mt7921: eapol fc 08 rx 9 ev 10 skip 1 tr 19");
+        assert_eq!(&out[..n], b"mt7921: eapol w1 fc 08 rx 9 ev 10 skip 1 tr 19");
+    }
+
+    #[test]
+    fn eapol_stop_fits_the_stage_row() {
+        let mut out = [0u8; 64];
+        let boot = AuthMiss {
+            rx: 2,
+            ev: 10,
+            skip: 1,
+            tr: 0,
+            fc: Some(0x08),
+            stop: EapolStop::Tx2,
+            ..AuthMiss::default()
+        };
+        let n = write_eapol_miss(&mut out, &boot);
+        assert_eq!(&out[..n], b"mt7921: eapol t2 fc 08 rx 2 ev 10 skip 1 tr 0");
+        assert!(n <= 48, "row 22 keeps 48 cells");
+        for stop in [
+            EapolStop::Wait1,
+            EapolStop::Msg1,
+            EapolStop::Build2,
+            EapolStop::Tx2,
+            EapolStop::Wait3,
+            EapolStop::Msg3,
+            EapolStop::Build4,
+            EapolStop::Tx4,
+        ] {
+            let mut row = boot;
+            row.stop = stop;
+            let n = write_eapol_miss(&mut out, &row);
+            let head = b"mt7921: eapol ";
+            assert!(n <= 48);
+            assert!(out[..n].starts_with(head));
+            assert_eq!(&out[head.len()..head.len() + 2], stop.word());
+        }
     }
 
     #[test]

@@ -1203,10 +1203,10 @@ pub fn write_channel_domain(out: &mut [u8]) -> Option<usize> {
 
 /// `mt76_connac2_mac_write_txwi` for one 802.11 frame.
 ///
-/// The MMIO path posts a management frame with cut-through format on the ALTX
-/// queue (`qid >= MT_TXQ_PSD`). The wireless index is [`PEER_WTBL`].
-/// `band5` selects the fixed rate: CCK 1 Mbps below channel 15, OFDM 6 Mbps above.
-/// A control-port frame uses the best-effort queue and that same fixed rate.
+/// Management frames use the ALTX queue (`qid >= MT_TXQ_PSD`). Data frames,
+/// including DHCP, use the best-effort queue. The wireless index is
+/// [`PEER_WTBL`]. `band5` selects the fixed rate: CCK 1 Mbps below channel 15,
+/// OFDM 6 Mbps above. A control-port frame is data at that fixed rate.
 /// mac80211 sets `IEEE80211_TX_CTL_USE_MINRATE` for ethertype `0x888e`, and a
 /// station that did not advertise WMM sends the frame as non-`QoS` data.
 pub fn write_txwi(txwi: &mut [u8], frame: &[u8], frame_phys: u32, band5: bool) -> bool {
@@ -1234,10 +1234,14 @@ const MT_LMAC_AC_BE: u32 = 1;
 fn write_txd(txwi: &mut [u8], frame: &[u8], band5: bool) {
     let total = frame.len() + TXD_LEN;
     let eapol = control_port(frame);
-    let queue = if eapol { MT_LMAC_AC_BE } else { MT_LMAC_ALTX0 };
+    let fc = u16::from_le_bytes([frame[0], frame[1]]);
+    // Linux posts data on the access-category queue. ALTX is management only.
+    // DHCP is the first data frame after the handshake, and EAPOL already left
+    // on this best-effort queue.
+    let data = fc & 0x000c == 0x0008;
+    let queue = if data { MT_LMAC_AC_BE } else { MT_LMAC_ALTX0 };
     let tx0 = u32::from(low_u16(total)) | (queue << 25);
     txwi[..4].copy_from_slice(&tx0.to_le_bytes());
-    let fc = u16::from_le_bytes([frame[0], frame[1]]);
     let fc_kind = u32::from((fc & 0x000c) >> 2);
     let subtype = u32::from((fc & 0x00f0) >> 4);
     let hdr = header_len(frame);
@@ -1249,7 +1253,6 @@ fn write_txd(txwi: &mut [u8], frame: &[u8], band5: bool) {
     if multicast {
         tx2 |= 1 << 10;
     }
-    let data = fc & 0x000c == 0x0008;
     if !data || multicast || eapol {
         tx2 |= 1 << 31;
         tx2 |= 1 << 13;
@@ -1444,6 +1447,15 @@ pub fn write_key(page: &mut [u8], ssid: &[u8], psk: &[u8]) -> bool {
 
 /// Byte 3 is the association result. `write_key` leaves it clear.
 const JOIN_UP: u8 = 1;
+
+/// The shell posted a passphrase and [`write_join`] has not stored a result.
+///
+/// A later notify drains the receive ring during DHCP. It must not start a
+/// second association. [`write_key`] clears this byte, so the next command can.
+#[must_use]
+pub fn join_pending(page: &[u8]) -> bool {
+    page.len() >= 4 && page[0] == 1 && page[3] == 0
+}
 
 /// The radio sets this after `associate` returns. `up` is a finished handshake.
 pub fn write_join(page: &mut [u8], up: bool) -> bool {
@@ -1771,6 +1783,45 @@ pub fn write_auth_miss(out: &mut [u8], miss: &AuthMiss) -> usize {
         return 0;
     };
     write_counts(out, n, miss).unwrap_or(n)
+}
+
+/// Stage row once the handshake has finished.
+///
+/// `rx` is a frame queued for the shell. `tx` is a shell frame whose
+/// descriptor the card accepted. `drop` is a received frame that was not
+/// queued, including a beacon, or an MCU completion that was not a frame.
+/// `fc` appears after a drop. A data frame replaces an earlier beacon, and a
+/// later beacon does not replace that data frame.
+#[must_use]
+pub fn write_link_mark(out: &mut [u8], rx: u32, tx: u32, drop: u32, fc: Option<u8>) -> usize {
+    let Some(n) = write_bytes(out, 0, b"mt7921: rx ") else {
+        return 0;
+    };
+    let Some(n) = write_dec(out, n, rx) else {
+        return 0;
+    };
+    let Some(n) = write_bytes(out, n, b" tx ") else {
+        return 0;
+    };
+    let Some(n) = write_dec(out, n, tx) else {
+        return 0;
+    };
+    let Some(n) = write_bytes(out, n, b" drop ") else {
+        return 0;
+    };
+    let Some(n) = write_dec(out, n, drop) else {
+        return 0;
+    };
+    if drop == 0 {
+        return n;
+    }
+    let Some(n) = write_bytes(out, n, b" fc ") else {
+        return 0;
+    };
+    match fc {
+        Some(byte) => write_bytes(out, n, &hex_byte(byte)).unwrap_or(n),
+        None => write_bytes(out, n, b"--").unwrap_or(n),
+    }
 }
 
 /// First of the four join-detail rows. They start on the disk row, under the
@@ -2604,10 +2655,13 @@ mod tests {
         assert_eq!(ssid, b"home");
         assert_eq!(psk, b"password");
         assert!(!join_up(&page));
+        assert!(join_pending(&page));
         assert!(write_join(&mut page, true));
         assert!(join_up(&page));
+        assert!(!join_pending(&page));
         assert!(write_join(&mut page, false));
         assert!(!join_up(&page));
+        assert!(!join_pending(&page));
         assert!(!write_key(&mut page, b"", b"password"));
     }
 
@@ -2771,7 +2825,7 @@ mod tests {
         let tx1 = u32::from_le_bytes(txwi[4..8].try_into().expect("txd1"));
         let tx2 = u32::from_le_bytes(txwi[8..12].try_into().expect("txd2"));
         assert_eq!((tx1 >> 11) & 0x1f, 13, "qos header words");
-        assert_eq!(tx0 >> 25, 0x10, "ordinary data stays on ALTX");
+        assert_eq!(tx0 >> 25, 1, "data uses the best-effort queue");
         assert_eq!(tx2 & (1 << 31), 0, "ordinary data is not a fixed rate");
     }
 
@@ -2796,6 +2850,17 @@ mod tests {
         assert_eq!(tx2 & (1 << 13), 1 << 13, "htc valid");
         assert_eq!(tx3 & (1 << 28), 1 << 28, "block ack disabled");
         assert_eq!((tx6 >> 16) & 0x3fff, 0, "2.4 GHz rate");
+    }
+
+    #[test]
+    fn link_mark_names_queued_frames_and_a_dropped_data_frame() {
+        let mut out = [0u8; 64];
+        let n = write_link_mark(&mut out, 0, 1, 0, None);
+        assert_eq!(&out[..n], b"mt7921: rx 0 tx 1 drop 0");
+        let n = write_link_mark(&mut out, 1, 2, 4, Some(0x88));
+        assert_eq!(&out[..n], b"mt7921: rx 1 tx 2 drop 4 fc 88");
+        let n = write_link_mark(&mut out, 0, 0, 1, None);
+        assert_eq!(&out[..n], b"mt7921: rx 0 tx 0 drop 1 fc --");
     }
 
     #[test]

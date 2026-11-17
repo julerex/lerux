@@ -337,6 +337,8 @@ impl Stack {
     fn bring_up(&mut self) -> bool {
         let start = self.ms;
         loop {
+            #[cfg(feature = "board-swift_sfx14_41g")]
+            crate::kick_radio();
             self.poll_iface();
             match self.take_dhcp() {
                 Ok(true) => return true,
@@ -413,6 +415,7 @@ impl Stack {
         let mut last_send = None;
         let mut seq_no = 0u16;
         loop {
+            crate::kick_radio();
             self.poll_iface();
             let now = self.ms;
             let replied = {

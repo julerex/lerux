@@ -286,21 +286,51 @@ impl Mac {
     fn receive(&mut self, net: &Net) -> bool {
         let mut moved = false;
         let mut frame = [0u8; 1600];
-        while net.rx_has_room() {
-            let Some(n) = self.poll_data() else {
+        // The data ring is 8 deep and shares it with beacons. Linux also
+        // reads the MCU rings: a frame there is type 2, or type 7 with flag 1.
+        // One pump drains both, or the offer is overwritten before the next
+        // DHCP retry.
+        for _ in 0..32 {
+            if !net.rx_has_room() {
+                break;
+            }
+            if let Some(n) = self.poll_data() {
+                if self.take_frame(n, &mut frame, net) {
+                    moved = true;
+                }
+                continue;
+            }
+            let Some(n) = self.poll_mcu() else {
                 break;
             };
-            let Some(m) = copy_frame(n, &mut frame) else {
+            if !is_rx_frame(Mac::rx_bytes(n)) {
+                // The completion left the ring. Count it, or a full MCU ring
+                // looks the same as a ring that never moved.
+                self.note_drop(None);
                 continue;
-            };
-            let queued = self
-                .link()
-                .is_some_and(|link| net.enqueue_received(link, &frame[..m]));
-            if queued {
+            }
+            if self.take_frame(n, &mut frame, net) {
                 moved = true;
             }
         }
         moved
+    }
+
+    fn take_frame(&mut self, n: usize, frame: &mut [u8], net: &Net) -> bool {
+        let Some(m) = copy_frame(n, frame) else {
+            self.note_drop(None);
+            return false;
+        };
+        let queued = self
+            .link()
+            .is_some_and(|link| net.enqueue_received(link, &frame[..m]));
+        if queued {
+            self.count_rx();
+            true
+        } else {
+            self.note_drop(frame.first().copied());
+            false
+        }
     }
 
     fn transmit(&mut self, net: &Net) -> bool {
@@ -319,8 +349,8 @@ impl Mac {
                 TxFrame::Wifi(n) => n,
             };
             moved = true;
-            if n > 0 {
-                let _ = self.tx_80211(&wifi[..n]);
+            if n > 0 && self.tx_80211(&wifi[..n]) {
+                self.count_tx();
             }
         }
         moved

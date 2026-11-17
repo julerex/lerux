@@ -4,8 +4,18 @@ mod tarball;
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
+use sha2::{Digest, Sha256};
 
 use crate::process::{self, binary_parent, command_on_path, download, ensure_dir, run_checked};
+
+// Same archive and digest as docker/Dockerfile. developer.arm.com often
+// answers HTTP 503 before it redirects at the file. The second URL is that
+// redirect target.
+const ARM_GNU_SHA256: &str = "62d66e0ad7bd7f2a183d236ee301a5c73c737c886c7944aa4f39415aab528daf";
+const ARM_GNU_URLS: [&str; 2] = [
+    "https://developer.arm.com/-/media/Files/downloads/gnu/12.2.rel1/binrel/arm-gnu-toolchain-12.2.rel1-x86_64-aarch64-none-elf.tar.xz",
+    "https://armkeil.blob.core.windows.net/developer/Files/downloads/gnu/12.2.rel1/binrel/arm-gnu-toolchain-12.2.rel1-x86_64-aarch64-none-elf.tar.xz",
+];
 
 pub use deb::install_deb_tool;
 pub use tarball::extract_tar_xz;
@@ -35,9 +45,8 @@ pub fn install_arm_toolchain(root: &Path) -> Result<PathBuf> {
         }
     }
 
-    let url = "https://developer.arm.com/-/media/Files/downloads/gnu/12.2.rel1/binrel/arm-gnu-toolchain-12.2.rel1-x86_64-aarch64-none-elf.tar.xz";
     let tmp = tempfile::NamedTempFile::new().context("temp file")?;
-    download(url, tmp.path())?;
+    download_arm_gnu(tmp.path())?;
     extract_tar_xz(tmp.path(), &toolchains)?;
 
     let install_dir = find_dir(&toolchains, "arm-gnu-toolchain-*-aarch64-none-elf")
@@ -47,6 +56,41 @@ pub fn install_arm_toolchain(root: &Path) -> Result<PathBuf> {
         bail!("ARM toolchain install failed");
     }
     Ok(install_dir.join("bin"))
+}
+
+fn download_arm_gnu(dest: &Path) -> Result<()> {
+    let mut last = None;
+    for url in ARM_GNU_URLS {
+        match fetch_arm_gnu(url, dest) {
+            Ok(()) => return Ok(()),
+            Err(err) => {
+                eprintln!("==> {url} failed: {err:#}");
+                let _ = std::fs::remove_file(dest);
+                last = Some(err);
+            }
+        }
+    }
+    match last {
+        Some(err) => Err(err).context("ARM toolchain download failed"),
+        None => bail!("ARM toolchain download failed"),
+    }
+}
+
+fn fetch_arm_gnu(url: &str, dest: &Path) -> Result<()> {
+    download(url, dest)?;
+    expect_sha256(dest, ARM_GNU_SHA256)
+}
+
+fn expect_sha256(path: &Path, expect: &str) -> Result<()> {
+    let mut file = std::fs::File::open(path).with_context(|| format!("open {}", path.display()))?;
+    let mut hasher = Sha256::new();
+    std::io::copy(&mut file, &mut hasher).context("hash download")?;
+    let digest = hasher.finalize();
+    let actual = format!("{digest:x}");
+    if actual != expect {
+        bail!("sha256 {actual} != {expect}");
+    }
+    Ok(())
 }
 
 pub fn install_riscv_toolchain(root: &Path) -> Result<PathBuf> {
@@ -485,5 +529,23 @@ mod tests {
     fn display_help_has_gtk_should_reject_headless_help() {
         let help = "none                 none display\ncurses               curses display\n";
         assert!(!display_help_has_gtk(help));
+    }
+
+    #[test]
+    fn arm_gnu_fallback_is_the_blob_store() {
+        assert!(ARM_GNU_URLS[0].starts_with("https://developer.arm.com/"));
+        assert!(ARM_GNU_URLS[1].starts_with("https://armkeil.blob.core.windows.net/"));
+        let archive = "arm-gnu-toolchain-12.2.rel1-x86_64-aarch64-none-elf.tar.xz";
+        assert!(ARM_GNU_URLS.iter().all(|url| url.ends_with(archive)));
+    }
+
+    #[test]
+    fn expect_sha256_checks_the_file_bytes() {
+        let tmp = tempfile::NamedTempFile::new().expect("temp");
+        std::fs::write(tmp.path(), b"abc").expect("write");
+        let hash = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";
+        expect_sha256(tmp.path(), hash).expect("matching digest");
+        std::fs::write(tmp.path(), b"abcd").expect("rewrite");
+        assert!(expect_sha256(tmp.path(), hash).is_err());
     }
 }

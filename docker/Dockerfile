@@ -12,10 +12,34 @@ RUN apt-get update -q && apt-get install -y --no-install-recommends \
     xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# ARM GNU bare-metal toolchain (Microkit SDK build requirement)
+# ARM GNU bare-metal toolchain (Microkit SDK build requirement).
+# Same archive and digest as `install_arm_toolchain`. developer.arm.com often
+# answers HTTP 503 before it redirects at the file. The second URL is that
+# redirect target.
 RUN set -eux; \
-    curl -fsSL -o /tmp/arm-gnu.tar.xz \
-      "https://developer.arm.com/-/media/Files/downloads/gnu/12.2.rel1/binrel/arm-gnu-toolchain-12.2.rel1-x86_64-aarch64-none-elf.tar.xz"; \
+    archive=arm-gnu-toolchain-12.2.rel1-x86_64-aarch64-none-elf.tar.xz; \
+    sum=62d66e0ad7bd7f2a183d236ee301a5c73c737c886c7944aa4f39415aab528daf; \
+    primary="https://developer.arm.com/-/media/Files/downloads/gnu/12.2.rel1/binrel/${archive}"; \
+    mirror="https://armkeil.blob.core.windows.net/developer/Files/downloads/gnu/12.2.rel1/binrel/${archive}"; \
+    ok=0; \
+    for url in "$primary" "$mirror"; do \
+      if curl -fsSL \
+          --connect-timeout 20 \
+          --speed-limit 1024 \
+          --speed-time 30 \
+          --retry 5 \
+          --retry-delay 2 \
+          --retry-all-errors \
+          --retry-max-time 60 \
+          -o /tmp/arm-gnu.tar.xz \
+          "$url" \
+        && echo "${sum}  /tmp/arm-gnu.tar.xz" | sha256sum -c -; then \
+        ok=1; \
+        break; \
+      fi; \
+      rm -f /tmp/arm-gnu.tar.xz; \
+    done; \
+    test "$ok" = 1; \
     tar -xf /tmp/arm-gnu.tar.xz -C /opt; \
     rm /tmp/arm-gnu.tar.xz
 ENV PATH="/opt/arm-gnu-toolchain-12.2.rel1-x86_64-aarch64-none-elf/bin:${PATH}"

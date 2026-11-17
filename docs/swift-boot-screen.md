@@ -312,7 +312,7 @@ These are the other status words the Wi-Fi program can paint. Each one names a s
 | `mac` | The radio setup after firmware, including the reset of the Wi-Fi block |
 | `wait` | Firmware and radio setup finished. Choosing `3 wifi` lists the names the radio can hear |
 
-`nvme` on row 23 and `bt` on row 24 are the disk and Bluetooth programs. They start only after the Wi-Fi startup returns, including when it returns by giving up. A failed `auth rx` or `eapol` replaces rows 23–26 with the rejected frame: the sequence and status, the addresses, this station, and the first 16 payload bytes. That covers the disk line, the Bluetooth line, and the first two device names until the next boot.
+`nvme` on row 23 and `bt` on row 24 are the disk and Bluetooth programs. They start only after the Wi-Fi startup returns, including when it returns by giving up. A failed `auth rx` or `eapol` replaces rows 23–26 with the rejected frame: the sequence and status, the addresses, this station, and 16 bytes of the body (`m24`, `m26`, or `m0`). Row 27 is `END OF OUTPUT`. The device lines under that, the ones that end in `irq`, are blank. That covers the disk line, the Bluetooth line, and the device names until the next boot.
 
 ## Where this lives in the tree
 

@@ -4,6 +4,8 @@
 //! `mt7921/pci.c`, `mt792x_dma.c`, and `mt76_connac_mcu.c`. A register that
 //! those files do not map is [`Map::Unsupported`].
 
+use core::ops::Range;
+
 use crate::wifi::{format_report, WifiReport};
 
 /// `mt792x_patch_name` / `mt792x_ram_name`. 0x7922 and 0x7925 are different images.
@@ -1640,8 +1642,28 @@ pub struct AuthMiss {
     pub a2: [u8; 6],
     /// Address 3. Empty when the frame is translated.
     pub a3: [u8; 6],
+    /// Offset of [`head`] in the copied frame. 24 or 26 is the 802.11 body.
+    /// 0 is the start of a translated frame.
+    body_at: u8,
     head: [u8; 16],
     head_n: u8,
+}
+
+fn note_body(miss: &mut AuthMiss, frame: &[u8], translated: bool) {
+    let at = if translated || frame.is_empty() {
+        0
+    } else {
+        header_len(frame)
+    };
+    miss.body_at = u8::try_from(at).unwrap_or(0);
+    miss.head = [0; 16];
+    miss.head_n = 0;
+    let Some(body) = frame.get(at..) else {
+        return;
+    };
+    let n = body.len().min(miss.head.len());
+    miss.head[..n].copy_from_slice(&body[..n]);
+    miss.head_n = u8::try_from(n).unwrap_or(0);
 }
 
 /// Record one copied payload the way the join detail rows print it.
@@ -1655,10 +1677,7 @@ pub fn note_copied(miss: &mut AuthMiss, frame: &[u8], sta: &[u8; 6], layout: RxL
     miss.ms = u8::from(layout.amsdu());
     miss.len = u16::try_from(frame.len()).unwrap_or(u16::MAX);
     miss.ad = u8::from(!layout.translated() && frame.get(4..10) == Some(&sta[..]));
-    let n = frame.len().min(miss.head.len());
-    miss.head = [0; 16];
-    miss.head[..n].copy_from_slice(&frame[..n]);
-    miss.head_n = u8::try_from(n).unwrap_or(0);
+    note_body(miss, frame, layout.translated());
     if layout.translated() && frame.len() >= 12 {
         miss.addr = 1;
         miss.a1.copy_from_slice(&frame[0..6]);
@@ -1702,9 +1721,24 @@ pub fn write_auth_miss(out: &mut [u8], miss: &AuthMiss) -> usize {
 pub const JOIN_DETAIL_ROW: usize = 23;
 /// How many join-detail rows [`write_join_detail`] fills.
 pub const JOIN_DETAIL_LINES: usize = 4;
+/// Row after the detail. A failed join paints [`JOIN_END`] here.
+pub const JOIN_END_ROW: usize = JOIN_DETAIL_ROW + JOIN_DETAIL_LINES;
+/// Last line of a failed join. The device lines under it are blanked.
+pub const JOIN_END: &[u8] = b"END OF OUTPUT";
+
+/// Device-name rows that still end in `irq` after the detail and [`JOIN_END`].
+///
+/// The probe paints one line per [`crate::LOCATIONS`] entry, starting at the
+/// first row below the console. The detail covers the first of those lines.
+/// This range is the rest.
+#[must_use]
+pub fn join_device_rows_to_clear() -> Range<usize> {
+    let devices_end = lerux_desk::CONSOLE_ROWS + crate::LOCATIONS.len();
+    (JOIN_END_ROW + 1)..devices_end
+}
 
 /// One join-detail row. `row` is 0 through 3: the classification, the first
-/// two addresses, address 3 with the station, then the first payload bytes.
+/// two addresses, address 3 with the station, then 16 bytes of the body.
 #[must_use]
 pub fn write_join_detail(out: &mut [u8], row: usize, miss: &AuthMiss, sta: &[u8; 6]) -> usize {
     let written = match row {
@@ -1785,7 +1819,9 @@ fn write_detail_sta(out: &mut [u8], miss: &AuthMiss, sta: [u8; 6]) -> Option<usi
 }
 
 fn write_detail_hex(out: &mut [u8], miss: &AuthMiss) -> Option<usize> {
-    let n = write_bytes(out, 0, b"hex ")?;
+    let mut n = write_bytes(out, 0, b"m")?;
+    n = write_dec(out, n, u32::from(miss.body_at))?;
+    n = write_bytes(out, n, b" ")?;
     if miss.head_n == 0 {
         return write_bytes(out, n, b"--");
     }
@@ -2703,7 +2739,39 @@ mod tests {
         let n = write_join_detail(&mut out, 2, &miss, &sta);
         assert_eq!(&out[..n], b"a3 02:00:00:00:00:01 sta 02:11:22:33:44:55");
         let n = write_join_detail(&mut out, 3, &miss, &sta);
-        assert_eq!(&out[..n], b"hex b0000000020000000001021122334455");
+        assert_eq!(&out[..n], b"m24 000001000000");
+    }
+
+    #[test]
+    fn join_detail_shows_the_data_body() {
+        let sta = [0x74, 0x4c, 0xa1, 0x87, 0x7c, 0x49];
+        let mut frame = [0u8; 40];
+        frame[0] = 0x08;
+        frame[1] = 0x02;
+        frame[4..10].copy_from_slice(&sta);
+        frame[24..32].copy_from_slice(&[0xaa, 0xaa, 0x03, 0x00, 0x00, 0x00, 0x88, 0x8e]);
+        frame[32] = 2;
+        frame[33] = 3;
+        let mut miss = AuthMiss::default();
+        note_copied(&mut miss, &frame, &sta, rx_layout(&[]));
+        let mut out = [0u8; 64];
+        let n = write_join_detail(&mut out, 3, &miss, &sta);
+        assert_eq!(&out[..n], b"m24 aaaa03000000888e0203000000000000");
+    }
+
+    #[test]
+    fn join_end_clears_the_irq_lines_under_the_detail() {
+        assert_eq!(JOIN_END, b"END OF OUTPUT");
+        assert_eq!(JOIN_END_ROW, 27);
+        let devices = lerux_desk::CONSOLE_ROWS..lerux_desk::CONSOLE_ROWS + crate::LOCATIONS.len();
+        assert!(devices.contains(&JOIN_END_ROW));
+        assert_eq!(join_device_rows_to_clear(), 28..31);
+        for row in devices {
+            let covered = (JOIN_DETAIL_ROW..JOIN_END_ROW).contains(&row)
+                || row == JOIN_END_ROW
+                || join_device_rows_to_clear().contains(&row);
+            assert!(covered, "device row {row} stays on screen");
+        }
     }
 
     #[test]
@@ -2723,6 +2791,8 @@ mod tests {
         assert_eq!(&out[..n], b"da 02:11:22:33:44:55 sa 02:00:00:00:00:01");
         let n = write_join_detail(&mut out, 2, &miss, &sta);
         assert_eq!(&out[..n], b"a3 -- sta 02:11:22:33:44:55");
+        let n = write_join_detail(&mut out, 3, &miss, &sta);
+        assert_eq!(&out[..n], b"m0 02112233445502000000000100000000");
     }
 
     #[test]

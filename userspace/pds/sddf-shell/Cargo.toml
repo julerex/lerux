@@ -49,6 +49,7 @@ smoltcp = { workspace = true, optional = true, features = [
     "proto-ipv4",
     "proto-dhcpv4",
     "socket-dhcpv4",
+    "socket-icmp",
     "socket-tcp",
 ] }
 

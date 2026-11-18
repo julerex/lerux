@@ -5,16 +5,19 @@
 //! association stays up.
 
 use lerux_swift::{
-    mt7921::{frame_off, read_scan_done, write_survey_list, write_survey_mark, Stage, SCAN_MAX},
+    mt7921::{
+        frame_off, is_rx_frame, note_copied, read_scan_done, rx_layout, write_survey_list,
+        write_survey_mark, AuthMiss, EapolStop, Stage, SurveyCounts, SCAN_MAX,
+    },
     wpa::{
-        assoc_ok, auth_ok, beacon_ssid, ccmp_decrypt, derive_ptk, eapol_in_msdu, match_beacon,
-        message1, message2, message3, message4, pmk, write_assoc, write_auth, write_qos_data,
-        FoundAp,
+        assoc_aid, assoc_ok, auth_ok, beacon_ssid, ccmp_decrypt, derive_ptk, eapol_in_ether,
+        eapol_in_msdu, match_beacon, message1, message2, message3, message4, pmk, write_assoc,
+        write_auth, write_data, FoundAp,
     },
 };
 
 use crate::{
-    device::{assoc_budget, scan_budget, Mac},
+    device::{assoc_budget, drain_budget, scan_budget, Mac},
     ether::{write_keepalive, Net, Note, TxFrame},
 };
 
@@ -31,17 +34,31 @@ impl Mac {
         if !self.set_channel(ap.channel, band) {
             return Stage::Scan;
         }
-        paint(Stage::Auth);
-        if !self.open_auth(&ap) {
-            return Stage::Auth;
+        // The boot that stopped on `auth` had found the network. That word was
+        // both a transmit ring that did not take the frame and a wait that
+        // saw no matching authentication reply.
+        paint(Stage::AuthTx);
+        if !self.add_peer(ap.bssid, ap.channel > 14) || !self.post_auth(&ap) {
+            return Stage::AuthTx;
+        }
+        paint(Stage::AuthRx);
+        if !self.recv_auth() {
+            return Stage::AuthRx;
         }
         paint(Stage::Assoc);
-        if !self.request_assoc(&ap, ssid) {
+        let Some(aid) = self.request_assoc(&ap, ssid) else {
+            return Stage::Assoc;
+        };
+        if !self.note_assoc(ap.bssid, ap.channel, ap.channel > 14, aid) {
             return Stage::Assoc;
         }
         paint(Stage::Eapol);
-        let Some(tk) = self.four_way(&ap, ssid, psk) else {
-            return Stage::Eapol;
+        let tk = match self.four_way(&ap, ssid, psk) {
+            Ok(tk) => tk,
+            Err(stop) => {
+                self.note_eapol_stop(stop);
+                return Stage::Eapol;
+            }
         };
         self.open_link(ap.bssid, tk);
         self.send_keepalive();
@@ -65,115 +82,205 @@ impl Mac {
         }
     }
 
+    /// Directed scan. The access point is returned only after scan-done.
+    ///
+    /// The boot that stayed on `auth rx` posted authentication as soon as the
+    /// beacon arrived. The firmware scan was still hopping, so the descriptor
+    /// completed on a channel the access point was not using.
     fn find_ap(&mut self, ssid: &[u8]) -> Option<FoundAp> {
         if !self.start_scan(ssid) {
             return None;
         }
         let mut frame = [0u8; 1600];
+        let mut found = None;
+        let mut done = false;
         for _ in 0..scan_budget() {
-            if let Some(n) = self.poll_data()
-                && let Some(m) = copy_frame(n, &mut frame)
-                && let Some(ap) = match_beacon(&frame[..m], ssid)
+            if found.is_none()
+                && let Some(n) = self.poll_data()
+                && let Some(ap) = beacon_for(n, &mut frame, ssid)
+            {
+                found = Some(ap);
+            }
+            if let Some(n) = self.poll_mcu() {
+                if read_scan_done(Mac::rx_bytes(n)).is_some() {
+                    done = true;
+                    break;
+                }
+                if found.is_none()
+                    && is_rx_frame(Mac::rx_bytes(n))
+                    && let Some(ap) = beacon_for(n, &mut frame, ssid)
+                {
+                    found = Some(ap);
+                }
+            }
+            core::hint::spin_loop();
+        }
+        if !done {
+            return None;
+        }
+        if found.is_some() {
+            return found;
+        }
+        for _ in 0..drain_budget() {
+            if let Some(n) = self.poll_frame()
+                && let Some(ap) = beacon_for(n, &mut frame, ssid)
             {
                 return Some(ap);
-            }
-            if let Some(n) = self.poll_mcu()
-                && read_scan_done(Mac::rx_bytes(n)).is_some()
-            {
-                return None;
             }
             core::hint::spin_loop();
         }
         None
     }
 
+    /// Next frame from the data ring or an MCU ring. Linux reads every
+    /// receive ring by packet type. Other MCU packets are dropped here.
+    fn poll_frame(&mut self) -> Option<usize> {
+        if let Some(n) = self.poll_data() {
+            return Some(n);
+        }
+        let n = self.poll_mcu()?;
+        is_rx_frame(Mac::rx_bytes(n)).then_some(n)
+    }
+
     /// Wildcard scan. Heard names are written for the shell, in byte order.
     ///
     /// A scan that does not start leaves the request tag, so the shell reports
     /// `wifi err` instead of an empty list. The mark under the list counts
-    /// data buffers, names kept, and whether the firmware signaled scan-done.
-    /// `ch` and `bcn` are that event's completed channels and beacon count.
+    /// data-ring frames, MCU-ring frames, names kept, and whether the firmware
+    /// signaled scan-done. `ch` and `bcn` are that event's completed channels
+    /// and beacon count.
     pub(crate) fn survey(&mut self, page: &mut [u8]) {
         if !self.start_scan(&[]) {
             return;
         }
-        let mut names = [[0u8; 32]; SCAN_MAX];
-        let mut lens = [0u8; SCAN_MAX];
-        let mut count = 0usize;
-        let mut rx = 0u32;
-        let mut ok = 0u32;
-        let mut done = false;
-        let (mut channels, mut beacons) = (0u8, 0u32);
-        let mut fc = None;
+        let mut heard = Heard::default();
         let mut frame = [0u8; 1600];
+        self.wait_survey(&mut heard, &mut frame);
+        let mut refs: [&[u8]; SCAN_MAX] = [&[]; SCAN_MAX];
+        let listed = heard.names.iter().zip(heard.lens.iter()).take(heard.count);
+        for (slot, (name, len)) in refs.iter_mut().zip(listed) {
+            let n = usize::from(*len);
+            *slot = &name[..n];
+        }
+        let _ = write_survey_list(page, &refs[..heard.count]);
+        let _ = write_survey_mark(page, &heard.mark);
+    }
+
+    fn wait_survey(&mut self, heard: &mut Heard, frame: &mut [u8]) {
         for _ in 0..scan_budget() {
             if let Some(n) = self.poll_data() {
-                rx = rx.saturating_add(1);
-                if let Some(m) = copy_frame(n, &mut frame) {
-                    if fc.is_none() && m > 0 {
-                        fc = Some(frame[0]);
-                    }
-                    if let Some(ssid) = beacon_ssid(&frame[..m]) {
-                        ok = ok.saturating_add(1);
-                        count = remember(&mut names, &mut lens, count, ssid);
-                    }
-                }
+                heard.data(n, frame);
             }
-            if let Some(n) = self.poll_mcu()
-                && let Some(report) = read_scan_done(Mac::rx_bytes(n))
-            {
-                done = true;
-                (channels, beacons) = (report.channels, report.beacons);
-                break;
+            if let Some(n) = self.poll_mcu() {
+                if let Some(report) = read_scan_done(Mac::rx_bytes(n)) {
+                    heard.mark.done = true;
+                    heard.mark.channels = report.channels;
+                    heard.mark.beacons = report.beacons;
+                    break;
+                }
+                if is_rx_frame(Mac::rx_bytes(n)) {
+                    heard.event(n, frame);
+                }
             }
             core::hint::spin_loop();
         }
-        let mut refs: [&[u8]; SCAN_MAX] = [&[]; SCAN_MAX];
-        for i in 0..count {
-            let n = usize::from(lens[i]);
-            refs[i] = &names[i][..n];
+        if !heard.mark.done {
+            return;
         }
-        let _ = write_survey_list(page, &refs[..count]);
-        let _ = write_survey_mark(page, rx, ok, done, fc, channels, beacons);
+        for _ in 0..drain_budget() {
+            if let Some(n) = self.poll_data() {
+                heard.data(n, frame);
+            }
+            if let Some(n) = self.poll_mcu()
+                && is_rx_frame(Mac::rx_bytes(n))
+            {
+                heard.event(n, frame);
+            }
+            core::hint::spin_loop();
+        }
     }
 
-    fn open_auth(&mut self, ap: &FoundAp) -> bool {
+    fn post_auth(&mut self, ap: &FoundAp) -> bool {
         let sta = self.sta();
         let mut frame = [0u8; 64];
         let n = write_auth(&mut frame, &ap.bssid, &sta, self.next_seq_wifi());
-        if !self.tx_80211(&frame[..n]) {
-            return false;
-        }
-        self.wait_frame(assoc_budget(), |got| auth_ok(got, &sta))
+        self.tx_80211(&frame[..n])
     }
 
-    fn request_assoc(&mut self, ap: &FoundAp, ssid: &[u8]) -> bool {
+    fn recv_auth(&mut self) -> bool {
+        let sta = self.sta();
+        let mut frame = [0u8; 1600];
+        let mut miss = AuthMiss::default();
+        for _ in 0..assoc_budget() {
+            if let Some(n) = self.poll_data() {
+                miss.rx = miss.rx.saturating_add(1);
+                if copied_auth(n, &mut frame, &mut miss, sta) {
+                    self.remember_auth(miss);
+                    return true;
+                }
+            } else if let Some(n) = self.poll_mcu() {
+                if is_rx_frame(Mac::rx_bytes(n)) {
+                    miss.ev = miss.ev.saturating_add(1);
+                    if copied_auth(n, &mut frame, &mut miss, sta) {
+                        self.remember_auth(miss);
+                        return true;
+                    }
+                } else {
+                    miss.skip = miss.skip.saturating_add(1);
+                }
+            }
+            core::hint::spin_loop();
+        }
+        self.remember_auth(miss);
+        false
+    }
+
+    fn request_assoc(&mut self, ap: &FoundAp, ssid: &[u8]) -> Option<u16> {
         let sta = self.sta();
         let mut frame = [0u8; 160];
-        let Some(n) = write_assoc(&mut frame, &ap.bssid, &sta, ssid, self.next_seq_wifi()) else {
-            return false;
-        };
+        let n = write_assoc(&mut frame, &ap.bssid, &sta, ssid, self.next_seq_wifi())?;
         if !self.tx_80211(&frame[..n]) {
-            return false;
+            return None;
         }
-        self.wait_frame(assoc_budget(), |got| assoc_ok(got, &sta))
+        self.wait_assoc(sta)
     }
 
-    fn four_way(&mut self, ap: &FoundAp, ssid: &[u8], psk: &[u8]) -> Option<[u8; 16]> {
+    fn wait_assoc(&mut self, sta: [u8; 6]) -> Option<u16> {
+        let mut frame = [0u8; 1600];
+        for _ in 0..assoc_budget() {
+            if let Some(n) = self.poll_frame()
+                && let Some(m) = copy_frame(n, &mut frame)
+                && assoc_ok(&frame[..m], &sta)
+            {
+                return assoc_aid(&frame[..m]);
+            }
+            core::hint::spin_loop();
+        }
+        None
+    }
+
+    fn four_way(&mut self, ap: &FoundAp, ssid: &[u8], psk: &[u8]) -> Result<[u8; 16], EapolStop> {
         let sta = self.sta();
         let mut eapol = [0u8; 256];
-        let m = self.wait_eapol(sta, None, &mut eapol)?;
-        let (anonce, replay) = message1(&eapol[..m])?;
+        let m = self
+            .wait_eapol(sta, None, EapolWant::Message1, &mut eapol)
+            .ok_or(EapolStop::Wait1)?;
+        let (anonce, replay) = message1(&eapol[..m]).ok_or(EapolStop::Msg1)?;
         let key = pmk(psk, ssid);
         let snonce = snonce();
         let ptk = derive_ptk(&key, &ap.bssid, &sta, &anonce, &snonce);
-        let n = message2(&mut eapol, &anonce, &snonce, &replay, &ptk.kck)?;
-        self.send_eapol(ap.bssid, sta, &eapol[..n])?;
-        let m = self.wait_eapol(sta, None, &mut eapol)?;
-        let replay = message3(&eapol[..m], &ptk.kck)?;
-        let n = message4(&mut eapol, &replay, &ptk.kck)?;
-        self.send_eapol(ap.bssid, sta, &eapol[..n])?;
-        Some(ptk.tk)
+        let n =
+            message2(&mut eapol, &anonce, &snonce, &replay, &ptk.kck).ok_or(EapolStop::Build2)?;
+        self.send_eapol(ap.bssid, sta, &eapol[..n])
+            .ok_or(EapolStop::Tx2)?;
+        let m = self
+            .wait_eapol(sta, None, EapolWant::Message3, &mut eapol)
+            .ok_or(EapolStop::Wait3)?;
+        let replay = message3(&eapol[..m], &ptk.kck).ok_or(EapolStop::Msg3)?;
+        let n = message4(&mut eapol, &replay, &ptk.kck).ok_or(EapolStop::Build4)?;
+        self.send_eapol(ap.bssid, sta, &eapol[..n])
+            .ok_or(EapolStop::Tx4)?;
+        Ok(ptk.tk)
     }
 
     fn receive(&mut self, net: &Net) -> bool {
@@ -255,39 +362,42 @@ impl Mac {
         let _ = self.tx_80211(&frame[..n]);
     }
 
-    fn wait_frame(&mut self, spins: u32, mut pred: impl FnMut(&[u8]) -> bool) -> bool {
-        let mut frame = [0u8; 1600];
-        for _ in 0..spins {
-            if let Some(n) = self.poll_data()
-                && let Some(m) = copy_frame(n, &mut frame)
-                && pred(&frame[..m])
-            {
-                return true;
-            }
-            let _ = self.poll_mcu();
-            core::hint::spin_loop();
-        }
-        false
-    }
-
-    fn wait_eapol(&mut self, sta: [u8; 6], tk: Option<&[u8; 16]>, out: &mut [u8]) -> Option<usize> {
+    fn wait_eapol(
+        &mut self,
+        sta: [u8; 6],
+        tk: Option<&[u8; 16]>,
+        want: EapolWant,
+        out: &mut [u8],
+    ) -> Option<usize> {
         let mut frame = [0u8; 1600];
         let mut plain = [0u8; 400];
+        let mut miss = AuthMiss::default();
         for _ in 0..assoc_budget() {
-            if let Some(n) = self.poll_data()
-                && let Some(m) = copy_frame(n, &mut frame)
-                && frame.get(4..10) == Some(&sta[..])
-                && let Some(body) = msdu(&frame[..m], tk, &mut plain)
-                && let Some(eapol) = eapol_in_msdu(body)
-                && eapol.len() <= out.len()
-            {
-                let n = eapol.len();
-                out[..n].copy_from_slice(eapol);
-                return Some(n);
+            if let Some(n) = self.poll_data() {
+                miss.rx = miss.rx.saturating_add(1);
+                if let Some(got) = copied_eapol(n, &mut frame, &mut plain, &mut miss, sta, tk, out)
+                    && kept_eapol(want, &out[..got])
+                {
+                    self.remember_eapol(miss);
+                    return Some(got);
+                }
+            } else if let Some(n) = self.poll_mcu() {
+                if is_rx_frame(Mac::rx_bytes(n)) {
+                    miss.ev = miss.ev.saturating_add(1);
+                    if let Some(got) =
+                        copied_eapol(n, &mut frame, &mut plain, &mut miss, sta, tk, out)
+                        && kept_eapol(want, &out[..got])
+                    {
+                        self.remember_eapol(miss);
+                        return Some(got);
+                    }
+                } else {
+                    miss.skip = miss.skip.saturating_add(1);
+                }
             }
-            let _ = self.poll_mcu();
             core::hint::spin_loop();
         }
+        self.remember_eapol(miss);
         None
     }
 
@@ -305,7 +415,7 @@ impl Mac {
 
     fn send_plain(&mut self, bssid: [u8; 6], sta: [u8; 6], da: [u8; 6], msdu: &[u8]) -> Option<()> {
         let mut frame = [0u8; 400];
-        let n = write_qos_data(
+        let n = write_data(
             frame.as_mut_slice(),
             &bssid,
             &sta,
@@ -316,6 +426,44 @@ impl Mac {
         )?;
         self.tx_80211(&frame[..n]).then_some(())
     }
+}
+
+#[derive(Default)]
+struct Heard {
+    names: [[u8; 32]; SCAN_MAX],
+    lens: [u8; SCAN_MAX],
+    count: usize,
+    mark: SurveyCounts,
+}
+
+impl Heard {
+    fn data(&mut self, slot: usize, frame: &mut [u8]) {
+        self.mark.rx = self.mark.rx.saturating_add(1);
+        self.keep(slot, frame);
+    }
+
+    fn event(&mut self, slot: usize, frame: &mut [u8]) {
+        self.mark.ev = self.mark.ev.saturating_add(1);
+        self.keep(slot, frame);
+    }
+
+    fn keep(&mut self, slot: usize, frame: &mut [u8]) {
+        let Some(m) = copy_frame(slot, frame) else {
+            return;
+        };
+        if self.mark.fc.is_none() && m > 0 {
+            self.mark.fc = Some(frame[0]);
+        }
+        if let Some(ssid) = beacon_ssid(&frame[..m]) {
+            self.mark.ok = self.mark.ok.saturating_add(1);
+            self.count = remember(&mut self.names, &mut self.lens, self.count, ssid);
+        }
+    }
+}
+
+fn beacon_for(n: usize, frame: &mut [u8], ssid: &[u8]) -> Option<FoundAp> {
+    let m = copy_frame(n, frame)?;
+    match_beacon(&frame[..m], ssid)
 }
 
 fn remember(names: &mut [[u8; 32]], lens: &mut [u8], count: usize, ssid: &[u8]) -> usize {
@@ -332,6 +480,77 @@ fn remember(names: &mut [[u8; 32]], lens: &mut [u8], count: usize, ssid: &[u8]) 
     count + 1
 }
 
+/// Which EAPOL key frame the wait keeps.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum EapolWant {
+    /// The first frame, including a retransmission.
+    Message1,
+    /// A later frame. A retransmitted message 1 stays in the ring until the
+    /// access point accepts message 2, and it is not message 3.
+    Message3,
+}
+
+/// Message 3 ignores a frame [`message1`] accepts.
+fn kept_eapol(want: EapolWant, eapol: &[u8]) -> bool {
+    want == EapolWant::Message1 || message1(eapol).is_none()
+}
+
+fn copied_eapol(
+    n: usize,
+    frame: &mut [u8],
+    plain: &mut [u8],
+    miss: &mut AuthMiss,
+    sta: [u8; 6],
+    tk: Option<&[u8; 16]>,
+    out: &mut [u8],
+) -> Option<usize> {
+    let bytes = Mac::rx_bytes(n);
+    let layout = rx_layout(bytes);
+    if layout.translated() {
+        miss.tr = miss.tr.saturating_add(1);
+    }
+    let m = copy_frame(n, frame)?;
+    if m == 0 {
+        return None;
+    }
+    miss.fc = Some(frame[0]);
+    note_copied(miss, &frame[..m], &sta, layout);
+    if layout.rejected() {
+        return None;
+    }
+    let eapol = if layout.translated() {
+        if frame.get(..6) != Some(&sta[..]) {
+            return None;
+        }
+        eapol_in_ether(&frame[..m])?
+    } else {
+        if frame.get(4..10) != Some(&sta[..]) {
+            return None;
+        }
+        let body = msdu(&frame[..m], tk, plain, layout.plain(), layout.amsdu())?;
+        eapol_in_msdu(body)?
+    };
+    if eapol.len() > out.len() {
+        return None;
+    }
+    let n = eapol.len();
+    out[..n].copy_from_slice(eapol);
+    Some(n)
+}
+
+fn copied_auth(n: usize, frame: &mut [u8], miss: &mut AuthMiss, sta: [u8; 6]) -> bool {
+    let layout = rx_layout(Mac::rx_bytes(n));
+    let Some(m) = copy_frame(n, frame) else {
+        return false;
+    };
+    if m == 0 {
+        return false;
+    }
+    miss.fc = Some(frame[0]);
+    note_copied(miss, &frame[..m], &sta, layout);
+    auth_ok(&frame[..m], &sta)
+}
+
 fn copy_frame(n: usize, out: &mut [u8]) -> Option<usize> {
     let bytes = Mac::rx_bytes(n);
     let off = frame_off(bytes)?;
@@ -341,7 +560,13 @@ fn copy_frame(n: usize, out: &mut [u8]) -> Option<usize> {
     Some(m)
 }
 
-fn msdu<'a>(frame: &[u8], tk: Option<&[u8; 16]>, out: &'a mut [u8]) -> Option<&'a [u8]> {
+fn msdu<'a>(
+    frame: &[u8],
+    tk: Option<&[u8; 16]>,
+    out: &'a mut [u8],
+    stripped: bool,
+    amsdu: bool,
+) -> Option<&'a [u8]> {
     if frame.len() < 24 {
         return None;
     }
@@ -350,14 +575,18 @@ fn msdu<'a>(frame: &[u8], tk: Option<&[u8; 16]>, out: &'a mut [u8]) -> Option<&'
     } else {
         24
     };
-    if frame[1] & 0x40 != 0 {
+    if frame[1] & 0x40 != 0 && !stripped {
         let n = ccmp_decrypt(tk?, hdr, frame, out)?;
-        Some(&out[..n])
-    } else {
-        let n = frame.len().saturating_sub(hdr).min(out.len());
-        out[..n].copy_from_slice(&frame[hdr..hdr + n]);
-        Some(&out[..n])
+        return Some(&out[..n]);
     }
+    // `fill_rx` removes two bytes after the 802.11 header of an A-MSDU.
+    let body_at = hdr + if amsdu { 2 } else { 0 };
+    if frame.len() < body_at {
+        return None;
+    }
+    let n = frame.len().saturating_sub(body_at).min(out.len());
+    out[..n].copy_from_slice(&frame[body_at..body_at + n]);
+    Some(&out[..n])
 }
 
 fn snonce() -> [u8; 32] {

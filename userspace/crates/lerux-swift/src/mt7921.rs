@@ -4,6 +4,8 @@
 //! `mt7921/pci.c`, `mt792x_dma.c`, and `mt76_connac_mcu.c`. A register that
 //! those files do not map is [`Map::Unsupported`].
 
+use core::ops::Range;
+
 use crate::wifi::{format_report, WifiReport};
 
 /// `mt792x_patch_name` / `mt792x_ram_name`. 0x7922 and 0x7925 are different images.
@@ -71,7 +73,12 @@ pub enum Stage {
     Mac,
     Wait,
     Scan,
-    Auth,
+    /// The open-system authentication frame did not leave the transmit ring.
+    ///
+    /// The boot that painted a single `auth` covered this return and [`Stage::AuthRx`].
+    AuthTx,
+    /// The authentication frame was posted and no matching reply arrived.
+    AuthRx,
     Assoc,
     Eapol,
     Dhcp,
@@ -102,7 +109,8 @@ impl Stage {
             Stage::Mac => b"mac",
             Stage::Wait => b"wait",
             Stage::Scan => b"scan",
-            Stage::Auth => b"auth",
+            Stage::AuthTx => b"auth tx",
+            Stage::AuthRx => b"auth rx",
             Stage::Assoc => b"assoc",
             Stage::Eapol => b"eapol",
             Stage::Dhcp => b"dhcp",
@@ -367,6 +375,8 @@ pub const DMA_DONE: u32 = 1 << 31;
 pub const LAST_SEC0: u32 = 1 << 30;
 pub const RXD_LEN: usize = 36;
 pub const MCU_TXD_LEN: usize = 64;
+/// `sizeof(struct mt76_connac2_mcu_uni_txd)`.
+pub const UNI_TXD_LEN: usize = 48;
 pub const TXD_LEN: usize = 32;
 pub const TXP_LEN: usize = 32;
 pub const DESC_LEN: usize = 16;
@@ -481,7 +491,13 @@ pub const PATCH_SEM: u32 = 0x10;
 pub const FW_SCATTER: u32 = 0xee;
 pub const EXT_CID: u32 = 0xed;
 const CE: u32 = 1 << 18;
+const UNI: u32 = 1 << 17;
 const QUERY: u32 = 1 << 16;
+/// `MCU_CMD_UNI_EXT_ACK`: reply, unified command, set.
+const UNI_EXT_ACK: u8 = 0x07;
+/// `CONNECTION_INFRA_STA`.
+const CONN_INFRA_STA: u32 = 1 | (1 << 16);
+const CONN_INFRA_AP: u32 = 2 | (1 << 16);
 
 #[must_use]
 pub fn ext_cmd(id: u32) -> u32 {
@@ -496,6 +512,37 @@ pub fn ext_query(id: u32) -> u32 {
 #[must_use]
 pub fn ce_cmd(id: u32) -> u32 {
     id | CE
+}
+
+/// `MCU_UNI_CMD`. The header is [`write_uni_txd`], shorter than [`write_mcu_txd`].
+#[must_use]
+pub fn uni_cmd(id: u32) -> u32 {
+    id | UNI
+}
+
+#[must_use]
+pub fn is_uni_cmd(cmd: u32) -> bool {
+    cmd & UNI != 0
+}
+
+/// Bytes before the payload. A unified command uses the 48-byte header.
+#[must_use]
+pub fn mcu_header_len(cmd: u32) -> usize {
+    if is_uni_cmd(cmd) {
+        UNI_TXD_LEN
+    } else {
+        MCU_TXD_LEN
+    }
+}
+
+/// Header for `cmd`. The payload length is the bytes that follow the header.
+#[must_use]
+pub fn write_mcu_header(buf: &mut [u8], cmd: u32, seq: u8, payload: usize) -> bool {
+    if is_uni_cmd(cmd) {
+        write_uni_txd(buf, cmd, seq, payload)
+    } else {
+        write_mcu_txd(buf, cmd, seq, payload)
+    }
 }
 
 /// `mt76_connac_mcu_init_download` command choice for MT7921.
@@ -681,6 +728,322 @@ pub fn write_mcu_txd(buf: &mut [u8], cmd: u32, seq: u8, payload: usize) -> bool 
     true
 }
 
+/// Unified MCU header. Payload follows at [`UNI_TXD_LEN`].
+///
+/// `len` counts every byte after the eight-dword TXD, including this header.
+pub fn write_uni_txd(buf: &mut [u8], cmd: u32, seq: u8, payload: usize) -> bool {
+    if buf.len() < UNI_TXD_LEN {
+        return false;
+    }
+    buf[..UNI_TXD_LEN].fill(0);
+    let total = UNI_TXD_LEN + payload;
+    let tx0 = u32::from(low_u16(total)) | (2 << 23) | (0x20 << 25);
+    let tx1: u32 = 1 << 31 | (1 << 16);
+    buf[..4].copy_from_slice(&tx0.to_le_bytes());
+    buf[4..8].copy_from_slice(&tx1.to_le_bytes());
+    let body = low_u16(total - TXD_LEN);
+    buf[32..34].copy_from_slice(&body.to_le_bytes());
+    buf[34..36].copy_from_slice(&u16::from((cmd & 0xff) as u8).to_le_bytes());
+    buf[37] = 0xa0;
+    buf[39] = seq;
+    buf[43] = UNI_EXT_ACK;
+    true
+}
+
+/// Bytes in [`write_dev_info`].
+pub const DEV_INFO_LEN: usize = 16;
+/// Bytes in [`write_bss_info`].
+pub const BSS_INFO_LEN: usize = 36;
+/// Bytes in [`write_bss_connect`]: the four-byte header, the basic TLV, and the QBSS TLV.
+pub const BSS_CONNECT_LEN: usize = 44;
+/// Bytes in [`write_bss_rlm`].
+pub const BSS_RLM_LEN: usize = 20;
+/// Bytes in [`write_rx_filter_enable`].
+pub const RX_FILTER_LEN: usize = 68;
+
+/// `DEV_INFO_UPDATE` for omac 0. `mac` is the station address.
+pub fn write_dev_info(out: &mut [u8], mac: &[u8; 6]) -> bool {
+    if out.len() < DEV_INFO_LEN {
+        return false;
+    }
+    out[..DEV_INFO_LEN].fill(0);
+    out[6..8].copy_from_slice(&12u16.to_le_bytes());
+    out[8] = 1;
+    out[10..16].copy_from_slice(mac);
+    true
+}
+
+/// `BSS_INFO_UPDATE` basic TLV for an unassociated station at `bss_idx` 0.
+///
+/// The wlan index stays 0. `mt7921_add_interface` assigns the table index
+/// after this command returns, so the firmware sees 0.
+pub fn write_bss_info(out: &mut [u8]) -> bool {
+    if out.len() < BSS_INFO_LEN {
+        return false;
+    }
+    out[..BSS_INFO_LEN].fill(0);
+    out[6..8].copy_from_slice(&32u16.to_le_bytes());
+    out[8] = 1;
+    out[12..16].copy_from_slice(&CONN_INFRA_STA.to_le_bytes());
+    out[16] = 1;
+    true
+}
+
+/// `BSS_INFO_UPDATE` from `mt76_connac_mcu_uni_add_bss` once the station associates.
+///
+/// `conn_state` is 0 while the station is connecting. The BSSID is the access
+/// point. `bmc_tx_wlan_idx` and `sta_idx` are the interface entry
+/// [`WTBL_RESERVED`]. Beacon interval, DTIM, and the qos byte stay 0 because
+/// those beacon fields are not parsed. `phymode` is A on 5 GHz and B plus G on
+/// 2.4 GHz. `nonht_basic_phy` is OFDM on 5 GHz and HR/DSSS plus ERP on 2.4 GHz.
+pub fn write_bss_connect(out: &mut [u8], bssid: &[u8; 6], band5: bool) -> bool {
+    if out.len() < BSS_CONNECT_LEN {
+        return false;
+    }
+    out[..BSS_CONNECT_LEN].fill(0);
+    out[6..8].copy_from_slice(&32u16.to_le_bytes());
+    out[8] = 1;
+    out[12..16].copy_from_slice(&CONN_INFRA_STA.to_le_bytes());
+    out[18..24].copy_from_slice(bssid);
+    out[24..26].copy_from_slice(&VIF_WTBL.to_le_bytes());
+    let phymode = if band5 {
+        PHY_MODE_A
+    } else {
+        PHY_MODE_B | PHY_MODE_G
+    };
+    let legacy = if band5 {
+        PHY_OFDM
+    } else {
+        PHY_HR_DSSS | PHY_ERP
+    };
+    out[29] = phymode;
+    out[30..32].copy_from_slice(&VIF_WTBL.to_le_bytes());
+    out[32..34].copy_from_slice(&u16::from(legacy).to_le_bytes());
+    out[36..38].copy_from_slice(&15u16.to_le_bytes());
+    out[38..40].copy_from_slice(&8u16.to_le_bytes());
+    true
+}
+
+/// Channel context `mt76_connac_mcu_uni_set_chctx` sends at the end of the
+/// association BSS update.
+///
+/// The width is 20 MHz, the same width [`write_chan`] programs, so `bw` is 0,
+/// `ht_op_info` is 0, and the center channel equals the control channel.
+/// `tx_streams` is the number of set bits in `antenna`. `rx_streams` is that
+/// mask: Linux writes the popcount into the transmit field and the chain mask
+/// into the receive field, and this device programs both masks with one value.
+pub fn write_bss_rlm(out: &mut [u8], channel: u8, band: u8, antenna: u8) -> bool {
+    if out.len() < BSS_RLM_LEN {
+        return false;
+    }
+    out[..BSS_RLM_LEN].fill(0);
+    out[4..6].copy_from_slice(&2u16.to_le_bytes());
+    out[6..8].copy_from_slice(&16u16.to_le_bytes());
+    out[8] = channel;
+    out[9] = channel;
+    out[12] = u8::try_from(antenna.count_ones()).unwrap_or(0);
+    out[13] = antenna;
+    out[14] = 1;
+    out[17] = band;
+    true
+}
+
+const STA_REQ_HDR: usize = 8;
+const STA_BASIC: usize = 20;
+const STA_PHY: usize = 12;
+const STA_RA: usize = 16;
+const STA_STATE: usize = 12;
+const STA_WTBL_TLV: usize = 4;
+const WTBL_HDR: usize = 8;
+const WTBL_GENERIC_LEN: usize = 20;
+const WTBL_RX_LEN: usize = 12;
+const WTBL_HDR_TRANS_LEN: usize = 8;
+const WTBL_SMPS_LEN: usize = 8;
+const STA_WTBL: usize =
+    STA_WTBL_TLV + WTBL_HDR + WTBL_GENERIC_LEN + WTBL_RX_LEN + WTBL_HDR_TRANS_LEN + WTBL_SMPS_LEN;
+
+/// Bytes in [`write_sta_rec`].
+pub const STA_REC_LEN: usize = STA_REQ_HDR + STA_BASIC + STA_PHY + STA_RA + STA_STATE + STA_WTBL;
+
+/// `STA_REC_UPDATE` for the access point.
+///
+/// `mt7921_mac_sta_add` calls this with `assoc` false, before authentication.
+/// Index 0 is the global entry (`mt792x_init_wcid`), so the peer is [`PEER_WTBL`].
+/// Extra info is version plus new, the state byte is none, and `aid` is 0.
+/// `mt7921_mac_sta_event` calls it again with `assoc` true after the association
+/// response. Extra info is version only, because `newly` is false for
+/// `MT76_STA_INFO_STATE_ASSOC`. The state byte is 2, and the generic
+/// wireless-table TLV stores `aid` as `partial_aid`. The basic TLV stays
+/// port-secure because the station is enabled. HT, VHT, and HE stay absent:
+/// `sta_tlv` adds them when the peer capabilities are set, and those
+/// capabilities are not parsed here.
+pub fn write_sta_rec(
+    out: &mut [u8],
+    bssid: &[u8; 6],
+    band5: bool,
+    assoc: bool,
+    aid: u16,
+) -> Option<usize> {
+    if out.len() < STA_REC_LEN {
+        return None;
+    }
+    out[..STA_REC_LEN].fill(0);
+    let mut at = 0;
+    let (extra, state): (u16, u8) = if assoc { (1, 2) } else { (3, 0) };
+    put_sta_header(out, &mut at);
+    put_sta_basic(out, &mut at, *bssid, aid, extra);
+    put_sta_rates(out, &mut at, band5, state);
+    put_sta_wtbl(out, &mut at, *bssid, aid);
+    (at == STA_REC_LEN).then_some(at)
+}
+
+fn put_sta_header(out: &mut [u8], at: &mut usize) {
+    put_u8(out, at, 0);
+    put_u8(out, at, PEER_INDEX);
+    put_u16(out, at, 5);
+    put_u8(out, at, 1);
+    put_bytes(out, at, &[0; 3]);
+}
+
+fn put_sta_basic(out: &mut [u8], at: &mut usize, bssid: [u8; 6], aid: u16, extra: u16) {
+    put_u16(out, at, 0);
+    put_u16(out, at, fit_u16(STA_BASIC));
+    put_u32(out, at, CONN_INFRA_AP);
+    put_u8(out, at, 2);
+    put_u8(out, at, 0);
+    put_u16(out, at, aid);
+    put_bytes(out, at, &bssid);
+    put_u16(out, at, extra);
+}
+
+fn put_sta_rates(out: &mut [u8], at: &mut usize, band5: bool, state: u8) {
+    let phy = if band5 {
+        PHY_OFDM
+    } else {
+        PHY_HR_DSSS | PHY_ERP
+    };
+    let basic = if band5 { 0x0015u16 } else { 0x000f };
+    put_u16(out, at, 0x15);
+    put_u16(out, at, fit_u16(STA_PHY));
+    put_u16(out, at, basic);
+    put_u8(out, at, phy);
+    put_bytes(out, at, &[0; 5]);
+
+    let legacy = if band5 {
+        0xffu16 << 6
+    } else {
+        (0xffu16 << 6) | 0xf
+    };
+    put_u16(out, at, 1);
+    put_u16(out, at, fit_u16(STA_RA));
+    put_u16(out, at, legacy);
+    put_bytes(out, at, &[0; 10]);
+
+    put_u16(out, at, 7);
+    put_u16(out, at, fit_u16(STA_STATE));
+    put_u32(out, at, 0);
+    put_u8(out, at, state);
+    put_bytes(out, at, &[0; 3]);
+}
+
+fn put_sta_wtbl(out: &mut [u8], at: &mut usize, bssid: [u8; 6], aid: u16) {
+    put_u16(out, at, 13);
+    put_u16(out, at, fit_u16(STA_WTBL));
+    put_u8(out, at, PEER_INDEX);
+    put_u8(out, at, 1);
+    put_u16(out, at, 4);
+    put_bytes(out, at, &[0; 4]);
+
+    put_u16(out, at, 0);
+    put_u16(out, at, fit_u16(WTBL_GENERIC_LEN));
+    put_bytes(out, at, &bssid);
+    put_bytes(out, at, &[0; 6]);
+    put_u16(out, at, aid);
+    put_bytes(out, at, &[0; 2]);
+
+    put_u16(out, at, 1);
+    put_u16(out, at, fit_u16(WTBL_RX_LEN));
+    put_u8(out, at, 0);
+    put_bytes(out, at, &[1, 1, 1]);
+    put_bytes(out, at, &[0; 4]);
+
+    put_u16(out, at, 6);
+    put_u16(out, at, fit_u16(WTBL_HDR_TRANS_LEN));
+    put_bytes(out, at, &[1, 0, 1, 0]);
+
+    put_u16(out, at, 13);
+    put_u16(out, at, fit_u16(WTBL_SMPS_LEN));
+    put_bytes(out, at, &[0; 4]);
+}
+
+const PHY_HR_DSSS: u8 = 1;
+const PHY_ERP: u8 = 2;
+const PHY_OFDM: u8 = 8;
+const PHY_MODE_A: u8 = 1;
+const PHY_MODE_B: u8 = 2;
+const PHY_MODE_G: u8 = 4;
+
+fn put_u8(out: &mut [u8], at: &mut usize, value: u8) {
+    out[*at] = value;
+    *at += 1;
+}
+
+fn put_u16(out: &mut [u8], at: &mut usize, value: u16) {
+    out[*at..*at + 2].copy_from_slice(&value.to_le_bytes());
+    *at += 2;
+}
+
+fn put_u32(out: &mut [u8], at: &mut usize, value: u32) {
+    out[*at..*at + 4].copy_from_slice(&value.to_le_bytes());
+    *at += 4;
+}
+
+fn put_bytes(out: &mut [u8], at: &mut usize, bytes: &[u8]) {
+    out[*at..*at + bytes.len()].copy_from_slice(bytes);
+    *at += bytes.len();
+}
+
+/// `SET_RX_FILTER` mode 1, the filter word `mt7921_configure_filter` sends
+/// before a scan. Mode 1 replaces the filter. `BIT(31)` is `FILTER_ENABLE`.
+/// Linux adds other-BSS, FCS-fail, and control only when mac80211 asks.
+pub fn write_rx_filter_enable(out: &mut [u8]) -> bool {
+    if out.len() < RX_FILTER_LEN {
+        return false;
+    }
+    out[..RX_FILTER_LEN].fill(0);
+    out[4] = 1;
+    out[8..12].copy_from_slice(&(1u32 << 31).to_le_bytes());
+    true
+}
+
+/// `SET_RX_FILTER` bitmap clear of `MT_WF_RFCR_DROP_OTHER_BEACON`.
+///
+/// Mode 2 updates one bit. `bit_op` bit 1 clears it. This is the command
+/// `mt7921_mcu_set_beacon_filter` sends when the station is not associated.
+/// The firmware can count those beacons and still drop them before the host.
+pub fn write_clear_other_beacon(out: &mut [u8]) -> bool {
+    if out.len() < RX_FILTER_LEN {
+        return false;
+    }
+    out[..RX_FILTER_LEN].fill(0);
+    out[4] = 2;
+    out[12..16].copy_from_slice(&(1u32 << 11).to_le_bytes());
+    out[16] = 1 << 1;
+    true
+}
+
+/// True when a unified command reply is success for `cid`.
+///
+/// The event follows the connac2 RXD: command id, then a little-endian status.
+/// Status 0 is success.
+#[must_use]
+pub fn uni_event_ok(buf: &[u8], cid: u8) -> bool {
+    let Some(event) = buf.get(RXD_LEN..RXD_LEN + 8) else {
+        return false;
+    };
+    event[0] == cid && event[4..8] == [0, 0, 0, 0]
+}
+
 #[must_use]
 pub fn rxd_seq(buf: &[u8]) -> Option<u8> {
     buf.get(29).copied()
@@ -757,7 +1120,7 @@ const SCAN_CHANNELS: &[(u8, u8)] = &[
     (2, 161),
 ];
 
-/// Active scan. Layout is `mt76_connac_hw_scan_req` in Linux v6.8.
+/// Active scan. Layout is `mt76_connac_hw_scan_req`.
 ///
 /// An empty `ssid` is the wildcard survey: `ssid_type` bit 0, `ssids_num` 0.
 /// A name is the directed scan association uses.
@@ -792,9 +1155,12 @@ pub fn write_scan(out: &mut [u8], ssid: &[u8], seq: u8) -> bool {
     out[after_ies + 3] = 0;
     let bssid_at = after_ies + 4 + 32 * SCAN_CH + 6 * SCAN_SSID;
     out[bssid_at..bssid_at + 6].fill(0xff);
-    let ext_flag = bssid_at + 12 + 63;
-    if ext_flag < SCAN_REQ_LEN {
-        out[ext_flag] = 1;
+    // `ssid_type_ext` bit 0 means the named SSID only. A wildcard survey leaves it 0.
+    if !ssid.is_empty() {
+        let ext_flag = bssid_at + 12 + 63;
+        if ext_flag < SCAN_REQ_LEN {
+            out[ext_flag] = 1;
+        }
     }
     true
 }
@@ -835,13 +1201,20 @@ pub fn write_channel_domain(out: &mut [u8]) -> Option<usize> {
     Some(CHANNEL_DOMAIN_LEN)
 }
 
-/// `mt76_connac2_mac_write_txwi` for one 802.11 frame on the ALTX queue.
-pub fn write_txwi(txwi: &mut [u8], frame: &[u8], frame_phys: u32) -> bool {
+/// `mt76_connac2_mac_write_txwi` for one 802.11 frame.
+///
+/// The MMIO path posts a management frame with cut-through format on the ALTX
+/// queue (`qid >= MT_TXQ_PSD`). The wireless index is [`PEER_WTBL`].
+/// `band5` selects the fixed rate: CCK 1 Mbps below channel 15, OFDM 6 Mbps above.
+/// A control-port frame uses the best-effort queue and that same fixed rate.
+/// mac80211 sets `IEEE80211_TX_CTL_USE_MINRATE` for ethertype `0x888e`, and a
+/// station that did not advertise WMM sends the frame as non-`QoS` data.
+pub fn write_txwi(txwi: &mut [u8], frame: &[u8], frame_phys: u32, band5: bool) -> bool {
     if txwi.len() < TXD_LEN + TXP_LEN || frame.len() < 24 || frame.len() > 0x3fff {
         return false;
     }
     txwi[..TXD_LEN + TXP_LEN].fill(0);
-    write_txd(txwi, frame);
+    write_txd(txwi, frame, band5);
     txwi[32..34].copy_from_slice(&0x8000u16.to_le_bytes());
     txwi[40..44].copy_from_slice(&frame_phys.to_le_bytes());
     let len = fit_u16(frame.len()) | 0x8000;
@@ -849,18 +1222,27 @@ pub fn write_txwi(txwi: &mut [u8], frame: &[u8], frame_phys: u32) -> bool {
     true
 }
 
+/// `MT_LMAC_ALTX0`. Management frames use this queue on the MMIO path.
+const MT_LMAC_ALTX0: u32 = 0x10;
+/// Best-effort LMAC queue. `mt76_connac_lmac_mapping` reverses the mac80211
+/// index, and `IEEE80211_AC_BE` is 2, so the hardware queue is 1.
+const MT_LMAC_AC_BE: u32 = 1;
+
 /// TXD words before the TXP buffer pointer. `frame` is at least 24 bytes.
-fn write_txd(txwi: &mut [u8], frame: &[u8]) {
+///
+/// Packet format is cut-through: `MT_TXD0_PKT_FMT` (bits 24:23) stays clear.
+fn write_txd(txwi: &mut [u8], frame: &[u8], band5: bool) {
     let total = frame.len() + TXD_LEN;
-    let q = 0x10u32;
-    let tx0 = u32::from(low_u16(total)) | (2 << 23) | (q << 25);
+    let eapol = control_port(frame);
+    let queue = if eapol { MT_LMAC_AC_BE } else { MT_LMAC_ALTX0 };
+    let tx0 = u32::from(low_u16(total)) | (queue << 25);
     txwi[..4].copy_from_slice(&tx0.to_le_bytes());
     let fc = u16::from_le_bytes([frame[0], frame[1]]);
     let fc_kind = u32::from((fc & 0x000c) >> 2);
     let subtype = u32::from((fc & 0x00f0) >> 4);
     let hdr = header_len(frame);
     let words = u32::try_from(hdr / 2).expect("header words");
-    let tx1 = (1u32 << 31) | (words << 11) | (2 << 16);
+    let tx1 = (1u32 << 31) | (words << 11) | (2 << 16) | PEER_WTBL;
     txwi[4..8].copy_from_slice(&tx1.to_le_bytes());
     let multicast = frame[4] & 1 != 0;
     let mut tx2 = (fc_kind << 4) | subtype;
@@ -868,7 +1250,7 @@ fn write_txd(txwi: &mut [u8], frame: &[u8]) {
         tx2 |= 1 << 10;
     }
     let data = fc & 0x000c == 0x0008;
-    if !data || multicast {
+    if !data || multicast || eapol {
         tx2 |= 1 << 31;
         tx2 |= 1 << 13;
     }
@@ -878,7 +1260,9 @@ fn write_txd(txwi: &mut [u8], frame: &[u8]) {
         tx3 |= 1;
     }
     if tx2 & (1 << 31) != 0 {
-        let rate = 0x40u32;
+        // `mt76_connac2_mac_tx_rate_val` on connac2 uses the lowest basic rate.
+        // That is CCK 1 Mbps on 2.4 GHz and OFDM 6 Mbps (`0x40`) on 5 GHz.
+        let rate = if band5 { 0x40u32 } else { 0 };
         let tx6 = (1u32 << 2) | (rate << 16);
         txwi[24..28].copy_from_slice(&tx6.to_le_bytes());
         tx3 |= 1 << 28;
@@ -888,12 +1272,46 @@ fn write_txd(txwi: &mut [u8], frame: &[u8]) {
     txwi[28..32].copy_from_slice(&tx7.to_le_bytes());
 }
 
+/// Header length from `ieee80211_hdrlen`.
+///
+/// Bit 7 of the first frame-control byte is the `QoS` bit only on a data frame.
+/// On a management frame it is a subtype bit. Authentication is `0xb0`, so
+/// treating that bit as `QoS` reports 26 bytes and the MAC reads the algorithm
+/// field as part of the header.
 fn header_len(frame: &[u8]) -> usize {
-    if frame[0] & 0x80 != 0 {
+    let fc = frame[0];
+    if fc & 0x0c == 0x08 && fc & 0x80 != 0 {
         26
     } else {
         24
     }
+}
+
+/// LLC/SNAP plus ethertype `0x888e`, the control-port protocol.
+fn control_port(frame: &[u8]) -> bool {
+    let at = header_len(frame);
+    frame.get(at..at + 8) == Some(&[0xaa, 0xaa, 0x03, 0x00, 0x00, 0x00, 0x88, 0x8e])
+}
+
+const PKT_TYPE_NORMAL: u32 = 2;
+const PKT_TYPE_RX_EVENT: u32 = 7;
+const PKT_TYPE_NORMAL_MCU: u32 = 8;
+
+/// True when `mt7921_queue_rx_skb` passes this packet to `mt7921_mac_fill_rx`.
+///
+/// That is `PKT_TYPE_NORMAL`, or `PKT_TYPE_RX_EVENT` with flag 1, which Linux
+/// renames `PKT_TYPE_NORMAL_MCU`. Linux applies this to every receive ring,
+/// the MCU rings included. The type is RXD0 bits 31:27 and the flag is 19:16.
+#[must_use]
+pub fn is_rx_frame(buf: &[u8]) -> bool {
+    let Some(word) = buf.get(..4) else {
+        return false;
+    };
+    let rxd0 = u32::from_le_bytes([word[0], word[1], word[2], word[3]]);
+    let kind = rxd0 >> 27;
+    let flag = (rxd0 >> 16) & 0xf;
+    matches!(kind, PKT_TYPE_NORMAL | PKT_TYPE_NORMAL_MCU)
+        || (kind == PKT_TYPE_RX_EVENT && flag == 1)
 }
 
 /// Skip the connac2 RXD groups the way `mt7921_mac_fill_rx` does.
@@ -929,6 +1347,72 @@ pub fn frame_off(buf: &[u8]) -> Option<usize> {
     }
 }
 
+/// How `mt7921_mac_fill_rx` classifies one connac2 receive descriptor.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct RxLayout(u8);
+
+const RX_TRANSLATED: u8 = 1;
+const RX_DROP: u8 = 2;
+const RX_PLAIN: u8 = 4;
+const RX_AMSDU: u8 = 8;
+
+impl RxLayout {
+    /// `MT_RXD2_NORMAL_HDR_TRANS`. The bytes after [`frame_off`] are Ethernet.
+    #[must_use]
+    pub fn translated(self) -> bool {
+        self.0 & RX_TRANSLATED != 0
+    }
+
+    /// Header translation together with `MT_RXD1_NORMAL_CM`. `fill_rx` rejects it.
+    #[must_use]
+    pub fn rejected(self) -> bool {
+        self.0 & RX_DROP != 0
+    }
+
+    /// `SEC_MODE` is set and neither `CLM` nor `CM` is. The IV and MIC are gone.
+    #[must_use]
+    pub fn plain(self) -> bool {
+        self.0 & RX_PLAIN != 0
+    }
+
+    /// `MT_RXD4_NORMAL_PAYLOAD_FORMAT` is non-zero. Two bytes follow the 802.11 header.
+    #[must_use]
+    pub fn amsdu(self) -> bool {
+        self.0 & RX_AMSDU != 0
+    }
+}
+
+/// Read the `fill_rx` flags from a connac2 receive descriptor.
+#[must_use]
+pub fn rx_layout(buf: &[u8]) -> RxLayout {
+    let Some(rxd1) = rx_word(buf, 4) else {
+        return RxLayout(0);
+    };
+    let Some(rxd2) = rx_word(buf, 8) else {
+        return RxLayout(0);
+    };
+    let mut flags = 0;
+    if rxd2 & (1 << 13) != 0 {
+        flags |= RX_TRANSLATED;
+        if rxd1 & (1 << 23) != 0 {
+            flags |= RX_DROP;
+        }
+    }
+    let sec = (rxd1 >> 16) & 0x1f;
+    if sec != 0 && rxd1 & ((1 << 23) | (1 << 24)) == 0 {
+        flags |= RX_PLAIN;
+    }
+    if rx_word(buf, 16).is_some_and(|rxd4| rxd4 & 3 != 0) {
+        flags |= RX_AMSDU;
+    }
+    RxLayout(flags)
+}
+
+fn rx_word(buf: &[u8], at: usize) -> Option<u32> {
+    let bytes = buf.get(at..at + 4)?;
+    Some(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+}
+
 #[must_use]
 /// `MT_DMA_CTL_SD_LEN0` is bits 29:16. The low half is the unused second segment.
 pub fn desc_ctrl(len: u32, last: bool) -> u32 {
@@ -958,6 +1442,24 @@ pub fn write_key(page: &mut [u8], ssid: &[u8], psk: &[u8]) -> bool {
     true
 }
 
+/// Byte 3 is the association result. `write_key` leaves it clear.
+const JOIN_UP: u8 = 1;
+
+/// The radio sets this after `associate` returns. `up` is a finished handshake.
+pub fn write_join(page: &mut [u8], up: bool) -> bool {
+    if page.len() < 4 || page[0] != 1 {
+        return false;
+    }
+    page[3] = if up { JOIN_UP } else { 2 };
+    true
+}
+
+/// True when the radio finished the handshake for the posted key.
+#[must_use]
+pub fn join_up(page: &[u8]) -> bool {
+    page.len() >= 4 && page[0] == 1 && page[3] == JOIN_UP
+}
+
 #[must_use]
 pub fn read_key(page: &[u8]) -> Option<(&[u8], &[u8])> {
     if page.len() < 128 || page[0] != 1 {
@@ -983,7 +1485,7 @@ const PAGE_LIST: u8 = 3;
 const SURVEY_STRIDE: usize = 33;
 /// Byte after the name list. The length byte and the mark text follow.
 const SURVEY_MARK: usize = 4 + SCAN_MAX * SURVEY_STRIDE;
-const SURVEY_MARK_MAX: usize = 64;
+const SURVEY_MARK_MAX: usize = 80;
 
 const _: () = assert!(SURVEY_MARK + 1 + SURVEY_MARK_MAX <= 0x1000);
 const _: () = assert!(SURVEY_REPORT_MAX > SURVEY_MARK_MAX);
@@ -1057,53 +1559,58 @@ pub fn read_survey_ssid(page: &[u8], index: usize) -> Option<&[u8]> {
     survey_name(page, index)
 }
 
-/// `rx`, `ok`, and `done` for one survey.
+/// Counters for one survey, in the order the mark prints them.
+#[derive(Clone, Copy, Default)]
+pub struct SurveyCounts {
+    /// Completions on the data ring.
+    pub rx: u32,
+    /// Frames that arrived on an MCU ring. See [`is_rx_frame`].
+    pub ev: u32,
+    /// Frames whose network name was kept.
+    pub ok: u32,
+    /// The firmware signaled scan-done.
+    pub done: bool,
+    /// Control byte of the first copied frame.
+    pub fc: Option<u8>,
+    /// Channels the firmware finished.
+    pub channels: u8,
+    /// `beacon_scan_num` from scan-done.
+    pub beacons: u32,
+}
+
+/// `rx`, `ev`, `ok`, and `done` for one survey.
 ///
-/// `fc` is present only when buffers arrived and no name was kept. A copied
-/// frame contributes its control byte. `--` means `frame_off` rejected every buffer.
+/// `fc` is present only when frames arrived and no name was kept. A copied
+/// frame contributes its control byte. `--` means `frame_off` rejected every frame.
 /// `ch` and `bcn` follow a scan-done event: channels the firmware finished,
 /// and `beacon_scan_num`.
 #[must_use]
-pub fn format_survey_mark(
-    out: &mut [u8],
-    rx: u32,
-    ok: u32,
-    done: bool,
-    fc: Option<u8>,
-    channels: u8,
-    beacons: u32,
-) -> usize {
-    format_survey_mark_at(out, rx, ok, done, fc, channels, beacons).unwrap_or(0)
+pub fn format_survey_mark(out: &mut [u8], counts: &SurveyCounts) -> usize {
+    format_survey_mark_at(out, counts).unwrap_or(0)
 }
 
-fn format_survey_mark_at(
-    out: &mut [u8],
-    rx: u32,
-    ok: u32,
-    done: bool,
-    fc: Option<u8>,
-    channels: u8,
-    beacons: u32,
-) -> Option<usize> {
+fn format_survey_mark_at(out: &mut [u8], counts: &SurveyCounts) -> Option<usize> {
     let mut n = 0;
     n = write_bytes(out, n, b"rx ")?;
-    n = write_dec(out, n, rx)?;
+    n = write_dec(out, n, counts.rx)?;
+    n = write_bytes(out, n, b" ev ")?;
+    n = write_dec(out, n, counts.ev)?;
     n = write_bytes(out, n, b" ok ")?;
-    n = write_dec(out, n, ok)?;
+    n = write_dec(out, n, counts.ok)?;
     n = write_bytes(out, n, b" done ")?;
-    n = write_bytes(out, n, if done { b"1" } else { b"0" })?;
-    if rx > 0 && ok == 0 {
+    n = write_bytes(out, n, if counts.done { b"1" } else { b"0" })?;
+    if (counts.rx > 0 || counts.ev > 0) && counts.ok == 0 {
         n = write_bytes(out, n, b" fc ")?;
-        n = match fc {
+        n = match counts.fc {
             Some(byte) => write_bytes(out, n, &hex_byte(byte))?,
             None => write_bytes(out, n, b"--")?,
         };
     }
-    if done {
+    if counts.done {
         n = write_bytes(out, n, b" ch ")?;
-        n = write_dec(out, n, u32::from(channels))?;
+        n = write_dec(out, n, u32::from(counts.channels))?;
         n = write_bytes(out, n, b" bcn ")?;
-        n = write_dec(out, n, beacons)?;
+        n = write_dec(out, n, counts.beacons)?;
     }
     Some(n)
 }
@@ -1112,18 +1619,334 @@ fn hex_byte(byte: u8) -> [u8; 2] {
     [hex_nibble(byte >> 4), hex_nibble(byte)]
 }
 
+/// Where the four-way handshake returned without a key.
+///
+/// The panel row is 48 cells. Each word is two bytes and is printed
+/// immediately after `eapol`, before the counts.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum EapolStop {
+    /// No message 1 arrived.
+    #[default]
+    Wait1,
+    /// The copied frame was not message 1.
+    Msg1,
+    /// Message 2 did not fit in the buffer.
+    Build2,
+    /// Message 2 did not leave the transmit ring.
+    Tx2,
+    /// No message 3 arrived.
+    Wait3,
+    /// The copied frame was not message 3.
+    Msg3,
+    /// Message 4 did not fit in the buffer.
+    Build4,
+    /// Message 4 did not leave the transmit ring.
+    Tx4,
+}
+
+impl EapolStop {
+    fn word(self) -> &'static [u8] {
+        match self {
+            Self::Wait1 => b"w1",
+            Self::Msg1 => b"m1",
+            Self::Build2 => b"b2",
+            Self::Tx2 => b"t2",
+            Self::Wait3 => b"w3",
+            Self::Msg3 => b"m3",
+            Self::Build4 => b"b4",
+            Self::Tx4 => b"t4",
+        }
+    }
+}
+
+/// What the authentication wait kept instead of a matching reply.
+///
+/// `rx` and `ev` match the survey mark. `skip` counts MCU completions
+/// [`is_rx_frame`] rejected. `tr` counts frames whose descriptor has header
+/// translation. The other fields describe the last copied payload, which the
+/// join detail rows print. `fc` is the first byte of that payload, when one copied.
+#[derive(Clone, Copy, Default)]
+pub struct AuthMiss {
+    pub rx: u16,
+    pub ev: u16,
+    pub skip: u16,
+    pub tr: u16,
+    pub fc: Option<u8>,
+    /// Handshake return. The authentication miss leaves this [`EapolStop::Wait1`].
+    pub stop: EapolStop,
+    /// Authentication sequence. 1 is the request this station sends.
+    pub sq: Option<u8>,
+    /// Authentication status. Linux accepts 0.
+    pub st: Option<u16>,
+    /// Authentication algorithm. 0 is open system.
+    pub alg: Option<u16>,
+    /// 1 when address 1 is the station. Header translation leaves this 0.
+    pub ad: u8,
+    /// 1 when this frame's descriptor has `MT_RXD2_NORMAL_HDR_TRANS`.
+    pub hdr: u8,
+    /// 1 when `SEC_MODE` says the IV and MIC are already gone.
+    pub pn: u8,
+    /// 1 when the payload format is an A-MSDU.
+    pub ms: u8,
+    /// Copied payload length.
+    pub len: u16,
+    /// 1 when `a1` and `a2` were taken from this frame.
+    pub addr: u8,
+    /// Address 1, or the Ethernet destination when `hdr` is 1.
+    pub a1: [u8; 6],
+    /// Address 2, or the Ethernet source when `hdr` is 1.
+    pub a2: [u8; 6],
+    /// Address 3. Empty when the frame is translated.
+    pub a3: [u8; 6],
+    /// Offset of [`head`] in the copied frame. 24 or 26 is the 802.11 body.
+    /// 0 is the start of a translated frame.
+    body_at: u8,
+    head: [u8; 16],
+    head_n: u8,
+}
+
+fn note_body(miss: &mut AuthMiss, frame: &[u8], translated: bool) {
+    let at = if translated || frame.is_empty() {
+        0
+    } else {
+        header_len(frame)
+    };
+    miss.body_at = u8::try_from(at).unwrap_or(0);
+    miss.head = [0; 16];
+    miss.head_n = 0;
+    let Some(body) = frame.get(at..) else {
+        return;
+    };
+    let n = body.len().min(miss.head.len());
+    miss.head[..n].copy_from_slice(&body[..n]);
+    miss.head_n = u8::try_from(n).unwrap_or(0);
+}
+
+/// Record one copied payload the way the join detail rows print it.
+///
+/// Sequence 1 is the open-system request. Linux accepts sequence 2 with
+/// status 0 from the access point. A translated frame stores the Ethernet
+/// destination and source instead of the 802.11 addresses.
+pub fn note_copied(miss: &mut AuthMiss, frame: &[u8], sta: &[u8; 6], layout: RxLayout) {
+    miss.hdr = u8::from(layout.translated());
+    miss.pn = u8::from(layout.plain());
+    miss.ms = u8::from(layout.amsdu());
+    miss.len = u16::try_from(frame.len()).unwrap_or(u16::MAX);
+    miss.ad = u8::from(!layout.translated() && frame.get(4..10) == Some(&sta[..]));
+    note_body(miss, frame, layout.translated());
+    if layout.translated() && frame.len() >= 12 {
+        miss.addr = 1;
+        miss.a1.copy_from_slice(&frame[0..6]);
+        miss.a2.copy_from_slice(&frame[6..12]);
+        miss.a3 = [0; 6];
+    } else if !layout.translated() && frame.len() >= 22 {
+        miss.addr = 1;
+        miss.a1.copy_from_slice(&frame[4..10]);
+        miss.a2.copy_from_slice(&frame[10..16]);
+        miss.a3.copy_from_slice(&frame[16..22]);
+    } else {
+        miss.addr = 0;
+        miss.a1 = [0; 6];
+        miss.a2 = [0; 6];
+        miss.a3 = [0; 6];
+    }
+    if !layout.translated() && frame.len() >= 30 && frame[0] & 0xfc == 0xb0 {
+        miss.alg = Some(u16::from_le_bytes([frame[24], frame[25]]));
+        miss.sq = Some(frame[26]);
+        miss.st = Some(u16::from_le_bytes([frame[28], frame[29]]));
+    } else {
+        miss.alg = None;
+        miss.sq = None;
+        miss.st = None;
+    }
+}
+
+/// Panel line for a posted authentication frame with no matching reply.
+///
+/// The stage word stays `auth rx`. The counts use the survey words, plus
+/// `skip` for an MCU completion that was not a frame.
+#[must_use]
+pub fn write_auth_miss(out: &mut [u8], miss: &AuthMiss) -> usize {
+    let Some(n) = write_fc(out, b"mt7921: auth rx fc ", miss.fc) else {
+        return 0;
+    };
+    write_counts(out, n, miss).unwrap_or(n)
+}
+
+/// First of the four join-detail rows. They start on the disk row, under the
+/// stage line of the Arch console band.
+pub const JOIN_DETAIL_ROW: usize = lerux_desk::ROW_NVME;
+/// How many join-detail rows [`write_join_detail`] fills.
+pub const JOIN_DETAIL_LINES: usize = 4;
+/// Row after the detail. A failed join paints [`JOIN_END`] here.
+pub const JOIN_END_ROW: usize = JOIN_DETAIL_ROW + JOIN_DETAIL_LINES;
+/// Last line of a failed join. The device lines under it are blanked.
+pub const JOIN_END: &[u8] = b"END OF OUTPUT";
+
+/// Device-name rows that still end in `irq` after the detail and [`JOIN_END`].
+///
+/// The probe paints one line per [`crate::LOCATIONS`] entry, starting at
+/// [`lerux_desk::ROW_PCI`]. The detail covers the disk row, Bluetooth, and the
+/// first two device names. [`JOIN_END`] is the next device line. This range is
+/// the rest.
+#[must_use]
+pub fn join_device_rows_to_clear() -> Range<usize> {
+    let devices_end = lerux_desk::ROW_PCI + crate::LOCATIONS.len();
+    (JOIN_END_ROW + 1)..devices_end
+}
+
+/// One join-detail row. `row` is 0 through 3: the classification, the first
+/// two addresses, address 3 with the station, then 16 bytes of the body.
+#[must_use]
+pub fn write_join_detail(out: &mut [u8], row: usize, miss: &AuthMiss, sta: &[u8; 6]) -> usize {
+    let written = match row {
+        0 => write_detail_class(out, miss),
+        1 => write_detail_pair(out, miss),
+        2 => write_detail_sta(out, miss, *sta),
+        _ => write_detail_hex(out, miss),
+    };
+    written.unwrap_or(0)
+}
+
+/// Panel line when the four-way handshake returns without a key.
+///
+/// The stage word stays `eapol`. The next two letters are [`EapolStop`].
+/// `rx`, `ev`, `skip`, and `fc` mean the same thing they mean on the `auth rx`
+/// line. `tr` is the header-translation count.
+#[must_use]
+pub fn write_eapol_miss(out: &mut [u8], miss: &AuthMiss) -> usize {
+    let Some(n) = write_bytes(out, 0, b"mt7921: eapol ") else {
+        return 0;
+    };
+    let Some(n) = write_bytes(out, n, miss.stop.word()) else {
+        return n;
+    };
+    let Some(n) = write_bytes(out, n, b" fc ") else {
+        return n;
+    };
+    let Some(n) = write_fc_value(out, n, miss.fc) else {
+        return n;
+    };
+    let Some(n) = write_counts(out, n, miss) else {
+        return n;
+    };
+    let Some(n) = write_bytes(out, n, b" tr ") else {
+        return n;
+    };
+    write_dec(out, n, u32::from(miss.tr)).unwrap_or(n)
+}
+
+fn write_fc(out: &mut [u8], prefix: &[u8], fc: Option<u8>) -> Option<usize> {
+    let n = write_bytes(out, 0, prefix)?;
+    write_fc_value(out, n, fc)
+}
+
+fn write_fc_value(out: &mut [u8], n: usize, fc: Option<u8>) -> Option<usize> {
+    match fc {
+        Some(byte) => write_bytes(out, n, &hex_byte(byte)),
+        None => write_bytes(out, n, b"--"),
+    }
+}
+
+fn write_detail_class(out: &mut [u8], miss: &AuthMiss) -> Option<usize> {
+    let mut n = write_bytes(out, 0, b"sq ")?;
+    n = write_opt(out, n, miss.sq.map(u32::from))?;
+    n = write_bytes(out, n, b" st ")?;
+    n = write_opt(out, n, miss.st.map(u32::from))?;
+    n = write_bytes(out, n, b" alg ")?;
+    n = write_opt(out, n, miss.alg.map(u32::from))?;
+    n = write_bytes(out, n, b" ad ")?;
+    n = write_dec(out, n, u32::from(miss.ad))?;
+    n = write_bytes(out, n, b" hdr ")?;
+    n = write_dec(out, n, u32::from(miss.hdr))?;
+    n = write_bytes(out, n, b" pn ")?;
+    n = write_dec(out, n, u32::from(miss.pn))?;
+    n = write_bytes(out, n, b" ms ")?;
+    n = write_dec(out, n, u32::from(miss.ms))?;
+    n = write_bytes(out, n, b" len ")?;
+    write_dec(out, n, u32::from(miss.len))
+}
+
+fn write_detail_pair(out: &mut [u8], miss: &AuthMiss) -> Option<usize> {
+    let (left, right): (&[u8], &[u8]) = if miss.hdr == 1 {
+        (b"da ", b" sa ")
+    } else {
+        (b"a1 ", b" a2 ")
+    };
+    let mut n = write_bytes(out, 0, left)?;
+    n = write_addr(out, n, miss.addr == 1, miss.a1)?;
+    n = write_bytes(out, n, right)?;
+    write_addr(out, n, miss.addr == 1, miss.a2)
+}
+
+fn write_detail_sta(out: &mut [u8], miss: &AuthMiss, sta: [u8; 6]) -> Option<usize> {
+    let mut n = write_bytes(out, 0, b"a3 ")?;
+    n = if miss.hdr == 1 || miss.addr == 0 {
+        write_bytes(out, n, b"--")?
+    } else {
+        write_mac(out, n, miss.a3)?
+    };
+    n = write_bytes(out, n, b" sta ")?;
+    write_mac(out, n, sta)
+}
+
+fn write_detail_hex(out: &mut [u8], miss: &AuthMiss) -> Option<usize> {
+    let mut n = write_bytes(out, 0, b"m")?;
+    n = write_dec(out, n, u32::from(miss.body_at))?;
+    n = write_bytes(out, n, b" ")?;
+    if miss.head_n == 0 {
+        return write_bytes(out, n, b"--");
+    }
+    let end = usize::from(miss.head_n).min(miss.head.len());
+    write_hex(out, n, &miss.head[..end])
+}
+
+fn write_opt(out: &mut [u8], n: usize, value: Option<u32>) -> Option<usize> {
+    match value {
+        Some(value) => write_dec(out, n, value),
+        None => write_bytes(out, n, b"-"),
+    }
+}
+
+fn write_addr(out: &mut [u8], n: usize, present: bool, mac: [u8; 6]) -> Option<usize> {
+    if present {
+        write_mac(out, n, mac)
+    } else {
+        write_bytes(out, n, b"--")
+    }
+}
+
+fn write_mac(out: &mut [u8], mut n: usize, mac: [u8; 6]) -> Option<usize> {
+    for (i, byte) in mac.iter().enumerate() {
+        if i > 0 {
+            n = write_bytes(out, n, b":")?;
+        }
+        n = write_bytes(out, n, &hex_byte(*byte))?;
+    }
+    Some(n)
+}
+
+fn write_hex(out: &mut [u8], mut n: usize, bytes: &[u8]) -> Option<usize> {
+    for byte in bytes {
+        n = write_bytes(out, n, &hex_byte(*byte))?;
+    }
+    Some(n)
+}
+
+fn write_counts(out: &mut [u8], mut n: usize, miss: &AuthMiss) -> Option<usize> {
+    n = write_bytes(out, n, b" rx ")?;
+    n = write_dec(out, n, u32::from(miss.rx))?;
+    n = write_bytes(out, n, b" ev ")?;
+    n = write_dec(out, n, u32::from(miss.ev))?;
+    n = write_bytes(out, n, b" skip ")?;
+    n = write_dec(out, n, u32::from(miss.skip))?;
+    Some(n)
+}
+
 /// Store the mark after the name list. The shell prints these bytes.
-pub fn write_survey_mark(
-    page: &mut [u8],
-    rx: u32,
-    ok: u32,
-    done: bool,
-    fc: Option<u8>,
-    channels: u8,
-    beacons: u32,
-) -> bool {
+pub fn write_survey_mark(page: &mut [u8], counts: &SurveyCounts) -> bool {
     let mut line = [0u8; SURVEY_MARK_MAX];
-    let n = format_survey_mark(&mut line, rx, ok, done, fc, channels, beacons);
+    let n = format_survey_mark(&mut line, counts);
     if n == 0 || n > SURVEY_MARK_MAX || page.len() < SURVEY_MARK + 1 + n {
         return false;
     }
@@ -1279,16 +2102,21 @@ fn name_before(left: &[u8; 32], left_len: u8, right: &[u8; 32], right_len: u8) -
     left[..usize::from(left_len)] < right[..usize::from(right_len)]
 }
 
-/// `mt7921_mcu_set_chan_info` body for a 20 MHz channel, one stream.
-pub fn write_chan(out: &mut [u8], channel: u8, band: u8) -> bool {
+/// `mt7921_mcu_set_chan_info` body for a 20 MHz channel.
+///
+/// `rx_path` is `SET_RX_PATH`: the receive field is the antenna mask.
+/// A channel switch stores the number of streams there instead.
+/// `switch_reason` stays 0, `CH_SWITCH_NORMAL`.
+pub fn write_chan(out: &mut [u8], channel: u8, band: u8, antenna_mask: u8, rx_path: bool) -> bool {
     if out.len() < 76 {
         return false;
     }
     out[..76].fill(0);
+    let streams = u8::try_from(antenna_mask.count_ones()).unwrap_or(0);
     out[0] = channel;
     out[1] = channel;
-    out[3] = 1;
-    out[4] = 1;
+    out[3] = streams;
+    out[4] = if rx_path { antenna_mask } else { streams };
     out[10] = band;
     true
 }
@@ -1312,6 +2140,355 @@ pub fn write_rts(out: &mut [u8]) {
 
 pub fn write_efuse_read(out: &mut [u8]) {
     out[..4].fill(0);
+}
+
+/// `MT_EE_HW_TYPE`. Linux reads this byte before it sends CLC.
+pub const EE_HW_TYPE: u32 = 0x55b;
+/// Bytes in `mt7921_mcu_eeprom_info`.
+pub const EFUSE_BLOCK_LEN: usize = 24;
+/// Wireless-table index Linux assigns to the first station after registration.
+pub const WTBL_RESERVED: u32 = 19;
+/// Same index as [`WTBL_RESERVED`], stored in the BSS TLV's `u16` fields.
+const VIF_WTBL: u16 = 19;
+const _: () = assert!(WTBL_RESERVED == VIF_WTBL as u32);
+/// First peer. Index 0 is the global management entry from `mt792x_init_wcid`.
+pub const PEER_WTBL: u32 = PEER_INDEX as u32;
+const PEER_INDEX: u8 = 1;
+
+/// `MCU_EXT_QUERY(EFUSE_ACCESS)` for the 16-byte block that holds `offset`.
+pub fn write_efuse_block(out: &mut [u8], offset: u32) -> bool {
+    if out.len() < EFUSE_BLOCK_LEN {
+        return false;
+    }
+    out[..EFUSE_BLOCK_LEN].fill(0);
+    let addr = offset & !0xf;
+    out[..4].copy_from_slice(&addr.to_le_bytes());
+    true
+}
+
+/// One byte from an efuse-access reply. The data starts eight bytes after the RXD.
+#[must_use]
+pub fn efuse_block_byte(buf: &[u8], offset: u32) -> Option<u8> {
+    let index = usize::try_from(offset & 0xf).ok()?;
+    buf.get(RXD_LEN + 8 + index).copied()
+}
+
+/// `MCU_CE_CMD(FWLOG_2_HOST)` with control 1, the value Linux sends after CLC.
+pub fn write_fw_log(out: &mut [u8]) -> bool {
+    if out.len() < 4 {
+        return false;
+    }
+    out[..4].fill(0);
+    out[0] = 1;
+    true
+}
+
+/// `mt76_connac_mcu_set_deep_sleep`. Deep sleep on writes `KeepFullPwr 0`.
+pub fn write_keep_full_power(out: &mut [u8], deep_sleep: bool) -> bool {
+    const LEN: usize = 328;
+    if out.len() < LEN {
+        return false;
+    }
+    out[..LEN].fill(0);
+    let text: &[u8] = if deep_sleep {
+        b"KeepFullPwr 0"
+    } else {
+        b"KeepFullPwr 1"
+    };
+    out[8..8 + text.len()].copy_from_slice(text);
+    true
+}
+
+/// Streams and address from `GET_NIC_CAPAB`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NicCap {
+    /// `(1 << nss) - 1`, from the PHY element. `1` when that element is absent.
+    pub antenna_mask: u8,
+    pub mac: Option<[u8; 6]>,
+    pub has_6g: bool,
+    /// `MT792x_CHIP_CAP_CLC_EVT_EN` is bit 0 of the chip-capability element.
+    pub clc_event: bool,
+}
+
+const NIC_MAC: u32 = 7;
+const NIC_PHY: u32 = 8;
+const NIC_6G: u32 = 0x18;
+const NIC_CHIP: u32 = 0x20;
+
+fn note_nic_tlv(cap: &mut NicCap, kind: u32, data: &[u8]) {
+    match kind {
+        NIC_MAC if data.len() >= 6 => {
+            let mut mac = [0u8; 6];
+            mac.copy_from_slice(&data[..6]);
+            cap.mac = Some(mac);
+        }
+        NIC_PHY if data.len() >= 5 => {
+            let nss = data[4];
+            if nss > 0 && nss < 8 {
+                cap.antenna_mask = (1u8 << nss) - 1;
+            }
+        }
+        NIC_6G if !data.is_empty() => cap.has_6g = data[0] != 0,
+        NIC_CHIP if data.len() >= 8 => {
+            let bytes = data[..8].try_into().unwrap_or([0; 8]);
+            cap.clc_event = u64::from_le_bytes(bytes) & 1 != 0;
+        }
+        _ => {}
+    }
+}
+
+/// Parse a `GET_NIC_CAPAB` reply. The event body follows the connac2 RXD.
+#[must_use]
+pub fn parse_nic_cap(buf: &[u8]) -> Option<NicCap> {
+    let mut body = buf.get(RXD_LEN..)?;
+    if body.len() < 4 {
+        return None;
+    }
+    let n_element = u16::from_le_bytes([body[0], body[1]]);
+    body = &body[4..];
+    let mut cap = NicCap {
+        antenna_mask: 1,
+        mac: None,
+        has_6g: false,
+        clc_event: false,
+    };
+    for _ in 0..n_element {
+        if body.len() < 8 {
+            break;
+        }
+        let kind = u32::from_le_bytes(body[..4].try_into().ok()?);
+        let len = u32::from_le_bytes(body[4..8].try_into().ok()?) as usize;
+        body = &body[8..];
+        if body.len() < len {
+            break;
+        }
+        note_nic_tlv(&mut cap, kind, &body[..len]);
+        body = &body[len..];
+    }
+    Some(cap)
+}
+
+/// The non-download CLC region of a RAM image, when the trailer names one.
+#[must_use]
+pub fn clc_image(image: &[u8]) -> Option<&[u8]> {
+    if image.len() < RAM_TRAILER {
+        return None;
+    }
+    let trailer = image.len() - RAM_TRAILER;
+    let n = usize::from(image[trailer + 2]);
+    if n == 0 || n > MAX_REGIONS {
+        return None;
+    }
+    let mut data = 0usize;
+    for i in 0..n {
+        let at = trailer - (n - i) * RAM_REGION;
+        let region = image.get(at..at + RAM_REGION)?;
+        let len = u32::from_le_bytes(region[20..24].try_into().ok()?) as usize;
+        let feature = region[24];
+        let kind = region[25];
+        let end = data.checked_add(len)?;
+        if end > trailer {
+            return None;
+        }
+        if feature & (1 << 6) != 0 && kind == 2 {
+            return image.get(data..end);
+        }
+        data = end;
+    }
+    None
+}
+
+/// Header of one `SET_CLC` command, before the country rule.
+pub const CLC_HDR: usize = 76;
+
+/// `MT792x_CLC_POWER`. The encapsulation bit is checked only for this index.
+const CLC_POWER: u8 = 0;
+/// `MT792x_CLC_REGD`. The loader stores it; `mt7921_mcu_set_clc` does not submit it.
+const CLC_REGD: u8 = 3;
+/// `MT792x_CLC_MAX_NUM`. `mt7921_load_clc` leaves a record at or past this index unused.
+const CLC_MAX: u8 = 4;
+
+/// World-domain (`00`) rules from a CLC region.
+///
+/// `mt7921_load_clc` stores a record only while its index is below
+/// `MT792x_CLC_MAX_NUM`. `mt7921_mcu_set_clc` then skips `MT792x_CLC_REGD`.
+/// Index 0 is the power block, and its encapsulation bit has to match `hw_encap`.
+/// A record length the published parser rejects stops the walk.
+pub fn each_world_rule(
+    region: &[u8],
+    hw_encap: u8,
+    mut visit: impl FnMut(u8, [u8; 2], [u8; 2], &[u8]) -> bool,
+) -> bool {
+    let mut at = 0usize;
+    while at + 16 <= region.len() {
+        let len = u32::from_le_bytes(region[at..at + 4].try_into().unwrap_or([0; 4])) as usize;
+        if len < 16 || at.checked_add(len).is_none_or(|end| end > region.len()) {
+            return false;
+        }
+        let idx = region[at + 4];
+        let encap = region[at + 7] & 1;
+        // A newer firmware may add a record this driver does not store.
+        let skip =
+            idx >= CLC_MAX || idx == CLC_REGD || (idx == CLC_POWER && encap != (hw_encap & 1));
+        if !skip {
+            let body = &region[at + 16..at + len];
+            let mut rule = 0usize;
+            while body.len() - rule > 16 {
+                if rule + 6 > body.len() {
+                    return false;
+                }
+                let data_len = usize::from(u16::from_le_bytes([body[rule + 4], body[rule + 5]]));
+                let next = rule + 6 + data_len;
+                if next > body.len() {
+                    return false;
+                }
+                if body[rule] == b'0' && body[rule + 1] == b'0' {
+                    let kind = [body[rule + 2], body[rule + 3]];
+                    if !visit(idx, [b'0', b'0'], kind, &body[rule + 6..next]) {
+                        return false;
+                    }
+                }
+                rule = next;
+            }
+        }
+        at += len;
+    }
+    true
+}
+
+/// `MCU_CE_CMD(SET_CLC)` for one country rule. `event` sets `CLC_CAP_EVT_EN`.
+#[must_use]
+pub fn write_clc(
+    out: &mut [u8],
+    idx: u8,
+    alpha: [u8; 2],
+    kind: [u8; 2],
+    data: &[u8],
+    event: bool,
+) -> Option<usize> {
+    let total = CLC_HDR.checked_add(data.len())?;
+    if out.len() < total || total > usize::from(u16::MAX) {
+        return None;
+    }
+    out[..total].fill(0);
+    out[0] = 1;
+    out[2..4].copy_from_slice(&u16::try_from(total).ok()?.to_le_bytes());
+    out[4] = idx;
+    out[5] = 1;
+    if event {
+        out[7] = 1;
+    }
+    out[8] = alpha[0];
+    out[9] = alpha[1];
+    out[10] = kind[0];
+    out[11] = kind[1];
+    out[CLC_HDR..total].copy_from_slice(data);
+    Some(total)
+}
+
+/// Channels in one `SET_RATE_TX_POWER` message on the 7921.
+pub const TX_POWER_BATCH: usize = 8;
+/// `sizeof(mt76_connac_tx_power_limit_tlv)`.
+pub const TX_POWER_HDR: usize = 44;
+/// Channel byte plus `MT_SKU_POWER_LIMIT` (161).
+pub const SKU_LEN: usize = 162;
+
+/// 2.4 GHz centers in `mt76_connac_mcu_rate_txpower_band`.
+pub const POWER_2G: &[u8] = &[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
+
+/// 5 GHz centers in `mt76_connac_mcu_rate_txpower_band`.
+pub const POWER_5G: &[u8] = &[
+    36, 38, 40, 42, 44, 46, 48, 50, 52, 54, 56, 58, 60, 62, 64, 100, 102, 104, 106, 108, 110, 112,
+    114, 116, 118, 120, 122, 124, 126, 128, 132, 134, 136, 138, 140, 142, 144, 149, 151, 153, 155,
+    157, 159, 161, 165, 169, 173, 177,
+];
+
+/// 6 GHz centers in `mt76_connac_mcu_rate_txpower_band`.
+pub const POWER_6G: &[u8] = &[
+    1, 3, 5, 7, 9, 11, 13, 15, 17, 19, 21, 23, 25, 27, 29, 33, 35, 37, 39, 41, 43, 45, 47, 49, 51,
+    53, 55, 57, 59, 61, 65, 67, 69, 71, 73, 75, 77, 79, 81, 83, 85, 87, 89, 91, 93, 97, 99, 101,
+    103, 105, 107, 109, 111, 113, 115, 117, 119, 121, 123, 125, 129, 131, 133, 135, 137, 139, 141,
+    143, 145, 147, 149, 151, 153, 155, 157, 161, 163, 165, 167, 169, 171, 173, 175, 177, 179, 181,
+    183, 185, 187, 189, 193, 195, 197, 199, 201, 203, 205, 207, 209, 211, 213, 215, 217, 219, 221,
+    225, 227, 229, 233,
+];
+
+/// One batch of `SET_RATE_TX_POWER`. Every rate limit is 127, Linux's uncapped value.
+#[must_use]
+pub fn write_tx_power_batch(
+    out: &mut [u8],
+    band: u8,
+    channels: &[u8],
+    batch: usize,
+    global_last: u8,
+) -> Option<usize> {
+    let start = batch.checked_mul(TX_POWER_BATCH)?;
+    if start >= channels.len() {
+        return None;
+    }
+    let end = (start + TX_POWER_BATCH).min(channels.len());
+    let slice = &channels[start..end];
+    let total = TX_POWER_HDR + slice.len() * SKU_LEN;
+    if out.len() < total {
+        return None;
+    }
+    out[..total].fill(0);
+    out[4] = u8::try_from(slice.len()).ok()?;
+    out[5] = band;
+    if slice.last().copied() == Some(global_last) {
+        out[6] = 1;
+    }
+    out[8] = b'0';
+    out[9] = b'0';
+    for (i, channel) in slice.iter().enumerate() {
+        let at = TX_POWER_HDR + i * SKU_LEN;
+        out[at] = *channel;
+        out[at + 1..at + SKU_LEN].fill(127);
+    }
+    Some(total)
+}
+
+/// One register update from `mt792x_mac_init_band`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RegOp {
+    /// OR these bits.
+    Or(u32, u32),
+    /// Clear these bits.
+    Clear(u32, u32),
+    /// `mt76_rmw_field` of `MT_DMA_DCR0_MAX_RX_LEN`, value in bytes.
+    RxLen(u32, u32),
+    /// Replace `mask` with `value`. `value` is already shifted.
+    Field(u32, u32, u32),
+}
+
+const fn band_base(band: u32, even: u32, odd: u32) -> u32 {
+    if band == 0 {
+        even
+    } else {
+        odd
+    }
+}
+
+/// Register updates for one band. Band 0 is the even base.
+#[must_use]
+pub fn band_init_ops(band: u32) -> [RegOp; 8] {
+    let tmac = band_base(band, 0x820e_4000, 0x820f_4000) + 0x0f4;
+    let dma = band_base(band, 0x820e_7000, 0x820f_7000);
+    let rscr = band_base(band, 0x820e_9000, 0x820f_9000) + 0x008;
+    let mib = band_base(band, 0x820e_d000, 0x820f_d000) + 0x004;
+    let time = band_base(band, 0x820e_5000, 0x820f_5000) + 0x03c4;
+    let air = band_base(band, 0x820e_5000, 0x820f_5000) + 0x0380;
+    let rcpi = (3 << 30) | (3 << 24);
+    [
+        RegOp::Field(tmac, 0x3f, 0x3f),
+        RegOp::Or(tmac, (1 << 17) | (1 << 18)),
+        RegOp::Or(time, 1 << 30),
+        RegOp::Or(air, 1 << 30),
+        RegOp::Or(mib, (1 << 8) | (1 << 9)),
+        RegOp::RxLen(dma, 1536),
+        RegOp::Clear(dma, 1 << 23),
+        RegOp::Field(rscr, rcpi, 3 << 24),
+    ]
 }
 
 #[must_use]
@@ -1393,6 +2570,10 @@ mod tests {
         assert_eq!(&out[..n], b"mt7921: fw sem 2a");
         let n = Stage::FwScatter.paint(&mut out);
         assert_eq!(&out[..n], b"mt7921: fw scatter");
+        let n = Stage::AuthTx.paint(&mut out);
+        assert_eq!(&out[..n], b"mt7921: auth tx");
+        let n = Stage::AuthRx.paint(&mut out);
+        assert_eq!(&out[..n], b"mt7921: auth rx");
         let n = Stage::PingOk([192, 168, 1, 20]).paint(&mut out);
         assert_eq!(&out[..n], b"ip 192.168.1.20 ping ok");
     }
@@ -1422,6 +2603,11 @@ mod tests {
         let (ssid, psk) = read_key(&page).unwrap();
         assert_eq!(ssid, b"home");
         assert_eq!(psk, b"password");
+        assert!(!join_up(&page));
+        assert!(write_join(&mut page, true));
+        assert!(join_up(&page));
+        assert!(write_join(&mut page, false));
+        assert!(!join_up(&page));
         assert!(!write_key(&mut page, b"", b"password"));
     }
 
@@ -1477,11 +2663,13 @@ mod tests {
         assert_eq!(buf[2], 1);
         assert_eq!(buf[3], 1 << 2);
         assert_eq!(buf[4], 1);
+        assert_eq!(buf[1185], 1);
         assert!(write_scan(&mut buf, b"", 3));
         assert_eq!(buf[2], 1);
         assert_eq!(buf[3], 1);
         assert_eq!(buf[4], 0);
         assert_eq!(buf[12], 0);
+        assert_eq!(buf[1185], 0);
     }
 
     #[test]
@@ -1506,6 +2694,552 @@ mod tests {
             u16::from(SCAN_CHANNELS[n2].1)
         );
         assert!(write_channel_domain(&mut [0u8; 8]).is_none());
+    }
+
+    #[test]
+    fn uni_header_is_shorter_than_the_mcu_header() {
+        let mut buf = [0u8; 64];
+        let cmd = uni_cmd(0x01);
+        assert!(is_uni_cmd(cmd));
+        assert_eq!(mcu_header_len(cmd), UNI_TXD_LEN);
+        assert!(write_mcu_header(&mut buf, cmd, 4, DEV_INFO_LEN));
+        let len = u16::from_le_bytes([buf[32], buf[33]]);
+        assert_eq!(
+            len,
+            u16::try_from(UNI_TXD_LEN - TXD_LEN + DEV_INFO_LEN).unwrap()
+        );
+        assert_eq!(u16::from_le_bytes([buf[34], buf[35]]), 1);
+        assert_eq!(buf[37], 0xa0);
+        assert_eq!(buf[39], 4);
+        assert_eq!(buf[43], 0x07);
+        assert!(!write_uni_txd(&mut [0u8; 16], cmd, 1, 0));
+    }
+
+    #[test]
+    fn station_registration_is_bss_zero() {
+        let mac = [0x02, 0x11, 0x22, 0x33, 0x44, 0x55];
+        let mut dev = [0u8; DEV_INFO_LEN];
+        assert!(write_dev_info(&mut dev, &mac));
+        assert_eq!(u16::from_le_bytes([dev[6], dev[7]]), 12);
+        assert_eq!(dev[8], 1);
+        assert_eq!(&dev[10..16], &mac);
+        let mut bss = [0u8; BSS_INFO_LEN];
+        assert!(write_bss_info(&mut bss));
+        assert_eq!(u16::from_le_bytes([bss[6], bss[7]]), 32);
+        assert_eq!(bss[8], 1);
+        assert_eq!(
+            u32::from_le_bytes([bss[12], bss[13], bss[14], bss[15]]),
+            0x1_0001
+        );
+        assert_eq!(bss[16], 1);
+        assert!(!write_dev_info(&mut [0u8; 8], &mac));
+        assert!(!write_bss_info(&mut [0u8; 8]));
+    }
+
+    #[test]
+    fn auth_txd_is_cut_through_on_altx() {
+        let mut frame = [0u8; 64];
+        let bssid = [0x02, 0x00, 0x00, 0x00, 0x00, 0x01];
+        let sta = [0x02, 0x11, 0x22, 0x33, 0x44, 0x55];
+        let n = crate::wpa::write_auth(&mut frame, &bssid, &sta, 1);
+        let mut txwi = [0u8; TXD_LEN + TXP_LEN];
+        assert!(write_txwi(&mut txwi, &frame[..n], 0x01f6_8000, true));
+        let tx0 = u32::from_le_bytes(txwi[0..4].try_into().expect("txd0"));
+        let tx1 = u32::from_le_bytes(txwi[4..8].try_into().expect("txd1"));
+        let tx6 = u32::from_le_bytes(txwi[24..28].try_into().expect("txd6"));
+        assert_eq!((tx0 >> 23) & 0x3, 0, "packet format");
+        assert_eq!(tx0 >> 25, 0x10, "queue");
+        assert_eq!(tx1 & 0x3ff, PEER_WTBL, "wireless index");
+        assert_eq!((tx1 >> 11) & 0x1f, 12, "management header words");
+        assert_eq!((tx6 >> 16) & 0x3fff, 0x40, "5 GHz rate");
+        assert_eq!(u16::from_le_bytes([txwi[32], txwi[33]]), 0x8000);
+        assert!(write_txwi(&mut txwi, &frame[..n], 0x01f6_8000, false));
+        let tx6 = u32::from_le_bytes(txwi[24..28].try_into().expect("txd6"));
+        assert_eq!((tx6 >> 16) & 0x3fff, 0, "2.4 GHz rate");
+    }
+
+    #[test]
+    fn qos_data_header_is_thirteen_words() {
+        let mut frame = [0u8; 64];
+        let bssid = [0x02, 0x00, 0x00, 0x00, 0x00, 0x01];
+        let sta = [0x02, 0x11, 0x22, 0x33, 0x44, 0x55];
+        let n = crate::wpa::write_qos_data(&mut frame, &bssid, &sta, &bssid, b"hi", 1, false)
+            .expect("qos frame");
+        let mut txwi = [0u8; TXD_LEN + TXP_LEN];
+        assert!(write_txwi(&mut txwi, &frame[..n], 0x01f6_8000, false));
+        let tx0 = u32::from_le_bytes(txwi[0..4].try_into().expect("txd0"));
+        let tx1 = u32::from_le_bytes(txwi[4..8].try_into().expect("txd1"));
+        let tx2 = u32::from_le_bytes(txwi[8..12].try_into().expect("txd2"));
+        assert_eq!((tx1 >> 11) & 0x1f, 13, "qos header words");
+        assert_eq!(tx0 >> 25, 0x10, "ordinary data stays on ALTX");
+        assert_eq!(tx2 & (1 << 31), 0, "ordinary data is not a fixed rate");
+    }
+
+    #[test]
+    fn eapol_txd_uses_best_effort_and_fixed_rate() {
+        let mut frame = [0u8; 64];
+        let bssid = [0x02, 0x00, 0x00, 0x00, 0x00, 0x01];
+        let sta = [0x02, 0x11, 0x22, 0x33, 0x44, 0x55];
+        let msdu = [0xaa, 0xaa, 0x03, 0x00, 0x00, 0x00, 0x88, 0x8e, 1, 3];
+        let n = crate::wpa::write_data(&mut frame, &bssid, &sta, &bssid, &msdu, 1, false)
+            .expect("eapol frame");
+        let mut txwi = [0u8; TXD_LEN + TXP_LEN];
+        assert!(write_txwi(&mut txwi, &frame[..n], 0x01f6_8000, false));
+        let tx0 = u32::from_le_bytes(txwi[0..4].try_into().expect("txd0"));
+        let tx1 = u32::from_le_bytes(txwi[4..8].try_into().expect("txd1"));
+        let tx2 = u32::from_le_bytes(txwi[8..12].try_into().expect("txd2"));
+        let tx3 = u32::from_le_bytes(txwi[12..16].try_into().expect("txd3"));
+        let tx6 = u32::from_le_bytes(txwi[24..28].try_into().expect("txd6"));
+        assert_eq!(tx0 >> 25, 1, "best-effort queue");
+        assert_eq!((tx1 >> 11) & 0x1f, 12, "data header words");
+        assert_eq!(tx2 & (1 << 31), 1 << 31, "fixed rate");
+        assert_eq!(tx2 & (1 << 13), 1 << 13, "htc valid");
+        assert_eq!(tx3 & (1 << 28), 1 << 28, "block ack disabled");
+        assert_eq!((tx6 >> 16) & 0x3fff, 0, "2.4 GHz rate");
+    }
+
+    #[test]
+    fn auth_miss_counts_each_ring() {
+        let mut out = [0u8; 64];
+        let n = write_auth_miss(
+            &mut out,
+            &AuthMiss {
+                fc: None,
+                ..AuthMiss::default()
+            },
+        );
+        assert_eq!(&out[..n], b"mt7921: auth rx fc -- rx 0 ev 0 skip 0");
+        let n = write_auth_miss(
+            &mut out,
+            &AuthMiss {
+                rx: 1,
+                ev: 1,
+                skip: 1,
+                fc: Some(0xb0),
+                ..AuthMiss::default()
+            },
+        );
+        assert_eq!(&out[..n], b"mt7921: auth rx fc b0 rx 1 ev 1 skip 1");
+    }
+
+    #[test]
+    fn join_detail_names_the_rejected_auth_frame() {
+        let bssid = [0x02, 0x00, 0x00, 0x00, 0x00, 0x01];
+        let sta = [0x02, 0x11, 0x22, 0x33, 0x44, 0x55];
+        let mut frame = [0u8; 64];
+        let n = crate::wpa::write_auth(&mut frame, &bssid, &sta, 1);
+        let mut miss = AuthMiss::default();
+        note_copied(&mut miss, &frame[..n], &sta, rx_layout(&[]));
+        let mut out = [0u8; 64];
+        let n = write_join_detail(&mut out, 0, &miss, &sta);
+        assert_eq!(&out[..n], b"sq 1 st 0 alg 0 ad 0 hdr 0 pn 0 ms 0 len 30");
+        let n = write_join_detail(&mut out, 1, &miss, &sta);
+        assert_eq!(&out[..n], b"a1 02:00:00:00:00:01 a2 02:11:22:33:44:55");
+        let n = write_join_detail(&mut out, 2, &miss, &sta);
+        assert_eq!(&out[..n], b"a3 02:00:00:00:00:01 sta 02:11:22:33:44:55");
+        let n = write_join_detail(&mut out, 3, &miss, &sta);
+        assert_eq!(&out[..n], b"m24 000001000000");
+    }
+
+    #[test]
+    fn join_detail_shows_the_data_body() {
+        let sta = [0x74, 0x4c, 0xa1, 0x87, 0x7c, 0x49];
+        let mut frame = [0u8; 40];
+        frame[0] = 0x08;
+        frame[1] = 0x02;
+        frame[4..10].copy_from_slice(&sta);
+        frame[24..32].copy_from_slice(&[0xaa, 0xaa, 0x03, 0x00, 0x00, 0x00, 0x88, 0x8e]);
+        frame[32] = 2;
+        frame[33] = 3;
+        let mut miss = AuthMiss::default();
+        note_copied(&mut miss, &frame, &sta, rx_layout(&[]));
+        let mut out = [0u8; 64];
+        let n = write_join_detail(&mut out, 3, &miss, &sta);
+        assert_eq!(&out[..n], b"m24 aaaa03000000888e0203000000000000");
+    }
+
+    #[test]
+    fn join_end_clears_the_irq_lines_under_the_detail() {
+        assert_eq!(JOIN_END, b"END OF OUTPUT");
+        assert_eq!(JOIN_DETAIL_ROW, 48);
+        assert_eq!(JOIN_END_ROW, 52);
+        let devices = lerux_desk::ROW_PCI..lerux_desk::ROW_PCI + crate::LOCATIONS.len();
+        assert_eq!(devices, 50..56);
+        assert!(devices.contains(&JOIN_END_ROW));
+        assert_eq!(join_device_rows_to_clear(), 53..56);
+        for row in devices {
+            let covered = (JOIN_DETAIL_ROW..JOIN_END_ROW).contains(&row)
+                || row == JOIN_END_ROW
+                || join_device_rows_to_clear().contains(&row);
+            assert!(covered, "device row {row} stays on screen");
+        }
+    }
+
+    #[test]
+    fn join_detail_names_a_translated_frame() {
+        let sta = [0x02, 0x11, 0x22, 0x33, 0x44, 0x55];
+        let mut desc = [0u8; 24];
+        desc[9] = 1 << 5;
+        let mut frame = [0u8; 16];
+        frame[..6].copy_from_slice(&sta);
+        frame[6..12].copy_from_slice(&[0x02, 0, 0, 0, 0, 1]);
+        let mut miss = AuthMiss::default();
+        note_copied(&mut miss, &frame, &sta, rx_layout(&desc));
+        let mut out = [0u8; 64];
+        let n = write_join_detail(&mut out, 0, &miss, &sta);
+        assert_eq!(&out[..n], b"sq - st - alg - ad 0 hdr 1 pn 0 ms 0 len 16");
+        let n = write_join_detail(&mut out, 1, &miss, &sta);
+        assert_eq!(&out[..n], b"da 02:11:22:33:44:55 sa 02:00:00:00:00:01");
+        let n = write_join_detail(&mut out, 2, &miss, &sta);
+        assert_eq!(&out[..n], b"a3 -- sta 02:11:22:33:44:55");
+        let n = write_join_detail(&mut out, 3, &miss, &sta);
+        assert_eq!(&out[..n], b"m0 02112233445502000000000100000000");
+    }
+
+    #[test]
+    fn eapol_miss_counts_header_translation() {
+        let mut out = [0u8; 64];
+        let n = write_eapol_miss(
+            &mut out,
+            &AuthMiss {
+                fc: None,
+                ..AuthMiss::default()
+            },
+        );
+        assert_eq!(&out[..n], b"mt7921: eapol w1 fc -- rx 0 ev 0 skip 0 tr 0");
+        let n = write_eapol_miss(
+            &mut out,
+            &AuthMiss {
+                rx: 9,
+                ev: 10,
+                skip: 1,
+                tr: 19,
+                fc: Some(0x08),
+                ..AuthMiss::default()
+            },
+        );
+        assert_eq!(&out[..n], b"mt7921: eapol w1 fc 08 rx 9 ev 10 skip 1 tr 19");
+    }
+
+    #[test]
+    fn eapol_stop_fits_the_stage_row() {
+        let mut out = [0u8; 64];
+        let boot = AuthMiss {
+            rx: 2,
+            ev: 10,
+            skip: 1,
+            tr: 0,
+            fc: Some(0x08),
+            stop: EapolStop::Tx2,
+            ..AuthMiss::default()
+        };
+        let n = write_eapol_miss(&mut out, &boot);
+        assert_eq!(&out[..n], b"mt7921: eapol t2 fc 08 rx 2 ev 10 skip 1 tr 0");
+        assert!(n <= 48, "the stage line keeps 48 cells");
+        for stop in [
+            EapolStop::Wait1,
+            EapolStop::Msg1,
+            EapolStop::Build2,
+            EapolStop::Tx2,
+            EapolStop::Wait3,
+            EapolStop::Msg3,
+            EapolStop::Build4,
+            EapolStop::Tx4,
+        ] {
+            let mut row = boot;
+            row.stop = stop;
+            let n = write_eapol_miss(&mut out, &row);
+            let head = b"mt7921: eapol ";
+            assert!(n <= 48);
+            assert!(out[..n].starts_with(head));
+            assert_eq!(&out[head.len()..head.len() + 2], stop.word());
+        }
+    }
+
+    #[test]
+    fn fill_rx_names_header_translation() {
+        let mut buf = [0u8; 24];
+        buf[9] = 1 << 5;
+        let info = rx_layout(&buf);
+        assert!(info.translated());
+        assert!(!info.rejected());
+        buf[6] = 0x80;
+        assert!(rx_layout(&buf).rejected());
+        buf[6] = 1;
+        assert!(rx_layout(&buf).plain());
+        assert!(!rx_layout(&buf).rejected());
+        buf[7] = 1;
+        assert!(!rx_layout(&buf).plain());
+        buf[16] = 1;
+        assert!(rx_layout(&buf).amsdu());
+        assert!(!rx_layout(&[]).translated());
+    }
+
+    #[test]
+    fn sta_rec_names_the_ap() {
+        let bssid = [0x10, 0x20, 0x30, 0x40, 0x50, 0x60];
+        let mut body = [0u8; STA_REC_LEN];
+        assert_eq!(
+            write_sta_rec(&mut body, &bssid, false, false, 0),
+            Some(STA_REC_LEN)
+        );
+        assert_eq!(body[1], 1);
+        assert_eq!(u16::from_le_bytes([body[2], body[3]]), 5);
+        assert_eq!(body[4], 1);
+        assert_eq!(
+            u32::from_le_bytes([body[12], body[13], body[14], body[15]]),
+            CONN_INFRA_AP
+        );
+        assert_eq!(body[16], 2);
+        assert_eq!(u16::from_le_bytes([body[18], body[19]]), 0);
+        assert_eq!(&body[20..26], &bssid);
+        assert_eq!(u16::from_le_bytes([body[26], body[27]]), 3);
+        assert_eq!(body[34], PHY_HR_DSSS | PHY_ERP);
+        assert_eq!(body[64], 0);
+        assert_eq!(u16::from_le_bytes([body[96], body[97]]), 0);
+        let mut five = [0u8; STA_REC_LEN];
+        assert_eq!(
+            write_sta_rec(&mut five, &bssid, true, true, 0x123),
+            Some(STA_REC_LEN)
+        );
+        assert_eq!(five[34], PHY_OFDM);
+        assert_eq!(u16::from_le_bytes([five[18], five[19]]), 0x123);
+        assert_eq!(u16::from_le_bytes([five[26], five[27]]), 1);
+        assert_eq!(five[64], 2);
+        assert_eq!(u16::from_le_bytes([five[96], five[97]]), 0x123);
+        assert!(write_sta_rec(&mut [0u8; 8], &bssid, false, false, 0).is_none());
+    }
+
+    #[test]
+    fn bss_connect_names_the_ap() {
+        let bssid = [0x10, 0x20, 0x30, 0x40, 0x50, 0x60];
+        let mut body = [0u8; BSS_CONNECT_LEN];
+        assert!(write_bss_connect(&mut body, &bssid, false));
+        assert_eq!(u16::from_le_bytes([body[6], body[7]]), 32);
+        assert_eq!(body[8], 1);
+        assert_eq!(
+            u32::from_le_bytes([body[12], body[13], body[14], body[15]]),
+            CONN_INFRA_STA
+        );
+        assert_eq!(body[16], 0);
+        assert_eq!(&body[18..24], &bssid);
+        assert_eq!(u16::from_le_bytes([body[24], body[25]]), 19);
+        assert_eq!(body[29], PHY_MODE_B | PHY_MODE_G);
+        assert_eq!(u16::from_le_bytes([body[30], body[31]]), 19);
+        assert_eq!(u16::from_le_bytes([body[32], body[33]]), 3);
+        assert_eq!(u16::from_le_bytes([body[36], body[37]]), 15);
+        assert_eq!(u16::from_le_bytes([body[38], body[39]]), 8);
+        assert_eq!(body[40], 0);
+        assert!(write_bss_connect(&mut body, &bssid, true));
+        assert_eq!(body[29], PHY_MODE_A);
+        assert_eq!(
+            u16::from_le_bytes([body[32], body[33]]),
+            u16::from(PHY_OFDM)
+        );
+        assert!(!write_bss_connect(&mut [0u8; 8], &bssid, false));
+    }
+
+    #[test]
+    fn bss_rlm_is_twenty_megahertz() {
+        let mut body = [0u8; BSS_RLM_LEN];
+        assert!(write_bss_rlm(&mut body, 6, 0, 0b11));
+        assert_eq!(u16::from_le_bytes([body[4], body[5]]), 2);
+        assert_eq!(u16::from_le_bytes([body[6], body[7]]), 16);
+        assert_eq!(body[8], 6);
+        assert_eq!(body[9], 6);
+        assert_eq!(body[10], 0);
+        assert_eq!(body[11], 0);
+        assert_eq!(body[12], 2);
+        assert_eq!(body[13], 0b11);
+        assert_eq!(body[14], 1);
+        assert_eq!(body[15], 0);
+        assert_eq!(body[17], 0);
+        assert!(write_bss_rlm(&mut body, 36, 1, 1));
+        assert_eq!(body[8], 36);
+        assert_eq!(body[12], 1);
+        assert_eq!(body[13], 1);
+        assert_eq!(body[17], 1);
+        assert!(!write_bss_rlm(&mut [0u8; 8], 6, 0, 1));
+    }
+
+    #[test]
+    fn rx_filter_enable_is_mode_one() {
+        let mut buf = [0u8; RX_FILTER_LEN];
+        assert!(write_rx_filter_enable(&mut buf));
+        assert_eq!(buf[4], 1);
+        assert_eq!(
+            u32::from_le_bytes([buf[8], buf[9], buf[10], buf[11]]),
+            1 << 31
+        );
+        assert_eq!(buf[12], 0);
+        assert_eq!(buf[16], 0);
+        assert!(!write_rx_filter_enable(&mut [0u8; 8]));
+    }
+
+    #[test]
+    fn other_beacon_drop_is_cleared() {
+        let mut buf = [0u8; RX_FILTER_LEN];
+        assert!(write_clear_other_beacon(&mut buf));
+        assert_eq!(buf[4], 2);
+        assert_eq!(
+            u32::from_le_bytes([buf[12], buf[13], buf[14], buf[15]]),
+            1 << 11
+        );
+        assert_eq!(buf[16], 1 << 1);
+        assert_eq!(u32::from_le_bytes([buf[8], buf[9], buf[10], buf[11]]), 0);
+        assert!(!write_clear_other_beacon(&mut [0u8; 8]));
+    }
+
+    #[test]
+    fn channel_command_uses_the_antenna_mask() {
+        let mut buf = [0u8; 76];
+        assert!(write_chan(&mut buf, 6, 0, 0b11, true));
+        assert_eq!(buf[0], 6);
+        assert_eq!(buf[3], 2);
+        assert_eq!(buf[4], 0b11);
+        assert_eq!(buf[5], 0);
+        assert!(write_chan(&mut buf, 36, 1, 0b11, false));
+        assert_eq!(buf[3], 2);
+        assert_eq!(buf[4], 2);
+        assert_eq!(buf[10], 1);
+    }
+
+    #[test]
+    fn nic_capability_reads_streams_and_the_clc_bit() {
+        let mut buf = [0u8; RXD_LEN + 4 + 8 + 12 + 8 + 8];
+        buf[RXD_LEN] = 2;
+        let phy = RXD_LEN + 4;
+        buf[phy..phy + 4].copy_from_slice(&8u32.to_le_bytes());
+        buf[phy + 4..phy + 8].copy_from_slice(&12u32.to_le_bytes());
+        buf[phy + 8 + 4] = 2;
+        let chip = phy + 8 + 12;
+        buf[chip..chip + 4].copy_from_slice(&0x20u32.to_le_bytes());
+        buf[chip + 4..chip + 8].copy_from_slice(&8u32.to_le_bytes());
+        buf[chip + 8] = 1;
+        let cap = parse_nic_cap(&buf).unwrap();
+        assert_eq!(cap.antenna_mask, 0b11);
+        assert!(cap.clc_event);
+        assert!(parse_nic_cap(&[0; 8]).is_none());
+    }
+
+    #[test]
+    fn clc_walk_sends_the_world_rule() {
+        let mut region = [0u8; 16 + 6 + 12];
+        let len = u32::try_from(region.len()).unwrap();
+        region[..4].copy_from_slice(&len.to_le_bytes());
+        region[7] = 0;
+        region[16] = b'0';
+        region[17] = b'0';
+        region[18] = b'-';
+        region[19] = b'0';
+        region[20..22].copy_from_slice(&12u16.to_le_bytes());
+        region[22] = 9;
+        region[23] = 8;
+        let mut seen = 0u8;
+        assert!(each_world_rule(&region, 0, |idx, alpha, kind, data| {
+            assert_eq!(idx, 0);
+            assert_eq!(alpha, [b'0', b'0']);
+            assert_eq!(kind, [b'-', b'0']);
+            assert_eq!(&data[..2], &[9, 8]);
+            seen += 1;
+            true
+        }));
+        assert_eq!(seen, 1);
+        assert!(each_world_rule(&region, 1, |_, _, _, _| {
+            seen = 9;
+            true
+        }));
+        assert_eq!(seen, 1);
+        let mut cmd = [0u8; 128];
+        let n = write_clc(
+            &mut cmd,
+            0,
+            [b'0', b'0'],
+            [b'-', b'0'],
+            &region[22..34],
+            false,
+        )
+        .unwrap();
+        assert_eq!(n, CLC_HDR + 12);
+        assert_eq!(cmd[0], 1);
+        assert_eq!(cmd[5], 1);
+        assert_eq!(&cmd[8..12], b"00-0");
+        assert_eq!(cmd[CLC_HDR], 9);
+        assert_eq!(cmd[CLC_HDR + 1], 8);
+    }
+
+    fn put_clc(out: &mut [u8], idx: u8) -> usize {
+        let len = 16 + 6 + 12;
+        out[..len].fill(0);
+        out[..4].copy_from_slice(&u32::try_from(len).unwrap().to_le_bytes());
+        out[4] = idx;
+        out[16] = b'0';
+        out[17] = b'0';
+        out[18] = b'-';
+        out[19] = b'0';
+        out[20..22].copy_from_slice(&12u16.to_le_bytes());
+        out[22] = 9;
+        len
+    }
+
+    #[test]
+    fn clc_walk_skips_records_the_driver_does_not_store() {
+        let mut region = [0u8; 34 * 5];
+        let mut at = 0usize;
+        for idx in [CLC_POWER, 1, CLC_REGD, 2, CLC_MAX] {
+            at += put_clc(&mut region[at..], idx);
+        }
+        let mut seen = [0u8; 4];
+        let mut n = 0usize;
+        assert!(each_world_rule(&region[..at], 0, |idx, _, _, _| {
+            seen[n] = idx;
+            n += 1;
+            true
+        }));
+        assert_eq!(&seen[..n], &[CLC_POWER, 1, 2]);
+    }
+
+    #[test]
+    fn band_init_sets_the_dma_receive_length() {
+        let ops = band_init_ops(0);
+        assert!(matches!(ops[5], RegOp::RxLen(0x820e_7000, 1536)));
+        assert!(matches!(ops[6], RegOp::Clear(0x820e_7000, bit23) if bit23 == 1 << 23));
+        let odd = band_init_ops(1);
+        assert!(matches!(odd[5], RegOp::RxLen(0x820f_7000, 1536)));
+    }
+
+    #[test]
+    fn tx_power_batch_marks_the_last_channel() {
+        let mut buf = [0u8; TX_POWER_HDR + 8 * SKU_LEN];
+        let n = write_tx_power_batch(&mut buf, 1, POWER_2G, 0, 14).unwrap();
+        assert_eq!(n, TX_POWER_HDR + 8 * SKU_LEN);
+        assert_eq!(buf[4], 8);
+        assert_eq!(buf[5], 1);
+        assert_eq!(buf[6], 0);
+        assert_eq!(buf[TX_POWER_HDR], 1);
+        assert_eq!(buf[TX_POWER_HDR + 1], 127);
+        let n = write_tx_power_batch(&mut buf, 1, POWER_2G, 1, 14).unwrap();
+        assert_eq!(buf[4], 6);
+        assert_eq!(buf[6], 1);
+        assert_eq!(buf[TX_POWER_HDR], 9);
+        assert!(n > TX_POWER_HDR);
+        assert_eq!(POWER_2G.len(), 14);
+        assert_eq!(POWER_5G.last(), Some(&177));
+        assert_eq!(POWER_6G.last(), Some(&233));
+        let mut word = [0u8; 328];
+        assert!(write_keep_full_power(&mut word, true));
+        assert_eq!(&word[8..21], b"KeepFullPwr 0");
+    }
+
+    #[test]
+    fn uni_event_status_zero_matches_the_command() {
+        let mut buf = [0u8; RXD_LEN + 8];
+        assert!(!uni_event_ok(&buf, 1));
+        buf[RXD_LEN] = 1;
+        assert!(uni_event_ok(&buf, 1));
+        assert!(!uni_event_ok(&buf, 2));
+        buf[RXD_LEN + 4] = 1;
+        assert!(!uni_event_ok(&buf, 1));
     }
 
     #[test]
@@ -1550,31 +3284,69 @@ mod tests {
         assert!(read_survey_count(&page).is_none());
     }
 
+    fn counts(
+        rx: u32,
+        ev: u32,
+        ok: u32,
+        done: bool,
+        fc: Option<u8>,
+        ch: u8,
+        bcn: u32,
+    ) -> SurveyCounts {
+        SurveyCounts {
+            rx,
+            ev,
+            ok,
+            done,
+            fc,
+            channels: ch,
+            beacons: bcn,
+        }
+    }
+
     #[test]
     fn survey_mark_records_an_empty_scan() {
         let mut out = [0u8; SURVEY_MARK_MAX];
-        let n = format_survey_mark(&mut out, 0, 0, true, None, 0, 0);
-        assert_eq!(&out[..n], b"rx 0 ok 0 done 1 ch 0 bcn 0");
-        let n = format_survey_mark(&mut out, 4, 0, true, Some(0x08), 21, 4);
-        assert_eq!(&out[..n], b"rx 4 ok 0 done 1 fc 08 ch 21 bcn 4");
-        let n = format_survey_mark(&mut out, 4, 0, false, None, 21, 4);
-        assert_eq!(&out[..n], b"rx 4 ok 0 done 0 fc --");
-        let n = format_survey_mark(&mut out, 2, 2, true, Some(0x80), 13, 2);
-        assert_eq!(&out[..n], b"rx 2 ok 2 done 1 ch 13 bcn 2");
-        let n = format_survey_mark(&mut out, u32::MAX, u32::MAX, false, Some(0xff), 0, 0);
+        let n = format_survey_mark(&mut out, &counts(0, 0, 0, true, None, 0, 0));
+        assert_eq!(&out[..n], b"rx 0 ev 0 ok 0 done 1 ch 0 bcn 0");
+        let n = format_survey_mark(&mut out, &counts(4, 0, 0, true, Some(0x08), 21, 4));
+        assert_eq!(&out[..n], b"rx 4 ev 0 ok 0 done 1 fc 08 ch 21 bcn 4");
+        let n = format_survey_mark(&mut out, &counts(4, 0, 0, false, None, 21, 4));
+        assert_eq!(&out[..n], b"rx 4 ev 0 ok 0 done 0 fc --");
+        let n = format_survey_mark(&mut out, &counts(2, 0, 2, true, Some(0x80), 13, 2));
+        assert_eq!(&out[..n], b"rx 2 ev 0 ok 2 done 1 ch 13 bcn 2");
+        let n = format_survey_mark(&mut out, &counts(0, 3, 0, true, Some(0x80), 21, 12));
+        assert_eq!(&out[..n], b"rx 0 ev 3 ok 0 done 1 fc 80 ch 21 bcn 12");
+        let max = counts(u32::MAX, u32::MAX, u32::MAX, false, Some(0xff), 0, 0);
+        let n = format_survey_mark(&mut out, &max);
         assert!(n > 0 && n <= SURVEY_MARK_MAX);
-        let n = format_survey_mark(&mut out, u32::MAX, 0, true, Some(0xff), 255, u32::MAX);
+        let max = counts(u32::MAX, u32::MAX, 0, true, Some(0xff), 255, u32::MAX);
+        let n = format_survey_mark(&mut out, &max);
         assert!(n > 0 && n <= SURVEY_MARK_MAX);
         let mut page = [0u8; 0x1000];
         assert!(write_survey(&mut page));
         assert!(read_survey_mark(&page).is_none());
         assert!(write_survey_list(&mut page, &[]));
-        assert!(write_survey_mark(&mut page, 4, 0, true, Some(0x80), 21, 4));
+        assert!(write_survey_mark(
+            &mut page,
+            &counts(4, 0, 0, true, Some(0x80), 21, 4)
+        ));
         assert_eq!(read_survey_count(&page), Some(0));
         assert_eq!(
             read_survey_mark(&page),
-            Some(&b"rx 4 ok 0 done 1 fc 80 ch 21 bcn 4"[..])
+            Some(&b"rx 4 ev 0 ok 0 done 1 fc 80 ch 21 bcn 4"[..])
         );
+    }
+
+    #[test]
+    fn frames_are_recognized_on_any_ring() {
+        let word = |kind: u32, flag: u32| ((kind << 27) | (flag << 16) | 0x40).to_le_bytes();
+        assert!(is_rx_frame(&word(2, 0)));
+        assert!(is_rx_frame(&word(7, 1)));
+        assert!(is_rx_frame(&word(8, 0)));
+        assert!(!is_rx_frame(&word(7, 0)));
+        assert!(!is_rx_frame(&word(6, 0)));
+        assert!(!is_rx_frame(&[0u8; 3]));
     }
 
     #[test]
@@ -1590,7 +3362,10 @@ mod tests {
     fn survey_report_lists_names_in_byte_order() {
         let mut page = [0u8; 0x1000];
         assert!(write_survey_list(&mut page, &[b"zeta", b"alpha", b"2"]));
-        assert!(write_survey_mark(&mut page, 3, 3, true, None, 21, 3));
+        assert!(write_survey_mark(
+            &mut page,
+            &counts(3, 0, 3, true, None, 21, 3)
+        ));
         let mut out = [0u8; SURVEY_REPORT_MAX];
         let n = format_survey_report(&page, &mut out).unwrap();
         assert_eq!(&out[..n], b"1 2\n2 alpha\n3 zeta\n");
@@ -1604,14 +3379,23 @@ mod tests {
         assert!(format_survey_report(&page, &mut out).is_none());
         assert!(write_survey_list(&mut page, &[]));
         assert!(format_survey_report(&page, &mut out).is_none());
-        assert!(write_survey_mark(&mut page, 0, 0, true, None, 0, 0));
+        assert!(write_survey_mark(
+            &mut page,
+            &counts(0, 0, 0, true, None, 0, 0)
+        ));
         let n = format_survey_report(&page, &mut out).unwrap();
-        assert_eq!(&out[..n], b"rx 0 ok 0 done 1 ch 0 bcn 0\n");
-        assert!(write_survey_mark(&mut page, 4, 0, true, Some(0x80), 21, 4));
+        assert_eq!(&out[..n], b"rx 0 ev 0 ok 0 done 1 ch 0 bcn 0\n");
+        assert!(write_survey_mark(
+            &mut page,
+            &counts(4, 0, 0, true, Some(0x80), 21, 4)
+        ));
         let n = format_survey_report(&page, &mut out).unwrap();
-        assert_eq!(&out[..n], b"rx 4 ok 0 done 1 fc 80 ch 21 bcn 4\n");
-        assert!(write_survey_mark(&mut page, 4, 0, false, None, 0, 0));
+        assert_eq!(&out[..n], b"rx 4 ev 0 ok 0 done 1 fc 80 ch 21 bcn 4\n");
+        assert!(write_survey_mark(
+            &mut page,
+            &counts(4, 0, 0, false, None, 0, 0)
+        ));
         let n = format_survey_report(&page, &mut out).unwrap();
-        assert_eq!(&out[..n], b"rx 4 ok 0 done 0 fc --\n");
+        assert_eq!(&out[..n], b"rx 4 ev 0 ok 0 done 0 fc --\n");
     }
 }

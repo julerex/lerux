@@ -48,7 +48,7 @@ The written desk-browser spec is [`desk-browser.md`](desk-browser.md).
 
 ## Platform parity
 
-x86 names that get mixed across QEMU and the desk (q35, the 82574, the I217-V, COM1, the VGA text page, the CRTC, the Intel display engine) are defined in [GLOSSARY.md](../GLOSSARY.md). That file also defines the driver words (doorbell, DMA, firmware), the Acer Swift X devices, and the Wi-Fi bring-up line. The driver tables are in [platforms.md](platforms.md#x86-device-map).
+x86 names that get mixed across QEMU and the desk (q35, the 82574, the I217-V, COM1, the VGA text page, the CRTC, the Intel display engine) are defined in [GLOSSARY.md](../GLOSSARY.md). That file also defines the driver words (doorbell, DMA, firmware), the Acer Swift X devices, the Wi-Fi bring-up line, and the Arch live image terms (kernel module, Marvell, SOF, MediaTek firmware, the udev hardware database). The measured installer is [arch-live-image.md](arch-live-image.md). The driver tables are in [platforms.md](platforms.md#x86-device-map).
 
 Virtio hello and HTTP smokes run on aarch64, RISC-V virt, and x86 (PCI virtio on q35). Debug hierarchy smokes run on all three. See [`boards.md`](boards.md) and [`plan.md`](plan.md).
 
@@ -170,6 +170,40 @@ The guest does **not** target a Linux or POSIX syscall ABI. Remaining protection
 
 **lerux-web**
 : `#![no_std]`+`alloc` layout and paint, modelled on Ladybird and rewritten in Rust, not a port of Servo or of Ladybird, Chromium, or WebKit C++. Phases 71–80 painted a fixed CSS subset and hosted no JavaScript. JavaScript and WebAssembly are approved. The live browser shell uses it on `qemu_virt_aarch64_browser_sddf`. The desk-browser spec grows it to the shared layout, script, WebAssembly, and media behavior of the reference browsers.
+
+## Swift radio survey
+
+The `setup-wifi` mark uses these words. The same paragraph is in [plan-metal-parity.md](plan-metal-parity.md) Milestone 8.
+
+**host**
+: On this survey, the CPU side. It is the `swift-mt7921` protection domain. It posts the scan commands and reads frames the card has copied into RAM. `rx` counts frames this side received. The developer machine is also called the host in the build docs, and a public name is the host of a public page. Those are separate.
+
+**client identity**
+: The six-byte station address of this laptop. `mac_init` copies it from the card's efuse when that read returns an address. Otherwise it stays `CLIENT_MAC`, `02:14:c3:79:21:01`. Station registration sends those bytes in `write_dev_info`.
+
+**station**
+: The laptop's Wi-Fi client identity. The driver registers one station at `bss_idx` 0 before the survey, using the address from the card. The firmware uses that identity for the scan and for a later association. Linux v6.8 sends the same pair from `mt7921_add_interface`: `DEV_INFO_UPDATE`, then `BSS_INFO_UPDATE`.
+
+**channel**
+: One frequency in the survey list. The list is 13 channels on 2.4 GHz and 8 on 5 GHz, 21 in all. The channel domain is that list, sent to the firmware before the scan. `ch` is `complete_channel_num` from the scan-done event: how many of those channels the firmware finished.
+
+**access point**
+: The radio that transmits a network name. In a beacon its address is the BSSID, bytes 16 through 21. `match_beacon` stores that address with the channel from the DS parameter set when the name matches.
+
+**announcement**
+: A beacon. An access point transmits it so a station can learn the network name. The name is the SSID element, tag 0, after the 36-byte header. An empty name is a hidden network.
+
+**beacon**
+: An 802.11 announcement an access point transmits, carrying its name. `bcn` is `beacon_scan_num` from the same scan-done event: how many beacons the firmware counted. The count includes beacons the host never received.
+
+**frame control**
+: The first field of an 802.11 frame, two bytes. The driver classifies the frame from the first byte with the protocol-version bits cleared (`byte & 0xfc`). `0x80` is a beacon. `0x50` is a probe response.
+
+**scan frame**
+: A beacon (frame control `0x80`) or a probe response (frame control `0x50`) from the survey. `beacon_ssid` reads the network name from either. The host learns a name from a scan frame only after the card has copied that frame onto a receive ring. On this survey most scan frames arrive on an MCU ring.
+
+**data ring**
+: The receive DMA ring whose registers are `RX_DATA_BASE` (`WFDMA0 + 0x520`). `poll_data` reads it, and `rx` counts its completions. It is not the only ring that carries frames. The MCU rings are `WFDMA0 + 0x500` before N9 is ready and `WFDMA0 + 0x540` once it is. Linux reads every receive ring by packet type: type 2, or type 7 with flag 1, is a frame, and any other packet is an MCU event. `ev` counts frames that arrive on an MCU ring. Scan-done, including `ch` and `bcn`, is an MCU event. The boot that printed `rx 1 ev 16 ok 12 done 1 ch 21 bcn 15` listed the networks. Earlier images read only scan-done from the MCU rings and printed `rx 0`. See [swift-wifi-survey-retrospective.md](swift-wifi-survey-retrospective.md).
 
 ## Boundaries
 

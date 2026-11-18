@@ -13,8 +13,10 @@
 //! The shell notifies channel 3 for that survey and for a passphrase.
 //! Channel 1 is the receive virtualiser and runs the same handler.
 //! Channel 0 stays the MSI. Channel 2 is the transmit virtualiser.
-//! Association paints `scan`, `auth`, `assoc`, and `eapol`, then returns to
-//! `wait`. The shell owns the address and the ping. Received Ethernet frames
+//! Association paints `scan`, `auth tx`, `auth rx`, `assoc`, and `eapol`, then returns to
+//! `wait`. A failed `auth rx` or `eapol` also paints four detail rows under that
+//! line, then `END OF OUTPUT`, and blanks the device lines under that marker.
+//! The shell owns the address and the ping. Received Ethernet frames
 //! are enqueued on the standard receive queue, and transmit frames are
 //! dequeued from the standard transmit queue.
 //! The register dump that used to occupy rows 51 to 65 is not painted.
@@ -45,7 +47,11 @@ use lerux_sddf::{net_driver_config_t, net_image::net_config_from_bytes, SDDF_NET
 #[cfg(not(test))]
 use lerux_swift::{
     bar_line, class_code, format_report, load_header, memory_bar,
-    mt7921::{read_survey_mark, survey_requested, write_slot_line, Sem, Stage},
+    mt7921::{
+        join_device_rows_to_clear, read_survey_mark, survey_requested, write_auth_miss,
+        write_eapol_miss, write_join, write_join_detail, write_slot_line, AuthMiss, Sem, Stage,
+        JOIN_DETAIL_LINES, JOIN_DETAIL_ROW, JOIN_END, JOIN_END_ROW,
+    },
     paint_row, read_key, vendor_device, working_line, WaitMark, WifiReport, MT7921_BAR, MT7921_BDF,
     MT7921_IDS,
 };
@@ -256,8 +262,21 @@ fn paint_stage(stage: Stage) {
     }
 }
 
-/// Row 22 keeps the survey counts after `wait`. A menu scroll erases that row,
-/// so the shell prints the same bytes.
+#[cfg(not(test))]
+fn paint_detail(miss: &AuthMiss, sta: [u8; 6]) {
+    let mut line = [0u8; 48];
+    for row in 0..JOIN_DETAIL_LINES {
+        let n = write_join_detail(&mut line, row, miss, &sta);
+        paint_at(JOIN_DETAIL_ROW + row, &line[..n]);
+    }
+    paint_at(JOIN_END_ROW, JOIN_END);
+    for row in join_device_rows_to_clear() {
+        paint_at(row, b"");
+    }
+}
+
+/// The stage row keeps the survey counts after `wait`. The shell prints the
+/// same bytes.
 #[cfg(not(test))]
 fn paint_survey_mark() {
     let Some(mark) = read_survey_mark(key_page()) else {
@@ -278,11 +297,12 @@ fn paint(text: &[u8]) {
 
 #[cfg(not(test))]
 fn paint_at(row: usize, text: &[u8]) {
+    // The survey mark fills this row. A later status, including `eapol fc`,
+    // has to replace every cell or the old tail stays beside the new words.
     let mut line = [b' '; 48];
     let n = text.len().min(line.len());
     line[..n].copy_from_slice(&text[..n]);
-    let width = n.max(24);
-    paint_line(row, &line[..width]);
+    paint_line(row, &line);
 }
 
 #[cfg(not(test))]
@@ -343,7 +363,23 @@ impl HandlerImpl {
             paint_survey_mark();
         } else if let Some((name, name_len, pass, pass_len)) = posted_key() {
             let stage = mac.associate(&name[..name_len], &pass[..pass_len], paint_stage);
-            paint_stage(stage);
+            let up = stage == Stage::Wait;
+            if stage == Stage::AuthRx {
+                let mut line = [0u8; 64];
+                let miss = mac.auth_miss();
+                let n = write_auth_miss(&mut line, &miss);
+                paint(&line[..n]);
+                paint_detail(&miss, mac.sta());
+            } else if stage == Stage::Eapol {
+                let mut line = [0u8; 64];
+                let miss = mac.eapol_miss();
+                let n = write_eapol_miss(&mut line, &miss);
+                paint(&line[..n]);
+                paint_detail(&miss, mac.sta());
+            } else {
+                paint_stage(stage);
+            }
+            let _ = write_join(key_page(), up);
         }
     }
 

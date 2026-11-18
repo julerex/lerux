@@ -52,7 +52,7 @@ lerux runs several small programs at once. Each one has its own memory. They sha
 
 The Wi-Fi program starts before the disk program and the Bluetooth program. Its startup includes a long wait for the card. Until that wait ends, the disk line and the Bluetooth line do not exist yet. The blank minute is that wait. The moving dots, and the lines under them, are there so the wait is visible.
 
-A later scroll redraws the shell band from the console's own record of the screen. That record is the top 40 rows. The device rows start at row 40, so a full redraw leaves them. The status word on row 47 is painted again by the Wi-Fi program.
+A later scroll redraws the shell band from the console's own record of the screen. That record is the top 40 rows. The device rows start at row 40, so a full redraw leaves them, including a failed join's detail. The status word on row 47 is painted again by the Wi-Fi program. The disk and Bluetooth programs do not paint rows 48 and 49 again after a failed join has used them.
 
 ## How to read the numbers
 
@@ -312,7 +312,7 @@ These are the other status words the Wi-Fi program can paint. Each one names a s
 | `mac` | The radio setup after firmware, including the reset of the Wi-Fi block |
 | `wait` | Firmware and radio setup finished. `setup-wifi` lists the names the radio can hear |
 
-`nvme` on row 48 and `bt` on row 49 are the disk and Bluetooth programs. They start only after the Wi-Fi startup returns, including when it returns by giving up.
+`nvme` on row 48 and `bt` on row 49 are the disk and Bluetooth programs. They start only after the Wi-Fi startup returns, including when it returns by giving up. A failed `auth rx` or `eapol` replaces rows 48–51 with the rejected frame. The two letters after `eapol` on row 47 name the return. `w1` and `w3` are waits that ended with no message. `m1` and `m3` are a copied frame the handshake refused. `t2` and `t4` are a reply that did not leave the transmit ring. `b2` and `b4` are a reply that did not fit. The rows under that are the sequence and status, the addresses, this station, and 16 bytes of the body (`m24`, `m26`, or `m0`). Row 52 is `END OF OUTPUT`. The device lines under that, the ones that end in `irq`, are blank. That covers the disk line, the Bluetooth line, and the device names until the next boot.
 
 ## Where this lives in the tree
 

@@ -15,6 +15,8 @@ use sel4_microkit::{Channel, ChannelSet};
 
 #[cfg(feature = "browser-net")]
 use smoltcp::socket::dns::{self, GetQueryResultError};
+#[cfg(feature = "board-swift_sfx14_41g")]
+use smoltcp::socket::icmp;
 #[cfg(feature = "browser-net")]
 use smoltcp::wire::DnsQueryType;
 use smoltcp::{
@@ -28,6 +30,11 @@ use smoltcp::{
         EthernetAddress, HardwareAddress, IpAddress, IpCidr, IpEndpoint, IpListenEndpoint,
         Ipv4Address,
     },
+};
+#[cfg(feature = "board-swift_sfx14_41g")]
+use smoltcp::{
+    phy::ChecksumCapabilities,
+    wire::{Icmpv4Packet, Icmpv4Repr},
 };
 
 use lerux_cothread::microkit_cothread_recv_ntfn;
@@ -51,6 +58,12 @@ use crate::net_device::NetDevice;
 
 const SPINS_PER_VIRTUAL_MS: u32 = 30_000;
 const LIMIT_MS: u64 = 30_000;
+#[cfg(feature = "board-swift_sfx14_41g")]
+const PING_INTERVAL_MS: u64 = 2_000;
+#[cfg(feature = "board-swift_sfx14_41g")]
+const ECHO_IDENT: u16 = 0x4c58;
+#[cfg(feature = "board-swift_sfx14_41g")]
+const ECHO_DATA: [u8; 2] = [0x4c, 0x58];
 const LOCAL_PORT: u16 = 49152;
 const GATEWAY: Ipv4Address = Ipv4Address::new(10, 0, 2, 2);
 #[cfg(any(
@@ -263,12 +276,16 @@ struct Stack {
     sockets: SocketSet<'static>,
     dhcp: SocketHandle,
     tcp: SocketHandle,
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    icmp: SocketHandle,
     #[cfg(feature = "browser-net")]
     dns: SocketHandle,
     ms: u64,
     op_start: u64,
     local_port: u16,
     local_ip: Ipv4Address,
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    gateway: Ipv4Address,
     connecting: bool,
     listening: bool,
 }
@@ -292,6 +309,8 @@ impl Stack {
         let mut sockets = empty_sockets();
         let dhcp = add_dhcp(&mut sockets);
         let tcp = add_tcp(&mut sockets);
+        #[cfg(feature = "board-swift_sfx14_41g")]
+        let icmp = add_icmp(&mut sockets);
         #[cfg(feature = "browser-net")]
         let dns = add_dns(&mut sockets);
         Self {
@@ -300,12 +319,16 @@ impl Stack {
             sockets,
             dhcp,
             tcp,
+            #[cfg(feature = "board-swift_sfx14_41g")]
+            icmp,
             #[cfg(feature = "browser-net")]
             dns,
             ms: 0,
             op_start: 0,
             local_port: LOCAL_PORT,
             local_ip: Ipv4Address::UNSPECIFIED,
+            #[cfg(feature = "board-swift_sfx14_41g")]
+            gateway: Ipv4Address::UNSPECIFIED,
             connecting: false,
             listening: false,
         }
@@ -376,7 +399,46 @@ impl Stack {
             return Err(());
         }
         self.local_ip = address;
+        #[cfg(feature = "board-swift_sfx14_41g")]
+        {
+            self.gateway = router;
+        }
         Ok(true)
+    }
+
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    fn echo_gateway(&mut self) -> bool {
+        let start = self.ms;
+        let gateway = self.gateway;
+        let mut last_send = None;
+        let mut seq_no = 0u16;
+        loop {
+            self.poll_iface();
+            let now = self.ms;
+            let replied = {
+                let socket = self.sockets.get_mut::<icmp::Socket>(self.icmp);
+                if socket.can_recv() {
+                    let _ = socket.recv();
+                    true
+                } else {
+                    let due = last_send
+                        .is_none_or(|sent: u64| now.saturating_sub(sent) >= PING_INTERVAL_MS);
+                    if due && socket.can_send() {
+                        send_echo(socket, gateway, seq_no);
+                        last_send = Some(now);
+                        seq_no = seq_no.wrapping_add(1);
+                    }
+                    false
+                }
+            };
+            if replied {
+                return true;
+            }
+            if now.saturating_sub(start) >= LIMIT_MS {
+                return false;
+            }
+            self.advance();
+        }
     }
 
     fn within_budget(&self) -> bool {
@@ -444,6 +506,73 @@ fn add_dhcp(sockets: &mut SocketSet<'static>) -> SocketHandle {
     let mut dhcp = dhcpv4::Socket::new();
     dhcp.set_retry_config(dhcp_retry());
     sockets.add(dhcp)
+}
+
+#[cfg(feature = "board-swift_sfx14_41g")]
+fn add_icmp(sockets: &mut SocketSet<'static>) -> SocketHandle {
+    let mut socket = icmp::Socket::new(packet_buffer(), packet_buffer());
+    socket
+        .bind(icmp::Endpoint::Ident(ECHO_IDENT))
+        .expect("echo ident binds");
+    sockets.add(socket)
+}
+
+#[cfg(feature = "board-swift_sfx14_41g")]
+fn packet_buffer() -> icmp::PacketBuffer<'static> {
+    let meta: &'static mut [icmp::PacketMetadata] =
+        Box::leak(Box::new([icmp::PacketMetadata::EMPTY; 4]));
+    let payload: &'static mut [u8] = Box::leak(Box::new([0u8; 512]));
+    icmp::PacketBuffer::new(meta, payload)
+}
+
+/// One ICMP echo to the DHCP router after the lease.
+#[cfg(feature = "board-swift_sfx14_41g")]
+#[derive(Clone, Copy)]
+pub enum PingResult {
+    /// The router answered. The octets are the leased address.
+    Up([u8; 4]),
+    /// The lease did not arrive.
+    NoAddress,
+    /// The lease arrived and the router did not answer.
+    NoReply([u8; 4]),
+}
+
+/// Bring the interface up, then ping the router from that lease.
+#[cfg(feature = "board-swift_sfx14_41g")]
+pub fn ping_gateway() -> PingResult {
+    let Ok(sockets) = sockets() else {
+        return PingResult::NoAddress;
+    };
+    sockets.with_pipe(|stack| {
+        if stack.local_ip == Ipv4Address::UNSPECIFIED {
+            return PingResult::NoAddress;
+        }
+        let addr = stack.local_ip.octets();
+        if stack.echo_gateway() {
+            PingResult::Up(addr)
+        } else {
+            PingResult::NoReply(addr)
+        }
+    })
+}
+
+#[cfg(feature = "board-swift_sfx14_41g")]
+fn send_echo(socket: &mut icmp::Socket<'_>, gateway: Ipv4Address, seq_no: u16) {
+    let repr = Icmpv4Repr::EchoRequest {
+        ident: ECHO_IDENT,
+        seq_no,
+        data: &ECHO_DATA,
+    };
+    let mut bytes = [0u8; 16];
+    let len = repr.buffer_len();
+    assert!(len <= bytes.len(), "echo queued");
+    {
+        let mut packet = Icmpv4Packet::new_unchecked(&mut bytes[..len]);
+        repr.emit(&mut packet, &ChecksumCapabilities::default());
+    }
+    socket
+        .send_slice(&bytes[..len], IpAddress::Ipv4(gateway))
+        .expect("echo queued");
 }
 
 fn add_tcp(sockets: &mut SocketSet<'static>) -> SocketHandle {

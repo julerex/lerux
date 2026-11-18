@@ -283,7 +283,10 @@ use lerux_sddf::{
 #[cfg(feature = "board-swift_sfx14_41g")]
 use lerux_signon::for_each_preamble;
 #[cfg(feature = "board-swift_sfx14_41g")]
-use lerux_swift::{format_survey_report, is_setup_wifi, write_survey, SURVEY_REPORT_MAX};
+use lerux_swift::{
+    format_survey_report, is_setup_wifi, join_up, read_survey_count, survey_choice, write_key,
+    write_survey, SURVEY_REPORT_MAX,
+};
 
 const CONFIG: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/config.bin"));
 #[cfg(not(feature = "console-out"))]
@@ -934,31 +937,141 @@ fn dispatch_swift(cmd: &[u8], rest: &[u8]) -> bool {
     true
 }
 
-/// Ask the radio which names it can hear.
+/// Ask the radio which names it can hear, then join the chosen row and ping.
 ///
-/// The radio is priority 4 and this shell is priority 1, so the survey
-/// finishes before `notify` returns. A stored name is `N name`. Zero names
-/// are the survey mark. A survey the radio did not answer is `wifi err`.
-/// Extra words and a page the shell cannot mark are `setup-wifi err` plus
-/// the reason.
+/// The radio is priority 4 and this shell is priority 1, so the survey and
+/// the association each finish before `notify` returns. A stored name is
+/// `N name`, then `ssid>`. The row number selects that name. `psk>` takes
+/// the passphrase. `psk ok` is a finished handshake. The address line and
+/// `ping ok` follow. Zero names are the survey mark, with no prompt. A survey
+/// the radio did not answer, a rejected row or passphrase, or a handshake
+/// that did not finish is `wifi err`. Extra words and a page the shell cannot
+/// mark are `setup-wifi err` plus the reason.
 #[cfg(feature = "board-swift_sfx14_41g")]
 fn cmd_setup_wifi(rest: &[u8]) {
     if !rest.is_empty() {
         say(b"setup-wifi err args\n");
         return;
     }
+    if !posted_survey() {
+        return;
+    }
+    if read_survey_count(key_page()).unwrap_or(0) == 0 {
+        return;
+    }
+    join_chosen();
+}
+
+/// The survey replaces the key page. `false` means the shell already printed the error.
+#[cfg(feature = "board-swift_sfx14_41g")]
+fn posted_survey() -> bool {
     if !write_survey(key_page()) {
         say(b"setup-wifi err page\n");
-        return;
+        return false;
     }
     SWIFT_MT7921.notify();
     discard_pending();
     let mut out = [0u8; SURVEY_REPORT_MAX];
-    if let Some(n) = format_survey_report(key_page(), &mut out) {
-        say(&out[..n]);
-    } else {
+    let Some(n) = format_survey_report(key_page(), &mut out) else {
         say(b"wifi err\n");
+        return false;
+    };
+    say(&out[..n]);
+    true
+}
+
+#[cfg(feature = "board-swift_sfx14_41g")]
+fn join_chosen() {
+    say(b"ssid> ");
+    let mut line = [0u8; LINE_MAX];
+    let len = read_line(&mut line);
+    if trim(&line[..len]) == b"quit" {
+        return;
     }
+    let Some((name, name_len)) = chosen_ssid(trim(&line[..len])) else {
+        say(b"wifi err\n");
+        return;
+    };
+    say(b"psk> ");
+    let len = read_line(&mut line);
+    let psk = trim(&line[..len]);
+    if psk == b"quit" {
+        return;
+    }
+    if !write_key(key_page(), &name[..name_len], psk) {
+        say(b"wifi err\n");
+        return;
+    }
+    SWIFT_MT7921.notify();
+    if !join_up(key_page()) {
+        say(b"wifi err\n");
+        return;
+    }
+    say(b"psk ok\n");
+    say_ping(net::ping_gateway());
+}
+
+/// Copy the chosen name out of the survey page before the key write clears it.
+#[cfg(feature = "board-swift_sfx14_41g")]
+fn chosen_ssid(line: &[u8]) -> Option<([u8; 32], usize)> {
+    let name = survey_choice(key_page(), line)?;
+    let mut owned = [0u8; 32];
+    owned[..name.len()].copy_from_slice(name);
+    Some((owned, name.len()))
+}
+
+#[cfg(feature = "board-swift_sfx14_41g")]
+fn say_ping(result: net::PingResult) {
+    match result {
+        net::PingResult::NoAddress => say(b"ip err\n"),
+        net::PingResult::Up(addr) => {
+            say_ip(addr);
+            say(b"ping ok\n");
+        }
+        net::PingResult::NoReply(addr) => {
+            say_ip(addr);
+            say(b"ping err\n");
+        }
+    }
+}
+
+#[cfg(feature = "board-swift_sfx14_41g")]
+fn say_ip(octets: [u8; 4]) {
+    let mut out = [0u8; 20];
+    let mut n = 0;
+    for &byte in b"ip " {
+        out[n] = byte;
+        n += 1;
+    }
+    for (index, octet) in octets.into_iter().enumerate() {
+        if index > 0 {
+            out[n] = b'.';
+            n += 1;
+        }
+        n = write_octet(&mut out, n, octet);
+    }
+    out[n] = b'\n';
+    say(&out[..=n]);
+}
+
+#[cfg(feature = "board-swift_sfx14_41g")]
+fn write_octet(buf: &mut [u8], mut at: usize, mut value: u8) -> usize {
+    let mut tmp = [0u8; 3];
+    let mut digits = 0usize;
+    loop {
+        tmp[digits] = b'0' + (value % 10);
+        digits += 1;
+        value /= 10;
+        if value == 0 {
+            break;
+        }
+    }
+    while digits > 0 {
+        digits -= 1;
+        buf[at] = tmp[digits];
+        at += 1;
+    }
+    at
 }
 
 /// Drop keys queued while the radio ran the survey.

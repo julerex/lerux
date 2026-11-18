@@ -398,7 +398,7 @@ The number of bytes from one row of the [GOP](#gop) buffer to the next. The [Swi
 
 ### cell buffer
 
-The character grid the console [driver](#driver) paints from. On the [Swift X](#swift-x) the grid is 25 rows, and the pixels land in the [GOP](#gop) buffer. `swift_mt7921` writes row 22, `swift_nvme` writes row 23, and `swift_bt` writes row 24. A scroll or a full clear is `Damage::All`, so `present_all` copies this grid back over those rows. Read the [firmware stage](#firmware-stage) before that happens.
+The character grid the console [driver](#driver) paints from. On the [Swift X](#swift-x) the grid is the 240 by 40 shell band, and the pixels land in the [GOP](#gop) buffer. Device text starts at row 40. `swift_mt7921` writes rows 42–47, `swift_nvme` writes row 48, and `swift_bt` writes row 49. A scroll or a full clear is `Damage::All`, so `present_all` redraws that band and leaves the rows at and below 40.
 
 _Avoid_: the [GOP](#gop) mode line the [mb2-stub](#mb2-stub) paints. That line is the framebuffer record. This grid is the console.
 
@@ -550,11 +550,11 @@ _Avoid_: the 6-byte station address. The [driver](#driver) uses `02:14:c3:79:21:
 
 ### firmware stage
 
-The word `swift_mt7921` paints on row 22 of the [cell buffer](#cell-buffer). The line starts with `mt7921:`.
+The word `swift_mt7921` paints on row 47, under the shell band. The line starts with `mt7921:`.
 
 `own` is [driver own](#driver-own). `fw sem` is the [patch semaphore](#patch-semaphore). `fw patch` is the [patch image](#patch-image). `fw scatter` is one [scatter](#scatter). `fw ram` and `fw start` are the [RAM image](#ram-image). `fw chip` is the [chip id](#chip-id). `mac` is [MAC setup](#mac). `wait` is the normal state after [N9](#n9) and that setup. `scan` is a [Wi-Fi scan](#wi-fi-scan). `auth` is [authentication](#authentication). `assoc` is [association](#association). `eapol` is [EAPOL](#eapol). `dhcp` is [DHCP](#dhcp). `ping` is [ping](#ping). `bar` is a [BAR](#base-address-register) that is not the address the [driver](#driver) maps. `firmware err` means the [patch image](#patch-image) or the [RAM image](#ram-image) was empty.
 
-A line that says `mac` or `own` still includes the earlier returns. Type `3` only when the line says `wait`. The shell then stores the [SSID](#ssid) and the [PSK](#psk) and notifies the radio on [channel](#channel) 1. A notify while the line is still one of these words repaints that word and does not keep the key. The `bt:` line on row 24 is the [HCI](#hci) behind an [AMD xHCI](#amd-xhci). It does not join the [access point](#access-point).
+A line that says `mac` or `own` still includes the earlier returns. Type `3` only when the line says `wait`. The shell then stores the [SSID](#ssid) and the [PSK](#psk) and notifies the radio on [channel](#channel) 1. A notify while the line is still one of these words repaints that word and does not keep the key. The `bt:` line on row 49 is the [HCI](#hci) behind an [AMD xHCI](#amd-xhci). It does not join the [access point](#access-point).
 
 ### Wi-Fi scan
 

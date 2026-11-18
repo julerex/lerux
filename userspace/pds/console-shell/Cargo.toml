@@ -3,7 +3,7 @@ name = "console-shell"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-description = "VGA start menu: browser is unavailable, maths is an integer session"
+description = "Arch sign-on and the console commands on the VGA page"
 
 [lints]
 workspace = true
@@ -17,6 +17,7 @@ board-swift_sfx14_41g = ["dep:lerux-swift", "dep:lerux-desk", "dep:lerux-ladybir
 [dependencies]
 embedded-hal-nb = { workspace = true }
 lerux-calc = { path = "../../crates/lerux-calc" }
+lerux-signon = { path = "../../crates/lerux-signon" }
 lerux-desk = { path = "../../crates/lerux-desk", optional = true }
 lerux-ladybird-image = { path = "../../../lerux-ladybird/crates/lerux-ladybird-image", optional = true }
 lerux-logging = { path = "../../crates/lerux-logging", optional = true }

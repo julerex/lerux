@@ -281,6 +281,8 @@ use lerux_sddf::{
 };
 
 #[cfg(feature = "board-swift_sfx14_41g")]
+use lerux_signon::for_each_preamble;
+#[cfg(feature = "board-swift_sfx14_41g")]
 use lerux_swift::{
     format_survey_report, is_setup_wifi, join_up, read_survey_count, survey_choice, write_key,
     write_survey, SURVEY_REPORT_MAX,
@@ -467,13 +469,23 @@ extern "C" fn worker() {
         feature = "board-qemu_virt_riscv64_browser_sddf"
     )))]
     {
+        #[cfg(feature = "board-swift_sfx14_41g")]
+        say_preamble();
+        #[cfg(not(feature = "board-swift_sfx14_41g"))]
         say(b"lerux shell ready\n");
         let mut line = [0u8; LINE_MAX];
         loop {
             let len = read_line(&mut line);
             dispatch(&line[..len]);
+            #[cfg(feature = "board-swift_sfx14_41g")]
+            say(lerux_signon::PROMPT);
         }
     }
+}
+
+#[cfg(feature = "board-swift_sfx14_41g")]
+fn say_preamble() {
+    for_each_preamble(env!("LERUX_GIT_DESCRIBE").as_bytes(), say);
 }
 
 fn bind_files() -> bool {

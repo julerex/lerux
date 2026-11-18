@@ -23,14 +23,14 @@ expects = ["lerux: Hello from Rust on seL4 Microkit!"]
 expects = ["lerux: Hello from Rust on seL4 Microkit!"]
 
 [boards.x86_64_generic_console]
-expects = ["1 browser"]
+expects = ["lerux login: root (automatic login)"]
 timeout_secs = 120
 qmp_keys = ["2", "ret", "6", "slash", "2", "ret"]
 qmp_expect = "maths 3"
 
 # Same console image as x86_64_generic_console; ISO smoke under OVMF (no QMP).
 [boards.pc_z97_d3h]
-expects = ["1 browser"]
+expects = ["lerux login: root (automatic login)"]
 timeout_secs = 180
 
 [boards.rpi4b_4gb]

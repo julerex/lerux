@@ -1,33 +1,31 @@
-//! 80×25 VGA text cells. Hardware stores stay outside this module.
+//! Text cells for the console.
+//!
+//! The VGA boards are the 80×25 hardware page. The Swift panel is a 240×40 band
+//! of 8×16 cells. Both store one Linux attribute byte in the high half of the cell.
 
-/// Columns in the VGA text page Limine leaves behind.
-pub const COLS: usize = 80;
-/// Rows in that page.
-pub const ROWS: usize = 25;
-/// Cells in the page. 80×25 occupies 4000 bytes of the 4 KiB map.
+use lerux_desk::{CellAttr, DEFAULT_ATTR};
+
+/// Columns. The Swift band is 240; a VGA page is 80.
+#[cfg(feature = "board-swift_sfx14_41g")]
+pub(crate) const COLS: usize = lerux_desk::CONSOLE_COLS;
+#[cfg(not(feature = "board-swift_sfx14_41g"))]
+pub(crate) const COLS: usize = 80;
+/// Rows. The Swift band matches [`lerux_desk::CONSOLE_ROWS`]. A VGA page is 25.
+#[cfg(feature = "board-swift_sfx14_41g")]
+pub(crate) const ROWS: usize = lerux_desk::CONSOLE_ROWS;
+#[cfg(not(feature = "board-swift_sfx14_41g"))]
+pub(crate) const ROWS: usize = 25;
+/// Cells in the page.
 pub const CELLS: usize = COLS * ROWS;
 
-/// Bright white on blue, in the high byte of a VGA text cell.
-pub const ATTR: u16 = 0x1f00;
-
-/// Painted on row 0 before the shell prompt.
-///
-/// The Swift panel carries `LERUX_GIT_DESCRIBE` from `just make-lerux-iso`
-/// (`git describe --always --dirty`, one leading `v` removed). Z97 and
-/// Inspiron stay `hello lerux`.
-#[cfg(feature = "board-swift_sfx14_41g")]
-pub const BANNER: &[u8] = concat!("hello lerux v", env!("LERUX_GIT_DESCRIBE")).as_bytes();
-#[cfg(not(feature = "board-swift_sfx14_41g"))]
-pub const BANNER: &[u8] = b"hello lerux";
-
-const _: () = assert!(BANNER.len() < COLS);
+/// Light gray on black, in the high byte of a VGA text cell.
+pub const ATTR: u16 = (DEFAULT_ATTR as u16) << 8;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Ansi {
     Ground,
     Esc,
-    Bracket,
-    Param(u8),
+    Csi,
 }
 
 /// What [`Screen::apply_byte`] changed in the cell buffer.
@@ -48,25 +46,26 @@ pub struct Screen {
     row: usize,
     col: usize,
     ansi: Ansi,
+    attr: CellAttr,
+    params: [u16; 8],
+    nparams: u8,
+    acc: u16,
+    have_digits: bool,
 }
 
 impl Screen {
-    /// Blue field, the banner on the first line, cursor on the next line.
-    pub fn with_banner() -> Self {
-        let mut screen = Self::blank();
-        for (index, &byte) in BANNER.iter().enumerate() {
-            screen.cells[index] = cell(byte);
-        }
-        screen.row = 1;
-        screen
-    }
-
-    fn blank() -> Self {
+    /// Blank gray-on-black page, cursor at the origin.
+    pub fn blank() -> Self {
         Self {
-            cells: [blank(); CELLS],
+            cells: blank_cells(),
             row: 0,
             col: 0,
             ansi: Ansi::Ground,
+            attr: CellAttr::DEFAULT,
+            params: [0; 8],
+            nparams: 0,
+            acc: 0,
+            have_digits: false,
         }
     }
 
@@ -80,7 +79,6 @@ impl Screen {
     }
 
     /// Hardware cursor index, clamped to the last cell.
-    #[cfg(not(feature = "board-swift_sfx14_41g"))]
     pub fn cursor_index(&self) -> usize {
         (self.row * COLS + self.col).min(CELLS - 1)
     }
@@ -89,15 +87,14 @@ impl Screen {
         match self.ansi {
             Ansi::Ground => self.ground(byte),
             Ansi::Esc => {
-                self.ansi = if byte == b'[' {
-                    Ansi::Bracket
+                if byte == b'[' {
+                    self.begin_csi();
                 } else {
-                    Ansi::Ground
-                };
+                    self.ansi = Ansi::Ground;
+                }
                 Damage::None
             }
-            Ansi::Bracket => self.bracket(byte),
-            Ansi::Param(n) => self.param(n, byte),
+            Ansi::Csi => self.csi(byte),
         }
     }
 
@@ -129,33 +126,61 @@ impl Screen {
         }
     }
 
-    fn bracket(&mut self, byte: u8) -> Damage {
-        if byte.is_ascii_digit() {
-            self.ansi = Ansi::Param(byte - b'0');
-            return Damage::None;
-        }
-        self.ansi = Ansi::Ground;
-        if byte == b'H' {
-            self.home();
-        }
-        Damage::None
+    fn begin_csi(&mut self) {
+        self.ansi = Ansi::Csi;
+        self.params = [0; 8];
+        self.nparams = 0;
+        self.acc = 0;
+        self.have_digits = false;
     }
 
-    fn param(&mut self, n: u8, byte: u8) -> Damage {
+    fn push_param(&mut self) {
+        if self.nparams < 8 {
+            self.params[usize::from(self.nparams)] = self.acc;
+            self.nparams += 1;
+        }
+        self.acc = 0;
+        self.have_digits = false;
+    }
+
+    fn csi(&mut self, byte: u8) -> Damage {
         if byte.is_ascii_digit() {
-            self.ansi = Ansi::Param(byte - b'0');
+            self.have_digits = true;
+            self.acc = self
+                .acc
+                .saturating_mul(10)
+                .saturating_add(u16::from(byte - b'0'));
             return Damage::None;
         }
+        if byte == b';' {
+            self.push_param();
+            return Damage::None;
+        }
+        if self.have_digits {
+            self.push_param();
+        }
+        let n = usize::from(self.nparams);
+        let params = self.params;
         self.ansi = Ansi::Ground;
-        if byte == b'H' {
-            self.home();
-            return Damage::None;
+        match byte {
+            b'H' => {
+                self.home();
+                Damage::None
+            }
+            b'J' if n == 1 && params[0] == 2 => {
+                self.clear();
+                Damage::All
+            }
+            b'm' => {
+                if n == 0 {
+                    self.attr.apply_sgr(&[]);
+                } else {
+                    self.attr.apply_sgr(&params[..n]);
+                }
+                Damage::None
+            }
+            _ => Damage::None,
         }
-        if byte == b'J' && n == 2 {
-            self.clear();
-            return Damage::All;
-        }
-        Damage::None
     }
 
     fn put(&mut self, byte: u8) -> Damage {
@@ -165,7 +190,7 @@ impl Screen {
             false
         };
         let index = self.row * COLS + self.col;
-        self.cells[index] = cell(byte);
+        self.cells[index] = cell(self.attr, byte);
         self.col += 1;
         if scrolled {
             Damage::All
@@ -191,15 +216,16 @@ impl Screen {
 
     fn scroll(&mut self) {
         self.cells.copy_within(COLS.., 0);
+        let fill = cell(self.attr, b' ');
         for slot in &mut self.cells[CELLS - COLS..] {
-            *slot = blank();
+            *slot = fill;
         }
         self.row = ROWS - 1;
         self.col = 0;
     }
 
     fn clear(&mut self) {
-        self.cells = [blank(); CELLS];
+        self.cells.fill(cell(self.attr, b' '));
         self.home();
     }
 
@@ -209,12 +235,19 @@ impl Screen {
     }
 }
 
-fn cell(byte: u8) -> u16 {
-    ATTR | u16::from(byte)
+fn cell(attr: CellAttr, byte: u8) -> u16 {
+    (u16::from(attr.bits()) << 8) | u16::from(byte)
 }
 
 fn blank() -> u16 {
-    cell(b' ')
+    ATTR | u16::from(b' ')
+}
+
+fn blank_cells() -> [u16; CELLS] {
+    let fill = blank();
+    // `from_fn` rather than `[fill; CELLS]`: the Swift band is 19 KiB, and a
+    // repeat expression of that size is a stack temporary clippy rejects.
+    core::array::from_fn(|_| fill)
 }
 
 #[cfg(test)]
@@ -222,44 +255,32 @@ mod tests {
     use super::*;
 
     #[test]
-    fn banner_sits_above_the_prompt_line() {
-        let screen = Screen::with_banner();
-        for (index, &byte) in BANNER.iter().enumerate() {
-            assert_eq!(screen.cells()[index], cell(byte));
-        }
-        assert_eq!(screen.cells()[BANNER.len()], blank());
-        assert_eq!(screen.cursor(), (1, 0));
-        assert_eq!(screen.cursor_index(), COLS);
-    }
-
-    #[test]
-    fn bytes_land_on_the_second_line() {
-        let mut screen = Screen::with_banner();
+    fn bytes_land_on_the_first_line() {
+        let mut screen = Screen::blank();
         for &byte in b"lerux> " {
             screen.apply_byte(byte);
         }
-        let start = COLS;
         for (offset, &byte) in b"lerux> ".iter().enumerate() {
-            assert_eq!(screen.cells()[start + offset], cell(byte));
+            assert_eq!(screen.cells()[offset], blank_with(byte));
         }
-        assert_eq!(screen.cursor(), (1, 7));
+        assert_eq!(screen.cursor(), (0, 7));
     }
 
     #[test]
     fn backspace_sequence_erases_a_character() {
-        let mut screen = Screen::with_banner();
+        let mut screen = Screen::blank();
         screen.apply_byte(b'e');
-        // The shell sends backspace, space, backspace.
         screen.apply_byte(0x08);
         screen.apply_byte(b' ');
         screen.apply_byte(0x08);
-        assert_eq!(screen.cells()[COLS], blank());
-        assert_eq!(screen.cursor(), (1, 0));
+        assert_eq!(screen.cells()[0], blank());
+        assert_eq!(screen.cursor(), (0, 0));
     }
 
     #[test]
-    fn clear_sequence_homes_and_wipes_the_banner() {
-        let mut screen = Screen::with_banner();
+    fn clear_sequence_homes_and_wipes() {
+        let mut screen = Screen::blank();
+        screen.apply_byte(b'e');
         for &byte in b"\x1b[2J\x1b[H" {
             screen.apply_byte(byte);
         }
@@ -268,14 +289,76 @@ mod tests {
     }
 
     #[test]
-    fn newline_off_the_last_row_scrolls_the_banner_away() {
-        let mut screen = Screen::with_banner();
-        // Cursor starts on row 1. Twenty-four newlines reach row 24 and scroll.
-        for _ in 0..24 {
+    fn newline_off_the_last_row_scrolls() {
+        let mut screen = Screen::blank();
+        screen.apply_byte(b'X');
+        for _ in 0..ROWS {
             screen.apply_byte(b'\n');
         }
         assert_eq!(screen.cursor(), (ROWS - 1, 0));
         assert_eq!(screen.cells()[0], blank());
         assert_eq!(screen.cells()[CELLS - 1], blank());
+    }
+
+    #[test]
+    fn truecolor_title_is_nibble_11() {
+        let mut screen = Screen::blank();
+        for &byte in b"\x1b[38;2;23;147;209mA" {
+            screen.apply_byte(byte);
+        }
+        assert_eq!(screen.cells()[0] >> 8, 0x0b);
+        assert_eq!(screen.cells()[0] & 0xff, u16::from(b'A'));
+    }
+
+    #[test]
+    fn sgr_35_and_logo_red_share_one_attribute_byte() {
+        let mut screen = Screen::blank();
+        for &byte in b"\x1b[35mi\x1b[0m\x1b[41m " {
+            screen.apply_byte(byte);
+        }
+        assert_eq!(screen.cells()[0] >> 8, 0x05);
+        assert_eq!(screen.cells()[1] >> 8, 0x47);
+    }
+
+    #[test]
+    fn preamble_leaves_the_cursor_on_the_prompt() {
+        let mut screen = Screen::blank();
+        lerux_signon::for_each_preamble(b"test", |part| {
+            for &byte in part {
+                screen.apply_byte(byte);
+            }
+        });
+        let (row, col) = screen.cursor();
+        assert_eq!(col, lerux_signon::PROMPT.len());
+        assert_eq!(screen.cursor_index(), row * COLS + col);
+        let start = row * COLS;
+        for (offset, &byte) in lerux_signon::PROMPT.iter().enumerate() {
+            assert_eq!(screen.cells()[start + offset] & 0xff, u16::from(byte));
+            assert_eq!(screen.cells()[start + offset] >> 8, u16::from(DEFAULT_ATTR));
+        }
+        let arch = find(&screen, b"Arch Linux").expect("title cells");
+        assert_eq!(screen.cells()[arch] >> 8, 0x0b);
+        let iwctl = find(&screen, b"iwctl").expect("utility cells");
+        assert_eq!(screen.cells()[iwctl] >> 8, 0x05);
+        assert!(
+            screen
+                .cells()
+                .iter()
+                .any(|cell| *cell >> 8 == 0x47 && *cell & 0xff == u16::from(b' ')),
+            "a logo cell is red on the hardware index"
+        );
+    }
+
+    fn blank_with(byte: u8) -> u16 {
+        ATTR | u16::from(byte)
+    }
+
+    fn find(screen: &Screen, word: &[u8]) -> Option<usize> {
+        screen.cells().windows(word.len()).position(|window| {
+            window
+                .iter()
+                .zip(word)
+                .all(|(cell, &byte)| (*cell & 0xff) as u8 == byte)
+        })
     }
 }

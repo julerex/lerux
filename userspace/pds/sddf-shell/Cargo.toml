@@ -30,13 +30,14 @@ board-qemu_virt_riscv64_fs_sddf = []
 board-x86_64_generic_fs_sddf = []
 board-x86_64_generic_fs_ahci = ["board-x86_64_generic_fs_sddf"]
 console-out = ["dep:embedded-hal-nb", "dep:sel4-microkit-driver-adapters"]
-board-swift_sfx14_41g = ["board-x86_64_generic_fetch_sddf", "console-out", "dep:lerux-swift"]
+board-swift_sfx14_41g = ["board-x86_64_generic_fetch_sddf", "console-out", "dep:lerux-swift", "dep:lerux-signon"]
 
 [dependencies]
 lerux-calc = { path = "../../crates/lerux-calc" }
 lerux-cothread = { path = "../../crates/lerux-cothread" }
 lerux-posix = { path = "../../crates/lerux-posix" }
 lerux-sddf = { path = "../../crates/lerux-sddf" }
+lerux-signon = { path = "../../crates/lerux-signon", optional = true }
 lerux-swift = { path = "../../crates/lerux-swift", optional = true }
 lerux-tls = { path = "../../crates/lerux-tls", optional = true }
 lerux-web = { path = "../../crates/lerux-web", optional = true }

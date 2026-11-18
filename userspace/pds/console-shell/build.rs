@@ -1,14 +1,8 @@
-//! The Swift panel banner uses `git describe --always --dirty`.
+//! The issue line uses `git describe --always --dirty`.
 //!
 //! `just make-lerux-iso` passes that string in `LERUX_GIT_DESCRIBE`. Cargo
 //! reruns this script when the variable changes, including an unstaged edit
-//! that appends `-dirty`. Watching `.git/HEAD` does not: that file stays
-//! `ref: refs/heads/…` across commits on one branch, and an unstaged edit
-//! does not change the index mtime.
-//!
-//! There is no release tag and no GitHub release. The Cargo package version
-//! is the scaffold `0.1.0` on every crate, and the ISO builder has no version
-//! field. A missing git command falls back to that package version.
+//! that appends `-dirty`.
 
 use std::{env, path::PathBuf, process::Command};
 
@@ -24,7 +18,6 @@ fn main() {
     println!("cargo:rustc-env=LERUX_GIT_DESCRIBE={describe}");
 }
 
-/// The ISO recipe's describe, when it is a single graphic token.
 fn env_describe() -> Option<String> {
     accept_describe(&env::var("LERUX_GIT_DESCRIBE").ok()?)
 }

@@ -38,6 +38,7 @@ members = [
     "userspace/crates/lerux-html",
     "userspace/crates/lerux-input",
     "userspace/crates/lerux-desk",
+    "userspace/crates/lerux-signon",
     "userspace/crates/lerux-swift",
     "userspace/crates/lerux-web",
     "userspace/crates/lerux-wasm",

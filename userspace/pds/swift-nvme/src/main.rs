@@ -20,7 +20,7 @@ use lerux_swift::{
     working_line, write_result, DiskReport, WaitMark, NVME_BDF, NVME_CLASS,
 };
 
-const ROW: usize = 23;
+const ROW: usize = lerux_desk::ROW_NVME;
 static MARK: WaitMark = WaitMark::new();
 /// Matches `nvme_dma` in the Swift template. The window ends at `0x01f20000`,
 /// below the header pages and below the stub linked at 32 MiB.

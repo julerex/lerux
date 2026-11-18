@@ -72,7 +72,7 @@ The Acer Swift X SFX14-41G (Ryzen 5 5500U, Orion_CA). The panel belongs to the R
 |----------|--------|--------------|-------------|
 | Linear framebuffer | Firmware GOP buffer. The 2026-10-29 boot showed `fb 0x000000fc90000000 pitch 7680 1920x1080 r16 g8 b0` (`0x7E9000` bytes). The image maps that address | `console-driver` paints 32-bit pixels when the record matches the map. `mb2-stub` paints the mode line before seL4 | yes |
 | Keyboard | i8042 PS/2, ports `0x60` and `0x64`, I/O APIC pin 1, vector 49 | `console-driver` | yes |
-| Text menu | `1 browser` / `2 maths` on the panel | `console-shell` | yes |
+| Sign-on | `Lerux` and the git describe, then `[root@lerux ~]# ` | `sddf-shell` | yes |
 | PCI | `01:00.0`, `02:00.0`, `03:00.0`, `04:00.0`, `04:00.3`, `04:00.4` | `swift-pci-probe` | yes |
 | Wireless | MediaTek MT7921 at `03:00.0` | `swift-mt7921`. WPA-Personal, DHCP, and ping. Firmware and the key file are not in git | yes |
 | Disk | SK hynix BC711 `HFM512GD3JX016N` NVMe at `02:00.0`, class `0x010802` | `swift-nvme`, read-only. The Windows volume is not formatted | yes |

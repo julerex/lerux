@@ -8,7 +8,9 @@
 #[cfg(test)]
 extern crate std;
 
+mod font;
 mod mode;
+mod palette;
 mod pixel;
 mod url;
 
@@ -19,7 +21,11 @@ pub use mode::{
     BROWSER_HOLD, FRAMEBUFFER_BYTES, FRAMEBUFFER_HEIGHT, FRAMEBUFFER_PHYS, FRAMEBUFFER_PITCH,
     FRAMEBUFFER_WIDTH, MODE_RECORD_PHYS,
 };
-pub use pixel::{fill_background, paint_cell, paint_text_row, Pen, CELL_PX, CONSOLE_ROWS};
+pub use palette::{vga_rgb, CellAttr, DEFAULT_ATTR};
+pub use pixel::{
+    fill_background, paint_cell, paint_text_row, paint_underline, Pen, CONSOLE_COLS, CONSOLE_ROWS,
+    ROW_BT, ROW_CMD, ROW_EXCL, ROW_NVME, ROW_PCI, ROW_WIFI,
+};
 pub use url::{HttpsUrl, NamePolicy};
 
 const LINE_CAP: usize = 256;

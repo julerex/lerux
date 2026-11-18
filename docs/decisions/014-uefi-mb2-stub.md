@@ -37,7 +37,7 @@ The stub stays under GRUB because of the mode line, not because ADR-014 showed t
 - The EFI system partition is a FAT16 volume with `EFI/BOOT/BOOTX64.EFI`, `boot/grub/grub.cfg`, `mb2-stub.elf`, `sel4.elf`, and `loader.img`. The ISO9660 tree carries `boot/esp.img`. xorriso warns that `/EFI/BOOT` is missing from that tree. Firmware boots the FAT.
 - GRUB's menu timeout is 0, so QEMU smokes do not wait on a menu.
 - The SDK still ships `sel4_32.elf`; lerux does not stage or boot it.
-- On 2026-10-29 a metal boot of `just make-lerux-iso` on the Acer Swift X SFX14-41G showed the framebuffer. The `1 browser` / `2 maths` menu stays off until that address is the page the console driver maps.
+- On 2026-10-29 a metal boot of `just make-lerux-iso` on the Acer Swift X SFX14-41G showed the framebuffer. The sign-on stays off until that address is the page the console driver maps.
 
 ## References
 

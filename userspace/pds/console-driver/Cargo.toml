@@ -23,14 +23,17 @@ board-pc_z97_d3h = ["hardware", "lerux-logging/boot-line-gap"]
 board-inspiron_n5010 = ["hardware"]
 board-x86_64_generic_console = ["hardware"]
 board-x86_64_generic_usb_kbd = ["hardware"]
-board-swift_sfx14_41g = ["hardware", "dep:lerux-desk"]
+board-swift_sfx14_41g = ["hardware"]
 
 [dependencies]
 heapless = { workspace = true, optional = true }
-lerux-desk = { path = "../../crates/lerux-desk", optional = true }
+lerux-desk = { path = "../../crates/lerux-desk" }
 lerux-driver-protocols = { path = "../../crates/lerux-driver-protocols", optional = true }
 lerux-logging = { path = "../../crates/lerux-logging", optional = true }
 log = { workspace = true, optional = true }
 sel4 = { workspace = true, optional = true }
 sel4-microkit = { workspace = true, optional = true }
 sel4-microkit-simple-ipc = { workspace = true, optional = true }
+
+[dev-dependencies]
+lerux-signon = { path = "../../crates/lerux-signon" }

@@ -1773,8 +1773,9 @@ pub fn write_auth_miss(out: &mut [u8], miss: &AuthMiss) -> usize {
     write_counts(out, n, miss).unwrap_or(n)
 }
 
-/// First of the four join-detail rows. They sit under the `mt7921` line.
-pub const JOIN_DETAIL_ROW: usize = 23;
+/// First of the four join-detail rows. They start on the disk row, under the
+/// stage line of the Arch console band.
+pub const JOIN_DETAIL_ROW: usize = lerux_desk::ROW_NVME;
 /// How many join-detail rows [`write_join_detail`] fills.
 pub const JOIN_DETAIL_LINES: usize = 4;
 /// Row after the detail. A failed join paints [`JOIN_END`] here.
@@ -1784,12 +1785,13 @@ pub const JOIN_END: &[u8] = b"END OF OUTPUT";
 
 /// Device-name rows that still end in `irq` after the detail and [`JOIN_END`].
 ///
-/// The probe paints one line per [`crate::LOCATIONS`] entry, starting at the
-/// first row below the console. The detail covers the first of those lines.
-/// This range is the rest.
+/// The probe paints one line per [`crate::LOCATIONS`] entry, starting at
+/// [`lerux_desk::ROW_PCI`]. The detail covers the disk row, Bluetooth, and the
+/// first two device names. [`JOIN_END`] is the next device line. This range is
+/// the rest.
 #[must_use]
 pub fn join_device_rows_to_clear() -> Range<usize> {
-    let devices_end = lerux_desk::CONSOLE_ROWS + crate::LOCATIONS.len();
+    let devices_end = lerux_desk::ROW_PCI + crate::LOCATIONS.len();
     (JOIN_END_ROW + 1)..devices_end
 }
 
@@ -2859,10 +2861,12 @@ mod tests {
     #[test]
     fn join_end_clears_the_irq_lines_under_the_detail() {
         assert_eq!(JOIN_END, b"END OF OUTPUT");
-        assert_eq!(JOIN_END_ROW, 27);
-        let devices = lerux_desk::CONSOLE_ROWS..lerux_desk::CONSOLE_ROWS + crate::LOCATIONS.len();
+        assert_eq!(JOIN_DETAIL_ROW, 48);
+        assert_eq!(JOIN_END_ROW, 52);
+        let devices = lerux_desk::ROW_PCI..lerux_desk::ROW_PCI + crate::LOCATIONS.len();
+        assert_eq!(devices, 50..56);
         assert!(devices.contains(&JOIN_END_ROW));
-        assert_eq!(join_device_rows_to_clear(), 28..31);
+        assert_eq!(join_device_rows_to_clear(), 53..56);
         for row in devices {
             let covered = (JOIN_DETAIL_ROW..JOIN_END_ROW).contains(&row)
                 || row == JOIN_END_ROW
@@ -2931,7 +2935,7 @@ mod tests {
         };
         let n = write_eapol_miss(&mut out, &boot);
         assert_eq!(&out[..n], b"mt7921: eapol t2 fc 08 rx 2 ev 10 skip 1 tr 0");
-        assert!(n <= 48, "row 22 keeps 48 cells");
+        assert!(n <= 48, "the stage line keeps 48 cells");
         for stop in [
             EapolStop::Wait1,
             EapolStop::Msg1,

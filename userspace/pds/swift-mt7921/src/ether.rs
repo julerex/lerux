@@ -111,6 +111,7 @@ impl Net {
             TxFrame::Dropped => return TxFrame::Dropped,
             TxFrame::Wifi(n) => n,
         };
+        translate_identity(&mut ether[..n], SHELL_MAC.addr, link.sta);
         match ethernet_to_wifi(link, &ether[..n], out) {
             Some(len) => TxFrame::Wifi(len),
             None => TxFrame::Dropped,
@@ -190,6 +191,100 @@ impl Net {
     }
 }
 
+/// The shell and the virt filter use the sDDF client address. The station
+/// address is the card's efuse identity. DHCP and ARP carry that address a
+/// second time, and the access point unicasts the offer to it.
+fn translate_identity(frame: &mut [u8], from: [u8; 6], to: [u8; 6]) {
+    if from == to || frame.len() < 14 {
+        return;
+    }
+    let kind = u16::from_be_bytes([frame[12], frame[13]]);
+    if kind == 0x0806 {
+        translate_arp(frame, from, to);
+    } else if kind == 0x0800 {
+        translate_dhcp(frame, from, to);
+    }
+}
+
+fn translate_arp(frame: &mut [u8], from: [u8; 6], to: [u8; 6]) {
+    if frame.len() < 42 || frame[14..16] != [0, 1] || frame[16..18] != [0x08, 0] {
+        return;
+    }
+    if frame[18] != 6 || frame[19] != 4 {
+        return;
+    }
+    let _ = replace_mac(&mut frame[22..28], from, to);
+    let _ = replace_mac(&mut frame[32..38], from, to);
+}
+
+fn translate_dhcp(frame: &mut [u8], from: [u8; 6], to: [u8; 6]) {
+    if frame.len() < 34 || frame[14] >> 4 != 4 {
+        return;
+    }
+    let ihl = usize::from(frame[14] & 0x0f) * 4;
+    if ihl < 20 || frame.len() < 14 + ihl + 8 {
+        return;
+    }
+    let frag = u16::from_be_bytes([frame[20], frame[21]]);
+    if frag & 0x1fff != 0 || frame[23] != 17 {
+        return;
+    }
+    let udp = 14 + ihl;
+    let src = u16::from_be_bytes([frame[udp], frame[udp + 1]]);
+    let dst = u16::from_be_bytes([frame[udp + 2], frame[udp + 3]]);
+    if !matches!((src, dst), (68, 67) | (67, 68)) {
+        return;
+    }
+    let bootp = udp + 8;
+    if frame.len() < bootp + 240 || frame[bootp + 236..bootp + 240] != [99, 130, 83, 99] {
+        return;
+    }
+    let mut changed = replace_mac(&mut frame[bootp + 28..bootp + 34], from, to);
+    changed |= rewrite_client_id(&mut frame[bootp + 240..], from, to);
+    if changed {
+        // The payload changed. IPv4 allows a UDP checksum of zero.
+        frame[udp + 6] = 0;
+        frame[udp + 7] = 0;
+    }
+}
+
+fn rewrite_client_id(opts: &mut [u8], from: [u8; 6], to: [u8; 6]) -> bool {
+    let mut at = 0;
+    let mut changed = false;
+    while at < opts.len() {
+        let kind = opts[at];
+        if kind == 255 {
+            break;
+        }
+        if kind == 0 {
+            at += 1;
+            continue;
+        }
+        if at + 1 >= opts.len() {
+            break;
+        }
+        let len = usize::from(opts[at + 1]);
+        let next = at + 2 + len;
+        if next > opts.len() {
+            break;
+        }
+        if kind == 61 && len == 7 && opts[at + 2] == 1 {
+            changed |= replace_mac(&mut opts[at + 3..at + 9], from, to);
+        }
+        at = next;
+    }
+    changed
+}
+
+fn replace_mac(slot: &mut [u8], from: [u8; 6], to: [u8; 6]) -> bool {
+    if slot == from {
+        slot.copy_from_slice(&to);
+        true
+    } else {
+        false
+    }
+}
+
 /// Empty protected `QoS` data to the access point, so the association stays up.
 pub(crate) fn write_keepalive(link: &mut Link, out: &mut [u8]) -> Option<usize> {
     let seq = take_seq(link);
@@ -245,7 +340,9 @@ fn wifi_to_ethernet(link: &Link, frame: &[u8], out: &mut [u8]) -> Option<usize> 
     out[..6].copy_from_slice(&da);
     out[6..12].copy_from_slice(&sa);
     out[12..12 + payload.len()].copy_from_slice(payload);
-    Some(12 + payload.len())
+    let len = 12 + payload.len();
+    translate_identity(&mut out[..len], link.sta, SHELL_MAC.addr);
+    Some(len)
 }
 
 fn ethernet_to_wifi(link: &mut Link, ether: &[u8], out: &mut [u8]) -> Option<usize> {
@@ -502,5 +599,65 @@ mod tests {
         let mut plain = [0u8; 16];
         let got = ccmp_decrypt(&link.tk, 26, &frame[..n], &mut plain).expect("decrypt");
         assert_eq!(got, 0);
+    }
+
+    fn dhcp_discover(chaddr: [u8; 6]) -> Vec<u8> {
+        let mut frame = vec![0u8; 295];
+        frame[..6].fill(0xff);
+        frame[6..12].copy_from_slice(&SHELL_MAC.addr);
+        frame[12] = 0x08;
+        frame[14] = 0x45;
+        frame[23] = 17;
+        frame[34] = 0;
+        frame[35] = 68;
+        frame[36] = 0;
+        frame[37] = 67;
+        frame[40] = 0x12;
+        frame[41] = 0x34;
+        let bootp = 42;
+        frame[bootp] = 1;
+        frame[bootp + 1] = 1;
+        frame[bootp + 2] = 6;
+        frame[bootp + 28..bootp + 34].copy_from_slice(&chaddr);
+        frame[bootp + 236..bootp + 240].copy_from_slice(&[99, 130, 83, 99]);
+        let opt = bootp + 240;
+        frame[opt] = 53;
+        frame[opt + 1] = 1;
+        frame[opt + 2] = 1;
+        frame[opt + 3] = 61;
+        frame[opt + 4] = 7;
+        frame[opt + 5] = 1;
+        frame[opt + 6..opt + 12].copy_from_slice(&chaddr);
+        frame[opt + 12] = 255;
+        frame
+    }
+
+    #[test]
+    fn dhcp_identity_follows_the_station_on_the_air() {
+        let mut link = link();
+        let mut fix = Fix::new();
+        let discover = dhcp_discover(SHELL_MAC.addr);
+        write_tx(&mut fix, &discover);
+        let mut out = [0u8; FRAME_MAX];
+        let n = match fix.net.dequeue_transmit(&mut link, &mut out) {
+            TxFrame::Wifi(n) => n,
+            TxFrame::Empty | TxFrame::Dropped => panic!("discover missing"),
+        };
+        let aired = ethernet_from_tx(&link, &out[..n]);
+        assert_eq!(&aired[70..76], &link.sta);
+        assert_eq!(&aired[288..294], &link.sta);
+        assert_eq!(&aired[40..42], &[0, 0]);
+
+        let mut offer = dhcp_discover(link.sta);
+        offer[..6].copy_from_slice(&link.sta);
+        offer[6..12].copy_from_slice(&[0x02, 0, 0, 0, 0, 9]);
+        offer[35] = 67;
+        offer[37] = 68;
+        let wifi = protect_from_ds(&link, &offer);
+        assert!(fix.net.enqueue_received(&link, &wifi));
+        let got = read_rx(&mut fix);
+        assert_eq!(&got[..6], &SHELL_MAC.addr);
+        assert_eq!(&got[70..76], &SHELL_MAC.addr);
+        assert_eq!(&got[288..294], &SHELL_MAC.addr);
     }
 }

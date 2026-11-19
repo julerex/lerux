@@ -307,6 +307,13 @@ const NET_VIRT_TX: Channel = Channel::new(4);
 #[cfg(feature = "board-swift_sfx14_41g")]
 const SWIFT_MT7921: Channel = Channel::new(5);
 
+/// Drain the radio's receive ring. The ring is 8 deep, and DHCP waits here
+/// without a transmit for longer than that. A joined key does not associate again.
+#[cfg(feature = "board-swift_sfx14_41g")]
+pub(crate) fn kick_radio() {
+    SWIFT_MT7921.notify();
+}
+
 #[cfg(feature = "net-client")]
 const _: () = {
     assert!(lerux_sddf::net_image::SHELL_NET_RX_CHANNEL == 3);

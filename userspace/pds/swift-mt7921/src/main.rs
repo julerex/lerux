@@ -16,7 +16,9 @@
 //! Association paints `scan`, `auth tx`, `auth rx`, `assoc`, and `eapol`, then returns to
 //! `wait`. A failed `auth rx` or `eapol` also paints four detail rows under that
 //! line, then `END OF OUTPUT`, and blanks the device lines under that marker.
-//! The shell owns the address and the ping. Received Ethernet frames
+//! Once the link is up, the stage row leaves `wait` for `rx`, `tx`, and `drop`.
+//! The shell owns
+//! the address and the ping. Received Ethernet frames
 //! are enqueued on the standard receive queue, and transmit frames are
 //! dequeued from the standard transmit queue.
 //! The register dump that used to occupy rows 51 to 65 is not painted.
@@ -48,9 +50,10 @@ use lerux_sddf::{net_driver_config_t, net_image::net_config_from_bytes, SDDF_NET
 use lerux_swift::{
     bar_line, class_code, format_report, load_header, memory_bar,
     mt7921::{
-        join_device_rows_to_clear, read_survey_mark, survey_requested, write_auth_miss,
-        write_eapol_miss, write_join, write_join_detail, write_slot_line, AuthMiss, Sem, Stage,
-        JOIN_DETAIL_LINES, JOIN_DETAIL_ROW, JOIN_END, JOIN_END_ROW,
+        join_device_rows_to_clear, join_pending, read_survey_mark, survey_requested,
+        write_auth_miss, write_eapol_miss, write_join, write_join_detail, write_link_mark,
+        write_slot_line, AuthMiss, Sem, Stage, JOIN_DETAIL_LINES, JOIN_DETAIL_ROW, JOIN_END,
+        JOIN_END_ROW,
     },
     paint_row, read_key, vendor_device, working_line, WaitMark, WifiReport, MT7921_BAR, MT7921_BDF,
     MT7921_IDS,
@@ -361,7 +364,9 @@ impl HandlerImpl {
             mac.survey(key_page());
             paint_stage(Stage::Wait);
             paint_survey_mark();
-        } else if let Some((name, name_len, pass, pass_len)) = posted_key() {
+        } else if join_pending(key_page())
+            && let Some((name, name_len, pass, pass_len)) = posted_key()
+        {
             let stage = mac.associate(&name[..name_len], &pass[..pass_len], paint_stage);
             let up = stage == Stage::Wait;
             if stage == Stage::AuthRx {
@@ -388,6 +393,11 @@ impl HandlerImpl {
             return;
         };
         let note = mac.pump(&self.net);
+        if let Some((rx, tx, drop, fc)) = mac.link_mark() {
+            let mut line = [0u8; 64];
+            let n = write_link_mark(&mut line, rx, tx, drop, fc);
+            paint(&line[..n]);
+        }
         notify(self.rx_id, note.rx);
         notify(self.tx_id, note.tx);
     }

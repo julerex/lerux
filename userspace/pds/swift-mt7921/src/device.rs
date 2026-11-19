@@ -131,6 +131,14 @@ pub struct Mac {
     /// Set only after the 4-way handshake. The firmware path leaves this empty,
     /// so it never loads the network queues.
     link: Option<Link>,
+    /// Frames queued for the shell since the handshake.
+    link_rx: u32,
+    /// Shell frames whose transmit descriptor the card accepted.
+    link_tx: u32,
+    /// Received frames that were not queued. Beacons count here.
+    link_drop: u32,
+    /// Last dropped data frame's first byte, else the first drop.
+    link_fc: Option<u8>,
     /// Read just before the first MCU command. The panel no longer paints it.
     before: [u32; DUMP_REGS.len()],
     /// Read when `start` returns. The panel no longer paints it.
@@ -212,6 +220,10 @@ impl Mac {
             pn: 1,
             wifi_seq: 1,
             link: None,
+            link_rx: 0,
+            link_tx: 0,
+            link_drop: 0,
+            link_fc: None,
             before: [0; DUMP_REGS.len()],
             after: Snapshot::empty(),
         };
@@ -291,6 +303,33 @@ impl Mac {
 
     pub(crate) fn link(&mut self) -> Option<&mut Link> {
         self.link.as_mut()
+    }
+
+    /// `rx`, `tx`, `drop`, and the dropped frame byte, once the link is up.
+    pub(crate) fn link_mark(&self) -> Option<(u32, u32, u32, Option<u8>)> {
+        self.link
+            .is_some()
+            .then_some((self.link_rx, self.link_tx, self.link_drop, self.link_fc))
+    }
+
+    pub(crate) fn note_drop(&mut self, fc: Option<u8>) {
+        self.link_drop = self.link_drop.saturating_add(1);
+        let Some(fc) = fc else {
+            return;
+        };
+        // A beacon must not hide a data frame that failed to queue.
+        let data = fc & 0x0c == 0x08;
+        if self.link_fc.is_none() || data {
+            self.link_fc = Some(fc);
+        }
+    }
+
+    pub(crate) fn count_rx(&mut self) {
+        self.link_rx = self.link_rx.saturating_add(1);
+    }
+
+    pub(crate) fn count_tx(&mut self) {
+        self.link_tx = self.link_tx.saturating_add(1);
     }
 
     fn start(&mut self, images: &Images) -> Result<(), Stage> {

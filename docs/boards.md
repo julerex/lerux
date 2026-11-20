@@ -169,7 +169,7 @@ Living work list (what still needs a Pi): [`plan-arch.md` — Physical RPi4 lab]
 
 Board `swift_sfx14_41g` is the on-screen menu on the Acer Swift X SFX14-41G (Ryzen 5 5500U). It reuses Microkit `x86_64_generic` and `console-swift.system.template`. Names for this machine and its devices are in [GLOSSARY.md](../GLOSSARY.md#swift-x). The panel is the firmware GOP buffer. The keyboard is the built-in i8042 (ports `0x60` and `0x64`, I/O APIC pin 1, vector 49). This machine has no COM port and no `serial-driver`. This image has no QEMU model. Device roles are in [platforms.md](platforms.md#swift-x-devices). `just make-lerux-iso pc_z97_d3h` packs the [Gigabyte Z97-D3H](#gigabyte-z97-d3h-install-path) image.
 
-**USB ISO** (`just make-lerux-iso` packs `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`). Build the image, verify the digest, write the media, and boot. `lerux verify-image` prints the `dd` line after the digest matches.
+**USB ISO** (`just make-lerux-iso` packs `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`). Build the image, verify the digest, write the media, and boot. `lerux verify-image` prints `lerux iso --board swift_sfx14_41g --no-build` and the `dd` line after the digest matches. That packs the checked `loader.img`. It does not run `just make-lerux-iso`.
 
 ```bash
 just fetch
@@ -223,7 +223,7 @@ Use the USB boot entry that says UEFI (GRUB `EFI/BOOT/BOOTX64.EFI`). `sel4.elf` 
 
 An AMD modesetting driver would matter only if lerux itself programmed this card (resolution, HDMI, a linear framebuffer) or had to bring the picture up when the firmware had not left VGA text mode. That work is still deferred. The QEMU `ramfb` display server does not drive this card.
 
-**USB ISO** (writes `build/pc_z97_d3h/lerux_pc_z97_d3h.iso` and does not touch a disk). Build the image, verify the digest, write the media, and boot. `lerux verify-image` prints the flash line after the digest matches. The write is `just make-lerux-iso pc_z97_d3h` and the `dd` line, or `just deploy-pc` onto a mounted FAT volume.
+**USB ISO** (writes `build/pc_z97_d3h/lerux_pc_z97_d3h.iso` and does not touch a disk). Build the image, verify the digest, write the media, and boot. `lerux verify-image` prints the flash line after the digest matches. The ISO path is `lerux iso --board pc_z97_d3h --no-build` and the `dd` line. The other path is `just deploy-pc` onto a mounted FAT volume. The printed FAT line is a comment, so pasting the flash block writes only the ISO.
 
 ```bash
 just make-lerux-iso pc_z97_d3h
@@ -255,7 +255,7 @@ That writes GRUB's `EFI/BOOT/BOOTX64.EFI`, `/boot/grub/grub.cfg`, and `boot/mb2-
 | 1. SDK | `MICROKIT_BOARDS=…,x86_64_generic just build-sdk` or `just fetch-sdk` (already required for QEMU x86) |
 | 2. Serial hardware | Gigabyte **COMA** 9-pin header → DB9 cable → laptop USB-serial at **115200 8N1**. There is no rear DB9. Prove the link from Linux (`/dev/ttyS0` is `0x3F8` IRQ 4) before seL4. |
 | 3. Image | `BOARD=pc_z97_d3h just image`, then `lerux verify-image --board pc_z97_d3h` |
-| 4. Media | `just make-lerux-iso pc_z97_d3h`, then `dd` the ISO onto the flash drive (not `sda` or `sdb`). Or `DEST=/path/to/usb-fat just deploy-pc` to write the same GRUB layout onto a mounted volume. |
+| 4. Media | `lerux iso --board pc_z97_d3h --no-build`, then `dd` that ISO onto the flash drive (not `sda` or `sdb`). Or `DEST=/path/to/usb-fat just deploy-pc` to write the GRUB layout onto a mounted volume. |
 | 5. Boot | Firmware boot menu (F12) → the USB entry that says UEFI (GRUB `EFI/BOOT/BOOTX64.EFI`). GRUB is Multiboot 2: kernel `/boot/mb2-stub.elf`, modules `/boot/sel4.elf` and `/boot/loader.img`. |
 | 6. Host smoke | From the **laptop**: `LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD=pc_z97_d3h just test-hw` |
 | 7. Back to Ubuntu | Reboot and pick the default Ubuntu EFI entry. |

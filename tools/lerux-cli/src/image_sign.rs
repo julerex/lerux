@@ -145,8 +145,12 @@ mod tests {
         let text = verify_then_flash(&loader, "swift_sfx14_41g", "build", None, false)
             .unwrap()
             .unwrap();
-        assert!(text.contains("just make-lerux-iso"), "{text}");
+        assert!(
+            text.contains("lerux iso --board swift_sfx14_41g --build-dir build --no-build"),
+            "{text}"
+        );
         assert!(text.contains("dd if=build/swift_sfx14_41g/"), "{text}");
+        assert!(!text.contains("just make-lerux-iso"), "{text}");
 
         fs::write(&loader, b"tampered").unwrap();
         let err = verify_then_flash(&loader, "swift_sfx14_41g", "build", None, false)

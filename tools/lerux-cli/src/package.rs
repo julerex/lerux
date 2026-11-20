@@ -18,7 +18,7 @@ use crate::{
     profile::{self, load_profiles},
 };
 
-/// Boards whose flash line is `just make-lerux-iso`, `just deploy-pc`, or
+/// Boards whose flash line is an ISO `dd`, `just deploy-pc`, or
 /// `just deploy-rpi4`. `upgrade --all` rebuilds this set.
 pub(crate) const ROLLING_BOARDS: &[&str] = &["swift_sfx14_41g", "pc_z97_d3h", "rpi4b_4gb"];
 

@@ -251,7 +251,7 @@ use lerux_cothread::{
     microkit_cothread_init, microkit_cothread_recv_ntfn, microkit_cothread_spawn,
     microkit_cothread_wait_on_channel, microkit_cothread_yield, NULL_HANDLE, STACK_SLOTS,
 };
-use lerux_posix::{Files, Open, Stat};
+use lerux_posix::{Fd, Files, Open, Stat};
 use lerux_sddf::{
     fs_client_config_t,
     fs_image::{
@@ -1580,10 +1580,33 @@ fn cmd_write(rest: &[u8]) {
         say(b"write err\n");
         return;
     }
-    let Ok(fd) = files().open(name, Open::CreateWrite) else {
+    if let Ok(fd) = files().open(name, Open::CreateWrite) {
+        finish_write(fd, payload);
+        return;
+    }
+    // A second write of the same name appends. One line is 80 bytes, so a
+    // file past 512 bytes is several writes at the current size.
+    let Ok(stat) = files().stat(name) else {
         say(b"write err\n");
         return;
     };
+    if is_dir(&stat) {
+        say(b"write err\n");
+        return;
+    }
+    let Ok(fd) = files().open(name, Open::Write) else {
+        say(b"write err\n");
+        return;
+    };
+    if files().seek(fd, stat.size).is_err() {
+        let _ = files().close(fd);
+        say(b"write err\n");
+        return;
+    }
+    finish_write(fd, payload);
+}
+
+fn finish_write(fd: Fd, payload: &[u8]) {
     let wrote = files().write(fd, payload);
     let _ = files().close(fd);
     let ok = matches!(wrote, Ok(n) if n == payload.len());
@@ -1600,16 +1623,19 @@ fn cmd_cat(rest: &[u8]) {
         return;
     };
     let mut buf = [0u8; 512];
-    let read = files().read(fd, &mut buf);
+    loop {
+        match files().read(fd, &mut buf) {
+            Ok(0) => break,
+            Ok(n) => say(&buf[..n]),
+            Err(_) => {
+                let _ = files().close(fd);
+                say(b"cat err\n");
+                return;
+            }
+        }
+    }
     let _ = files().close(fd);
-    let Ok(n) = read else {
-        say(b"cat err\n");
-        return;
-    };
-    let mut out = [0u8; 513];
-    out[..n].copy_from_slice(&buf[..n]);
-    out[n] = b'\n';
-    say(&out[..=n]);
+    say(b"\n");
 }
 
 fn cmd_ls(rest: &[u8]) {

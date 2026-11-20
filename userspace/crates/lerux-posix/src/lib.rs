@@ -447,6 +447,21 @@ impl Files {
         Ok(done)
     }
 
+    /// Set the offset of the next `read` or `write`.
+    ///
+    /// The cursor stays in this client. The server sees it on the next transfer.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Errno::EBUSY`] while a command is in flight and [`Errno::EBADF`]
+    /// when `fd` is not an open file.
+    pub fn seek(&mut self, fd: Fd, offset: u64) -> Result<(), Errno> {
+        self.idle()?;
+        self.live(fd)?;
+        self.set_cursor(fd, offset);
+        Ok(())
+    }
+
     /// Send `FS_CMD_DIR_CREATE`.
     ///
     /// # Errors

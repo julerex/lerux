@@ -52,9 +52,20 @@ const SECTORS_PER_TRANSFER: u32 = 8;
 const REQ_ID: u32 = 1;
 const ATTR_DIR: u8 = 0x10;
 const ATTR_ARCHIVE: u8 = 0x20;
-const FD_FILE: u64 = 0;
+/// Directory descriptor. File descriptors skip this value.
 const FD_DIR: u64 = 1;
-const CLUSTER_SCAN: u16 = 64;
+/// Open files at once. One more open returns `FS_STATUS_TOO_MANY_OPEN_FILES`.
+const FILE_CAP: usize = 4;
+/// Last cluster that has a data sector. Cluster 2 is `DATA_LBA`.
+const LAST_CLUSTER: u16 = TOTAL_SECTORS - 97 + 1;
+const _: () = assert!(DATA_LBA == 97);
+const EOC: u16 = 0xFFFF;
+const EOC_MIN: u16 = 0xFFF8;
+/// A file stays within this many bytes. That covers a fetched HTML body
+/// (the 16640-byte Transport Layer Security buffer) and an edit buffer.
+/// A write may start at a non-zero offset and may cross a 512-byte sector.
+const FILE_BYTES: u64 = 32 * 1024;
+const PATH_CAP: usize = 128;
 const S_IFDIR: u64 = 0o040_000;
 const S_IFREG: u64 = 0o100_000;
 const MODE_BITS: u64 = 0o777;
@@ -104,7 +115,7 @@ struct State {
     block_no: u64,
     block_valid: bool,
     block_dirty: bool,
-    file: Option<OpenFile>,
+    files: [Option<OpenFile>; FILE_CAP],
     dir: Option<OpenDir>,
 }
 
@@ -126,7 +137,7 @@ static STATE: StateCell = StateCell(UnsafeCell::new(State {
     block_no: 0,
     block_valid: false,
     block_dirty: false,
-    file: None,
+    files: [None; FILE_CAP],
     dir: None,
 }));
 
@@ -287,128 +298,73 @@ fn serve_one() -> bool {
 }
 
 fn handle_open(id: u64, params: fs_cmd_params_file_open_t) -> bool {
-    const PATH_MAX: usize = 24;
-    let Ok(size) = usize::try_from(params.path.size) else {
-        return complete(id, FS_STATUS_INVALID_NAME, &Completion::Empty);
-    };
-    if size > PATH_MAX {
-        return complete(id, FS_STATUS_INVALID_NAME, &Completion::Empty);
-    }
-    let mut raw = [0u8; PATH_MAX];
-    if size > 0 && !copy_share(params.path.offset, size, &mut raw[..size]) {
-        return complete(id, FS_STATUS_INVALID_BUFFER, &Completion::Empty);
-    }
-    let path = &raw[..size];
-    if path.contains(&b'/') {
-        if params.flags != FS_OPEN_FLAGS_READ_ONLY {
-            return complete(id, FS_STATUS_ERROR, &Completion::Empty);
-        }
-        let Some((dir, file)) = two_components(path) else {
-            return complete(id, FS_STATUS_INVALID_NAME, &Completion::Empty);
-        };
-        let Some(dir_name) = pack_name(dir) else {
-            return complete(id, FS_STATUS_INVALID_NAME, &Completion::Empty);
-        };
-        let Some(file_name) = pack_name(file) else {
-            return complete(id, FS_STATUS_INVALID_NAME, &Completion::Empty);
-        };
-        return open_nested_read(id, &dir_name, &file_name);
-    }
-    if size > 11 {
-        return complete(id, FS_STATUS_INVALID_NAME, &Completion::Empty);
-    }
-    let Some(name) = pack_name(path) else {
-        return complete(id, FS_STATUS_INVALID_NAME, &Completion::Empty);
+    let (parent, name) = match entry_path(id, params.path) {
+        Ok(pair) => pair,
+        Err(done) => return done,
     };
     if params.flags == (FS_OPEN_FLAGS_CREATE | FS_OPEN_FLAGS_WRITE_ONLY) {
-        create_file(id, &name)
-    } else if params.flags == FS_OPEN_FLAGS_READ_ONLY {
-        open_read(id, &name)
+        create_file(id, parent, &name)
+    } else if params.flags == FS_OPEN_FLAGS_READ_ONLY || params.flags == FS_OPEN_FLAGS_WRITE_ONLY {
+        if parent == 0 {
+            open_read(id, parent, &name)
+        } else {
+            open_nested_read(id, parent, &name)
+        }
     } else {
         complete(id, FS_STATUS_ERROR, &Completion::Empty)
     }
 }
 
-/// Optional leading slash, then exactly two 8.3 components.
-fn two_components(path: &[u8]) -> Option<(&[u8], &[u8])> {
-    let path = path.strip_prefix(b"/").unwrap_or(path);
-    let slash = path.iter().position(|byte| *byte == b'/')?;
-    let dir = &path[..slash];
-    let file = &path[slash + 1..];
-    if dir.is_empty() || file.is_empty() || file.contains(&b'/') {
-        return None;
-    }
-    Some((dir, file))
-}
-
-fn open_nested_read(id: u64, dir_name: &[u8; 11], file_name: &[u8; 11]) -> bool {
+fn open_nested_read(id: u64, parent: u16, name: &[u8; 11]) -> bool {
     if file_busy() {
         return complete(id, FS_STATUS_TOO_MANY_OPEN_FILES, &Completion::Empty);
     }
-    let parent = match find_name(dir_name) {
-        Scan::Hit(hit) if hit.attr & ATTR_DIR != 0 && hit.cluster >= 2 => hit,
-        Scan::Hit(_) => return complete(id, FS_STATUS_ERROR, &Completion::Empty),
-        Scan::Missing => return complete(id, FS_STATUS_NO_FILE, &Completion::Empty),
-        Scan::Failed => {
-            let _ = complete(id, FS_STATUS_ERROR, &Completion::Empty);
-            return false;
-        }
-    };
-    match find_in_cluster(parent.cluster, file_name) {
-        Scan::Hit(hit) => {
-            if hit.attr & ATTR_DIR != 0 || hit.cluster < 2 {
-                return complete(id, FS_STATUS_ERROR, &Completion::Empty);
-            }
-            unsafe {
-                (*state()).file = Some(OpenFile {
-                    cluster: hit.cluster,
-                    size: hit.size,
-                    dir_index: hit.index,
-                    parent: parent.cluster,
-                });
-            }
-            complete(id, FS_STATUS_SUCCESS, &Completion::Fd(FD_FILE))
-        }
-        Scan::Missing => complete(id, FS_STATUS_NO_FILE, &Completion::Empty),
-        Scan::Failed => {
-            let _ = complete(id, FS_STATUS_ERROR, &Completion::Empty);
-            false
-        }
-    }
+    occupy(id, parent, name)
 }
 
 fn file_busy() -> bool {
-    unsafe { (*state()).file.is_some() }
+    unsafe { (*state()).files.iter().all(Option::is_some) }
 }
 
-fn create_file(id: u64, name: &[u8; 11]) -> bool {
+fn file_held(parent: u16, index: u16) -> bool {
+    unsafe {
+        (*state())
+            .files
+            .iter()
+            .flatten()
+            .any(|file| file.parent == parent && file.dir_index == index)
+    }
+}
+
+fn create_file(id: u64, parent: u16, name: &[u8; 11]) -> bool {
     if file_busy() {
         return complete(id, FS_STATUS_TOO_MANY_OPEN_FILES, &Completion::Empty);
     }
-    let (slot, cluster) = match reserve_file(id, name) {
+    let (slot, cluster) = match reserve_file(id, parent, name) {
         Ok(pair) => pair,
         Err(done) => return done,
     };
-    if !set_fat(cluster, 0xFFFF)
-        || !write_dir(slot, name, cluster, 0, ATTR_ARCHIVE)
+    // Both File Allocation Tables record the new end-of-chain mark.
+    if !set_fat(cluster, EOC)
+        || !write_entry(parent, slot, name, cluster, 0, ATTR_ARCHIVE)
         || !flush_block()
     {
         let _ = complete(id, FS_STATUS_ERROR, &Completion::Empty);
         return false;
     }
-    unsafe {
-        (*state()).file = Some(OpenFile {
-            cluster,
-            size: 0,
-            dir_index: slot,
-            parent: 0,
-        });
-    }
-    complete(id, FS_STATUS_SUCCESS, &Completion::Fd(FD_FILE))
+    let Some(fd) = insert_file(OpenFile {
+        cluster,
+        size: 0,
+        dir_index: slot,
+        parent,
+    }) else {
+        return complete(id, FS_STATUS_TOO_MANY_OPEN_FILES, &Completion::Empty);
+    };
+    complete(id, FS_STATUS_SUCCESS, &Completion::Fd(fd))
 }
 
-fn reserve_file(id: u64, name: &[u8; 11]) -> Result<(u16, u16), bool> {
-    match find_name(name) {
+fn reserve_file(id: u64, parent: u16, name: &[u8; 11]) -> Result<(u16, u16), bool> {
+    match lookup(parent, name) {
         Scan::Hit(_) => return Err(complete(id, FS_STATUS_ALREADY_EXISTS, &Completion::Empty)),
         Scan::Missing => {}
         Scan::Failed => {
@@ -416,7 +372,7 @@ fn reserve_file(id: u64, name: &[u8; 11]) -> Result<(u16, u16), bool> {
             return Err(false);
         }
     }
-    let slot = match find_free() {
+    let slot = match find_free_at(parent) {
         Scan::Hit(index) => index,
         Scan::Missing => {
             return Err(complete(
@@ -444,24 +400,31 @@ fn reserve_file(id: u64, name: &[u8; 11]) -> Result<(u16, u16), bool> {
     }
 }
 
-fn open_read(id: u64, name: &[u8; 11]) -> bool {
+fn open_read(id: u64, parent: u16, name: &[u8; 11]) -> bool {
     if file_busy() {
         return complete(id, FS_STATUS_TOO_MANY_OPEN_FILES, &Completion::Empty);
     }
-    match find_name(name) {
+    occupy(id, parent, name)
+}
+
+fn occupy(id: u64, parent: u16, name: &[u8; 11]) -> bool {
+    match lookup(parent, name) {
         Scan::Hit(hit) => {
             if hit.attr & ATTR_DIR != 0 || hit.cluster < 2 {
                 return complete(id, FS_STATUS_ERROR, &Completion::Empty);
             }
-            unsafe {
-                (*state()).file = Some(OpenFile {
-                    cluster: hit.cluster,
-                    size: hit.size,
-                    dir_index: hit.index,
-                    parent: 0,
-                });
+            if file_held(parent, hit.index) {
+                return complete(id, FS_STATUS_TOO_MANY_OPEN_FILES, &Completion::Empty);
             }
-            complete(id, FS_STATUS_SUCCESS, &Completion::Fd(FD_FILE))
+            let Some(fd) = insert_file(OpenFile {
+                cluster: hit.cluster,
+                size: hit.size,
+                dir_index: hit.index,
+                parent,
+            }) else {
+                return complete(id, FS_STATUS_TOO_MANY_OPEN_FILES, &Completion::Empty);
+            };
+            complete(id, FS_STATUS_SUCCESS, &Completion::Fd(fd))
         }
         Scan::Missing => complete(id, FS_STATUS_NO_FILE, &Completion::Empty),
         Scan::Failed => {
@@ -472,74 +435,67 @@ fn open_read(id: u64, name: &[u8; 11]) -> bool {
 }
 
 fn handle_close(id: u64, params: fs_cmd_params_file_close_t) -> bool {
-    if params.fd != FD_FILE || unsafe { (*state()).file.is_none() } {
+    let Some(slot) = slot_of(params.fd) else {
         return complete(id, FS_STATUS_INVALID_FD, &Completion::Empty);
-    }
-    unsafe {
-        (*state()).file = None;
+    };
+    let open = unsafe { (*state()).files[slot].take() };
+    if open.is_none() {
+        return complete(id, FS_STATUS_INVALID_FD, &Completion::Empty);
     }
     complete(id, FS_STATUS_SUCCESS, &Completion::Empty)
 }
 
 fn handle_write(id: u64, params: fs_cmd_params_file_write_t) -> bool {
-    let Some(file) = (unsafe { (*state()).file }) else {
+    let Some(file) = open_file(params.fd) else {
         return complete(id, FS_STATUS_INVALID_FD, &Completion::Empty);
     };
-    if params.fd != FD_FILE {
-        return complete(id, FS_STATUS_INVALID_FD, &Completion::Empty);
-    }
-    if file.parent != 0 {
-        return complete(id, FS_STATUS_INVALID_WRITE, &Completion::Empty);
-    }
-    if params.offset != 0 || params.buf.size == 0 || params.buf.size > SECTOR_BYTES as u64 {
-        return complete(id, FS_STATUS_INVALID_WRITE, &Completion::Empty);
-    }
-    let Ok(len) = usize::try_from(params.buf.size) else {
+    let Some(len) = write_len(file.size, params.offset, params.buf.size) else {
         return complete(id, FS_STATUS_INVALID_WRITE, &Completion::Empty);
     };
-    let mut data = [0u8; SECTOR_BYTES];
-    if !copy_share(params.buf.offset, len, &mut data[..len]) {
+    let Some((src, _)) = share_span(params.buf) else {
         return complete(id, FS_STATUS_INVALID_BUFFER, &Completion::Empty);
-    }
-    let lba = DATA_LBA + u32::from(file.cluster - 2);
-    if !edit_sector(lba, |sector| {
-        sector[..len].copy_from_slice(&data[..len]);
-    }) {
-        let _ = complete(id, FS_STATUS_ERROR, &Completion::Empty);
-        return false;
-    }
-    let Ok(size) = u32::try_from(len) else {
-        return complete(id, FS_STATUS_INVALID_WRITE, &Completion::Empty);
     };
-    if !update_size(file.parent, file.dir_index, size) || !flush_block() {
+    let end = params.offset + len as u64;
+    if !ensure_span(file.cluster, end) || !write_span(file.cluster, params.offset, src, len) {
         let _ = complete(id, FS_STATUS_ERROR, &Completion::Empty);
         return false;
     }
-    unsafe {
-        if let Some(open) = (*state()).file.as_mut() {
-            open.size = size;
-        }
+    let new_size = u32::try_from(end.max(u64::from(file.size))).unwrap_or(file.size);
+    if !update_size(file.parent, file.dir_index, new_size) || !flush_block() {
+        let _ = complete(id, FS_STATUS_ERROR, &Completion::Empty);
+        return false;
     }
-    complete(id, FS_STATUS_SUCCESS, &Completion::Write(params.buf.size))
+    note_size(params.fd, new_size);
+    complete(id, FS_STATUS_SUCCESS, &Completion::Write(len as u64))
+}
+
+fn write_len(size: u32, offset: u64, len: u64) -> Option<usize> {
+    if len == 0 || len > FILE_BYTES {
+        return None;
+    }
+    let len = usize::try_from(len).ok()?;
+    let end = offset.checked_add(len as u64)?;
+    if offset > u64::from(size) || end > FILE_BYTES {
+        return None;
+    }
+    Some(len)
 }
 
 fn handle_read(id: u64, params: fs_cmd_params_file_read_t) -> bool {
-    let Some(file) = (unsafe { (*state()).file }) else {
+    let Some(file) = open_file(params.fd) else {
         return complete(id, FS_STATUS_INVALID_FD, &Completion::Empty);
     };
-    if params.fd != FD_FILE {
-        return complete(id, FS_STATUS_INVALID_FD, &Completion::Empty);
-    }
-    if params.offset != 0 {
-        return complete(id, FS_STATUS_INVALID_READ, &Completion::Empty);
-    }
     let Some((buf_off, buf_len)) = share_span(params.buf) else {
         return complete(id, FS_STATUS_INVALID_BUFFER, &Completion::Empty);
     };
-    let file_size = usize::try_from(file.size).unwrap_or(0);
-    let copied = buf_len.min(file_size);
+    let file_size = u64::from(file.size);
+    if params.offset > file_size {
+        return complete(id, FS_STATUS_INVALID_READ, &Completion::Empty);
+    }
+    let available = file_size - params.offset;
+    let copied = buf_len.min(usize::try_from(available).unwrap_or(0));
     if copied > 0
-        && let Err(done) = stage_file_bytes(id, &file, buf_off, copied)
+        && let Err(done) = stage_file_bytes(id, &file, params.offset, buf_off, copied)
     {
         return done;
     }
@@ -560,23 +516,40 @@ fn share_span(buf: fs_buffer_t) -> Option<(usize, usize)> {
     Some((buf_off, buf_len))
 }
 
-fn stage_file_bytes(id: u64, file: &OpenFile, buf_off: usize, copied: usize) -> Result<(), bool> {
-    if file.cluster < 2 {
-        return Err(complete(id, FS_STATUS_ERROR, &Completion::Empty));
-    }
-    let lba = DATA_LBA + u32::from(file.cluster - 2);
-    if !load_block(u64::from(lba / SECTORS_PER_TRANSFER)) {
-        let _ = complete(id, FS_STATUS_ERROR, &Completion::Empty);
-        return Err(false);
-    }
-    let offset = ((lba % SECTORS_PER_TRANSFER) as usize) * SECTOR_BYTES;
-    // SAFETY: the share range was checked, and the sector sits inside the static block buffer.
-    unsafe {
-        core::ptr::copy_nonoverlapping(
-            (*block()).as_ptr().add(offset),
-            (*state()).share.add(buf_off),
-            copied,
-        );
+fn stage_file_bytes(
+    id: u64,
+    file: &OpenFile,
+    file_off: u64,
+    buf_off: usize,
+    copied: usize,
+) -> Result<(), bool> {
+    let mut done = 0;
+    while done < copied {
+        let pos = file_off + done as u64;
+        let cluster = match cluster_at(file.cluster, pos) {
+            Scan::Hit(cluster) => cluster,
+            Scan::Missing | Scan::Failed => {
+                let _ = complete(id, FS_STATUS_ERROR, &Completion::Empty);
+                return Err(false);
+            }
+        };
+        let lba = DATA_LBA + u32::from(cluster - 2);
+        if !load_block(u64::from(lba / SECTORS_PER_TRANSFER)) {
+            let _ = complete(id, FS_STATUS_ERROR, &Completion::Empty);
+            return Err(false);
+        }
+        let within = sector_within(pos);
+        let chunk = (SECTOR_BYTES - within).min(copied - done);
+        let sector = ((lba % SECTORS_PER_TRANSFER) as usize) * SECTOR_BYTES + within;
+        // SAFETY: the share range was checked, and the sector slice sits in the static block.
+        unsafe {
+            core::ptr::copy_nonoverlapping(
+                (*block()).as_ptr().add(sector),
+                (*state()).share.add(buf_off + done),
+                chunk,
+            );
+        }
+        done += chunk;
     }
     Ok(())
 }
@@ -644,6 +617,37 @@ fn write_dir(index: u16, name: &[u8; 11], cluster: u16, size: u32, attr: u8) -> 
     })
 }
 
+fn lookup(parent: u16, name: &[u8; 11]) -> Scan<DirHit> {
+    if parent == 0 {
+        find_name(name)
+    } else {
+        find_in_cluster(parent, name)
+    }
+}
+
+fn find_free_at(parent: u16) -> Scan<u16> {
+    if parent == 0 {
+        find_free()
+    } else {
+        find_free_in_cluster(parent)
+    }
+}
+
+fn write_entry(
+    parent: u16,
+    index: u16,
+    name: &[u8; 11],
+    cluster: u16,
+    size: u32,
+    attr: u8,
+) -> bool {
+    if parent == 0 {
+        write_dir(index, name, cluster, size, attr)
+    } else {
+        write_in_cluster(parent, index, name, cluster, size, attr)
+    }
+}
+
 fn put_entry(entry: &mut [u8], name: &[u8; 11], cluster: u16, size: u32, attr: u8) {
     entry.fill(0);
     entry[..11].copy_from_slice(name);
@@ -708,7 +712,7 @@ fn create_directory(name: &[u8; 11]) -> Option<u16> {
         Scan::Missing | Scan::Failed => return None,
     };
     if !set_fat(cluster, 0xFFFF)
-        || !format_directory(cluster)
+        || !format_directory(cluster, 0)
         || !write_dir(slot, name, cluster, 0, ATTR_DIR)
         || !flush_block()
     {
@@ -829,7 +833,7 @@ fn read_fat(cluster: u16) -> Scan<u16> {
 }
 
 fn alloc_cluster() -> Scan<u16> {
-    for cluster in 2..CLUSTER_SCAN {
+    for cluster in 2..=LAST_CLUSTER {
         match read_fat(cluster) {
             Scan::Hit(0) => return Scan::Hit(cluster),
             Scan::Hit(_) => {}
@@ -840,26 +844,17 @@ fn alloc_cluster() -> Scan<u16> {
     Scan::Missing
 }
 
-fn handle_stat(id: u64, params: fs_cmd_params_stat_t) -> bool {
-    if params.buf.size < core::mem::size_of::<fs_stat_t>() as u64 {
-        return complete(id, FS_STATUS_INVALID_BUFFER, &Completion::Empty);
-    }
-    let mut raw = [0u8; 11];
-    let hit = if is_root_path_buf(params.path) {
-        None
-    } else {
-        let Some(name) = read_packed_name(params.path, &mut raw) else {
-            return complete(id, FS_STATUS_INVALID_NAME, &Completion::Empty);
-        };
-        match find_name(&name) {
-            Scan::Hit(hit) => Some(hit),
-            Scan::Missing => return complete(id, FS_STATUS_NO_FILE, &Completion::Empty),
-            Scan::Failed => {
-                let _ = complete(id, FS_STATUS_ERROR, &Completion::Empty);
-                return false;
-            }
-        }
-    };
+fn linked(value: u16) -> bool {
+    (2..EOC_MIN).contains(&value)
+}
+
+fn sector_within(pos: u64) -> usize {
+    let sector = u64::try_from(SECTOR_BYTES).expect("sector size");
+    usize::try_from(pos % sector).expect("offset in sector")
+}
+
+fn stat_of(hit: Option<DirHit>) -> fs_stat_t {
+    // SAFETY: `fs_stat_t` is plain data. Zero is a valid stat.
     let mut stat: fs_stat_t = unsafe { core::mem::zeroed() };
     stat.blksize = SECTOR_BYTES as u64;
     match hit {
@@ -877,6 +872,146 @@ fn handle_stat(id: u64, params: fs_cmd_params_stat_t) -> bool {
             };
         }
     }
+    stat
+}
+
+fn cluster_at(first: u16, offset: u64) -> Scan<u16> {
+    if first < 2 {
+        return Scan::Failed;
+    }
+    let mut skip = offset / SECTOR_BYTES as u64;
+    let mut cluster = first;
+    while skip > 0 {
+        match read_fat(cluster) {
+            Scan::Hit(next) if linked(next) => {
+                cluster = next;
+                skip -= 1;
+            }
+            Scan::Hit(_) | Scan::Missing => return Scan::Missing,
+            Scan::Failed => return Scan::Failed,
+        }
+    }
+    Scan::Hit(cluster)
+}
+
+fn ensure_span(first: u16, bytes: u64) -> bool {
+    let need = if bytes == 0 {
+        0
+    } else {
+        bytes.div_ceil(SECTOR_BYTES as u64)
+    };
+    if need == 0 {
+        return true;
+    }
+    let mut cluster = first;
+    let mut have = 1u64;
+    while have < need {
+        match read_fat(cluster) {
+            Scan::Hit(next) if linked(next) => {
+                cluster = next;
+                have += 1;
+            }
+            Scan::Hit(_) => {
+                let next = match alloc_cluster() {
+                    Scan::Hit(cluster) => cluster,
+                    Scan::Missing | Scan::Failed => return false,
+                };
+                // Mark the new cluster in both tables before the previous one points at it.
+                if !set_fat(next, EOC) || !set_fat(cluster, next) {
+                    return false;
+                }
+                cluster = next;
+                have += 1;
+            }
+            Scan::Missing | Scan::Failed => return false,
+        }
+    }
+    true
+}
+
+fn write_span(first: u16, offset: u64, src: usize, len: usize) -> bool {
+    let mut done = 0;
+    while done < len {
+        let pos = offset + done as u64;
+        let cluster = match cluster_at(first, pos) {
+            Scan::Hit(cluster) => cluster,
+            Scan::Missing | Scan::Failed => return false,
+        };
+        let within = sector_within(pos);
+        let chunk = (SECTOR_BYTES - within).min(len - done);
+        let mut tmp = [0u8; SECTOR_BYTES];
+        let Ok(step) = u64::try_from(done) else {
+            return false;
+        };
+        let Ok(src) = u64::try_from(src) else {
+            return false;
+        };
+        let Some(base) = src.checked_add(step) else {
+            return false;
+        };
+        if !copy_share(base, chunk, &mut tmp[..chunk]) {
+            return false;
+        }
+        let lba = DATA_LBA + u32::from(cluster - 2);
+        if !edit_sector(lba, |sector| {
+            sector[within..within + chunk].copy_from_slice(&tmp[..chunk]);
+        }) {
+            return false;
+        }
+        done += chunk;
+    }
+    true
+}
+
+fn free_chain(start: u16) -> bool {
+    if start < 2 {
+        return true;
+    }
+    let mut cluster = start;
+    for _ in 0..LAST_CLUSTER {
+        let next = match read_fat(cluster) {
+            Scan::Hit(value) => value,
+            Scan::Missing | Scan::Failed => return false,
+        };
+        if !set_fat(cluster, 0) {
+            return false;
+        }
+        if !linked(next) {
+            return true;
+        }
+        cluster = next;
+    }
+    false
+}
+
+fn handle_stat(id: u64, params: fs_cmd_params_stat_t) -> bool {
+    if params.buf.size < core::mem::size_of::<fs_stat_t>() as u64 {
+        return complete(id, FS_STATUS_INVALID_BUFFER, &Completion::Empty);
+    }
+    let found = match read_walk(id, params.path) {
+        Ok(found) => found,
+        Err(done) => return done,
+    };
+    let hit = match found {
+        Path::Root => None,
+        Path::Entry { parent, name } => match lookup(parent, &name) {
+            Scan::Hit(hit) => Some(hit),
+            Scan::Missing => return complete(id, FS_STATUS_NO_FILE, &Completion::Empty),
+            Scan::Failed => {
+                let _ = complete(id, FS_STATUS_ERROR, &Completion::Empty);
+                return false;
+            }
+        },
+        Path::Missing => return complete(id, FS_STATUS_NO_FILE, &Completion::Empty),
+        Path::Bad | Path::NotDir => {
+            return complete(id, FS_STATUS_INVALID_NAME, &Completion::Empty)
+        }
+        Path::Io => {
+            let _ = complete(id, FS_STATUS_ERROR, &Completion::Empty);
+            return false;
+        }
+    };
+    let stat = stat_of(hit);
     if !write_share(params.buf, &stat) {
         return complete(id, FS_STATUS_INVALID_BUFFER, &Completion::Empty);
     }
@@ -884,15 +1019,18 @@ fn handle_stat(id: u64, params: fs_cmd_params_stat_t) -> bool {
 }
 
 fn handle_rename(id: u64, params: fs_cmd_params_rename_t) -> bool {
-    let mut old_raw = [0u8; 11];
-    let mut new_raw = [0u8; 11];
-    let Some(old) = read_packed_name(params.old_path, &mut old_raw) else {
-        return complete(id, FS_STATUS_INVALID_NAME, &Completion::Empty);
+    let (old_parent, old_name) = match entry_path(id, params.old_path) {
+        Ok(pair) => pair,
+        Err(done) => return done,
     };
-    let Some(new) = read_packed_name(params.new_path, &mut new_raw) else {
-        return complete(id, FS_STATUS_INVALID_NAME, &Completion::Empty);
+    let (new_parent, new_name) = match entry_path(id, params.new_path) {
+        Ok(pair) => pair,
+        Err(done) => return done,
     };
-    let hit = match find_name(&old) {
+    if old_parent != new_parent {
+        return complete(id, FS_STATUS_ERROR, &Completion::Empty);
+    }
+    let hit = match lookup(old_parent, &old_name) {
         Scan::Hit(hit) => hit,
         Scan::Missing => return complete(id, FS_STATUS_NO_FILE, &Completion::Empty),
         Scan::Failed => {
@@ -900,8 +1038,8 @@ fn handle_rename(id: u64, params: fs_cmd_params_rename_t) -> bool {
             return false;
         }
     };
-    if old != new {
-        match find_name(&new) {
+    if old_name != new_name {
+        match lookup(new_parent, &new_name) {
             Scan::Hit(_) => return complete(id, FS_STATUS_ALREADY_EXISTS, &Completion::Empty),
             Scan::Missing => {}
             Scan::Failed => {
@@ -910,7 +1048,7 @@ fn handle_rename(id: u64, params: fs_cmd_params_rename_t) -> bool {
             }
         }
     }
-    if !rename_entry(hit.index, &new) || !flush_block() {
+    if !rename_entry(old_parent, hit.index, &new_name) || !flush_block() {
         let _ = complete(id, FS_STATUS_ERROR, &Completion::Empty);
         return false;
     }
@@ -918,11 +1056,11 @@ fn handle_rename(id: u64, params: fs_cmd_params_rename_t) -> bool {
 }
 
 fn handle_remove(id: u64, params: fs_cmd_params_file_remove_t) -> bool {
-    let mut raw = [0u8; 11];
-    let Some(name) = read_packed_name(params.path, &mut raw) else {
-        return complete(id, FS_STATUS_INVALID_NAME, &Completion::Empty);
+    let (parent, name) = match entry_path(id, params.path) {
+        Ok(pair) => pair,
+        Err(done) => return done,
     };
-    let hit = match find_name(&name) {
+    let hit = match lookup(parent, &name) {
         Scan::Hit(hit) => hit,
         Scan::Missing => return complete(id, FS_STATUS_NO_FILE, &Completion::Empty),
         Scan::Failed => {
@@ -941,33 +1079,20 @@ fn handle_remove(id: u64, params: fs_cmd_params_file_remove_t) -> bool {
             }
         }
     }
-    let free = if hit.cluster >= 2 {
-        set_fat(hit.cluster, 0)
-    } else {
-        true
-    };
-    if !free || !mark_deleted(hit.index) || !flush_block() {
+    if !free_chain(hit.cluster) || !mark_deleted(parent, hit.index) || !flush_block() {
         let _ = complete(id, FS_STATUS_ERROR, &Completion::Empty);
         return false;
     }
-    unsafe {
-        if (*state())
-            .file
-            .as_ref()
-            .is_some_and(|file| file.parent == 0 && file.dir_index == hit.index)
-        {
-            (*state()).file = None;
-        }
-    }
+    drop_open(parent, hit.index);
     complete(id, FS_STATUS_SUCCESS, &Completion::Empty)
 }
 
 fn handle_mkdir(id: u64, params: fs_cmd_params_dir_create_t) -> bool {
-    let mut raw = [0u8; 11];
-    let Some(name) = read_packed_name(params.path, &mut raw) else {
-        return complete(id, FS_STATUS_INVALID_NAME, &Completion::Empty);
+    let (parent, name) = match entry_path(id, params.path) {
+        Ok(pair) => pair,
+        Err(done) => return done,
     };
-    match find_name(&name) {
+    match lookup(parent, &name) {
         Scan::Hit(_) => return complete(id, FS_STATUS_ALREADY_EXISTS, &Completion::Empty),
         Scan::Missing => {}
         Scan::Failed => {
@@ -975,7 +1100,7 @@ fn handle_mkdir(id: u64, params: fs_cmd_params_dir_create_t) -> bool {
             return false;
         }
     }
-    let slot = match find_free() {
+    let slot = match find_free_at(parent) {
         Scan::Hit(index) => index,
         Scan::Missing => return complete(id, FS_STATUS_DIRECTORY_IS_FULL, &Completion::Empty),
         Scan::Failed => {
@@ -991,9 +1116,9 @@ fn handle_mkdir(id: u64, params: fs_cmd_params_dir_create_t) -> bool {
             return false;
         }
     };
-    if !set_fat(cluster, 0xFFFF)
-        || !format_directory(cluster)
-        || !write_dir(slot, &name, cluster, 0, ATTR_DIR)
+    if !set_fat(cluster, EOC)
+        || !format_directory(cluster, parent)
+        || !write_entry(parent, slot, &name, cluster, 0, ATTR_DIR)
         || !flush_block()
     {
         let _ = complete(id, FS_STATUS_ERROR, &Completion::Empty);
@@ -1006,18 +1131,17 @@ fn handle_dir_open(id: u64, params: fs_cmd_params_dir_open_t) -> bool {
     if unsafe { (*state()).dir.is_some() } {
         return complete(id, FS_STATUS_TOO_MANY_OPEN_FILES, &Completion::Empty);
     }
-    let opened = if is_root_path_buf(params.path) {
-        OpenDir {
+    let found = match read_walk(id, params.path) {
+        Ok(found) => found,
+        Err(done) => return done,
+    };
+    let opened = match found {
+        Path::Root => OpenDir {
             cluster: 0,
             index: 0,
             limit: ROOT_ENTRIES,
-        }
-    } else {
-        let mut raw = [0u8; 11];
-        let Some(name) = read_packed_name(params.path, &mut raw) else {
-            return complete(id, FS_STATUS_INVALID_NAME, &Completion::Empty);
-        };
-        match find_name(&name) {
+        },
+        Path::Entry { parent, name } => match lookup(parent, &name) {
             Scan::Hit(hit) if hit.attr & ATTR_DIR != 0 && hit.cluster >= 2 => OpenDir {
                 cluster: hit.cluster,
                 index: 0,
@@ -1030,6 +1154,12 @@ fn handle_dir_open(id: u64, params: fs_cmd_params_dir_open_t) -> bool {
                 let _ = complete(id, FS_STATUS_ERROR, &Completion::Empty);
                 return false;
             }
+        },
+        Path::Bad => return complete(id, FS_STATUS_INVALID_NAME, &Completion::Empty),
+        Path::Missing | Path::NotDir => return complete(id, FS_STATUS_NO_FILE, &Completion::Empty),
+        Path::Io => {
+            let _ = complete(id, FS_STATUS_ERROR, &Completion::Empty);
+            return false;
         }
     };
     unsafe {
@@ -1091,32 +1221,107 @@ fn handle_dir_close(id: u64, fd: u64) -> bool {
     complete(id, FS_STATUS_SUCCESS, &Completion::Empty)
 }
 
-fn is_root_path_buf(path: fs_buffer_t) -> bool {
-    if path.size == 0 {
-        return true;
-    }
-    if path.size > 11 {
-        return false;
-    }
-    let Ok(size) = usize::try_from(path.size) else {
-        return false;
-    };
-    let mut raw = [0u8; 11];
-    if !copy_share(path.offset, size, &mut raw[..size]) {
-        return false;
-    }
-    raw[..size] == *b"." || raw[..size] == *b"/"
+enum SharePath<'a> {
+    Ok(&'a [u8]),
+    TooLong,
+    BadShare,
 }
 
-fn read_packed_name(path: fs_buffer_t, raw: &mut [u8; 11]) -> Option<[u8; 11]> {
-    if path.size > 11 {
+enum Path {
+    Root,
+    Entry { parent: u16, name: [u8; 11] },
+    Bad,
+    Missing,
+    NotDir,
+    Io,
+}
+
+fn share_path(buf: fs_buffer_t, raw: &mut [u8; PATH_CAP]) -> SharePath<'_> {
+    let Ok(size) = usize::try_from(buf.size) else {
+        return SharePath::TooLong;
+    };
+    if size > PATH_CAP {
+        return SharePath::TooLong;
+    }
+    if size > 0 && !copy_share(buf.offset, size, &mut raw[..size]) {
+        return SharePath::BadShare;
+    }
+    SharePath::Ok(&raw[..size])
+}
+
+fn read_walk(id: u64, buf: fs_buffer_t) -> Result<Path, bool> {
+    let mut raw = [0u8; PATH_CAP];
+    let path = match share_path(buf, &mut raw) {
+        SharePath::Ok(path) => path,
+        SharePath::TooLong => {
+            return Err(complete(id, FS_STATUS_INVALID_NAME, &Completion::Empty));
+        }
+        SharePath::BadShare => {
+            return Err(complete(id, FS_STATUS_INVALID_BUFFER, &Completion::Empty));
+        }
+    };
+    Ok(walk(path))
+}
+
+fn entry_path(id: u64, buf: fs_buffer_t) -> Result<(u16, [u8; 11]), bool> {
+    match read_walk(id, buf)? {
+        Path::Entry { parent, name } => Ok((parent, name)),
+        Path::Missing => Err(complete(id, FS_STATUS_NO_FILE, &Completion::Empty)),
+        Path::NotDir => Err(complete(id, FS_STATUS_ERROR, &Completion::Empty)),
+        Path::Io => {
+            let _ = complete(id, FS_STATUS_ERROR, &Completion::Empty);
+            Err(false)
+        }
+        Path::Root | Path::Bad => Err(complete(id, FS_STATUS_INVALID_NAME, &Completion::Empty)),
+    }
+}
+
+fn walk(path: &[u8]) -> Path {
+    if path.is_empty() || path == b"." || path == b"/" {
+        return Path::Root;
+    }
+    let mut rest = path.strip_prefix(b"/").unwrap_or(path);
+    if rest.is_empty() {
+        return Path::Root;
+    }
+    if rest.ends_with(b"/") {
+        return Path::Bad;
+    }
+    let mut parent = 0u16;
+    loop {
+        let Some((comp, next)) = split_comp(rest) else {
+            return Path::Bad;
+        };
+        let Some(name) = pack_name(comp) else {
+            return Path::Bad;
+        };
+        if next.is_empty() {
+            return Path::Entry { parent, name };
+        }
+        match lookup(parent, &name) {
+            Scan::Hit(hit) if hit.attr & ATTR_DIR != 0 && hit.cluster >= 2 => {
+                parent = hit.cluster;
+            }
+            Scan::Hit(_) => return Path::NotDir,
+            Scan::Missing => return Path::Missing,
+            Scan::Failed => return Path::Io,
+        }
+        rest = next;
+    }
+}
+
+fn split_comp(path: &[u8]) -> Option<(&[u8], &[u8])> {
+    if path.is_empty() {
         return None;
     }
-    let size = usize::try_from(path.size).ok()?;
-    if !copy_share(path.offset, size, &mut raw[..size]) {
+    let Some(slash) = path.iter().position(|byte| *byte == b'/') else {
+        return Some((path, b""));
+    };
+    let comp = &path[..slash];
+    if comp.is_empty() {
         return None;
     }
-    pack_name(&raw[..size])
+    Some((comp, &path[slash + 1..]))
 }
 
 fn read_placed(cluster: u16, index: u16, dest: &mut [u8; DIR_ENTRY]) -> bool {
@@ -1156,7 +1361,7 @@ fn directory_empty(cluster: u16) -> Scan<bool> {
     Scan::Hit(true)
 }
 
-fn format_directory(cluster: u16) -> bool {
+fn format_directory(cluster: u16, parent: u16) -> bool {
     let lba = DATA_LBA + u32::from(cluster - 2);
     let dot = dot_name(1);
     let dotdot = dot_name(2);
@@ -1166,27 +1371,101 @@ fn format_directory(cluster: u16) -> bool {
         put_entry(
             &mut sector[DIR_ENTRY..DIR_ENTRY * 2],
             &dotdot,
-            0,
+            parent,
             0,
             ATTR_DIR,
         );
     })
 }
 
-fn rename_entry(index: u16, name: &[u8; 11]) -> bool {
-    let lba = ROOT_LBA + u32::from(index / ENTRIES_PER_SECTOR);
-    let off = usize::from(index % ENTRIES_PER_SECTOR) * DIR_ENTRY;
+fn rename_entry(parent: u16, index: u16, name: &[u8; 11]) -> bool {
+    let Some((lba, off)) = entry_at(parent, index) else {
+        return false;
+    };
     edit_sector(lba, |sector| {
         sector[off..off + 11].copy_from_slice(name);
     })
 }
 
-fn mark_deleted(index: u16) -> bool {
-    let lba = ROOT_LBA + u32::from(index / ENTRIES_PER_SECTOR);
-    let off = usize::from(index % ENTRIES_PER_SECTOR) * DIR_ENTRY;
+fn mark_deleted(parent: u16, index: u16) -> bool {
+    let Some((lba, off)) = entry_at(parent, index) else {
+        return false;
+    };
     edit_sector(lba, |sector| {
         sector[off] = 0xE5;
     })
+}
+
+fn entry_at(parent: u16, index: u16) -> Option<(u32, usize)> {
+    if parent == 0 {
+        if index >= ROOT_ENTRIES {
+            return None;
+        }
+        let lba = ROOT_LBA + u32::from(index / ENTRIES_PER_SECTOR);
+        let off = usize::from(index % ENTRIES_PER_SECTOR) * DIR_ENTRY;
+        return Some((lba, off));
+    }
+    if parent < 2 || index >= ENTRIES_PER_SECTOR {
+        return None;
+    }
+    let lba = DATA_LBA + u32::from(parent - 2);
+    Some((lba, usize::from(index) * DIR_ENTRY))
+}
+
+fn fd_of(slot: usize) -> u64 {
+    let fd = slot as u64;
+    if fd >= FD_DIR {
+        fd + 1
+    } else {
+        fd
+    }
+}
+
+fn slot_of(fd: u64) -> Option<usize> {
+    if fd == FD_DIR {
+        return None;
+    }
+    let raw = if fd > FD_DIR { fd - 1 } else { fd };
+    let slot = usize::try_from(raw).ok()?;
+    (slot < FILE_CAP).then_some(slot)
+}
+
+fn insert_file(file: OpenFile) -> Option<u64> {
+    unsafe {
+        let files = &mut (*state()).files;
+        let slot = files.iter().position(Option::is_none)?;
+        files[slot] = Some(file);
+        Some(fd_of(slot))
+    }
+}
+
+fn open_file(fd: u64) -> Option<OpenFile> {
+    let slot = slot_of(fd)?;
+    unsafe { (*state()).files[slot] }
+}
+
+fn note_size(fd: u64, size: u32) {
+    let Some(slot) = slot_of(fd) else {
+        return;
+    };
+    unsafe {
+        if let Some(file) = (*state()).files[slot].as_mut() {
+            file.size = size;
+        }
+    }
+}
+
+fn drop_open(parent: u16, index: u16) {
+    unsafe {
+        for entry in &mut (*state()).files {
+            if entry
+                .as_ref()
+                .is_some_and(|file| file.parent == parent && file.dir_index == index)
+            {
+                *entry = None;
+            }
+        }
+    }
 }
 
 fn is_dot(entry: &[u8; DIR_ENTRY]) -> bool {

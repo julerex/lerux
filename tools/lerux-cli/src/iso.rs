@@ -28,10 +28,10 @@ use crate::{
 /// Build `build/<board>/lerux_<board>.iso` (or `--output`) for an `x86_64` board.
 ///
 /// Rebuilds the Microkit image when `build_if_missing` is set, including when
-/// an older `loader.img` is already on disk. When `verify` is set, both SHA-256 sidecars must
-/// match before anything is packed. Sidecars are not copied onto the ISO.
-/// Prints USB flash instructions after packing. Always packs, then writes the
-/// boot-recipe stamp.
+/// an older `loader.img` is already on disk. When `verify` is set, both SHA-256
+/// sidecars must match before anything is packed, and the USB flash line is
+/// printed only after that check. Sidecars are not copied onto the ISO.
+/// Always packs, then writes the boot-recipe stamp.
 pub fn build_iso(
     root: &Path,
     board: &str,
@@ -50,7 +50,9 @@ pub fn build_iso(
         build_if_missing,
         verify,
     )?;
-    print_usb_instructions(board, &out);
+    if verify {
+        print_usb_instructions(board, &out);
+    }
     Ok(out)
 }
 

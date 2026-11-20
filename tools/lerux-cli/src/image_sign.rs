@@ -102,6 +102,20 @@ pub fn verify_image(loader: &Path, pub_path: Option<&Path>, require_sig: bool) -
     Ok(())
 }
 
+/// Check the digest (and signature, when required), then return the flash line.
+///
+/// A failed check returns the error and no flash text.
+pub fn verify_then_flash(
+    loader: &Path,
+    board: &str,
+    build_dir: &str,
+    pub_path: Option<&Path>,
+    require_sig: bool,
+) -> Result<Option<String>> {
+    verify_image(loader, pub_path, require_sig)?;
+    Ok(image_digest::flash_instruction(board, build_dir))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -120,5 +134,27 @@ mod tests {
         fs::write(&loader, b"tampered").unwrap();
         image_digest::write_sidecar(&loader).unwrap();
         assert!(verify_image(&loader, Some(&pubk), true).is_err());
+    }
+
+    #[test]
+    fn verify_then_flash_waits_for_a_matching_digest() {
+        let tmp = tempfile::tempdir().unwrap();
+        let loader = tmp.path().join("loader.img");
+        fs::write(&loader, b"image-v1").unwrap();
+        image_digest::write_sidecar(&loader).unwrap();
+        let text = verify_then_flash(&loader, "swift_sfx14_41g", "build", None, false)
+            .unwrap()
+            .unwrap();
+        assert!(text.contains("just make-lerux-iso"), "{text}");
+        assert!(text.contains("dd if=build/swift_sfx14_41g/"), "{text}");
+
+        fs::write(&loader, b"tampered").unwrap();
+        let err = verify_then_flash(&loader, "swift_sfx14_41g", "build", None, false)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("integrity check failed"), "{err}");
+        assert!(!err.contains("dd if="), "{err}");
+        assert!(!err.contains("deploy-rpi4"), "{err}");
+        assert!(!err.contains("deploy-pc"), "{err}");
     }
 }

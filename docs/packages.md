@@ -5,31 +5,16 @@ lerux packages are **host-side composition units**, not runtime packages. A pack
 ## CLI
 
 ```bash
-lerux package list
-lerux package search editor          # substring over name/pd/description
-lerux package show edit
+lerux package install --board swift_sfx14_41g
+lerux package upgrade --board pc_z97_d3h
+lerux package upgrade --all
 
-# Install into dev-workstation and rebuild loader.img.
-lerux package install edit
-lerux package install chat-client
-lerux package install http-file-browser
-
-lerux package remove edit --profile dev-workstation
-
-# Rolling pins (CI artifacts / local ELF SHA256)
-lerux package build edit --board qemu_virt_aarch64_workstation
-lerux package pin edit --board qemu_virt_aarch64_workstation
-lerux package diff edit --board qemu_virt_aarch64_workstation
-lerux package upgrade edit --board qemu_virt_aarch64_workstation
-lerux package upgrade --all --board qemu_virt_aarch64_workstation
-
-# Rebuild that profile's system description and link loader.img.
-lerux profile build dev-workstation
-lerux profile validate
-lerux profile check-channels
+lerux verify-image --board rpi4b_4gb
 ```
 
-`lerux package install edit` installs into `dev-workstation` and rebuilds `loader.img`. Install checks `fragment.requires` against the profile, merges `fragment.pds`, and appends named `[[fragment.channel]]` edges. It skips a protection domain or a channel that is already present. It writes the profile file only when the merge added a protection domain or a channel. It writes the system description on every successful install. Install refuses a profile whose file sets `extends`, and leaves that file unchanged. The generator fails with `unknown component "nosuch"` when the name is not in the template. The pre-wired workstation image still contains `edit`.
+`lerux package install` and `lerux package upgrade` rebuild the selected board profile, write `support/package-pins.toml`, write `loader.img.sha256`, and print the pin digest. `--all` rebuilds the Swift (`swift_sfx14_41g`), the Z97 (`pc_z97_d3h`), and the Pi (`rpi4b_4gb`). The guest cannot install a package. The operator rebuilds on the host.
+
+`lerux image` also writes `loader.img.sha256`. `lerux verify-image` checks that sidecar and, when the digest matches, prints the flash line for the Swift, the Z97, or the Pi. The flash lines are `just make-lerux-iso` and `dd` for the Swift, `just make-lerux-iso pc_z97_d3h` or `just deploy-pc` for the Z97, and `just deploy-rpi4` for the Pi.
 
 ## Recipes (Phase 55 / 60)
 
@@ -97,11 +82,13 @@ Pins: `support/package-pins.toml` (sha256 per board artifact).
 1. Out-of-tree crate implements a PD (`#![no_std]`, `lerux-ipc`) against a published `lerux-interface-types` version.  
 2. Ship a package TOML + optional profile fragment (same shape as `support/packages/`).  
 3. Vendor or path-depend the crate in the consumer tree; copy the TOML into `support/packages/`.  
-4. `lerux package install <name>` rebuilds `loader.img` for `dev-workstation`. `lerux profile build <recipe>` rebuilds that named profile and links `loader.img`.  
+4. `lerux package upgrade --board <board>` rebuilds that board profile, writes `loader.img.sha256`, and prints the pin digest. `lerux profile build <recipe>` rebuilds a named profile and links `loader.img`.  
 5. Follow the **ported app checklist** in [`context.md`](context.md).  
 
 Breaking `interface_types` majors requires rebuilding all PDs that speak that IPC.
 
 ## Not in scope
+
+An on-device package manager. The guest cannot install a package.
 
 Runtime loading of native ELFs into a live Microkit image. A signed module inside `program-runtime` is [Phase 81](plan.md#phase-81--signed-wasm-runtime) ([ADR-010](decisions/010-program-runtime.md)). Milestone 14 runs ordinary WebAssembly on `qemu_virt_aarch64_program_sddf` ([ADR-012](decisions/012-ordinary-webassembly.md)).

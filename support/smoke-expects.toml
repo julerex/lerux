@@ -116,6 +116,13 @@ script = [
   { send = "cert\r", expect = "cert ok" },
   { send = "edit E.TXT edited\r", expect = "edit ok" },
   { send = "chat\r", expect = "chat ok" },
+  { send = "config get net.mode\r", expect = "dhcp" },
+  { send = "config set net.mode static 10.0.2.15\r", expect = "config ok" },
+  { send = "config get net.mode\r", expect = "static" },
+  { send = "config set net.mode dhcp\r", expect = "config ok" },
+  { send = "config get net.mode\r", expect = "dhcp" },
+  { send = "date\r", expect = "date err" },
+  { send = "dmesg\r", expect = "lerux shell ready" },
 ]
 
 [boards.x86_64_generic_fetch_native]
@@ -133,6 +140,13 @@ script = [
   { send = "cert\r", expect = "cert ok" },
   { send = "edit E.TXT edited\r", expect = "edit ok" },
   { send = "chat\r", expect = "chat ok" },
+  { send = "config get net.mode\r", expect = "dhcp" },
+  { send = "config set net.mode static 10.0.2.15\r", expect = "config ok" },
+  { send = "config get net.mode\r", expect = "static" },
+  { send = "config set net.mode dhcp\r", expect = "config ok" },
+  { send = "config get net.mode\r", expect = "dhcp" },
+  { send = "date\r", expect = "date err" },
+  { send = "dmesg\r", expect = "lerux shell ready" },
 ]
 
 [boards.qemu_virt_aarch64_web_sddf]
@@ -246,11 +260,14 @@ script = [
   { send = "rm H/D/P.TXT\r", expect = "rm ok" },
   { send = "rm H/D\r", expect = "rm ok" },
   { send = "config get hostname\r", expect = "lerux" },
+  { send = "config set hostname desk\r", expect = "config ok" },
+  { send = "config get hostname\r", expect = "desk" },
   { send = "date\r", expect = "1970-01-01" },
   { send = "ps\r", expect = "shell 1 1000" },
   { send = "qos\r", expect = "fatfs 2 2000" },
   { send = "dmesg\r", expect = "lerux shell ready" },
   { send = "reboot\r", expect = "lerux shell ready" },
+  { send = "config get hostname\r", expect = "desk" },
 ]
 
 [boards.qemu_virt_riscv64_fs_sddf]

@@ -4,7 +4,7 @@
 use sel4_microkit::{protection_domain, Channel, ChannelSet, Handler, Infallible};
 
 use lerux_logging::{debug, log};
-use lerux_machine::{ahci_map, READY_LINE};
+use lerux_machine::{ahci_map, format_identity, IDENTITY_CAP, READY_LINE};
 use lerux_sddf::{
     blk_dequeue_req, blk_driver_config_t, blk_enqueue_resp,
     blk_image::{self, BLK_DATA_SIZE, BLK_DATA_VADDR, BLK_DRIVER_IRQ_CHANNEL, BLK_QUEUE_CAPACITY},
@@ -52,6 +52,7 @@ fn init() -> HandlerImpl {
             u32::from(config.virt.num_buffers),
         );
     }
+    log_identity(&engine);
     log::info!("{READY_LINE}");
     HandlerImpl {
         engine,
@@ -60,6 +61,14 @@ fn init() -> HandlerImpl {
         virt: Channel::new(usize::from(config.virt.id)),
         capacity_blocks,
     }
+}
+
+fn log_identity(engine: &engine::Engine) {
+    let mut line = [0u8; IDENTITY_CAP];
+    let n = format_identity(engine.vendor(), engine.device(), engine.model(), &mut line)
+        .expect("identity line fits");
+    let text = core::str::from_utf8(&line[..n]).expect("identity line is ascii");
+    log::info!("{text}");
 }
 
 /// # Safety

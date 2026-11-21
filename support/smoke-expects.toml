@@ -399,7 +399,7 @@ script = [
 ]
 
 [boards.x86_64_generic_fs_ahci]
-expects = ["ahci: port 0", "lerux shell ready"]
+expects = ["ahci: 8086:2922 QEMU HARDDISK", "ahci: port 0", "lerux shell ready"]
 timeout_secs = 120
 script_timeout_secs = 120
 script = [

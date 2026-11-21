@@ -108,6 +108,30 @@ pub fn resolve_loader(root: &Path, board: &str, build_dir: &str, path: Option<&P
     }
 }
 
+/// Flash lines for the Swift, the Z97, and the Pi.
+///
+/// `verify-image` prints this only after the digest matches. The ISO boards
+/// pack that `loader.img` with `lerux iso --no-build`, then `dd` the ISO.
+/// `just make-lerux-iso` rebuilds the loader, so it is not a flash line.
+/// The Z97 FAT copy is a comment: it is the other write, and a paste of the
+/// block does not run it with `dd`. Other boards have no flash line here.
+pub fn flash_instruction(board: &str, build_dir: &str) -> Option<String> {
+    match board {
+        "swift_sfx14_41g" => Some(format!(
+            "lerux iso --board swift_sfx14_41g --build-dir {build_dir} --no-build\n\
+             sudo dd if={build_dir}/swift_sfx14_41g/lerux_swift_sfx14_41g.iso of=/dev/sdX bs=4M status=progress conv=fsync"
+        )),
+        "pc_z97_d3h" => Some(format!(
+            "lerux iso --board pc_z97_d3h --build-dir {build_dir} --no-build\n\
+             sudo dd if={build_dir}/pc_z97_d3h/lerux_pc_z97_d3h.iso of=/dev/sdX bs=4M status=progress conv=fsync\n\
+             # or, instead of that ISO, a mounted FAT volume:\n\
+             # DEST=/media/$USER/boot just deploy-pc"
+        )),
+        "rpi4b_4gb" => Some("DEST=/media/$USER/boot just deploy-rpi4".to_string()),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -164,5 +188,61 @@ mod tests {
             parse_sidecar(&format!("  {hex}  *loader.img\n")).unwrap(),
             hex
         );
+    }
+
+    /// Lines a shell runs when the flash block is pasted. A `#` line is shown
+    /// and is not a command.
+    fn live_lines(text: &str) -> Vec<&str> {
+        text.lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty() && !line.starts_with('#'))
+            .collect()
+    }
+
+    fn assert_packs_then_dd(text: &str, board: &str, iso: &str) {
+        let live = live_lines(text);
+        let pack = format!("lerux iso --board {board} --build-dir build --no-build");
+        assert!(live.iter().any(|line| line.contains(&pack)), "{text}");
+        assert!(live.iter().any(|line| line.contains(iso)), "{text}");
+        assert!(!text.contains("just make-lerux-iso"), "{text}");
+    }
+
+    #[test]
+    fn flash_instruction_names_the_three_writers() {
+        let swift = flash_instruction("swift_sfx14_41g", "build").unwrap();
+        assert_packs_then_dd(
+            &swift,
+            "swift_sfx14_41g",
+            "sudo dd if=build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso of=/dev/sdX bs=4M status=progress conv=fsync",
+        );
+        assert!(!swift.contains("deploy-rpi4"), "{swift}");
+        assert!(!swift.contains("deploy-pc"), "{swift}");
+
+        let z97 = flash_instruction("pc_z97_d3h", "build").unwrap();
+        assert_packs_then_dd(
+            &z97,
+            "pc_z97_d3h",
+            "sudo dd if=build/pc_z97_d3h/lerux_pc_z97_d3h.iso of=/dev/sdX bs=4M status=progress conv=fsync",
+        );
+        assert!(
+            z97.contains("# DEST=/media/$USER/boot just deploy-pc"),
+            "{z97}"
+        );
+        assert!(
+            !live_lines(&z97)
+                .iter()
+                .any(|line| line.contains("deploy-pc")),
+            "{z97}"
+        );
+        assert!(!z97.contains("deploy-rpi4"), "{z97}");
+
+        let pi = flash_instruction("rpi4b_4gb", "build").unwrap();
+        assert_eq!(pi, "DEST=/media/$USER/boot just deploy-rpi4");
+        assert!(!pi.contains("dd if="), "{pi}");
+        assert!(!pi.contains("just make-lerux-iso"), "{pi}");
+
+        assert!(flash_instruction("qemu_virt_aarch64", "build").is_none());
+        assert!(flash_instruction("inspiron_n5010", "build").is_none());
+        assert!(flash_instruction("rpi4b_4gb_workstation", "build").is_none());
     }
 }

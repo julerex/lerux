@@ -83,20 +83,24 @@ Board `rpi4b_4gb_workstation` (profile `workstation-rpi4`) is the **install-medi
 
 **One-command deploy** (after mounting the SD FAT boot partition on the host):
 
+Build the image, verify the digest, write the media, and boot. `just deploy-rpi4` copies `build/rpi4b_4gb/loader.img`. `lerux verify-image` prints that flash line after the digest matches.
+
 ```bash
-# Build (if needed) + verify loader.img.sha256 + copy image/sidecar + write lerux-uboot.txt
+BOARD=rpi4b_4gb just image
+lerux verify-image --board rpi4b_4gb
 DEST=/media/$USER/boot just deploy-rpi4
-# equivalent: cargo run -p lerux-cli -- deploy --board rpi4b_4gb_workstation --dest /media/$USER/boot
-# Skip integrity check only if needed: lerux deploy … --no-verify
-# Manual: lerux digest / lerux verify-image  (Phase 60 Track C; docs/security.md)
+# equivalent: cargo run -p lerux-cli -- deploy --board rpi4b_4gb --dest /media/$USER/boot
+# Boot: fatload mmc 0 0x10000000 loader.img && go 0x10000000
 ```
+
+The guest cannot install a package. The operator rebuilds on the host with `lerux package install --board rpi4b_4gb` or `lerux package upgrade --board rpi4b_4gb`. That command prints the pin digest and writes `loader.img.sha256`.
 
 **Full path**
 
 | Step | Command / action |
 |------|------------------|
 | 1. SDK | `MICROKIT_BOARDS=…,rpi4b_4gb just build-sdk` or `just fetch-sdk` |
-| 2. Image | `BOARD=rpi4b_4gb_workstation just image` (or deploy builds it) |
+| 2. Image | `BOARD=rpi4b_4gb just image`, then `lerux verify-image --board rpi4b_4gb` |
 | 3. Flash | `DEST=/path/to/sd-boot just deploy-rpi4` |
 | 4. Boot | U-Boot: `fatload mmc 0 0x10000000 loader.img` then `go 0x10000000` |
 | 5. Host smoke | `LERUX_HW_SERIAL=/dev/ttyUSB0 just test-hw` (boot expects + scripted `ls`/`pwd`/`ip`) |
@@ -165,15 +169,20 @@ Living work list (what still needs a Pi): [`plan-arch.md` — Physical RPi4 lab]
 
 Board `swift_sfx14_41g` is the on-screen menu on the Acer Swift X SFX14-41G (Ryzen 5 5500U). It reuses Microkit `x86_64_generic` and `console-swift.system.template`. Names for this machine and its devices are in [GLOSSARY.md](../GLOSSARY.md#swift-x). The panel is the firmware GOP buffer. The keyboard is the built-in i8042 (ports `0x60` and `0x64`, I/O APIC pin 1, vector 49). This machine has no COM port and no `serial-driver`. This image has no QEMU model. Device roles are in [platforms.md](platforms.md#swift-x-devices). `just make-lerux-iso pc_z97_d3h` packs the [Gigabyte Z97-D3H](#gigabyte-z97-d3h-install-path) image.
 
-**USB ISO** (`just make-lerux-iso` packs `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`; `just burn-lerux-iso` writes a USB stick):
+**USB ISO** (`just make-lerux-iso` packs `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`). Build the image, verify the digest, write the media, and boot. `lerux verify-image` prints `lerux iso --board swift_sfx14_41g --no-build` and the `dd` line after the digest matches. That packs the checked `loader.img`. It does not run `just make-lerux-iso`.
 
 ```bash
 just fetch
 just fetch-sdk
-# or: just build-sdk
 just make-lerux-iso
-just burn-lerux-iso
+lerux verify-image --board swift_sfx14_41g
+lsblk
+sudo dd if=build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso of=/dev/sdX bs=4M status=progress conv=fsync
 ```
+
+The guest cannot install a package. The operator rebuilds on the host with `lerux package install --board swift_sfx14_41g` or `lerux package upgrade --board swift_sfx14_41g`. That command prints the pin digest and writes `loader.img.sha256`.
+
+Replace `sdX` with the flash drive from `lsblk`. Do not write the internal NVMe.
 
 `just burn-lerux-iso` runs `just make-lerux-iso`, then lists the USB sticks and asks which one to erase. `just burn-lerux-iso /dev/sdX` writes that stick. The command refuses the host OS disk. It writes the Swift ISO, including when the last `just make-lerux-iso` target was the Z97 desk or the Inspiron. Reboot and open the firmware boot menu. Choose the USB entry that says UEFI (GRUB `EFI/BOOT/BOOTX64.EFI`). GRUB boots immediately. It Multiboot 2-loads `/boot/mb2-stub.elf` with modules `/boot/sel4.elf` and `/boot/loader.img`. The stub places the 64-bit kernel at 1 MiB after `ExitBootServices`.
 
@@ -214,13 +223,16 @@ Use the USB boot entry that says UEFI (GRUB `EFI/BOOT/BOOTX64.EFI`). `sel4.elf` 
 
 An AMD modesetting driver would matter only if lerux itself programmed this card (resolution, HDMI, a linear framebuffer) or had to bring the picture up when the firmware had not left VGA text mode. That work is still deferred. The QEMU `ramfb` display server does not drive this card.
 
-**USB ISO** (writes `build/pc_z97_d3h/lerux_pc_z97_d3h.iso` and does not touch a disk):
+**USB ISO** (writes `build/pc_z97_d3h/lerux_pc_z97_d3h.iso` and does not touch a disk). Build the image, verify the digest, write the media, and boot. `lerux verify-image` prints the flash line after the digest matches. The ISO path is `lerux iso --board pc_z97_d3h --no-build` and the `dd` line. The other path is `just deploy-pc` onto a mounted FAT volume. The printed FAT line is a comment, so pasting the flash block writes only the ISO.
 
 ```bash
 just make-lerux-iso pc_z97_d3h
+lerux verify-image --board pc_z97_d3h
 lsblk
 sudo dd if=build/pc_z97_d3h/lerux_pc_z97_d3h.iso of=/dev/sdX bs=4M status=progress conv=fsync
 ```
+
+The guest cannot install a package. The operator rebuilds on the host with `lerux package install --board pc_z97_d3h` or `lerux package upgrade --board pc_z97_d3h`. That command prints the pin digest and writes `loader.img.sha256`.
 
 Replace `sdX` with the flash drive from `lsblk`. Do not use `sda` (Ubuntu SSD) or `sdb` (data disk). Reboot and open the firmware boot menu (F12). Choose the USB entry that says UEFI (GRUB `EFI/BOOT/BOOTX64.EFI`). GRUB boots immediately (`timeout=0`), then the screen is the 80×25 VGA page, light gray on black, with the sign-on and `[root@lerux ~]# `. Type with a PS/2 keyboard in the rear combo port, or a USB HID boot keyboard on a root xHCI port (the Microsoft Wireless Desktop 900 dongle on this machine is one). Keyboards behind a hub are not seen. `1` or `browser` prints `browser unavailable` (this image has no network and no page painter). `2` or `maths` reads integer expressions until `quit`, which prints the prompt again. The serial console is still COM1 at 115200 8N1 on the COMA header and shows the same text. `console-driver: usb keyboard` means the USB boot keyboard was armed. Reboot and choose Ubuntu to return.
 
@@ -229,6 +241,7 @@ The ISO is a UEFI image. GRUB Multiboot 2-boots `/boot/mb2-stub.elf` (linked at 
 **FAT volume that already has a bootloader** (after mounting it; not the Ubuntu ESP):
 
 ```bash
+lerux verify-image --board pc_z97_d3h
 DEST=/media/$USER/boot just deploy-pc
 # equivalent: cargo run -p lerux-cli -- deploy --board pc_z97_d3h --dest /media/$USER/boot
 ```
@@ -241,8 +254,8 @@ That writes GRUB's `EFI/BOOT/BOOTX64.EFI`, `/boot/grub/grub.cfg`, and `boot/mb2-
 |------|------------------|
 | 1. SDK | `MICROKIT_BOARDS=…,x86_64_generic just build-sdk` or `just fetch-sdk` (already required for QEMU x86) |
 | 2. Serial hardware | Gigabyte **COMA** 9-pin header → DB9 cable → laptop USB-serial at **115200 8N1**. There is no rear DB9. Prove the link from Linux (`/dev/ttyS0` is `0x3F8` IRQ 4) before seL4. |
-| 3. Image | `BOARD=pc_z97_d3h just image` (or deploy builds it) |
-| 4. Media | `just make-lerux-iso pc_z97_d3h`, then `dd` the ISO onto the flash drive (not `sda` or `sdb`). Or `DEST=/path/to/usb-fat just deploy-pc` to write the same GRUB layout onto a mounted volume. |
+| 3. Image | `BOARD=pc_z97_d3h just image`, then `lerux verify-image --board pc_z97_d3h` |
+| 4. Media | `lerux iso --board pc_z97_d3h --no-build`, then `dd` that ISO onto the flash drive (not `sda` or `sdb`). Or `DEST=/path/to/usb-fat just deploy-pc` to write the GRUB layout onto a mounted volume. |
 | 5. Boot | Firmware boot menu (F12) → the USB entry that says UEFI (GRUB `EFI/BOOT/BOOTX64.EFI`). GRUB is Multiboot 2: kernel `/boot/mb2-stub.elf`, modules `/boot/sel4.elf` and `/boot/loader.img`. |
 | 6. Host smoke | From the **laptop**: `LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD=pc_z97_d3h just test-hw` |
 | 7. Back to Ubuntu | Reboot and pick the default Ubuntu EFI entry. |

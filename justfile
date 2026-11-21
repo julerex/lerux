@@ -96,6 +96,16 @@ make-lerux-iso target="swift_sfx14_41g":
 burn-lerux-iso *args: (make-lerux-iso "swift_sfx14_41g")
     bash "{{root}}/support/burn-lerux-iso.sh" --image "{{root}}/{{build_dir}}/swift_sfx14_41g/lerux_swift_sfx14_41g.iso" {{args}}
 
+# Copy the Pi loader onto a mounted FAT boot directory. Verifies loader.img.sha256 first.
+# DEST=/media/$USER/boot just deploy-rpi4
+deploy-rpi4:
+    {{lerux}} deploy --board rpi4b_4gb --dest {{env_var("DEST")}} --build-dir {{build_dir}} --config {{config}}
+
+# Copy the Z97 GRUB layout onto a mounted FAT volume. Verifies loader.img.sha256 first.
+# DEST=/media/$USER/boot just deploy-pc
+deploy-pc:
+    {{lerux}} deploy --board pc_z97_d3h --dest {{env_var("DEST")}} --build-dir {{build_dir}} --config {{config}}
+
 # Erase a USB stick and write the Arch install image plus the desk probe.
 # With no argument, lists USB sticks and asks which one to erase.
 # just burn-arch-probe

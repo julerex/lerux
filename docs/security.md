@@ -140,7 +140,7 @@ Host-side **SHA-256 digests** for `loader.img` (not asymmetric signing, not meas
 |------|--------------------|
 | Write | Automatic after `lerux image` → `build/<board>/loader.img.sha256` (`sha256sum` format) |
 | Write (manual) | `lerux digest --board <board>` or `lerux digest -p path/to/loader.img` |
-| Verify | `lerux verify-image --board <board>` |
+| Verify | `lerux verify-image --board <board>` checks the sidecar, then prints the flash line for the Swift, the Z97, or the Pi |
 | Deploy | `lerux deploy …` verifies the sidecar **by default**; copies `.sha256` to media; skip with `--no-verify` |
 
 ```bash

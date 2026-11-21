@@ -267,6 +267,19 @@ pub fn apply_static(octets: [u8; 4]) -> bool {
     unsafe { &mut **slot }.with_pipe(|stack| stack.install_static(octets))
 }
 
+/// The lease this client already holds. The first call brings the interface up.
+#[cfg(all(
+    feature = "net-client",
+    not(any(
+        feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-qemu_virt_riscv64_browser_sddf"
+    ))
+))]
+pub fn local_address() -> Result<[u8; 4], ()> {
+    let sockets = sockets()?;
+    sockets.with_pipe(|stack| stack.leased_address()).ok_or(())
+}
+
 fn copy_queue(queue: &net_queue_handle_t) -> net_queue_handle_t {
     net_queue_handle_t {
         free: queue.free,
@@ -388,6 +401,21 @@ impl Stack {
         self.local_ip = address;
         self.poll_iface();
         true
+    }
+
+    #[cfg(all(
+        feature = "net-client",
+        not(any(
+            feature = "board-qemu_virt_aarch64_browser_sddf",
+            feature = "board-qemu_virt_riscv64_browser_sddf"
+        ))
+    ))]
+    fn leased_address(&self) -> Option<[u8; 4]> {
+        if self.local_ip == Ipv4Address::UNSPECIFIED {
+            None
+        } else {
+            Some(self.local_ip.octets())
+        }
     }
 
     fn bring_up(&mut self) -> bool {

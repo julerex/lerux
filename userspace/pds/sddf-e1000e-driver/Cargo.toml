@@ -7,6 +7,9 @@ license = "MIT"
 [lints]
 workspace = true
 
+[features]
+board-pc_z97_d3h_i217 = []
+
 [dependencies]
 lerux-logging = { path = "../../crates/lerux-logging" }
 lerux-machine = { path = "../../crates/lerux-machine" }

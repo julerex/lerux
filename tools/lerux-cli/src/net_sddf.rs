@@ -12,7 +12,7 @@ pub fn write_configs(dir: &Path, board: &str) -> Result<()> {
     fs::create_dir_all(dir).with_context(|| format!("mkdir {}", dir.display()))?;
     let driver = match board_registration(board).map_err(|error| anyhow::anyhow!("{error}"))? {
         Some(BoardId {
-            net: NetBackend::E1000e,
+            net: NetBackend::E1000e | NetBackend::I217,
             ..
         }) => "sddf-e1000e-driver",
         Some(_) | None => "sddf-net-driver",
@@ -81,6 +81,9 @@ mod tests {
         let e1000e = tempfile::tempdir().expect("tempdir");
         write_configs(e1000e.path(), "x86_64_generic_net_e1000e").expect("e1000e configs");
         check(e1000e.path(), "net_driver_config.bin", &driver_config());
+        let desk = tempfile::tempdir().expect("tempdir");
+        write_configs(desk.path(), "pc_z97_d3h_i217").expect("i217 configs");
+        check(desk.path(), "net_driver_config.bin", &driver_config());
         let rejected = tempfile::tempdir().expect("tempdir");
         let error = write_configs(rejected.path(), "qemu_virt_aarch64_net_e1000e")
             .expect_err("non-x86 e1000e");

@@ -33,7 +33,11 @@ mod tests {
         path::PathBuf,
     };
 
-    use lerux_machine::{ahci_msi, e1000e::e1000e_map, e1000e_standalone_irq, Arch, IoApicVector};
+    use lerux_machine::{
+        ahci_msi,
+        e1000e::{e1000e_map, i217_map, I217_FLASH_PADDR, I217_IO_PORT},
+        e1000e_standalone_irq, i217_irq, Arch, IoApicVector,
+    };
     use lerux_sddf::{
         fs_client_config_t, fs_config_check_magic, net_client_config_t, net_config_check_magic,
         serial_client_config_t, serial_config_check_magic, serial_connection_resource_t,
@@ -491,6 +495,70 @@ mod tests {
         assert_82574_driver_binding(&xml);
     }
 
+    #[test]
+    fn desk_i217_board_renders_the_same_roles_on_the_recorded_window() {
+        let xml = render_board("pc_z97_d3h_i217")
+            .expect("render")
+            .expect("i217 image");
+        assert_i217_driver_image(&xml);
+        assert_i217_board_entry();
+    }
+
+    fn assert_i217_driver_image(xml: &str) {
+        let map = i217_map();
+        let irq = i217_irq();
+        assert!(xml.contains("sddf-e1000e-driver.elf"));
+        assert!(!xml.contains("sddf-net-driver.elf"));
+        assert!(!xml.contains("rtl8852be"));
+        assert!(xml.contains("e1000e_regs"));
+        assert!(xml.contains("e1000e_dma"));
+        assert!(xml.contains(&format!("phys_addr=\"{}\"", map.regs_paddr.text())));
+        assert!(xml.contains(&format!("phys_addr=\"{}\"", map.dma_paddr.text())));
+        assert!(!xml.contains(I217_FLASH_PADDR.text()));
+        assert!(!xml.contains(&format!("0x{I217_IO_PORT:x}")));
+        assert!(!xml.contains("0xfed4_0000"));
+        assert!(xml.contains(&format!(
+            "<irq pin=\"{}\" vector=\"{}\" id=\"0\" trigger=\"level\" polarity=\"low\" />",
+            irq.pin.0, irq.vector.0
+        )));
+        assert_eq!((irq.pin.0, irq.vector.0), (20, 50));
+        assert!(xml.contains(
+            "<protection_domain name=\"net_driver\" priority=\"4\" stack_size=\"0x10_000\">"
+        ));
+        assert!(!xml.contains("budget="));
+        assert!(xml.contains("sddf-net-client.elf"));
+        assert!(xml.contains("sddf-net-virt-tx.elf"));
+        assert!(xml.contains("sddf-net-virt-rx.elf"));
+        assert!(xml.contains("sddf-net-copy.elf"));
+        assert!(xml.contains(&format!(
+            "<end pd=\"net_driver\" id=\"{}\" />",
+            lerux_sddf::net_image::DRIVER_RX_CHANNEL
+        )));
+        assert!(xml.contains(&format!(
+            "<end pd=\"net_driver\" id=\"{}\" />",
+            lerux_sddf::net_image::DRIVER_TX_CHANNEL
+        )));
+    }
+
+    fn assert_i217_board_entry() {
+        let boards = fs::read_to_string(repo_root().join("support/boards.toml")).expect("boards");
+        let header = boards.split("\n[").next().expect("header");
+        assert!(header.contains("pc_z97_d3h_i217"));
+        let section = board_section(&boards, "pc_z97_d3h_i217");
+        assert!(section.contains("sddf-e1000e-driver"));
+        assert!(section.contains("ci = false"));
+        assert!(!section.contains("qemu"));
+        let docs = fs::read_to_string(repo_root().join("docs/system-generation.md")).expect("docs");
+        assert!(docs.contains("pc_z97_d3h_i217"));
+        assert_eq!(
+            board_registration("pc_z97_d3h_i217")
+                .expect("register")
+                .expect("desk image")
+                .net,
+            NetBackend::I217
+        );
+    }
+
     fn assert_82574_driver_image(xml: &str) {
         let map = e1000e_map();
         let irq = e1000e_standalone_irq();
@@ -509,6 +577,7 @@ mod tests {
         assert_eq!((irq.pin.0, irq.vector.0), (11, 50));
         assert!(!xml.contains("virtio_net"));
         assert!(!xml.contains("0xfed3_0000"));
+        assert!(!xml.contains("0xf7e0_0000"));
         assert!(!xml.contains("pcidev="));
         assert!(!xml.contains("0x6400_0000"));
         assert!(xml.contains(

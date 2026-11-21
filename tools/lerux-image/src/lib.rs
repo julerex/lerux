@@ -557,7 +557,8 @@ mod tests {
         let native = board_section(&smokes, "boards.x86_64_generic_fetch_native");
         let virtio = board_section(&smokes, "boards.x86_64_generic_fetch_sddf");
         assert_eq!(native, virtio);
-        assert!(!native.contains("reboot"));
+        // The daily shell ends with `reboot`. x86 starts a new QEMU for that step.
+        assert!(native.contains("reboot"));
         let docs = fs::read_to_string(root.join("docs/system-generation.md")).expect("docs");
         assert!(docs.contains("x86_64_generic_fetch_native"));
     }

@@ -2170,6 +2170,19 @@ fn push_u64(buf: &mut [u8], mut value: u64) -> usize {
     feature = "board-qemu_virt_aarch64_browser_sddf",
     feature = "board-qemu_virt_riscv64_browser_sddf"
 )))]
+const DF_PATH: usize = 64;
+/// One directory can list this many children. After the parent is popped, that
+/// many subdirectories fit. A wider frontier does not, and `df` reports an error.
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+const DF_PENDING: usize = LIST_MAX;
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
 struct Listed {
     bytes: [[u8; NAME_MAX]; LIST_MAX],
     lens: [u8; LIST_MAX],
@@ -2180,10 +2193,125 @@ struct Listed {
     feature = "board-qemu_virt_aarch64_browser_sddf",
     feature = "board-qemu_virt_riscv64_browser_sddf"
 )))]
-impl Listed {
-    fn name(&self, index: usize) -> &[u8] {
-        &self.bytes[index][..usize::from(self.lens[index])]
+#[derive(Clone, Copy)]
+struct DfEntry {
+    bytes: [u8; DF_PATH],
+    len: u8,
+    root: bool,
+}
+
+/// The directory snapshot and the directories still to visit. Both stay off
+/// the worker stack. A recursive walk kept a snapshot on every frame, and a
+/// chain of short names overflowed the `0x4000` filesystem stack.
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+struct DfScratch {
+    listed: Listed,
+    pending: [DfEntry; DF_PENDING],
+    count: usize,
+}
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+struct DfScratchCell(UnsafeCell<DfScratch>);
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+// SAFETY: the worker is the only user. The root does not run `df`.
+unsafe impl Sync for DfScratchCell {}
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+static DF_SCRATCH: DfScratchCell = DfScratchCell(UnsafeCell::new(DfScratch {
+    listed: Listed {
+        bytes: [[0; NAME_MAX]; LIST_MAX],
+        lens: [0; LIST_MAX],
+        count: 0,
+    },
+    pending: [DfEntry {
+        bytes: [0; DF_PATH],
+        len: 0,
+        root: false,
+    }; DF_PENDING],
+    count: 0,
+}));
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+fn df_scratch() -> &'static mut DfScratch {
+    // SAFETY: only the worker calls `df`. Each helper drops this borrow
+    // before the next `files()` call.
+    unsafe { &mut *DF_SCRATCH.0.get() }
+}
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+fn df_push(path: &[u8], root: bool) -> Option<()> {
+    if path.is_empty() || path.len() > DF_PATH {
+        return None;
     }
+    let len = u8::try_from(path.len()).unwrap_or(0);
+    if len == 0 {
+        return None;
+    }
+    let scratch = df_scratch();
+    if scratch.count == DF_PENDING {
+        return None;
+    }
+    let slot = &mut scratch.pending[scratch.count];
+    slot.bytes[..path.len()].copy_from_slice(path);
+    slot.len = len;
+    slot.root = root;
+    scratch.count += 1;
+    Some(())
+}
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+fn df_pop(out: &mut [u8]) -> Option<(usize, bool)> {
+    let scratch = df_scratch();
+    if scratch.count == 0 {
+        return None;
+    }
+    scratch.count -= 1;
+    let slot = &scratch.pending[scratch.count];
+    let len = usize::from(slot.len);
+    if len == 0 || len > out.len() || len > slot.bytes.len() {
+        return None;
+    }
+    out[..len].copy_from_slice(&slot.bytes[..len]);
+    Some((len, slot.root))
+}
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+fn df_child(index: usize, out: &mut [u8]) -> Option<usize> {
+    let listed = &df_scratch().listed;
+    if index >= listed.count {
+        return None;
+    }
+    let len = usize::from(listed.lens[index]);
+    if len == 0 || len > out.len() || len > NAME_MAX {
+        return None;
+    }
+    out[..len].copy_from_slice(&listed.bytes[index][..len]);
+    Some(len)
 }
 
 #[cfg(not(any(
@@ -2191,16 +2319,25 @@ impl Listed {
     feature = "board-qemu_virt_riscv64_browser_sddf"
 )))]
 fn used_clusters(path: &[u8], root: bool) -> Option<u64> {
-    let listed = read_names(path)?;
-    let mut used = u64::from(!root);
-    for index in 0..listed.count {
-        let mut joined = [0u8; 64];
-        let len = join_child(path, root, listed.name(index), &mut joined)?;
-        let name = &joined[..len];
-        match files().stat(name) {
-            Ok(stat) if is_dir(&stat) => used += used_clusters(name, false)?,
-            Ok(stat) => used += file_clusters(stat.size),
-            Err(_) => return None,
+    df_scratch().count = 0;
+    df_push(path, root)?;
+    let mut used = 0u64;
+    while df_scratch().count > 0 {
+        let mut path_buf = [0u8; DF_PATH];
+        let (path_len, root) = df_pop(&mut path_buf)?;
+        let path = &path_buf[..path_len];
+        let count = read_names(path)?;
+        used += u64::from(!root);
+        for index in 0..count {
+            let mut child = [0u8; NAME_MAX];
+            let child_len = df_child(index, &mut child)?;
+            let mut joined = [0u8; DF_PATH];
+            let joined_len = join_child(path, root, &child[..child_len], &mut joined)?;
+            match files().stat(&joined[..joined_len]) {
+                Ok(stat) if is_dir(&stat) => df_push(&joined[..joined_len], false)?,
+                Ok(stat) => used += file_clusters(stat.size),
+                Err(_) => return None,
+            }
         }
     }
     Some(used)
@@ -2240,9 +2377,9 @@ fn file_clusters(size: u64) -> u64 {
     feature = "board-qemu_virt_aarch64_browser_sddf",
     feature = "board-qemu_virt_riscv64_browser_sddf"
 )))]
-fn read_names(path: &[u8]) -> Option<Listed> {
+fn read_names(path: &[u8]) -> Option<usize> {
     let dir = files().open_dir(path).ok()?;
-    let mut listed = Listed {
+    df_scratch().listed = Listed {
         bytes: [[0; NAME_MAX]; LIST_MAX],
         lens: [0; LIST_MAX],
         count: 0,
@@ -2254,17 +2391,10 @@ fn read_names(path: &[u8]) -> Option<Listed> {
             Ok(None) => break,
             Ok(Some(0)) => {}
             Ok(Some(len)) => {
-                if listed.count == LIST_MAX || len > NAME_MAX {
+                if !df_note_name(&buf[..len]) {
                     failed = true;
                     break;
                 }
-                listed.bytes[listed.count][..len].copy_from_slice(&buf[..len]);
-                listed.lens[listed.count] = u8::try_from(len).unwrap_or(0);
-                if listed.lens[listed.count] == 0 {
-                    failed = true;
-                    break;
-                }
-                listed.count += 1;
             }
             Err(_) => {
                 failed = true;
@@ -2276,8 +2406,27 @@ fn read_names(path: &[u8]) -> Option<Listed> {
     if failed {
         None
     } else {
-        Some(listed)
+        Some(df_scratch().listed.count)
     }
+}
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+fn df_note_name(name: &[u8]) -> bool {
+    let listed = &mut df_scratch().listed;
+    if listed.count == LIST_MAX || name.is_empty() || name.len() > NAME_MAX {
+        return false;
+    }
+    let len = u8::try_from(name.len()).unwrap_or(0);
+    if len == 0 {
+        return false;
+    }
+    listed.bytes[listed.count][..name.len()].copy_from_slice(name);
+    listed.lens[listed.count] = len;
+    listed.count += 1;
+    true
 }
 
 fn cmd_mkdir(rest: &[u8]) {

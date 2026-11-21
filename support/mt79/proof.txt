@@ -1,8 +1,8 @@
 linux tag v7.3.5
-macros emitted 2681
+macros emitted 2715
 enum constants emitted 1417
 records emitted 337
-skipped 1551
+skipped 1517
 linux mismatches 0
 skipped dma.h DMA_DUMMY_DATA not an integer constant
 skipped dma.h mt76_dma_handle_read inline function
@@ -566,7 +566,6 @@ skipped mt7915/mt7915.h MT7915_WTBL_RESERVED not an integer constant
 skipped mt7915/mt7915.h MT7915_WTBL_STA not an integer constant
 skipped mt7915/mt7915.h MT7915_WATCHDOG_TIME not an integer constant
 skipped mt7915/mt7915.h MT7915_RESET_TIMEOUT not an integer constant
-skipped mt7915/mt7915.h MT7915_MAX_QUEUE linux value mismatch
 skipped mt7915/mt7915.h DECLARE_EWMA inline function
 skipped mt7915/mt7915.h mt7915_get_rdd_idx inline function
 skipped mt7915/mt7915.h mt7915_hw_phy inline function
@@ -938,15 +937,6 @@ skipped mt7921/regd.h mt7921_regd_clc_supported function prototype
 skipped mt7921/regd.h mt7921_regd_change function prototype
 skipped mt7921/regd.h mt7921_regd_init function prototype
 skipped mt7921/regd.h mt7921_regd_update function prototype
-skipped mt7921/regs.h MT_WFDMA0_HOST_INT_ENA linux value mismatch
-skipped mt7921/regs.h MT_INT_RX_DONE_DATA linux value mismatch
-skipped mt7921/regs.h MT_INT_RX_DONE_WM linux value mismatch
-skipped mt7921/regs.h MT_INT_RX_DONE_ALL linux value mismatch
-skipped mt7921/regs.h MT_INT_TX_DONE_BAND0 linux value mismatch
-skipped mt7921/regs.h MT_INT_TX_DONE_ALL linux value mismatch
-skipped mt7921/regs.h MT_RX_DATA_RING_BASE linux value mismatch
-skipped mt7921/regs.h MT_WTBLON_TOP_WDUCR linux value mismatch
-skipped mt7921/regs.h MT_WTBL_UPDATE linux value mismatch
 skipped mt7925/mac.h mt7925_mac_wtbl_lmac_addr inline function
 skipped mt7925/mcu.h MT7925_STA_UPDATE_MAX_SIZE unparsed expression
 skipped mt7925/mcu.h MT7925_BSS_UPDATE_MAX_SIZE unparsed expression
@@ -1081,29 +1071,6 @@ skipped mt7925/regd.h mt7925_regd_update function prototype
 skipped mt7925/regd.h mt7925_regd_change function prototype
 skipped mt7925/regd.h mt7925_regd_is_valid_channel function prototype
 skipped mt7925/regd.h mt7925_regd_init function prototype
-skipped mt7925/regs.h MT_WFDMA0_HOST_INT_ENA linux value mismatch
-skipped mt7925/regs.h MT_WFDMA0_HOST_INT_DIS linux value mismatch
-skipped mt7925/regs.h MT_INT_RX_DONE_WM2 linux value mismatch
-skipped mt7925/regs.h MT7925_INT_RX_DONE_DATA linux value mismatch
-skipped mt7925/regs.h MT7925_INT_RX_DONE_WM linux value mismatch
-skipped mt7925/regs.h MT7925_INT_RX_DONE_ALL linux value mismatch
-skipped mt7925/regs.h MT7927_INT_RX_DONE_DATA linux value mismatch
-skipped mt7925/regs.h MT7927_INT_RX_DONE_WM linux value mismatch
-skipped mt7925/regs.h MT7927_INT_RX_DONE_WM2 linux value mismatch
-skipped mt7925/regs.h MT7927_INT_RX_DONE_ALL linux value mismatch
-skipped mt7925/regs.h MT7928_INT_RX_DONE_DATA linux value mismatch
-skipped mt7925/regs.h MT7928_INT_RX_DONE_WM linux value mismatch
-skipped mt7925/regs.h MT7928_INT_RX_DONE_ALL linux value mismatch
-skipped mt7925/regs.h MT_INT_TX_DONE_BAND0 linux value mismatch
-skipped mt7925/regs.h MT_INT_TX_DONE_ALL linux value mismatch
-skipped mt7925/regs.h MT_RX_DATA_RING_BASE linux value mismatch
-skipped mt7925/regs.h MT7925_WTBLON_TOP_WDUCR linux value mismatch
-skipped mt7925/regs.h MT7928_WTBLON_TOP_WDUCR linux value mismatch
-skipped mt7925/regs.h MT7925_WTBL_UPDATE linux value mismatch
-skipped mt7925/regs.h MT7928_WTBL_UPDATE linux value mismatch
-skipped mt7925/regs.h MT7928_WTBL_ITCR linux value mismatch
-skipped mt7925/regs.h MT7928_WTBL_ITDR0 linux value mismatch
-skipped mt7925/regs.h MT7928_WTBL_ITDR1 linux value mismatch
 skipped mt792x.h MT792x_PM_TIMEOUT not an integer constant
 skipped mt792x.h MT792x_HW_SCAN_TIMEOUT not an integer constant
 skipped mt792x.h MT792x_WATCHDOG_TIME not an integer constant
@@ -1256,7 +1223,6 @@ skipped mt7996/mt7996.h MT7996_WATCHDOG_TIME not an integer constant
 skipped mt7996/mt7996.h MT7996_RESET_TIMEOUT not an integer constant
 skipped mt7996/mt7996.h MT7996_RX_MCU_BUF_SIZE unparsed expression
 skipped mt7996/mt7996.h MT7996_FIRMWARE_DSP_233 not an integer constant
-skipped mt7996/mt7996.h MT7996_MAX_QUEUE linux value mismatch
 skipped mt7996/mt7996.h MT7996_RX_BUF_SIZE unparsed expression
 skipped mt7996/mt7996.h MT7996_RX_MSDU_PAGE_SIZE unparsed expression
 skipped mt7996/mt7996.h DECLARE_EWMA inline function

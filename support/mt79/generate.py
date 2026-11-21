@@ -167,6 +167,7 @@ class Macro:
     sample: tuple[int, ...] | None = None
     text: str | None = None
     clang: int | None = None
+    probe: str | None = None
 
 
 @dataclass
@@ -178,6 +179,7 @@ class EnumConst:
     expr_src: str | None
     clang: int | None = None
     anchor: str | None = None
+    probe: str | None = None
 
 
 @dataclass
@@ -1975,11 +1977,18 @@ def confirm_constants(items: list, prefix: list[str] | None = None) -> list:
         got = _parse_const_output(out)
         accepted = []
         for item in items:
-            if got.get(item.name) == item.value:
-                item.clang = got[item.name]
+            seen = got.get(item.name)
+            if seen == item.value:
+                item.clang = seen
+                item.probe = None
                 accepted.append(item)
+            elif seen is None:
+                item.probe = "linux probe failed"
+            else:
+                item.probe = "linux value mismatch"
         return accepted
     if len(items) == 1:
+        items[0].probe = "linux probe failed"
         return []
     mid = len(items) // 2
     left = confirm_constants(items[:mid], prefix)
@@ -1994,7 +2003,7 @@ def _define_of(item: Macro | EnumConst) -> str:
     return enum_define(item)
 
 
-def accept_constants(bag: Bag) -> None:
+def accept_constants(bag: Bag, bags: dict[str, Bag]) -> None:
     items: list = []
     for macro in bag.macros:
         if macro.kind == "str":
@@ -2004,7 +2013,9 @@ def accept_constants(bag: Bag) -> None:
         items.append((const.order, 1, const))
     items.sort(key=lambda part: (part[0], part[1]))
     ordered = [part[2] for part in items]
-    accepted = confirm_constants(ordered)
+    # Parents are already accepted. The probe has to see their macros, or a
+    # use of MT_WFDMA0 from the included header looks like a value mismatch.
+    accepted = confirm_constants(ordered, visible_defines(bag, bags))
     accepted_ids = {id(item) for item in accepted}
     kept_macros = []
     for macro in bag.macros:
@@ -2015,7 +2026,7 @@ def accept_constants(bag: Bag) -> None:
             kept_macros.append(macro)
             bag.define_lines.append(macro_define(macro))
             continue
-        bag.skips.append(Skip(bag.rel, macro.name, "linux value mismatch", macro.order))
+        bag.skips.append(Skip(bag.rel, macro.name, macro.probe or "linux value mismatch", macro.order))
         bag.env.values.pop(macro.name, None)
         bag.env.functions.pop(macro.name, None)
     bag.macros = kept_macros
@@ -2025,7 +2036,7 @@ def accept_constants(bag: Bag) -> None:
             kept_enums.append(const)
             bag.define_lines.append(enum_define(const))
             continue
-        bag.skips.append(Skip(bag.rel, const.name, "linux value mismatch", const.order))
+        bag.skips.append(Skip(bag.rel, const.name, const.probe or "linux value mismatch", const.order))
         bag.env.values.pop(const.name, None)
     bag.enum_consts = kept_enums
 
@@ -3242,7 +3253,7 @@ def generate(root: Path, rels: list[str]) -> None:
     for rel in closure_order(rels, bags):
         print(f"bind {rel}", flush=True)
         bind_header(bags[rel], bags)
-        accept_constants(bags[rel])
+        accept_constants(bags[rel], bags)
     print("resolve records", flush=True)
     resolved = resolve_records(bags)
     print(f"probe {len(resolved)} records", flush=True)

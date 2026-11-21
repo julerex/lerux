@@ -49,6 +49,7 @@ pub const MT7915_SKU_PATH_NUM: u64 = 185;
 pub const MT7915_MAX_TWT_AGRT: u64 = 16;
 pub const MT7915_MAX_STA_TWT_AGRT: u64 = 8;
 pub const MT7915_MIN_TWT_DUR: u64 = 64;
+pub const MT7915_MAX_QUEUE: u64 = 11;
 pub const MT7915_WED_RX_TOKEN_SIZE: u64 = 0x3000;
 pub const MT7915_CRIT_TEMP_IDX: u64 = 0;
 pub const MT7915_MAX_TEMP_IDX: u64 = 1;

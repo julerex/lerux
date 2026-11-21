@@ -14678,6 +14678,7 @@ printf("I %s %llu\n", "MT7915_SKU_PATH_NUM", (unsigned long long)(MT7915_SKU_PAT
 printf("I %s %llu\n", "MT7915_MAX_TWT_AGRT", (unsigned long long)(MT7915_MAX_TWT_AGRT));
 printf("I %s %llu\n", "MT7915_MAX_STA_TWT_AGRT", (unsigned long long)(MT7915_MAX_STA_TWT_AGRT));
 printf("I %s %llu\n", "MT7915_MIN_TWT_DUR", (unsigned long long)(MT7915_MIN_TWT_DUR));
+printf("I %s %llu\n", "MT7915_MAX_QUEUE", (unsigned long long)(MT7915_MAX_QUEUE));
 printf("I %s %llu\n", "MT7915_WED_RX_TOKEN_SIZE", (unsigned long long)(MT7915_WED_RX_TOKEN_SIZE));
 printf("I %s %llu\n", "MT7915_CRIT_TEMP_IDX", (unsigned long long)(MT7915_CRIT_TEMP_IDX));
 printf("I %s %llu\n", "MT7915_MAX_TEMP_IDX", (unsigned long long)(MT7915_MAX_TEMP_IDX));
@@ -14901,6 +14902,10 @@ return 0; }"#,
             IntRow {
                 name: "MT7915_MIN_TWT_DUR",
                 value: crate::mt7915::mt7915::MT7915_MIN_TWT_DUR,
+            },
+            IntRow {
+                name: "MT7915_MAX_QUEUE",
+                value: crate::mt7915::mt7915::MT7915_MAX_QUEUE,
             },
             IntRow {
                 name: "MT7915_WED_RX_TOKEN_SIZE",
@@ -20629,6 +20634,7 @@ printf("I %s %llu\n", "MT_MDP_RCFR1_RX_DROPPED_UCAST", (unsigned long long)(MT_M
 printf("I %s %llu\n", "MT_MDP_RCFR1_RX_DROPPED_MCAST", (unsigned long long)(MT_MDP_RCFR1_RX_DROPPED_MCAST));
 printf("I %s %llu\n", "MT_MDP_TO_HIF", (unsigned long long)(MT_MDP_TO_HIF));
 printf("I %s %llu\n", "MT_MDP_TO_WM", (unsigned long long)(MT_MDP_TO_WM));
+printf("I %s %llu\n", "MT_WFDMA0_HOST_INT_ENA", (unsigned long long)(MT_WFDMA0_HOST_INT_ENA));
 printf("I %s %llu\n", "HOST_TX_DONE_INT_ENA8", (unsigned long long)(HOST_TX_DONE_INT_ENA8));
 printf("I %s %llu\n", "HOST_TX_DONE_INT_ENA9", (unsigned long long)(HOST_TX_DONE_INT_ENA9));
 printf("I %s %llu\n", "HOST_TX_DONE_INT_ENA10", (unsigned long long)(HOST_TX_DONE_INT_ENA10));
@@ -20640,10 +20646,16 @@ printf("I %s %llu\n", "HOST_RX_DONE_INT_ENA4", (unsigned long long)(HOST_RX_DONE
 printf("I %s %llu\n", "HOST_RX_DONE_INT_ENA5", (unsigned long long)(HOST_RX_DONE_INT_ENA5));
 printf("I %s %llu\n", "HOST_TX_DONE_INT_ENA16", (unsigned long long)(HOST_TX_DONE_INT_ENA16));
 printf("I %s %llu\n", "HOST_TX_DONE_INT_ENA17", (unsigned long long)(HOST_TX_DONE_INT_ENA17));
+printf("I %s %llu\n", "MT_INT_RX_DONE_DATA", (unsigned long long)(MT_INT_RX_DONE_DATA));
+printf("I %s %llu\n", "MT_INT_RX_DONE_WM", (unsigned long long)(MT_INT_RX_DONE_WM));
 printf("I %s %llu\n", "MT_INT_RX_DONE_WM2", (unsigned long long)(MT_INT_RX_DONE_WM2));
+printf("I %s %llu\n", "MT_INT_RX_DONE_ALL", (unsigned long long)(MT_INT_RX_DONE_ALL));
 printf("I %s %llu\n", "MT_INT_TX_DONE_MCU_WM", (unsigned long long)(MT_INT_TX_DONE_MCU_WM));
 printf("I %s %llu\n", "MT_INT_TX_DONE_FWDL", (unsigned long long)(MT_INT_TX_DONE_FWDL));
+printf("I %s %llu\n", "MT_INT_TX_DONE_BAND0", (unsigned long long)(MT_INT_TX_DONE_BAND0));
 printf("I %s %llu\n", "MT_INT_TX_DONE_MCU", (unsigned long long)(MT_INT_TX_DONE_MCU));
+printf("I %s %llu\n", "MT_INT_TX_DONE_ALL", (unsigned long long)(MT_INT_TX_DONE_ALL));
+printf("I %s %llu\n", "MT_RX_DATA_RING_BASE", (unsigned long long)(MT_RX_DATA_RING_BASE));
 printf("I %s %llu\n", "MT_INFRA_CFG_BASE", (unsigned long long)(MT_INFRA_CFG_BASE));
 printf("I %s %llu\n", "MT_INFRA", (unsigned long long)(MT_INFRA(0)));
 printf("I %s %llu\n", "MT_HIF_REMAP_L1", (unsigned long long)(MT_HIF_REMAP_L1));
@@ -20652,7 +20664,9 @@ printf("I %s %llu\n", "MT_HIF_REMAP_L1_OFFSET", (unsigned long long)(MT_HIF_REMA
 printf("I %s %llu\n", "MT_HIF_REMAP_L1_BASE", (unsigned long long)(MT_HIF_REMAP_L1_BASE));
 printf("I %s %llu\n", "MT_HIF_REMAP_BASE_L1", (unsigned long long)(MT_HIF_REMAP_BASE_L1));
 printf("I %s %llu\n", "MT_WFSYS_SW_RST_B", (unsigned long long)(MT_WFSYS_SW_RST_B));
+printf("I %s %llu\n", "MT_WTBLON_TOP_WDUCR", (unsigned long long)(MT_WTBLON_TOP_WDUCR));
 printf("I %s %llu\n", "MT_WTBLON_TOP_WDUCR_GROUP", (unsigned long long)(MT_WTBLON_TOP_WDUCR_GROUP));
+printf("I %s %llu\n", "MT_WTBL_UPDATE", (unsigned long long)(MT_WTBL_UPDATE));
 printf("I %s %llu\n", "MT_WTBL_UPDATE_WLAN_IDX", (unsigned long long)(MT_WTBL_UPDATE_WLAN_IDX));
 printf("I %s %llu\n", "MT_WTBL_UPDATE_ADM_COUNT_CLEAR", (unsigned long long)(MT_WTBL_UPDATE_ADM_COUNT_CLEAR));
 printf("I %s %llu\n", "MT_PCIE_MAC_BASE", (unsigned long long)(MT_PCIE_MAC_BASE));
@@ -20730,6 +20744,10 @@ return 0; }"#,
                 value: crate::mt7921::regs::MT_MDP_TO_WM,
             },
             IntRow {
+                name: "MT_WFDMA0_HOST_INT_ENA",
+                value: crate::mt7921::regs::MT_WFDMA0_HOST_INT_ENA,
+            },
+            IntRow {
                 name: "HOST_TX_DONE_INT_ENA8",
                 value: crate::mt7921::regs::HOST_TX_DONE_INT_ENA8,
             },
@@ -20774,8 +20792,20 @@ return 0; }"#,
                 value: crate::mt7921::regs::HOST_TX_DONE_INT_ENA17,
             },
             IntRow {
+                name: "MT_INT_RX_DONE_DATA",
+                value: crate::mt7921::regs::MT_INT_RX_DONE_DATA,
+            },
+            IntRow {
+                name: "MT_INT_RX_DONE_WM",
+                value: crate::mt7921::regs::MT_INT_RX_DONE_WM,
+            },
+            IntRow {
                 name: "MT_INT_RX_DONE_WM2",
                 value: crate::mt7921::regs::MT_INT_RX_DONE_WM2,
+            },
+            IntRow {
+                name: "MT_INT_RX_DONE_ALL",
+                value: crate::mt7921::regs::MT_INT_RX_DONE_ALL,
             },
             IntRow {
                 name: "MT_INT_TX_DONE_MCU_WM",
@@ -20786,8 +20816,20 @@ return 0; }"#,
                 value: crate::mt7921::regs::MT_INT_TX_DONE_FWDL,
             },
             IntRow {
+                name: "MT_INT_TX_DONE_BAND0",
+                value: crate::mt7921::regs::MT_INT_TX_DONE_BAND0,
+            },
+            IntRow {
                 name: "MT_INT_TX_DONE_MCU",
                 value: crate::mt7921::regs::MT_INT_TX_DONE_MCU,
+            },
+            IntRow {
+                name: "MT_INT_TX_DONE_ALL",
+                value: crate::mt7921::regs::MT_INT_TX_DONE_ALL,
+            },
+            IntRow {
+                name: "MT_RX_DATA_RING_BASE",
+                value: crate::mt7921::regs::MT_RX_DATA_RING_BASE,
             },
             IntRow {
                 name: "MT_INFRA_CFG_BASE",
@@ -20822,8 +20864,16 @@ return 0; }"#,
                 value: crate::mt7921::regs::MT_WFSYS_SW_RST_B,
             },
             IntRow {
+                name: "MT_WTBLON_TOP_WDUCR",
+                value: crate::mt7921::regs::MT_WTBLON_TOP_WDUCR,
+            },
+            IntRow {
                 name: "MT_WTBLON_TOP_WDUCR_GROUP",
                 value: crate::mt7921::regs::MT_WTBLON_TOP_WDUCR_GROUP,
+            },
+            IntRow {
+                name: "MT_WTBL_UPDATE",
+                value: crate::mt7921::regs::MT_WTBL_UPDATE,
             },
             IntRow {
                 name: "MT_WTBL_UPDATE_WLAN_IDX",
@@ -25113,6 +25163,8 @@ printf("I %s %llu\n", "MT_MDP_RCFR1_RX_DROPPED_UCAST", (unsigned long long)(MT_M
 printf("I %s %llu\n", "MT_MDP_RCFR1_RX_DROPPED_MCAST", (unsigned long long)(MT_MDP_RCFR1_RX_DROPPED_MCAST));
 printf("I %s %llu\n", "MT_MDP_TO_HIF", (unsigned long long)(MT_MDP_TO_HIF));
 printf("I %s %llu\n", "MT_MDP_TO_WM", (unsigned long long)(MT_MDP_TO_WM));
+printf("I %s %llu\n", "MT_WFDMA0_HOST_INT_ENA", (unsigned long long)(MT_WFDMA0_HOST_INT_ENA));
+printf("I %s %llu\n", "MT_WFDMA0_HOST_INT_DIS", (unsigned long long)(MT_WFDMA0_HOST_INT_DIS));
 printf("I %s %llu\n", "HOST_RX_DONE_INT_ENA4", (unsigned long long)(HOST_RX_DONE_INT_ENA4));
 printf("I %s %llu\n", "HOST_RX_DONE_INT_ENA5", (unsigned long long)(HOST_RX_DONE_INT_ENA5));
 printf("I %s %llu\n", "HOST_RX_DONE_INT_ENA6", (unsigned long long)(HOST_RX_DONE_INT_ENA6));
@@ -25124,9 +25176,23 @@ printf("I %s %llu\n", "HOST_RX_DONE_INT_ENA11", (unsigned long long)(HOST_RX_DON
 printf("I %s %llu\n", "HOST_TX_DONE_INT_ENA15", (unsigned long long)(HOST_TX_DONE_INT_ENA15));
 printf("I %s %llu\n", "HOST_TX_DONE_INT_ENA16", (unsigned long long)(HOST_TX_DONE_INT_ENA16));
 printf("I %s %llu\n", "HOST_TX_DONE_INT_ENA17", (unsigned long long)(HOST_TX_DONE_INT_ENA17));
+printf("I %s %llu\n", "MT_INT_RX_DONE_WM2", (unsigned long long)(MT_INT_RX_DONE_WM2));
+printf("I %s %llu\n", "MT7925_INT_RX_DONE_DATA", (unsigned long long)(MT7925_INT_RX_DONE_DATA));
+printf("I %s %llu\n", "MT7925_INT_RX_DONE_WM", (unsigned long long)(MT7925_INT_RX_DONE_WM));
+printf("I %s %llu\n", "MT7925_INT_RX_DONE_ALL", (unsigned long long)(MT7925_INT_RX_DONE_ALL));
+printf("I %s %llu\n", "MT7927_INT_RX_DONE_DATA", (unsigned long long)(MT7927_INT_RX_DONE_DATA));
+printf("I %s %llu\n", "MT7927_INT_RX_DONE_WM", (unsigned long long)(MT7927_INT_RX_DONE_WM));
+printf("I %s %llu\n", "MT7927_INT_RX_DONE_WM2", (unsigned long long)(MT7927_INT_RX_DONE_WM2));
+printf("I %s %llu\n", "MT7927_INT_RX_DONE_ALL", (unsigned long long)(MT7927_INT_RX_DONE_ALL));
+printf("I %s %llu\n", "MT7928_INT_RX_DONE_DATA", (unsigned long long)(MT7928_INT_RX_DONE_DATA));
+printf("I %s %llu\n", "MT7928_INT_RX_DONE_WM", (unsigned long long)(MT7928_INT_RX_DONE_WM));
+printf("I %s %llu\n", "MT7928_INT_RX_DONE_ALL", (unsigned long long)(MT7928_INT_RX_DONE_ALL));
 printf("I %s %llu\n", "MT_INT_TX_DONE_MCU_WM", (unsigned long long)(MT_INT_TX_DONE_MCU_WM));
 printf("I %s %llu\n", "MT_INT_TX_DONE_FWDL", (unsigned long long)(MT_INT_TX_DONE_FWDL));
+printf("I %s %llu\n", "MT_INT_TX_DONE_BAND0", (unsigned long long)(MT_INT_TX_DONE_BAND0));
 printf("I %s %llu\n", "MT_INT_TX_DONE_MCU", (unsigned long long)(MT_INT_TX_DONE_MCU));
+printf("I %s %llu\n", "MT_INT_TX_DONE_ALL", (unsigned long long)(MT_INT_TX_DONE_ALL));
+printf("I %s %llu\n", "MT_RX_DATA_RING_BASE", (unsigned long long)(MT_RX_DATA_RING_BASE));
 printf("I %s %llu\n", "MT_INFRA_CFG_BASE", (unsigned long long)(MT_INFRA_CFG_BASE));
 printf("I %s %llu\n", "MT_INFRA", (unsigned long long)(MT_INFRA(0)));
 printf("I %s %llu\n", "MT_HIF_REMAP_L1", (unsigned long long)(MT_HIF_REMAP_L1));
@@ -25137,9 +25203,16 @@ printf("I %s %llu\n", "MT_HIF_REMAP_BASE_L1", (unsigned long long)(MT_HIF_REMAP_
 printf("I %s %llu\n", "MT_HIF_REMAP_L2", (unsigned long long)(MT_HIF_REMAP_L2));
 printf("I %s %llu\n", "MT_HIF_REMAP_BASE_L2", (unsigned long long)(MT_HIF_REMAP_BASE_L2));
 printf("I %s %llu\n", "MT_WFSYS_SW_RST_B", (unsigned long long)(MT_WFSYS_SW_RST_B));
+printf("I %s %llu\n", "MT7925_WTBLON_TOP_WDUCR", (unsigned long long)(MT7925_WTBLON_TOP_WDUCR));
+printf("I %s %llu\n", "MT7928_WTBLON_TOP_WDUCR", (unsigned long long)(MT7928_WTBLON_TOP_WDUCR));
 printf("I %s %llu\n", "MT_WTBLON_TOP_WDUCR_GROUP", (unsigned long long)(MT_WTBLON_TOP_WDUCR_GROUP));
+printf("I %s %llu\n", "MT7925_WTBL_UPDATE", (unsigned long long)(MT7925_WTBL_UPDATE));
+printf("I %s %llu\n", "MT7928_WTBL_UPDATE", (unsigned long long)(MT7928_WTBL_UPDATE));
 printf("I %s %llu\n", "MT_WTBL_UPDATE_WLAN_IDX", (unsigned long long)(MT_WTBL_UPDATE_WLAN_IDX));
 printf("I %s %llu\n", "MT_WTBL_UPDATE_ADM_COUNT_CLEAR", (unsigned long long)(MT_WTBL_UPDATE_ADM_COUNT_CLEAR));
+printf("I %s %llu\n", "MT7928_WTBL_ITCR", (unsigned long long)(MT7928_WTBL_ITCR));
+printf("I %s %llu\n", "MT7928_WTBL_ITDR0", (unsigned long long)(MT7928_WTBL_ITDR0));
+printf("I %s %llu\n", "MT7928_WTBL_ITDR1", (unsigned long long)(MT7928_WTBL_ITDR1));
 printf("I %s %llu\n", "MT7925_PCIE_MAC_BASE", (unsigned long long)(MT7925_PCIE_MAC_BASE));
 printf("I %s %llu\n", "MT7925_PCIE_MAC", (unsigned long long)(MT7925_PCIE_MAC(0)));
 printf("I %s %llu\n", "MT7925_PCIE_MAC_INT_ENABLE", (unsigned long long)(MT7925_PCIE_MAC_INT_ENABLE));
@@ -25239,6 +25312,14 @@ return 0; }"#,
                 value: crate::mt7925::regs::MT_MDP_TO_WM,
             },
             IntRow {
+                name: "MT_WFDMA0_HOST_INT_ENA",
+                value: crate::mt7925::regs::MT_WFDMA0_HOST_INT_ENA,
+            },
+            IntRow {
+                name: "MT_WFDMA0_HOST_INT_DIS",
+                value: crate::mt7925::regs::MT_WFDMA0_HOST_INT_DIS,
+            },
+            IntRow {
                 name: "HOST_RX_DONE_INT_ENA4",
                 value: crate::mt7925::regs::HOST_RX_DONE_INT_ENA4,
             },
@@ -25283,6 +25364,50 @@ return 0; }"#,
                 value: crate::mt7925::regs::HOST_TX_DONE_INT_ENA17,
             },
             IntRow {
+                name: "MT_INT_RX_DONE_WM2",
+                value: crate::mt7925::regs::MT_INT_RX_DONE_WM2,
+            },
+            IntRow {
+                name: "MT7925_INT_RX_DONE_DATA",
+                value: crate::mt7925::regs::MT7925_INT_RX_DONE_DATA,
+            },
+            IntRow {
+                name: "MT7925_INT_RX_DONE_WM",
+                value: crate::mt7925::regs::MT7925_INT_RX_DONE_WM,
+            },
+            IntRow {
+                name: "MT7925_INT_RX_DONE_ALL",
+                value: crate::mt7925::regs::MT7925_INT_RX_DONE_ALL,
+            },
+            IntRow {
+                name: "MT7927_INT_RX_DONE_DATA",
+                value: crate::mt7925::regs::MT7927_INT_RX_DONE_DATA,
+            },
+            IntRow {
+                name: "MT7927_INT_RX_DONE_WM",
+                value: crate::mt7925::regs::MT7927_INT_RX_DONE_WM,
+            },
+            IntRow {
+                name: "MT7927_INT_RX_DONE_WM2",
+                value: crate::mt7925::regs::MT7927_INT_RX_DONE_WM2,
+            },
+            IntRow {
+                name: "MT7927_INT_RX_DONE_ALL",
+                value: crate::mt7925::regs::MT7927_INT_RX_DONE_ALL,
+            },
+            IntRow {
+                name: "MT7928_INT_RX_DONE_DATA",
+                value: crate::mt7925::regs::MT7928_INT_RX_DONE_DATA,
+            },
+            IntRow {
+                name: "MT7928_INT_RX_DONE_WM",
+                value: crate::mt7925::regs::MT7928_INT_RX_DONE_WM,
+            },
+            IntRow {
+                name: "MT7928_INT_RX_DONE_ALL",
+                value: crate::mt7925::regs::MT7928_INT_RX_DONE_ALL,
+            },
+            IntRow {
                 name: "MT_INT_TX_DONE_MCU_WM",
                 value: crate::mt7925::regs::MT_INT_TX_DONE_MCU_WM,
             },
@@ -25291,8 +25416,20 @@ return 0; }"#,
                 value: crate::mt7925::regs::MT_INT_TX_DONE_FWDL,
             },
             IntRow {
+                name: "MT_INT_TX_DONE_BAND0",
+                value: crate::mt7925::regs::MT_INT_TX_DONE_BAND0,
+            },
+            IntRow {
                 name: "MT_INT_TX_DONE_MCU",
                 value: crate::mt7925::regs::MT_INT_TX_DONE_MCU,
+            },
+            IntRow {
+                name: "MT_INT_TX_DONE_ALL",
+                value: crate::mt7925::regs::MT_INT_TX_DONE_ALL,
+            },
+            IntRow {
+                name: "MT_RX_DATA_RING_BASE",
+                value: crate::mt7925::regs::MT_RX_DATA_RING_BASE,
             },
             IntRow {
                 name: "MT_INFRA_CFG_BASE",
@@ -25335,8 +25472,24 @@ return 0; }"#,
                 value: crate::mt7925::regs::MT_WFSYS_SW_RST_B,
             },
             IntRow {
+                name: "MT7925_WTBLON_TOP_WDUCR",
+                value: crate::mt7925::regs::MT7925_WTBLON_TOP_WDUCR,
+            },
+            IntRow {
+                name: "MT7928_WTBLON_TOP_WDUCR",
+                value: crate::mt7925::regs::MT7928_WTBLON_TOP_WDUCR,
+            },
+            IntRow {
                 name: "MT_WTBLON_TOP_WDUCR_GROUP",
                 value: crate::mt7925::regs::MT_WTBLON_TOP_WDUCR_GROUP,
+            },
+            IntRow {
+                name: "MT7925_WTBL_UPDATE",
+                value: crate::mt7925::regs::MT7925_WTBL_UPDATE,
+            },
+            IntRow {
+                name: "MT7928_WTBL_UPDATE",
+                value: crate::mt7925::regs::MT7928_WTBL_UPDATE,
             },
             IntRow {
                 name: "MT_WTBL_UPDATE_WLAN_IDX",
@@ -25345,6 +25498,18 @@ return 0; }"#,
             IntRow {
                 name: "MT_WTBL_UPDATE_ADM_COUNT_CLEAR",
                 value: crate::mt7925::regs::MT_WTBL_UPDATE_ADM_COUNT_CLEAR,
+            },
+            IntRow {
+                name: "MT7928_WTBL_ITCR",
+                value: crate::mt7925::regs::MT7928_WTBL_ITCR,
+            },
+            IntRow {
+                name: "MT7928_WTBL_ITDR0",
+                value: crate::mt7925::regs::MT7928_WTBL_ITDR0,
+            },
+            IntRow {
+                name: "MT7928_WTBL_ITDR1",
+                value: crate::mt7925::regs::MT7928_WTBL_ITDR1,
             },
             IntRow {
                 name: "MT7925_PCIE_MAC_BASE",
@@ -32536,6 +32701,7 @@ printf("I %s %llu\n", "MT7996_SKU_PATH_NUM", (unsigned long long)(MT7996_SKU_PAT
 printf("I %s %llu\n", "MT7996_MAX_TWT_AGRT", (unsigned long long)(MT7996_MAX_TWT_AGRT));
 printf("I %s %llu\n", "MT7996_MAX_STA_TWT_AGRT", (unsigned long long)(MT7996_MAX_STA_TWT_AGRT));
 printf("I %s %llu\n", "MT7996_MIN_TWT_DUR", (unsigned long long)(MT7996_MIN_TWT_DUR));
+printf("I %s %llu\n", "MT7996_MAX_QUEUE", (unsigned long long)(MT7996_MAX_QUEUE));
 printf("I %s %llu\n", "MT7996_BASIC_RATES_TBL", (unsigned long long)(MT7996_BASIC_RATES_TBL));
 printf("I %s %llu\n", "MT7996_BEACON_RATES_TBL", (unsigned long long)(MT7996_BEACON_RATES_TBL));
 printf("I %s %llu\n", "MT7996_THERMAL_THROTTLE_MAX", (unsigned long long)(MT7996_THERMAL_THROTTLE_MAX));
@@ -32896,6 +33062,10 @@ return 0; }"#,
             IntRow {
                 name: "MT7996_MIN_TWT_DUR",
                 value: crate::mt7996::mt7996::MT7996_MIN_TWT_DUR,
+            },
+            IntRow {
+                name: "MT7996_MAX_QUEUE",
+                value: crate::mt7996::mt7996::MT7996_MAX_QUEUE,
             },
             IntRow {
                 name: "MT7996_BASIC_RATES_TBL",

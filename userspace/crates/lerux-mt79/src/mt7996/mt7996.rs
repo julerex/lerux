@@ -74,6 +74,7 @@ pub const MT7996_SKU_PATH_NUM: u64 = 494;
 pub const MT7996_MAX_TWT_AGRT: u64 = 16;
 pub const MT7996_MAX_STA_TWT_AGRT: u64 = 8;
 pub const MT7996_MIN_TWT_DUR: u64 = 64;
+pub const MT7996_MAX_QUEUE: u64 = 27;
 pub const MT7996_BASIC_RATES_TBL: u64 = 31;
 pub const MT7996_BEACON_RATES_TBL: u64 = 25;
 pub const MT7996_THERMAL_THROTTLE_MAX: u64 = 100;

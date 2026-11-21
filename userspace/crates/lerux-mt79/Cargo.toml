@@ -1,0 +1,10 @@
+[package]
+name = "lerux-mt79"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-2.0-only"
+publish = false
+description = "Standalone mt76 layouts reconstructed from Linux v7.3.5. The MIT Swift driver does not link this crate."
+
+[lints]
+workspace = true

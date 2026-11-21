@@ -33,6 +33,7 @@ members = [
     "userspace/crates/lerux-sddf",
     "userspace/crates/lerux-ring",
     "userspace/crates/lerux-machine",
+    "userspace/crates/lerux-mt79",
     "userspace/crates/lerux-driver-protocols",
     "userspace/pds/html-demo",
     "userspace/crates/lerux-html",

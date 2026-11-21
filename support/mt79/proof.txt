@@ -1,0 +1,21 @@
+linux tag v7.3.5
+macros emitted 41
+enum constants emitted 25
+records emitted 10
+skipped 15
+linux mismatches 0
+skipped dma.h DMA_DUMMY_DATA not an integer constant
+skipped dma.h mt76_dma_handle_read inline function
+skipped dma.h mt76_dma_handle_write inline function
+skipped dma.h Q_READ statement expression
+skipped dma.h Q_WRITE statement macro
+skipped dma.h mt76_dma_rx_poll function prototype
+skipped dma.h mt76_dma_attach function prototype
+skipped dma.h mt76_dma_cleanup function prototype
+skipped dma.h mt76_dma_rx_fill function prototype
+skipped dma.h mt76_dma_queue_reset function prototype
+skipped dma.h mt76_dma_reset_tx_queue inline function
+skipped dma.h mt76_dma_should_drop_buf inline function
+skipped dma.h mt76_priv inline function
+skipped mt7921/mcu.h mt7921_mcu_eeprom_info unknown MT7921_EEPROM_BLOCK_SIZE
+skipped mt7921/mcu.h mt7921_txpwr_event depends on mt7921_txpwr

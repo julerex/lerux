@@ -1285,6 +1285,10 @@ name = "lerux-machine"
 version = "0.1.0"
 
 [[package]]
+name = "lerux-mt79"
+version = "0.1.0"
+
+[[package]]
 name = "lerux-posix"
 version = "0.1.0"
 dependencies = [

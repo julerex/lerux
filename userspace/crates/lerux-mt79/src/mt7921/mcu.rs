@@ -10,7 +10,7 @@ pub const MT_RA_RATE_TX_MODE: u64 = 0x1e00;
 pub const MT_RA_RATE_DCM_EN: u64 = 16;
 pub const MT_RA_RATE_BW: u64 = 0x6000;
 #[repr(C, packed)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct mt7921_mcu_tx_done_event {
     pub pid: u8,
     pub status: u8,
@@ -34,16 +34,24 @@ pub struct mt7921_mcu_tx_done_event {
 }
 
 pub const MCU_EXT_EVENT_RATE_REPORT: u64 = 135;
+#[repr(C, packed)]
+#[derive(Clone, Copy)]
+pub struct mt7921_mcu_eeprom_info {
+    pub addr: Le32,
+    pub valid: Le32,
+    pub data: [u8; 16],
+}
+
 pub const MT_EBF: u64 = 1;
 pub const MT_IBF: u64 = 2;
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct mt7921_mcu_ant_id_config {
     pub ant_id: [u8; 4],
 }
 
 #[repr(C, packed)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct mt7921_txpwr_req {
     pub ver: u8,
     pub action: u8,
@@ -52,8 +60,17 @@ pub struct mt7921_txpwr_req {
     pub rsv: [u8; 3],
 }
 
+#[repr(C, packed)]
+#[derive(Clone, Copy)]
+pub struct mt7921_txpwr_event {
+    pub ver: u8,
+    pub action: u8,
+    pub len: Le16,
+    pub txpwr: crate::mt7921::mt7921::mt7921_txpwr,
+}
+
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct mt7921_wf_rf_pin_ctrl_event {
     pub result: u8,
     pub value: u8,
@@ -68,7 +85,7 @@ pub const MT7921_TM_ICAP: u64 = 2;
 pub const MT7921_TM_ICAP_OVERLAP: u64 = 3;
 pub const MT7921_TM_WIFISPECTRUM: u64 = 4;
 #[repr(C, packed)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct mt7921_rftest_cmd {
     pub action: u8,
     pub rsv: [u8; 3],
@@ -77,14 +94,14 @@ pub struct mt7921_rftest_cmd {
 }
 
 #[repr(C, packed)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct mt7921_rftest_evt {
     pub param0: Le32,
     pub param1: Le32,
 }
 
 #[repr(C, packed)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct mt7921_clc_info_tlv {
     pub tag: Le16,
     pub len: Le16,

@@ -41,7 +41,7 @@ pub const RRO_RXDMAD_DATA2_RX_TOKEN_ID_MASK: u64 = 0xffff_0000;
 pub const RRO_RXDMAD_DATA2_IND_REASON_MASK: u64 = 0xf000;
 pub const RRO_RXDMAD_DATA3_MAGIC_CNT_MASK: u64 = 0xf000_0000;
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct mt76_desc {
     pub buf0: Le32,
     pub ctrl: Le32,
@@ -50,14 +50,14 @@ pub struct mt76_desc {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct mt76_wed_rro_desc {
     pub buf0: Le32,
     pub buf1: Le32,
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy)]
 pub struct mt76_rro_rxdmad_c {
     pub data0: Le32,
     pub data1: Le32,

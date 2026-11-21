@@ -3,6 +3,7 @@
 #ifndef MT79_MT7921_MCU_H
 #define MT79_MT7921_MCU_H
 #include "../mt79_types.h"
+#include "mt7921.h"
 
 #define MT_RA_RATE_NSS 448ull
 #define MT_RA_RATE_MCS 15ull
@@ -32,6 +33,12 @@ struct mt7921_mcu_tx_done_event {
 } __attribute__((packed));
 
 #define MCU_EXT_EVENT_RATE_REPORT 135ull
+struct mt7921_mcu_eeprom_info {
+    __le32 addr;
+    __le32 valid;
+    u8 data[16];
+} __attribute__((packed));
+
 #define MT_EBF 1ull
 #define MT_IBF 2ull
 struct mt7921_mcu_ant_id_config {
@@ -44,6 +51,13 @@ struct mt7921_txpwr_req {
     __le16 len;
     u8 dbdc_idx;
     u8 rsv[3];
+} __attribute__((packed));
+
+struct mt7921_txpwr_event {
+    u8 ver;
+    u8 action;
+    __le16 len;
+    struct mt7921_txpwr txpwr;
 } __attribute__((packed));
 
 struct mt7921_wf_rf_pin_ctrl_event {

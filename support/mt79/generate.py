@@ -637,6 +637,7 @@ def genmask(high: int, low: int) -> int:
 class Env:
     values: dict[str, int]
     functions: dict[str, tuple[list[str], object]]
+    fallback: dict[str, int] = field(default_factory=dict)
 
 
 def eval_expr(node: object, env: Env, local: dict[str, int] | None = None) -> int:
@@ -648,6 +649,8 @@ def eval_expr(node: object, env: Env, local: dict[str, int] | None = None) -> in
             return u64(local[node.name])
         if node.name in env.values:
             return u64(env.values[node.name])
+        if node.name in env.fallback:
+            return u64(env.fallback[node.name])
         raise EvalError(f"unknown {node.name}")
     if isinstance(node, Unary):
         value = eval_expr(node.expr, env, local)
@@ -770,13 +773,14 @@ def _cast(words: list[str], value: int) -> int:
 
 
 CALL_PATHS: dict[str, str] = {}
+PARAM_ALIASES: dict[str, str] = {}
 
 
 def rust_expr(node: object) -> str:
     if isinstance(node, IntLit):
-        return rust_int(node.value)
+        return f"{rust_int(node.value)}u64"
     if isinstance(node, Name):
-        return rust_ident(node.name)
+        return PARAM_ALIASES.get(node.name, rust_ident(node.name))
     if isinstance(node, Unary):
         inner = rust_expr(node.expr)
         if node.op == "!":
@@ -2164,7 +2168,9 @@ def try_resolve(
             if len(words) < 2:
                 raise LayoutError("missing tag")
             nested_rec = find_record(words[1], bag, bags, resolved, raw_index)
-            if nested_rec.name not in defined:
+            if nested_rec.name not in defined and not any(
+                dep.header == nested_rec.header and dep.name == nested_rec.name for dep in deps
+            ):
                 deps.append(nested_rec)
             size, align = nested_rec.size, nested_rec.align
             c_type = f"{nested_rec.kind} {nested_rec.name}"
@@ -2246,14 +2252,28 @@ def _linux_checks(fields: list[LayField]) -> list[Check]:
         if not lay.name:
             continue
         checks.append(Check("field", lay.name, lay.offset))
-        if nested is not None:
+        if nested is not None and not lay.arrays:
             for check in nested.checks:
                 path = f"{lay.name}.{check.path}"
                 checks.append(Check("field", path, (lay.offset or 0) + (check.offset or 0)))
     return checks
 
 
+def share_unique_constants(bags: dict[str, Bag]) -> None:
+    found: dict[str, set[int]] = {}
+    for bag in bags.values():
+        for macro in bag.macros:
+            if macro.kind == "int" and macro.value is not None:
+                found.setdefault(macro.name, set()).add(int(macro.value))
+        for const in bag.enum_consts:
+            found.setdefault(const.name, set()).add(int(const.value))
+    unique = {name: next(iter(values)) for name, values in found.items() if len(values) == 1}
+    for bag in bags.values():
+        bag.env.fallback = {name: value for name, value in unique.items() if name not in bag.env.values}
+
+
 def resolve_records(bags: dict[str, Bag]) -> dict:
+    share_unique_constants(bags)
     raw_index: dict[str, list[RawRecord]] = {}
     for bag in bags.values():
         for raw in bag.raw_records:
@@ -2335,6 +2355,57 @@ def probe_program(record: Record, prelude: str) -> str:
     return "\n".join(lines)
 
 
+def external_deps(record: Record, inside: set[str], seen: set[int], out: list[Record]) -> None:
+    for child in record.children:
+        external_deps(child, inside, seen, out)
+    for dep in record.dep_keys:
+        if not isinstance(dep, Record) or dep.name in inside or id(dep) in seen:
+            continue
+        seen.add(id(dep))
+        external_deps(dep, inside | dep.defined_inside, seen, out)
+        out.append(dep)
+
+
+def dep_sources(record: Record) -> list[str]:
+    deps: list[Record] = []
+    external_deps(record, set(record.defined_inside), set(), deps)
+    texts = []
+    for dep in deps:
+        source = normalize_record(dep.source).strip()
+        if not source.endswith(";"):
+            source += ";"
+        texts.append(source)
+    return texts
+
+
+def referenced_defines(texts: list[str], lines: list[str], bags: dict[str, Bag]) -> list[str]:
+    existing: set[str] = set()
+    index: dict[str, set[str]] = {}
+    for line in lines:
+        match = re.match(r"#define\s+(\w+)", line)
+        if match:
+            existing.add(match.group(1))
+    for other in bags.values():
+        for line in other.define_lines:
+            match = re.match(r"#define\s+(\w+)", line)
+            if match:
+                index.setdefault(match.group(1), set()).add(line)
+    extra: list[str] = []
+    pending = list(texts)
+    while pending:
+        for name in re.findall(r"\b[A-Za-z_]\w*\b", pending.pop()):
+            if name in existing:
+                continue
+            choices = index.get(name, set())
+            existing.add(name)
+            if len(choices) != 1:
+                continue
+            line = next(iter(choices))
+            extra.append(line)
+            pending.append(line)
+    return extra
+
+
 def record_prelude(record: Record, bag: Bag, bags: dict[str, Bag]) -> str:
     lines = visible_defines(bag, bags)
     blocked: set[str] = set()
@@ -2358,17 +2429,9 @@ def record_prelude(record: Record, bag: Bag, bags: dict[str, Bag]) -> str:
                 continue
             kept.append(line)
         lines = kept
-    dep_text = []
-    for dep in record.dep_keys:
-        if not isinstance(dep, Record):
-            continue
-        if dep.name in record.defined_inside:
-            continue
-        source = normalize_record(dep.source).strip()
-        if not source.endswith(";"):
-            source += ";"
-        dep_text.append(source)
-    return "\n".join([*lines, *enum_text, *dep_text])
+    dep_text = dep_sources(record)
+    extra = referenced_defines([record.source, *dep_text, *enum_text], lines, bags)
+    return "\n".join([*lines, *extra, *enum_text, *dep_text])
 
 
 def run_probe(record: Record, bag: Bag, bags: dict[str, Bag]) -> str | None:
@@ -2498,16 +2561,15 @@ def emit_c_record(record: Record) -> list[str]:
 
 def emit_rust_record(record: Record) -> list[str]:
     lines: list[str] = []
-    derive = "#[derive(Clone, Copy)]" if record.kind == "union" else "#[derive(Clone, Copy, Debug)]"
+    derive = "#[derive(Clone, Copy)]"
     if record.form == "wrap":
-        inner_derive = "#[derive(Clone, Copy)]" if record.kind == "union" else "#[derive(Clone, Copy, Debug)]"
-        lines.extend(["#[repr(C, packed)]", inner_derive, f"pub {record.kind} {record.inner} {{"])
+        lines.extend(["#[repr(C, packed)]", derive, f"pub {record.kind} {record.inner} {{"])
         for field in record.fields:
             lines.append(rust_decl(field))
         lines.append("}")
         lines.extend([
             f"#[repr(C, align({record.align_n}))]",
-            "#[derive(Clone, Copy, Debug)]" if record.kind == "struct" else "#[derive(Clone, Copy)]",
+            derive,
             f"pub struct {record.name}(pub {record.inner});",
         ])
     else:
@@ -2540,11 +2602,72 @@ def mask_items(record: Record, taken: set[str]) -> list[tuple[str, int]]:
     return items
 
 
+def names_in(node: object) -> set[str]:
+    found: set[str] = set()
+
+    def walk(item: object) -> None:
+        if isinstance(item, Name):
+            found.add(item.name)
+        elif isinstance(item, (Unary, Cast)):
+            walk(item.expr)
+        elif isinstance(item, Binary):
+            walk(item.left)
+            walk(item.right)
+        elif isinstance(item, Ternary):
+            walk(item.cond)
+            walk(item.then)
+            walk(item.else_)
+        elif isinstance(item, Call):
+            for arg in item.args:
+                walk(arg)
+
+    walk(node)
+    return found
+
+
+def param_aliases(params: list[str], expr: object) -> dict[str, str]:
+    used = names_in(expr)
+    aliases: dict[str, str] = {}
+    seen: set[str] = set()
+    for name in params:
+        if name in used:
+            rust = rust_ident(name.lstrip("_") or "arg")
+        else:
+            rust = rust_ident(name if name.startswith("_") else f"_{name}")
+        base = rust
+        index = 2
+        while rust in seen:
+            rust = f"{base}_{index}"
+            index += 1
+        seen.add(rust)
+        aliases[name] = rust
+    return aliases
+
+
+def strip_wrapping_parens(text: str) -> str:
+    if len(text) < 2 or text[0] != "(" or text[-1] != ")":
+        return text
+    depth = 0
+    for index, char in enumerate(text):
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth == 0 and index != len(text) - 1:
+                return text
+    return text[1:-1]
+
+
 def render_fn(macro: Macro) -> str:
-    params = ", ".join(f"{rust_ident(name)}: u64" for name in (macro.params or []))
-    body = rust_expr(macro.expr)
+    global PARAM_ALIASES
+    params = macro.params or []
+    aliases = param_aliases(params, macro.expr)
+    PARAM_ALIASES = aliases
+    body = strip_wrapping_parens(rust_expr(macro.expr))
+    PARAM_ALIASES = {}
+    signature = ", ".join(f"{aliases[name]}: u64" for name in params)
     name = rust_ident(macro.name)
-    return f"#[must_use]\n#[rustfmt::skip]\npub const fn {name}({params}) -> u64 {{ {body} }}\n"
+    return f"#[must_use]\n#[rustfmt::skip]\npub const fn {name}({signature}) -> u64 {{ {body} }}\n"
 
 
 def header_guard(rel: str) -> str:
@@ -2814,12 +2937,14 @@ def group_source(bag: Bag) -> tuple[str, str]:
     rust_ints: list[str] = []
     rust_strs: list[str] = []
     rust_recs: list[str] = []
+    string_lines: list[str] = []
+    record_lines: list[str] = []
     prefix = f"crate::{module_path(bag.rel)}"
     for macro in bag.macros:
         if macro.kind == "str":
-            c_lines.append(f'printf("S %zu ", sizeof({macro.name}) - 1);')
-            c_lines.append(f"fwrite({macro.name}, 1, sizeof({macro.name}) - 1, stdout);")
-            c_lines.append(r'printf("\n");')
+            string_lines.append(f'printf("S %zu ", sizeof({macro.name}) - 1);')
+            string_lines.append(f"fwrite({macro.name}, 1, sizeof({macro.name}) - 1, stdout);")
+            string_lines.append(r'printf("\n");')
             rust_strs.append(f"        {prefix}::{rust_ident(macro.name)},")
             continue
         if macro.kind == "fn":
@@ -2842,11 +2967,11 @@ def group_source(bag: Bag) -> tuple[str, str]:
             c_lines.append(f'printf("I %s %llu\\n", "{name}", (unsigned long long)({name}));')
             rust_ints.append(f'        IntRow {{ name: "{name}", value: {prefix}::{rust_ident(name)} }},')
         qualifier = f"{record.kind} {record.name}"
-        c_lines.append(f'printf("R %zu %zu\\n", sizeof({qualifier}), _Alignof({qualifier}));')
+        record_lines.append(f'printf("R %zu %zu\\n", sizeof({qualifier}), _Alignof({qualifier}));')
         fields = []
         rust_name = f"{prefix}::{record.name}"
         for field in record.fields:
-            c_lines.append(f'printf("O %zu\\n", offsetof({qualifier}, {field.name}));')
+            record_lines.append(f'printf("O %zu\\n", offsetof({qualifier}, {field.name}));')
             path = f"0.{rust_ident(field.name)}" if record.form == "wrap" else rust_ident(field.name)
             fields.append(f"            FieldRow {{ offset: core::mem::offset_of!({rust_name}, {path}) }},")
         field_body = "\n".join(fields)
@@ -2857,6 +2982,8 @@ def group_source(bag: Bag) -> tuple[str, str]:
             f"            fields: &[\n{field_body}\n            ],\n"
             "        },"
         )
+    c_lines.extend(string_lines)
+    c_lines.extend(record_lines)
     c_lines.append("return 0; }")
     rust = "\n".join([
         "    Group {",
@@ -2998,6 +3125,8 @@ def lib_rust(rels: list[str], names: list[tuple[str, str]]) -> str:
         "#![allow(non_snake_case)] // C fields and function-like macros keep their spelling",
         "#![allow(non_upper_case_globals)] // C macros keep their spelling",
         "#![allow(missing_debug_implementations)] // wire records are copied, not formatted",
+        "#![allow(clippy::module_inception)] // the chip header repeats its directory name",
+        "#![allow(clippy::pub_underscore_fields)] // kernel fields keep a leading underscore",
         "",
         "mod bits;",
         "mod endian;",

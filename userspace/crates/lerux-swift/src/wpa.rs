@@ -205,6 +205,12 @@ pub fn message1(eapol: &[u8]) -> Option<([u8; 32], [u8; 8])> {
     Some((anonce, replay))
 }
 
+/// Message 1. The access point sends this after association. There is no MIC.
+#[must_use]
+pub fn write_message1(out: &mut [u8], anonce: &[u8; 32], replay: &[u8; 8]) -> Option<usize> {
+    write_eapol_key(out, KEY_ACK, *replay, anonce, &[])
+}
+
 /// Message 2. `out` receives the EAPOL key frame. The MIC uses `kck`.
 ///
 /// Key data is [`RSN_IE`], the element carried in the association request.
@@ -218,6 +224,20 @@ pub fn message2(
 ) -> Option<usize> {
     let n = write_eapol_key(out, KEY_PAIR | KEY_MIC, *replay, snonce, RSN_IE)?;
     let _ = anonce;
+    seal_mic(out, n, kck);
+    Some(n)
+}
+
+/// Message 3. `kck` seals the MIC. The station echoes `replay` in message 4.
+#[must_use]
+pub fn write_message3(
+    out: &mut [u8],
+    anonce: &[u8; 32],
+    replay: &[u8; 8],
+    kck: &[u8; 16],
+) -> Option<usize> {
+    let info = KEY_PAIR | KEY_INSTALL | KEY_ACK | KEY_MIC | KEY_SECURE;
+    let n = write_eapol_key(out, info, *replay, anonce, &[])?;
     seal_mic(out, n, kck);
     Some(n)
 }
@@ -818,6 +838,22 @@ mod tests {
                 0xc5, 0x5a
             ]
         );
+    }
+
+    #[test]
+    fn ap_messages_match_the_station_parser() {
+        let anonce = [0x11; 32];
+        let mut replay = [0u8; 8];
+        replay[7] = 1;
+        let mut frame = [0u8; 128];
+        let n = write_message1(&mut frame, &anonce, &replay).expect("message 1 fits");
+        let (got, got_replay) = message1(&frame[..n]).expect("message 1 parses");
+        assert_eq!(got, anonce);
+        assert_eq!(got_replay, replay);
+        let kck = [0x22; 16];
+        replay[7] = 2;
+        let n = write_message3(&mut frame, &anonce, &replay, &kck).expect("message 3 fits");
+        assert_eq!(message3(&frame[..n], &kck), Some(replay));
     }
 
     #[test]

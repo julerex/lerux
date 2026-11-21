@@ -10,6 +10,7 @@ mod bt;
 mod crypto;
 pub mod dump;
 pub mod mt7921;
+pub mod mt7921_card;
 mod nvme;
 mod panel;
 mod pci;

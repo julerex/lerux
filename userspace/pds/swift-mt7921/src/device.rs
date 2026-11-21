@@ -1281,12 +1281,16 @@ fn rx_rings() -> [RxRing; 3] {
 
 #[expect(clippy::cast_ptr_alignment, reason = "4-byte MMIO register")]
 fn rd(regs: *mut u8, off: u32) -> u32 {
+    #[cfg(test)]
+    crate::hook::before_read(off);
     unsafe { regs.add(off as usize).cast::<u32>().read_volatile() }
 }
 
 #[expect(clippy::cast_ptr_alignment, reason = "4-byte MMIO register")]
 fn wr(regs: *mut u8, off: u32, value: u32) {
     unsafe { regs.add(off as usize).cast::<u32>().write_volatile(value) }
+    #[cfg(test)]
+    crate::hook::after_write(off, value);
 }
 
 #[expect(clippy::cast_ptr_alignment, reason = "4-byte DMA descriptor")]

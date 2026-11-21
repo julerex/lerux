@@ -2171,13 +2171,21 @@ fn push_u64(buf: &mut [u8], mut value: u64) -> usize {
     feature = "board-qemu_virt_riscv64_browser_sddf"
 )))]
 const DF_PATH: usize = 64;
-/// One directory can list this many children. After the parent is popped, that
-/// many subdirectories fit. A wider frontier does not, and `df` reports an error.
+/// One cursor per path component, including the root. A 64-byte path of
+/// one-letter names is 32 components plus the root, which is less than this.
 #[cfg(not(any(
     feature = "board-qemu_virt_aarch64_browser_sddf",
     feature = "board-qemu_virt_riscv64_browser_sddf"
 )))]
-const DF_PENDING: usize = LIST_MAX;
+const DF_CURSORS: usize = DF_PATH;
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+const _: () = {
+    assert!(DF_CURSORS > DF_PATH.div_ceil(2));
+    assert!(LIST_MAX < 255);
+};
 
 #[cfg(not(any(
     feature = "board-qemu_virt_aarch64_browser_sddf",
@@ -2194,23 +2202,25 @@ struct Listed {
     feature = "board-qemu_virt_riscv64_browser_sddf"
 )))]
 #[derive(Clone, Copy)]
-struct DfEntry {
+struct DfCursor {
     bytes: [u8; DF_PATH],
     len: u8,
+    /// Next child index to visit. The parent is re-read from here.
+    next: u8,
     root: bool,
 }
 
-/// The directory snapshot and the directories still to visit. Both stay off
-/// the worker stack. A recursive walk kept a snapshot on every frame, and a
-/// chain of short names overflowed the `0x4000` filesystem stack.
+/// One directory snapshot and a resume cursor per path level. Both stay off
+/// the worker stack. The cursor count follows the 64-byte path, not the width
+/// of a directory.
 #[cfg(not(any(
     feature = "board-qemu_virt_aarch64_browser_sddf",
     feature = "board-qemu_virt_riscv64_browser_sddf"
 )))]
 struct DfScratch {
     listed: Listed,
-    pending: [DfEntry; DF_PENDING],
-    count: usize,
+    cursors: [DfCursor; DF_CURSORS],
+    depth: usize,
 }
 
 #[cfg(not(any(
@@ -2236,12 +2246,13 @@ static DF_SCRATCH: DfScratchCell = DfScratchCell(UnsafeCell::new(DfScratch {
         lens: [0; LIST_MAX],
         count: 0,
     },
-    pending: [DfEntry {
+    cursors: [DfCursor {
         bytes: [0; DF_PATH],
         len: 0,
+        next: 0,
         root: false,
-    }; DF_PENDING],
-    count: 0,
+    }; DF_CURSORS],
+    depth: 0,
 }));
 
 #[cfg(not(any(
@@ -2267,14 +2278,15 @@ fn df_push(path: &[u8], root: bool) -> Option<()> {
         return None;
     }
     let scratch = df_scratch();
-    if scratch.count == DF_PENDING {
+    if scratch.depth == DF_CURSORS {
         return None;
     }
-    let slot = &mut scratch.pending[scratch.count];
+    let slot = &mut scratch.cursors[scratch.depth];
     slot.bytes[..path.len()].copy_from_slice(path);
     slot.len = len;
+    slot.next = 0;
     slot.root = root;
-    scratch.count += 1;
+    scratch.depth += 1;
     Some(())
 }
 
@@ -2282,19 +2294,42 @@ fn df_push(path: &[u8], root: bool) -> Option<()> {
     feature = "board-qemu_virt_aarch64_browser_sddf",
     feature = "board-qemu_virt_riscv64_browser_sddf"
 )))]
-fn df_pop(out: &mut [u8]) -> Option<(usize, bool)> {
+fn df_top(out: &mut [u8]) -> Option<(usize, u8, bool)> {
     let scratch = df_scratch();
-    if scratch.count == 0 {
+    if scratch.depth == 0 {
         return None;
     }
-    scratch.count -= 1;
-    let slot = &scratch.pending[scratch.count];
+    let slot = &scratch.cursors[scratch.depth - 1];
     let len = usize::from(slot.len);
     if len == 0 || len > out.len() || len > slot.bytes.len() {
         return None;
     }
     out[..len].copy_from_slice(&slot.bytes[..len]);
-    Some((len, slot.root))
+    Some((len, slot.next, slot.root))
+}
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+fn df_set_next(next: u8) -> Option<()> {
+    let scratch = df_scratch();
+    if scratch.depth == 0 {
+        return None;
+    }
+    scratch.cursors[scratch.depth - 1].next = next;
+    Some(())
+}
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+fn df_pop() {
+    let scratch = df_scratch();
+    if scratch.depth > 0 {
+        scratch.depth -= 1;
+    }
 }
 
 #[cfg(not(any(
@@ -2319,25 +2354,41 @@ fn df_child(index: usize, out: &mut [u8]) -> Option<usize> {
     feature = "board-qemu_virt_riscv64_browser_sddf"
 )))]
 fn used_clusters(path: &[u8], root: bool) -> Option<u64> {
-    df_scratch().count = 0;
+    df_scratch().depth = 0;
     df_push(path, root)?;
     let mut used = 0u64;
-    while df_scratch().count > 0 {
+    while df_scratch().depth > 0 {
         let mut path_buf = [0u8; DF_PATH];
-        let (path_len, root) = df_pop(&mut path_buf)?;
+        let (path_len, next, root) = df_top(&mut path_buf)?;
         let path = &path_buf[..path_len];
         let count = read_names(path)?;
-        used += u64::from(!root);
-        for index in 0..count {
+        if next == 0 {
+            used += u64::from(!root);
+        }
+        let resume = usize::from(next);
+        if resume > count {
+            return None;
+        }
+        let mut descended = false;
+        for index in resume..count {
             let mut child = [0u8; NAME_MAX];
             let child_len = df_child(index, &mut child)?;
             let mut joined = [0u8; DF_PATH];
             let joined_len = join_child(path, root, &child[..child_len], &mut joined)?;
             match files().stat(&joined[..joined_len]) {
-                Ok(stat) if is_dir(&stat) => df_push(&joined[..joined_len], false)?,
+                Ok(stat) if is_dir(&stat) => {
+                    let next_child = u8::try_from(index + 1).ok()?;
+                    df_set_next(next_child)?;
+                    df_push(&joined[..joined_len], false)?;
+                    descended = true;
+                    break;
+                }
                 Ok(stat) => used += file_clusters(stat.size),
                 Err(_) => return None,
             }
+        }
+        if !descended {
+            df_pop();
         }
     }
     Some(used)

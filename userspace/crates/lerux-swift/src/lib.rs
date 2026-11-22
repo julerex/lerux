@@ -24,9 +24,12 @@ pub use bt::{
     PortStop, XferFail,
 };
 pub use mt7921::{
-    format_survey_report, is_setup_wifi, join_up, read_key, read_survey_count, read_survey_mark,
-    read_survey_ssid, survey_choice, write_join, write_key, write_survey, write_survey_mark,
-    FirmwareKind, Stage, SCAN_MAX, SURVEY_REPORT_MAX,
+    drop_requested, format_survey_report, is_setup_wifi, join_up, mirror_heard, note_dropped,
+    publish_station, read_heard_count, read_heard_security, read_heard_ssid, read_key,
+    read_link_name, read_station, read_survey_count, read_survey_mark, read_survey_security,
+    read_survey_ssid, request_drop, survey_choice, survey_requested, write_join, write_key,
+    write_link_name, write_survey, write_survey_mark, write_survey_secured, FirmwareKind, Stage,
+    SCAN_MAX, SURVEY_REPORT_MAX, SURVEY_SEC_OPEN, SURVEY_SEC_OTHER, SURVEY_SEC_PSK,
 };
 pub use nvme::{
     io_allowed, io_rejected, load_named, report_bytes, write_result, DiskReport, NAMED_FILE,
@@ -43,4 +46,4 @@ pub use wifi::{
     bring_up, credentials, dhcp_router, dhcp_yiaddr, enqueue_frame, format_report, icmp_reply,
     write_discover, write_echo, write_request, Nic, WifiReport, CLIENT_MAC,
 };
-pub use wpa::key_ok;
+pub use wpa::{beacon_security, key_ok, write_deauth, BEACON_OPEN, BEACON_OTHER, BEACON_PSK};

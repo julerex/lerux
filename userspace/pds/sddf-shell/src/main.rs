@@ -789,7 +789,7 @@ fn console() -> &'static mut Client {
     unsafe { (*CONSOLE.0.get()).assume_init_mut() }
 }
 
-fn say(bytes: &[u8]) {
+pub(crate) fn say(bytes: &[u8]) {
     #[cfg(not(any(
         feature = "board-qemu_virt_aarch64_browser_sddf",
         feature = "board-qemu_virt_riscv64_browser_sddf"
@@ -799,7 +799,7 @@ fn say(bytes: &[u8]) {
 }
 
 #[cfg(not(feature = "console-out"))]
-fn emit(bytes: &[u8]) {
+pub(crate) fn emit(bytes: &[u8]) {
     let tx = &io().tx;
     for &byte in bytes {
         // SAFETY: `tx` is this client's mapped transmit queue. This worker produces it.
@@ -814,7 +814,7 @@ fn emit(bytes: &[u8]) {
 }
 
 #[cfg(feature = "console-out")]
-fn emit(bytes: &[u8]) {
+pub(crate) fn emit(bytes: &[u8]) {
     let screen = console();
     for &byte in bytes {
         loop {
@@ -828,7 +828,7 @@ fn emit(bytes: &[u8]) {
 }
 
 #[cfg(not(feature = "console-out"))]
-fn read_byte() -> u8 {
+pub(crate) fn read_byte() -> u8 {
     let rx = &io().rx;
     loop {
         let mut byte = 0;
@@ -845,7 +845,7 @@ fn read_byte() -> u8 {
 }
 
 #[cfg(feature = "console-out")]
-fn read_byte() -> u8 {
+pub(crate) fn read_byte() -> u8 {
     loop {
         match console().read() {
             Ok(byte) => return byte,
@@ -967,12 +967,19 @@ fn dispatch_file(cmd: &[u8], rest: &[u8]) -> bool {
 }
 
 #[cfg(feature = "board-swift_sfx14_41g")]
+mod iwctl_cmd;
+
+#[cfg(feature = "board-swift_sfx14_41g")]
 fn dispatch_swift(cmd: &[u8], rest: &[u8]) -> bool {
-    if !is_setup_wifi(cmd) {
-        return false;
+    if is_setup_wifi(cmd) {
+        cmd_setup_wifi(rest);
+        return true;
     }
-    cmd_setup_wifi(rest);
-    true
+    if lerux_iwctl::is_iwctl(cmd) {
+        iwctl_cmd::run(rest);
+        return true;
+    }
+    false
 }
 
 /// Ask the radio which names it can hear, then join the chosen row and ping.
@@ -1126,7 +1133,7 @@ fn write_octet(buf: &mut [u8], mut at: usize, mut value: u8) -> usize {
 
 /// Drop keys queued while the radio ran the survey.
 #[cfg(feature = "board-swift_sfx14_41g")]
-fn discard_pending() {
+pub(crate) fn discard_pending() {
     loop {
         match console().read() {
             Ok(_) => {}
@@ -1137,7 +1144,7 @@ fn discard_pending() {
 
 /// The template maps this page read-write at `0x1fd0000`. The radio is the other writer.
 #[cfg(feature = "board-swift_sfx14_41g")]
-fn key_page() -> &'static mut [u8] {
+pub(crate) fn key_page() -> &'static mut [u8] {
     let ptr = memory_region_symbol!(wifi_key_vaddr: *mut u8).as_ptr();
     // SAFETY: this domain maps `wifi_key` for its whole life. The slice is not held across `notify`.
     unsafe { core::slice::from_raw_parts_mut(ptr, 0x1000) }

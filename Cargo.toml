@@ -41,6 +41,7 @@ members = [
     "userspace/crates/lerux-desk",
     "userspace/crates/lerux-signon",
     "userspace/crates/lerux-swift",
+    "userspace/crates/lerux-iwctl",
     "userspace/crates/lerux-web",
     "userspace/crates/lerux-wasm",
     "userspace/crates/lerux-tls",

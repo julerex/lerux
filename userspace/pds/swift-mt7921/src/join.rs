@@ -6,13 +6,14 @@
 
 use lerux_swift::{
     mt7921::{
-        frame_off, is_rx_frame, note_copied, read_scan_done, rx_layout, write_survey_list,
-        write_survey_mark, AuthMiss, EapolStop, Stage, SurveyCounts, SCAN_MAX,
+        frame_off, is_rx_frame, mirror_heard, note_copied, note_dropped, read_scan_done, rx_layout,
+        write_survey_mark, write_survey_secured, AuthMiss, EapolStop, Stage, SurveyCounts,
+        SCAN_MAX,
     },
     wpa::{
-        assoc_aid, assoc_ok, auth_ok, beacon_ssid, ccmp_decrypt, derive_ptk, eapol_in_ether,
-        eapol_in_msdu, match_beacon, message1, message2, message3, message4, pmk, write_assoc,
-        write_auth, write_data, FoundAp,
+        assoc_aid, assoc_ok, auth_ok, beacon_security, beacon_ssid, ccmp_decrypt, derive_ptk,
+        eapol_in_ether, eapol_in_msdu, match_beacon, message1, message2, message3, message4, pmk,
+        write_assoc, write_auth, write_data, write_deauth, FoundAp,
     },
 };
 
@@ -156,14 +157,31 @@ impl Mac {
         let mut heard = Heard::default();
         let mut frame = [0u8; 1600];
         self.wait_survey(&mut heard, &mut frame);
+        Mac::publish_survey(page, &heard);
+    }
+
+    /// Drop the association. A live link gets a deauthentication, reason 3.
+    pub(crate) fn disconnect(&mut self, page: &mut [u8]) {
+        if let Some(bssid) = self.bssid() {
+            let sta = self.sta();
+            let mut frame = [0u8; 32];
+            let n = write_deauth(&mut frame, &bssid, &sta, self.next_seq_wifi());
+            let _ = self.tx_80211(&frame[..n]);
+            self.close_link();
+        }
+        note_dropped(page);
+    }
+
+    fn publish_survey(page: &mut [u8], heard: &Heard) {
         let mut refs: [&[u8]; SCAN_MAX] = [&[]; SCAN_MAX];
         let listed = heard.names.iter().zip(heard.lens.iter()).take(heard.count);
         for (slot, (name, len)) in refs.iter_mut().zip(listed) {
             let n = usize::from(*len);
             *slot = &name[..n];
         }
-        let _ = write_survey_list(page, &refs[..heard.count]);
+        let _ = write_survey_secured(page, &refs[..heard.count], &heard.secs[..heard.count]);
         let _ = write_survey_mark(page, &heard.mark);
+        let _ = mirror_heard(page);
     }
 
     fn wait_survey(&mut self, heard: &mut Heard, frame: &mut [u8]) {
@@ -462,6 +480,7 @@ impl Mac {
 struct Heard {
     names: [[u8; 32]; SCAN_MAX],
     lens: [u8; SCAN_MAX],
+    secs: [u8; SCAN_MAX],
     count: usize,
     mark: SurveyCounts,
 }
@@ -486,7 +505,15 @@ impl Heard {
         }
         if let Some(ssid) = beacon_ssid(&frame[..m]) {
             self.mark.ok = self.mark.ok.saturating_add(1);
-            self.count = remember(&mut self.names, &mut self.lens, self.count, ssid);
+            let sec = beacon_security(&frame[..m]).unwrap_or(0);
+            self.count = remember(
+                &mut self.names,
+                &mut self.lens,
+                &mut self.secs,
+                self.count,
+                ssid,
+                sec,
+            );
         }
     }
 }
@@ -496,17 +523,28 @@ fn beacon_for(n: usize, frame: &mut [u8], ssid: &[u8]) -> Option<FoundAp> {
     match_beacon(&frame[..m], ssid)
 }
 
-fn remember(names: &mut [[u8; 32]], lens: &mut [u8], count: usize, ssid: &[u8]) -> usize {
+fn remember(
+    names: &mut [[u8; 32]],
+    lens: &mut [u8],
+    secs: &mut [u8],
+    count: usize,
+    ssid: &[u8],
+    sec: u8,
+) -> usize {
     if ssid.is_empty() || ssid.len() > 32 || count >= names.len() {
         return count;
     }
     for i in 0..count {
         if usize::from(lens[i]) == ssid.len() && names[i][..ssid.len()] == *ssid {
+            if secs[i] == 0 && sec != 0 {
+                secs[i] = sec;
+            }
             return count;
         }
     }
     names[count][..ssid.len()].copy_from_slice(ssid);
     lens[count] = u8::try_from(ssid.len()).expect("ssid length");
+    secs[count] = sec;
     count + 1
 }
 

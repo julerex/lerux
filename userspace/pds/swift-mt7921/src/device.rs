@@ -305,6 +305,14 @@ impl Mac {
         self.link.as_mut()
     }
 
+    pub(crate) fn bssid(&self) -> Option<[u8; 6]> {
+        self.link.as_ref().map(|link| link.bssid)
+    }
+
+    pub(crate) fn close_link(&mut self) {
+        self.link = None;
+    }
+
     /// `rx`, `tx`, `drop`, and the dropped frame byte, once the link is up.
     pub(crate) fn link_mark(&self) -> Option<(u32, u32, u32, Option<u8>)> {
         self.link

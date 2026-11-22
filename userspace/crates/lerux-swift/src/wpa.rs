@@ -534,6 +534,65 @@ pub fn pmk(pass: &[u8], ssid: &[u8]) -> [u8; 32] {
     wpa_psk(pass, ssid)
 }
 
+/// No RSN element in the beacon.
+pub const BEACON_OPEN: u8 = 0;
+/// RSN AKM `00:0f:ac:02`.
+pub const BEACON_PSK: u8 = 1;
+/// An RSN element without that AKM.
+pub const BEACON_OTHER: u8 = 2;
+
+/// Security of a beacon or probe response that names a network.
+///
+/// An empty SSID is hidden and returns [`None`], the same as [`beacon_ssid`].
+#[must_use]
+pub fn beacon_security(frame: &[u8]) -> Option<u8> {
+    if beacon_ssid(frame).is_none() || frame.len() < 36 {
+        return None;
+    }
+    let mut ies = &frame[36..];
+    let mut saw_rsn = false;
+    let mut psk = false;
+    while ies.len() >= 2 {
+        let tag = ies[0];
+        let len = usize::from(ies[1]);
+        if ies.len() < 2 + len {
+            break;
+        }
+        if tag == 48 {
+            saw_rsn = true;
+            psk |= rsn_has_psk(&ies[2..2 + len]);
+        }
+        ies = &ies[2 + len..];
+    }
+    if psk {
+        Some(BEACON_PSK)
+    } else if saw_rsn {
+        Some(BEACON_OTHER)
+    } else {
+        Some(BEACON_OPEN)
+    }
+}
+
+fn rsn_has_psk(body: &[u8]) -> bool {
+    if body.len() < 8 {
+        return false;
+    }
+    let pairwise = u16::from_le_bytes([body[6], body[7]]);
+    let akm_at = 8 + usize::from(pairwise) * 4;
+    if body.len() < akm_at + 2 {
+        return false;
+    }
+    let akm = u16::from_le_bytes([body[akm_at], body[akm_at + 1]]);
+    let suites = &body[akm_at + 2..];
+    if suites.len() < usize::from(akm) * 4 {
+        return false;
+    }
+    suites
+        .chunks(4)
+        .take(usize::from(akm))
+        .any(|suite| suite == [0x00, 0x0f, 0xac, 0x02])
+}
+
 /// SSID from a beacon or a probe response. An empty name is a hidden network.
 #[must_use]
 pub fn beacon_ssid(frame: &[u8]) -> Option<&[u8]> {
@@ -632,6 +691,14 @@ pub fn assoc_aid(frame: &[u8]) -> Option<u16> {
     }
     let aid = u16::from_le_bytes([frame[28], frame[29]]) & 0x7ff;
     (aid != 0).then_some(aid)
+}
+
+/// Deauthentication, reason 3: this station is leaving the BSS.
+pub fn write_deauth(out: &mut [u8], bssid: &[u8; 6], sta: &[u8; 6], seq: u16) -> usize {
+    write_mgmt(out, 0xc0, *bssid, *sta, *bssid, seq);
+    out[24] = 3;
+    out[25] = 0;
+    26
 }
 
 /// Open-system authentication, sequence 1.
@@ -908,6 +975,44 @@ mod tests {
         let mut assoc = [0u8; 128];
         let an = write_assoc(&mut assoc, &ap, &sta, b"IEEE", 1).unwrap();
         assert!(assoc[..an].windows(RSN_IE.len()).any(|w| w == RSN_IE));
+    }
+
+    #[test]
+    fn beacon_security_reads_the_rsn_akm() {
+        let mut frame = [0u8; 80];
+        frame[0] = 0x80;
+        frame[36] = 0;
+        frame[37] = 4;
+        frame[38..42].copy_from_slice(b"home");
+        assert_eq!(beacon_security(&frame[..42]), Some(BEACON_OPEN));
+        let rsn = [
+            48u8, 20, 1, 0, 0x00, 0x0f, 0xac, 0x04, 1, 0, 0x00, 0x0f, 0xac, 0x04, 1, 0, 0x00, 0x0f,
+            0xac, 0x02, 0, 0,
+        ];
+        frame[42..42 + rsn.len()].copy_from_slice(&rsn);
+        assert_eq!(beacon_security(&frame[..42 + rsn.len()]), Some(BEACON_PSK));
+        frame[42 + 19] = 0x08;
+        assert_eq!(
+            beacon_security(&frame[..42 + rsn.len()]),
+            Some(BEACON_OTHER)
+        );
+        frame[38] = 0;
+        frame[37] = 0;
+        assert!(beacon_security(&frame[..42]).is_none());
+    }
+
+    #[test]
+    fn deauth_is_reason_3() {
+        let bssid = [0x02, 0, 0, 0, 0, 1];
+        let sta = [0x02, 0, 0, 0, 0, 2];
+        let mut out = [0u8; 32];
+        let n = write_deauth(&mut out, &bssid, &sta, 4);
+        assert_eq!(n, 26);
+        assert_eq!(out[0], 0xc0);
+        assert_eq!(&out[4..10], &bssid);
+        assert_eq!(&out[10..16], &sta);
+        assert_eq!(out[24], 3);
+        assert_eq!(out[25], 0);
     }
 
     #[test]

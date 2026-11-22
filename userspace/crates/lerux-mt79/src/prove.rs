@@ -35808,12 +35808,44 @@ fn check_recs(group: &Group, lines: &[&str], mut cursor: usize) {
     }
 }
 
+struct ProbeDir {
+    path: std::path::PathBuf,
+}
+
+impl Drop for ProbeDir {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.path);
+    }
+}
+
+impl ProbeDir {
+    fn create() -> Self {
+        let base = std::env::temp_dir();
+        for salt in 0..64 {
+            let path = base.join(format!(
+                "lerux-mt79-proof-{}-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .expect("clock")
+                    .as_nanos(),
+                salt,
+            ));
+            match std::fs::create_dir(&path) {
+                Ok(()) => return Self { path },
+                Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(err) => panic!("temp dir: {err}"),
+            }
+        }
+        panic!("temp dir");
+    }
+}
+
 fn compile(source: &str) -> String {
-    let dir = std::env::temp_dir().join("lerux-mt79-proof");
-    std::fs::create_dir_all(&dir).expect("temp dir");
-    let path = dir.join("probe.c");
+    let dir = ProbeDir::create();
+    let path = dir.path.join("probe.c");
     std::fs::write(&path, source).expect("probe source");
-    let binary = dir.join("probe");
+    let binary = dir.path.join("probe");
     let include = concat!(env!("CARGO_MANIFEST_DIR"), "/include");
     let compiled = std::process::Command::new("gcc")
         .args(["-std=gnu11", "-I", include])

@@ -1236,6 +1236,23 @@ def line_number(offset_map: list[tuple[int, int]], offset: int) -> int:
 
 
 def preprocess(path: Path, rel: str, selected: set[str]) -> tuple[str, list, list[str], list[tuple[int, int]]]:
+    macros: MacroTable = {name: (None, body) for name, body in TARGET_MACROS.items()}
+    return _walk_header(path, rel, selected, macros, set(), emit=True)
+
+
+def _header_root(path: Path, rel: str) -> Path:
+    return path.parents[len(Path(rel).parts) - 1]
+
+
+def _walk_header(
+    path: Path,
+    rel: str,
+    selected: set[str],
+    macros: MacroTable,
+    applied: set[str],
+    emit: bool,
+) -> tuple[str, list, list[str], list[tuple[int, int]]]:
+    applied.add(rel)
     text = join_lines(strip_comments(path.read_text()))
     lines = text.splitlines()
     stack: list[tuple[bool, bool, bool]] = []
@@ -1247,43 +1264,51 @@ def preprocess(path: Path, rel: str, selected: set[str]) -> tuple[str, list, lis
     defines = []
     includes = []
     offset_map: list[tuple[int, int]] = []
-    macros = dict(TARGET_MACROS)
     cursor = 0
     for number, line in enumerate(lines, start=1):
         stripped = line.strip()
         if stripped.startswith("#"):
             _directive(
-                stripped, stack, defines, includes, rel, selected, number, live(), macros,
+                stripped, stack, defines, includes, rel, selected, number, live(),
+                macros, path, applied, emit,
             )
             continue
-        if live():
+        if emit and live():
             code.append(line)
             offset_map.append((cursor, number))
             cursor += len(line) + 1
             code.append("\n")
+    if not emit:
+        return "", [], [], []
     return "".join(code), defines, includes, offset_map
 
 
-# Linux v7.3.5 as clang sees it on x86_64. `__LITTLE_ENDIAN` is the name the
-# kernel's compatibility tests use; the `__*__` names are the compiler's.
+# Linux v7.3.5 as clang sees it on x86_64. Values are replacement text.
+# `__GNUC__` is clang's compatibility version, not 1. `__LITTLE_ENDIAN_BITFIELD`
+# is the empty macro from the little-endian kernel byteorder header.
 # Kernel CONFIG_* symbols are absent: this is not a .config, so SoC arms stay
 # on their #else stubs and the little-endian arm stays live.
-TARGET_MACROS: dict[str, int | None] = {
-    "__LITTLE_ENDIAN__": 1,
-    "__LITTLE_ENDIAN": 1234,
-    "__ORDER_LITTLE_ENDIAN__": 1234,
-    "__ORDER_BIG_ENDIAN__": 4321,
-    "__ORDER_PDP_ENDIAN__": 3412,
-    "__BYTE_ORDER__": 1234,
-    "__BYTE_ORDER": 1234,
-    "__LP64__": 1,
-    "__x86_64__": 1,
-    "__x86_64": 1,
-    "__linux__": 1,
-    "__linux": 1,
-    "linux": 1,
-    "__GNUC__": 1,
+TARGET_MACROS: dict[str, str] = {
+    "__LITTLE_ENDIAN__": "1",
+    "__LITTLE_ENDIAN": "1234",
+    "__LITTLE_ENDIAN_BITFIELD": "",
+    "__ORDER_LITTLE_ENDIAN__": "1234",
+    "__ORDER_BIG_ENDIAN__": "4321",
+    "__ORDER_PDP_ENDIAN__": "3412",
+    "__BYTE_ORDER__": "1234",
+    "__BYTE_ORDER": "1234",
+    "__LP64__": "1",
+    "__x86_64__": "1",
+    "__x86_64": "1",
+    "__linux__": "1",
+    "__linux": "1",
+    "linux": "1",
+    "__GNUC__": "4",
+    "__GNUC_MINOR__": "2",
+    "__GNUC_PATCHLEVEL__": "1",
 }
+# params is None for an object-like macro. The body is unexpanded source.
+MacroTable = dict[str, tuple[list[str] | None, str]]
 _COND_FALSE = {"IS_ENABLED", "IS_BUILTIN", "IS_MODULE", "IS_REACHABLE"}
 _COND_TOKEN = re.compile(
     r"\s+"
@@ -1291,7 +1316,7 @@ _COND_TOKEN = re.compile(
     r"|\d+(?:[uU][lL]{0,2}|[lL]{1,2}[uU]?)?"
     r"|[A-Za-z_][A-Za-z0-9_]*"
     r"|&&|\|\||==|!=|<=|>=|<<|>>"
-    r"|[()!<>+\-*/%&|^~]"
+    r"|[()!<>+\-*/%&|^~?:,]"
 )
 
 
@@ -1303,7 +1328,10 @@ def _live(stack: list[tuple[bool, bool, bool]]) -> bool:
     return all(arm for _parent, arm, _taken in stack)
 
 
-def _directive(line, stack, defines, includes, rel, selected, number, active, macros) -> None:
+def _directive(
+    line, stack, defines, includes, rel, selected, number, active,
+    macros, path, applied, emit,
+) -> None:
     parts = line.split(None, 1)
     keyword = parts[0]
     rest = parts[1].strip() if len(parts) > 1 else ""
@@ -1341,11 +1369,18 @@ def _directive(line, stack, defines, includes, rel, selected, number, active, ma
         if target.startswith("linux/") or target.startswith("net/"):
             return
         resolved = os.path.normpath(os.path.join(os.path.dirname(rel), target))
-        if resolved in selected:
+        if resolved not in selected:
+            return
+        if emit:
             includes.append(resolved)
+        if resolved in applied:
+            return
+        include_path = _header_root(path, rel) / resolved
+        if include_path.is_file():
+            _walk_header(include_path, resolved, selected, macros, applied, emit=False)
 
 
-def _arm(keyword: str, rest: str, stack, macros: dict[str, int | None]) -> None:
+def _arm(keyword: str, rest: str, stack, macros: MacroTable) -> None:
     if keyword == "#elif":
         if not stack:
             return
@@ -1368,21 +1403,9 @@ def _arm(keyword: str, rest: str, stack, macros: dict[str, int | None]) -> None:
     stack.append((parent, cond, cond))
 
 
-def _remember_define(parsed: tuple, macros: dict[str, int | None]) -> None:
+def _remember_define(parsed: tuple, macros: MacroTable) -> None:
     name, params, body = parsed
-    if params is not None:
-        macros[name] = None
-        return
-    macros[name] = _macro_int(body, macros)
-
-
-def _macro_int(body: str, macros: dict[str, int | None]) -> int | None:
-    literal = _c_int(body)
-    if literal is not None:
-        return literal
-    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", body) and isinstance(macros.get(body), int):
-        return macros[body]
-    return None
+    macros[name] = (params, body)
 
 
 def _c_int(text: str) -> int | None:
@@ -1395,24 +1418,136 @@ def _c_int(text: str) -> int | None:
     return int(match.group(1), 0)
 
 
-def _if_value(expr: str, macros: dict[str, int | None]) -> bool:
+def _if_value(expr: str, macros: MacroTable) -> bool:
     try:
-        return _Cond(expr, macros).parse() != 0
+        tokens = _expand_tokens(_cond_tokens(expr), macros, set())
+        return _Cond(tokens, macros).parse() != 0
     except CondError as error:
         raise SystemExit(f"undecided condition: {expr}") from error
 
 
+def _is_ident(token: str) -> bool:
+    return re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", token) is not None
+
+
+def _expand_tokens(
+    tokens: list[str], macros: MacroTable, hidden: set[str], depth: int = 0,
+) -> list[str]:
+    if depth > 64:
+        raise CondError("macro depth")
+    out: list[str] = []
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        if token == "defined":
+            out.append(token)
+            index += 1
+            if index < len(tokens) and tokens[index] == "(":
+                out.append(tokens[index])
+                index += 1
+                if index < len(tokens):
+                    out.append(tokens[index])
+                    index += 1
+                if index < len(tokens) and tokens[index] == ")":
+                    out.append(tokens[index])
+                    index += 1
+            elif index < len(tokens):
+                out.append(tokens[index])
+                index += 1
+            continue
+        entry = macros.get(token) if _is_ident(token) and token not in hidden else None
+        if entry is None:
+            out.append(token)
+            index += 1
+            continue
+        params, body = entry
+        if params is not None and "..." in params:
+            out.append(token)
+            index += 1
+            continue
+        if params is None:
+            out.extend(_expand_tokens(_cond_tokens(body), macros, hidden | {token}, depth + 1))
+            index += 1
+            continue
+        if index + 1 < len(tokens) and tokens[index + 1] == "(":
+            args, index = _read_args(tokens, index + 2)
+            substituted = _substitute(params, body, args, macros, depth)
+            out.extend(_expand_tokens(substituted, macros, hidden | {token}, depth + 1))
+            continue
+        out.append(token)
+        index += 1
+    return out
+
+
+def _read_args(tokens: list[str], start: int) -> tuple[list[list[str]], int]:
+    args: list[list[str]] = []
+    current: list[str] = []
+    depth = 0
+    index = start
+    while index < len(tokens):
+        token = tokens[index]
+        if token == "(":
+            depth += 1
+            current.append(token)
+        elif token == ")":
+            if depth == 0:
+                args.append(current)
+                return args, index + 1
+            depth -= 1
+            current.append(token)
+        elif token == "," and depth == 0:
+            args.append(current)
+            current = []
+        else:
+            current.append(token)
+        index += 1
+    raise CondError("unclosed call")
+
+
+def _substitute(
+    params: list[str], body: str, args: list[list[str]], macros: MacroTable, depth: int,
+) -> list[str]:
+    expanded = [_expand_tokens(arg, macros, set(), depth + 1) for arg in args]
+    out: list[str] = []
+    for token in _cond_tokens(body):
+        if token in params:
+            slot = params.index(token)
+            if slot < len(expanded):
+                out.extend(expanded[slot])
+            continue
+        out.append(token)
+    return out
+
+
 class _Cond:
-    def __init__(self, expr: str, macros: dict[str, int | None]) -> None:
+    def __init__(self, tokens: list[str], macros: MacroTable) -> None:
         self.macros = macros
-        self.tokens = _cond_tokens(expr)
+        self.tokens = tokens
         self.index = 0
 
     def parse(self) -> int:
-        value = self._or()
+        value = self._comma()
         if self._peek():
             raise CondError(self._peek())
         return value
+
+    def _comma(self) -> int:
+        value = self._ternary()
+        while self._peek() == ",":
+            self._bump()
+            value = self._ternary()
+        return value
+
+    def _ternary(self) -> int:
+        value = self._or()
+        if self._peek() != "?":
+            return value
+        self._bump()
+        yes = self._comma()
+        if self._bump() != ":":
+            raise CondError(":")
+        no = self._ternary()
+        return yes if value else no
 
     def _peek(self) -> str:
         if self.index >= len(self.tokens):
@@ -1430,14 +1565,16 @@ class _Cond:
         value = self._and()
         while self._peek() == "||":
             self._bump()
-            value = 1 if value or self._and() else 0
+            right = self._and()
+            value = 1 if value or right else 0
         return value
 
     def _and(self) -> int:
         value = self._bor()
         while self._peek() == "&&":
             self._bump()
-            value = 1 if value and self._bor() else 0
+            right = self._bor()
+            value = 1 if value and right else 0
         return value
 
     def _bor(self) -> int:
@@ -1547,9 +1684,8 @@ class _Cond:
         literal = _c_int(token)
         if literal is not None:
             return literal
-        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", token):
-            value = self.macros.get(token)
-            return value if isinstance(value, int) else 0
+        if _is_ident(token):
+            return 0
         raise CondError(token)
 
     def _defined(self) -> int:
@@ -1638,22 +1774,78 @@ def _check_preprocess() -> None:
             ["KEEP_OUTER_ELSE"],
             ["DROP_NEST", "DROP_NEST_ELSE"],
         ),
+        (
+            "#if __GNUC__ >= 4\nKEEP_GNUC\n#else\nDROP_GNUC\n#endif\n"
+            "#if __GNUC__ < 4\nDROP_OLD_GNUC\n#else\nKEEP_NEW_GNUC\n#endif\n",
+            ["KEEP_GNUC", "KEEP_NEW_GNUC"],
+            ["DROP_GNUC", "DROP_OLD_GNUC"],
+        ),
+        (
+            "#ifdef __LITTLE_ENDIAN_BITFIELD\nKEEP_LE_BITS\n#else\nDROP_BE_BITS\n#endif\n"
+            "#ifdef __BIG_ENDIAN_BITFIELD\nDROP_BE_BITFIELD\n#else\nKEEP_NO_BE_BITFIELD\n#endif\n",
+            ["KEEP_LE_BITS", "KEEP_NO_BE_BITFIELD"],
+            ["DROP_BE_BITS", "DROP_BE_BITFIELD"],
+        ),
+        (
+            "#define FOO (1 << 2)\n#if FOO\nKEEP_SHIFT\n#else\nDROP_SHIFT\n#endif\n"
+            "#if !FOO\nDROP_NOT_SHIFT\n#else\nKEEP_NOT_SHIFT\n#endif\n",
+            ["KEEP_SHIFT", "KEEP_NOT_SHIFT"],
+            ["DROP_SHIFT", "DROP_NOT_SHIFT"],
+        ),
+        (
+            "#define SUM 1 + 2\n#if SUM == 3\nKEEP_SUM\n#else\nDROP_SUM\n#endif\n"
+            "#define ONE 1\n#define ALSO ONE\n#if ALSO\nKEEP_ALIAS\n#else\nDROP_ALIAS\n#endif\n",
+            ["KEEP_SUM", "KEEP_ALIAS"],
+            ["DROP_SUM", "DROP_ALIAS"],
+        ),
+        (
+            "#define ADD(a, b) ((a) + (b))\n#if ADD(1, 2) == 3\nKEEP_ADD\n#else\nDROP_ADD\n#endif\n",
+            ["KEEP_ADD"],
+            ["DROP_ADD"],
+        ),
     ]
     for text, kept, dropped in cases:
-        lines = _kept_lines(text)
-        for item in kept:
-            if item not in lines:
-                raise SystemExit(f"dropped live line {item}")
-        for item in dropped:
-            if item in lines:
-                raise SystemExit(f"kept dead line {item}")
+        _expect_lines(text, kept, dropped)
+    _expect_lines(
+        '#include "inc.h"\n#if FOO\nKEEP_INC\n#else\nDROP_INC\n#endif\n'
+        "#if !FOO\nDROP_NOT_INC\n#else\nKEEP_NOT_INC\n#endif\n",
+        ["KEEP_INC", "KEEP_NOT_INC"],
+        ["DROP_INC", "DROP_NOT_INC"],
+        {"inc.h": "#define FOO (1 << 2)\n"},
+    )
+    _expect_lines(
+        '#include "a.h"\n#if BAR\nKEEP_NEST\n#else\nDROP_NEST_INC\n#endif\n',
+        ["KEEP_NEST"],
+        ["DROP_NEST_INC"],
+        {"a.h": '#include "b.h"\n', "b.h": "#define BAR (1 + 2)\n"},
+    )
 
 
-def _kept_lines(text: str) -> list[str]:
+def _expect_lines(
+    text: str, kept: list[str], dropped: list[str], extras: dict[str, str] | None = None,
+) -> None:
+    lines = _kept_lines(text, extras)
+    for item in kept:
+        if item not in lines:
+            raise SystemExit(f"dropped live line {item}")
+    for item in dropped:
+        if item in lines:
+            raise SystemExit(f"kept dead line {item}")
+
+
+def _kept_lines(text: str, extras: dict[str, str] | None = None) -> list[str]:
+    extras = extras or {}
     with tempfile.TemporaryDirectory() as directory:
-        path = Path(directory) / "self.h"
-        path.write_text(text)
-        code, _defines, _includes, _offsets = preprocess(path, "self.h", set())
+        root = Path(directory)
+        (root / "self.h").write_text(text)
+        names = {"self.h"}
+        for name, body in extras.items():
+            dest = root / name
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text(body)
+            names.add(name)
+        selected = names if extras else set()
+        code, _defines, _includes, _offsets = preprocess(root / "self.h", "self.h", selected)
     return [line.strip() for line in code.splitlines() if line.strip()]
 
 
@@ -3430,12 +3622,44 @@ fn check_recs(group: &Group, lines: &[&str], mut cursor: usize) {{
     }}
 }}
 
+struct ProbeDir {{
+    path: std::path::PathBuf,
+}}
+
+impl Drop for ProbeDir {{
+    fn drop(&mut self) {{
+        let _ = std::fs::remove_dir_all(&self.path);
+    }}
+}}
+
+impl ProbeDir {{
+    fn create() -> Self {{
+        let base = std::env::temp_dir();
+        for salt in 0..64 {{
+            let path = base.join(format!(
+                "lerux-mt79-proof-{{}}-{{}}-{{}}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .expect("clock")
+                    .as_nanos(),
+                salt,
+            ));
+            match std::fs::create_dir(&path) {{
+                Ok(()) => return Self {{ path }},
+                Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {{}},
+                Err(err) => panic!("temp dir: {{err}}"),
+            }}
+        }}
+        panic!("temp dir");
+    }}
+}}
+
 fn compile(source: &str) -> String {{
-    let dir = std::env::temp_dir().join("lerux-mt79-proof");
-    std::fs::create_dir_all(&dir).expect("temp dir");
-    let path = dir.join("probe.c");
+    let dir = ProbeDir::create();
+    let path = dir.path.join("probe.c");
     std::fs::write(&path, source).expect("probe source");
-    let binary = dir.join("probe");
+    let binary = dir.path.join("probe");
     let include = concat!(env!("CARGO_MANIFEST_DIR"), "/include");
     let compiled = std::process::Command::new("gcc")
         .args(["-std=gnu11", "-I", include])

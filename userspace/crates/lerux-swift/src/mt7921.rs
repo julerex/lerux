@@ -1502,6 +1502,27 @@ const SURVEY_MARK_MAX: usize = 80;
 const _: () = assert!(SURVEY_MARK + 1 + SURVEY_MARK_MAX <= 0x1000);
 const _: () = assert!(SURVEY_REPORT_MAX > SURVEY_MARK_MAX);
 
+/// Open: the beacon had no RSN element.
+pub const SURVEY_SEC_OPEN: u8 = 0;
+/// PSK: the RSN AKM list contains `00:0f:ac:02`.
+pub const SURVEY_SEC_PSK: u8 = 1;
+/// Any other RSN element. This station does not join it.
+pub const SURVEY_SEC_OTHER: u8 = 2;
+
+/// One security byte per sorted name, after the survey mark text.
+const SURVEY_SECURITY: usize = SURVEY_MARK + 1 + SURVEY_MARK_MAX;
+/// Station identity. Past the security bytes, so a survey does not clear it.
+const STATION_AT: usize = 0x280;
+const STATION_LEN: usize = 43;
+const STATION_MAGIC: u8 = 0x57;
+/// Heard-name mirror. [`write_key`] clears the low list and leaves this copy.
+const HEARD_AT: usize = 0x300;
+const HEARD_STRIDE: usize = 34;
+
+const _: () = assert!(SURVEY_SECURITY + SCAN_MAX <= STATION_AT);
+const _: () = assert!(STATION_AT + STATION_LEN <= HEARD_AT);
+const _: () = assert!(HEARD_AT + 1 + SCAN_MAX * HEARD_STRIDE <= 0x1000);
+
 fn survey_span() -> usize {
     SURVEY_MARK
 }
@@ -1526,30 +1547,75 @@ pub fn survey_requested(page: &[u8]) -> bool {
 
 /// Store the heard names in byte order. Tag becomes the list the shell reads.
 pub fn write_survey_list(page: &mut [u8], names: &[&[u8]]) -> bool {
-    if page.len() < survey_span() || names.len() > SCAN_MAX {
+    if names.len() > SCAN_MAX {
         return false;
     }
-    for name in names {
-        if name.is_empty() || name.len() > 32 {
-            return false;
-        }
+    let open = [SURVEY_SEC_OPEN; SCAN_MAX];
+    write_survey_secured(page, names, &open[..names.len()])
+}
+
+/// Names plus one security byte each, sorted together.
+///
+/// `0` is open, `1` is PSK, `2` is any other RSN element. The bytes sit after
+/// the survey mark so [`write_key`] and [`write_survey`] leave them in place
+/// until the next list replaces them.
+pub fn write_survey_secured(page: &mut [u8], names: &[&[u8]], security: &[u8]) -> bool {
+    if !names_fit(page, names, security) {
+        return false;
     }
     let mut owned = [[0u8; 32]; SCAN_MAX];
     let mut lens = [0u8; SCAN_MAX];
+    let mut secs = [0u8; SCAN_MAX];
+    copy_names(names, security, &mut owned, &mut lens, &mut secs);
+    sort_names(&mut owned, &mut lens, &mut secs, names.len());
+    write_sorted(page, &owned, &lens, &secs, names.len())
+}
+
+fn names_fit(page: &[u8], names: &[&[u8]], security: &[u8]) -> bool {
+    if page.len() < SURVEY_SECURITY + SCAN_MAX
+        || names.len() > SCAN_MAX
+        || security.len() != names.len()
+    {
+        return false;
+    }
+    names
+        .iter()
+        .zip(security)
+        .all(|(name, sec)| !name.is_empty() && name.len() <= 32 && *sec <= SURVEY_SEC_OTHER)
+}
+
+fn copy_names(
+    names: &[&[u8]],
+    security: &[u8],
+    owned: &mut [[u8; 32]],
+    lens: &mut [u8],
+    secs: &mut [u8],
+) {
     for (i, name) in names.iter().enumerate() {
         owned[i][..name.len()].copy_from_slice(name);
         lens[i] = fit_u8(name.len());
+        secs[i] = security[i];
     }
-    sort_names(&mut owned, &mut lens, names.len());
+}
+
+fn write_sorted(
+    page: &mut [u8],
+    owned: &[[u8; 32]],
+    lens: &[u8],
+    secs: &[u8],
+    count: usize,
+) -> bool {
     page[..survey_span()].fill(0);
     page[0] = PAGE_LIST;
-    page[1] = fit_u8(names.len());
-    for i in 0..names.len() {
+    page[1] = fit_u8(count);
+    for i in 0..count {
         let at = 4 + i * SURVEY_STRIDE;
         let n = usize::from(lens[i]);
         page[at] = lens[i];
         page[at + 1..at + 1 + n].copy_from_slice(&owned[i][..n]);
     }
+    page[SURVEY_SECURITY..SURVEY_SECURITY + SCAN_MAX].fill(0);
+    page[SURVEY_SECURITY..SURVEY_SECURITY + count].copy_from_slice(&secs[..count]);
     true
 }
 
@@ -2138,12 +2204,13 @@ fn menu_index(line: &[u8]) -> Option<usize> {
     value.checked_sub(1)
 }
 
-fn sort_names(names: &mut [[u8; 32]], lens: &mut [u8], count: usize) {
+fn sort_names(names: &mut [[u8; 32]], lens: &mut [u8], secs: &mut [u8], count: usize) {
     for i in 1..count {
         let mut j = i;
         while j > 0 && name_before(&names[j], lens[j], &names[j - 1], lens[j - 1]) {
             names.swap(j, j - 1);
             lens.swap(j, j - 1);
+            secs.swap(j, j - 1);
             j -= 1;
         }
     }
@@ -2560,6 +2627,173 @@ pub fn efuse_mac(buf: &[u8]) -> Option<[u8; 6]> {
 #[must_use]
 pub fn wtbl_word(idx: u32) -> u32 {
     (idx & 0x3ff) | (1 << 12)
+}
+
+/// Security byte stored beside the sorted name. Missing bytes are open.
+#[must_use]
+pub fn read_survey_security(page: &[u8], index: usize) -> Option<u8> {
+    let n = read_survey_count(page)?;
+    if index >= n || page.len() < SURVEY_SECURITY + n {
+        return None;
+    }
+    Some(page[SURVEY_SECURITY + index])
+}
+
+/// Record that the firmware is up and the station address.
+///
+/// A later call updates power and the address. It leaves a connected name
+/// and a drop request already on the page.
+pub fn publish_station(page: &mut [u8], powered: bool, address: [u8; 6]) -> bool {
+    if page.len() < STATION_AT + STATION_LEN {
+        return false;
+    }
+    if page[STATION_AT] != STATION_MAGIC {
+        page[STATION_AT..STATION_AT + STATION_LEN].fill(0);
+        page[STATION_AT] = STATION_MAGIC;
+    }
+    page[STATION_AT + 1] = u8::from(powered);
+    page[STATION_AT + 2..STATION_AT + 8].copy_from_slice(&address);
+    true
+}
+
+/// Power and the station address, when the radio has published them.
+#[must_use]
+pub fn read_station(page: &[u8]) -> Option<(bool, [u8; 6])> {
+    if page.len() < STATION_AT + 8 || page[STATION_AT] != STATION_MAGIC {
+        return None;
+    }
+    let mut address = [0u8; 6];
+    address.copy_from_slice(&page[STATION_AT + 2..STATION_AT + 8]);
+    Some((page[STATION_AT + 1] == 1, address))
+}
+
+/// Ask the radio to send a deauthentication and clear the local link.
+pub fn request_drop(page: &mut [u8]) -> bool {
+    if read_station(page).is_none() || page.len() < STATION_AT + STATION_LEN {
+        return false;
+    }
+    page[STATION_AT + 8] = 1;
+    true
+}
+
+/// The shell's drop request is still waiting.
+#[must_use]
+pub fn drop_requested(page: &[u8]) -> bool {
+    page.get(STATION_AT) == Some(&STATION_MAGIC) && page.get(STATION_AT + 8) == Some(&1)
+}
+
+/// Remember the name `iwctl` connected. The low survey list does not hold it.
+pub fn write_link_name(page: &mut [u8], ssid: &[u8]) -> bool {
+    if ssid.is_empty() || ssid.len() > 32 || page.len() < STATION_AT + STATION_LEN {
+        return false;
+    }
+    if page[STATION_AT] != STATION_MAGIC {
+        return false;
+    }
+    page[STATION_AT + 9] = 1;
+    page[STATION_AT + 10] = fit_u8(ssid.len());
+    page[STATION_AT + 11..STATION_AT + 11 + ssid.len()].copy_from_slice(ssid);
+    true
+}
+
+/// Connected name from [`write_link_name`].
+#[must_use]
+pub fn read_link_name(page: &[u8]) -> Option<&[u8]> {
+    if page.len() < STATION_AT + STATION_LEN || page[STATION_AT] != STATION_MAGIC {
+        return None;
+    }
+    if page[STATION_AT + 9] != 1 {
+        return None;
+    }
+    let n = usize::from(page[STATION_AT + 10]);
+    if n == 0 || n > 32 {
+        return None;
+    }
+    Some(&page[STATION_AT + 11..STATION_AT + 11 + n])
+}
+
+/// Clear the drop request, the connected name, and a finished join.
+pub fn note_dropped(page: &mut [u8]) {
+    if page.len() > STATION_AT + 10 && page[STATION_AT] == STATION_MAGIC {
+        page[STATION_AT + 8] = 0;
+        page[STATION_AT + 9] = 0;
+        page[STATION_AT + 10] = 0;
+    }
+    if page.len() >= 4 && page[0] == 1 {
+        page[3] = 2;
+    }
+}
+
+/// Copy the current name list past the key area so a later passphrase keeps it.
+pub fn mirror_heard(page: &mut [u8]) -> bool {
+    let Some(n) = read_survey_count(page) else {
+        return false;
+    };
+    if page.len() < HEARD_AT + 1 + n * HEARD_STRIDE {
+        return false;
+    }
+    page[HEARD_AT] = fit_u8(n);
+    for i in 0..n {
+        if !mirror_one(page, i) {
+            return false;
+        }
+    }
+    true
+}
+
+fn mirror_one(page: &mut [u8], index: usize) -> bool {
+    let (n, owned, sec) = {
+        let Some(name) = read_survey_ssid(page, index) else {
+            return false;
+        };
+        let mut owned = [0u8; 32];
+        let n = name.len();
+        owned[..n].copy_from_slice(name);
+        let sec = read_survey_security(page, index).unwrap_or(SURVEY_SEC_OPEN);
+        (n, owned, sec)
+    };
+    let at = HEARD_AT + 1 + index * HEARD_STRIDE;
+    page[at] = fit_u8(n);
+    page[at + 1..at + 1 + n].copy_from_slice(&owned[..n]);
+    page[at + 33] = sec;
+    true
+}
+
+/// Names in the mirror [`mirror_heard`] wrote.
+#[must_use]
+pub fn read_heard_count(page: &[u8]) -> Option<usize> {
+    let n = usize::from(*page.get(HEARD_AT)?);
+    if n > SCAN_MAX || page.len() < HEARD_AT + 1 + n * HEARD_STRIDE {
+        return None;
+    }
+    for i in 0..n {
+        read_heard_ssid(page, i)?;
+    }
+    Some(n)
+}
+
+/// One mirrored name.
+#[must_use]
+pub fn read_heard_ssid(page: &[u8], index: usize) -> Option<&[u8]> {
+    let n = usize::from(*page.get(HEARD_AT)?);
+    if index >= n || n > SCAN_MAX {
+        return None;
+    }
+    let at = HEARD_AT + 1 + index * HEARD_STRIDE;
+    let len = usize::from(*page.get(at)?);
+    if len == 0 || len > 32 || page.len() < at + 34 {
+        return None;
+    }
+    Some(&page[at + 1..at + 1 + len])
+}
+
+/// Security byte stored with [`read_heard_ssid`].
+#[must_use]
+pub fn read_heard_security(page: &[u8], index: usize) -> Option<u8> {
+    let name = read_heard_ssid(page, index)?;
+    let at = HEARD_AT + 1 + index * HEARD_STRIDE;
+    let _ = name;
+    page.get(at + 33).copied()
 }
 
 #[cfg(test)]
@@ -3462,5 +3696,77 @@ mod tests {
         ));
         let n = format_survey_report(&page, &mut out).unwrap();
         assert_eq!(&out[..n], b"rx 4 ev 0 ok 0 done 0 fc --\n");
+    }
+
+    #[test]
+    fn survey_security_sorts_with_the_names() {
+        let mut page = [0u8; 0x1000];
+        assert!(write_survey_secured(
+            &mut page,
+            &[b"zeta", b"alpha"],
+            &[SURVEY_SEC_PSK, SURVEY_SEC_OPEN]
+        ));
+        assert_eq!(read_survey_ssid(&page, 0), Some(&b"alpha"[..]));
+        assert_eq!(read_survey_security(&page, 0), Some(SURVEY_SEC_OPEN));
+        assert_eq!(read_survey_ssid(&page, 1), Some(&b"zeta"[..]));
+        assert_eq!(read_survey_security(&page, 1), Some(SURVEY_SEC_PSK));
+        assert!(mirror_heard(&mut page));
+        let mac = [0x52, 0x54, 0x00, 0x12, 0x34, 0x56];
+        assert!(publish_station(&mut page, true, mac));
+        assert!(write_link_name(&mut page, b"alpha"));
+        assert!(write_key(&mut page, b"alpha", b"correct12"));
+        assert!(write_survey(&mut page));
+        let (powered, got) = read_station(&page).unwrap();
+        assert!(powered);
+        assert_eq!(got, mac);
+        assert_eq!(read_link_name(&page), Some(&b"alpha"[..]));
+        assert_eq!(read_heard_ssid(&page, 1), Some(&b"zeta"[..]));
+        assert_eq!(read_heard_security(&page, 1), Some(SURVEY_SEC_PSK));
+        assert!(request_drop(&mut page));
+        assert!(drop_requested(&page));
+        note_dropped(&mut page);
+        assert!(!drop_requested(&page));
+        assert!(read_link_name(&page).is_none());
+        assert!(!join_up(&page));
+    }
+
+    #[test]
+    fn a_second_join_drops_the_previous_name() {
+        let mut page = [0u8; 0x1000];
+        let mac = [0x52, 0x54, 0x00, 0x12, 0x34, 0x56];
+        assert!(publish_station(&mut page, true, mac));
+        assert!(write_link_name(&mut page, b"old"));
+        assert!(write_key(&mut page, b"new", b"correct12"));
+        note_dropped(&mut page);
+        assert!(read_link_name(&page).is_none());
+        assert!(write_join(&mut page, false));
+        assert!(!join_up(&page));
+        assert!(read_link_name(&page).is_none());
+        assert!(!join_pending(&page));
+        assert!(write_key(&mut page, b"new", b"correct12"));
+        note_dropped(&mut page);
+        assert!(write_join(&mut page, true));
+        assert!(write_link_name(&mut page, b"new"));
+        assert_eq!(read_link_name(&page), Some(&b"new"[..]));
+    }
+
+    #[test]
+    fn a_survey_keeps_the_live_link_name() {
+        let mut page = [0u8; 0x1000];
+        let mac = [0x52, 0x54, 0x00, 0x12, 0x34, 0x56];
+        assert!(publish_station(&mut page, true, mac));
+        assert!(write_link_name(&mut page, b"lerux"));
+        assert!(write_key(&mut page, b"lerux", b"correct12"));
+        assert!(write_join(&mut page, true));
+        assert!(write_survey(&mut page));
+        assert_eq!(read_link_name(&page), Some(&b"lerux"[..]));
+        assert!(read_key(&page).is_none());
+        assert!(!join_up(&page));
+        assert!(write_survey_secured(
+            &mut page,
+            &[b"lerux"],
+            &[SURVEY_SEC_PSK]
+        ));
+        assert_eq!(read_link_name(&page), Some(&b"lerux"[..]));
     }
 }

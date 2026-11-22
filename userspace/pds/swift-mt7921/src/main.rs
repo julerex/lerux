@@ -54,15 +54,15 @@ use lerux_desk::FRAMEBUFFER_BYTES;
 use lerux_sddf::{net_driver_config_t, net_image::net_config_from_bytes, SDDF_NET_MAGIC};
 #[cfg(not(test))]
 use lerux_swift::{
-    bar_line, class_code, format_report, load_header, memory_bar,
+    bar_line, class_code, drop_requested, format_report, load_header, memory_bar,
     mt7921::{
         join_device_rows_to_clear, join_pending, read_survey_mark, survey_requested,
         write_auth_miss, write_eapol_miss, write_join, write_join_detail, write_link_mark,
         write_slot_line, AuthMiss, Sem, Stage, JOIN_DETAIL_LINES, JOIN_DETAIL_ROW, JOIN_END,
         JOIN_END_ROW,
     },
-    paint_row, read_key, vendor_device, working_line, WaitMark, WifiReport, MT7921_BAR, MT7921_BDF,
-    MT7921_IDS,
+    paint_row, publish_station, read_key, vendor_device, working_line, WaitMark, WifiReport,
+    MT7921_BAR, MT7921_BDF, MT7921_IDS,
 };
 
 #[cfg(not(test))]
@@ -146,6 +146,7 @@ fn init() -> HandlerImpl {
     let mac = Mac::boot(regs, dma, &images);
     beat_disarm();
     paint_stage(mac.stage());
+    note_station(&mac);
     HandlerImpl {
         mac: Some(mac),
         net,
@@ -276,6 +277,11 @@ fn paint_working(tick: u32) {
 }
 
 #[cfg(not(test))]
+fn note_station(mac: &Mac) {
+    let _ = publish_station(key_page(), mac.ready(), mac.sta());
+}
+
+#[cfg(not(test))]
 fn paint_stage(stage: Stage) {
     let mut line = [0u8; 40];
     let n = stage.paint(&mut line);
@@ -378,6 +384,11 @@ impl HandlerImpl {
         let Some(mac) = self.mac.as_mut() else {
             return;
         };
+        note_station(mac);
+        if drop_requested(key_page()) {
+            mac.disconnect(key_page());
+            return;
+        }
         if !mac.ready() {
             paint_stage(mac.stage());
         } else if survey_requested(key_page()) {
@@ -388,24 +399,7 @@ impl HandlerImpl {
         } else if join_pending(key_page())
             && let Some((name, name_len, pass, pass_len)) = posted_key()
         {
-            let stage = mac.associate(&name[..name_len], &pass[..pass_len], paint_stage);
-            let up = stage == Stage::Wait;
-            if stage == Stage::AuthRx {
-                let mut line = [0u8; 64];
-                let miss = mac.auth_miss();
-                let n = write_auth_miss(&mut line, &miss);
-                paint(&line[..n]);
-                paint_detail(&miss, mac.sta());
-            } else if stage == Stage::Eapol {
-                let mut line = [0u8; 64];
-                let miss = mac.eapol_miss();
-                let n = write_eapol_miss(&mut line, &miss);
-                paint(&line[..n]);
-                paint_detail(&miss, mac.sta());
-            } else {
-                paint_stage(stage);
-            }
-            let _ = write_join(key_page(), up);
+            join_posted(mac, &name[..name_len], &pass[..pass_len]);
         }
     }
 
@@ -422,6 +416,41 @@ impl HandlerImpl {
         notify(self.rx_id, note.rx);
         notify(self.tx_id, note.tx);
     }
+}
+
+/// A new join leaves the previous BSS before it scans.
+///
+/// `disconnect` sends reason 3 and clears the stored name. A failed handshake
+/// then cannot report that name as still connected.
+#[cfg(not(test))]
+fn join_posted(mac: &mut Mac, name: &[u8], pass: &[u8]) {
+    if mac.bssid().is_some() {
+        mac.disconnect(key_page());
+    }
+    let stage = mac.associate(name, pass, paint_stage);
+    report_join(mac, stage);
+    let _ = write_join(key_page(), stage == Stage::Wait);
+}
+
+#[cfg(not(test))]
+fn report_join(mac: &Mac, stage: Stage) {
+    if stage == Stage::AuthRx {
+        let mut line = [0u8; 64];
+        let miss = mac.auth_miss();
+        let n = write_auth_miss(&mut line, &miss);
+        paint(&line[..n]);
+        paint_detail(&miss, mac.sta());
+        return;
+    }
+    if stage == Stage::Eapol {
+        let mut line = [0u8; 64];
+        let miss = mac.eapol_miss();
+        let n = write_eapol_miss(&mut line, &miss);
+        paint(&line[..n]);
+        paint_detail(&miss, mac.sta());
+        return;
+    }
+    paint_stage(stage);
 }
 
 #[cfg(not(test))]

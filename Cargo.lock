@@ -1225,6 +1225,10 @@ name = "lerux-input"
 version = "0.1.0"
 
 [[package]]
+name = "lerux-iwctl"
+version = "0.1.0"
+
+[[package]]
 name = "lerux-ladybird-gfx"
 version = "0.1.0"
 dependencies = [
@@ -2359,6 +2363,7 @@ dependencies = [
  "lerux-calc",
  "lerux-cothread",
  "lerux-image",
+ "lerux-iwctl",
  "lerux-posix",
  "lerux-sddf",
  "lerux-signon",

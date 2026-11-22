@@ -1056,6 +1056,12 @@ mod tests {
         assert!(text.contains("kind-ovmf 2\n"));
         assert!(text.contains("kind-none 2\n"));
         assert!(text.contains("carve-ok"));
+        assert!(text.contains("phys36-panel 0\n"));
+        assert!(text.contains("phys36-wifi 0\n"));
+        assert!(text.contains("phys39-panel 0\n"));
+        assert!(text.contains("phys40-panel 1\n"));
+        assert!(text.contains("phys40-wifi 1\n"));
+        assert!(text.contains("phys36-vga 1\n"));
     }
 
     #[test]

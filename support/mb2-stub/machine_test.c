@@ -76,7 +76,7 @@ static int test_windows(void) {
     if (n == 0) {
         return fail("carve before windows");
     }
-    n = reserve_missing_windows(spans, n, 16);
+    n = reserve_missing_windows(spans, n, 16, 48);
     if (n == 0) {
         return fail("reserve windows");
     }
@@ -96,7 +96,7 @@ static int test_windows(void) {
     spans[0].addr = SWIFT_FB_PHYS;
     spans[0].len = 0x1000000ull;
     spans[0].type = MMAP_RAM;
-    n = reserve_missing_windows(spans, 1, 16);
+    n = reserve_missing_windows(spans, 1, 16, 48);
     for (i = 1; i < n; i++) {
         if (spans[i].addr == SWIFT_FB_PHYS) {
             return fail("ram panel was reserved again");
@@ -108,8 +108,48 @@ static int test_windows(void) {
     return 0;
 }
 
+static int high_covered(unsigned phys_bits, uint64_t addr) {
+    mem_span spans[16];
+    size_t n;
+
+    spans[0].addr = 0x100000ull;
+    spans[0].len = 0x100000ull;
+    spans[0].type = MMAP_RAM;
+    n = reserve_missing_windows(spans, 1, 16, phys_bits);
+    if (n == 0) {
+        return -1;
+    }
+    return span_covers(spans, n, addr, 0x1000ull);
+}
+
+static int test_phys_limit(void) {
+    int panel36 = high_covered(36, SWIFT_FB_PHYS);
+    int wifi36 = high_covered(36, 0x000000fc82000000ull);
+    int panel39 = high_covered(39, SWIFT_FB_PHYS);
+    int panel40 = high_covered(40, SWIFT_FB_PHYS);
+    int wifi40 = high_covered(40, 0x000000fc82000000ull);
+    int vga36 = high_covered(36, 0xb8000ull);
+
+    if (panel36 < 0 || wifi36 < 0 || panel39 < 0 || panel40 < 0 || wifi40 < 0 || vga36 < 0) {
+        return fail("phys reserve");
+    }
+    printf("phys36-panel %d\n", panel36);
+    printf("phys36-wifi %d\n", wifi36);
+    printf("phys39-panel %d\n", panel39);
+    printf("phys40-panel %d\n", panel40);
+    printf("phys40-wifi %d\n", wifi40);
+    printf("phys36-vga %d\n", vga36);
+    if (panel36 != 0 || wifi36 != 0 || panel39 != 0) {
+        return fail("narrow cpu reserved a high window");
+    }
+    if (panel40 != 1 || wifi40 != 1 || vga36 != 1) {
+        return fail("wide cpu dropped an addressable window");
+    }
+    return 0;
+}
+
 int main(void) {
-    if (test_kind() || test_carve() || test_windows()) {
+    if (test_kind() || test_carve() || test_windows() || test_phys_limit()) {
         return 1;
     }
     printf("kind-swift %u\n", (unsigned)console_kind_for_framebuffer(SWIFT_FB_PHYS));

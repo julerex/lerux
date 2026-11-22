@@ -333,7 +333,7 @@ static void copy_memory_map(const struct multiboot2_tag_mmap *tag, uint32_t *idx
     if (carved == 0) {
         fail("mode page carve");
     }
-    carved = reserve_missing_windows(span_out, carved, SPAN_CAP);
+    carved = reserve_missing_windows(span_out, carved, SPAN_CAP, host_phys_bits());
     if (carved == 0) {
         fail("device window reserve");
     }

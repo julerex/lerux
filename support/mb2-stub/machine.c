@@ -123,7 +123,9 @@ size_t carve_mode_page(const mem_span *in, size_t count, mem_span *out, size_t o
     return written;
 }
 
-/* Windows the one image maps. The Inspiron AHCI disk is not here. */
+/* Windows the one image maps. The Inspiron AHCI disk is not here.
+   The last two need 40 physical bits. A 36-bit or 39-bit CPU does not
+   receive them. */
 static const mem_span DEVICE_WINDOWS[] = {
     {0x00000000000b8000ull, 0x1000ull, MMAP_RESERVED},
     {0x00000000d1100000ull, 0x10000ull, MMAP_RESERVED},
@@ -134,11 +136,45 @@ static const mem_span DEVICE_WINDOWS[] = {
     {SWIFT_FB_PHYS, 0x7e9000ull, MMAP_RESERVED},
 };
 
-size_t reserve_missing_windows(mem_span *spans, size_t count, size_t cap) {
+int span_fits_phys(uint64_t addr, uint64_t len, unsigned phys_bits) {
+    if (phys_bits < 32 || phys_bits > 52 || !range_ok(addr, len)) {
+        return 0;
+    }
+    if ((addr >> phys_bits) != 0) {
+        return 0;
+    }
+    if (((addr + len - 1ull) >> phys_bits) != 0) {
+        return 0;
+    }
+    return 1;
+}
+
+unsigned host_phys_bits(void) {
+    uint32_t eax;
+    uint32_t ebx;
+    uint32_t ecx;
+    uint32_t edx;
+
+    __asm__ volatile("cpuid" : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx) : "0"(0x80000000u));
+    if (eax < 0x80000008u) {
+        return 36u;
+    }
+    __asm__ volatile("cpuid" : "=a"(eax), "=b"(ebx), "=c"(ecx), "=d"(edx) : "0"(0x80000008u));
+    eax &= 0xffu;
+    if (eax < 32u || eax > 52u) {
+        return 36u;
+    }
+    return eax;
+}
+
+size_t reserve_missing_windows(mem_span *spans, size_t count, size_t cap, unsigned phys_bits) {
     size_t i;
     for (i = 0; i < sizeof(DEVICE_WINDOWS) / sizeof(DEVICE_WINDOWS[0]); i++) {
         uint64_t addr = DEVICE_WINDOWS[i].addr;
         uint64_t len = DEVICE_WINDOWS[i].len;
+        if (!span_fits_phys(addr, len, phys_bits)) {
+            continue;
+        }
         if (span_covers(spans, count, addr, len)) {
             continue;
         }

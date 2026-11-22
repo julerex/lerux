@@ -39,6 +39,13 @@ int span_overlaps_ram(const mem_span *spans, size_t count, uint64_t addr, uint64
    Returns 0 when `out_cap` is too small. */
 size_t carve_mode_page(const mem_span *in, size_t count, mem_span *out, size_t out_cap);
 
-/* Append reserved holes for device windows the map does not already cover.
-   A window that overlaps RAM is not added. Returns 0 when `cap` is too small. */
-size_t reserve_missing_windows(mem_span *spans, size_t count, size_t cap);
+/* 1 when the last byte of [addr, addr + len) sits below 2^phys_bits. */
+int span_fits_phys(uint64_t addr, uint64_t len, unsigned phys_bits);
+
+/* CPUID leaf 0x80000008 EAX[7:0]. A missing leaf is 36, the Intel default. */
+unsigned host_phys_bits(void);
+
+/* Append a device window only when it is not already RAM and the CPU can
+ * address it. A 36-bit machine does not get the Swift panel or the MT7921
+ * window. Returns the new count, or 0 when the list cannot grow. */
+size_t reserve_missing_windows(mem_span *spans, size_t count, size_t cap, unsigned phys_bits);

@@ -7,11 +7,16 @@
   the i8042. PCI locations are the Windows enumeration of the Swift.
   Device registers are touched only after that probe says this is the Swift.
   The Inspiron AHCI disk is not mapped. The NVMe window is not written, and
-  it is not loaded or stored unless the probe selected the Swift panel.
+  it is not loaded, stored, or bus-mastered unless the probe selected the
+  Swift panel. The framebuffer at 0xfc90000000 and the MT7921 window at
+  0xfc82000000 need 40 physical bits. The stub reserves those two only when
+  CPUID says this CPU can address them. A VGA boot does not program the
+  IOMMU or the MT7921.
   Microkit allows 0xcf8 in one protection domain. The probe writes the six
-  headers and sets bus master on the NVMe, xHCI, and MT7921 functions, and on
-  the root port above the MT7921. Firmware assigned those base addresses. The
-  other domains read that page.   The shell is the fetch client: console-driver
+  headers. When the probe selects the panel it sets bus master on the NVMe,
+  xHCI, and MT7921 functions, and on the root port above the MT7921. Firmware
+  assigned those base addresses. The other domains read that page. The shell
+  is the fetch client: console-driver
   is its byte output, and swift_mt7921 occupies the network driver slot.
   File commands use sddf-fatfs on the RAM volume. The NVMe window stays
   on swift_nvme and is not formatted.
@@ -19,13 +24,14 @@
 -->
 <system>
     <memory_region name="mode_record" size="0x1000" phys_addr="0x1fe0000" />
+    <!-- Swift panel. Reserved in the memory map only when MAXPHYADDR covers it. -->
     <memory_region name="framebuffer" size="{fb_bytes}" phys_addr="{fb_phys}" page_size="0x1000" />
     <!-- VGA text page. The Swift panel does not scan it. Other machines do. -->
     <memory_region name="vga_text" size="0x1_000" phys_addr="0xb8000" />
     <memory_region name="pci_headers" size="0x1000" phys_addr="0x1fb0000" />
     <!-- Panel line ifdf00000. The probe excludes the low DMA windows here. -->
     <memory_region name="iommu_regs" size="0x4000" phys_addr="0xfdf00000" page_size="0x1000" />
-    <!-- 0xfc82000000 is the header address. It is not a canonical virtual address. -->
+    <!-- 0xfc82000000 needs 40 physical bits. The stub omits it below that. -->
     <memory_region name="mt7921_regs" size="0x200000" phys_addr="0xfc82000000" page_size="0x1000" />
     <memory_region name="nvme_regs" size="0x4000" phys_addr="0xd1500000" />
     <!-- 128 KiB below the header pages. The stub is linked at 32 MiB. -->

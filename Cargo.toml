@@ -50,6 +50,7 @@ members = [
     "userspace/pds/rdtime-timer-driver",
     "userspace/pds/cmos-rtc-driver",
     "userspace/pds/rtl8852be-probe",
+    "userspace/pds/rtl8852be-driver",
     "userspace/pds/console-driver",
     "userspace/pds/console-shell",
     "userspace/pds/swift-pci-probe",

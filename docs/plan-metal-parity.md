@@ -17,7 +17,7 @@ That is the bar. A QEMU line does not close a metal milestone. A panel photo or 
 ### The three boards
 
 - **Acer Swift X** (`swift_sfx14_41g`) is the main target. The image is `just make-lerux-iso`. There is no QEMU model and no COM port. The console is the firmware GOP panel. The keyboard is the built-in i8042.
-- **Gigabyte Z97-D3H** (`pc_z97_d3h`) is the desk. The image is `just make-lerux-iso pc_z97_d3h`. QEMU covers the VGA menu (`just test-x86-console`). The onboard Ethernet port is the I217-V. The RTL8852BE card (`pc_z97_d3h_rtl8852be`) stays a configuration-space probe.
+- **Gigabyte Z97-D3H** (`pc_z97_d3h`) is the desk. The image is `just make-lerux-iso pc_z97_d3h`. QEMU covers the VGA menu (`just test-x86-console`). The onboard Ethernet port is the I217-V. The desk ISO maps the RTL8852BE BAR 2 and stops the PCI HCI. `pc_z97_d3h_rtl8852be` stays a configuration-space probe.
 - **Raspberry Pi 4** (`rpi4b_4gb`, workstation profile `rpi4b_4gb_workstation`) is secondary. It stays behind the two x86 boards. No second single-board computer is added until this one is signed off.
 
 ### Status words
@@ -247,7 +247,7 @@ Do not add a postcard message. New queue code uses `lerux-sddf`. Do not invent a
 - Accept `8086:153b` at `00:19.0` with the recorded subsystem. Keep the QEMU `8086:10d3` path.
 - Program the same rings the QEMU driver programs. Do not copy a Linux driver.
 - DHCP, then one ping of the gateway. The success lines are an address line and `ping ok`. A miss prints `ip err` or `ping err`.
-- Leave the RTL8852BE as a configuration-space read. Do not map its BAR in this milestone.
+- Do not change the RTL8852BE driver in this milestone. `pc_z97_d3h_rtl8852be` stays a configuration-space probe.
 
 **QEMU.** `just test-x86-e1000e` still prints `e1000e: ready`, `ip 10.0.2.15`, and `ping ok`. That smoke does not close the milestone.
 

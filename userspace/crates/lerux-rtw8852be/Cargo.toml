@@ -3,7 +3,7 @@ name = "lerux-rtw8852be"
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-description = "PCI identity of a Realtek RTL8852BE and the bridge window that reaches it"
+description = "PCI identity of a Realtek RTL8852BE, its bridge window, and the PCI HCI idle sequence"
 
 [lints]
 workspace = true

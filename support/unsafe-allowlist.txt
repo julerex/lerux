@@ -59,6 +59,7 @@ userspace/crates/lerux-wasm/src/exec.rs
 userspace/pds/cmos-rtc-driver/src/main.rs
 userspace/pds/console-driver/src/boot_line.rs
 userspace/pds/console-driver/src/device.rs
+userspace/pds/console-driver/src/rtl8852be.rs
 userspace/pds/console-driver/src/xhci.rs
 userspace/pds/console-shell/src/main.rs
 userspace/pds/cothread-client/src/main.rs
@@ -74,6 +75,7 @@ userspace/pds/hello/src/vga.rs
 userspace/pds/http-server/src/net.rs
 userspace/pds/pl031-driver/src/main.rs
 userspace/pds/rdtime-timer-driver/src/main.rs
+userspace/pds/rtl8852be-driver/src/main.rs
 userspace/pds/sddf-ahci-driver/src/engine.rs
 userspace/pds/sddf-ahci-driver/src/main.rs
 userspace/pds/sddf-agent/src/main.rs

@@ -47,7 +47,7 @@ QEMU machine `q35` with OVMF and the GRUB ISO (same path as metal UEFI). The vir
 
 ### Z97 desk devices
 
-The Gigabyte GA-Z97-D3H. Firmware scanout uses the HD Graphics 4600 when Initial Display Output is `IGFX`. The RX 560 stays unused. The onboard Ethernet port is the I217-V. The RTL8852BE is a wireless card, and the probe only reads its configuration space.
+The Gigabyte GA-Z97-D3H. Firmware scanout uses the HD Graphics 4600 when Initial Display Output is `IGFX`. The RX 560 stays unused. The onboard Ethernet port is the I217-V. The RTL8852BE is a wireless card. The desk ISO maps BAR 2, enables the PCI command bits, and stops the PCI HCI. `rtl8852be-probe` still only reads configuration space.
 
 | Category | Device | lerux driver | In the tree |
 |----------|--------|--------------|-------------|
@@ -60,7 +60,7 @@ The Gigabyte GA-Z97-D3H. Firmware scanout uses the HD Graphics 4600 when Initial
 | Interval timer | time-stamp counter | `tsc-timer-driver` on the init image | yes |
 | Disk | 9 Series AHCI `8086:8c82` at `00:1f.2`, class `0x010601`, subsystem `1458:b005`. The drive is identified. The volume is not formatted | `sddf-ahci-driver` accepts this id beside QEMU `8086:2922`. The desk image does not map the controller | yes |
 | Network | I217-V, `8086:153b` at `00:19.0` | `sddf-e1000e-driver`, [Milestone 22](plan-lionsos.md#milestone-22--desk) | yes |
-| Wireless | RTL8852BE, `10ec:b852`, behind root port `00:1c.6` | `rtl8852be-probe` reads configuration space and does not map the card | yes, probe only |
+| Wireless | RTL8852BE, `10ec:b852`, behind root port `00:1c.6` | `rtl8852be` maps BAR 2 and stops the PCI HCI. `console-driver` enables the command bits. `rtl8852be-probe` reads configuration space and does not map the card | yes |
 | Display | HD Graphics 4600, `8086:0412` at `00:02.0` | none | no |
 | Display | RX 560, `1002:67ff` at `01:00.0` | none | no |
 

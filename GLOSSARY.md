@@ -146,7 +146,7 @@ _Avoid_: using it as the name of the [Z97 desk](#z97-desk) part
 
 ### RTL8852BE
 
-The Realtek wireless card on the [Z97 desk](#z97-desk), behind root port `00:1c.6`, identity `10ec:b852`. The probe reads [configuration space](#configuration-space) and does not map the card.
+The Realtek wireless card on the [Z97 desk](#z97-desk), behind root port `00:1c.6`, identity `10ec:b852`. On the desk ISO, `rtl8852be` maps BAR 2 and stops the PCI HCI. `console-driver` enables the PCI command bits. `rtl8852be-probe` reads [configuration space](#configuration-space) and does not map the card.
 
 _Avoid_: [I217-V](#i217-v), [MT7921](#mt7921)
 

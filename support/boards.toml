@@ -509,8 +509,8 @@ ci = false
 arch = "x86_64"
 microkit_board = "x86_64_generic"
 target = "x86_64-sel4-microkit"
-template = "console-pc.system.template"
-pds = ["console-shell", "serial-driver", "console-driver"]
+template = "console-z97.system.template"
+pds = ["console-shell", "serial-driver", "console-driver", "rtl8852be-driver"]
 system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48 }
 
 # Z97 I217-V. Hardware only. Same roles as x86_64_generic_net_e1000e.

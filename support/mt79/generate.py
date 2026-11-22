@@ -1669,7 +1669,7 @@ class _Cond:
     def _primary(self) -> int:
         token = self._bump()
         if token == "(":
-            value = self._or()
+            value = self._comma()
             if self._bump() != ")":
                 raise CondError(token)
             return value
@@ -1677,7 +1677,7 @@ class _Cond:
             return self._defined()
         if token in _COND_FALSE and self._peek() == "(":
             self._bump()
-            self._or()
+            self._comma()
             if self._bump() != ")":
                 raise CondError(token)
             return 0
@@ -1802,6 +1802,20 @@ def _check_preprocess() -> None:
             "#define ADD(a, b) ((a) + (b))\n#if ADD(1, 2) == 3\nKEEP_ADD\n#else\nDROP_ADD\n#endif\n",
             ["KEEP_ADD"],
             ["DROP_ADD"],
+        ),
+        (
+            "#if (1 ? 2 : 0)\nKEEP_PAREN_TERNARY\n#else\nDROP_PAREN_TERNARY\n#endif\n"
+            "#if (0 ? 1 : 0)\nDROP_PAREN_TERNARY_FALSE\n#else\nKEEP_PAREN_TERNARY_ELSE\n#endif\n"
+            "#if ((0 ? 1 : 0) ? 0 : 1)\nKEEP_NEST_TERNARY\n#else\nDROP_NEST_TERNARY\n#endif\n",
+            ["KEEP_PAREN_TERNARY", "KEEP_PAREN_TERNARY_ELSE", "KEEP_NEST_TERNARY"],
+            ["DROP_PAREN_TERNARY", "DROP_PAREN_TERNARY_FALSE", "DROP_NEST_TERNARY"],
+        ),
+        (
+            "#if (0, 1)\nKEEP_PAREN_COMMA\n#else\nDROP_PAREN_COMMA\n#endif\n"
+            "#if (1, 0)\nDROP_PAREN_COMMA_FALSE\n#else\nKEEP_PAREN_COMMA_ELSE\n#endif\n"
+            "#if ((1, 0), (0, 2))\nKEEP_NEST_COMMA\n#else\nDROP_NEST_COMMA\n#endif\n",
+            ["KEEP_PAREN_COMMA", "KEEP_PAREN_COMMA_ELSE", "KEEP_NEST_COMMA"],
+            ["DROP_PAREN_COMMA", "DROP_PAREN_COMMA_FALSE", "DROP_NEST_COMMA"],
         ),
     ]
     for text, kept, dropped in cases:

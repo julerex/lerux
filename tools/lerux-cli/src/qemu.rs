@@ -346,6 +346,7 @@ fn x86_net_device(board: &str) -> Result<String> {
     match x86_net_backend(board)? {
         NetBackend::Virtio => Ok(X86_VIRTIO_NET_PCI.to_string()),
         NetBackend::E1000e => Ok(e1000e_net_device()),
+        NetBackend::I217 => bail!("{board} has no QEMU network device"),
     }
 }
 

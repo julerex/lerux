@@ -1,4 +1,4 @@
-//! 82574 driver for the one-client network image.
+//! 82574 and I217-V driver for the one-client network image.
 //!
 //! Packet bytes move between the shared data regions and a private DMA window.
 //! A shared descriptor holds an offset. `io_addr` stays 0.
@@ -9,7 +9,11 @@
 use sel4_microkit::{protection_domain, Channel, ChannelSet, Handler, Infallible};
 
 use lerux_logging::{debug, log};
-use lerux_machine::e1000e::{self, e1000e_map};
+use lerux_machine::e1000e;
+#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
+use lerux_machine::e1000e::e1000e_map as device_map;
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+use lerux_machine::e1000e::i217_map as device_map;
 use lerux_sddf::{
     net_buff_desc_t, net_cancel_signal_active, net_cancel_signal_free, net_connection_resource_t,
     net_dequeue_active, net_dequeue_free, net_driver_config_t, net_enqueue_active,
@@ -47,7 +51,7 @@ fn init() -> HandlerImpl {
     assert_eq!(config.virt_rx.id, DRIVER_RX_CHANNEL);
     assert_eq!(config.virt_tx.id, DRIVER_TX_CHANNEL);
 
-    let engine = engine::Engine::open(e1000e_map(), CLIENT_MAC.addr).expect("e1000e engine");
+    let engine = engine::Engine::open(device_map(), CLIENT_MAC.addr).expect("e1000e engine");
     engine.ack();
     let irq = Channel::new(usize::from(DRIVER_IRQ_CHANNEL));
     irq.irq_ack().expect("irq ack");

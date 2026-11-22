@@ -14,8 +14,9 @@
 #                                   docs/ci.md. For a board lerux-image renders
 #                                   (names ending in _sddf, qemu_virt_aarch64_ladybird,
 #                                   x86_64_generic_fs_ahci,
-#                                   x86_64_generic_net_e1000e, and
-#                                   x86_64_generic_fetch_native),
+#                                   x86_64_generic_net_e1000e,
+#                                   x86_64_generic_fetch_native, and
+#                                   pc_z97_d3h_i217),
 #                                   template is not a file and system_vars are not
 #                                   substituted. The system description is the Rust
 #                                   image renderer.
@@ -511,6 +512,18 @@ target = "x86_64-sel4-microkit"
 template = "console-pc.system.template"
 pds = ["console-shell", "serial-driver", "console-driver"]
 system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48 }
+
+# Z97 I217-V. Hardware only. Same roles as x86_64_generic_net_e1000e.
+# Register window 0xf7e00000. The RTL8852BE probe stays a configuration-space
+# read on its own board. This image does not format a disk.
+[pc_z97_d3h_i217]
+arch = "x86_64"
+microkit_board = "x86_64_generic"
+target = "x86_64-sel4-microkit"
+template = "net-sddf.system.template"
+pds = ["sddf-e1000e-driver", "sddf-net-virt-tx", "sddf-net-virt-rx", "sddf-net-copy", "sddf-serial-driver", "sddf-serial-virt-tx", "sddf-serial-virt-rx", "sddf-net-client"]
+ci = false
+system_vars = {}
 
 # Z97 RTL8852BE config-space probe. Hardware only. Reads root port 00:1c.6,
 # then the device on that port's secondary bus, and logs the id and BAR.

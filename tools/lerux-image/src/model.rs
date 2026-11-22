@@ -46,6 +46,8 @@ pub enum DiskBackend {
 pub enum NetBackend {
     Virtio,
     E1000e,
+    /// Desk I217-V. Same driver program as [`NetBackend::E1000e`], recorded BARs.
+    I217,
 }
 
 #[derive(Debug)]

@@ -59,7 +59,7 @@ The Gigabyte GA-Z97-D3H. Firmware scanout uses the HD Graphics 4600 when Initial
 | Wall clock | CMOS real-time clock | `cmos-rtc-driver` on the init image | yes |
 | Interval timer | time-stamp counter | `tsc-timer-driver` on the init image | yes |
 | Disk | 9 Series AHCI `8086:8c82` at `00:1f.2`, class `0x010601`, subsystem `1458:b005`. The drive is identified. The volume is not formatted | `sddf-ahci-driver` accepts this id beside QEMU `8086:2922`. The desk image does not map the controller | yes |
-| Network | I217-V, `8086:153b` at `00:19.0` | `sddf-e1000e-driver`, [Milestone 22](plan-lionsos.md#milestone-22--desk) | no |
+| Network | I217-V, `8086:153b` at `00:19.0` | `sddf-e1000e-driver`, [Milestone 22](plan-lionsos.md#milestone-22--desk) | yes |
 | Wireless | RTL8852BE, `10ec:b852`, behind root port `00:1c.6` | `rtl8852be-probe` reads configuration space and does not map the card | yes, probe only |
 | Display | HD Graphics 4600, `8086:0412` at `00:02.0` | none | no |
 | Display | RX 560, `1002:67ff` at `01:00.0` | none | no |

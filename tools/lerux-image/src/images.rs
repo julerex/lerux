@@ -7,11 +7,11 @@ use crate::model::render_forcing_end;
 use lerux_machine::{
     ahci_map,
     description::{
-        ahci_msi, e1000e_fetch_irq, e1000e_standalone_irq, pci_config_port, pci_net_config_port,
-        IoApicPin, IoApicVector, IoPort, Irq, MmioDevice, MmioWindow, PciBar, Polarity, SerialNode,
-        Trigger, VirtioNode, X86Irq,
+        ahci_msi, e1000e_fetch_irq, e1000e_standalone_irq, i217_irq, pci_config_port,
+        pci_net_config_port, IoApicPin, IoApicVector, IoPort, Irq, MmioDevice, MmioWindow, PciBar,
+        Polarity, SerialNode, Trigger, VirtioNode, X86Irq,
     },
-    e1000e::{self, e1000e_map},
+    e1000e::{self, e1000e_map, i217_map},
     virtio_dma_guest, virtio_dma_phys_addr, virtio_node, Arch, VirtioRole, AHCI_PORT,
 };
 
@@ -99,7 +99,7 @@ const SDDF_SUFFIX: &str = "_sddf";
 /// Returns [`ImageError::Unsupported`] for `net_e1000e`, `fs_ahci`, or
 /// `fetch_native` on an architecture other than x86. Returns
 /// [`ImageError::UnknownBoard`] when an `_sddf` or `net_e1000e` suffix does not
-/// name a known architecture and image.
+/// name a known architecture and image. `pc_z97_d3h_i217` is the desk I217-V.
 pub fn board_registration(board: &str) -> Result<Option<BoardId>, ImageError> {
     if let Some(id) = ladybird_registration(board) {
         return Ok(Some(id));
@@ -130,17 +130,14 @@ fn ladybird_registration(board: &str) -> Option<BoardId> {
 }
 
 fn net_e1000e_registration(board: &str) -> Result<Option<BoardId>, ImageError> {
+    if board == "x86_64_generic_net_e1000e" {
+        return Ok(Some(e1000e_board(NetBackend::E1000e)));
+    }
+    if board == "pc_z97_d3h_i217" {
+        return Ok(Some(e1000e_board(NetBackend::I217)));
+    }
     if !board.ends_with("net_e1000e") {
         return Ok(None);
-    }
-    if board == "x86_64_generic_net_e1000e" {
-        return Ok(Some(BoardId {
-            kind: ImageKind::Net,
-            mode: None,
-            arch: Arch::X86_64,
-            disk: DiskBackend::Virtio,
-            net: NetBackend::E1000e,
-        }));
     }
     if let Some((arch, _)) = Arch::split_prefix(board) {
         return Err(ImageError::Unsupported {
@@ -151,6 +148,16 @@ fn net_e1000e_registration(board: &str) -> Result<Option<BoardId>, ImageError> {
     Err(ImageError::UnknownBoard {
         name: board.to_string(),
     })
+}
+
+fn e1000e_board(net: NetBackend) -> BoardId {
+    BoardId {
+        kind: ImageKind::Net,
+        mode: None,
+        arch: Arch::X86_64,
+        disk: DiskBackend::Virtio,
+        net,
+    }
 }
 
 fn fs_ahci_registration(board: &str) -> Result<Option<BoardId>, ImageError> {
@@ -446,16 +453,7 @@ fn net_image(arch: Arch, net: NetBackend) -> Image {
     let serial = serial_attachment(arch);
     let mut client = serial_client_slots();
     client.extend(net_client_slots());
-    let (device_regions, driver) = match net {
-        NetBackend::Virtio => (
-            net_virtio_regions(arch, false),
-            net_driver(arch, false, None, 4),
-        ),
-        NetBackend::E1000e => {
-            assert_eq!(arch, Arch::X86_64, "e1000e registration is x86 only");
-            (e1000e_regions(), e1000e_domain(&E1000ePlace::Standalone))
-        }
-    };
+    let (device_regions, driver) = net_device(arch, net);
     Image {
         groups: vec![serial.regions, device_regions, net_regions(false)],
         domains: vec![
@@ -480,6 +478,27 @@ fn net_image(arch: Arch, net: NetBackend) -> Image {
             ("net_copy", "net_client", 7),
         ]),
     }
+}
+
+fn net_device(arch: Arch, net: NetBackend) -> (Vec<Region>, Domain) {
+    match net {
+        NetBackend::Virtio => (
+            net_virtio_regions(arch, false),
+            net_driver(arch, false, None, 4),
+        ),
+        NetBackend::E1000e => {
+            assert_eq!(arch, Arch::X86_64, "e1000e registration is x86 only");
+            e1000e_device(&E1000ePlace::Standalone)
+        }
+        NetBackend::I217 => {
+            assert_eq!(arch, Arch::X86_64, "e1000e registration is x86 only");
+            e1000e_device(&E1000ePlace::Desk)
+        }
+    }
+}
+
+fn e1000e_device(place: &E1000ePlace) -> (Vec<Region>, Domain) {
+    (e1000e_regions(place), e1000e_domain(place))
 }
 
 fn fetch_virtio_regions(arch: Arch) -> Vec<Region> {
@@ -655,7 +674,7 @@ fn q35_native_devices() -> FetchDevices {
     // uses on the combined x86 fetch image. e1000e keeps the net ports.
     let block = ahci_block(true);
     let mut regions = block.regions;
-    regions.extend(e1000e_regions());
+    regions.extend(e1000e_regions(&E1000ePlace::FetchNative));
     FetchDevices {
         regions,
         block: blk_driver_domain(
@@ -1250,8 +1269,23 @@ fn net_virtio_regions(arch: Arch, net_pci_ecam: bool) -> Vec<Region> {
 
 const E1000E_NET_PROGRAM: &str = "sddf-e1000e-driver.elf";
 
-fn e1000e_regions() -> Vec<Region> {
-    let map = e1000e_map();
+/// Standalone QEMU net image, the x86 fetch image that also has ICH9 AHCI,
+/// or the desk I217-V image.
+enum E1000ePlace {
+    Standalone,
+    FetchNative,
+    Desk,
+}
+
+fn e1000e_place_map(place: &E1000ePlace) -> e1000e::E1000eMap {
+    match place {
+        E1000ePlace::Desk => i217_map(),
+        E1000ePlace::Standalone | E1000ePlace::FetchNative => e1000e_map(),
+    }
+}
+
+fn e1000e_regions(place: &E1000ePlace) -> Vec<Region> {
+    let map = e1000e_place_map(place);
     vec![
         phys(
             map.regs_region,
@@ -1269,18 +1303,13 @@ fn e1000e_regions() -> Vec<Region> {
     ]
 }
 
-/// Standalone net image, or the x86 fetch image that also has ICH9 AHCI.
-enum E1000ePlace {
-    Standalone,
-    FetchNative,
-}
-
 fn e1000e_domain(place: &E1000ePlace) -> Domain {
     let (priority, qos, irq) = match place {
         E1000ePlace::Standalone => (4, None, Irq::X86(e1000e_standalone_irq())),
         E1000ePlace::FetchNative => (2, Some(budget(2000)), Irq::X86(e1000e_fetch_irq())),
+        E1000ePlace::Desk => (4, None, Irq::X86(i217_irq())),
     };
-    let map = e1000e_map();
+    let map = e1000e_place_map(place);
     let mut slots = vec![
         Slot::Map(Map {
             region: map.regs_region,

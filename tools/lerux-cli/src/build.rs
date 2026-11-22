@@ -52,6 +52,7 @@ fn write_block_and_net_configs(dir: &Path, board: &str) -> Result<()> {
         || board == "qemu_virt_riscv64_net_sddf"
         || board == "x86_64_generic_net_sddf"
         || board == "x86_64_generic_net_e1000e"
+        || board == "pc_z97_d3h_i217"
     {
         crate::net_sddf::write_configs(dir, board)?;
     }

@@ -167,6 +167,8 @@ Living work list (what still needs a Pi): [`plan-arch.md` — Physical RPi4 lab]
 
 ### Acer Swift X install path
 
+A first boot, from the checkout through Wi-Fi, is [setup.md](setup.md).
+
 Board `swift_sfx14_41g` is the on-screen menu on the Acer Swift X SFX14-41G (Ryzen 5 5500U). It reuses Microkit `x86_64_generic` and `console-swift.system.template`. Names for this machine and its devices are in [GLOSSARY.md](../GLOSSARY.md#swift-x). The panel is the firmware GOP buffer. The keyboard is the built-in i8042 (ports `0x60` and `0x64`, I/O APIC pin 1, vector 49). This machine has no COM port and no `serial-driver`. This image has no QEMU model. Device roles are in [platforms.md](platforms.md#swift-x-devices). `just make-lerux-iso pc_z97_d3h` packs the [Gigabyte Z97-D3H](#gigabyte-z97-d3h-install-path) image.
 
 **USB ISO** (`just make-lerux-iso` packs `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`). Build the image, verify the digest, write the media, and boot. `lerux verify-image` prints `lerux iso --board swift_sfx14_41g --no-build` and the `dd` line after the digest matches. That packs the checked `loader.img`. It does not run `just make-lerux-iso`.

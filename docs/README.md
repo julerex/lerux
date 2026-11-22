@@ -50,6 +50,7 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [platforms.md](platforms.md) | Platform notes and hardware bring-up |
 | [bench-results.latest.md](bench-results.latest.md) | Latest `just bench` snapshot (regenerated) |
 | [net-topology.md](net-topology.md) | NIC paths: device-framework client vs remaining virtio boards |
+| [setup.md](setup.md) | First boot of the Swift X live image: build the ISO, write the stick, and join Wi-Fi with `setup-wifi` |
 | [boards.md](boards.md) | Board names, PDs, QEMU profiles; [Swift X install path](boards.md#acer-swift-x-install-path); [RPi4 install path](boards.md#rpi4-workstation-install-path-phase-52); [Z97-D3H install path](boards.md#gigabyte-z97-d3h-install-path) |
 | [ci.md](ci.md) | GitHub Actions pipeline, caches, troubleshooting |
 | [acknowledgements.md](acknowledgements.md) | Dependencies and inspirations |

@@ -1222,6 +1222,7 @@ def self_check() -> None:
     if form != "wrap" or size != 8 or align != 4:
         raise SystemExit(f"wrap self-check {form} {size} {align}")
     _ = lowered
+    _check_preprocess()
 
 
 def line_number(offset_map: list[tuple[int, int]], offset: int) -> int:
@@ -1246,11 +1247,14 @@ def preprocess(path: Path, rel: str, selected: set[str]) -> tuple[str, list, lis
     defines = []
     includes = []
     offset_map: list[tuple[int, int]] = []
+    macros = dict(TARGET_MACROS)
     cursor = 0
     for number, line in enumerate(lines, start=1):
         stripped = line.strip()
         if stripped.startswith("#"):
-            _directive(stripped, stack, defines, includes, rel, selected, number, live())
+            _directive(
+                stripped, stack, defines, includes, rel, selected, number, live(), macros,
+            )
             continue
         if live():
             code.append(line)
@@ -1260,49 +1264,73 @@ def preprocess(path: Path, rel: str, selected: set[str]) -> tuple[str, list, lis
     return "".join(code), defines, includes, offset_map
 
 
+# Linux v7.3.5 as clang sees it on x86_64. `__LITTLE_ENDIAN` is the name the
+# kernel's compatibility tests use; the `__*__` names are the compiler's.
+# Kernel CONFIG_* symbols are absent: this is not a .config, so SoC arms stay
+# on their #else stubs and the little-endian arm stays live.
+TARGET_MACROS: dict[str, int | None] = {
+    "__LITTLE_ENDIAN__": 1,
+    "__LITTLE_ENDIAN": 1234,
+    "__ORDER_LITTLE_ENDIAN__": 1234,
+    "__ORDER_BIG_ENDIAN__": 4321,
+    "__ORDER_PDP_ENDIAN__": 3412,
+    "__BYTE_ORDER__": 1234,
+    "__BYTE_ORDER": 1234,
+    "__LP64__": 1,
+    "__x86_64__": 1,
+    "__x86_64": 1,
+    "__linux__": 1,
+    "__linux": 1,
+    "linux": 1,
+    "__GNUC__": 1,
+}
+_COND_FALSE = {"IS_ENABLED", "IS_BUILTIN", "IS_MODULE", "IS_REACHABLE"}
+_COND_TOKEN = re.compile(
+    r"\s+"
+    r"|0[xX][0-9A-Fa-f]+(?:[uU][lL]{0,2}|[lL]{1,2}[uU]?)?"
+    r"|\d+(?:[uU][lL]{0,2}|[lL]{1,2}[uU]?)?"
+    r"|[A-Za-z_][A-Za-z0-9_]*"
+    r"|&&|\|\||==|!=|<=|>=|<<|>>"
+    r"|[()!<>+\-*/%&|^~]"
+)
+
+
+class CondError(Exception):
+    """A #if expression is not one this target can decide."""
+
+
 def _live(stack: list[tuple[bool, bool, bool]]) -> bool:
-    for parent_active, cond, seen_else in stack:
-        if not parent_active:
-            return False
-        active = cond if not seen_else else not cond
-        if not active:
-            return False
-    return True
+    return all(arm for _parent, arm, _taken in stack)
 
 
-def _directive(line, stack, defines, includes, rel, selected, number, active) -> None:
-    if line.startswith("#ifndef"):
-        parent = _live(stack)
-        stack.append((parent, True, False))
+def _directive(line, stack, defines, includes, rel, selected, number, active, macros) -> None:
+    parts = line.split(None, 1)
+    keyword = parts[0]
+    rest = parts[1].strip() if len(parts) > 1 else ""
+    if keyword in {"#ifndef", "#ifdef", "#if", "#elif"}:
+        _arm(keyword, rest, stack, macros)
         return
-    if line.startswith("#ifdef"):
-        name = line.split(None, 1)[1].strip() if len(line.split(None, 1)) > 1 else ""
-        cond = False if name.startswith("CONFIG_") else False
-        parent = _live(stack)
-        stack.append((parent, cond, False))
-        return
-    if line.startswith("#if"):
-        cond = _if_cond(line)
-        parent = _live(stack)
-        stack.append((parent, cond, False))
-        return
-    if line.startswith("#else"):
+    if keyword == "#else":
         if stack:
-            parent, cond, _seen = stack[-1]
-            stack[-1] = (parent, cond, True)
+            parent, _arm_now, taken = stack[-1]
+            stack[-1] = (parent, parent and not taken, True)
         return
-    if line.startswith("#endif"):
+    if keyword == "#endif":
         if stack:
             stack.pop()
         return
     if not active:
         return
-    if line.startswith("#define"):
+    if keyword == "#define":
         parsed = _parse_define(line)
         if parsed is not None:
             defines.append((*parsed, number))
+            _remember_define(parsed, macros)
         return
-    if line.startswith("#include"):
+    if keyword == "#undef":
+        macros.pop(rest, None)
+        return
+    if keyword == "#include":
         match = re.search(r'[<"]([^>"]+)[>"]', line)
         if not match:
             return
@@ -1317,13 +1345,316 @@ def _directive(line, stack, defines, includes, rel, selected, number, active) ->
             includes.append(resolved)
 
 
-def _if_cond(line: str) -> bool:
-    expr = line[3:].strip()
-    if "IS_ENABLED" in expr:
-        return False
-    if re.search(r"defined\s*\(\s*CONFIG_", expr):
-        return False
-    return False
+def _arm(keyword: str, rest: str, stack, macros: dict[str, int | None]) -> None:
+    if keyword == "#elif":
+        if not stack:
+            return
+        parent, _arm_now, taken = stack[-1]
+        if taken or not parent:
+            stack[-1] = (parent, False, True)
+            return
+        cond = _if_value(rest, macros)
+        stack[-1] = (parent, cond, cond)
+        return
+    parent = _live(stack)
+    if not parent:
+        cond = False
+    elif keyword == "#ifndef":
+        cond = rest not in macros
+    elif keyword == "#ifdef":
+        cond = rest in macros
+    else:
+        cond = _if_value(rest, macros)
+    stack.append((parent, cond, cond))
+
+
+def _remember_define(parsed: tuple, macros: dict[str, int | None]) -> None:
+    name, params, body = parsed
+    if params is not None:
+        macros[name] = None
+        return
+    macros[name] = _macro_int(body, macros)
+
+
+def _macro_int(body: str, macros: dict[str, int | None]) -> int | None:
+    literal = _c_int(body)
+    if literal is not None:
+        return literal
+    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", body) and isinstance(macros.get(body), int):
+        return macros[body]
+    return None
+
+
+def _c_int(text: str) -> int | None:
+    match = re.fullmatch(
+        r"(0[xX][0-9A-Fa-f]+|\d+)(?:[uU][lL]{0,2}|[lL]{1,2}[uU]?)?",
+        text,
+    )
+    if not match:
+        return None
+    return int(match.group(1), 0)
+
+
+def _if_value(expr: str, macros: dict[str, int | None]) -> bool:
+    try:
+        return _Cond(expr, macros).parse() != 0
+    except CondError as error:
+        raise SystemExit(f"undecided condition: {expr}") from error
+
+
+class _Cond:
+    def __init__(self, expr: str, macros: dict[str, int | None]) -> None:
+        self.macros = macros
+        self.tokens = _cond_tokens(expr)
+        self.index = 0
+
+    def parse(self) -> int:
+        value = self._or()
+        if self._peek():
+            raise CondError(self._peek())
+        return value
+
+    def _peek(self) -> str:
+        if self.index >= len(self.tokens):
+            return ""
+        return self.tokens[self.index]
+
+    def _bump(self) -> str:
+        token = self._peek()
+        if not token:
+            raise CondError("end")
+        self.index += 1
+        return token
+
+    def _or(self) -> int:
+        value = self._and()
+        while self._peek() == "||":
+            self._bump()
+            value = 1 if value or self._and() else 0
+        return value
+
+    def _and(self) -> int:
+        value = self._bor()
+        while self._peek() == "&&":
+            self._bump()
+            value = 1 if value and self._bor() else 0
+        return value
+
+    def _bor(self) -> int:
+        value = self._bxor()
+        while self._peek() == "|":
+            self._bump()
+            value |= self._bxor()
+        return value
+
+    def _bxor(self) -> int:
+        value = self._band()
+        while self._peek() == "^":
+            self._bump()
+            value ^= self._band()
+        return value
+
+    def _band(self) -> int:
+        value = self._eq()
+        while self._peek() == "&":
+            self._bump()
+            value &= self._eq()
+        return value
+
+    def _eq(self) -> int:
+        value = self._rel()
+        while self._peek() in {"==", "!="}:
+            op = self._bump()
+            right = self._rel()
+            value = int(value == right) if op == "==" else int(value != right)
+        return value
+
+    def _rel(self) -> int:
+        value = self._shift()
+        while self._peek() in {"<", ">", "<=", ">="}:
+            op = self._bump()
+            right = self._shift()
+            if op == "<":
+                value = int(value < right)
+            elif op == ">":
+                value = int(value > right)
+            elif op == "<=":
+                value = int(value <= right)
+            else:
+                value = int(value >= right)
+        return value
+
+    def _shift(self) -> int:
+        value = self._add()
+        while self._peek() in {"<<", ">>"}:
+            op = self._bump()
+            right = self._add()
+            value = value << right if op == "<<" else value >> right
+        return value
+
+    def _add(self) -> int:
+        value = self._mul()
+        while self._peek() in {"+", "-"}:
+            op = self._bump()
+            right = self._mul()
+            value = value + right if op == "+" else value - right
+        return value
+
+    def _mul(self) -> int:
+        value = self._unary()
+        while self._peek() in {"*", "/", "%"}:
+            op = self._bump()
+            right = self._unary()
+            if op == "*":
+                value *= right
+            elif op == "/":
+                value = 0 if right == 0 else int(value / right)
+            else:
+                value = 0 if right == 0 else value % right
+        return value
+
+    def _unary(self) -> int:
+        op = self._peek()
+        if op == "!":
+            self._bump()
+            return int(not self._unary())
+        if op == "~":
+            self._bump()
+            return (~self._unary()) & MASK64
+        if op == "+":
+            self._bump()
+            return self._unary()
+        if op == "-":
+            self._bump()
+            return -self._unary()
+        return self._primary()
+
+    def _primary(self) -> int:
+        token = self._bump()
+        if token == "(":
+            value = self._or()
+            if self._bump() != ")":
+                raise CondError(token)
+            return value
+        if token == "defined":
+            return self._defined()
+        if token in _COND_FALSE and self._peek() == "(":
+            self._bump()
+            self._or()
+            if self._bump() != ")":
+                raise CondError(token)
+            return 0
+        literal = _c_int(token)
+        if literal is not None:
+            return literal
+        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", token):
+            value = self.macros.get(token)
+            return value if isinstance(value, int) else 0
+        raise CondError(token)
+
+    def _defined(self) -> int:
+        if self._peek() == "(":
+            self._bump()
+            name = self._bump()
+            if self._bump() != ")":
+                raise CondError(name)
+        else:
+            name = self._bump()
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
+            raise CondError(name)
+        return int(name in self.macros)
+
+
+def _cond_tokens(expr: str) -> list[str]:
+    tokens = []
+    index = 0
+    while index < len(expr):
+        match = _COND_TOKEN.match(expr, index)
+        if not match:
+            raise CondError(expr[index:])
+        index = match.end()
+        token = match.group(0)
+        if not token.isspace():
+            tokens.append(token)
+    return tokens
+
+
+def _check_preprocess() -> None:
+    cases = [
+        ("#if 1\nKEEP_ONE\n#else\nDROP_ONE\n#endif\n", ["KEEP_ONE"], ["DROP_ONE"]),
+        ("#if 0\nDROP_ZERO\n#else\nKEEP_ZERO\n#endif\n", ["KEEP_ZERO"], ["DROP_ZERO"]),
+        (
+            "#if defined(__LITTLE_ENDIAN)\nKEEP_LE\n#else\nDROP_BE\n#endif\n",
+            ["KEEP_LE"],
+            ["DROP_BE"],
+        ),
+        (
+            "#if defined(__BIG_ENDIAN)\nDROP_BE2\n#else\nKEEP_NOT_BE\n#endif\n",
+            ["KEEP_NOT_BE"],
+            ["DROP_BE2"],
+        ),
+        (
+            "#ifdef __LITTLE_ENDIAN__\nKEEP_IFDEF_LE\n#else\nDROP_IFDEF_BE\n#endif\n",
+            ["KEEP_IFDEF_LE"],
+            ["DROP_IFDEF_BE"],
+        ),
+        (
+            "#ifdef CONFIG_ACPI\nDROP_ACPI\n#else\nKEEP_NO_ACPI\n#endif\n",
+            ["KEEP_NO_ACPI"],
+            ["DROP_ACPI"],
+        ),
+        (
+            "#if 0\nDROP_IF\n#elif defined(__LITTLE_ENDIAN)\nKEEP_ELIF\n#else\nDROP_AFTER_ELIF\n#endif\n",
+            ["KEEP_ELIF"],
+            ["DROP_IF", "DROP_AFTER_ELIF"],
+        ),
+        (
+            "#if 0\nDROP_A\n#elif 0\nDROP_B\n#else\nKEEP_ELSE\n#endif\n",
+            ["KEEP_ELSE"],
+            ["DROP_A", "DROP_B"],
+        ),
+        (
+            "#if 1\nKEEP_IF\n#elif 1\nDROP_ELIF\n#else\nDROP_ELSE\n#endif\n",
+            ["KEEP_IF"],
+            ["DROP_ELIF", "DROP_ELSE"],
+        ),
+        (
+            "#ifndef __LITTLE_ENDIAN\nDROP_IFNDEF_LE\n#else\nKEEP_IFNDEF_ELSE\n#endif\n",
+            ["KEEP_IFNDEF_ELSE"],
+            ["DROP_IFNDEF_LE"],
+        ),
+        (
+            "#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__\nKEEP_BO\n#else\nDROP_BO\n#endif\n",
+            ["KEEP_BO"],
+            ["DROP_BO"],
+        ),
+        (
+            "#if !defined(__BIG_ENDIAN) && defined(__LITTLE_ENDIAN)\nKEEP_NOTBIG\n#else\nDROP_NOTBIG\n#endif\n",
+            ["KEEP_NOTBIG"],
+            ["DROP_NOTBIG"],
+        ),
+        (
+            "#if 0\n#if 1\nDROP_NEST\n#else\nDROP_NEST_ELSE\n#endif\n#else\nKEEP_OUTER_ELSE\n#endif\n",
+            ["KEEP_OUTER_ELSE"],
+            ["DROP_NEST", "DROP_NEST_ELSE"],
+        ),
+    ]
+    for text, kept, dropped in cases:
+        lines = _kept_lines(text)
+        for item in kept:
+            if item not in lines:
+                raise SystemExit(f"dropped live line {item}")
+        for item in dropped:
+            if item in lines:
+                raise SystemExit(f"kept dead line {item}")
+
+
+def _kept_lines(text: str) -> list[str]:
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "self.h"
+        path.write_text(text)
+        code, _defines, _includes, _offsets = preprocess(path, "self.h", set())
+    return [line.strip() for line in code.splitlines() if line.strip()]
 
 
 def _parse_define(line: str):

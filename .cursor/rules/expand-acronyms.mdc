@@ -1,0 +1,8 @@
+---
+description: Spell out acronyms when writing to a person
+alwaysApply: true
+---
+
+When communicating with a person, include the full term with every acronym, for example sDDF (serial device driver framework).
+
+This applies to messages to a person only. Leave identifiers in code, commit subjects, and generated serial strings unchanged.

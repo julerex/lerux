@@ -154,9 +154,15 @@ _Avoid_: [I217-V](#i217-v), [MT7921](#mt7921)
 
 QEMU's Serial ATA controller on [q35](#q35). [PCI](#pci) `8086:2922` at `00:1f.2`. It speaks the [Advanced Host Controller Interface](#advanced-host-controller-interface).
 
+### Z97 SATA
+
+The Serial ATA controller on the [Z97 desk](#z97-desk). [PCI](#pci) `8086:8c82` at `00:1f.2`, class `0x010601`, subsystem `1458:b005`. It speaks the [Advanced Host Controller Interface](#advanced-host-controller-interface). The driver also accepts [ich9-ahci](#ich9-ahci). The drive is identified. The volume is not formatted.
+
+_Avoid_: [NVMe](#nvme). The Inspiron controller `8086:3b2f` is a different part and is not accepted.
+
 ### Advanced Host Controller Interface
 
-The register specification for a Serial ATA controller's command list and SATA ports. [ich9-ahci](#ich9-ahci) speaks it, and the [Z97 desk](#z97-desk) Serial ATA controller speaks it too. That desk controller's [PCI](#pci) identity is not recorded yet.
+The register specification for a Serial ATA controller's command list and SATA ports. [ich9-ahci](#ich9-ahci) speaks it, and the [Z97 SATA](#z97-sata) controller speaks it too.
 
 _Avoid_: [NVMe](#nvme), which is the [Swift X](#swift-x) disk
 

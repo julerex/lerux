@@ -26,8 +26,9 @@ use table::{
 };
 
 pub use ahci::{
-    ahci_map, msi_data, AhciMap, Claimed, PciAddress, RejectedClass, Unclaimed, AHCI_CLASS,
-    AHCI_IOAPIC_VECTOR, AHCI_PORT, MSI_ADDRESS, QEMU_ICH9_AHCI, READY_LINE,
+    ahci_map, format_identity, msi_data, AhciMap, AtaModel, Claimed, PciAddress, RejectedId,
+    Unclaimed, AHCI_CLASS, AHCI_IOAPIC_VECTOR, AHCI_PORT, ATA_MODEL_BYTES, ATA_MODEL_OFFSET,
+    IDENTITY_CAP, MSI_ADDRESS, QEMU_ICH9_AHCI, READY_LINE, Z97_AHCI,
 };
 
 pub use table::{

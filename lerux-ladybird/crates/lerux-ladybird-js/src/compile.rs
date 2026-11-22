@@ -151,12 +151,17 @@ impl Cx {
         chunks: &mut Vec<Chunk>,
         tail: bool,
     ) -> Result<(), Error> {
-        let last = items.len().saturating_sub(1);
+        let last = items
+            .iter()
+            .enumerate()
+            .rev()
+            .find(|(_, item)| !matches!(item, Stmt::Function(_)))
+            .map(|(i, _)| i);
         for (index, item) in items.iter().enumerate() {
             if matches!(item, Stmt::Function(_)) {
                 continue;
             }
-            self.statement(item, chunks, tail && index == last)?;
+            self.statement(item, chunks, tail && Some(index) == last)?;
         }
         Ok(())
     }
@@ -233,7 +238,8 @@ impl Cx {
         self.scope = scope.checked_add(1).ok_or(Error::syntax())?;
         self.items(body, chunks, tail)?;
         self.scope = scope;
-        self.names.retain(|name| name.scope <= scope);
+        self.names
+            .retain(|name| name.scope <= scope || name.hops > 0);
         Ok(())
     }
 

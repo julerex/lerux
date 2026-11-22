@@ -313,11 +313,20 @@ pub(crate) fn write_keepalive(link: &mut Link, out: &mut [u8]) -> Option<usize> 
 }
 
 fn wifi_to_ethernet(link: &Link, frame: &[u8], out: &mut [u8]) -> Option<usize> {
-    if frame.len() < 26 || frame[0] & 0xfc != 0x88 || frame[1] & 0x43 != 0x42 {
+    let fc0 = *frame.first()?;
+    let fc1 = *frame.get(1)?;
+    // The association request does not advertise WMM, so data has no QoS
+    // control and CCMP starts at byte 24. QoS data starts at byte 26.
+    let hdr_len = match fc0 & 0xfc {
+        0x08 => 24,
+        0x88 => 26,
+        _ => return None,
+    };
+    if frame.len() < hdr_len || fc1 & 0x43 != 0x42 {
         return None;
     }
     let mut plain = [0u8; FRAME_MAX];
-    let n = ccmp_decrypt(&link.tk, 26, frame, &mut plain)?;
+    let n = ccmp_decrypt(&link.tk, hdr_len, frame, &mut plain)?;
     let msdu = &plain[..n];
     let payload = msdu.strip_prefix(&SNAP)?;
     if payload.len() >= 2 && payload[0] == 0x88 && payload[1] == 0x8e {
@@ -659,5 +668,42 @@ mod tests {
         assert_eq!(&got[..6], &SHELL_MAC.addr);
         assert_eq!(&got[70..76], &SHELL_MAC.addr);
         assert_eq!(&got[288..294], &SHELL_MAC.addr);
+    }
+
+    /// From-DS data, no `QoS` control. CCMP starts at byte 24.
+    fn protect_data(link: &Link, ether: &[u8]) -> Vec<u8> {
+        let mut llc = [0u8; FRAME_MAX];
+        let n = llc_from_ethernet(ether, &mut llc).expect("llc");
+        let mut hdr = [0u8; 24];
+        hdr[0] = 0x08;
+        hdr[1] = 0x42;
+        hdr[4..10].copy_from_slice(&ether[..6]);
+        hdr[10..16].copy_from_slice(&link.bssid);
+        hdr[16..22].copy_from_slice(&ether[6..12]);
+        let mut body = [0u8; FRAME_MAX];
+        let clen = ccmp_encrypt(&link.tk, &hdr, 7, &llc[..n], &mut body).expect("ccmp");
+        let mut frame = vec![0u8; 24 + clen];
+        frame[..24].copy_from_slice(&hdr);
+        frame[24..].copy_from_slice(&body[..clen]);
+        frame
+    }
+
+    #[test]
+    fn non_qos_dhcp_offer_reaches_the_shell() {
+        let link = link();
+        let mut offer = dhcp_discover(link.sta);
+        offer[..6].copy_from_slice(&link.sta);
+        offer[6..12].copy_from_slice(&[0x02, 0, 0, 0, 0, 9]);
+        offer[35] = 67;
+        offer[37] = 68;
+        let wifi = protect_data(&link, &offer);
+        let mut fix = Fix::new();
+        assert!(
+            fix.net.enqueue_received(&link, &wifi),
+            "non-qos offer dropped"
+        );
+        let got = read_rx(&mut fix);
+        assert_eq!(&got[..6], &SHELL_MAC.addr);
+        assert_eq!(&got[70..76], &SHELL_MAC.addr);
     }
 }

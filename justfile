@@ -77,10 +77,11 @@ build-pd crate:
 image: build
     {{lerux}} image --board {{board}} --build-dir {{build_dir}} --config {{config}}
 
-# UEFI GRUB ISO. `just make-lerux-iso` rebuilds the Swift image, then packs it.
-# `just make-lerux-iso pc_z97_d3h` does the same for the Z97 desk.
-# `just make-lerux-iso inspiron_n5010` packs the Inspiron N5010 VGA text image.
-# Does not write a disk. `just burn-lerux-iso` runs this recipe, then writes the Swift ISO.
+# UEFI GRUB ISO. `just make-lerux-iso` rebuilds one image. The stub selects the
+# Swift panel or the VGA text page. It does not map the Inspiron AHCI disk.
+# `just make-lerux-iso pc_z97_d3h` and `just make-lerux-iso inspiron_n5010`
+# still pack those boards' own images. Does not write a disk.
+# `just burn-lerux-iso` runs the one-image recipe, then writes that ISO.
 # `LERUX_GIT_DESCRIBE` is `git describe --always --dirty` for the tree being
 # packed, with one leading `v` removed. Cargo reruns the console-driver build
 # script when that value changes, so an unstaged edit repaints the Swift
@@ -88,8 +89,8 @@ image: build
 make-lerux-iso target="swift_sfx14_41g":
     describe=$(git -C '{{root}}' describe --always --dirty) && LERUX_GIT_DESCRIBE="${describe#v}" {{lerux}} iso --board {{target}} --build-dir {{build_dir}} --config {{config}}
 
-# Pack the Swift ISO with `make-lerux-iso`, then erase a USB stick and write it.
-# This is the Acer image only. Z97 and Inspiron stay on the dd lines in docs/boards.md.
+# Pack the one x86 ISO with `make-lerux-iso`, then erase a USB stick and write it.
+# That image selects the Swift panel or the VGA text page. It does not write an internal disk.
 # With no argument, lists USB sticks and asks which one to erase.
 # just burn-lerux-iso
 # just burn-lerux-iso /dev/sdX

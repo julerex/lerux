@@ -1,8 +1,9 @@
 //! VGA text aperture and the i8042 keyboard controller.
 //!
 //! The system description maps `0xb8000` uncached and grants the CRTC ports
-//! plus keyboard ports `0x60` and `0x64`. Scan-code translation stays in
-//! [`crate::scancode`].
+//! plus keyboard ports `0x60` and `0x64`. On the Swift image the same driver
+//! paints the GOP panel when the mode record names that buffer, and the VGA
+//! text page otherwise. Scan-code translation stays in [`crate::scancode`].
 
 #[cfg(feature = "board-swift_sfx14_41g")]
 use core::cell::Cell;
@@ -15,9 +16,11 @@ use lerux_desk::{
     fill_background, paint_cell, paint_underline, panel_mode, Pen, BROWSER_HOLD, FRAMEBUFFER_BYTES,
 };
 
+use crate::screen::Screen;
+#[cfg(feature = "board-swift_sfx14_41g")]
+use crate::screen::CELLS;
 #[cfg(feature = "board-swift_sfx14_41g")]
 use crate::screen::COLS;
-use crate::screen::{Screen, CELLS};
 
 #[cfg(feature = "board-swift_sfx14_41g")]
 struct Panel {
@@ -56,7 +59,7 @@ pub struct Device {
     #[cfg(not(feature = "board-swift_sfx14_41g"))]
     vga: *mut u16,
     #[cfg(feature = "board-swift_sfx14_41g")]
-    panel: Panel,
+    surface: Surface,
     #[cfg(not(feature = "board-swift_sfx14_41g"))]
     crtc_cap: u64,
     #[cfg(not(feature = "board-swift_sfx14_41g"))]
@@ -73,9 +76,19 @@ fn low_u16(value: usize) -> u16 {
     u16::try_from(value & 0xffff).expect("low half")
 }
 
-#[cfg(not(feature = "board-swift_sfx14_41g"))]
 pub(crate) fn vga_text() -> *mut u16 {
     memory_region_symbol!(vga_text_vaddr: *mut u16).as_ptr()
+}
+
+/// The Swift image paints the panel or the VGA text page. Other boards are VGA.
+#[cfg(feature = "board-swift_sfx14_41g")]
+enum Surface {
+    Panel(Panel),
+    Vga {
+        ptr: *mut u16,
+        crtc_cap: u64,
+        crtc_port: u16,
+    },
 }
 
 impl Device {
@@ -91,12 +104,12 @@ impl Device {
         #[cfg(not(feature = "board-swift_sfx14_41g"))]
         let crtc_port = low_u16(*var!(crtc_ioport_addr: usize = usize::MAX));
         #[cfg(feature = "board-swift_sfx14_41g")]
-        let panel = panel_from_system();
+        let surface = surface_from_system();
         Self {
             #[cfg(not(feature = "board-swift_sfx14_41g"))]
             vga,
             #[cfg(feature = "board-swift_sfx14_41g")]
-            panel,
+            surface,
             #[cfg(not(feature = "board-swift_sfx14_41g"))]
             crtc_cap: BASE_IOPORT_CAP + crtc_id,
             #[cfg(not(feature = "board-swift_sfx14_41g"))]
@@ -108,51 +121,78 @@ impl Device {
         }
     }
 
+    /// The firmware buffer is the Swift panel, so this boot paints pixels.
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    pub fn uses_panel(&self) -> bool {
+        matches!(self.surface, Surface::Panel(_))
+    }
+
     pub fn present_all(&self, screen: &Screen) {
-        for (index, &value) in screen.cells().iter().enumerate() {
+        for (index, &value) in screen.page().iter().enumerate() {
             self.write_cell(index, value);
         }
     }
 
     pub fn present_cells(&self, screen: &Screen, start: usize, end: usize) {
-        for index in start..end.min(CELLS) {
-            self.write_cell(index, screen.cells()[index]);
+        let page = screen.page();
+        let end = end.min(page.len());
+        for (index, &value) in page.iter().enumerate().take(end).skip(start) {
+            self.write_cell(index, value);
         }
     }
 
-    #[cfg(not(feature = "board-swift_sfx14_41g"))]
     pub(crate) fn enable_cursor(&self) {
         // Scanlines 13 through 15, disable-bit clear: an underline.
-        self.crtc(0x0a, 0x0d);
-        self.crtc(0x0b, 0x0f);
-    }
-
-    #[cfg(feature = "board-swift_sfx14_41g")]
-    #[expect(
-        clippy::unused_self,
-        reason = "the underline is drawn later in sync_cursor"
-    )]
-    pub(crate) fn enable_cursor(&self) {}
-
-    #[cfg(not(feature = "board-swift_sfx14_41g"))]
-    pub(crate) fn sync_cursor(&self, screen: &Screen) {
-        let pos = u16::try_from(screen.cursor_index()).expect("cursor fits");
-        self.crtc(0x0e, (pos >> 8) as u8);
-        self.crtc(0x0f, (pos & 0xff) as u8);
-    }
-
-    #[cfg(feature = "board-swift_sfx14_41g")]
-    pub(crate) fn sync_cursor(&self, screen: &Screen) {
-        let next = screen.cursor_index();
-        if let Some(prev) = self.panel.cursor.replace(Some(next))
-            && prev != next
-            && prev < CELLS
+        // The Swift panel draws that underline in pixels instead.
+        #[cfg(not(feature = "board-swift_sfx14_41g"))]
         {
-            self.write_cell(prev, screen.cells()[prev]);
+            self.crtc(0x0a, 0x0d);
+            self.crtc(0x0b, 0x0f);
         }
-        if next < CELLS {
-            self.write_cell(next, screen.cells()[next]);
-            self.underline(next, screen.cells()[next]);
+        #[cfg(feature = "board-swift_sfx14_41g")]
+        if let Surface::Vga {
+            crtc_cap,
+            crtc_port,
+            ..
+        } = self.surface
+        {
+            Self::crtc_at(crtc_cap, crtc_port, 0x0a, 0x0d);
+            Self::crtc_at(crtc_cap, crtc_port, 0x0b, 0x0f);
+        }
+    }
+
+    pub(crate) fn sync_cursor(&self, screen: &Screen) {
+        #[cfg(not(feature = "board-swift_sfx14_41g"))]
+        {
+            let pos = u16::try_from(screen.cursor_index()).expect("cursor fits");
+            self.crtc(0x0e, (pos >> 8) as u8);
+            self.crtc(0x0f, (pos & 0xff) as u8);
+        }
+        #[cfg(feature = "board-swift_sfx14_41g")]
+        match &self.surface {
+            Surface::Vga {
+                crtc_cap,
+                crtc_port,
+                ..
+            } => {
+                let pos = u16::try_from(screen.cursor_index()).expect("cursor fits");
+                Self::crtc_at(*crtc_cap, *crtc_port, 0x0e, (pos >> 8) as u8);
+                Self::crtc_at(*crtc_cap, *crtc_port, 0x0f, (pos & 0xff) as u8);
+            }
+            Surface::Panel(panel) => {
+                let next = screen.cursor_index();
+                let page = screen.page();
+                if let Some(prev) = panel.cursor.replace(Some(next))
+                    && prev != next
+                    && prev < page.len()
+                {
+                    self.write_cell(prev, page[prev]);
+                }
+                if next < page.len() {
+                    self.write_cell(next, page[next]);
+                    Self::underline(panel, next, page[next]);
+                }
+            }
         }
     }
 
@@ -194,58 +234,39 @@ impl Device {
             self.vga.add(index).write_volatile(value);
         }
         #[cfg(feature = "board-swift_sfx14_41g")]
-        {
-            if !self.panel.live || held() || index >= CELLS {
-                return;
-            }
-            let frame =
-                unsafe { core::slice::from_raw_parts_mut(self.panel.frame, self.panel.len) };
-            paint_cell(
-                frame,
-                Pen {
-                    pitch: self.panel.pitch,
-                    width: self.panel.width,
-                    height: self.panel.height,
-                    red: self.panel.red,
-                    green: self.panel.green,
-                    blue: self.panel.blue,
-                },
-                index % COLS,
-                index / COLS,
-                (value & 0xff) as u8,
-                (value >> 8) as u8,
-            );
+        match &self.surface {
+            Surface::Vga { ptr, .. } => unsafe {
+                ptr.add(index).write_volatile(value);
+            },
+            Surface::Panel(panel) => write_panel_cell(panel, index, value),
         }
     }
 
     #[cfg(feature = "board-swift_sfx14_41g")]
-    fn underline(&self, index: usize, value: u16) {
-        if !self.panel.live || held() || index >= CELLS {
+    fn underline(panel: &Panel, index: usize, value: u16) {
+        if !panel.live || held() || index >= CELLS {
             return;
         }
         // SAFETY: the same mapped framebuffer `write_cell` paints. The underline
         // covers the bottom two pixels of one cell.
-        let frame = unsafe { core::slice::from_raw_parts_mut(self.panel.frame, self.panel.len) };
+        let frame = unsafe { core::slice::from_raw_parts_mut(panel.frame, panel.len) };
         paint_underline(
             frame,
-            Pen {
-                pitch: self.panel.pitch,
-                width: self.panel.width,
-                height: self.panel.height,
-                red: self.panel.red,
-                green: self.panel.green,
-                blue: self.panel.blue,
-            },
+            pen(panel),
             index % COLS,
             index / COLS,
             (value >> 8) as u8,
         );
     }
 
+    fn crtc_at(cap: u64, port: u16, index: u8, value: u8) {
+        Self::out8(cap, port, index);
+        Self::out8(cap, port.wrapping_add(1), value);
+    }
+
     #[cfg(not(feature = "board-swift_sfx14_41g"))]
     fn crtc(&self, index: u8, value: u8) {
-        Self::out8(self.crtc_cap, self.crtc_port, index);
-        Self::out8(self.crtc_cap, self.crtc_port.wrapping_add(1), value);
+        Self::crtc_at(self.crtc_cap, self.crtc_port, index, value);
     }
 
     fn command(&self, byte: u8) -> bool {
@@ -326,10 +347,54 @@ fn held() -> bool {
 }
 
 #[cfg(feature = "board-swift_sfx14_41g")]
-fn panel_from_system() -> Panel {
+fn pen(panel: &Panel) -> Pen {
+    Pen {
+        pitch: panel.pitch,
+        width: panel.width,
+        height: panel.height,
+        red: panel.red,
+        green: panel.green,
+        blue: panel.blue,
+    }
+}
+
+#[cfg(feature = "board-swift_sfx14_41g")]
+fn write_panel_cell(panel: &Panel, index: usize, value: u16) {
+    if !panel.live || held() || index >= CELLS {
+        return;
+    }
+    let frame = unsafe { core::slice::from_raw_parts_mut(panel.frame, panel.len) };
+    paint_cell(
+        frame,
+        pen(panel),
+        index % COLS,
+        index / COLS,
+        (value & 0xff) as u8,
+        (value >> 8) as u8,
+    );
+}
+
+/// Panel when the mode record names the Swift buffer. VGA text otherwise.
+/// A VGA boot does not read or write the high framebuffer.
+#[cfg(feature = "board-swift_sfx14_41g")]
+fn surface_from_system() -> Surface {
     let mode_ptr = memory_region_symbol!(mode_record_vaddr: *mut u8).as_ptr();
-    let frame = memory_region_symbol!(fb_vaddr: *mut u8).as_ptr();
     let record = unsafe { core::slice::from_raw_parts(mode_ptr, 40) };
+    if panel_mode(record).is_some() {
+        return Surface::Panel(panel_from_record(record));
+    }
+    let crtc_id = *var!(crtc_ioport_id: usize = usize::MAX) as u64;
+    let crtc_port = low_u16(*var!(crtc_ioport_addr: usize = usize::MAX));
+    Surface::Vga {
+        ptr: vga_text(),
+        crtc_cap: BASE_IOPORT_CAP + crtc_id,
+        crtc_port,
+    }
+}
+
+#[cfg(feature = "board-swift_sfx14_41g")]
+fn panel_from_record(record: &[u8]) -> Panel {
+    let frame = memory_region_symbol!(fb_vaddr: *mut u8).as_ptr();
     let mode = panel_mode(record);
     let live = mode.is_some();
     let (pitch, width, height, red, green, blue) = if let Some(mode) = mode {

@@ -17,9 +17,10 @@ mod url;
 use lerux_input::{Key, KeyEvent};
 
 pub use mode::{
-    mode_from_mb2_tag, mode_line, panel_mode, panel_ready, swift_recorded_mode, ScanoutMode,
-    BROWSER_HOLD, FRAMEBUFFER_BYTES, FRAMEBUFFER_HEIGHT, FRAMEBUFFER_PHYS, FRAMEBUFFER_PITCH,
-    FRAMEBUFFER_WIDTH, MODE_RECORD_PHYS,
+    console_kind, mode_from_mb2_tag, mode_line, panel_mode, panel_ready, swift_recorded_mode,
+    touch_swift_devices, ScanoutMode, BROWSER_HOLD, CONSOLE_KIND, CONSOLE_PANEL, CONSOLE_VGA,
+    FRAMEBUFFER_BYTES, FRAMEBUFFER_HEIGHT, FRAMEBUFFER_PHYS, FRAMEBUFFER_PITCH, FRAMEBUFFER_WIDTH,
+    MODE_RECORD_PHYS,
 };
 pub use palette::{vga_rgb, CellAttr, DEFAULT_ATTR};
 pub use pixel::{

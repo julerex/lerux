@@ -38,6 +38,7 @@ INTEGER_ONLY=(
 )
 
 "$CC" "${CFLAGS[@]}" "${INTEGER_ONLY[@]}" -c -o "$tmpdir/stub.o" "$root/stub.c"
+"$CC" "${CFLAGS[@]}" "${INTEGER_ONLY[@]}" -c -o "$tmpdir/machine.o" "$root/machine.c"
 "$CC" "${CFLAGS[@]}" "${INTEGER_ONLY[@]}" -c -o "$tmpdir/fb_paint.o" "$root/fb_paint.c"
 "$CC" "${CFLAGS[@]}" -c -o "$tmpdir/entry.o" "$root/entry.S"
 "$CC" "${CFLAGS[@]}" -nostdlib -static \
@@ -46,7 +47,7 @@ INTEGER_ONLY=(
     -Wl,--build-id=none \
     -Wl,-z,max-page-size=8 \
     -o "$out" \
-    "$tmpdir/entry.o" "$tmpdir/stub.o" "$tmpdir/fb_paint.o"
+    "$tmpdir/entry.o" "$tmpdir/stub.o" "$tmpdir/machine.o" "$tmpdir/fb_paint.o"
 
 # xorps here is a triple fault: see the CFLAGS comment above.
 if objdump -d "$out" | grep -Eq '[[:space:]](xorps|movaps|movups|movdqa|movapd|pxor|addps)[[:space:]]'; then

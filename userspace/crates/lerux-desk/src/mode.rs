@@ -548,16 +548,51 @@ pub(crate) fn recorded_mode_line() -> (line: [u8; 80])
 } // verus!
 const _: () = assert!(FRAMEBUFFER_PITCH as u64 * FRAMEBUFFER_HEIGHT as u64 == FRAMEBUFFER_BYTES);
 
-/// Mode to paint. A record that names another address stays off. A cleared
-/// record uses [`swift_recorded_mode`].
+/// Offset of the console kind in the mode record. The stub writes it.
+/// A cleared record leaves 0.
+pub const CONSOLE_KIND: usize = 36;
+
+/// Firmware handed over the Swift panel at [`FRAMEBUFFER_PHYS`].
+pub const CONSOLE_PANEL: u8 = 1;
+
+/// VGA text page. This is every machine that is not the Swift panel.
+pub const CONSOLE_VGA: u8 = 2;
+
+/// Kind byte the stub stored. 0 is a cleared record.
+#[must_use]
+pub fn console_kind(record: &[u8]) -> u8 {
+    record.get(CONSOLE_KIND).copied().unwrap_or(0)
+}
+
+/// Mode to paint. An explicit VGA mark stays off, including when the address
+/// bytes still name the Swift panel. A record that names another address stays
+/// off. A cleared record uses [`swift_recorded_mode`].
 #[must_use]
 pub fn panel_mode(record: &[u8]) -> Option<ScanoutMode> {
+    if console_kind(record) == CONSOLE_VGA {
+        return None;
+    }
     if let Some(mode) = ScanoutMode::parse(record) {
         let bytes = u64::from(mode.pitch()).saturating_mul(u64::from(mode.height()));
         return (panel_ready(mode.address(), FRAMEBUFFER_PHYS) && bytes <= FRAMEBUFFER_BYTES)
             .then_some(mode);
     }
     Some(swift_recorded_mode())
+}
+
+/// Whether this boot may touch Swift device registers.
+///
+/// The panel mark is the Swift. An explicit VGA mark is not, even when an
+/// MT7921 is plugged into some other machine. A cleared record (kind 0) still
+/// counts when that radio is present, because a Swift boot used to lose the
+/// mode page when seL4 retyped it.
+#[must_use]
+pub fn touch_swift_devices(record: &[u8], mt7921_present: bool) -> bool {
+    match console_kind(record) {
+        CONSOLE_VGA => false,
+        CONSOLE_PANEL => true,
+        _ => mt7921_present,
+    }
 }
 
 fn push(out: &mut [u8; 80], len: &mut usize, bytes: &[u8]) -> bool {
@@ -960,6 +995,67 @@ mod tests {
         assert_eq!(panel_mode(&record), Some(mode));
         record[8..16].copy_from_slice(&0x8000_0000u64.to_le_bytes());
         assert!(panel_mode(&record).is_none());
+    }
+
+    #[test]
+    fn vga_mark_does_not_paint_the_panel() {
+        let mode = swift_recorded_mode();
+        let mut record = [0u8; RECORD_LEN];
+        mode.write_record(&mut record)
+            .expect("the mode record is 40 bytes");
+        record[CONSOLE_KIND] = CONSOLE_VGA;
+        assert!(panel_mode(&record).is_none());
+        assert!(!touch_swift_devices(&record, true));
+        record[CONSOLE_KIND] = CONSOLE_PANEL;
+        assert_eq!(panel_mode(&record), Some(mode));
+        assert!(touch_swift_devices(&record, false));
+    }
+
+    #[test]
+    fn generic_path_does_not_touch_swift_devices() {
+        let mut record = [0u8; RECORD_LEN];
+        record[CONSOLE_KIND] = CONSOLE_VGA;
+        assert!(!touch_swift_devices(&record, true));
+        assert!(!touch_swift_devices(&record, false));
+        record[CONSOLE_KIND] = CONSOLE_PANEL;
+        assert!(touch_swift_devices(&record, false));
+        record[CONSOLE_KIND] = 0;
+        assert!(!touch_swift_devices(&record, false));
+        assert!(touch_swift_devices(&record, true));
+    }
+
+    #[test]
+    fn stub_probe_matches_the_console_kind() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../..");
+        let out_dir = root.join("build/host");
+        std::fs::create_dir_all(&out_dir).expect("host build dir");
+        let bin = out_dir.join("machine-probe-test");
+        let status = std::process::Command::new("clang")
+            .current_dir(&root)
+            .args([
+                "-std=c11",
+                "-Wall",
+                "-Wextra",
+                "-Werror",
+                "support/mb2-stub/machine.c",
+                "support/mb2-stub/machine_test.c",
+                "-o",
+            ])
+            .arg(&bin)
+            .status()
+            .expect("clang");
+        assert!(status.success(), "machine probe host build");
+        let printed = std::process::Command::new(&bin)
+            .output()
+            .expect("run machine probe test");
+        assert!(printed.status.success(), "machine probe test failed");
+        let text = std::str::from_utf8(&printed.stdout).expect("utf8");
+        assert_eq!(CONSOLE_PANEL, 1);
+        assert_eq!(CONSOLE_VGA, 2);
+        assert!(text.contains("kind-swift 1\n"));
+        assert!(text.contains("kind-ovmf 2\n"));
+        assert!(text.contains("kind-none 2\n"));
+        assert!(text.contains("carve-ok"));
     }
 
     #[test]

@@ -390,12 +390,15 @@ fn print_usb_instructions(board: &str, iso: &Path) {
 
 fn print_swift_usb() {
     println!("Replace sdX with the flash drive from lsblk. Do not write the internal NVMe.");
+    println!("This one ISO also boots another x86 PC. It does not map the Inspiron AHCI disk.");
     println!("Firmware boot menu → the USB entry that says UEFI (GRUB EFI/BOOT/BOOTX64.EFI).");
     println!("mb2-stub loads sel4.elf (64-bit) at 1 MiB after ExitBootServices.");
     println!(
-        "Screen: the GOP mode line, then the sign-on. The issue line is \"Lerux\" and the short git describe. The prompt is \"[root@lerux ~]# \". This laptop has no COM port."
+        "Swift: the GOP buffer is 0xfc90000000, the panel is used, and setup-wifi stays. Any other machine uses the VGA text page and leaves that NVMe window unread."
     );
-    println!("The prompt runs the shell, including setup-wifi.");
+    println!(
+        "Screen: the sign-on, then \"[root@lerux ~]# \". The issue line is \"Lerux\" and the short git describe."
+    );
     println!("Expect: lerux login: root (automatic login)");
 }
 

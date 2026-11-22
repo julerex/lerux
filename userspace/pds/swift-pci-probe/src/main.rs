@@ -19,13 +19,13 @@ use sel4_microkit::{
     memory_region_symbol, protection_domain, var, ChannelSet, Handler, Infallible,
 };
 
-use lerux_desk::FRAMEBUFFER_BYTES;
+use lerux_desk::{touch_swift_devices, FRAMEBUFFER_BYTES};
 use lerux_swift::{
     class_code, config_address, describe, exclusion_base, exclusion_limit, iommu_base,
-    iommu_with_bit, paint_row, store_header, store_iommu, vendor_device, write_cmd_line,
-    write_excl_line, IOMMU_CTRL, IOMMU_EXCL_BASE, IOMMU_EXCL_LIMIT, IOMMU_OFF_BITS, LOCATIONS,
-    MT7921_BDF, MT7921_IDS, NVME_BDF, NVME_CLASS, SWIFT_DMA_END, SWIFT_DMA_START, XHCI_BDFS,
-    XHCI_CLASS,
+    iommu_with_bit, paint_row, radio_present, store_header, store_iommu, vendor_device,
+    write_cmd_line, write_excl_line, IOMMU_CTRL, IOMMU_EXCL_BASE, IOMMU_EXCL_LIMIT, IOMMU_OFF_BITS,
+    LOCATIONS, MT7921_BDF, MT7921_IDS, NVME_BDF, NVME_CLASS, SWIFT_DMA_END, SWIFT_DMA_START,
+    XHCI_BDFS, XHCI_CLASS,
 };
 
 const BASE_IOPORT_CAP: u64 = 394;
@@ -43,7 +43,43 @@ fn init() -> HandlerImpl {
     let cap = BASE_IOPORT_CAP + cap_id;
     let page = memory_region_symbol!(pci_headers_vaddr: *mut u8).as_ptr();
     let page = unsafe { core::slice::from_raw_parts_mut(page, 0x1000) };
+    let mode = mode_ptr();
+    let record = unsafe { core::slice::from_raw_parts(mode, 40) };
+    store_locations(cap, addr, page);
     let mut wifi_cmd = None;
+    // A VGA boot does not set bus master, program the IOMMU, or touch the link.
+    let swift = touch_swift_devices(record, radio_present(page));
+    if swift {
+        for (bus, dev, func) in LOCATIONS {
+            let header = read_header(cap, addr, bus, dev, func);
+            enable_claimed(cap, addr, bus, dev, func, &header);
+            if (bus, dev, func) == MT7921_BDF {
+                wifi_cmd = command_word(cap, addr, bus, dev, func, &header);
+            }
+        }
+    }
+    let mut line = [b' '; 8];
+    let n = write_cmd_line(&mut line, wifi_cmd);
+    paint(ROW_CMD, &line[..n.max(8)]);
+    let base = find_iommu(cap, addr);
+    store_iommu(page, base);
+    let seen = if swift {
+        let iommu = memory_region_symbol!(iommu_regs_vaddr: *mut u8).as_ptr();
+        pass_dma(iommu, base)
+    } else {
+        None
+    };
+    let mut line = [b' '; 28];
+    let n = write_excl_line(&mut line, seen);
+    paint(ROW_EXCL, &line[..n.max(26)]);
+    if swift {
+        let pci = dump::Pci { cap, port: addr };
+        dump::program_wifi_link(&pci);
+    }
+    HandlerImpl
+}
+
+fn store_locations(cap: u64, addr: u16, page: &mut [u8]) {
     for (index, (bus, dev, func)) in LOCATIONS.iter().copied().enumerate() {
         let header = read_header(cap, addr, bus, dev, func);
         store_header(page, index, &header);
@@ -52,24 +88,7 @@ fn init() -> HandlerImpl {
         fallback[8..14].copy_from_slice(b"absent");
         let line = describe(bus, dev, func, &header).unwrap_or(fallback);
         paint(ROW + index, &line);
-        enable_claimed(cap, addr, bus, dev, func, &header);
-        if (bus, dev, func) == MT7921_BDF {
-            wifi_cmd = command_word(cap, addr, bus, dev, func, &header);
-        }
     }
-    let mut line = [b' '; 8];
-    let n = write_cmd_line(&mut line, wifi_cmd);
-    paint(ROW_CMD, &line[..n.max(8)]);
-    let base = find_iommu(cap, addr);
-    store_iommu(page, base);
-    let iommu = memory_region_symbol!(iommu_regs_vaddr: *mut u8).as_ptr();
-    let seen = pass_dma(iommu, base);
-    let mut line = [b' '; 28];
-    let n = write_excl_line(&mut line, seen);
-    paint(ROW_EXCL, &line[..n.max(26)]);
-    let pci = dump::Pci { cap, port: addr };
-    dump::program_wifi_link(&pci);
-    HandlerImpl
 }
 
 /// `0xfdf00000` is the base this Swift painted. Translation stays on for the
@@ -189,8 +208,12 @@ fn enable_mem(cap: u64, port: u16, bus: u8, dev: u8, func: u8) {
     out32(cap, data, command | 0x06);
 }
 
+fn mode_ptr() -> *mut u8 {
+    memory_region_symbol!(mode_record_vaddr: *mut u8).as_ptr()
+}
+
 pub(crate) fn paint(row: usize, text: &[u8]) {
-    let mode = memory_region_symbol!(mode_record_vaddr: *mut u8).as_ptr();
+    let mode = mode_ptr();
     let frame = memory_region_symbol!(fb_vaddr: *mut u8).as_ptr();
     let record = unsafe { core::slice::from_raw_parts(mode, 40) };
     let bytes = usize::try_from(FRAMEBUFFER_BYTES).expect("framebuffer fits");

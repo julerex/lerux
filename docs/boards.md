@@ -1,8 +1,8 @@
 # Boards
 
-Board names are the `BOARD=` value for `just run`, `just test`, and `just build`. Metadata lives in [`support/boards.toml`](../support/boards.toml). `just build` and `just run` default to `qemu_virt_aarch64`. Bare `just test` boots `qemu_virt_aarch64_browser_sddf`. Bare `just make-lerux-iso` packs `swift_sfx14_41g`.
+Board names are the `BOARD=` value for `just run`, `just test`, and `just build`. Metadata lives in [`support/boards.toml`](../support/boards.toml). `just build` and `just run` default to `qemu_virt_aarch64`. Bare `just test` boots `qemu_virt_aarch64_browser_sddf`. Bare `just make-lerux-iso` packs one image, `swift_sfx14_41g`, that probes the machine.
 
-The metal target being driven is the Acer Swift X SFX14-41G (`swift_sfx14_41g`). The Gigabyte Z97-D3H desk page (`pc_z97_d3h`) and the RPi4 workstation lab (`rpi4b_4gb`) stay secondary. The Dell Inspiron N5010 (`inspiron_n5010`) is a VGA text image from the probe in [support/arch-probe/machines/inspiron-n5010.md](../support/arch-probe/machines/inspiron-n5010.md). `just make-lerux-iso` still packs the Swift X.
+The metal target being driven is the Acer Swift X SFX14-41G (`swift_sfx14_41g`). That one ISO also boots the Gigabyte Z97-D3H (`pc_z97_d3h`), the Dell Inspiron N5010 (`inspiron_n5010`), and any other x86 PC. The stub selects the Swift GOP panel when the framebuffer is `0xfc90000000` and the VGA text page otherwise. It does not map the Inspiron AHCI disk and does not touch the Swift NVMe unless the probe selected the panel. `just make-lerux-iso pc_z97_d3h` and `just make-lerux-iso inspiron_n5010` still pack those boards' own images. The RPi4 workstation lab (`rpi4b_4gb`) stays secondary.
 
 aarch64 init and composed images need the patched SP804 QEMU in [`ci.md`](ci.md#patched-qemu); RISC-V init uses stock QEMU with the Goldfish RTC and `rdtime`, and x86 init uses stock QEMU with the CMOS RTC and TSC.
 
@@ -32,8 +32,8 @@ aarch64 init and composed images need the patched SP804 QEMU in [`ci.md`](ci.md#
 | `x86_64_generic` | x86_64 | `BOARD=x86_64_generic just test` | hello + serial (COM1) |
 | `x86_64_generic_console` | x86_64 | `just test-x86-console` | `serial_driver`, `console_driver`, `shell` (`console-shell.elf`) |
 | `pc_z97_d3h` | x86_64 | `BOARD=pc_z97_d3h just image` | same menu on the desk VGA text page (hardware only) |
-| `swift_sfx14_41g` | x86_64 | `just make-lerux-iso` | Swift X panel menu, PS/2, PCI lines, MT7921, read-only NVMe, Bluetooth (hardware only) |
-| `inspiron_n5010` | x86_64 | `just make-lerux-iso inspiron_n5010` | VGA text menu and the built-in i8042 (hardware only) |
+| `swift_sfx14_41g` | x86_64 | `just make-lerux-iso` | One ISO: Swift panel when the GOP buffer is `0xfc90000000`, VGA text on any other x86 PC (hardware only) |
+| `inspiron_n5010` | x86_64 | `just make-lerux-iso inspiron_n5010` | VGA-only image. The default ISO also boots this machine on the VGA text page (hardware only) |
 | `x86_64_generic_virtio` | x86_64 | `just test-x86-virtio` | hello + serial + virtio-pci blk/net |
 | `x86_64_generic_http` | x86_64 | `just test-x86-http` | serial + virtio-pci net + http-server |
 | `rpi4b_4gb` | aarch64 | `BOARD=rpi4b_4gb just image` | hello + serial (PL011; hardware only) |
@@ -169,7 +169,7 @@ Living work list (what still needs a Pi): [`plan-arch.md` — Physical RPi4 lab]
 
 A first boot, from the checkout through Wi-Fi, is [setup.md](setup.md).
 
-Board `swift_sfx14_41g` is the on-screen menu on the Acer Swift X SFX14-41G (Ryzen 5 5500U). It reuses Microkit `x86_64_generic` and `console-swift.system.template`. Names for this machine and its devices are in [GLOSSARY.md](../GLOSSARY.md#swift-x). The panel is the firmware GOP buffer. The keyboard is the built-in i8042 (ports `0x60` and `0x64`, I/O APIC pin 1, vector 49). This machine has no COM port and no `serial-driver`. This image has no QEMU model. Device roles are in [platforms.md](platforms.md#swift-x-devices). `just make-lerux-iso pc_z97_d3h` packs the [Gigabyte Z97-D3H](#gigabyte-z97-d3h-install-path) image.
+Board `swift_sfx14_41g` is the one x86 ISO. On the Acer Swift X SFX14-41G (Ryzen 5 5500U) it paints the GOP panel. On any other x86 PC, including the Z97 desk and the Inspiron, it paints the VGA text page. It reuses Microkit `x86_64_generic` and `console-swift.system.template`. Names for this machine and its devices are in [GLOSSARY.md](../GLOSSARY.md#swift-x). The keyboard is the built-in i8042 (ports `0x60` and `0x64`, I/O APIC pin 1, vector 49). The Swift has no COM port and no `serial-driver`. This image has no QEMU model of the panel. Device roles are in [platforms.md](platforms.md#swift-x-devices). `just make-lerux-iso pc_z97_d3h` still packs the separate [Gigabyte Z97-D3H](#gigabyte-z97-d3h-install-path) image.
 
 **USB ISO** (`just make-lerux-iso` packs `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`). Build the image, verify the digest, write the media, and boot. `lerux verify-image` prints `lerux iso --board swift_sfx14_41g --no-build` and the `dd` line after the digest matches. That packs the checked `loader.img`. It does not run `just make-lerux-iso`.
 
@@ -298,7 +298,7 @@ This board has no native disk or Ethernet driver. QEMU `workstation-x86` is virt
 
 ### Dell Inspiron N5010 install path
 
-Board `inspiron_n5010` is the on-screen menu on the Dell Inspiron N5010 (Core i5-460M, HM57, BIOS A15). It reuses Microkit `x86_64_generic` and `console-inspiron.system.template`. The probe is [support/arch-probe/machines/inspiron-n5010.md](../support/arch-probe/machines/inspiron-n5010.md). Device roles are in [platforms.md](platforms.md#inspiron-n5010). Acer Swift X remains the metal target `just make-lerux-iso` packs. This image has no QEMU model.
+Board `inspiron_n5010` is the VGA-only image for the Dell Inspiron N5010 (Core i5-460M, HM57, BIOS A15). The one ISO from `just make-lerux-iso` also boots this machine: the stub does not see the Swift panel, so it paints this same VGA text page and does not map the AHCI disk. The board image itself reuses Microkit `x86_64_generic` and `console-inspiron.system.template`. The probe is [support/arch-probe/machines/inspiron-n5010.md](../support/arch-probe/machines/inspiron-n5010.md). Device roles are in [platforms.md](platforms.md#inspiron-n5010). This image has no QEMU model.
 
 The 2026-11-14 boot was legacy BIOS with `nomodeset`. The console was the VGA text page, 80 by 25, at `0xb8000`, scanned by the integrated graphics `8086:0046` at `00:02.0`. The log has no `efifb` or `vesafb` line, so this image does not map a GOP buffer. The keyboard is the built-in i8042 at `0x60` and `0x64`, I/O APIC pin 1, vector 49. The probe recorded no IRQ 1 override. There is no serial port and no xHCI controller. The shell is `console-shell`. The page is light gray on black. The sign-on ends at `[root@lerux ~]# `. `1` or `browser` prints `browser unavailable`, and `2` or `maths` is the `lerux-calc` session.
 

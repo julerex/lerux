@@ -49,7 +49,7 @@ use sel4_microkit::{
 };
 
 #[cfg(not(test))]
-use lerux_desk::FRAMEBUFFER_BYTES;
+use lerux_desk::{touch_swift_devices, FRAMEBUFFER_BYTES};
 #[cfg(not(test))]
 use lerux_sddf::{net_driver_config_t, net_image::net_config_from_bytes, SDDF_NET_MAGIC};
 #[cfg(not(test))]
@@ -124,11 +124,14 @@ fn init() -> HandlerImpl {
     let (bus, dev, func) = MT7921_BDF;
     let header = load_header(page, bus, dev, func);
     let present = vendor_device(&header).is_some_and(|id| MT7921_IDS.contains(&id));
+    let mode = mode_ptr();
+    let record = unsafe { core::slice::from_raw_parts(mode, 40) };
     let _ = class_code(&header);
     let images = firmware_images();
     let mut line = [0u8; 40];
     let bar = memory_bar(&header);
-    if !present {
+    // Another machine's MT7921 is not this driver. VGA leaves the BAR alone.
+    if !present || !touch_swift_devices(record, present) {
         let n = format_report(&WifiReport::Absent, &mut line);
         return stopped(net, rx_id, tx_id, &line[..n]);
     }
@@ -336,8 +339,13 @@ fn paint_at(row: usize, text: &[u8]) {
 }
 
 #[cfg(not(test))]
+fn mode_ptr() -> *mut u8 {
+    memory_region_symbol!(mode_record_vaddr: *mut u8).as_ptr()
+}
+
+#[cfg(not(test))]
 fn paint_line(row: usize, line: &[u8]) {
-    let mode = memory_region_symbol!(mode_record_vaddr: *mut u8).as_ptr();
+    let mode = mode_ptr();
     let frame = memory_region_symbol!(fb_vaddr: *mut u8).as_ptr();
     let record = unsafe { core::slice::from_raw_parts(mode, 40) };
     let bytes = usize::try_from(FRAMEBUFFER_BYTES).expect("framebuffer fits");

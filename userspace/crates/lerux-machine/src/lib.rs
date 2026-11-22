@@ -12,10 +12,10 @@ pub mod description;
 
 #[cfg(feature = "system-description")]
 pub use description::{
-    ahci_msi, e1000e_fetch_irq, e1000e_standalone_irq, pci_config_port, pci_net_config_port,
-    qemu_plan, serial_node, virtio_node, IoApicPin, IoApicVector, IoPort, Irq, LineIrq, MmioDevice,
-    MmioWindow, MsiIrq, PciBar, Polarity, QemuDevice, QemuPlan, SerialNode, SpelledAddr, Trigger,
-    VirtioNode, X86Irq,
+    ahci_msi, e1000e_fetch_irq, e1000e_standalone_irq, i217_irq, pci_config_port,
+    pci_net_config_port, qemu_plan, serial_node, virtio_node, IoApicPin, IoApicVector, IoPort, Irq,
+    LineIrq, MmioDevice, MmioWindow, MsiIrq, PciBar, Polarity, QemuDevice, QemuPlan, SerialNode,
+    SpelledAddr, Trigger, VirtioNode, X86Irq,
 };
 
 use table::{
@@ -26,8 +26,9 @@ use table::{
 };
 
 pub use ahci::{
-    ahci_map, msi_data, AhciMap, Claimed, PciAddress, RejectedClass, Unclaimed, AHCI_CLASS,
-    AHCI_IOAPIC_VECTOR, AHCI_PORT, MSI_ADDRESS, QEMU_ICH9_AHCI, READY_LINE,
+    ahci_map, format_identity, msi_data, AhciMap, AtaModel, Claimed, PciAddress, RejectedId,
+    Unclaimed, AHCI_CLASS, AHCI_IOAPIC_VECTOR, AHCI_PORT, ATA_MODEL_BYTES, ATA_MODEL_OFFSET,
+    IDENTITY_CAP, MSI_ADDRESS, QEMU_ICH9_AHCI, READY_LINE, Z97_AHCI,
 };
 
 pub use table::{

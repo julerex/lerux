@@ -67,10 +67,7 @@ impl HandlerImpl {
     }
 
     fn sync_cursor(&self) {
-        #[cfg(not(feature = "board-swift_sfx14_41g"))]
         self.device.sync_cursor(&self.screen);
-        #[cfg(feature = "board-swift_sfx14_41g")]
-        Device::sync_cursor(&self.screen);
     }
 
     fn handle_request(&mut self, req: &Request) -> SuccessResponse {

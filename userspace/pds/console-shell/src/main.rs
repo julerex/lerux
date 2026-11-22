@@ -1,4 +1,4 @@
-//! Start menu on the VGA text console.
+//! Sign-on and command prompt on the VGA text console.
 //!
 //! Channel 0 is `console_driver` (keyboard bytes in, screen bytes out).
 //! On the desk, channel 1 is `serial_driver` (the same output bytes on COM1).
@@ -25,6 +25,7 @@ use lerux_calc::{eval, write_i64, Error};
 use lerux_desk::{panel_mode, BROWSER_HOLD};
 #[cfg(feature = "board-swift_sfx14_41g")]
 use lerux_ladybird_image::{paint_page, Shifts};
+use lerux_signon::{for_each_preamble, PROMPT};
 #[cfg(feature = "board-swift_sfx14_41g")]
 use lerux_swift::{
     key_ok, read_survey_count, read_survey_mark, read_survey_ssid, survey_choice, write_key,
@@ -39,10 +40,6 @@ const DISK: Channel = Channel::new(1);
 #[cfg(feature = "board-swift_sfx14_41g")]
 const WIFI: Channel = Channel::new(2);
 const LINE_MAX: usize = 80;
-#[cfg(not(feature = "board-swift_sfx14_41g"))]
-const MENU: &[u8] = b"1 browser\n2 maths\n";
-#[cfg(feature = "board-swift_sfx14_41g")]
-const MENU: &[u8] = b"1 browser\n2 maths\n3 wifi\n";
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Mode {
@@ -93,7 +90,11 @@ fn init() -> HandlerImpl {
         len: 0,
         overflow: false,
     };
-    shell.emit_boot(MENU);
+    for_each_preamble(env!("LERUX_GIT_DESCRIBE").as_bytes(), |part| {
+        shell.emit_boot(part);
+    });
+    #[cfg(feature = "board-pc_z97_d3h")]
+    lerux_logging::debug::after_boot_line();
     #[cfg(feature = "board-swift_sfx14_41g")]
     shell.emit_disk();
     shell
@@ -122,16 +123,12 @@ impl HandlerImpl {
         }
     }
 
-    /// Boot menu only. Each finished line stays up before the next one is drawn.
+    /// Sign-on bytes. The desk holds the finished screen once, after this returns.
     fn emit_boot(&mut self, bytes: &[u8]) {
         for &byte in bytes {
             push(&mut self.screen, byte);
             #[cfg(not(any(feature = "board-swift_sfx14_41g", feature = "board-inspiron_n5010")))]
             push(&mut self.com1, byte);
-            #[cfg(feature = "board-pc_z97_d3h")]
-            if byte == b'\n' {
-                lerux_logging::debug::after_boot_line();
-            }
         }
     }
 
@@ -256,7 +253,7 @@ impl HandlerImpl {
     #[cfg(not(feature = "board-swift_sfx14_41g"))]
     fn open_browser(&mut self) {
         self.emit(b"browser unavailable\n");
-        self.emit(MENU);
+        self.emit(PROMPT);
     }
 
     #[cfg(feature = "board-swift_sfx14_41g")]
@@ -267,7 +264,7 @@ impl HandlerImpl {
         } else {
             set_hold(0);
             self.emit(b"browser err\n");
-            self.emit(MENU);
+            self.emit(PROMPT);
         }
     }
 
@@ -280,7 +277,7 @@ impl HandlerImpl {
         set_hold(0);
         self.mode = Mode::Menu;
         self.emit(b"\x1b[2J");
-        self.emit(MENU);
+        self.emit(PROMPT);
         self.emit_disk();
     }
 
@@ -288,7 +285,7 @@ impl HandlerImpl {
     fn dispatch_ssid(&mut self, line: &[u8]) {
         if line == b"quit" {
             self.mode = Mode::Menu;
-            self.emit(MENU);
+            self.emit(PROMPT);
             return;
         }
         if let Some(name) = survey_choice(key_page(), line) {
@@ -360,7 +357,7 @@ impl HandlerImpl {
     fn dispatch_psk(&mut self, line: &[u8]) {
         if line == b"quit" {
             self.mode = Mode::Menu;
-            self.emit(MENU);
+            self.emit(PROMPT);
             return;
         }
         let name_len = self.ssid_len;
@@ -374,7 +371,7 @@ impl HandlerImpl {
     fn dispatch_maths(&mut self, line: &[u8]) {
         if line == b"quit" {
             self.mode = Mode::Menu;
-            self.emit(MENU);
+            self.emit(PROMPT);
             return;
         }
         match eval(line) {
@@ -388,7 +385,7 @@ impl HandlerImpl {
         match self.mode {
             Mode::Menu => {
                 self.emit(b"err\n");
-                self.emit(MENU);
+                self.emit(PROMPT);
             }
             Mode::Maths => {
                 self.emit(b"maths err\n");
@@ -405,7 +402,7 @@ impl HandlerImpl {
     fn wifi_err(&mut self) {
         self.mode = Mode::Menu;
         self.emit(b"wifi err\n");
-        self.emit(MENU);
+        self.emit(PROMPT);
     }
 
     #[cfg(feature = "board-swift_sfx14_41g")]
@@ -420,7 +417,7 @@ impl HandlerImpl {
         WIFI.notify();
         self.mode = Mode::Menu;
         self.emit(b"psk ok\n");
-        self.emit(MENU);
+        self.emit(PROMPT);
     }
 }
 

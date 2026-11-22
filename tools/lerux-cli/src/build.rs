@@ -52,6 +52,7 @@ fn write_block_and_net_configs(dir: &Path, board: &str) -> Result<()> {
         || board == "qemu_virt_riscv64_net_sddf"
         || board == "x86_64_generic_net_sddf"
         || board == "x86_64_generic_net_e1000e"
+        || board == "pc_z97_d3h_i217"
     {
         crate::net_sddf::write_configs(dir, board)?;
     }
@@ -322,6 +323,7 @@ fn hardware_ready_message(board: &str, arch: &str) -> String {
         return format!(
             "==> Hardware board {board:?}: image ready.\n\
              \x20   ISO: {}  (build/{board}/{})\n\
+             \x20   Verify: lerux verify-image --board {board}\n\
              \x20   This command does not write a disk. Do not dd the ISO onto the internal SATA disk.\n\
              \x20   Docs: {docs}",
             iso_recipe(board),
@@ -339,7 +341,8 @@ fn hardware_ready_message(board: &str, arch: &str) -> String {
     };
     format!(
         "==> Hardware board {board:?}: image ready.{iso}\n\
-         \x20   Deploy: lerux deploy --board {board} --dest /abs/path/to/boot\n\
+         \x20   Verify: lerux verify-image --board {board}\n\
+         \x20   When the digest matches, that command prints the flash line.\n\
          \x20   Boot smoke: LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD={board} just test-hw\n\
          \x20   Docs: {docs}"
     )
@@ -370,12 +373,20 @@ mod tests {
     #[test]
     fn hardware_ready_message_points_at_z97_docs() {
         let msg = hardware_ready_message("pc_z97_d3h", "x86_64");
-        assert!(msg.contains("lerux deploy --board pc_z97_d3h"), "{msg}");
+        assert!(
+            msg.contains("lerux verify-image --board pc_z97_d3h"),
+            "{msg}"
+        );
         assert!(msg.contains("just make-lerux-iso"), "{msg}");
         assert!(msg.contains("gigabyte-z97-d3h-install-path"), "{msg}");
         assert!(!msg.contains("deploy-rpi4"), "{msg}");
+        assert!(!msg.contains("lerux deploy --board"), "{msg}");
         let rpi = hardware_ready_message("rpi4b_4gb_workstation", "aarch64");
         assert!(!rpi.contains("just make-lerux-iso"), "{rpi}");
+        assert!(
+            rpi.contains("lerux verify-image --board rpi4b_4gb_workstation"),
+            "{rpi}"
+        );
         let inspiron = hardware_ready_message("inspiron_n5010", "x86_64");
         assert!(
             inspiron.contains("just make-lerux-iso inspiron_n5010"),

@@ -1,0 +1,2 @@
+# Host image pins. The guest does not install packages.
+# Rewritten by `lerux package install` and `lerux package upgrade`.

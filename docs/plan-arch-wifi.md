@@ -98,12 +98,12 @@ Arch’s stack underneath the same keystrokes is `iwctl`, `iwd`, nl80211, mac802
 
 **Steps.**
 
-- After `lerux shell ready`, `ip link` and `iwctl` are shell commands. `ping` arrives in Milestone 3.
+- After the sign-on prompt, `ip link` and `iwctl` are shell commands. `ping` arrives in Milestone 3.
 - `iwctl` prints `[iwd]# ` and reads further lines until `exit` or byte `0x04`. `ip link` and, later, `ping` are typed outside that prompt, as the installation guide types them at the shell.
 - The radio writes two fields on `wifi_key` when it reaches `wait`: a powered flag, and the six-byte station address it already uses in the authentication frame. The shell reads those fields. It does not parse the framebuffer. The survey list layout that `setup-wifi` still reads stays where it is. Station, beacon, scan frame, channel, host, and data ring are the Swift radio survey in [context.md](context.md#swift-radio-survey).
 - `device list` prints a header and one row: name `wlan0`, the station address as colon-separated lowercase hex, Powered `on` when the flag is set, Adapter `phy0`, Mode `station`. When the flag is clear, Powered is `off`, and `scan`, `get-networks`, and `connect` print `Operation failed` and do not notify the radio.
 - `station wlan0 scan` prints nothing. It posts the existing wildcard survey and notifies the radio.
-- `station wlan0 get-networks` prints a header, `Network name`, `Security`, and `Signal`, then one row per stored name. Security is `psk` when the beacon’s RSN AKM list contains PSK, and `open` when the beacon has no RSN element. Any other RSN, including SAE only, is refused by `connect` in Milestone 2. `Signal` is empty until the page holds a dBm. An empty survey prints the header and no rows. The mark `rx`, `ev`, `ok`, `done`, and `fc` stays on panel row 22 and is not a row of this table.
+- `station wlan0 get-networks` prints a header, `Network name`, `Security`, and `Signal`, then one row per stored name. Security is `psk` when the beacon’s RSN AKM list contains PSK, and `open` when the beacon has no RSN element. Any other RSN, including SAE only, is refused by `connect` in Milestone 2. `Signal` is empty until the page holds a dBm. An empty survey prints the header and no rows. The mark `rx`, `ev`, `ok`, `done`, and `fc` stays on panel row 47 and is not a row of this table.
 - `station wlan0 connect NAME` prints `Type the network passphrase for NAME psk.` and `Passphrase: `, then writes the key page and notifies the radio. A passphrase outside 8 to 63 bytes prints `PMK generation failed. Ensure Crypto Engine is properly configured` and does not notify. A double-quoted name is accepted, including a name that contains a space. A device name other than `wlan0` prints `Device NAME not found`.
 - `setup-wifi` and the `console-shell` menu `3 wifi` stay until this session is the one the Swift image documents. The change that removes them updates `AGENTS.md` in the same commit.
 
@@ -128,7 +128,7 @@ Arch’s stack underneath the same keystrokes is `iwctl`, `iwd`, nl80211, mac802
 - `connect` returns to `[iwd]# ` when `associate` finishes. A failure, including a SAE-only beacon, prints `Operation failed`. This path stays WPA-Personal: PBKDF2-HMAC-SHA1 and an HMAC-MD5 MIC.
 - On success the powered station is associated. The next `ip link` prints index 1, flags `BROADCAST,MULTICAST,UP,LOWER_UP`, `mtu 1500`, `state UP`, and `link/ether` with the station address and `brd ff:ff:ff:ff:ff:ff`. Before association the same line uses flags `NO-CARRIER,BROADCAST,MULTICAST,UP` and `state DOWN`. There is no `lo` line.
 - The worker starts `bring_up` after association and polls that socket while it waits for the next line. `connect` does not wait for the lease. `ping` in Milestone 3 waits up to the budget `bring_up` already uses.
-- The stage line on row 22 stays the radio’s report (`scan`, `auth tx`, `auth rx`, `assoc`, `eapol`, then `wait`). The shell does not paint over it from the command transcript.
+- The stage line on row 47 stays the radio’s report (`scan`, `auth tx`, `auth rx`, `assoc`, `eapol`, then `wait`). The shell does not paint over it from the command transcript.
 
 **QEMU.** None for the radio. A host test of the command result covers `Operation failed` and the two `ip link` lines. The scripted-radio test that reaches `ip 192.168.1.20` and `ping ok` stays the Milestone 8 regression.
 

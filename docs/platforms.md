@@ -58,8 +58,8 @@ The Gigabyte GA-Z97-D3H. Firmware scanout uses the HD Graphics 4600 when Initial
 | Keyboard | Intel xHCI at `00:14.0` and a USB boot keyboard on a root port | `console-driver` | yes |
 | Wall clock | CMOS real-time clock | `cmos-rtc-driver` on the init image | yes |
 | Interval timer | time-stamp counter | `tsc-timer-driver` on the init image | yes |
-| Disk | Z97 Serial ATA controller in Advanced Host Controller Interface mode. PCI identity not recorded | `sddf-ahci-driver`, [Milestone 22](plan-lionsos.md#milestone-22--desk) | no |
-| Network | I217-V, `8086:153b` at `00:19.0` | `sddf-e1000e-driver`, [Milestone 22](plan-lionsos.md#milestone-22--desk) | no |
+| Disk | 9 Series AHCI `8086:8c82` at `00:1f.2`, class `0x010601`, subsystem `1458:b005`. The drive is identified. The volume is not formatted | `sddf-ahci-driver` accepts this id beside QEMU `8086:2922`. The desk image does not map the controller | yes |
+| Network | I217-V, `8086:153b` at `00:19.0` | `sddf-e1000e-driver`, [Milestone 22](plan-lionsos.md#milestone-22--desk) | yes |
 | Wireless | RTL8852BE, `10ec:b852`, behind root port `00:1c.6` | `rtl8852be-probe` reads configuration space and does not map the card | yes, probe only |
 | Display | HD Graphics 4600, `8086:0412` at `00:02.0` | none | no |
 | Display | RX 560, `1002:67ff` at `01:00.0` | none | no |
@@ -72,7 +72,7 @@ The Acer Swift X SFX14-41G (Ryzen 5 5500U, Orion_CA). The panel belongs to the R
 |----------|--------|--------------|-------------|
 | Linear framebuffer | Firmware GOP buffer. The 2026-10-29 boot showed `fb 0x000000fc90000000 pitch 7680 1920x1080 r16 g8 b0` (`0x7E9000` bytes). The image maps that address | `console-driver` paints 32-bit pixels when the record matches the map. `mb2-stub` paints the mode line before seL4 | yes |
 | Keyboard | i8042 PS/2, ports `0x60` and `0x64`, I/O APIC pin 1, vector 49 | `console-driver` | yes |
-| Text menu | `1 browser` / `2 maths` on the panel | `console-shell` | yes |
+| Sign-on | `Lerux` and the git describe, then `[root@lerux ~]# ` | `sddf-shell` | yes |
 | PCI | `01:00.0`, `02:00.0`, `03:00.0`, `04:00.0`, `04:00.3`, `04:00.4` | `swift-pci-probe` | yes |
 | Wireless | MediaTek MT7921 at `03:00.0` | `swift-mt7921`. WPA-Personal, DHCP, and ping. Firmware and the key file are not in git | yes |
 | Disk | SK hynix BC711 `HFM512GD3JX016N` NVMe at `02:00.0`, class `0x010802` | `swift-nvme`, read-only. The Windows volume is not formatted | yes |

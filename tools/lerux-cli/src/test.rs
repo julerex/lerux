@@ -852,10 +852,11 @@ fn handle_script_reboot(
             index + 1
         )
     })?;
-    if let Some(slot) = guest_stdin.as_mut() {
-        slot.take();
-    }
     if let Some(restart) = host_restart {
+        // The replacement process gets a new serial pipe. Close the old write end first.
+        if let Some(slot) = guest_stdin.as_mut() {
+            slot.take();
+        }
         let stdin_slot = guest_stdin
             .as_mut()
             .context("host restart needs guest stdin")?;
@@ -863,6 +864,8 @@ fn handle_script_reboot(
             .restart(stdin_slot)
             .with_context(|| format!("script step {} host QEMU restart after reboot", index + 1))?;
     } else {
+        // `system_reset` keeps this process. The serial pipe has to stay open so a
+        // later script step can still write a command.
         let socket = qmp_socket.context("a reboot step needs a QMP socket")?;
         qmp_system_reset(socket).context("QMP system_reset")?;
     }

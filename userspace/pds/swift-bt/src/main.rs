@@ -26,7 +26,7 @@ use lerux_swift::{
 
 mod xhci;
 
-const ROW: usize = 24;
+const ROW: usize = lerux_desk::ROW_BT;
 static MARK: WaitMark = WaitMark::new();
 const FIRMWARE: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/mt7921-bt.bin"));
 

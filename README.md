@@ -22,7 +22,7 @@ just burn-lerux-iso       # pack that ISO, then write it to a USB stick
 
 Reboot and open the firmware boot menu. Choose the USB entry that says **UEFI** (GRUB `EFI/BOOT/BOOTX64.EFI`). GRUB reads `/boot/grub/grub.cfg` and boots immediately. It Multiboot 2-loads `/boot/mb2-stub.elf` with modules `/boot/sel4.elf` and `/boot/loader.img`. The stub places the kernel at 1 MiB after `ExitBootServices`.
 
-The panel is the firmware GOP buffer. On 2026-10-29 it showed `fb 0x000000fc90000000 pitch 7680 1920x1080 r16 g8 b0`. On 2026-10-30 it then showed `hello lerux` and the menu `1 browser`, `2 maths`, and `3 wifi`. The keyboard is the built-in i8042. This machine has no COM port. `1` or `browser` opens the test page `support/browser/lenna.html` at the top left of the panel. The heading `Lenna` is at the top, and the picture `support/browser/lenna.png` is below it. The shell echoes no key on that page, and `quit` returns the menu. `2` or `maths` reads integer expressions until `quit`. `3` or `wifi` lists the names the radio can hear, then prompts `ssid>` and `psk>`. Device roles: [`docs/platforms.md`](docs/platforms.md#swift-x-devices).
+The panel is the firmware GOP buffer. On 2026-10-29 it showed `fb 0x000000fc90000000 pitch 7680 1920x1080 r16 g8 b0`. The shell band is 240 by 40 cells of the VGA 8×16 font, light gray on black. The sign-on is `Lerux` and the short git describe, the login line, the archiso message of the day, and `[root@lerux ~]# `. The keyboard is the built-in i8042. This machine has no COM port. The prompt runs the shell, including `setup-wifi`. Device rows sit below the band. Device roles: [`docs/platforms.md`](docs/platforms.md#swift-x-devices).
 
 ## Quick start (QEMU)
 

@@ -7,12 +7,12 @@
 use lerux_swift::{
     mt7921::{
         frame_off, is_rx_frame, note_copied, read_scan_done, rx_layout, write_survey_list,
-        write_survey_mark, AuthMiss, Stage, SurveyCounts, SCAN_MAX,
+        write_survey_mark, AuthMiss, EapolStop, Stage, SurveyCounts, SCAN_MAX,
     },
     wpa::{
         assoc_aid, assoc_ok, auth_ok, beacon_ssid, ccmp_decrypt, derive_ptk, eapol_in_ether,
         eapol_in_msdu, match_beacon, message1, message2, message3, message4, pmk, write_assoc,
-        write_auth, write_qos_data, FoundAp,
+        write_auth, write_data, FoundAp,
     },
 };
 
@@ -53,8 +53,12 @@ impl Mac {
             return Stage::Assoc;
         }
         paint(Stage::Eapol);
-        let Some(tk) = self.four_way(&ap, ssid, psk) else {
-            return Stage::Eapol;
+        let tk = match self.four_way(&ap, ssid, psk) {
+            Ok(tk) => tk,
+            Err(stop) => {
+                self.note_eapol_stop(stop);
+                return Stage::Eapol;
+            }
         };
         self.open_link(ap.bssid, tk);
         self.send_keepalive();
@@ -255,41 +259,78 @@ impl Mac {
         None
     }
 
-    fn four_way(&mut self, ap: &FoundAp, ssid: &[u8], psk: &[u8]) -> Option<[u8; 16]> {
+    fn four_way(&mut self, ap: &FoundAp, ssid: &[u8], psk: &[u8]) -> Result<[u8; 16], EapolStop> {
         let sta = self.sta();
         let mut eapol = [0u8; 256];
-        let m = self.wait_eapol(sta, None, &mut eapol)?;
-        let (anonce, replay) = message1(&eapol[..m])?;
+        let m = self
+            .wait_eapol(sta, None, EapolWant::Message1, &mut eapol)
+            .ok_or(EapolStop::Wait1)?;
+        let (anonce, replay) = message1(&eapol[..m]).ok_or(EapolStop::Msg1)?;
         let key = pmk(psk, ssid);
         let snonce = snonce();
         let ptk = derive_ptk(&key, &ap.bssid, &sta, &anonce, &snonce);
-        let n = message2(&mut eapol, &anonce, &snonce, &replay, &ptk.kck)?;
-        self.send_eapol(ap.bssid, sta, &eapol[..n])?;
-        let m = self.wait_eapol(sta, None, &mut eapol)?;
-        let replay = message3(&eapol[..m], &ptk.kck)?;
-        let n = message4(&mut eapol, &replay, &ptk.kck)?;
-        self.send_eapol(ap.bssid, sta, &eapol[..n])?;
-        Some(ptk.tk)
+        let n =
+            message2(&mut eapol, &anonce, &snonce, &replay, &ptk.kck).ok_or(EapolStop::Build2)?;
+        self.send_eapol(ap.bssid, sta, &eapol[..n])
+            .ok_or(EapolStop::Tx2)?;
+        let m = self
+            .wait_eapol(sta, None, EapolWant::Message3, &mut eapol)
+            .ok_or(EapolStop::Wait3)?;
+        let replay = message3(&eapol[..m], &ptk.kck).ok_or(EapolStop::Msg3)?;
+        let n = message4(&mut eapol, &replay, &ptk.kck).ok_or(EapolStop::Build4)?;
+        self.send_eapol(ap.bssid, sta, &eapol[..n])
+            .ok_or(EapolStop::Tx4)?;
+        Ok(ptk.tk)
     }
 
     fn receive(&mut self, net: &Net) -> bool {
         let mut moved = false;
         let mut frame = [0u8; 1600];
-        while net.rx_has_room() {
-            let Some(n) = self.poll_data() else {
+        // The data ring is 8 deep and shares it with beacons. Linux also
+        // reads the MCU rings: a frame there is type 2, or type 7 with flag 1.
+        // One pump drains both, or the offer is overwritten before the next
+        // DHCP retry.
+        for _ in 0..32 {
+            if !net.rx_has_room() {
+                break;
+            }
+            if let Some(n) = self.poll_data() {
+                if self.take_frame(n, &mut frame, net) {
+                    moved = true;
+                }
+                continue;
+            }
+            let Some(n) = self.poll_mcu() else {
                 break;
             };
-            let Some(m) = copy_frame(n, &mut frame) else {
+            if !is_rx_frame(Mac::rx_bytes(n)) {
+                // The completion left the ring. Count it, or a full MCU ring
+                // looks the same as a ring that never moved.
+                self.note_drop(None);
                 continue;
-            };
-            let queued = self
-                .link()
-                .is_some_and(|link| net.enqueue_received(link, &frame[..m]));
-            if queued {
+            }
+            if self.take_frame(n, &mut frame, net) {
                 moved = true;
             }
         }
         moved
+    }
+
+    fn take_frame(&mut self, n: usize, frame: &mut [u8], net: &Net) -> bool {
+        let Some(m) = copy_frame(n, frame) else {
+            self.note_drop(None);
+            return false;
+        };
+        let queued = self
+            .link()
+            .is_some_and(|link| net.enqueue_received(link, &frame[..m]));
+        if queued {
+            self.count_rx();
+            true
+        } else {
+            self.note_drop(frame.first().copied());
+            false
+        }
     }
 
     fn transmit(&mut self, net: &Net) -> bool {
@@ -308,8 +349,8 @@ impl Mac {
                 TxFrame::Wifi(n) => n,
             };
             moved = true;
-            if n > 0 {
-                let _ = self.tx_80211(&wifi[..n]);
+            if n > 0 && self.tx_80211(&wifi[..n]) {
+                self.count_tx();
             }
         }
         moved
@@ -351,7 +392,13 @@ impl Mac {
         let _ = self.tx_80211(&frame[..n]);
     }
 
-    fn wait_eapol(&mut self, sta: [u8; 6], tk: Option<&[u8; 16]>, out: &mut [u8]) -> Option<usize> {
+    fn wait_eapol(
+        &mut self,
+        sta: [u8; 6],
+        tk: Option<&[u8; 16]>,
+        want: EapolWant,
+        out: &mut [u8],
+    ) -> Option<usize> {
         let mut frame = [0u8; 1600];
         let mut plain = [0u8; 400];
         let mut miss = AuthMiss::default();
@@ -359,6 +406,7 @@ impl Mac {
             if let Some(n) = self.poll_data() {
                 miss.rx = miss.rx.saturating_add(1);
                 if let Some(got) = copied_eapol(n, &mut frame, &mut plain, &mut miss, sta, tk, out)
+                    && kept_eapol(want, &out[..got])
                 {
                     self.remember_eapol(miss);
                     return Some(got);
@@ -368,6 +416,7 @@ impl Mac {
                     miss.ev = miss.ev.saturating_add(1);
                     if let Some(got) =
                         copied_eapol(n, &mut frame, &mut plain, &mut miss, sta, tk, out)
+                        && kept_eapol(want, &out[..got])
                     {
                         self.remember_eapol(miss);
                         return Some(got);
@@ -396,7 +445,7 @@ impl Mac {
 
     fn send_plain(&mut self, bssid: [u8; 6], sta: [u8; 6], da: [u8; 6], msdu: &[u8]) -> Option<()> {
         let mut frame = [0u8; 400];
-        let n = write_qos_data(
+        let n = write_data(
             frame.as_mut_slice(),
             &bssid,
             &sta,
@@ -459,6 +508,21 @@ fn remember(names: &mut [[u8; 32]], lens: &mut [u8], count: usize, ssid: &[u8]) 
     names[count][..ssid.len()].copy_from_slice(ssid);
     lens[count] = u8::try_from(ssid.len()).expect("ssid length");
     count + 1
+}
+
+/// Which EAPOL key frame the wait keeps.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum EapolWant {
+    /// The first frame, including a retransmission.
+    Message1,
+    /// A later frame. A retransmitted message 1 stays in the ring until the
+    /// access point accepts message 2, and it is not message 3.
+    Message3,
+}
+
+/// Message 3 ignores a frame [`message1`] accepts.
+fn kept_eapol(want: EapolWant, eapol: &[u8]) -> bool {
+    want == EapolWant::Message1 || message1(eapol).is_none()
 }
 
 fn copied_eapol(

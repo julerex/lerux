@@ -45,6 +45,7 @@ const SHARED_CRATES: &[&str] = &[
     "lerux-html",
     "lerux-input",
     "lerux-desk",
+    "lerux-signon",
     "lerux-swift",
     "lerux-web",
     "lerux-ladybird-url",

@@ -77,17 +77,11 @@ fn init() -> handler::HandlerImpl {
     let usb = xhci::UsbKbd::bring_up();
     #[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-inspiron_n5010"))]
     let usb = usb_off::UsbKbd::off();
-    #[cfg(not(feature = "board-swift_sfx14_41g"))]
     device.enable_cursor();
-    #[cfg(feature = "board-swift_sfx14_41g")]
-    device::Device::enable_cursor();
-    let screen = Screen::with_banner();
+    let screen = Screen::blank();
     device.present_all(&screen);
-    #[cfg(not(feature = "board-swift_sfx14_41g"))]
     device.sync_cursor(&screen);
-    #[cfg(feature = "board-swift_sfx14_41g")]
-    device::Device::sync_cursor(&screen);
-    // The banner replaces the log lines. Hold it before the shell prints the menu.
+    // The blank page replaces the log lines. Hold it before the shell prints the sign-on.
     #[cfg(feature = "board-pc_z97_d3h")]
     debug::after_boot_line();
     handler::HandlerImpl::new(device, screen, usb, IRQ, USB_IRQ, SHELL)

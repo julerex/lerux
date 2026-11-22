@@ -104,6 +104,19 @@ pub fn e1000e_fetch_irq() -> X86Irq {
     x86_level_low(10, 50)
 }
 
+/// Pin 20, vector 50, level, active-low for the I217-V at `00:19.0`.
+///
+/// The 2026-10-22 configuration-space read recorded the identity and the
+/// base-address registers. It did not record the interrupt line. Other
+/// GA-Z97-D3H listings route pin A of `8086:153b` subsystem `1458:e000` to
+/// IRQ 20. This binding stays provisional until a desk boot shows whether the
+/// guest took the interrupt. The QEMU 82574 image uses
+/// [`e1000e_standalone_irq`] and does not take this pin.
+#[must_use]
+pub fn i217_irq() -> X86Irq {
+    x86_level_low(20, 50)
+}
+
 #[must_use]
 pub fn ahci_msi() -> MsiIrq {
     MsiIrq {

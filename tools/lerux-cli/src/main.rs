@@ -32,6 +32,7 @@ mod iso_host;
 mod ladybird;
 mod libclang;
 mod net_sddf;
+mod package;
 mod path;
 mod process;
 mod profile;
@@ -129,6 +130,14 @@ enum Commands {
         build_dir: String,
         #[arg(long, default_value = "debug")]
         config: String,
+    },
+    /// Rebuild a board profile on the host and print its pin digest.
+    ///
+    /// The guest cannot install a package. `install` and `upgrade` both
+    /// rebuild the selected profile and write `loader.img.sha256`.
+    Package {
+        #[command(subcommand)]
+        command: PackageCommands,
     },
     Run {
         #[arg(long, default_value = "qemu_virt_aarch64")]
@@ -304,7 +313,10 @@ enum Commands {
         #[arg(long, short = 'p')]
         path: Option<PathBuf>,
     },
-    /// Phase 60 Track C / 67: verify digest, and ed25519 sig when present.
+    /// Verify the digest, and an ed25519 sig when present.
+    ///
+    /// After the digest matches, print the flash line for the Swift, the Z97,
+    /// or the Pi. A failed check prints no flash line.
     VerifyImage {
         #[arg(long, default_value = "qemu_virt_aarch64")]
         board: String,
@@ -340,6 +352,32 @@ enum Commands {
     Config {
         #[command(subcommand)]
         command: ConfigCommands,
+    },
+}
+
+#[derive(Subcommand)]
+enum PackageCommands {
+    /// Rebuild one board profile and write its pin.
+    Install {
+        #[arg(long)]
+        board: String,
+        #[arg(long, default_value = "build")]
+        build_dir: String,
+        #[arg(long, default_value = "debug")]
+        config: String,
+    },
+    /// Rebuild one board, or the Swift, the Z97, and the Pi with `--all`.
+    Upgrade {
+        /// Board profile to rebuild. Omit this when passing `--all`.
+        #[arg(long)]
+        board: Option<String>,
+        /// Rebuild `swift_sfx14_41g`, `pc_z97_d3h`, and `rpi4b_4gb`.
+        #[arg(long, default_value_t = false)]
+        all: bool,
+        #[arg(long, default_value = "build")]
+        build_dir: String,
+        #[arg(long, default_value = "debug")]
+        config: String,
     },
 }
 
@@ -456,6 +494,7 @@ fn dispatch(root: &Path, command: Commands) -> Result<()> {
         | Commands::Build { .. }
         | Commands::BuildPd { .. }
         | Commands::Image { .. }
+        | Commands::Package { .. }
         | Commands::TestAll { .. }
         | Commands::Bench { .. }
         | Commands::Diagnose { .. }
@@ -523,6 +562,7 @@ fn dispatch_host(root: &Path, command: Commands) -> Result<()> {
             build_dir,
             config,
         } => build::image(root, &board, &build_dir, &config),
+        Commands::Package { command } => package_command(root, command),
         Commands::TestAll { build_dir, config } => build::test_all(root, &build_dir, &config),
         Commands::Bench {
             build_dir,
@@ -1004,6 +1044,22 @@ fn digest_command(root: &Path, board: &str, build_dir: &str, path: Option<&Path>
     Ok(())
 }
 
+fn package_command(root: &Path, command: PackageCommands) -> Result<()> {
+    match command {
+        PackageCommands::Install {
+            board,
+            build_dir,
+            config,
+        } => package::execute_install(root, &board, &build_dir, &config),
+        PackageCommands::Upgrade {
+            board,
+            all,
+            build_dir,
+            config,
+        } => package::execute_upgrade(root, board.as_deref(), all, &build_dir, &config),
+    }
+}
+
 fn verify_image_command(
     root: &Path,
     board: &str,
@@ -1014,7 +1070,20 @@ fn verify_image_command(
 ) -> Result<()> {
     let loader = crate::image_digest::resolve_loader(root, board, build_dir, path);
     let key = key.map(|k| if k.is_absolute() { k } else { root.join(k) });
-    crate::image_sign::verify_image(&loader, key.as_deref(), require_sig)
+    let flash = crate::image_sign::verify_then_flash(
+        &loader,
+        board,
+        build_dir,
+        key.as_deref(),
+        require_sig,
+    )?;
+    if let Some(flash) = flash {
+        println!("Flash:");
+        for line in flash.lines() {
+            println!("  {line}");
+        }
+    }
+    Ok(())
 }
 
 fn keygen_command(root: &Path, out: PathBuf) -> Result<()> {

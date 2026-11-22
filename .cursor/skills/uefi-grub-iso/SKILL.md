@@ -27,7 +27,7 @@ A missing `grub-mkimage` fails before an older ISO is reused. The recipe stamp c
 
 A lone underscore is the firmware text cursor. GRUB has left that console, and the mode line was not written to the buffer the panel scans. On the Swift X that buffer is above 4 GiB. Multiboot enters with CR0.PG clear. Restoring the original CR0 leaves paging off, and the stores hit the 256 MiB window. Turn paging on for that paint, run it on a stack inside the identity map, mark those pages uncached, and `wbinvd` before seL4 starts. GRUB's stack is not in that map.
 
-The first metal success is the blue bar and the mode line. On 2026-10-29 the Swift X showed `fb 0x000000fc90000000 pitch 7680 1920x1080 r16 g8 b0`. The image maps `0xfc90000000` for `0x7E9000` bytes. The `1 browser` / `2 maths` menu paints when the mode record names that address. A boot that prints a different address leaves the menu off.
+The first metal success is the blue bar and the mode line. On 2026-10-29 the Swift X showed `fb 0x000000fc90000000 pitch 7680 1920x1080 r16 g8 b0`. The image maps `0xfc90000000` for `0x7E9000` bytes. The sign-on paints when the mode record names that address. A boot that prints a different address leaves the shell band off.
 
 An underscore under the first glyph is the firmware text cursor in the rows just below that 16-pixel bar. The glyph is 16 pixels and the clear covers 32, so a stub built after that clear leaves those rows blue. Seeing the underscore under the “f” means the USB still has the earlier stub.
 
@@ -41,7 +41,7 @@ The address is 2 MiB-aligned. `0x7e9000` is 2025 pages of 4 KiB and is not a mul
 
 `FRAMEBUFFER_PHYS` is `0x00FC_9000_0000`. That value equals `0xfc90000000` and the mode line prints `fb 0x000000fc90000000`. `0xFC90_0000_0000` is a different address and prints `fb 0x0000fc9000000000`. Clippy `unusual_byte_groupings` rejects uneven groups.
 
-seL4 clears the RAM frame at `0x01FE0000` when it retypes that page, so the mode record is gone by the time the console starts. A cleared record paints the recorded geometry and fills the mapped buffer with the console blue. A record that still names a different address leaves the menu off. The Swift console path does not program a VGA cursor.
+seL4 clears the RAM frame at `0x01FE0000` when it retypes that page, so the mode record is gone by the time the console starts. A cleared record paints the recorded geometry and fills the mapped buffer with black. A record that still names a different address leaves the shell band off. The Swift console path draws a two-pixel underline. It does not program a VGA cursor.
 
 When that `system.system` is the one inside the ISO and the panel still shows only the mode line, the protection domain did not run. Read the hex on the line. A different address means the mapped buffer is not the one the panel scans.
 

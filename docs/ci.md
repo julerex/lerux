@@ -115,6 +115,7 @@ These boards have `ci = false`. Milestone 16 added the QEMU RISC-V and QEMU x86 
 
 - `inspiron_n5010`
 - `pc_z97_d3h`
+- `pc_z97_d3h_i217`
 - `pc_z97_d3h_rtl8852be`
 - `qemu_virt_aarch64_ladybird`
 - `qemu_virt_riscv64_agent_sddf`

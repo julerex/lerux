@@ -401,6 +401,7 @@ dependencies = [
  "lerux-desk",
  "lerux-driver-protocols",
  "lerux-logging",
+ "lerux-signon",
  "log",
  "sel4",
  "sel4-microkit",
@@ -416,6 +417,7 @@ dependencies = [
  "lerux-desk",
  "lerux-ladybird-image",
  "lerux-logging",
+ "lerux-signon",
  "lerux-swift",
  "sel4-microkit",
  "sel4-microkit-driver-adapters",
@@ -1311,6 +1313,10 @@ dependencies = [
 
 [[package]]
 name = "lerux-serial-queue"
+version = "0.1.0"
+
+[[package]]
+name = "lerux-signon"
 version = "0.1.0"
 
 [[package]]
@@ -2341,6 +2347,7 @@ dependencies = [
  "lerux-image",
  "lerux-posix",
  "lerux-sddf",
+ "lerux-signon",
  "lerux-swift",
  "lerux-tls",
  "lerux-web",

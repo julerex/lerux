@@ -83,20 +83,24 @@ Board `rpi4b_4gb_workstation` (profile `workstation-rpi4`) is the **install-medi
 
 **One-command deploy** (after mounting the SD FAT boot partition on the host):
 
+Build the image, verify the digest, write the media, and boot. `just deploy-rpi4` copies `build/rpi4b_4gb/loader.img`. `lerux verify-image` prints that flash line after the digest matches.
+
 ```bash
-# Build (if needed) + verify loader.img.sha256 + copy image/sidecar + write lerux-uboot.txt
+BOARD=rpi4b_4gb just image
+lerux verify-image --board rpi4b_4gb
 DEST=/media/$USER/boot just deploy-rpi4
-# equivalent: cargo run -p lerux-cli -- deploy --board rpi4b_4gb_workstation --dest /media/$USER/boot
-# Skip integrity check only if needed: lerux deploy … --no-verify
-# Manual: lerux digest / lerux verify-image  (Phase 60 Track C; docs/security.md)
+# equivalent: cargo run -p lerux-cli -- deploy --board rpi4b_4gb --dest /media/$USER/boot
+# Boot: fatload mmc 0 0x10000000 loader.img && go 0x10000000
 ```
+
+The guest cannot install a package. The operator rebuilds on the host with `lerux package install --board rpi4b_4gb` or `lerux package upgrade --board rpi4b_4gb`. That command prints the pin digest and writes `loader.img.sha256`.
 
 **Full path**
 
 | Step | Command / action |
 |------|------------------|
 | 1. SDK | `MICROKIT_BOARDS=…,rpi4b_4gb just build-sdk` or `just fetch-sdk` |
-| 2. Image | `BOARD=rpi4b_4gb_workstation just image` (or deploy builds it) |
+| 2. Image | `BOARD=rpi4b_4gb just image`, then `lerux verify-image --board rpi4b_4gb` |
 | 3. Flash | `DEST=/path/to/sd-boot just deploy-rpi4` |
 | 4. Boot | U-Boot: `fatload mmc 0 0x10000000 loader.img` then `go 0x10000000` |
 | 5. Host smoke | `LERUX_HW_SERIAL=/dev/ttyUSB0 just test-hw` (boot expects + scripted `ls`/`pwd`/`ip`) |
@@ -165,19 +169,24 @@ Living work list (what still needs a Pi): [`plan-arch.md` — Physical RPi4 lab]
 
 Board `swift_sfx14_41g` is the on-screen menu on the Acer Swift X SFX14-41G (Ryzen 5 5500U). It reuses Microkit `x86_64_generic` and `console-swift.system.template`. Names for this machine and its devices are in [GLOSSARY.md](../GLOSSARY.md#swift-x). The panel is the firmware GOP buffer. The keyboard is the built-in i8042 (ports `0x60` and `0x64`, I/O APIC pin 1, vector 49). This machine has no COM port and no `serial-driver`. This image has no QEMU model. Device roles are in [platforms.md](platforms.md#swift-x-devices). `just make-lerux-iso pc_z97_d3h` packs the [Gigabyte Z97-D3H](#gigabyte-z97-d3h-install-path) image.
 
-**USB ISO** (`just make-lerux-iso` packs `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`; `just burn-lerux-iso` writes a USB stick):
+**USB ISO** (`just make-lerux-iso` packs `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`). Build the image, verify the digest, write the media, and boot. `lerux verify-image` prints `lerux iso --board swift_sfx14_41g --no-build` and the `dd` line after the digest matches. That packs the checked `loader.img`. It does not run `just make-lerux-iso`.
 
 ```bash
 just fetch
 just fetch-sdk
-# or: just build-sdk
 just make-lerux-iso
-just burn-lerux-iso
+lerux verify-image --board swift_sfx14_41g
+lsblk
+sudo dd if=build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso of=/dev/sdX bs=4M status=progress conv=fsync
 ```
+
+The guest cannot install a package. The operator rebuilds on the host with `lerux package install --board swift_sfx14_41g` or `lerux package upgrade --board swift_sfx14_41g`. That command prints the pin digest and writes `loader.img.sha256`.
+
+Replace `sdX` with the flash drive from `lsblk`. Do not write the internal NVMe.
 
 `just burn-lerux-iso` runs `just make-lerux-iso`, then lists the USB sticks and asks which one to erase. `just burn-lerux-iso /dev/sdX` writes that stick. The command refuses the host OS disk. It writes the Swift ISO, including when the last `just make-lerux-iso` target was the Z97 desk or the Inspiron. Reboot and open the firmware boot menu. Choose the USB entry that says UEFI (GRUB `EFI/BOOT/BOOTX64.EFI`). GRUB boots immediately. It Multiboot 2-loads `/boot/mb2-stub.elf` with modules `/boot/sel4.elf` and `/boot/loader.img`. The stub places the 64-bit kernel at 1 MiB after `ExitBootServices`.
 
-On 2026-10-29 the panel showed `fb 0x000000fc90000000 pitch 7680 1920x1080 r16 g8 b0`. On 2026-10-30 it then showed `hello lerux` and the menu `1 browser`, `2 maths`, and `3 wifi`. `1` or `browser` opens the test page `support/browser/lenna.html`. The page is 512 pixels wide and 520 tall, at the top left of the panel. The heading `Lenna` is black on a white strip 8 rows tall, and the picture `support/browser/lenna.png` is below it. The page does not clear the rest of the panel. The shell echoes no key on that page. `quit` clears the console and returns the menu. The console covers only the top 400 rows, so the last 120 rows of the picture stay on the panel. A picture that does not decode prints `browser err`. `2` or `maths` reads integer expressions until `quit`, which returns the menu. A value prints `maths N`. A bad line prints `maths err`. `3` or `wifi` lists the names the radio can hear, then prompts `ssid>` and `psk>`. The built-in keyboard types those lines.
+On 2026-10-29 the panel showed `fb 0x000000fc90000000 pitch 7680 1920x1080 r16 g8 b0`. The shell band is 240 columns by 40 rows of the VGA 8×16 font, light gray on black, with an underline at the cursor. The sign-on is `Lerux` and the short git describe, then `lerux login: root (automatic login)`, the archiso message of the day, and `[root@lerux ~]# `. The prompt runs `sddf-shell`, including `setup-wifi` and the file commands. Wi-Fi, the disk, Bluetooth, and the PCI names paint below that band in the same font. The built-in keyboard types the line.
 
 The ISO is UEFI only. Packing needs `xorriso` and `grub-mkimage` (Arch: `sudo pacman -S libisoburn grub`. Debian: `xorriso` and `grub-efi-amd64-bin`).
 
@@ -186,6 +195,8 @@ The ISO is UEFI only. Packing needs `xorriso` and `grub-mkimage` (Arch: `sudo pa
 Part names for this desk and for QEMU q35 are in [GLOSSARY.md](../GLOSSARY.md). The driver tables are in [platforms.md](platforms.md#x86-device-map).
 
 Board `pc_z97_d3h` is the **on-screen menu** on this Haswell desktop. It reuses Microkit `x86_64_generic` (same kernel as QEMU x86) and `console-pc.system.template` (COM1 `0x3f8`, IOAPIC pin 4, the VGA text page at `0xb8000`, a PS/2 keyboard, and a USB HID boot keyboard on the xHCI controller at PCI `00:14.0`). QEMU coverage of that image is `x86_64_generic_console` (`just test-x86-console`, PS/2). virtio-pci workstation images will **not** boot this motherboard.
+
+Board `pc_z97_d3h_i217` is the onboard I217-V (`8086:153b` at `00:19.0`, subsystem `1458:e000`). It is composed the same way as `x86_64_generic_net_e1000e`: `sddf-e1000e-driver` is the network driver, with the virtualisers, the copier, the serial roles, and `sddf-net-client`. The register window is `0xf7e00000` (128 KiB). COM1 prints `e1000e: ready`, then the DHCP address, then `ping ok`. A miss prints `ip err` or `ping err`. The on-screen menu remains `pc_z97_d3h`. The RTL8852BE probe remains a configuration-space read on `pc_z97_d3h_rtl8852be`. This image leaves the Windows disk alone. Build it with `just make-lerux-iso pc_z97_d3h_i217`. The I/O APIC pin is provisional: the 2026-10-22 configuration-space read did not record the interrupt line. `just test-x86-e1000e` is the QEMU 82574 image.
 
 The template maps the xHCI window so the desk dongle can type. The separate QEMU USB-keyboard board is not in this tree. The desk keyboard is the USB HID boot dongle on the Intel controller at `00:14.0`, or a PS/2 keyboard in the rear combo port. Keyboards behind a hub are not seen.
 
@@ -210,25 +221,29 @@ The desk-browser spec names `console-driver`, `serial-driver`, `log-server`, `br
 
 Before a metal boot, a separate QEMU image runs those browser protection domains with the existing x86 virtio network driver. It loads `https://host:8443/desk.html` from `lerux https-one`, follows the link to `https://host:8443/desk-link.html`, and submits `q=hi` to `https://host:8443/desk-form.html?q=hi`. COM1 records each address and the first non-white pixel. That boot is not the metal product.
 
-Use the USB boot entry that says UEFI (GRUB `EFI/BOOT/BOOTX64.EFI`). `sel4.elf` (64-bit) remains linked at 1 MiB; GRUB loads `/boot/mb2-stub.elf` and the stub places the kernel after `ExitBootServices`. The documented result is a blue screen with `hello lerux` on the first line and the menu `1 browser` / `2 maths` under it. A metal UEFI boot of this image has not been recorded on this machine yet. The QEMU proofs are `just test-x86-console` and `cargo run -p lerux-cli -- iso --board pc_z97_d3h --boot-test` (both OVMF UEFI with `sel4.elf`, the metal GRUB path).
+Use the USB boot entry that says UEFI (GRUB `EFI/BOOT/BOOTX64.EFI`). `sel4.elf` (64-bit) remains linked at 1 MiB; GRUB loads `/boot/mb2-stub.elf` and the stub places the kernel after `ExitBootServices`. The documented result is an 80×25 VGA page, light gray on black, with the sign-on and `[root@lerux ~]# `. The cursor is an underline. `1` or `browser` prints `browser unavailable`. `2` or `maths` is the integer session. A metal UEFI boot of this image has not been recorded on this machine yet. The QEMU proofs are `just test-x86-console` and `cargo run -p lerux-cli -- iso --board pc_z97_d3h --boot-test` (both OVMF UEFI with `sel4.elf`, the metal GRUB path).
 
 An AMD modesetting driver would matter only if lerux itself programmed this card (resolution, HDMI, a linear framebuffer) or had to bring the picture up when the firmware had not left VGA text mode. That work is still deferred. The QEMU `ramfb` display server does not drive this card.
 
-**USB ISO** (writes `build/pc_z97_d3h/lerux_pc_z97_d3h.iso` and does not touch a disk):
+**USB ISO** (writes `build/pc_z97_d3h/lerux_pc_z97_d3h.iso` and does not touch a disk). Build the image, verify the digest, write the media, and boot. `lerux verify-image` prints the flash line after the digest matches. The ISO path is `lerux iso --board pc_z97_d3h --no-build` and the `dd` line. The other path is `just deploy-pc` onto a mounted FAT volume. The printed FAT line is a comment, so pasting the flash block writes only the ISO.
 
 ```bash
 just make-lerux-iso pc_z97_d3h
+lerux verify-image --board pc_z97_d3h
 lsblk
 sudo dd if=build/pc_z97_d3h/lerux_pc_z97_d3h.iso of=/dev/sdX bs=4M status=progress conv=fsync
 ```
 
-Replace `sdX` with the flash drive from `lsblk`. Do not use `sda` (Ubuntu SSD) or `sdb` (data disk). Reboot and open the firmware boot menu (F12). Choose the USB entry that says UEFI (GRUB `EFI/BOOT/BOOTX64.EFI`). GRUB boots immediately (`timeout=0`), then the screen is blue with `hello lerux` on the first line and the menu `1 browser` / `2 maths` under it. Type with a PS/2 keyboard in the rear combo port, or a USB HID boot keyboard on a root xHCI port (the Microsoft Wireless Desktop 900 dongle on this machine is one). Keyboards behind a hub are not seen. `1` or `browser` prints `browser unavailable` (this image has no network and no page painter). `2` or `maths` reads integer expressions until `quit`. The serial console is still COM1 at 115200 8N1 on the COMA header and shows the same menu. `console-driver: usb keyboard` means the USB boot keyboard was armed. Reboot and choose Ubuntu to return.
+The guest cannot install a package. The operator rebuilds on the host with `lerux package install --board pc_z97_d3h` or `lerux package upgrade --board pc_z97_d3h`. That command prints the pin digest and writes `loader.img.sha256`.
+
+Replace `sdX` with the flash drive from `lsblk`. Do not use `sda` (Ubuntu SSD) or `sdb` (data disk). Reboot and open the firmware boot menu (F12). Choose the USB entry that says UEFI (GRUB `EFI/BOOT/BOOTX64.EFI`). GRUB boots immediately (`timeout=0`), then the screen is the 80×25 VGA page, light gray on black, with the sign-on and `[root@lerux ~]# `. Type with a PS/2 keyboard in the rear combo port, or a USB HID boot keyboard on a root xHCI port (the Microsoft Wireless Desktop 900 dongle on this machine is one). Keyboards behind a hub are not seen. `1` or `browser` prints `browser unavailable` (this image has no network and no page painter). `2` or `maths` reads integer expressions until `quit`, which prints the prompt again. The serial console is still COM1 at 115200 8N1 on the COMA header and shows the same text. `console-driver: usb keyboard` means the USB boot keyboard was armed. Reboot and choose Ubuntu to return.
 
 The ISO is a UEFI image. GRUB Multiboot 2-boots `/boot/mb2-stub.elf` (linked at 32 MiB) with modules `/boot/sel4.elf` and `/boot/loader.img`. The stub ELF-loads the 64-bit kernel to 1 MiB after `ExitBootServices`. Every x86 QEMU smoke packs that ISO and boots it under **OVMF** (needs the `ovmf` package or `OVMF_PATH`, plus `xorriso` and `grub-mkimage`. Arch: `sudo pacman -S libisoburn grub`. Debian: `xorriso` and `grub-efi-amd64-bin`). `cargo run -p lerux-cli -- iso --board pc_z97_d3h --boot-test` is the same path without QMP keys.
 
 **FAT volume that already has a bootloader** (after mounting it; not the Ubuntu ESP):
 
 ```bash
+lerux verify-image --board pc_z97_d3h
 DEST=/media/$USER/boot just deploy-pc
 # equivalent: cargo run -p lerux-cli -- deploy --board pc_z97_d3h --dest /media/$USER/boot
 ```
@@ -241,8 +256,8 @@ That writes GRUB's `EFI/BOOT/BOOTX64.EFI`, `/boot/grub/grub.cfg`, and `boot/mb2-
 |------|------------------|
 | 1. SDK | `MICROKIT_BOARDS=…,x86_64_generic just build-sdk` or `just fetch-sdk` (already required for QEMU x86) |
 | 2. Serial hardware | Gigabyte **COMA** 9-pin header → DB9 cable → laptop USB-serial at **115200 8N1**. There is no rear DB9. Prove the link from Linux (`/dev/ttyS0` is `0x3F8` IRQ 4) before seL4. |
-| 3. Image | `BOARD=pc_z97_d3h just image` (or deploy builds it) |
-| 4. Media | `just make-lerux-iso pc_z97_d3h`, then `dd` the ISO onto the flash drive (not `sda` or `sdb`). Or `DEST=/path/to/usb-fat just deploy-pc` to write the same GRUB layout onto a mounted volume. |
+| 3. Image | `BOARD=pc_z97_d3h just image`, then `lerux verify-image --board pc_z97_d3h` |
+| 4. Media | `lerux iso --board pc_z97_d3h --no-build`, then `dd` that ISO onto the flash drive (not `sda` or `sdb`). Or `DEST=/path/to/usb-fat just deploy-pc` to write the GRUB layout onto a mounted volume. |
 | 5. Boot | Firmware boot menu (F12) → the USB entry that says UEFI (GRUB `EFI/BOOT/BOOTX64.EFI`). GRUB is Multiboot 2: kernel `/boot/mb2-stub.elf`, modules `/boot/sel4.elf` and `/boot/loader.img`. |
 | 6. Host smoke | From the **laptop**: `LERUX_HW_SERIAL=/dev/ttyUSB0 BOARD=pc_z97_d3h just test-hw` |
 | 7. Back to Ubuntu | Reboot and pick the default Ubuntu EFI entry. |
@@ -253,22 +268,22 @@ That writes GRUB's `EFI/BOOT/BOOTX64.EFI`, `/boot/grub/grub.cfg`, and `boot/mb2-
 - PS/2 keyboard in the rear combo port, or a USB HID boot keyboard on a root xHCI port
 - Monitor cable on the motherboard HDMI port. Set Peripherals → Initial Display Output to `IGFX` before a boot that should appear there. See [VGA text on the RX 560](#vga-text-on-the-rx-560).
 - USB stick (or a unused FAT partition). Not the Ubuntu root disk.
-- Optional: second computer as serial console, to see `1 browser` on COM1
+- Optional: second computer as serial console, to see the login line on COM1
 
 **Pass criteria**
 
 | Check | Pass |
 |-------|------|
-| Screen | Blue background, `hello lerux` on the first line, then `1 browser` and `2 maths` |
+| Screen | Gray on black, the sign-on, then `[root@lerux ~]# ` |
 | Keyboard | `2` then Enter, then `6/2` then Enter, prints `maths 3` |
-| Serial | Kernel + `serial driver: NS16550 COM1` + `1 browser` |
+| Serial | Kernel + `serial driver: NS16550 COM1` + the login line |
 | Ubuntu | `sda` still boots after the experiment |
 
 **Likely failure modes**
 
 | Symptom | Likely cause |
 |---------|----------------|
-| GRUB menu, then a flashing cursor and no blue screen | The console PD did not run. Kernel output is still COM1 (COMA header, 115200 8N1). |
+| GRUB menu, then a flashing cursor and no sign-on | The console PD did not run. Kernel output is still COM1 (COMA header, 115200 8N1). |
 | Prompt is visible, keys do nothing | Serial shows `xhci none` or `xhci no keyboard`, and the combo port has no PS/2 keyboard. A boot keyboard on a hub is not seen. If the log already says `usb keyboard`, the xHCI interrupt did not arrive. |
 | Boot stops while loading `sel4.elf` at 1 MiB | An old ISO that Multiboot 2-boots the kernel ELF directly. Rebuild with `just make-lerux-iso pc_z97_d3h` so the menu loads `/boot/mb2-stub.elf`, then modules `/boot/sel4.elf` and `/boot/loader.img`. |
 | Boot stops loading the `sel4.elf` module | The module was only in the ISO9660 session. Rebuild with `just make-lerux-iso pc_z97_d3h` and rewrite the USB stick. The EFI system partition is `boot/esp.img` and holds `mb2-stub.elf`, `sel4.elf`, and `loader.img`. |
@@ -283,7 +298,7 @@ This board has no native disk or Ethernet driver. QEMU `workstation-x86` is virt
 
 Board `inspiron_n5010` is the on-screen menu on the Dell Inspiron N5010 (Core i5-460M, HM57, BIOS A15). It reuses Microkit `x86_64_generic` and `console-inspiron.system.template`. The probe is [support/arch-probe/machines/inspiron-n5010.md](../support/arch-probe/machines/inspiron-n5010.md). Device roles are in [platforms.md](platforms.md#inspiron-n5010). Acer Swift X remains the metal target `just make-lerux-iso` packs. This image has no QEMU model.
 
-The 2026-11-14 boot was legacy BIOS with `nomodeset`. The console was the VGA text page, 80 by 25, at `0xb8000`, scanned by the integrated graphics `8086:0046` at `00:02.0`. The log has no `efifb` or `vesafb` line, so this image does not map a GOP buffer. The keyboard is the built-in i8042 at `0x60` and `0x64`, I/O APIC pin 1, vector 49. The probe recorded no IRQ 1 override. There is no serial port and no xHCI controller. The shell is `console-shell`: `1 browser` prints `browser unavailable`, and `2 maths` is the `lerux-calc` session.
+The 2026-11-14 boot was legacy BIOS with `nomodeset`. The console was the VGA text page, 80 by 25, at `0xb8000`, scanned by the integrated graphics `8086:0046` at `00:02.0`. The log has no `efifb` or `vesafb` line, so this image does not map a GOP buffer. The keyboard is the built-in i8042 at `0x60` and `0x64`, I/O APIC pin 1, vector 49. The probe recorded no IRQ 1 override. There is no serial port and no xHCI controller. The shell is `console-shell`. The page is light gray on black. The sign-on ends at `[root@lerux ~]# `. `1` or `browser` prints `browser unavailable`, and `2` or `maths` is the `lerux-calc` session.
 
 The disk is the WDC WD5000BEVT-75A0RT0 on AHCI `8086:3b2f` at `00:1f.2`. This image does not map that controller and does not format the volume. Write the ISO only to a USB flash drive.
 
@@ -297,7 +312,7 @@ sudo dd if=build/inspiron_n5010/lerux_inspiron_n5010.iso of=/dev/sdX bs=4M statu
 
 Replace `sdX` with the flash drive from `lsblk`. Do not write the internal SATA disk. The ISO is UEFI only, the same GRUB Multiboot 2 path as the Swift X and the Z97 desk: `EFI/BOOT/BOOTX64.EFI` loads `/boot/mb2-stub.elf` with modules `/boot/sel4.elf` and `/boot/loader.img`. The recorded boot did not publish a UEFI entry. A metal boot has to show whether firmware offers a USB entry that says UEFI. There is no BIOS El Torito entry.
 
-The menu, if the integrated graphics still scans the VGA text page, is a blue screen with `hello lerux`, then `1 browser` and `2 maths`. Type on the built-in keyboard. This laptop has no COM port. `just test-x86-console` boots a different machine (QEMU q35, COM1, and an xHCI window) and does not close this boot.
+The page, if the integrated graphics still scans VGA text, is light gray on black, with the sign-on and `[root@lerux ~]# `. Type on the built-in keyboard. This laptop has no COM port. `just test-x86-console` boots a different machine (QEMU q35, COM1, and an xHCI window) and does not close this boot.
 
 ## QEMU profiles
 

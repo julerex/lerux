@@ -9,14 +9,16 @@
 //! `mac` when that step fails, and `wait` when the
 //! firmware has reached the normal state. The shell then asks for a survey.
 //! This domain writes the names it hears and, after the passphrase, associates.
-//! An empty name list still replaces row 22 with `rx`, `ok`, and `done`.
+//! An empty name list still replaces the stage row with `rx`, `ok`, and `done`.
 //! The shell notifies channel 3 for that survey and for a passphrase.
 //! Channel 1 is the receive virtualiser and runs the same handler.
 //! Channel 0 stays the MSI. Channel 2 is the transmit virtualiser.
 //! Association paints `scan`, `auth tx`, `auth rx`, `assoc`, and `eapol`, then returns to
 //! `wait`. A failed `auth rx` or `eapol` also paints four detail rows under that
 //! line, then `END OF OUTPUT`, and blanks the device lines under that marker.
-//! The shell owns the address and the ping. Received Ethernet frames
+//! Once the link is up, the stage row leaves `wait` for `rx`, `tx`, and `drop`.
+//! The shell owns
+//! the address and the ping. Received Ethernet frames
 //! are enqueued on the standard receive queue, and transmit frames are
 //! dequeued from the standard transmit queue.
 //! The register dump that used to occupy rows 51 to 65 is not painted.
@@ -27,9 +29,15 @@
 #[cfg_attr(test, allow(dead_code))]
 mod ether;
 
-#[cfg(not(test))]
+#[cfg_attr(test, allow(dead_code))]
+#[cfg(any(not(test), target_arch = "x86_64"))]
 mod device;
-#[cfg(not(test))]
+#[cfg(all(test, target_arch = "x86_64"))]
+mod drive;
+#[cfg(all(test, target_arch = "x86_64"))]
+mod hook;
+#[cfg_attr(test, allow(dead_code))]
+#[cfg(any(not(test), target_arch = "x86_64"))]
 mod join;
 
 #[cfg(not(test))]
@@ -48,9 +56,10 @@ use lerux_sddf::{net_driver_config_t, net_image::net_config_from_bytes, SDDF_NET
 use lerux_swift::{
     bar_line, class_code, format_report, load_header, memory_bar,
     mt7921::{
-        join_device_rows_to_clear, read_survey_mark, survey_requested, write_auth_miss,
-        write_eapol_miss, write_join, write_join_detail, write_slot_line, AuthMiss, Sem, Stage,
-        JOIN_DETAIL_LINES, JOIN_DETAIL_ROW, JOIN_END, JOIN_END_ROW,
+        join_device_rows_to_clear, join_pending, read_survey_mark, survey_requested,
+        write_auth_miss, write_eapol_miss, write_join, write_join_detail, write_link_mark,
+        write_slot_line, AuthMiss, Sem, Stage, JOIN_DETAIL_LINES, JOIN_DETAIL_ROW, JOIN_END,
+        JOIN_END_ROW,
     },
     paint_row, read_key, vendor_device, working_line, WaitMark, WifiReport, MT7921_BAR, MT7921_BDF,
     MT7921_IDS,
@@ -62,17 +71,17 @@ use device::{Images, Mac};
 use ether::Net;
 
 #[cfg(not(test))]
-const ROW: usize = 22;
+const ROW_SLOT: usize = lerux_desk::ROW_WIFI;
 #[cfg(not(test))]
-const ROW_SLOT: usize = 17;
+const ROW_CMD: usize = lerux_desk::ROW_WIFI + 1;
 #[cfg(not(test))]
-const ROW_CMD: usize = 18;
+const ROW_DESC: usize = lerux_desk::ROW_WIFI + 2;
 #[cfg(not(test))]
-const ROW_DESC: usize = 19;
+const ROW_BELL: usize = lerux_desk::ROW_WIFI + 3;
 #[cfg(not(test))]
-const ROW_BELL: usize = 20;
+const ROW_FETCH: usize = lerux_desk::ROW_WIFI + 4;
 #[cfg(not(test))]
-const ROW_FETCH: usize = 21;
+const ROW: usize = lerux_desk::ROW_WIFI + 5;
 #[cfg(not(test))]
 const PHASE_FETCH: u8 = 4;
 #[cfg(not(test))]
@@ -189,6 +198,9 @@ fn beat_disarm() {
     MARK.disarm();
 }
 
+#[cfg(all(test, target_arch = "x86_64"))]
+pub(crate) fn beat() {}
+
 #[cfg(not(test))]
 pub(crate) fn beat() {
     let Some(tick) = MARK.beat() else {
@@ -201,20 +213,32 @@ pub(crate) fn beat() {
     }
 }
 
+#[cfg(all(test, target_arch = "x86_64"))]
+pub(crate) fn step_cmd() {}
+
 #[cfg(not(test))]
 pub(crate) fn step_cmd() {
     show(1, ROW_CMD, b"cpu: write cmd");
 }
+
+#[cfg(all(test, target_arch = "x86_64"))]
+pub(crate) fn step_desc() {}
 
 #[cfg(not(test))]
 pub(crate) fn step_desc() {
     show(2, ROW_DESC, b"ram: write desc");
 }
 
+#[cfg(all(test, target_arch = "x86_64"))]
+pub(crate) fn step_bell() {}
+
 #[cfg(not(test))]
 pub(crate) fn step_bell() {
     show(3, ROW_BELL, b"wfdma: doorbell");
 }
+
+#[cfg(all(test, target_arch = "x86_64"))]
+pub(crate) fn step_fetch() {}
 
 #[cfg(not(test))]
 pub(crate) fn step_fetch() {
@@ -275,8 +299,8 @@ fn paint_detail(miss: &AuthMiss, sta: [u8; 6]) {
     }
 }
 
-/// Row 22 keeps the survey counts after `wait`. A menu scroll erases that row,
-/// so the shell prints the same bytes.
+/// The stage row keeps the survey counts after `wait`. The shell prints the
+/// same bytes.
 #[cfg(not(test))]
 fn paint_survey_mark() {
     let Some(mark) = read_survey_mark(key_page()) else {
@@ -361,7 +385,9 @@ impl HandlerImpl {
             mac.survey(key_page());
             paint_stage(Stage::Wait);
             paint_survey_mark();
-        } else if let Some((name, name_len, pass, pass_len)) = posted_key() {
+        } else if join_pending(key_page())
+            && let Some((name, name_len, pass, pass_len)) = posted_key()
+        {
             let stage = mac.associate(&name[..name_len], &pass[..pass_len], paint_stage);
             let up = stage == Stage::Wait;
             if stage == Stage::AuthRx {
@@ -388,6 +414,11 @@ impl HandlerImpl {
             return;
         };
         let note = mac.pump(&self.net);
+        if let Some((rx, tx, drop, fc)) = mac.link_mark() {
+            let mut line = [0u8; 64];
+            let n = write_link_mark(&mut line, rx, tx, drop, fc);
+            paint(&line[..n]);
+        }
         notify(self.rx_id, note.rx);
         notify(self.tx_id, note.tx);
     }

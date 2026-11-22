@@ -1,6 +1,9 @@
 use core::ptr;
 
-use lerux_machine::{msi_data, AhciMap, Claimed, Unclaimed, AHCI_IOAPIC_VECTOR, MSI_ADDRESS};
+use lerux_machine::{
+    msi_data, AhciMap, AtaModel, Claimed, Unclaimed, AHCI_IOAPIC_VECTOR, ATA_MODEL_BYTES,
+    ATA_MODEL_OFFSET, MSI_ADDRESS,
+};
 #[cfg(not(feature = "board-x86_64_generic_fetch_native"))]
 use sel4::with_ipc_buffer_mut;
 use sel4_microkit::var;
@@ -64,6 +67,8 @@ pub struct Engine {
     dma_vaddr: usize,
     dma_paddr: u64,
     capacity_blocks: u64,
+    claimed: Claimed,
+    model: AtaModel,
 }
 
 #[derive(Debug)]
@@ -72,24 +77,38 @@ pub struct OpenError;
 impl Engine {
     pub fn open(map: AhciMap) -> Result<Self, OpenError> {
         let pci = Pci::new();
-        let _claimed = claim_device(&pci)?;
+        let claimed = claim_device(&pci)?;
         pci.program(&map)?;
         let abar = usize::try_from(map.abar_vaddr).expect("abar vaddr");
         let dma_vaddr = usize::try_from(map.dma_vaddr).expect("dma vaddr");
         let dma_phys = map.dma_paddr.value();
         init_host(abar, dma_phys)?;
-        let capacity_sectors = identify_device(abar, dma_vaddr, dma_phys)?;
+        let (capacity_sectors, model) = identify_device(abar, dma_vaddr, dma_phys)?;
         let capacity_blocks = capacity_sectors / SECTORS_PER_TRANSFER_BLOCK;
         Ok(Self {
             abar,
             dma_vaddr,
             dma_paddr: dma_phys,
             capacity_blocks,
+            claimed,
+            model,
         })
     }
 
     pub fn capacity_blocks(&self) -> u64 {
         self.capacity_blocks
+    }
+
+    pub fn vendor(&self) -> u16 {
+        self.claimed.vendor()
+    }
+
+    pub fn device(&self) -> u16 {
+        self.claimed.device()
+    }
+
+    pub fn model(&self) -> &str {
+        self.model.as_str()
     }
 
     pub fn ack(&self) {
@@ -108,6 +127,10 @@ impl Engine {
     ) -> Result<(), ()> {
         if len == 0 {
             return Ok(());
+        }
+        // The desk disk is identified and read. A write would format or replace a volume.
+        if !read && !self.claimed.allows_write() {
+            return Err(());
         }
         let mut offset = 0usize;
         let mut lba = start_lba;
@@ -295,9 +318,14 @@ impl Pci {
 }
 
 fn claim_device(pci: &Pci) -> Result<Claimed, OpenError> {
+    let id = pci.read_config(0x00);
+    let vendor = u16::try_from(id & 0xffff).expect("vendor fits");
+    let device = u16::try_from(id >> 16).expect("device fits");
     let raw = pci.read_config(0x08);
     let class = (raw >> 8) & 0x00ff_ffff;
-    Unclaimed::compiled().claim(class).map_err(|_| OpenError)
+    Unclaimed::compiled()
+        .claim(class, vendor, device)
+        .map_err(|_| OpenError)
 }
 
 fn enable_msi(pci: &Pci) -> Result<(), OpenError> {
@@ -408,13 +436,24 @@ fn stop_port(abar: usize) {
     }
 }
 
-fn identify_device(abar: usize, dma_vaddr: usize, dma_phys: u64) -> Result<u64, OpenError> {
+fn identify_device(
+    abar: usize,
+    dma_vaddr: usize,
+    dma_phys: u64,
+) -> Result<(u64, AtaModel), OpenError> {
     if run_dma(abar, dma_vaddr, dma_phys, false, 0, 1, ATA_CMD_IDENTIFY).is_err() {
         return Err(OpenError);
     }
     let words = dma_vaddr + BOUNCE_OFF as usize;
-    // SAFETY: identify returns 512 bytes into the bounce buffer.
-    let w83 = unsafe { ptr::read_volatile((words + 83 * 2) as *const u16) };
+    // SAFETY: identify returns 512 bytes into the bounce buffer. The model is bytes 54..94.
+    let (w83, model) = unsafe {
+        let mut raw = [0u8; ATA_MODEL_BYTES];
+        for (i, byte) in raw.iter_mut().enumerate() {
+            *byte = ptr::read_volatile((words + ATA_MODEL_OFFSET + i) as *const u8);
+        }
+        let w83 = ptr::read_volatile((words + 83 * 2) as *const u16);
+        (w83, AtaModel::from_swapped(&raw))
+    };
     let lba48 = w83 & 0x0400 != 0;
     let sectors = if lba48 {
         let w100 = unsafe { ptr::read_volatile((words + 100 * 2) as *const u16) };
@@ -430,7 +469,7 @@ fn identify_device(abar: usize, dma_vaddr: usize, dma_phys: u64) -> Result<u64, 
         let w61 = unsafe { ptr::read_volatile((words + 61 * 2) as *const u16) };
         u64::from(w60) | (u64::from(w61) << 16)
     };
-    Ok(sectors)
+    Ok((sectors, model))
 }
 
 fn run_dma(

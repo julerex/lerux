@@ -17,20 +17,21 @@ use lerux_swift::{
         write_bss_rlm, write_chan, write_channel_domain, write_clc, write_clear_other_beacon,
         write_dev_info, write_eeprom_mode, write_efuse_block, write_efuse_read, write_fw_log,
         write_mac_enable, write_mcu_header, write_mcu_txd, write_rts, write_rx_filter_enable,
-        write_scan, write_sta_rec, write_txwi, wtbl_word, AuthMiss, FirmwareKind, Map, RegOp,
-        Region, Sem, Stage, TxStop, BSS_CONNECT_LEN, BSS_INFO_LEN, BSS_RLM_LEN, CHANNEL_DOMAIN_LEN,
-        CONN_ON_LPCTL, CONN_ON_MISC, DEV_INFO_LEN, DMASHDL_BYPASS, DMASHDL_ENABLE, DMASHDL_SW,
-        DMA_DONE, DUMMY_CR, DUMP_PREFETCH, DUMP_REGS, DUMP_RINGS, EE_HW_TYPE, EFUSE_BLOCK_LEN,
-        FW_N9_RDY, FW_SCATTER, FW_START, GLO_CFG, GLO_CFG_CHAIN, GLO_CFG_CLK, GLO_CFG_EXT0,
-        GLO_CFG_LE, GLO_CFG_OMIT_RX, GLO_CFG_OMIT_RX_PFET, GLO_CFG_OMIT_TX, GLO_CFG_RX_BUSY,
-        GLO_CFG_RX_EN, GLO_CFG_TX_BUSY, GLO_CFG_TX_EN, GLO_CFG_TX_WB, HIF_REMAP_L1, HOST_CLR_OWN,
-        HOST_INT_ENA, HOST_OWN_SYNC, HOST_SET_OWN, HW_CHIPID, HW_REV, IRQ_MASK, L0S_DIS, LAST_SEC0,
-        LPCR_DRV_OWN, LPCR_FW_OWN, MCU2HOST, MCU_TXD_LEN, MCU_WAKE, MDP_DAMSDU, MDP_DCR0, MDP_DCR1,
-        MDP_HDR_TRANS, NEED_REINIT, PATCH_FINISH, PATCH_IS_DL, PATCH_NOT_DL, PATCH_REL, PATCH_SEM,
-        PCIE_MAC_INT, PCIE_MAC_PM, PEER_WTBL, PRI_DLY, RST_DMASHDL, RST_DTX_PTR, RST_LOGIC,
-        RXD_LEN, RX_DATA_BASE, RX_EVENT_BASE, RX_FILTER_LEN, RX_WA_BASE, SCAN_REQ_LEN, STA_REC_LEN,
-        SWDEF_MODE, TOP_LPCR, TXD_LEN, TXP_LEN, TX_RING_BASE, WFDMA_RST, WFSYS_INIT_DONE,
-        WFSYS_RST, WFSYS_RST_B, WTBL_BUSY, WTBL_RESERVED, WTBL_UPDATE,
+        write_scan, write_sta_rec, write_txwi, wtbl_word, AuthMiss, EapolStop, FirmwareKind, Map,
+        RegOp, Region, Sem, Stage, TxStop, BSS_CONNECT_LEN, BSS_INFO_LEN, BSS_RLM_LEN,
+        CHANNEL_DOMAIN_LEN, CONN_ON_LPCTL, CONN_ON_MISC, DEV_INFO_LEN, DMASHDL_BYPASS,
+        DMASHDL_ENABLE, DMASHDL_SW, DMA_DONE, DUMMY_CR, DUMP_PREFETCH, DUMP_REGS, DUMP_RINGS,
+        EE_HW_TYPE, EFUSE_BLOCK_LEN, FW_N9_RDY, FW_SCATTER, FW_START, GLO_CFG, GLO_CFG_CHAIN,
+        GLO_CFG_CLK, GLO_CFG_EXT0, GLO_CFG_LE, GLO_CFG_OMIT_RX, GLO_CFG_OMIT_RX_PFET,
+        GLO_CFG_OMIT_TX, GLO_CFG_RX_BUSY, GLO_CFG_RX_EN, GLO_CFG_TX_BUSY, GLO_CFG_TX_EN,
+        GLO_CFG_TX_WB, HIF_REMAP_L1, HOST_CLR_OWN, HOST_INT_ENA, HOST_OWN_SYNC, HOST_SET_OWN,
+        HW_CHIPID, HW_REV, IRQ_MASK, L0S_DIS, LAST_SEC0, LPCR_DRV_OWN, LPCR_FW_OWN, MCU2HOST,
+        MCU_TXD_LEN, MCU_WAKE, MDP_DAMSDU, MDP_DCR0, MDP_DCR1, MDP_HDR_TRANS, NEED_REINIT,
+        PATCH_FINISH, PATCH_IS_DL, PATCH_NOT_DL, PATCH_REL, PATCH_SEM, PCIE_MAC_INT, PCIE_MAC_PM,
+        PEER_WTBL, PRI_DLY, RST_DMASHDL, RST_DTX_PTR, RST_LOGIC, RXD_LEN, RX_DATA_BASE,
+        RX_EVENT_BASE, RX_FILTER_LEN, RX_WA_BASE, SCAN_REQ_LEN, STA_REC_LEN, SWDEF_MODE, TOP_LPCR,
+        TXD_LEN, TXP_LEN, TX_RING_BASE, WFDMA_RST, WFSYS_INIT_DONE, WFSYS_RST, WFSYS_RST_B,
+        WTBL_BUSY, WTBL_RESERVED, WTBL_UPDATE,
     },
     CLIENT_MAC,
 };
@@ -130,6 +131,14 @@ pub struct Mac {
     /// Set only after the 4-way handshake. The firmware path leaves this empty,
     /// so it never loads the network queues.
     link: Option<Link>,
+    /// Frames queued for the shell since the handshake.
+    link_rx: u32,
+    /// Shell frames whose transmit descriptor the card accepted.
+    link_tx: u32,
+    /// Received frames that were not queued. Beacons count here.
+    link_drop: u32,
+    /// Last dropped data frame's first byte, else the first drop.
+    link_fc: Option<u8>,
     /// Read just before the first MCU command. The panel no longer paints it.
     before: [u32; DUMP_REGS.len()],
     /// Read when `start` returns. The panel no longer paints it.
@@ -211,6 +220,10 @@ impl Mac {
             pn: 1,
             wifi_seq: 1,
             link: None,
+            link_rx: 0,
+            link_tx: 0,
+            link_drop: 0,
+            link_fc: None,
             before: [0; DUMP_REGS.len()],
             after: Snapshot::empty(),
         };
@@ -290,6 +303,33 @@ impl Mac {
 
     pub(crate) fn link(&mut self) -> Option<&mut Link> {
         self.link.as_mut()
+    }
+
+    /// `rx`, `tx`, `drop`, and the dropped frame byte, once the link is up.
+    pub(crate) fn link_mark(&self) -> Option<(u32, u32, u32, Option<u8>)> {
+        self.link
+            .is_some()
+            .then_some((self.link_rx, self.link_tx, self.link_drop, self.link_fc))
+    }
+
+    pub(crate) fn note_drop(&mut self, fc: Option<u8>) {
+        self.link_drop = self.link_drop.saturating_add(1);
+        let Some(fc) = fc else {
+            return;
+        };
+        // A beacon must not hide a data frame that failed to queue.
+        let data = fc & 0x0c == 0x08;
+        if self.link_fc.is_none() || data {
+            self.link_fc = Some(fc);
+        }
+    }
+
+    pub(crate) fn count_rx(&mut self) {
+        self.link_rx = self.link_rx.saturating_add(1);
+    }
+
+    pub(crate) fn count_tx(&mut self) {
+        self.link_tx = self.link_tx.saturating_add(1);
     }
 
     fn start(&mut self, images: &Images) -> Result<(), Stage> {
@@ -1005,6 +1045,10 @@ impl Mac {
         self.eapol_miss = miss;
     }
 
+    pub(crate) fn note_eapol_stop(&mut self, stop: EapolStop) {
+        self.eapol_miss.stop = stop;
+    }
+
     pub(crate) fn next_seq_wifi(&mut self) -> u16 {
         let seq = self.wifi_seq;
         self.wifi_seq = self.wifi_seq.wrapping_add(1);
@@ -1237,12 +1281,16 @@ fn rx_rings() -> [RxRing; 3] {
 
 #[expect(clippy::cast_ptr_alignment, reason = "4-byte MMIO register")]
 fn rd(regs: *mut u8, off: u32) -> u32 {
+    #[cfg(test)]
+    crate::hook::before_read(off);
     unsafe { regs.add(off as usize).cast::<u32>().read_volatile() }
 }
 
 #[expect(clippy::cast_ptr_alignment, reason = "4-byte MMIO register")]
 fn wr(regs: *mut u8, off: u32, value: u32) {
     unsafe { regs.add(off as usize).cast::<u32>().write_volatile(value) }
+    #[cfg(test)]
+    crate::hook::after_write(off, value);
 }
 
 #[expect(clippy::cast_ptr_alignment, reason = "4-byte DMA descriptor")]

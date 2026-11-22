@@ -10,7 +10,6 @@
         reason = "this image is the start menu and does not run the file-command loop"
     )
 )]
-
 #[cfg(any(
     all(
         feature = "board-qemu_virt_aarch64_fetch_sddf",
@@ -224,6 +223,11 @@ compile_error!(
     "the Swift console image does not share a build with the fetch, web, browser, or filesystem image"
 );
 
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+use core::sync::atomic::{AtomicBool, Ordering};
 use core::{
     cell::UnsafeCell,
     mem::{size_of, MaybeUninit},
@@ -251,7 +255,16 @@ use lerux_cothread::{
     microkit_cothread_init, microkit_cothread_recv_ntfn, microkit_cothread_spawn,
     microkit_cothread_wait_on_channel, microkit_cothread_yield, NULL_HANDLE, STACK_SLOTS,
 };
-use lerux_posix::{Files, Open, Stat};
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf",
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
+use lerux_posix::Errno;
+use lerux_posix::{Fd, Files, Open, Stat};
 use lerux_sddf::{
     fs_client_config_t,
     fs_image::{
@@ -281,6 +294,8 @@ use lerux_sddf::{
 };
 
 #[cfg(feature = "board-swift_sfx14_41g")]
+use lerux_signon::for_each_preamble;
+#[cfg(feature = "board-swift_sfx14_41g")]
 use lerux_swift::{
     format_survey_report, is_setup_wifi, join_up, read_survey_count, survey_choice, write_key,
     write_survey, SURVEY_REPORT_MAX,
@@ -305,6 +320,13 @@ const NET_VIRT_TX: Channel = Channel::new(4);
 #[cfg(feature = "board-swift_sfx14_41g")]
 const SWIFT_MT7921: Channel = Channel::new(5);
 
+/// Drain the radio's receive ring. The ring is 8 deep, and DHCP waits here
+/// without a transmit for longer than that. A joined key does not associate again.
+#[cfg(feature = "board-swift_sfx14_41g")]
+pub(crate) fn kick_radio() {
+    SWIFT_MT7921.notify();
+}
+
 #[cfg(feature = "net-client")]
 const _: () = {
     assert!(lerux_sddf::net_image::SHELL_NET_RX_CHANNEL == 3);
@@ -319,6 +341,23 @@ const NAME_MAX: usize = 12;
 const LIST_MAX: usize = 32;
 const S_IFMT: u64 = 0o170_000;
 const S_IFDIR: u64 = 0o040_000;
+/// Sectors in the volume `sddf-fatfs` formats. Data starts at sector 97.
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+const VOLUME_SECTORS: u64 = 8192;
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+const VOLUME_DATA_LBA: u64 = 97;
+/// One cluster is one sector on that volume. The root directory is not in it.
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+const VOLUME_SECTOR: u64 = 512;
 
 #[cfg(any(
     feature = "board-qemu_virt_aarch64_browser_sddf",
@@ -375,43 +414,38 @@ unsafe impl Sync for FilesCell {}
 
 static FILES: FilesCell = FilesCell(UnsafeCell::new(MaybeUninit::uninit()));
 
-#[cfg(any(
-    feature = "board-qemu_virt_aarch64_fs_sddf",
-    feature = "board-qemu_virt_riscv64_fs_sddf",
-    feature = "board-x86_64_generic_fs_sddf"
-))]
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
 const LOG_CAP: usize = 2048;
 
-#[cfg(any(
-    feature = "board-qemu_virt_aarch64_fs_sddf",
-    feature = "board-qemu_virt_riscv64_fs_sddf",
-    feature = "board-x86_64_generic_fs_sddf"
-))]
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
 struct Log {
     bytes: [u8; LOG_CAP],
     len: usize,
 }
 
-#[cfg(any(
-    feature = "board-qemu_virt_aarch64_fs_sddf",
-    feature = "board-qemu_virt_riscv64_fs_sddf",
-    feature = "board-x86_64_generic_fs_sddf"
-))]
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
 struct LogCell(UnsafeCell<Log>);
 
-#[cfg(any(
-    feature = "board-qemu_virt_aarch64_fs_sddf",
-    feature = "board-qemu_virt_riscv64_fs_sddf",
-    feature = "board-x86_64_generic_fs_sddf"
-))]
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
 // SAFETY: the worker is the only user. The root does not read the log.
 unsafe impl Sync for LogCell {}
 
-#[cfg(any(
-    feature = "board-qemu_virt_aarch64_fs_sddf",
-    feature = "board-qemu_virt_riscv64_fs_sddf",
-    feature = "board-x86_64_generic_fs_sddf"
-))]
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
 static LOG: LogCell = LogCell(UnsafeCell::new(Log {
     bytes: [0; LOG_CAP],
     len: 0,
@@ -467,13 +501,23 @@ extern "C" fn worker() {
         feature = "board-qemu_virt_riscv64_browser_sddf"
     )))]
     {
+        #[cfg(feature = "board-swift_sfx14_41g")]
+        say_preamble();
+        #[cfg(not(feature = "board-swift_sfx14_41g"))]
         say(b"lerux shell ready\n");
         let mut line = [0u8; LINE_MAX];
         loop {
             let len = read_line(&mut line);
             dispatch(&line[..len]);
+            #[cfg(feature = "board-swift_sfx14_41g")]
+            say(lerux_signon::PROMPT);
         }
     }
+}
+
+#[cfg(feature = "board-swift_sfx14_41g")]
+fn say_preamble() {
+    for_each_preamble(env!("LERUX_GIT_DESCRIBE").as_bytes(), say);
 }
 
 fn bind_files() -> bool {
@@ -746,11 +790,10 @@ fn console() -> &'static mut Client {
 }
 
 fn say(bytes: &[u8]) {
-    #[cfg(any(
-        feature = "board-qemu_virt_aarch64_fs_sddf",
-        feature = "board-qemu_virt_riscv64_fs_sddf",
-        feature = "board-x86_64_generic_fs_sddf"
-    ))]
+    #[cfg(not(any(
+        feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-qemu_virt_riscv64_browser_sddf"
+    )))]
     store_serial(bytes);
     emit(bytes);
 }
@@ -853,12 +896,19 @@ fn dispatch(line: &[u8]) {
     if dispatch_file(cmd, rest) {
         return;
     }
+    #[cfg(not(any(
+        feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-qemu_virt_riscv64_browser_sddf"
+    )))]
+    if dispatch_daily(cmd, rest) {
+        return;
+    }
     #[cfg(any(
         feature = "board-qemu_virt_aarch64_fetch_sddf",
         feature = "board-qemu_virt_riscv64_fetch_sddf",
         feature = "board-x86_64_generic_fetch_sddf"
     ))]
-    if dispatch_fetch(cmd, rest) {
+    if dispatch_clock(cmd, rest) {
         return;
     }
     #[cfg(any(
@@ -1023,7 +1073,13 @@ fn say_ping(result: net::PingResult) {
     }
 }
 
-#[cfg(feature = "board-swift_sfx14_41g")]
+#[cfg(all(
+    feature = "net-client",
+    not(any(
+        feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-qemu_virt_riscv64_browser_sddf"
+    ))
+))]
 fn say_ip(octets: [u8; 4]) {
     let mut out = [0u8; 20];
     let mut n = 0;
@@ -1042,7 +1098,13 @@ fn say_ip(octets: [u8; 4]) {
     say(&out[..=n]);
 }
 
-#[cfg(feature = "board-swift_sfx14_41g")]
+#[cfg(all(
+    feature = "net-client",
+    not(any(
+        feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-qemu_virt_riscv64_browser_sddf"
+    ))
+))]
 fn write_octet(buf: &mut [u8], mut at: usize, mut value: u8) -> usize {
     let mut tmp = [0u8; 3];
     let mut digits = 0usize;
@@ -1081,20 +1143,109 @@ fn key_page() -> &'static mut [u8] {
     unsafe { core::slice::from_raw_parts_mut(ptr, 0x1000) }
 }
 
+/// File, address, clock, log, and edit commands for the filesystem image and the fetch image.
+///
+/// A command that needs a socket prints its name and `err` when this image has no network client.
+/// The browser image is a menu and does not compile this table.
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+fn dispatch_daily(cmd: &[u8], rest: &[u8]) -> bool {
+    match cmd {
+        b"df" => cmd_df(rest),
+        b"ip" => cmd_ip(rest),
+        b"date" => cmd_date(rest),
+        b"dmesg" => cmd_dmesg(rest),
+        b"edit" => cmd_edit(rest),
+        b"reboot" => cmd_reboot(rest),
+        b"calc" => cmd_calc(rest),
+        b"backup" => cmd_backup(rest),
+        b"source" => cmd_source(rest),
+        b"fetch" => cmd_fetch_shared(rest),
+        b"cert" => cmd_cert_shared(rest),
+        b"chat" => cmd_chat_shared(rest),
+        _ => return false,
+    }
+    true
+}
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+fn cmd_fetch_shared(rest: &[u8]) {
+    #[cfg(any(
+        feature = "board-qemu_virt_aarch64_fetch_sddf",
+        feature = "board-qemu_virt_riscv64_fetch_sddf",
+        feature = "board-x86_64_generic_fetch_sddf"
+    ))]
+    cmd_fetch(rest);
+    #[cfg(not(any(
+        feature = "board-qemu_virt_aarch64_fetch_sddf",
+        feature = "board-qemu_virt_riscv64_fetch_sddf",
+        feature = "board-x86_64_generic_fetch_sddf"
+    )))]
+    {
+        let _ = rest;
+        say(b"fetch err\n");
+    }
+}
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+fn cmd_cert_shared(rest: &[u8]) {
+    #[cfg(any(
+        feature = "board-qemu_virt_aarch64_fetch_sddf",
+        feature = "board-qemu_virt_riscv64_fetch_sddf",
+        feature = "board-x86_64_generic_fetch_sddf"
+    ))]
+    cmd_cert(rest);
+    #[cfg(not(any(
+        feature = "board-qemu_virt_aarch64_fetch_sddf",
+        feature = "board-qemu_virt_riscv64_fetch_sddf",
+        feature = "board-x86_64_generic_fetch_sddf"
+    )))]
+    {
+        let _ = rest;
+        say(b"cert err\n");
+    }
+}
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+fn cmd_chat_shared(rest: &[u8]) {
+    #[cfg(any(
+        feature = "board-qemu_virt_aarch64_fetch_sddf",
+        feature = "board-qemu_virt_riscv64_fetch_sddf",
+        feature = "board-x86_64_generic_fetch_sddf"
+    ))]
+    cmd_chat(rest);
+    #[cfg(not(any(
+        feature = "board-qemu_virt_aarch64_fetch_sddf",
+        feature = "board-qemu_virt_riscv64_fetch_sddf",
+        feature = "board-x86_64_generic_fetch_sddf"
+    )))]
+    {
+        let _ = rest;
+        say(b"chat err\n");
+    }
+}
+
 #[cfg(any(
     feature = "board-qemu_virt_aarch64_fetch_sddf",
     feature = "board-qemu_virt_riscv64_fetch_sddf",
     feature = "board-x86_64_generic_fetch_sddf"
 ))]
-fn dispatch_fetch(cmd: &[u8], rest: &[u8]) -> bool {
+fn dispatch_clock(cmd: &[u8], rest: &[u8]) -> bool {
     match cmd {
-        b"fetch" => cmd_fetch(rest),
-        b"calc" => cmd_calc(rest),
-        b"backup" => cmd_backup(rest),
-        b"source" => cmd_source(rest),
-        b"cert" => cmd_cert(rest),
-        b"edit" => cmd_edit(rest),
-        b"chat" => cmd_chat(rest),
+        b"config" => cmd_config(rest),
+        b"date" => cmd_date(rest),
+        b"dmesg" => cmd_dmesg(rest),
         _ => return false,
     }
     true
@@ -1108,11 +1259,8 @@ fn dispatch_fetch(cmd: &[u8], rest: &[u8]) -> bool {
 fn dispatch_fs_board(cmd: &[u8], rest: &[u8]) -> bool {
     match cmd {
         b"config" => cmd_config(rest),
-        b"date" => cmd_date(rest),
         b"ps" => cmd_table(rest, b"ps ok\n", b"ps err\n"),
         b"qos" => cmd_table(rest, b"qos ok\n", b"qos err\n"),
-        b"dmesg" => cmd_dmesg(rest),
-        b"reboot" => cmd_reboot(rest),
         _ => return false,
     }
     true
@@ -1121,22 +1269,95 @@ fn dispatch_fs_board(cmd: &[u8], rest: &[u8]) -> bool {
 #[cfg(any(
     feature = "board-qemu_virt_aarch64_fs_sddf",
     feature = "board-qemu_virt_riscv64_fs_sddf",
-    feature = "board-x86_64_generic_fs_sddf"
+    feature = "board-x86_64_generic_fs_sddf",
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
+const HOSTNAME_PATH: &[u8] = b"/config/hostname";
+/// `net.mode` is not an 8.3 name. The bytes sit beside `HOSTNAME`.
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
+const NETMODE_PATH: &[u8] = b"/config/netmode";
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf",
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
+const HOSTNAME_MAX: usize = 64;
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf",
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
 ))]
 fn cmd_config(rest: &[u8]) {
-    let Some((verb, key)) = split_first(rest) else {
+    let Some((verb, tail)) = split_first(rest) else {
         say(b"config err\n");
         return;
     };
-    if verb != b"get" || key != b"hostname" {
-        say(b"config err\n");
+    match verb {
+        b"get" => {
+            let Some(key) = one_name(tail) else {
+                say(b"config err\n");
+                return;
+            };
+            config_get(key);
+        }
+        b"set" => {
+            let Some((key, value)) = split_first(tail) else {
+                say(b"config err\n");
+                return;
+            };
+            config_set(key, value);
+        }
+        _ => say(b"config err\n"),
+    }
+}
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf",
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
+fn config_get(key: &[u8]) {
+    if key == b"hostname" {
+        config_get_hostname();
         return;
     }
-    let Ok(fd) = files().open(b"/config/hostname", Open::Read) else {
+    if key == b"net.mode" {
+        config_get_mode();
+        return;
+    }
+    say(b"config err\n");
+}
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf",
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
+fn config_get_hostname() {
+    let Ok(fd) = files().open(HOSTNAME_PATH, Open::Read) else {
         say(b"config err\n");
         return;
     };
-    let mut buf = [0u8; 64];
+    let mut buf = [0u8; HOSTNAME_MAX];
     let read = files().read(fd, &mut buf);
     let _ = files().close(fd);
     let Ok(n) = read else {
@@ -1147,7 +1368,7 @@ fn cmd_config(rest: &[u8]) {
         say(b"config err\n");
         return;
     }
-    let mut out = [0u8; 65];
+    let mut out = [0u8; HOSTNAME_MAX + 1];
     out[..n].copy_from_slice(&buf[..n]);
     out[n] = b'\n';
     say(&out[..=n]);
@@ -1156,13 +1377,337 @@ fn cmd_config(rest: &[u8]) {
 #[cfg(any(
     feature = "board-qemu_virt_aarch64_fs_sddf",
     feature = "board-qemu_virt_riscv64_fs_sddf",
-    feature = "board-x86_64_generic_fs_sddf"
+    feature = "board-x86_64_generic_fs_sddf",
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
 ))]
+fn config_get_mode() {
+    // This image has no network client, so the key is refused.
+    #[cfg(not(feature = "net-client"))]
+    {
+        say(b"config err\n");
+    }
+    #[cfg(feature = "net-client")]
+    {
+        match read_mode() {
+            ModeFile::Missing | ModeFile::Dhcp => say(b"dhcp\n"),
+            ModeFile::Static => say(b"static\n"),
+            ModeFile::Bad => say(b"config err\n"),
+        }
+    }
+}
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf",
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
+fn config_set(key: &[u8], value: &[u8]) {
+    if key == b"hostname" {
+        config_set_hostname(value);
+        return;
+    }
+    if key == b"net.mode" {
+        config_set_mode(value);
+        return;
+    }
+    say(b"config err\n");
+}
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf",
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
+fn config_set_hostname(value: &[u8]) {
+    let Some(name) = one_name(value) else {
+        say(b"config err\n");
+        return;
+    };
+    if !hostname_ok(name) || !replace_file(HOSTNAME_PATH, name) {
+        say(b"config err\n");
+        return;
+    }
+    say(b"config ok\n");
+}
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf",
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
+fn hostname_ok(name: &[u8]) -> bool {
+    !name.is_empty()
+        && name.len() <= HOSTNAME_MAX
+        && name
+            .iter()
+            .all(|byte| byte.is_ascii_graphic() && *byte != b'/')
+}
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf",
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
+fn config_set_mode(value: &[u8]) {
+    #[cfg(not(feature = "net-client"))]
+    {
+        let _ = value;
+        say(b"config err\n");
+    }
+    #[cfg(feature = "net-client")]
+    {
+        if value == b"dhcp" {
+            if replace_file(NETMODE_PATH, b"dhcp") {
+                say(b"config ok\n");
+            } else {
+                say(b"config err\n");
+            }
+            return;
+        }
+        let Some((word, addr)) = split_first(value) else {
+            say(b"config err\n");
+            return;
+        };
+        if word != b"static" {
+            say(b"config err\n");
+            return;
+        }
+        let Some(addr) = one_name(addr) else {
+            say(b"config err\n");
+            return;
+        };
+        let Some(octets) = parse_v4(addr) else {
+            say(b"config err\n");
+            return;
+        };
+        if !net::apply_static(octets) {
+            say(b"config err\n");
+            return;
+        }
+        let (stored, len) = format_static(octets);
+        if replace_file(NETMODE_PATH, &stored[..len]) {
+            say(b"config ok\n");
+        } else {
+            say(b"config err\n");
+        }
+    }
+}
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf",
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
+fn replace_file(path: &[u8], bytes: &[u8]) -> bool {
+    if bytes.is_empty() {
+        return false;
+    }
+    match files().unlink(path) {
+        Ok(()) => {}
+        Err(Errno(code)) if code == Errno::ENOENT => {}
+        Err(_) => return false,
+    }
+    let Ok(fd) = files().open(path, Open::CreateWrite) else {
+        return false;
+    };
+    let wrote = files().write(fd, bytes);
+    let _ = files().close(fd);
+    matches!(wrote, Ok(n) if n == bytes.len())
+}
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
+enum ModeFile {
+    Missing,
+    Dhcp,
+    Static,
+    Bad,
+}
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
+fn read_mode() -> ModeFile {
+    let fd = match files().open(NETMODE_PATH, Open::Read) {
+        Ok(fd) => fd,
+        Err(Errno(code)) if code == Errno::ENOENT => return ModeFile::Missing,
+        Err(_) => return ModeFile::Bad,
+    };
+    let mut buf = [0u8; 32];
+    let read = files().read(fd, &mut buf);
+    let _ = files().close(fd);
+    let Ok(n) = read else {
+        return ModeFile::Bad;
+    };
+    // A stored mode is `dhcp` or `static` plus one dotted address.
+    if n == 0 || n == buf.len() {
+        return ModeFile::Bad;
+    }
+    parse_mode(&buf[..n])
+}
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
+fn parse_mode(bytes: &[u8]) -> ModeFile {
+    if bytes == b"dhcp" {
+        return ModeFile::Dhcp;
+    }
+    let Some(addr) = bytes.strip_prefix(b"static ") else {
+        return ModeFile::Bad;
+    };
+    if parse_v4(addr).is_some() {
+        ModeFile::Static
+    } else {
+        ModeFile::Bad
+    }
+}
+
+/// Four decimal octets. A value above 255, an empty octet, or a trailing dot is refused.
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
+fn parse_v4(text: &[u8]) -> Option<[u8; 4]> {
+    let mut octets = [0u8; 4];
+    let mut index = 0usize;
+    let mut value = 0u16;
+    let mut digits = 0u8;
+    for &byte in text {
+        if byte == b'.' {
+            if digits == 0 || index >= 3 {
+                return None;
+            }
+            octets[index] = u8::try_from(value).ok()?;
+            index += 1;
+            value = 0;
+            digits = 0;
+            continue;
+        }
+        if !byte.is_ascii_digit() || digits == 3 {
+            return None;
+        }
+        value = value * 10 + u16::from(byte - b'0');
+        if value > 255 {
+            return None;
+        }
+        digits += 1;
+    }
+    if digits == 0 || index != 3 {
+        return None;
+    }
+    octets[3] = u8::try_from(value).ok()?;
+    Some(octets)
+}
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
+fn format_static(octets: [u8; 4]) -> ([u8; 22], usize) {
+    let mut out = [0u8; 22];
+    let prefix = b"static ";
+    out[..prefix.len()].copy_from_slice(prefix);
+    let len = prefix.len() + write_v4(&mut out[prefix.len()..], octets);
+    (out, len)
+}
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
+fn write_v4(buf: &mut [u8], octets: [u8; 4]) -> usize {
+    let mut at = 0usize;
+    for (index, octet) in octets.into_iter().enumerate() {
+        if index > 0 {
+            buf[at] = b'.';
+            at += 1;
+        }
+        at = write_octet_dec(buf, at, octet);
+    }
+    at
+}
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
+fn write_octet_dec(buf: &mut [u8], mut at: usize, mut value: u8) -> usize {
+    let mut tmp = [0u8; 3];
+    let mut digits = 0usize;
+    loop {
+        tmp[digits] = b'0' + (value % 10);
+        digits += 1;
+        value /= 10;
+        if value == 0 {
+            break;
+        }
+    }
+    while digits > 0 {
+        digits -= 1;
+        buf[at] = tmp[digits];
+        at += 1;
+    }
+    at
+}
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
 fn cmd_date(rest: &[u8]) {
     if !rest.is_empty() {
         say(b"date err\n");
         return;
     }
+    #[cfg(any(
+        feature = "board-qemu_virt_aarch64_fs_sddf",
+        feature = "board-qemu_virt_riscv64_fs_sddf",
+        feature = "board-x86_64_generic_fs_sddf"
+    ))]
+    date_from_timer();
+    #[cfg(not(any(
+        feature = "board-qemu_virt_aarch64_fs_sddf",
+        feature = "board-qemu_virt_riscv64_fs_sddf",
+        feature = "board-x86_64_generic_fs_sddf"
+    )))]
+    say(b"date err\n");
+}
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf"
+))]
+fn date_from_timer() {
     // The worker is the kernel thread while it is switched in, so the protected call runs here.
     let reply = Channel::new(usize::from(SHELL_TIMER_CHANNEL))
         .pp_call(MessageInfo::new(SDDF_TIMER_GET_TIME, 0));
@@ -1261,11 +1806,10 @@ fn push_dec(buf: &mut [u8], mut value: u32) -> usize {
     digits.len()
 }
 
-#[cfg(any(
-    feature = "board-qemu_virt_aarch64_fs_sddf",
-    feature = "board-qemu_virt_riscv64_fs_sddf",
-    feature = "board-x86_64_generic_fs_sddf"
-))]
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
 fn cmd_dmesg(rest: &[u8]) {
     if !rest.is_empty() {
         say(b"dmesg err\n");
@@ -1277,11 +1821,10 @@ fn cmd_dmesg(rest: &[u8]) {
     emit(&log.bytes[..log.len]);
 }
 
-#[cfg(any(
-    feature = "board-qemu_virt_aarch64_fs_sddf",
-    feature = "board-qemu_virt_riscv64_fs_sddf",
-    feature = "board-x86_64_generic_fs_sddf"
-))]
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
 fn cmd_reboot(rest: &[u8]) {
     if !rest.is_empty() {
         say(b"reboot err\n");
@@ -1290,11 +1833,10 @@ fn cmd_reboot(rest: &[u8]) {
     say(b"reboot\n");
 }
 
-#[cfg(any(
-    feature = "board-qemu_virt_aarch64_fs_sddf",
-    feature = "board-qemu_virt_riscv64_fs_sddf",
-    feature = "board-x86_64_generic_fs_sddf"
-))]
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
 fn store_serial(bytes: &[u8]) {
     // The boot line has to stay readable, so a full log stops instead of dropping the front.
     // SAFETY: the worker is the only user of this log.
@@ -1347,11 +1889,10 @@ fn cmd_fetch(rest: &[u8]) {
     reply(ok, b"fetch ok\n", b"fetch err\n");
 }
 
-#[cfg(any(
-    feature = "board-qemu_virt_aarch64_fetch_sddf",
-    feature = "board-qemu_virt_riscv64_fetch_sddf",
-    feature = "board-x86_64_generic_fetch_sddf"
-))]
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
 fn cmd_calc(rest: &[u8]) {
     if rest.is_empty() {
         say(b"calc err\n");
@@ -1363,13 +1904,6 @@ fn cmd_calc(rest: &[u8]) {
     }
 }
 
-#[cfg(any(
-    feature = "board-qemu_virt_aarch64_fetch_sddf",
-    feature = "board-qemu_virt_riscv64_fetch_sddf",
-    feature = "board-x86_64_generic_fetch_sddf",
-    feature = "board-qemu_virt_aarch64_browser_sddf",
-    feature = "board-qemu_virt_riscv64_browser_sddf"
-))]
 fn say_value(prefix: &[u8], value: i64) {
     let mut line = [0u8; 32];
     line[..prefix.len()].copy_from_slice(prefix);
@@ -1380,11 +1914,10 @@ fn say_value(prefix: &[u8], value: i64) {
     say(&line[..len]);
 }
 
-#[cfg(any(
-    feature = "board-qemu_virt_aarch64_fetch_sddf",
-    feature = "board-qemu_virt_riscv64_fetch_sddf",
-    feature = "board-x86_64_generic_fetch_sddf"
-))]
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
 fn cmd_backup(rest: &[u8]) {
     let Some((src, dest)) = split_first(rest) else {
         say(b"backup err\n");
@@ -1423,13 +1956,11 @@ fn cmd_backup(rest: &[u8]) {
     reply(ok, b"backup ok\n", b"backup err\n");
 }
 
-#[cfg(any(
-    feature = "board-qemu_virt_aarch64_fetch_sddf",
-    feature = "board-qemu_virt_riscv64_fetch_sddf",
-    feature = "board-x86_64_generic_fetch_sddf"
-))]
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
 fn cmd_source(rest: &[u8]) {
-    use core::sync::atomic::{AtomicBool, Ordering};
     static SOURCING: AtomicBool = AtomicBool::new(false);
     let Some(name) = one_name(rest) else {
         say(b"source err\n");
@@ -1446,11 +1977,10 @@ fn cmd_source(rest: &[u8]) {
     }
 }
 
-#[cfg(any(
-    feature = "board-qemu_virt_aarch64_fetch_sddf",
-    feature = "board-qemu_virt_riscv64_fetch_sddf",
-    feature = "board-x86_64_generic_fetch_sddf"
-))]
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
 fn source_file(name: &[u8]) -> bool {
     let Ok(fd) = files().open(name, Open::Read) else {
         return false;
@@ -1501,11 +2031,10 @@ fn cmd_cert(rest: &[u8]) {
     reply(net::cert_ready(), b"cert ok\n", b"cert err\n");
 }
 
-#[cfg(any(
-    feature = "board-qemu_virt_aarch64_fetch_sddf",
-    feature = "board-qemu_virt_riscv64_fetch_sddf",
-    feature = "board-x86_64_generic_fetch_sddf"
-))]
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
 fn cmd_edit(rest: &[u8]) {
     let Some((name, text)) = split_first(rest) else {
         say(b"edit err\n");
@@ -1544,6 +2073,413 @@ fn cmd_chat(rest: &[u8]) {
     reply(echoed, b"chat ok\n", b"chat err\n");
 }
 
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+fn cmd_df(rest: &[u8]) {
+    if !rest.is_empty() {
+        say(b"df err\n");
+        return;
+    }
+    let Ok(root) = files().stat(b"/") else {
+        say(b"df err\n");
+        return;
+    };
+    if root.blksize != VOLUME_SECTOR {
+        say(b"df err\n");
+        return;
+    }
+    let Some(total) = (VOLUME_SECTORS - VOLUME_DATA_LBA).checked_mul(VOLUME_SECTOR) else {
+        say(b"df err\n");
+        return;
+    };
+    // A directory is one cluster. A file occupies one cluster per 512 bytes
+    // of its size, and a nested name is stat'd so a file that spans clusters
+    // is counted in full.
+    let Some(clusters) = used_clusters(b".", true) else {
+        say(b"df err\n");
+        return;
+    };
+    let used = clusters.saturating_mul(VOLUME_SECTOR);
+    if used > total {
+        say(b"df err\n");
+        return;
+    }
+    say_df(total, used);
+}
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+fn cmd_ip(rest: &[u8]) {
+    if !rest.is_empty() {
+        say(b"ip err\n");
+        return;
+    }
+    #[cfg(feature = "net-client")]
+    match net::local_address() {
+        Ok(addr) => say_ip(addr),
+        Err(()) => say(b"ip err\n"),
+    };
+    #[cfg(not(feature = "net-client"))]
+    say(b"ip err\n");
+}
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+fn say_df(total: u64, used: u64) {
+    let mut line = [0u8; 48];
+    let mut len = 0;
+    for &byte in b"df " {
+        line[len] = byte;
+        len += 1;
+    }
+    len += push_u64(&mut line[len..], total);
+    line[len] = b' ';
+    len += 1;
+    len += push_u64(&mut line[len..], used);
+    line[len] = b'\n';
+    say(&line[..=len]);
+}
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+fn push_u64(buf: &mut [u8], mut value: u64) -> usize {
+    let mut tmp = [0u8; 20];
+    let mut index = tmp.len();
+    loop {
+        index -= 1;
+        tmp[index] = b'0' + (value % 10) as u8;
+        value /= 10;
+        if value == 0 {
+            break;
+        }
+    }
+    let digits = &tmp[index..];
+    buf[..digits.len()].copy_from_slice(digits);
+    digits.len()
+}
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+const DF_PATH: usize = 64;
+/// One cursor per path component, including the root. A 64-byte path of
+/// one-letter names is 32 components plus the root, which is less than this.
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+const DF_CURSORS: usize = DF_PATH;
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+const _: () = {
+    assert!(DF_CURSORS > DF_PATH.div_ceil(2));
+    assert!(LIST_MAX < 255);
+};
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+struct Listed {
+    bytes: [[u8; NAME_MAX]; LIST_MAX],
+    lens: [u8; LIST_MAX],
+    count: usize,
+}
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+#[derive(Clone, Copy)]
+struct DfCursor {
+    bytes: [u8; DF_PATH],
+    len: u8,
+    /// Next child index to visit. The parent is re-read from here.
+    next: u8,
+    root: bool,
+}
+
+/// One directory snapshot and a resume cursor per path level. Both stay off
+/// the worker stack. The cursor count follows the 64-byte path, not the width
+/// of a directory.
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+struct DfScratch {
+    listed: Listed,
+    cursors: [DfCursor; DF_CURSORS],
+    depth: usize,
+}
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+struct DfScratchCell(UnsafeCell<DfScratch>);
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+// SAFETY: the worker is the only user. The root does not run `df`.
+unsafe impl Sync for DfScratchCell {}
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+static DF_SCRATCH: DfScratchCell = DfScratchCell(UnsafeCell::new(DfScratch {
+    listed: Listed {
+        bytes: [[0; NAME_MAX]; LIST_MAX],
+        lens: [0; LIST_MAX],
+        count: 0,
+    },
+    cursors: [DfCursor {
+        bytes: [0; DF_PATH],
+        len: 0,
+        next: 0,
+        root: false,
+    }; DF_CURSORS],
+    depth: 0,
+}));
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+fn df_scratch() -> &'static mut DfScratch {
+    // SAFETY: only the worker calls `df`. Each helper drops this borrow
+    // before the next `files()` call.
+    unsafe { &mut *DF_SCRATCH.0.get() }
+}
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+fn df_push(path: &[u8], root: bool) -> Option<()> {
+    if path.is_empty() || path.len() > DF_PATH {
+        return None;
+    }
+    let len = u8::try_from(path.len()).unwrap_or(0);
+    if len == 0 {
+        return None;
+    }
+    let scratch = df_scratch();
+    if scratch.depth == DF_CURSORS {
+        return None;
+    }
+    let slot = &mut scratch.cursors[scratch.depth];
+    slot.bytes[..path.len()].copy_from_slice(path);
+    slot.len = len;
+    slot.next = 0;
+    slot.root = root;
+    scratch.depth += 1;
+    Some(())
+}
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+fn df_top(out: &mut [u8]) -> Option<(usize, u8, bool)> {
+    let scratch = df_scratch();
+    if scratch.depth == 0 {
+        return None;
+    }
+    let slot = &scratch.cursors[scratch.depth - 1];
+    let len = usize::from(slot.len);
+    if len == 0 || len > out.len() || len > slot.bytes.len() {
+        return None;
+    }
+    out[..len].copy_from_slice(&slot.bytes[..len]);
+    Some((len, slot.next, slot.root))
+}
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+fn df_set_next(next: u8) -> Option<()> {
+    let scratch = df_scratch();
+    if scratch.depth == 0 {
+        return None;
+    }
+    scratch.cursors[scratch.depth - 1].next = next;
+    Some(())
+}
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+fn df_pop() {
+    let scratch = df_scratch();
+    if scratch.depth > 0 {
+        scratch.depth -= 1;
+    }
+}
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+fn df_child(index: usize, out: &mut [u8]) -> Option<usize> {
+    let listed = &df_scratch().listed;
+    if index >= listed.count {
+        return None;
+    }
+    let len = usize::from(listed.lens[index]);
+    if len == 0 || len > out.len() || len > NAME_MAX {
+        return None;
+    }
+    out[..len].copy_from_slice(&listed.bytes[index][..len]);
+    Some(len)
+}
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+fn used_clusters(path: &[u8], root: bool) -> Option<u64> {
+    df_scratch().depth = 0;
+    df_push(path, root)?;
+    let mut used = 0u64;
+    while df_scratch().depth > 0 {
+        let mut path_buf = [0u8; DF_PATH];
+        let (path_len, next, root) = df_top(&mut path_buf)?;
+        let path = &path_buf[..path_len];
+        let count = read_names(path)?;
+        if next == 0 {
+            used += u64::from(!root);
+        }
+        let resume = usize::from(next);
+        if resume > count {
+            return None;
+        }
+        let mut descended = false;
+        for index in resume..count {
+            let mut child = [0u8; NAME_MAX];
+            let child_len = df_child(index, &mut child)?;
+            let mut joined = [0u8; DF_PATH];
+            let joined_len = join_child(path, root, &child[..child_len], &mut joined)?;
+            match files().stat(&joined[..joined_len]) {
+                Ok(stat) if is_dir(&stat) => {
+                    let next_child = u8::try_from(index + 1).ok()?;
+                    df_set_next(next_child)?;
+                    df_push(&joined[..joined_len], false)?;
+                    descended = true;
+                    break;
+                }
+                Ok(stat) => used += file_clusters(stat.size),
+                Err(_) => return None,
+            }
+        }
+        if !descended {
+            df_pop();
+        }
+    }
+    Some(used)
+}
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+fn join_child(path: &[u8], root: bool, child: &[u8], out: &mut [u8]) -> Option<usize> {
+    if root {
+        if child.len() > out.len() {
+            return None;
+        }
+        out[..child.len()].copy_from_slice(child);
+        return Some(child.len());
+    }
+    let need = path.len().checked_add(1)?.checked_add(child.len())?;
+    if need > out.len() {
+        return None;
+    }
+    out[..path.len()].copy_from_slice(path);
+    out[path.len()] = b'/';
+    out[path.len() + 1..need].copy_from_slice(child);
+    Some(need)
+}
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+fn file_clusters(size: u64) -> u64 {
+    size.div_ceil(VOLUME_SECTOR).max(1)
+}
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+fn read_names(path: &[u8]) -> Option<usize> {
+    let dir = files().open_dir(path).ok()?;
+    df_scratch().listed = Listed {
+        bytes: [[0; NAME_MAX]; LIST_MAX],
+        lens: [0; LIST_MAX],
+        count: 0,
+    };
+    let mut buf = [0u8; NAME_MAX];
+    let mut failed = false;
+    loop {
+        match files().read_dir(dir, &mut buf) {
+            Ok(None) => break,
+            Ok(Some(0)) => {}
+            Ok(Some(len)) => {
+                if !df_note_name(&buf[..len]) {
+                    failed = true;
+                    break;
+                }
+            }
+            Err(_) => {
+                failed = true;
+                break;
+            }
+        }
+    }
+    let _ = files().close_dir(dir);
+    if failed {
+        None
+    } else {
+        Some(df_scratch().listed.count)
+    }
+}
+
+#[cfg(not(any(
+    feature = "board-qemu_virt_aarch64_browser_sddf",
+    feature = "board-qemu_virt_riscv64_browser_sddf"
+)))]
+fn df_note_name(name: &[u8]) -> bool {
+    let listed = &mut df_scratch().listed;
+    if listed.count == LIST_MAX || name.is_empty() || name.len() > NAME_MAX {
+        return false;
+    }
+    let len = u8::try_from(name.len()).unwrap_or(0);
+    if len == 0 {
+        return false;
+    }
+    listed.bytes[listed.count][..name.len()].copy_from_slice(name);
+    listed.lens[listed.count] = len;
+    listed.count += 1;
+    true
+}
+
 fn cmd_mkdir(rest: &[u8]) {
     let Some(name) = one_name(rest) else {
         say(b"mkdir err\n");
@@ -1561,10 +2497,33 @@ fn cmd_write(rest: &[u8]) {
         say(b"write err\n");
         return;
     }
-    let Ok(fd) = files().open(name, Open::CreateWrite) else {
+    if let Ok(fd) = files().open(name, Open::CreateWrite) {
+        finish_write(fd, payload);
+        return;
+    }
+    // A second write of the same name appends. One line is 80 bytes, so a
+    // file past 512 bytes is several writes at the current size.
+    let Ok(stat) = files().stat(name) else {
         say(b"write err\n");
         return;
     };
+    if is_dir(&stat) {
+        say(b"write err\n");
+        return;
+    }
+    let Ok(fd) = files().open(name, Open::Write) else {
+        say(b"write err\n");
+        return;
+    };
+    if files().seek(fd, stat.size).is_err() {
+        let _ = files().close(fd);
+        say(b"write err\n");
+        return;
+    }
+    finish_write(fd, payload);
+}
+
+fn finish_write(fd: Fd, payload: &[u8]) {
     let wrote = files().write(fd, payload);
     let _ = files().close(fd);
     let ok = matches!(wrote, Ok(n) if n == payload.len());
@@ -1581,16 +2540,19 @@ fn cmd_cat(rest: &[u8]) {
         return;
     };
     let mut buf = [0u8; 512];
-    let read = files().read(fd, &mut buf);
+    loop {
+        match files().read(fd, &mut buf) {
+            Ok(0) => break,
+            Ok(n) => say(&buf[..n]),
+            Err(_) => {
+                let _ = files().close(fd);
+                say(b"cat err\n");
+                return;
+            }
+        }
+    }
     let _ = files().close(fd);
-    let Ok(n) = read else {
-        say(b"cat err\n");
-        return;
-    };
-    let mut out = [0u8; 513];
-    out[..n].copy_from_slice(&buf[..n]);
-    out[n] = b'\n';
-    say(&out[..=n]);
+    say(b"\n");
 }
 
 fn cmd_ls(rest: &[u8]) {

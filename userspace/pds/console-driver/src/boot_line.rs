@@ -1,7 +1,7 @@
 //! Copy each boot log line onto the VGA text page before the five-second pause.
 //!
-//! `Screen::with_banner` later replaces this page with the banner. A fault
-//! during bring-up leaves the last line on the monitor for that pause.
+//! The shell later replaces this page with the sign-on. A fault during
+//! bring-up leaves the last line on the monitor for that pause.
 
 use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 

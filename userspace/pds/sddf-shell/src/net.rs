@@ -244,6 +244,42 @@ fn sockets() -> Result<&'static mut Sockets<Stack>, ()> {
     Ok(sockets)
 }
 
+/// Install `octets` on the client. Prefix 24 and gateway `10.0.2.2` are the
+/// QEMU user network this client already uses. A stack that is still down
+/// comes up with that address and does not wait for a lease.
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fetch_sddf",
+    feature = "board-qemu_virt_riscv64_fetch_sddf",
+    feature = "board-x86_64_generic_fetch_sddf"
+))]
+pub fn apply_static(octets: [u8; 4]) -> bool {
+    // SAFETY: the worker is the only caller. `install` wrote the device map before it started.
+    let slot = unsafe { &mut *SOCKS.0.get() };
+    if slot.is_null() {
+        let mut stack = Stack::new();
+        if !stack.install_static(octets) {
+            return false;
+        }
+        *slot = Box::leak(Box::new(Sockets::new(stack)));
+        return true;
+    }
+    // SAFETY: this worker stored the pointer and it stays live for the domain.
+    unsafe { &mut **slot }.with_pipe(|stack| stack.install_static(octets))
+}
+
+/// The lease this client already holds. The first call brings the interface up.
+#[cfg(all(
+    feature = "net-client",
+    not(any(
+        feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-qemu_virt_riscv64_browser_sddf"
+    ))
+))]
+pub fn local_address() -> Result<[u8; 4], ()> {
+    let sockets = sockets()?;
+    sockets.with_pipe(|stack| stack.leased_address()).ok_or(())
+}
+
 fn copy_queue(queue: &net_queue_handle_t) -> net_queue_handle_t {
     net_queue_handle_t {
         free: queue.free,
@@ -334,9 +370,59 @@ impl Stack {
         }
     }
 
+    /// Prefix 24 is the QEMU user network. The gateway is the one DHCP uses.
+    #[cfg(any(
+        feature = "board-qemu_virt_aarch64_fetch_sddf",
+        feature = "board-qemu_virt_riscv64_fetch_sddf",
+        feature = "board-x86_64_generic_fetch_sddf"
+    ))]
+    fn install_static(&mut self, octets: [u8; 4]) -> bool {
+        const PREFIX: u8 = 24;
+        let address = Ipv4Address::new(octets[0], octets[1], octets[2], octets[3]);
+        let mut stored = false;
+        self.iface.update_ip_addrs(|addrs| {
+            addrs.clear();
+            stored = addrs
+                .push(IpCidr::new(IpAddress::Ipv4(address), PREFIX))
+                .is_ok();
+        });
+        if !stored {
+            return false;
+        }
+        self.iface.routes_mut().remove_default_ipv4_route();
+        if self
+            .iface
+            .routes_mut()
+            .add_default_ipv4_route(GATEWAY)
+            .is_err()
+        {
+            return false;
+        }
+        self.local_ip = address;
+        self.poll_iface();
+        true
+    }
+
+    #[cfg(all(
+        feature = "net-client",
+        not(any(
+            feature = "board-qemu_virt_aarch64_browser_sddf",
+            feature = "board-qemu_virt_riscv64_browser_sddf"
+        ))
+    ))]
+    fn leased_address(&self) -> Option<[u8; 4]> {
+        if self.local_ip == Ipv4Address::UNSPECIFIED {
+            None
+        } else {
+            Some(self.local_ip.octets())
+        }
+    }
+
     fn bring_up(&mut self) -> bool {
         let start = self.ms;
         loop {
+            #[cfg(feature = "board-swift_sfx14_41g")]
+            crate::kick_radio();
             self.poll_iface();
             match self.take_dhcp() {
                 Ok(true) => return true,
@@ -413,6 +499,7 @@ impl Stack {
         let mut last_send = None;
         let mut seq_no = 0u16;
         loop {
+            crate::kick_radio();
             self.poll_iface();
             let now = self.ms;
             let replied = {

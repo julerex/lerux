@@ -28,10 +28,10 @@ use crate::{
 /// Build `build/<board>/lerux_<board>.iso` (or `--output`) for an `x86_64` board.
 ///
 /// Rebuilds the Microkit image when `build_if_missing` is set, including when
-/// an older `loader.img` is already on disk. When `verify` is set, both SHA-256 sidecars must
-/// match before anything is packed. Sidecars are not copied onto the ISO.
-/// Prints USB flash instructions after packing. Always packs, then writes the
-/// boot-recipe stamp.
+/// an older `loader.img` is already on disk. When `verify` is set, both SHA-256
+/// sidecars must match before anything is packed, and the USB flash line is
+/// printed only after that check. Sidecars are not copied onto the ISO.
+/// Always packs, then writes the boot-recipe stamp.
 pub fn build_iso(
     root: &Path,
     board: &str,
@@ -50,7 +50,9 @@ pub fn build_iso(
         build_if_missing,
         verify,
     )?;
-    print_usb_instructions(board, &out);
+    if verify {
+        print_usb_instructions(board, &out);
+    }
     Ok(out)
 }
 
@@ -391,10 +393,10 @@ fn print_swift_usb() {
     println!("Firmware boot menu → the USB entry that says UEFI (GRUB EFI/BOOT/BOOTX64.EFI).");
     println!("mb2-stub loads sel4.elf (64-bit) at 1 MiB after ExitBootServices.");
     println!(
-        "Screen: the GOP mode line, then \"hello lerux v\" and the short git describe. This laptop has no COM port."
+        "Screen: the GOP mode line, then the sign-on. The issue line is \"Lerux\" and the short git describe. The prompt is \"[root@lerux ~]# \". This laptop has no COM port."
     );
-    println!("1 or browser opens the Lenna test page. quit returns the menu.");
-    println!("Expect: 1 browser");
+    println!("The prompt runs the shell, including setup-wifi.");
+    println!("Expect: lerux login: root (automatic login)");
 }
 
 fn print_inspiron_usb() {
@@ -402,7 +404,7 @@ fn print_inspiron_usb() {
     println!("Firmware boot menu → the USB entry that says UEFI (GRUB EFI/BOOT/BOOTX64.EFI).");
     println!("mb2-stub loads sel4.elf (64-bit) at 1 MiB after ExitBootServices.");
     println!(
-        "Screen: blue background, \"hello lerux\", then \"1 browser\" and \"2 maths\". The keyboard is the built-in i8042."
+        "Screen: gray on black, the sign-on, then \"[root@lerux ~]# \". The keyboard is the built-in i8042."
     );
     println!(
         "This laptop has no COM port. The probe recorded no GOP framebuffer, so the image paints the VGA text page."
@@ -422,9 +424,7 @@ fn print_desk_usb() {
         "Firmware boot menu (F12) → the USB entry that says UEFI (GRUB EFI/BOOT/BOOTX64.EFI)."
     );
     println!("mb2-stub loads sel4.elf (64-bit) at 1 MiB after ExitBootServices.");
-    println!(
-        "Screen: blue background, \"hello lerux\" on the first line, then \"1 browser\" and \"2 maths\"."
-    );
+    println!("Screen: gray on black, the sign-on, then \"[root@lerux ~]# \".");
     println!(
         "Keyboard: PS/2 in the rear combo port, or a USB HID boot keyboard on a root xHCI port."
     );
@@ -432,7 +432,7 @@ fn print_desk_usb() {
         "1 or browser prints \"browser unavailable\". 2 or maths reads expressions until quit."
     );
     println!("Console: COM1 115200 8N1 on the COMA header.");
-    println!("Expect: 1 browser");
+    println!("Expect: lerux login: root (automatic login)");
     println!("Full procedure: docs/boards.md#gigabyte-z97-d3h-install-path");
 }
 

@@ -1,0 +1,11 @@
+[package]
+name = "lerux-signon"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Arch live-image sign-on for the Swift panel and the VGA consoles"
+
+[lints]
+workspace = true
+
+[dependencies]

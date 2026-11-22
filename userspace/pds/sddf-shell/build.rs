@@ -1,4 +1,5 @@
 fn main() {
+    emit_describe();
     reject_mixed_filesystem_boards();
     reject_swift_sharing_a_build();
     reject_fetch_sharing_a_build();
@@ -300,6 +301,44 @@ fn reject_riscv_browser_against_web() {
     compile_error!(
         "the fetch image, the web image, the browser image, and the filesystem image do not share one build"
     );
+}
+
+fn emit_describe() {
+    let manifest =
+        std::path::PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap_or_default());
+    let root = manifest.join("../../..");
+    println!("cargo:rerun-if-env-changed=LERUX_GIT_DESCRIBE");
+    let describe = env_describe().unwrap_or_else(|| {
+        git_describe(&root).unwrap_or_else(|| {
+            std::env::var("CARGO_PKG_VERSION").unwrap_or_else(|_| "0.1.0".to_string())
+        })
+    });
+    println!("cargo:rustc-env=LERUX_GIT_DESCRIBE={describe}");
+}
+
+fn env_describe() -> Option<String> {
+    accept_describe(&std::env::var("LERUX_GIT_DESCRIBE").ok()?)
+}
+
+fn git_describe(root: &std::path::Path) -> Option<String> {
+    let output = std::process::Command::new("git")
+        .args(["-C"])
+        .arg(root)
+        .args(["describe", "--always", "--dirty"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    accept_describe(&String::from_utf8(output.stdout).ok()?)
+}
+
+fn accept_describe(text: &str) -> Option<String> {
+    let text = text.trim().strip_prefix('v').unwrap_or(text.trim());
+    if text.is_empty() || !text.bytes().all(|byte| byte.is_ascii_graphic()) {
+        return None;
+    }
+    Some(text.to_string())
 }
 
 fn emit_config() {

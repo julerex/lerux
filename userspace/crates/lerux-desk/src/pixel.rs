@@ -1,297 +1,36 @@
-//! 8×8 glyphs for a firmware framebuffer. Two pixels per font bit.
+//! 8×16 text on the firmware framebuffer.
+//!
+//! The shell band is 240 columns by [`CONSOLE_ROWS`] rows. Device programs paint
+//! on the rows below that band, in the same gray-on-black glyphs.
 
-const SCALE: usize = 2;
+use crate::{
+    font::glyph,
+    palette::{vga_rgb, DEFAULT_ATTR},
+};
 
-pub const CELL_PX: usize = 8 * SCALE;
+/// Glyph width in pixels.
+pub(crate) const CELL_W: usize = 8;
+/// Glyph height in pixels. One cell is [`CELL_W`] by this many pixels.
+pub(crate) const CELL_H: usize = 16;
+/// Columns of the Swift shell band.
+pub const CONSOLE_COLS: usize = 240;
+/// Rows of the Swift shell band. Device text starts at the next row.
+pub const CONSOLE_ROWS: usize = 40;
 
-pub const CONSOLE_ROWS: usize = 25;
-
-struct Glyph {
-    ch: u8,
-    row: [u8; 8],
-}
-
-const GLYPHS: &[Glyph] = &[
-    Glyph {
-        ch: b' ',
-        row: [0, 0, 0, 0, 0, 0, 0, 0],
-    },
-    Glyph {
-        ch: b'0',
-        row: [0x3C, 0x66, 0x6E, 0x76, 0x66, 0x66, 0x3C, 0],
-    },
-    Glyph {
-        ch: b'1',
-        row: [0x18, 0x38, 0x18, 0x18, 0x18, 0x18, 0x7E, 0],
-    },
-    Glyph {
-        ch: b'2',
-        row: [0x3C, 0x66, 0x06, 0x0C, 0x18, 0x30, 0x7E, 0],
-    },
-    Glyph {
-        ch: b'3',
-        row: [0x3C, 0x66, 0x06, 0x1C, 0x06, 0x66, 0x3C, 0],
-    },
-    Glyph {
-        ch: b'4',
-        row: [0x0C, 0x1C, 0x3C, 0x6C, 0x7E, 0x0C, 0x0C, 0],
-    },
-    Glyph {
-        ch: b'5',
-        row: [0x7E, 0x60, 0x7C, 0x06, 0x06, 0x66, 0x3C, 0],
-    },
-    Glyph {
-        ch: b'6',
-        row: [0x3C, 0x66, 0x60, 0x7C, 0x66, 0x66, 0x3C, 0],
-    },
-    Glyph {
-        ch: b'7',
-        row: [0x7E, 0x06, 0x0C, 0x18, 0x30, 0x30, 0x30, 0],
-    },
-    Glyph {
-        ch: b'8',
-        row: [0x3C, 0x66, 0x66, 0x3C, 0x66, 0x66, 0x3C, 0],
-    },
-    Glyph {
-        ch: b'9',
-        row: [0x3C, 0x66, 0x66, 0x3E, 0x06, 0x66, 0x3C, 0],
-    },
-    Glyph {
-        ch: b'a',
-        row: [0x00, 0x00, 0x3C, 0x06, 0x3E, 0x66, 0x3E, 0],
-    },
-    Glyph {
-        ch: b'b',
-        row: [0x60, 0x60, 0x7C, 0x66, 0x66, 0x66, 0x7C, 0],
-    },
-    Glyph {
-        ch: b'c',
-        row: [0x00, 0x00, 0x3C, 0x66, 0x60, 0x66, 0x3C, 0],
-    },
-    Glyph {
-        ch: b'd',
-        row: [0x06, 0x06, 0x3E, 0x66, 0x66, 0x66, 0x3E, 0],
-    },
-    Glyph {
-        ch: b'e',
-        row: [0x00, 0x00, 0x3C, 0x66, 0x7E, 0x60, 0x3C, 0],
-    },
-    Glyph {
-        ch: b'f',
-        row: [0x1C, 0x36, 0x30, 0x78, 0x30, 0x30, 0x30, 0],
-    },
-    Glyph {
-        ch: b'g',
-        row: [0x00, 0x00, 0x3E, 0x66, 0x66, 0x3E, 0x06, 0x7C],
-    },
-    Glyph {
-        ch: b'h',
-        row: [0x60, 0x60, 0x7C, 0x66, 0x66, 0x66, 0x66, 0],
-    },
-    Glyph {
-        ch: b'i',
-        row: [0x18, 0x00, 0x38, 0x18, 0x18, 0x18, 0x3C, 0],
-    },
-    Glyph {
-        ch: b'l',
-        row: [0x38, 0x18, 0x18, 0x18, 0x18, 0x18, 0x3C, 0],
-    },
-    Glyph {
-        ch: b'm',
-        row: [0x00, 0x00, 0x66, 0x7F, 0x7F, 0x6B, 0x63, 0],
-    },
-    Glyph {
-        ch: b'n',
-        row: [0x00, 0x00, 0x7C, 0x66, 0x66, 0x66, 0x66, 0],
-    },
-    Glyph {
-        ch: b'o',
-        row: [0x00, 0x00, 0x3C, 0x66, 0x66, 0x66, 0x3C, 0],
-    },
-    Glyph {
-        ch: b'q',
-        row: [0x00, 0x00, 0x3E, 0x66, 0x66, 0x3E, 0x06, 0x06],
-    },
-    Glyph {
-        ch: b'r',
-        row: [0x00, 0x00, 0x6C, 0x76, 0x60, 0x60, 0x60, 0],
-    },
-    Glyph {
-        ch: b's',
-        row: [0x00, 0x00, 0x3E, 0x60, 0x3C, 0x06, 0x7C, 0],
-    },
-    Glyph {
-        ch: b't',
-        row: [0x30, 0x30, 0x7C, 0x30, 0x30, 0x36, 0x1C, 0],
-    },
-    Glyph {
-        ch: b'u',
-        row: [0x00, 0x00, 0x66, 0x66, 0x66, 0x66, 0x3E, 0],
-    },
-    Glyph {
-        ch: b'v',
-        row: [0x00, 0x00, 0x66, 0x66, 0x66, 0x3C, 0x18, 0],
-    },
-    Glyph {
-        ch: b'w',
-        row: [0x00, 0x00, 0x63, 0x6B, 0x7F, 0x3E, 0x36, 0],
-    },
-    Glyph {
-        ch: b'x',
-        row: [0x00, 0x00, 0x66, 0x3C, 0x18, 0x3C, 0x66, 0],
-    },
-    Glyph {
-        ch: b'y',
-        row: [0x00, 0x00, 0x66, 0x66, 0x66, 0x3E, 0x06, 0x7C],
-    },
-    Glyph {
-        ch: b'>',
-        row: [0xC0, 0x60, 0x30, 0x18, 0x30, 0x60, 0xC0, 0],
-    },
-    Glyph {
-        ch: b'k',
-        row: [0x60, 0x60, 0x66, 0x6C, 0x78, 0x6C, 0x66, 0],
-    },
-    Glyph {
-        ch: b'p',
-        row: [0x00, 0x00, 0x7C, 0x66, 0x66, 0x7C, 0x60, 0x60],
-    },
-    Glyph {
-        ch: b'.',
-        row: [0x00, 0x00, 0x00, 0x00, 0x00, 0x18, 0x18, 0],
-    },
-    Glyph {
-        ch: b':',
-        row: [0x00, 0x18, 0x18, 0x00, 0x00, 0x18, 0x18, 0],
-    },
-    Glyph {
-        ch: b'-',
-        row: [0x00, 0x00, 0x00, 0x7E, 0x00, 0x00, 0x00, 0],
-    },
-    // Full-height capitals. The lowercase rows above sit in the lower half,
-    // so a shifted letter is visible on the panel.
-    Glyph {
-        ch: b'A',
-        row: [0x38, 0x44, 0x44, 0x7C, 0x44, 0x44, 0x44, 0],
-    },
-    Glyph {
-        ch: b'B',
-        row: [0x78, 0x44, 0x44, 0x78, 0x44, 0x44, 0x78, 0],
-    },
-    Glyph {
-        ch: b'C',
-        row: [0x38, 0x44, 0x40, 0x40, 0x40, 0x44, 0x38, 0],
-    },
-    Glyph {
-        ch: b'D',
-        row: [0x78, 0x44, 0x44, 0x44, 0x44, 0x44, 0x78, 0],
-    },
-    Glyph {
-        ch: b'E',
-        row: [0x7C, 0x40, 0x40, 0x78, 0x40, 0x40, 0x7C, 0],
-    },
-    Glyph {
-        ch: b'F',
-        row: [0x7C, 0x40, 0x40, 0x78, 0x40, 0x40, 0x40, 0],
-    },
-    Glyph {
-        ch: b'G',
-        row: [0x38, 0x44, 0x40, 0x5C, 0x44, 0x44, 0x38, 0],
-    },
-    Glyph {
-        ch: b'H',
-        row: [0x44, 0x44, 0x44, 0x7C, 0x44, 0x44, 0x44, 0],
-    },
-    Glyph {
-        ch: b'I',
-        row: [0x38, 0x10, 0x10, 0x10, 0x10, 0x10, 0x38, 0],
-    },
-    Glyph {
-        ch: b'J',
-        row: [0x1C, 0x08, 0x08, 0x08, 0x08, 0x48, 0x30, 0],
-    },
-    Glyph {
-        ch: b'K',
-        row: [0x44, 0x48, 0x50, 0x60, 0x50, 0x48, 0x44, 0],
-    },
-    Glyph {
-        ch: b'L',
-        row: [0x40, 0x40, 0x40, 0x40, 0x40, 0x40, 0x7C, 0],
-    },
-    Glyph {
-        ch: b'M',
-        row: [0x44, 0x6C, 0x54, 0x54, 0x44, 0x44, 0x44, 0],
-    },
-    Glyph {
-        ch: b'N',
-        row: [0x44, 0x64, 0x54, 0x4C, 0x44, 0x44, 0x44, 0],
-    },
-    Glyph {
-        ch: b'O',
-        row: [0x38, 0x44, 0x44, 0x44, 0x44, 0x44, 0x38, 0],
-    },
-    Glyph {
-        ch: b'P',
-        row: [0x78, 0x44, 0x44, 0x78, 0x40, 0x40, 0x40, 0],
-    },
-    Glyph {
-        ch: b'Q',
-        row: [0x38, 0x44, 0x44, 0x44, 0x54, 0x48, 0x34, 0],
-    },
-    Glyph {
-        ch: b'R',
-        row: [0x78, 0x44, 0x44, 0x78, 0x50, 0x48, 0x44, 0],
-    },
-    Glyph {
-        ch: b'S',
-        row: [0x3C, 0x40, 0x40, 0x38, 0x04, 0x04, 0x78, 0],
-    },
-    Glyph {
-        ch: b'T',
-        row: [0x7C, 0x10, 0x10, 0x10, 0x10, 0x10, 0x10, 0],
-    },
-    Glyph {
-        ch: b'U',
-        row: [0x44, 0x44, 0x44, 0x44, 0x44, 0x44, 0x38, 0],
-    },
-    Glyph {
-        ch: b'V',
-        row: [0x44, 0x44, 0x44, 0x44, 0x44, 0x28, 0x10, 0],
-    },
-    Glyph {
-        ch: b'W',
-        row: [0x44, 0x44, 0x44, 0x54, 0x54, 0x54, 0x28, 0],
-    },
-    Glyph {
-        ch: b'X',
-        row: [0x44, 0x44, 0x28, 0x10, 0x28, 0x44, 0x44, 0],
-    },
-    Glyph {
-        ch: b'Y',
-        row: [0x44, 0x44, 0x28, 0x10, 0x10, 0x10, 0x10, 0],
-    },
-    Glyph {
-        ch: b'Z',
-        row: [0x7C, 0x04, 0x08, 0x10, 0x20, 0x40, 0x7C, 0],
-    },
-];
-
-fn glyph(ch: u8) -> [u8; 8] {
-    for item in GLYPHS {
-        if item.ch == ch {
-            return item.row;
-        }
-    }
-    [0x7E, 0x42, 0x42, 0x42, 0x42, 0x42, 0x7E, 0]
-}
-
-fn pack(red: u8, green: u8, blue: u8, white: bool) -> u32 {
-    if white {
-        (0xffu32 << red) | (0xffu32 << green) | (0xffu32 << blue)
-    } else {
-        0xaau32 << blue
-    }
-}
+/// Command-word row. It is the first row below the shell band.
+pub const ROW_CMD: usize = CONSOLE_ROWS;
+/// Exclusion-range row.
+pub const ROW_EXCL: usize = ROW_CMD + 1;
+/// First of the six Wi-Fi rows. The stage line is the last of them.
+pub const ROW_WIFI: usize = ROW_EXCL + 1;
+/// Slot, command, descriptor, doorbell, fetch, and the stage line.
+pub(crate) const WIFI_ROWS: usize = 6;
+/// Disk row.
+pub const ROW_NVME: usize = ROW_WIFI + WIFI_ROWS;
+/// Bluetooth row.
+pub const ROW_BT: usize = ROW_NVME + 1;
+/// First device-name row.
+pub const ROW_PCI: usize = ROW_BT + 1;
 
 /// Pixel geometry for one firmware framebuffer.
 #[derive(Clone, Copy)]
@@ -304,12 +43,12 @@ pub struct Pen {
     pub blue: u8,
 }
 
-/// Fill the mapped frame with the console blue. Cells paint over this.
+/// Fill the mapped frame with black.
 pub fn fill_background(frame: &mut [u8], pen: Pen) {
     if pen.pitch < 4 {
         return;
     }
-    let bg = pack(pen.red, pen.green, pen.blue, false).to_le_bytes();
+    let bg = pack(pen, [0, 0, 0]).to_le_bytes();
     let rows = pen.height.min(frame.len() / pen.pitch);
     for y in 0..rows {
         let start = y * pen.pitch;
@@ -320,49 +59,100 @@ pub fn fill_background(frame: &mut [u8], pen: Pen) {
     }
 }
 
-/// Draw `text` on one cell row. Bytes past the row are skipped.
+/// Draw `text` on one cell row in the default gray on black. Bytes past the row are skipped.
 pub fn paint_text_row(frame: &mut [u8], pen: Pen, row: usize, text: &[u8]) {
     for (col, &ch) in text.iter().enumerate() {
-        paint_cell(frame, pen, col, row, ch);
+        paint_cell(frame, pen, col, row, ch, DEFAULT_ATTR);
     }
 }
 
-/// Draw one VGA cell. `ch` is the low byte. Cells past the frame are skipped.
-pub fn paint_cell(frame: &mut [u8], pen: Pen, col: usize, row: usize, ch: u8) {
-    let fg = pack(pen.red, pen.green, pen.blue, true);
-    let bg = pack(pen.red, pen.green, pen.blue, false);
-    let origin_x = col * 8 * SCALE;
-    let origin_y = row * 8 * SCALE;
-    if pen.pitch < 4 || origin_x + 8 * SCALE > pen.width || origin_y + 8 * SCALE > pen.height {
+/// Draw one VGA cell. `attr` is the hardware attribute byte. Cells past the frame are skipped.
+pub fn paint_cell(frame: &mut [u8], pen: Pen, col: usize, row: usize, ch: u8, attr: u8) {
+    blit(frame, pen, col, row, glyph(ch), attr);
+}
+
+/// Two-pixel underline in the cell's foreground colour. The glyph above it stays.
+pub fn paint_underline(frame: &mut [u8], pen: Pen, col: usize, row: usize, attr: u8) {
+    let fg = pack(pen, vga_rgb(attr & 0x0f));
+    let origin_x = col * CELL_W;
+    let origin_y = row * CELL_H;
+    if pen.pitch < 4 || origin_x + CELL_W > pen.width || origin_y + CELL_H > pen.height {
         return;
     }
-    let rows = glyph(ch);
-    for (gy, bits) in rows.iter().enumerate() {
-        for gx in 0..8 {
-            let on = bits & (0x80u8 >> gx) != 0;
-            let color = if on { fg } else { bg };
-            for sy in 0..SCALE {
-                for sx in 0..SCALE {
-                    let x = origin_x + gx * SCALE + sx;
-                    let y = origin_y + gy * SCALE + sy;
-                    let at = y * pen.pitch + x * 4;
-                    let Some(slot) = frame.get_mut(at..at + 4) else {
-                        return;
-                    };
-                    slot.copy_from_slice(&color.to_le_bytes());
-                }
-            }
+    for gy in (CELL_H - 2)..CELL_H {
+        for gx in 0..CELL_W {
+            let at = (origin_y + gy) * pen.pitch + (origin_x + gx) * 4;
+            let Some(slot) = frame.get_mut(at..at + 4) else {
+                return;
+            };
+            slot.copy_from_slice(&fg.to_le_bytes());
         }
     }
+}
+
+fn blit(frame: &mut [u8], pen: Pen, col: usize, row: usize, rows: [u8; CELL_H], attr: u8) {
+    let fg = pack(pen, vga_rgb(attr & 0x0f));
+    let bg = pack(pen, vga_rgb(attr >> 4));
+    let origin_x = col * CELL_W;
+    let origin_y = row * CELL_H;
+    if pen.pitch < 4 || origin_x + CELL_W > pen.width || origin_y + CELL_H > pen.height {
+        return;
+    }
+    for (gy, bits) in rows.iter().enumerate() {
+        for gx in 0..CELL_W {
+            let on = bits & (0x80u8 >> gx) != 0;
+            let color = if on { fg } else { bg };
+            let x = origin_x + gx;
+            let y = origin_y + gy;
+            let at = y * pen.pitch + x * 4;
+            let Some(slot) = frame.get_mut(at..at + 4) else {
+                return;
+            };
+            slot.copy_from_slice(&color.to_le_bytes());
+        }
+    }
+}
+
+fn pack(pen: Pen, rgb: [u8; 3]) -> u32 {
+    (u32::from(rgb[0]) << pen.red)
+        | (u32::from(rgb[1]) << pen.green)
+        | (u32::from(rgb[2]) << pen.blue)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::font::glyph;
+
+    fn pen(width: usize, height: usize) -> Pen {
+        Pen {
+            pitch: width * 4,
+            width,
+            height,
+            red: 16,
+            green: 8,
+            blue: 0,
+        }
+    }
+
+    fn gray() -> [u8; 4] {
+        pack(
+            Pen {
+                pitch: 4,
+                width: 1,
+                height: 1,
+                red: 16,
+                green: 8,
+                blue: 0,
+            },
+            [0xaa, 0xaa, 0xaa],
+        )
+        .to_le_bytes()
+    }
 
     #[test]
-    fn fill_background_paints_console_blue() {
-        let mut frame = [0u8; 16];
+    fn fill_background_paints_black() {
+        let mut frame = [0xffu8; 16];
         fill_background(
             &mut frame,
             Pen {
@@ -374,47 +164,52 @@ mod tests {
                 blue: 0,
             },
         );
-        assert_eq!(&frame[..4], &0xaau32.to_le_bytes());
-        assert_eq!(&frame[12..16], &0xaau32.to_le_bytes());
+        assert_eq!(frame, [0u8; 16]);
     }
 
     #[test]
-    fn letter_f_has_ink() {
-        let mut frame = [0u8; 64 * 32];
-        paint_cell(
-            &mut frame,
-            Pen {
-                pitch: 64,
-                width: 16,
-                height: 32,
-                red: 16,
-                green: 8,
-                blue: 0,
-            },
-            0,
-            0,
-            b'f',
-        );
-        assert_eq!(frame[26], 0xff);
+    fn default_glyph_ink_is_gray() {
+        let mut frame = [0u8; 16 * 32];
+        paint_cell(&mut frame, pen(8, 16), 0, 0, b'A', DEFAULT_ATTR);
+        // UniVGA 'A' row 2 is 0x10, so column 3 is ink.
+        let at = 2 * 32 + 3 * 4;
+        assert_eq!(glyph(b'A')[2], 0x10);
+        assert_eq!(&frame[at..at + 4], &gray());
+        assert_eq!(frame[0], 0x00);
     }
 
     #[test]
     fn capital_a_is_taller_than_lowercase() {
-        let pen = Pen {
-            pitch: 64,
-            width: 16,
-            height: 32,
-            red: 16,
-            green: 8,
-            blue: 0,
-        };
-        let mut upper = [0u8; 64 * 32];
-        let mut lower = [0u8; 64 * 32];
-        paint_cell(&mut upper, pen, 0, 0, b'A');
-        paint_cell(&mut lower, pen, 0, 0, b'a');
-        assert_ne!(upper, lower);
-        // First row of 'A' (0x38) lights pixel column 2. Lowercase 'a' is blank there.
-        assert_eq!(upper[16], 0xff);
-        assert_eq!(lower[16], 0xaa);
+        let mut upper = [0u8; 16 * 32];
+        let mut lower = [0u8; 16 * 32];
+        paint_cell(&mut upper, pen(8, 16), 0, 0, b'A', DEFAULT_ATTR);
+        paint_cell(&mut lower, pen(8, 16), 0, 0, b'a', DEFAULT_ATTR);
+        let at = 2 * 32 + 3 * 4;
+        assert_eq!(&upper[at..at + 4], &gray());
+        assert_eq!(&lower[at..at + 4], &[0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn device_rows_follow_the_shell_band() {
+        let rows = [
+            ROW_CMD,
+            ROW_EXCL,
+            ROW_WIFI,
+            ROW_WIFI + 1,
+            ROW_WIFI + 2,
+            ROW_WIFI + 3,
+            ROW_WIFI + 4,
+            ROW_WIFI + 5,
+            ROW_NVME,
+            ROW_BT,
+            ROW_PCI,
+        ];
+        assert!(rows[0] >= CONSOLE_ROWS);
+        for pair in rows.windows(2) {
+            assert!(pair[0] < pair[1]);
+        }
+        assert_eq!(ROW_WIFI + WIFI_ROWS, ROW_NVME);
+        let rows = usize::try_from(crate::FRAMEBUFFER_HEIGHT).expect("height") / CELL_H;
+        assert!(ROW_PCI + 6 <= rows);
     }
 }

@@ -43,16 +43,16 @@ lerux runs several small programs at once. Each one has its own memory. They sha
 
 | Priority | Program | What it paints |
 | --- | --- | --- |
-| 6 | Display | `hello lerux v` and the short git describe, then the shell |
-| 5 | PCI probe | Device names below the menu, and rows 15 and 16. It does not paint the dump |
-| 4 | Wi-Fi | Rows 17–22. It does not paint the dump |
-| 3 | Disk | Row 23, `nvme` |
-| 2 | Bluetooth | Row 24, `bt` |
-| 1 | Menu | `1 browser`, `2 maths`, `3 wifi` |
+| 6 | Display | The 240×40 shell band, light gray on black. The shell prints the sign-on |
+| 5 | PCI probe | The command row and the exclusion row, then the device names at row 50. It does not paint the dump |
+| 4 | Wi-Fi | Rows 42–47. It does not paint the dump |
+| 3 | Disk | Row 48, `nvme` |
+| 2 | Bluetooth | Row 49, `bt` |
+| 1 | Shell | The sign-on, then `[root@lerux ~]# ` |
 
 The Wi-Fi program starts before the disk program and the Bluetooth program. Its startup includes a long wait for the card. Until that wait ends, the disk line and the Bluetooth line do not exist yet. The blank minute is that wait. The moving dots, and the lines under them, are there so the wait is visible.
 
-A later scroll of the menu redraws the whole picture from the menu's own record of the screen. That record does not contain rows 15–21 or the join detail on rows 23–26. A full redraw erases them. The status word on row 22 is painted again by the Wi-Fi program, so it survives. The disk and Bluetooth programs do not paint rows 23 and 24 again after a failed join has used them.
+A later scroll redraws the shell band from the console's own record of the screen. That record is the top 40 rows. The device rows start at row 40, so a full redraw leaves them, including a failed join's detail. The status word on row 47 is painted again by the Wi-Fi program. The disk and Bluetooth programs do not paint rows 48 and 49 again after a failed join has used them.
 
 ## How to read the numbers
 
@@ -159,18 +159,18 @@ During the wait, the Wi-Fi program paints these rows:
 
 | Row | Text | What just happened |
 | --- | --- | --- |
-| 15 | `cmd …` | The probe read back the MT7921 PCI command word. This is painted before the Wi-Fi program starts |
-| 16 | `excl …` | The probe read back the IOMMU exclusion settings. This is painted before the Wi-Fi program starts |
-| 17 | `slot …` | After the wait fails, the processor reads note 0 back out of RAM |
-| 18 | `cpu: write cmd` | The processor copied the 68-byte semaphore message into the bounce buffer |
-| 19 | `ram: write desc` | The processor wrote the 16-byte note at the start of the command ring |
-| 20 | `wfdma: doorbell` | The processor stored 1 in the CPU index, on the card |
-| 21 | `wfdma: fetch` | The processor is waiting for the DMA index to move. The dot counts time |
-| 22 | `mt7921: fw sem …` | The wait ended without the card taking the note. The fields are the ring registers |
+| 40 | `cmd …` | The probe read back the MT7921 PCI command word. This is painted before the Wi-Fi program starts |
+| 41 | `excl …` | The probe read back the IOMMU exclusion settings. This is painted before the Wi-Fi program starts |
+| 42 | `slot …` | After the wait fails, the processor reads note 0 back out of RAM |
+| 43 | `cpu: write cmd` | The processor copied the 68-byte semaphore message into the bounce buffer |
+| 44 | `ram: write desc` | The processor wrote the 16-byte note at the start of the command ring |
+| 45 | `wfdma: doorbell` | The processor stored 1 in the CPU index, on the card |
+| 46 | `wfdma: fetch` | The processor is waiting for the DMA index to move. The dot counts time |
+| 47 | `mt7921: fw sem …` | The wait ended without the card taking the note. The fields are the ring registers |
 
-Rows 18–21 name the processor, the RAM patch, and the card's DMA engine. They are progress marks. They are not failure names. Row 22 is the failure name.
+Rows 43–46 name the processor, the RAM patch, and the card's DMA engine. They are progress marks. They are not failure names. Row 47 is the failure name.
 
-Before row 18 appears, row 22 shows `mt7921 .` with a moving dot. That covers earlier polls, such as asking the card to let the processor own it. The first semaphore step clears that dot and the four lines above take its place.
+Before row 43 appears, row 47 shows `mt7921 .` with a moving dot. That covers earlier polls, such as asking the card to let the processor own it. The first semaphore step clears that dot and the four lines above take its place.
 
 ## The line you already saw: `fw sem d00 c01 s0100 b2000 g75`
 
@@ -233,7 +233,7 @@ The card is supposed to read that address directly. Its counter still stayed at 
 
 Every PCI function has a command word. It is the 16-bit register at offset `0x04` in configuration space. Two bits in it matter here. Memory space lets the processor's writes reach the card's registers. Bus master lets the card read and write RAM on its own. Without bus master, the DMA engine is not allowed to fetch the note, whatever the doorbell and the translator say.
 
-The probe sets both of those bits on the MT7921 at `03:00.0`, then reads the word back. Row 15, the row above `excl`, is that reading. It is painted before the Wi-Fi program starts. The line is `cmd` and four hex digits. The last digit is the low nibble, bits 0 through 3. Bit 2 of that nibble is bus master.
+The probe sets both of those bits on the MT7921 at `03:00.0`, then reads the word back. Row 40, the row above `excl`, is that reading. It is painted before the Wi-Fi program starts. The line is `cmd` and four hex digits. The last digit is the low nibble, bits 0 through 3. Bit 2 of that nibble is bus master.
 
 | Line | Meaning |
 | --- | --- |
@@ -255,11 +255,11 @@ The command word is `cmd 0006`. Memory space and bus master are both set, so the
 
 The link control was cleared on the card and on its root port (`lnk 0142>0040` and `lnk 0042>0040` on row 31) and the stall stayed on `fw sem`. The fetch is permitted from the processor's side of the bus, and the engine's counter still does not move.
 
-The Linux probe of 8 November 2026 is written up in [plan-swift-wifi.md](plan-swift-wifi.md#what-the-linux-boot-showed). Linux loads the firmware on this unit. `rr` and `wr` now keep the high half of `HIF_REMAP_L1`. The next photograph is a cold boot of that image. The row 22 word is the result. The firmware download order stays as it is until that photograph shows a later word.
+The Linux probe of 8 November 2026 is written up in [plan-swift-wifi.md](plan-swift-wifi.md#what-the-linux-boot-showed). Linux loads the firmware on this unit. `rr` and `wr` now keep the high half of `HIF_REMAP_L1`. The next photograph is a cold boot of that image. The row 47 word is the result. The firmware download order stays as it is until that photograph shows a later word.
 
 ## The dump rows, 31 to 66
 
-The current image does not paint rows 31 to 66. The last status line is `bt: port 3 desc` on row 24. Device-name rows 25 to 30 stay. Nothing after that line is a photograph dump or a register row. The layout below is what older photographs show, and the formatters remain in `userspace/crates/lerux-swift/src/dump.rs` so a host test can still check a row. Do not paint these rows on the panel. Each row is at most 120 characters: a label of eight characters, then up to twelve 8-digit words.
+The shell band is rows 0–39. The device rows under it are 40–55: the command and exclusion lines, the six Wi-Fi rows, the disk, Bluetooth, and the device names. The photograph dump is not painted. The formatters remain in `userspace/crates/lerux-swift/src/dump.rs` and still name rows 31–66, so a host test can check a row. Do not paint that dump on the panel. The layout below is what older photographs show. Each row is at most 120 characters: a label of eight characters, then up to twelve 8-digit words.
 
 | Rows | Painted by | What is there |
 | --- | --- | --- |
@@ -279,7 +279,7 @@ The current image does not paint rows 31 to 66. The last status line is `bt: por
 
 The register names on rows 51 to 53 and 63 to 65 are, in order: `lpctl` `CONN_ON_LPCTL`, `misc` `CONN_ON_MISC`, `wfsys` `WFSYS_RST`, `lpcr` `TOP_LPCR_HOST_BAND0`, `chip` `HW_CHIPID`, `rev` `HW_REV`, `mint` `PCIE_MAC_INT_ENABLE`, `mpm` `PCIE_MAC_PM`, `iena` `HOST_INT_ENA`, `ista` `HOST_INT_STA`, `glo` `GLO_CFG`, `ext0` `GLO_CFG_EXT0`, `dtx` `RST_DTX_PTR`, `drx` `RST_DRX_PTR`, `mcmd` `MCU_CMD`, `m2h` `MCU2HOST_SW_INT_ENA`, `rst` `WFDMA_RST`, `busy` `BUSY_ENA`, `shdl` `DMASHDL_SW_CONTROL`, `dummy` `DUMMY_CR`, `swdef` `SWDEF_MODE`. The table is `DUMP_REGS` in `userspace/crates/lerux-swift/src/mt7921.rs`.
 
-Reading the photograph: `rp` on row 31 says whether the root port above the card was allowed to forward its reads. The two words either side of `>` say whether the probe changed anything. Rows 32–49 put the card, its port, and the working disk's port one above the other so a field that differs stands out. `aft` against `pre` says what moved in the card while the processor waited. The `t17` block on row 54 is the same four registers as `fw sem` on row 22, in full.
+Reading the photograph: `rp` on row 31 says whether the root port above the card was allowed to forward its reads. The two words either side of `>` say whether the probe changed anything. Rows 32–49 put the card, its port, and the working disk's port one above the other so a field that differs stands out. `aft` against `pre` says what moved in the card while the processor waited. The `t17` block on row 54 is the same four registers as `fw sem` on row 47, in full.
 
 Photograph rows 31–66 at full camera resolution, in two frames if one does not resolve the digits: rows 31–49 and rows 50–66. An upload scaled to about a thousand pixels across leaves 8 pixels per character, and the configuration-space rows cannot be read from it.
 
@@ -296,7 +296,7 @@ Linux clears those link bits before it touches the chip (`mt76_pci_disable_aspm`
 
 The next photograph, the same day, showed the clear taking effect and the stall staying put: `03:00.0 cmd 0006 lnk 0142>0040 pm 0008`, root port `00:02.2` with `lnk 0042>0040`, and row 22 still `fw sem d00 c01 s0100 b2000 g75`. With bits 1:0 clear on both ends of the link, L1 and its substates are not reachable, so that extended register is not the next measurement. The Linux probe that followed is recorded in [plan-swift-wifi.md](plan-swift-wifi.md).
 
-## Other words on row 22
+## Other words on row 47
 
 These are the other status words the Wi-Fi program can paint. Each one names a step. A boot that shows one of them stopped there, after the earlier steps had returned.
 
@@ -310,9 +310,9 @@ These are the other status words the Wi-Fi program can paint. Each one names a s
 | `fw start` | The "start running" command after that half got no answer |
 | `fw chip` | The card's chip id needs a different firmware pair than the one in this ISO |
 | `mac` | The radio setup after firmware, including the reset of the Wi-Fi block |
-| `wait` | Firmware and radio setup finished. Choosing `3 wifi` lists the names the radio can hear |
+| `wait` | Firmware and radio setup finished. `setup-wifi` lists the names the radio can hear |
 
-`nvme` on row 23 and `bt` on row 24 are the disk and Bluetooth programs. They start only after the Wi-Fi startup returns, including when it returns by giving up. A failed `auth rx` or `eapol` replaces rows 23–26 with the rejected frame: the sequence and status, the addresses, this station, and 16 bytes of the body (`m24`, `m26`, or `m0`). Row 27 is `END OF OUTPUT`. The device lines under that, the ones that end in `irq`, are blank. That covers the disk line, the Bluetooth line, and the device names until the next boot.
+`nvme` on row 48 and `bt` on row 49 are the disk and Bluetooth programs. They start only after the Wi-Fi startup returns, including when it returns by giving up. A failed `auth rx` or `eapol` replaces rows 48–51 with the rejected frame. The two letters after `eapol` on row 47 name the return. `w1` and `w3` are waits that ended with no message. `m1` and `m3` are a copied frame the handshake refused. `t2` and `t4` are a reply that did not leave the transmit ring. `b2` and `b4` are a reply that did not fit. The rows under that are the sequence and status, the addresses, this station, and 16 bytes of the body (`m24`, `m26`, or `m0`). Row 52 is `END OF OUTPUT`. The device lines under that, the ones that end in `irq`, are blank. That covers the disk line, the Bluetooth line, and the device names until the next boot.
 
 ## Where this lives in the tree
 

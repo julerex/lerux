@@ -1203,9 +1203,12 @@ pub fn write_channel_domain(out: &mut [u8]) -> Option<usize> {
 
 /// `mt76_connac2_mac_write_txwi` for one 802.11 frame.
 ///
-/// The MMIO path posts a management frame with cut-through format on the ALTX
-/// queue (`qid >= MT_TXQ_PSD`). The wireless index is [`PEER_WTBL`].
-/// `band5` selects the fixed rate: CCK 1 Mbps below channel 15, OFDM 6 Mbps above.
+/// Management frames use the ALTX queue (`qid >= MT_TXQ_PSD`). Data frames,
+/// including DHCP, use the best-effort queue. The wireless index is
+/// [`PEER_WTBL`]. `band5` selects the fixed rate: CCK 1 Mbps below channel 15,
+/// OFDM 6 Mbps above. A control-port frame is data at that fixed rate.
+/// mac80211 sets `IEEE80211_TX_CTL_USE_MINRATE` for ethertype `0x888e`, and a
+/// station that did not advertise WMM sends the frame as non-`QoS` data.
 pub fn write_txwi(txwi: &mut [u8], frame: &[u8], frame_phys: u32, band5: bool) -> bool {
     if txwi.len() < TXD_LEN + TXP_LEN || frame.len() < 24 || frame.len() > 0x3fff {
         return false;
@@ -1221,15 +1224,24 @@ pub fn write_txwi(txwi: &mut [u8], frame: &[u8], frame_phys: u32, band5: bool) -
 
 /// `MT_LMAC_ALTX0`. Management frames use this queue on the MMIO path.
 const MT_LMAC_ALTX0: u32 = 0x10;
+/// Best-effort LMAC queue. `mt76_connac_lmac_mapping` reverses the mac80211
+/// index, and `IEEE80211_AC_BE` is 2, so the hardware queue is 1.
+const MT_LMAC_AC_BE: u32 = 1;
 
 /// TXD words before the TXP buffer pointer. `frame` is at least 24 bytes.
 ///
 /// Packet format is cut-through: `MT_TXD0_PKT_FMT` (bits 24:23) stays clear.
 fn write_txd(txwi: &mut [u8], frame: &[u8], band5: bool) {
     let total = frame.len() + TXD_LEN;
-    let tx0 = u32::from(low_u16(total)) | (MT_LMAC_ALTX0 << 25);
-    txwi[..4].copy_from_slice(&tx0.to_le_bytes());
+    let eapol = control_port(frame);
     let fc = u16::from_le_bytes([frame[0], frame[1]]);
+    // Linux posts data on the access-category queue. ALTX is management only.
+    // DHCP is the first data frame after the handshake, and EAPOL already left
+    // on this best-effort queue.
+    let data = fc & 0x000c == 0x0008;
+    let queue = if data { MT_LMAC_AC_BE } else { MT_LMAC_ALTX0 };
+    let tx0 = u32::from(low_u16(total)) | (queue << 25);
+    txwi[..4].copy_from_slice(&tx0.to_le_bytes());
     let fc_kind = u32::from((fc & 0x000c) >> 2);
     let subtype = u32::from((fc & 0x00f0) >> 4);
     let hdr = header_len(frame);
@@ -1241,8 +1253,7 @@ fn write_txd(txwi: &mut [u8], frame: &[u8], band5: bool) {
     if multicast {
         tx2 |= 1 << 10;
     }
-    let data = fc & 0x000c == 0x0008;
-    if !data || multicast {
+    if !data || multicast || eapol {
         tx2 |= 1 << 31;
         tx2 |= 1 << 13;
     }
@@ -1277,6 +1288,12 @@ fn header_len(frame: &[u8]) -> usize {
     } else {
         24
     }
+}
+
+/// LLC/SNAP plus ethertype `0x888e`, the control-port protocol.
+fn control_port(frame: &[u8]) -> bool {
+    let at = header_len(frame);
+    frame.get(at..at + 8) == Some(&[0xaa, 0xaa, 0x03, 0x00, 0x00, 0x00, 0x88, 0x8e])
 }
 
 const PKT_TYPE_NORMAL: u32 = 2;
@@ -1430,6 +1447,15 @@ pub fn write_key(page: &mut [u8], ssid: &[u8], psk: &[u8]) -> bool {
 
 /// Byte 3 is the association result. `write_key` leaves it clear.
 const JOIN_UP: u8 = 1;
+
+/// The shell posted a passphrase and [`write_join`] has not stored a result.
+///
+/// A later notify drains the receive ring during DHCP. It must not start a
+/// second association. [`write_key`] clears this byte, so the next command can.
+#[must_use]
+pub fn join_pending(page: &[u8]) -> bool {
+    page.len() >= 4 && page[0] == 1 && page[3] == 0
+}
 
 /// The radio sets this after `associate` returns. `up` is a finished handshake.
 pub fn write_join(page: &mut [u8], up: bool) -> bool {
@@ -1605,6 +1631,46 @@ fn hex_byte(byte: u8) -> [u8; 2] {
     [hex_nibble(byte >> 4), hex_nibble(byte)]
 }
 
+/// Where the four-way handshake returned without a key.
+///
+/// The panel row is 48 cells. Each word is two bytes and is printed
+/// immediately after `eapol`, before the counts.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum EapolStop {
+    /// No message 1 arrived.
+    #[default]
+    Wait1,
+    /// The copied frame was not message 1.
+    Msg1,
+    /// Message 2 did not fit in the buffer.
+    Build2,
+    /// Message 2 did not leave the transmit ring.
+    Tx2,
+    /// No message 3 arrived.
+    Wait3,
+    /// The copied frame was not message 3.
+    Msg3,
+    /// Message 4 did not fit in the buffer.
+    Build4,
+    /// Message 4 did not leave the transmit ring.
+    Tx4,
+}
+
+impl EapolStop {
+    fn word(self) -> &'static [u8] {
+        match self {
+            Self::Wait1 => b"w1",
+            Self::Msg1 => b"m1",
+            Self::Build2 => b"b2",
+            Self::Tx2 => b"t2",
+            Self::Wait3 => b"w3",
+            Self::Msg3 => b"m3",
+            Self::Build4 => b"b4",
+            Self::Tx4 => b"t4",
+        }
+    }
+}
+
 /// What the authentication wait kept instead of a matching reply.
 ///
 /// `rx` and `ev` match the survey mark. `skip` counts MCU completions
@@ -1618,6 +1684,8 @@ pub struct AuthMiss {
     pub skip: u16,
     pub tr: u16,
     pub fc: Option<u8>,
+    /// Handshake return. The authentication miss leaves this [`EapolStop::Wait1`].
+    pub stop: EapolStop,
     /// Authentication sequence. 1 is the request this station sends.
     pub sq: Option<u8>,
     /// Authentication status. Linux accepts 0.
@@ -1717,8 +1785,48 @@ pub fn write_auth_miss(out: &mut [u8], miss: &AuthMiss) -> usize {
     write_counts(out, n, miss).unwrap_or(n)
 }
 
-/// First of the four join-detail rows. They sit under the `mt7921` line.
-pub const JOIN_DETAIL_ROW: usize = 23;
+/// Stage row once the handshake has finished.
+///
+/// `rx` is a frame queued for the shell. `tx` is a shell frame whose
+/// descriptor the card accepted. `drop` is a received frame that was not
+/// queued, including a beacon, or an MCU completion that was not a frame.
+/// `fc` appears after a drop. A data frame replaces an earlier beacon, and a
+/// later beacon does not replace that data frame.
+#[must_use]
+pub fn write_link_mark(out: &mut [u8], rx: u32, tx: u32, drop: u32, fc: Option<u8>) -> usize {
+    let Some(n) = write_bytes(out, 0, b"mt7921: rx ") else {
+        return 0;
+    };
+    let Some(n) = write_dec(out, n, rx) else {
+        return 0;
+    };
+    let Some(n) = write_bytes(out, n, b" tx ") else {
+        return 0;
+    };
+    let Some(n) = write_dec(out, n, tx) else {
+        return 0;
+    };
+    let Some(n) = write_bytes(out, n, b" drop ") else {
+        return 0;
+    };
+    let Some(n) = write_dec(out, n, drop) else {
+        return 0;
+    };
+    if drop == 0 {
+        return n;
+    }
+    let Some(n) = write_bytes(out, n, b" fc ") else {
+        return 0;
+    };
+    match fc {
+        Some(byte) => write_bytes(out, n, &hex_byte(byte)).unwrap_or(n),
+        None => write_bytes(out, n, b"--").unwrap_or(n),
+    }
+}
+
+/// First of the four join-detail rows. They start on the disk row, under the
+/// stage line of the Arch console band.
+pub const JOIN_DETAIL_ROW: usize = lerux_desk::ROW_NVME;
 /// How many join-detail rows [`write_join_detail`] fills.
 pub const JOIN_DETAIL_LINES: usize = 4;
 /// Row after the detail. A failed join paints [`JOIN_END`] here.
@@ -1728,12 +1836,13 @@ pub const JOIN_END: &[u8] = b"END OF OUTPUT";
 
 /// Device-name rows that still end in `irq` after the detail and [`JOIN_END`].
 ///
-/// The probe paints one line per [`crate::LOCATIONS`] entry, starting at the
-/// first row below the console. The detail covers the first of those lines.
-/// This range is the rest.
+/// The probe paints one line per [`crate::LOCATIONS`] entry, starting at
+/// [`lerux_desk::ROW_PCI`]. The detail covers the disk row, Bluetooth, and the
+/// first two device names. [`JOIN_END`] is the next device line. This range is
+/// the rest.
 #[must_use]
 pub fn join_device_rows_to_clear() -> Range<usize> {
-    let devices_end = lerux_desk::CONSOLE_ROWS + crate::LOCATIONS.len();
+    let devices_end = lerux_desk::ROW_PCI + crate::LOCATIONS.len();
     (JOIN_END_ROW + 1)..devices_end
 }
 
@@ -1752,12 +1861,22 @@ pub fn write_join_detail(out: &mut [u8], row: usize, miss: &AuthMiss, sta: &[u8;
 
 /// Panel line when the four-way handshake returns without a key.
 ///
-/// The stage word stays `eapol`. `rx`, `ev`, `skip`, and `fc` mean the same
-/// thing they mean on the `auth rx` line. `tr` is the header-translation count.
+/// The stage word stays `eapol`. The next two letters are [`EapolStop`].
+/// `rx`, `ev`, `skip`, and `fc` mean the same thing they mean on the `auth rx`
+/// line. `tr` is the header-translation count.
 #[must_use]
 pub fn write_eapol_miss(out: &mut [u8], miss: &AuthMiss) -> usize {
-    let Some(n) = write_fc(out, b"mt7921: eapol fc ", miss.fc) else {
+    let Some(n) = write_bytes(out, 0, b"mt7921: eapol ") else {
         return 0;
+    };
+    let Some(n) = write_bytes(out, n, miss.stop.word()) else {
+        return n;
+    };
+    let Some(n) = write_bytes(out, n, b" fc ") else {
+        return n;
+    };
+    let Some(n) = write_fc_value(out, n, miss.fc) else {
+        return n;
     };
     let Some(n) = write_counts(out, n, miss) else {
         return n;
@@ -1770,6 +1889,10 @@ pub fn write_eapol_miss(out: &mut [u8], miss: &AuthMiss) -> usize {
 
 fn write_fc(out: &mut [u8], prefix: &[u8], fc: Option<u8>) -> Option<usize> {
     let n = write_bytes(out, 0, prefix)?;
+    write_fc_value(out, n, fc)
+}
+
+fn write_fc_value(out: &mut [u8], n: usize, fc: Option<u8>) -> Option<usize> {
     match fc {
         Some(byte) => write_bytes(out, n, &hex_byte(byte)),
         None => write_bytes(out, n, b"--"),
@@ -2532,10 +2655,13 @@ mod tests {
         assert_eq!(ssid, b"home");
         assert_eq!(psk, b"password");
         assert!(!join_up(&page));
+        assert!(join_pending(&page));
         assert!(write_join(&mut page, true));
         assert!(join_up(&page));
+        assert!(!join_pending(&page));
         assert!(write_join(&mut page, false));
         assert!(!join_up(&page));
+        assert!(!join_pending(&page));
         assert!(!write_key(&mut page, b"", b"password"));
     }
 
@@ -2695,8 +2821,46 @@ mod tests {
             .expect("qos frame");
         let mut txwi = [0u8; TXD_LEN + TXP_LEN];
         assert!(write_txwi(&mut txwi, &frame[..n], 0x01f6_8000, false));
+        let tx0 = u32::from_le_bytes(txwi[0..4].try_into().expect("txd0"));
         let tx1 = u32::from_le_bytes(txwi[4..8].try_into().expect("txd1"));
+        let tx2 = u32::from_le_bytes(txwi[8..12].try_into().expect("txd2"));
         assert_eq!((tx1 >> 11) & 0x1f, 13, "qos header words");
+        assert_eq!(tx0 >> 25, 1, "data uses the best-effort queue");
+        assert_eq!(tx2 & (1 << 31), 0, "ordinary data is not a fixed rate");
+    }
+
+    #[test]
+    fn eapol_txd_uses_best_effort_and_fixed_rate() {
+        let mut frame = [0u8; 64];
+        let bssid = [0x02, 0x00, 0x00, 0x00, 0x00, 0x01];
+        let sta = [0x02, 0x11, 0x22, 0x33, 0x44, 0x55];
+        let msdu = [0xaa, 0xaa, 0x03, 0x00, 0x00, 0x00, 0x88, 0x8e, 1, 3];
+        let n = crate::wpa::write_data(&mut frame, &bssid, &sta, &bssid, &msdu, 1, false)
+            .expect("eapol frame");
+        let mut txwi = [0u8; TXD_LEN + TXP_LEN];
+        assert!(write_txwi(&mut txwi, &frame[..n], 0x01f6_8000, false));
+        let tx0 = u32::from_le_bytes(txwi[0..4].try_into().expect("txd0"));
+        let tx1 = u32::from_le_bytes(txwi[4..8].try_into().expect("txd1"));
+        let tx2 = u32::from_le_bytes(txwi[8..12].try_into().expect("txd2"));
+        let tx3 = u32::from_le_bytes(txwi[12..16].try_into().expect("txd3"));
+        let tx6 = u32::from_le_bytes(txwi[24..28].try_into().expect("txd6"));
+        assert_eq!(tx0 >> 25, 1, "best-effort queue");
+        assert_eq!((tx1 >> 11) & 0x1f, 12, "data header words");
+        assert_eq!(tx2 & (1 << 31), 1 << 31, "fixed rate");
+        assert_eq!(tx2 & (1 << 13), 1 << 13, "htc valid");
+        assert_eq!(tx3 & (1 << 28), 1 << 28, "block ack disabled");
+        assert_eq!((tx6 >> 16) & 0x3fff, 0, "2.4 GHz rate");
+    }
+
+    #[test]
+    fn link_mark_names_queued_frames_and_a_dropped_data_frame() {
+        let mut out = [0u8; 64];
+        let n = write_link_mark(&mut out, 0, 1, 0, None);
+        assert_eq!(&out[..n], b"mt7921: rx 0 tx 1 drop 0");
+        let n = write_link_mark(&mut out, 1, 2, 4, Some(0x88));
+        assert_eq!(&out[..n], b"mt7921: rx 1 tx 2 drop 4 fc 88");
+        let n = write_link_mark(&mut out, 0, 0, 1, None);
+        assert_eq!(&out[..n], b"mt7921: rx 0 tx 0 drop 1 fc --");
     }
 
     #[test]
@@ -2762,10 +2926,12 @@ mod tests {
     #[test]
     fn join_end_clears_the_irq_lines_under_the_detail() {
         assert_eq!(JOIN_END, b"END OF OUTPUT");
-        assert_eq!(JOIN_END_ROW, 27);
-        let devices = lerux_desk::CONSOLE_ROWS..lerux_desk::CONSOLE_ROWS + crate::LOCATIONS.len();
+        assert_eq!(JOIN_DETAIL_ROW, 48);
+        assert_eq!(JOIN_END_ROW, 52);
+        let devices = lerux_desk::ROW_PCI..lerux_desk::ROW_PCI + crate::LOCATIONS.len();
+        assert_eq!(devices, 50..56);
         assert!(devices.contains(&JOIN_END_ROW));
-        assert_eq!(join_device_rows_to_clear(), 28..31);
+        assert_eq!(join_device_rows_to_clear(), 53..56);
         for row in devices {
             let covered = (JOIN_DETAIL_ROW..JOIN_END_ROW).contains(&row)
                 || row == JOIN_END_ROW
@@ -2805,7 +2971,7 @@ mod tests {
                 ..AuthMiss::default()
             },
         );
-        assert_eq!(&out[..n], b"mt7921: eapol fc -- rx 0 ev 0 skip 0 tr 0");
+        assert_eq!(&out[..n], b"mt7921: eapol w1 fc -- rx 0 ev 0 skip 0 tr 0");
         let n = write_eapol_miss(
             &mut out,
             &AuthMiss {
@@ -2817,7 +2983,42 @@ mod tests {
                 ..AuthMiss::default()
             },
         );
-        assert_eq!(&out[..n], b"mt7921: eapol fc 08 rx 9 ev 10 skip 1 tr 19");
+        assert_eq!(&out[..n], b"mt7921: eapol w1 fc 08 rx 9 ev 10 skip 1 tr 19");
+    }
+
+    #[test]
+    fn eapol_stop_fits_the_stage_row() {
+        let mut out = [0u8; 64];
+        let boot = AuthMiss {
+            rx: 2,
+            ev: 10,
+            skip: 1,
+            tr: 0,
+            fc: Some(0x08),
+            stop: EapolStop::Tx2,
+            ..AuthMiss::default()
+        };
+        let n = write_eapol_miss(&mut out, &boot);
+        assert_eq!(&out[..n], b"mt7921: eapol t2 fc 08 rx 2 ev 10 skip 1 tr 0");
+        assert!(n <= 48, "the stage line keeps 48 cells");
+        for stop in [
+            EapolStop::Wait1,
+            EapolStop::Msg1,
+            EapolStop::Build2,
+            EapolStop::Tx2,
+            EapolStop::Wait3,
+            EapolStop::Msg3,
+            EapolStop::Build4,
+            EapolStop::Tx4,
+        ] {
+            let mut row = boot;
+            row.stop = stop;
+            let n = write_eapol_miss(&mut out, &row);
+            let head = b"mt7921: eapol ";
+            assert!(n <= 48);
+            assert!(out[..n].starts_with(head));
+            assert_eq!(&out[head.len()..head.len() + 2], stop.word());
+        }
     }
 
     #[test]

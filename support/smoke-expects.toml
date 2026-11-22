@@ -23,14 +23,14 @@ expects = ["lerux: Hello from Rust on seL4 Microkit!"]
 expects = ["lerux: Hello from Rust on seL4 Microkit!"]
 
 [boards.x86_64_generic_console]
-expects = ["1 browser"]
+expects = ["lerux login: root (automatic login)"]
 timeout_secs = 120
 qmp_keys = ["2", "ret", "6", "slash", "2", "ret"]
 qmp_expect = "maths 3"
 
 # Same console image as x86_64_generic_console; ISO smoke under OVMF (no QMP).
 [boards.pc_z97_d3h]
-expects = ["1 browser"]
+expects = ["lerux login: root (automatic login)"]
 timeout_secs = 180
 
 [boards.rpi4b_4gb]
@@ -72,6 +72,14 @@ expects = ["lerux shell ready"]
 timeout_secs = 180
 script_timeout_secs = 180
 script = [
+  { send = "df\r", expect = "df 4144640 1024" },
+  { send = "mkdir SUB\r", expect = "mkdir ok" },
+  { send = "write NOTE.TXT hello\r", expect = "write ok" },
+  { send = "mv NOTE.TXT MOVED.TXT\r", expect = "mv ok" },
+  { send = "stat MOVED.TXT\r", expect = "size 5" },
+  { send = "rm MOVED.TXT\r", expect = "rm ok" },
+  { send = "ip\r", expect = "ip 10.0.2.15" },
+  { send = "date\r", expect = "date err" },
   { send = "fetch FIX.TXT\r", expect = "fetch ok" },
   { send = "cat FIX.TXT\r", expect = "lerux-http-fixture" },
   { send = "calc (1+2)*3\r", expect = "calc 9" },
@@ -81,7 +89,10 @@ script = [
   { send = "source C.TXT\r", expect = "calc 4" },
   { send = "cert\r", expect = "cert ok" },
   { send = "edit E.TXT edited\r", expect = "edit ok" },
+  { send = "edit E.TXT again\r", expect = "edit err" },
   { send = "chat\r", expect = "chat ok" },
+  { send = "dmesg\r", expect = "lerux shell ready" },
+  { send = "reboot\r", expect = "lerux shell ready" },
 ]
 
 [boards.qemu_virt_riscv64_fetch_sddf]
@@ -89,6 +100,14 @@ expects = ["lerux shell ready"]
 timeout_secs = 180
 script_timeout_secs = 180
 script = [
+  { send = "df\r", expect = "df 4144640 1024" },
+  { send = "mkdir SUB\r", expect = "mkdir ok" },
+  { send = "write NOTE.TXT hello\r", expect = "write ok" },
+  { send = "mv NOTE.TXT MOVED.TXT\r", expect = "mv ok" },
+  { send = "stat MOVED.TXT\r", expect = "size 5" },
+  { send = "rm MOVED.TXT\r", expect = "rm ok" },
+  { send = "ip\r", expect = "ip 10.0.2.15" },
+  { send = "date\r", expect = "date err" },
   { send = "fetch FIX.TXT\r", expect = "fetch ok" },
   { send = "cat FIX.TXT\r", expect = "lerux-http-fixture" },
   { send = "calc (1+2)*3\r", expect = "calc 9" },
@@ -98,7 +117,10 @@ script = [
   { send = "source C.TXT\r", expect = "calc 4" },
   { send = "cert\r", expect = "cert ok" },
   { send = "edit E.TXT edited\r", expect = "edit ok" },
+  { send = "edit E.TXT again\r", expect = "edit err" },
   { send = "chat\r", expect = "chat ok" },
+  { send = "dmesg\r", expect = "lerux shell ready" },
+  { send = "reboot\r", expect = "lerux shell ready" },
 ]
 
 [boards.x86_64_generic_fetch_sddf]
@@ -106,6 +128,14 @@ expects = ["lerux shell ready"]
 timeout_secs = 180
 script_timeout_secs = 180
 script = [
+  { send = "df\r", expect = "df 4144640 1024" },
+  { send = "mkdir SUB\r", expect = "mkdir ok" },
+  { send = "write NOTE.TXT hello\r", expect = "write ok" },
+  { send = "mv NOTE.TXT MOVED.TXT\r", expect = "mv ok" },
+  { send = "stat MOVED.TXT\r", expect = "size 5" },
+  { send = "rm MOVED.TXT\r", expect = "rm ok" },
+  { send = "ip\r", expect = "ip 10.0.2.15" },
+  { send = "date\r", expect = "date err" },
   { send = "fetch FIX.TXT\r", expect = "fetch ok" },
   { send = "cat FIX.TXT\r", expect = "lerux-http-fixture" },
   { send = "calc (1+2)*3\r", expect = "calc 9" },
@@ -115,7 +145,15 @@ script = [
   { send = "source C.TXT\r", expect = "calc 4" },
   { send = "cert\r", expect = "cert ok" },
   { send = "edit E.TXT edited\r", expect = "edit ok" },
+  { send = "edit E.TXT again\r", expect = "edit err" },
   { send = "chat\r", expect = "chat ok" },
+  { send = "config get net.mode\r", expect = "dhcp" },
+  { send = "config set net.mode static 10.0.2.15\r", expect = "config ok" },
+  { send = "config get net.mode\r", expect = "static" },
+  { send = "config set net.mode dhcp\r", expect = "config ok" },
+  { send = "config get net.mode\r", expect = "dhcp" },
+  { send = "dmesg\r", expect = "lerux shell ready" },
+  { send = "reboot\r", expect = "lerux shell ready" },
 ]
 
 [boards.x86_64_generic_fetch_native]
@@ -123,6 +161,14 @@ expects = ["lerux shell ready"]
 timeout_secs = 180
 script_timeout_secs = 180
 script = [
+  { send = "df\r", expect = "df 4144640 1024" },
+  { send = "mkdir SUB\r", expect = "mkdir ok" },
+  { send = "write NOTE.TXT hello\r", expect = "write ok" },
+  { send = "mv NOTE.TXT MOVED.TXT\r", expect = "mv ok" },
+  { send = "stat MOVED.TXT\r", expect = "size 5" },
+  { send = "rm MOVED.TXT\r", expect = "rm ok" },
+  { send = "ip\r", expect = "ip 10.0.2.15" },
+  { send = "date\r", expect = "date err" },
   { send = "fetch FIX.TXT\r", expect = "fetch ok" },
   { send = "cat FIX.TXT\r", expect = "lerux-http-fixture" },
   { send = "calc (1+2)*3\r", expect = "calc 9" },
@@ -132,7 +178,15 @@ script = [
   { send = "source C.TXT\r", expect = "calc 4" },
   { send = "cert\r", expect = "cert ok" },
   { send = "edit E.TXT edited\r", expect = "edit ok" },
+  { send = "edit E.TXT again\r", expect = "edit err" },
   { send = "chat\r", expect = "chat ok" },
+  { send = "config get net.mode\r", expect = "dhcp" },
+  { send = "config set net.mode static 10.0.2.15\r", expect = "config ok" },
+  { send = "config get net.mode\r", expect = "static" },
+  { send = "config set net.mode dhcp\r", expect = "config ok" },
+  { send = "config get net.mode\r", expect = "dhcp" },
+  { send = "dmesg\r", expect = "lerux shell ready" },
+  { send = "reboot\r", expect = "lerux shell ready" },
 ]
 
 [boards.qemu_virt_aarch64_web_sddf]
@@ -220,6 +274,7 @@ expects = ["lerux shell ready"]
 timeout_secs = 120
 script_timeout_secs = 120
 script = [
+  { send = "df\r", expect = "df 4144640 1024" },
   { send = "mkdir SUB\r", expect = "mkdir ok" },
   { send = "write NOTE.TXT hello\r", expect = "write ok" },
   { send = "cat NOTE.TXT\r", expect = "hello" },
@@ -229,12 +284,34 @@ script = [
   { send = "stat MOVED.TXT\r", expect = "size 5" },
   { send = "rm MOVED.TXT\r", expect = "rm ok" },
   { send = "stat SUB\r", expect = "stat dir" },
+  { send = "mkdir H\r", expect = "mkdir ok" },
+  { send = "mkdir H/D\r", expect = "mkdir ok" },
+  { send = "write H/D/N.TXT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r", expect = "write ok" },
+  { send = "write H/D/N.TXT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r", expect = "write ok" },
+  { send = "write H/D/N.TXT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r", expect = "write ok" },
+  { send = "write H/D/N.TXT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r", expect = "write ok" },
+  { send = "write H/D/N.TXT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r", expect = "write ok" },
+  { send = "write H/D/N.TXT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r", expect = "write ok" },
+  { send = "write H/D/N.TXT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r", expect = "write ok" },
+  { send = "write H/D/N.TXT ............\r", expect = "write ok" },
+  { send = "write H/D/N.TXT bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbTAIL\r", expect = "write ok" },
+  { send = "cat H/D/N.TXT\r", expect = "TAIL" },
+  { send = "stat H/D/N.TXT\r", expect = "size 524" },
+  { send = "mv H/D/N.TXT H/D/P.TXT\r", expect = "mv ok" },
+  { send = "rm H/D/P.TXT\r", expect = "rm ok" },
+  { send = "rm H/D\r", expect = "rm ok" },
   { send = "config get hostname\r", expect = "lerux" },
+  { send = "config set hostname desk\r", expect = "config ok" },
+  { send = "config get hostname\r", expect = "desk" },
   { send = "date\r", expect = "1970-01-01" },
+  { send = "ip\r", expect = "ip err" },
+  { send = "edit E.TXT edited\r", expect = "edit ok" },
+  { send = "edit E.TXT again\r", expect = "edit err" },
   { send = "ps\r", expect = "shell 1 1000" },
   { send = "qos\r", expect = "fatfs 2 2000" },
   { send = "dmesg\r", expect = "lerux shell ready" },
   { send = "reboot\r", expect = "lerux shell ready" },
+  { send = "config get hostname\r", expect = "desk" },
 ]
 
 [boards.qemu_virt_riscv64_fs_sddf]
@@ -242,6 +319,7 @@ expects = ["lerux shell ready"]
 timeout_secs = 120
 script_timeout_secs = 120
 script = [
+  { send = "df\r", expect = "df 4144640 1024" },
   { send = "mkdir SUB\r", expect = "mkdir ok" },
   { send = "write NOTE.TXT hello\r", expect = "write ok" },
   { send = "cat NOTE.TXT\r", expect = "hello" },
@@ -251,8 +329,27 @@ script = [
   { send = "stat MOVED.TXT\r", expect = "size 5" },
   { send = "rm MOVED.TXT\r", expect = "rm ok" },
   { send = "stat SUB\r", expect = "stat dir" },
+  { send = "mkdir H\r", expect = "mkdir ok" },
+  { send = "mkdir H/D\r", expect = "mkdir ok" },
+  { send = "write H/D/N.TXT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r", expect = "write ok" },
+  { send = "write H/D/N.TXT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r", expect = "write ok" },
+  { send = "write H/D/N.TXT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r", expect = "write ok" },
+  { send = "write H/D/N.TXT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r", expect = "write ok" },
+  { send = "write H/D/N.TXT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r", expect = "write ok" },
+  { send = "write H/D/N.TXT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r", expect = "write ok" },
+  { send = "write H/D/N.TXT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r", expect = "write ok" },
+  { send = "write H/D/N.TXT ............\r", expect = "write ok" },
+  { send = "write H/D/N.TXT bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbTAIL\r", expect = "write ok" },
+  { send = "cat H/D/N.TXT\r", expect = "TAIL" },
+  { send = "stat H/D/N.TXT\r", expect = "size 524" },
+  { send = "mv H/D/N.TXT H/D/P.TXT\r", expect = "mv ok" },
+  { send = "rm H/D/P.TXT\r", expect = "rm ok" },
+  { send = "rm H/D\r", expect = "rm ok" },
   { send = "config get hostname\r", expect = "lerux" },
   { send = "date\r", expect = "1970-01-01" },
+  { send = "ip\r", expect = "ip err" },
+  { send = "edit E.TXT edited\r", expect = "edit ok" },
+  { send = "edit E.TXT again\r", expect = "edit err" },
   { send = "ps\r", expect = "shell 1 1000" },
   { send = "qos\r", expect = "fatfs 2 2000" },
   { send = "dmesg\r", expect = "lerux shell ready" },
@@ -264,6 +361,7 @@ expects = ["lerux shell ready"]
 timeout_secs = 120
 script_timeout_secs = 120
 script = [
+  { send = "df\r", expect = "df 4144640 1024" },
   { send = "mkdir SUB\r", expect = "mkdir ok" },
   { send = "write NOTE.TXT hello\r", expect = "write ok" },
   { send = "cat NOTE.TXT\r", expect = "hello" },
@@ -273,8 +371,27 @@ script = [
   { send = "stat MOVED.TXT\r", expect = "size 5" },
   { send = "rm MOVED.TXT\r", expect = "rm ok" },
   { send = "stat SUB\r", expect = "stat dir" },
+  { send = "mkdir H\r", expect = "mkdir ok" },
+  { send = "mkdir H/D\r", expect = "mkdir ok" },
+  { send = "write H/D/N.TXT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r", expect = "write ok" },
+  { send = "write H/D/N.TXT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r", expect = "write ok" },
+  { send = "write H/D/N.TXT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r", expect = "write ok" },
+  { send = "write H/D/N.TXT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r", expect = "write ok" },
+  { send = "write H/D/N.TXT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r", expect = "write ok" },
+  { send = "write H/D/N.TXT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r", expect = "write ok" },
+  { send = "write H/D/N.TXT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r", expect = "write ok" },
+  { send = "write H/D/N.TXT ............\r", expect = "write ok" },
+  { send = "write H/D/N.TXT bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbTAIL\r", expect = "write ok" },
+  { send = "cat H/D/N.TXT\r", expect = "TAIL" },
+  { send = "stat H/D/N.TXT\r", expect = "size 524" },
+  { send = "mv H/D/N.TXT H/D/P.TXT\r", expect = "mv ok" },
+  { send = "rm H/D/P.TXT\r", expect = "rm ok" },
+  { send = "rm H/D\r", expect = "rm ok" },
   { send = "config get hostname\r", expect = "lerux" },
   { send = "date\r", expect = "1970-01-01" },
+  { send = "ip\r", expect = "ip err" },
+  { send = "edit E.TXT edited\r", expect = "edit ok" },
+  { send = "edit E.TXT again\r", expect = "edit err" },
   { send = "ps\r", expect = "shell 1 1000" },
   { send = "qos\r", expect = "fatfs 2 2000" },
   { send = "dmesg\r", expect = "lerux shell ready" },
@@ -282,10 +399,11 @@ script = [
 ]
 
 [boards.x86_64_generic_fs_ahci]
-expects = ["ahci: port 0", "lerux shell ready"]
+expects = ["ahci: 8086:2922 QEMU HARDDISK", "ahci: port 0", "lerux shell ready"]
 timeout_secs = 120
 script_timeout_secs = 120
 script = [
+  { send = "df\r", expect = "df 4144640 1024" },
   { send = "mkdir SUB\r", expect = "mkdir ok" },
   { send = "write NOTE.TXT hello\r", expect = "write ok" },
   { send = "cat NOTE.TXT\r", expect = "hello" },
@@ -295,8 +413,27 @@ script = [
   { send = "stat MOVED.TXT\r", expect = "size 5" },
   { send = "rm MOVED.TXT\r", expect = "rm ok" },
   { send = "stat SUB\r", expect = "stat dir" },
+  { send = "mkdir H\r", expect = "mkdir ok" },
+  { send = "mkdir H/D\r", expect = "mkdir ok" },
+  { send = "write H/D/N.TXT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r", expect = "write ok" },
+  { send = "write H/D/N.TXT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r", expect = "write ok" },
+  { send = "write H/D/N.TXT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r", expect = "write ok" },
+  { send = "write H/D/N.TXT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r", expect = "write ok" },
+  { send = "write H/D/N.TXT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r", expect = "write ok" },
+  { send = "write H/D/N.TXT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r", expect = "write ok" },
+  { send = "write H/D/N.TXT aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\r", expect = "write ok" },
+  { send = "write H/D/N.TXT ............\r", expect = "write ok" },
+  { send = "write H/D/N.TXT bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbTAIL\r", expect = "write ok" },
+  { send = "cat H/D/N.TXT\r", expect = "TAIL" },
+  { send = "stat H/D/N.TXT\r", expect = "size 524" },
+  { send = "mv H/D/N.TXT H/D/P.TXT\r", expect = "mv ok" },
+  { send = "rm H/D/P.TXT\r", expect = "rm ok" },
+  { send = "rm H/D\r", expect = "rm ok" },
   { send = "config get hostname\r", expect = "lerux" },
   { send = "date\r", expect = "1970-01-01" },
+  { send = "ip\r", expect = "ip err" },
+  { send = "edit E.TXT edited\r", expect = "edit ok" },
+  { send = "edit E.TXT again\r", expect = "edit err" },
   { send = "ps\r", expect = "shell 1 1000" },
   { send = "qos\r", expect = "fatfs 2 2000" },
   { send = "dmesg\r", expect = "lerux shell ready" },

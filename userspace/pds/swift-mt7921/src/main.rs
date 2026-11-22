@@ -399,24 +399,7 @@ impl HandlerImpl {
         } else if join_pending(key_page())
             && let Some((name, name_len, pass, pass_len)) = posted_key()
         {
-            let stage = mac.associate(&name[..name_len], &pass[..pass_len], paint_stage);
-            let up = stage == Stage::Wait;
-            if stage == Stage::AuthRx {
-                let mut line = [0u8; 64];
-                let miss = mac.auth_miss();
-                let n = write_auth_miss(&mut line, &miss);
-                paint(&line[..n]);
-                paint_detail(&miss, mac.sta());
-            } else if stage == Stage::Eapol {
-                let mut line = [0u8; 64];
-                let miss = mac.eapol_miss();
-                let n = write_eapol_miss(&mut line, &miss);
-                paint(&line[..n]);
-                paint_detail(&miss, mac.sta());
-            } else {
-                paint_stage(stage);
-            }
-            let _ = write_join(key_page(), up);
+            join_posted(mac, &name[..name_len], &pass[..pass_len]);
         }
     }
 
@@ -433,6 +416,41 @@ impl HandlerImpl {
         notify(self.rx_id, note.rx);
         notify(self.tx_id, note.tx);
     }
+}
+
+/// A new join leaves the previous BSS before it scans.
+///
+/// `disconnect` sends reason 3 and clears the stored name. A failed handshake
+/// then cannot report that name as still connected.
+#[cfg(not(test))]
+fn join_posted(mac: &mut Mac, name: &[u8], pass: &[u8]) {
+    if mac.bssid().is_some() {
+        mac.disconnect(key_page());
+    }
+    let stage = mac.associate(name, pass, paint_stage);
+    report_join(mac, stage);
+    let _ = write_join(key_page(), stage == Stage::Wait);
+}
+
+#[cfg(not(test))]
+fn report_join(mac: &Mac, stage: Stage) {
+    if stage == Stage::AuthRx {
+        let mut line = [0u8; 64];
+        let miss = mac.auth_miss();
+        let n = write_auth_miss(&mut line, &miss);
+        paint(&line[..n]);
+        paint_detail(&miss, mac.sta());
+        return;
+    }
+    if stage == Stage::Eapol {
+        let mut line = [0u8; 64];
+        let miss = mac.eapol_miss();
+        let n = write_eapol_miss(&mut line, &miss);
+        paint(&line[..n]);
+        paint_detail(&miss, mac.sta());
+        return;
+    }
+    paint_stage(stage);
 }
 
 #[cfg(not(test))]

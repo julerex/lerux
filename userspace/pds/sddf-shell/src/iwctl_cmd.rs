@@ -4,10 +4,10 @@ use lerux_iwctl::{
     Action, Connect, Network, Security, Session, Station, Turn, LINE_MAX, PROMPT, SCAN_MAX,
 };
 use lerux_swift::{
-    drop_requested, join_up, mirror_heard, note_dropped, read_heard_count, read_heard_security,
-    read_heard_ssid, read_key, read_link_name, read_station, read_survey_count,
-    read_survey_security, read_survey_ssid, request_drop, survey_requested, write_key,
-    write_link_name, write_survey, SURVEY_SEC_OTHER, SURVEY_SEC_PSK,
+    drop_requested, join_pending, join_up, mirror_heard, note_dropped, read_heard_count,
+    read_heard_security, read_heard_ssid, read_key, read_link_name, read_station,
+    read_survey_count, read_survey_security, read_survey_ssid, request_drop, survey_requested,
+    write_key, write_link_name, write_survey, SURVEY_SEC_OTHER, SURVEY_SEC_PSK,
 };
 
 use crate::{discard_pending, emit, key_page, kick_radio, read_byte, say};
@@ -80,11 +80,16 @@ fn post_connect(connect: Option<Connect>) -> bool {
     }
     kick_radio();
     discard_pending();
-    if !join_up(key_page()) {
-        return false;
+    if join_up(key_page()) {
+        let _ = write_link_name(key_page(), connect.ssid());
+        return true;
     }
-    let _ = write_link_name(key_page(), connect.ssid());
-    true
+    // The radio drops the previous BSS before it scans. A finished failure
+    // must not leave that name. A join that never ran stays pending.
+    if !join_pending(key_page()) {
+        note_dropped(key_page());
+    }
+    false
 }
 
 fn post_drop() -> bool {

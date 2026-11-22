@@ -298,7 +298,7 @@ use lerux_signon::for_each_preamble;
 #[cfg(feature = "board-swift_sfx14_41g")]
 use lerux_swift::{
     format_survey_report, is_setup_wifi, join_up, read_survey_count, survey_choice, write_key,
-    write_survey, SURVEY_REPORT_MAX,
+    write_link_name, write_survey, SURVEY_REPORT_MAX,
 };
 
 const CONFIG: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/config.bin"));
@@ -1052,6 +1052,8 @@ fn join_chosen() {
         say(b"wifi err\n");
         return;
     }
+    // The name lives past the survey region. A later `iwctl` scan zeros the key.
+    let _ = write_link_name(key_page(), &name[..name_len]);
     say(b"psk ok\n");
     say_ping(net::ping_gateway());
 }

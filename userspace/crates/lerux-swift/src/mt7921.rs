@@ -3729,4 +3729,44 @@ mod tests {
         assert!(read_link_name(&page).is_none());
         assert!(!join_up(&page));
     }
+
+    #[test]
+    fn a_second_join_drops_the_previous_name() {
+        let mut page = [0u8; 0x1000];
+        let mac = [0x52, 0x54, 0x00, 0x12, 0x34, 0x56];
+        assert!(publish_station(&mut page, true, mac));
+        assert!(write_link_name(&mut page, b"old"));
+        assert!(write_key(&mut page, b"new", b"correct12"));
+        note_dropped(&mut page);
+        assert!(read_link_name(&page).is_none());
+        assert!(write_join(&mut page, false));
+        assert!(!join_up(&page));
+        assert!(read_link_name(&page).is_none());
+        assert!(!join_pending(&page));
+        assert!(write_key(&mut page, b"new", b"correct12"));
+        note_dropped(&mut page);
+        assert!(write_join(&mut page, true));
+        assert!(write_link_name(&mut page, b"new"));
+        assert_eq!(read_link_name(&page), Some(&b"new"[..]));
+    }
+
+    #[test]
+    fn a_survey_keeps_the_live_link_name() {
+        let mut page = [0u8; 0x1000];
+        let mac = [0x52, 0x54, 0x00, 0x12, 0x34, 0x56];
+        assert!(publish_station(&mut page, true, mac));
+        assert!(write_link_name(&mut page, b"lerux"));
+        assert!(write_key(&mut page, b"lerux", b"correct12"));
+        assert!(write_join(&mut page, true));
+        assert!(write_survey(&mut page));
+        assert_eq!(read_link_name(&page), Some(&b"lerux"[..]));
+        assert!(read_key(&page).is_none());
+        assert!(!join_up(&page));
+        assert!(write_survey_secured(
+            &mut page,
+            &[b"lerux"],
+            &[SURVEY_SEC_PSK]
+        ));
+        assert_eq!(read_link_name(&page), Some(&b"lerux"[..]));
+    }
 }

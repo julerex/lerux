@@ -68,5 +68,3 @@ One title in one document. The model does not cover the rest of the insertion mo
 ## Tools
 
 TLC, because the question is whether the builder can stay in the title after taking the text. `Document::parse` runs on the host for the title bytes. The mode itself is the open-element stack, so the probe reads the pop.
-
-Bring this check back in line with later edits through `/maintain-formal-verification-skill`.

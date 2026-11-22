@@ -67,5 +67,3 @@ One session. The model does not cover record bytes, certificates, or a second dr
 ## Tools
 
 TLC, because the question is whether `connected` can become true before the socket is open. The probe reads the assignments. The session is not driven on the host here, because that needs a peer.
-
-Bring this check back in line with later edits through `/maintain-formal-verification-skill`.

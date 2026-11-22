@@ -307,6 +307,9 @@ const TX_CH: usize = CLIENT_TX_CHANNEL as usize;
 #[cfg(not(feature = "console-out"))]
 const RX_CH: usize = CLIENT_RX_CHANNEL as usize;
 const FS_CH: usize = FS_SHELL_SERVER_CHANNEL as usize;
+/// Filesystem server. The literal matches `FS_SHELL_SERVER_CHANNEL`.
+const FATFS: Channel = Channel::new(2);
+const _: () = assert!(FS_SHELL_SERVER_CHANNEL == 2);
 /// Console byte channel. `console_driver` aliases `serial_driver` in the channel check.
 #[cfg(feature = "console-out")]
 const SERIAL_DRIVER: Channel = Channel::new(0);
@@ -544,7 +547,7 @@ fn bind_files() -> bool {
 }
 
 fn wake_fs(_: *mut ()) {
-    Channel::new(FS_CH).notify();
+    FATFS.notify();
     microkit_cothread_wait_on_channel(FS_CH);
 }
 
@@ -2832,7 +2835,7 @@ impl Handler for HandlerImpl {
         if channels.contains(Channel::new(RX_CH)) {
             microkit_cothread_recv_ntfn(RX_CH);
         }
-        if channels.contains(Channel::new(FS_CH)) {
+        if channels.contains(FATFS) {
             microkit_cothread_recv_ntfn(FS_CH);
         }
         #[cfg(feature = "net-client")]

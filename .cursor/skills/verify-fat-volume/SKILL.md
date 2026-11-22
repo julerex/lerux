@@ -69,5 +69,3 @@ One open file, one open directory, and two blocks. The model does not cover dire
 ## Tools
 
 TLC, because the question is whether a dirty block can be replaced before it is flushed. The server does not run on the host, so the probe reads the guards and the model checks the order.
-
-Bring this check back in line with later edits through `/maintain-formal-verification-skill`.

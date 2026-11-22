@@ -11,9 +11,12 @@ pds = [
   "net-virt-tx",
   "net-virt-rx",
   "net-copy",
+  "ram-blk",
+  "blk-virt",
+  "fatfs",
   "shell",
 ]
-description = "Swift panel with the fetch network virtualisers and copier"
+description = "Swift panel with the fetch network virtualisers, the copier, and a RAM filesystem"
 default_board = "swift_sfx14_41g"
 trust_class = "minimal"
 
@@ -71,4 +74,25 @@ name = "shell_wifi"
 ends = [
   { pd = "swift_mt7921", id = 3 },
   { pd = "shell", id = 5 },
+]
+
+[[channel]]
+name = "blk_driver_virt"
+ends = [
+  { pd = "ram_blk", id = 1 },
+  { pd = "blk_virt", id = 0 },
+]
+
+[[channel]]
+name = "blk_virt_client"
+ends = [
+  { pd = "blk_virt", id = 1 },
+  { pd = "fatfs", id = 0 },
+]
+
+[[channel]]
+name = "shell_fs"
+ends = [
+  { pd = "fatfs", id = 1 },
+  { pd = "shell", id = 2 },
 ]

@@ -12,6 +12,7 @@ members = [
     "userspace/pds/sddf-blk-driver",
     "userspace/pds/sddf-ahci-driver",
     "userspace/pds/sddf-blk-virt",
+    "userspace/pds/sddf-ram-blk",
     "userspace/pds/sddf-fatfs",
     "userspace/pds/sddf-fs-client",
     "userspace/pds/sddf-shell",

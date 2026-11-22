@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted for the `LRW1` envelope. Decision 2, the closed interpreter, is superseded by [ADR-012](012-ordinary-webassembly.md). The postcard `program-runtime` protection domain is not in the tree. Milestone 17 stays in [`plan-lionsos.md`](../plan-lionsos.md) and is the postcard guest-model removal. The live check is `sddf-program` on `qemu_virt_aarch64_program_sddf`. JavaScript and WebAssembly are approved.
+Superseded by [ADR-012](012-ordinary-webassembly.md). The decision text below is the original record. The live runtime is `wasmi` in `lerux-wasm`, the protection domain is `sddf-program` on `qemu_virt_aarch64_program_sddf`, and the check is `just test-program-sddf`. Milestone 17 stays in [`plan-lionsos.md`](../plan-lionsos.md) and is the postcard guest-model removal. JavaScript and WebAssembly are approved.
 
 ## Date
 

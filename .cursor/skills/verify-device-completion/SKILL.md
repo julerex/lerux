@@ -71,5 +71,3 @@ One buffer and one completion. A missing check on any of the four devices fails 
 ## Tools
 
 TLC, because the question is whether the copy can happen while the device still owns the buffer. The drivers do not run on the host, so the probe reads each guard.
-
-Bring this check back in line with later edits through `/maintain-formal-verification-skill`.

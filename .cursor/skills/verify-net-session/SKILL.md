@@ -73,5 +73,3 @@ One offer, one connect, and one listen. The model does not cover the TCP state m
 ## Tools
 
 TLC, because the question is whether connect, listen, and a dropped link can overlap. Those protection domains do not run on the host, so the probe reads the branches and the model checks their order.
-
-Bring this check back in line with later edits through `/maintain-formal-verification-skill`.

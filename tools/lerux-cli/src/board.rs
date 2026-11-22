@@ -314,6 +314,42 @@ mod tests {
     }
 
     #[test]
+    fn swift_image_serves_files_from_ram() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let xml = crate::system::render_system(&root, "swift_sfx14_41g").expect("swift sdf");
+        assert!(xml.contains("sddf-fatfs.elf"));
+        assert!(xml.contains("sddf-blk-virt.elf"));
+        assert!(xml.contains("sddf-ram-blk.elf"));
+        assert!(xml.contains("name=\"fatfs\" priority=\"2\""));
+        assert!(xml.contains("name=\"blk_virt\" priority=\"3\""));
+        assert!(xml.contains("name=\"ram_blk\" priority=\"4\""));
+        assert!(xml.contains("vaddr=\"0x4_000_000\""));
+        assert!(xml.contains("vaddr=\"0x4_020_000\""));
+        assert!(xml.contains("vaddr=\"0x4_030_000\""));
+        assert!(xml.contains("vaddr=\"0x4_040_000\""));
+        assert!(xml.contains("pd=\"shell\" id=\"2\""));
+        assert!(xml.contains("pd=\"fatfs\" id=\"1\""));
+        assert!(xml.contains("pd=\"fatfs\" id=\"0\""));
+        assert!(xml.contains("pd=\"blk_virt\" id=\"0\""));
+        assert!(xml.contains("pd=\"blk_virt\" id=\"1\""));
+        assert!(xml.contains("pd=\"ram_blk\" id=\"1\""));
+        let ram = pd_body(&xml, "ram_blk");
+        assert!(ram.contains("mr=\"ram_disk\""));
+        assert!(!ram.contains("nvme"));
+        let fat = pd_body(&xml, "fatfs");
+        assert!(!fat.contains("nvme"));
+        let shell = pd_body(&xml, "shell");
+        assert!(shell.contains("mr=\"fs_share\""));
+        assert!(!shell.contains("mr=\"blk_data\""));
+        assert!(!shell.contains("mr=\"ram_disk\""));
+        let nvme = pd_body(&xml, "swift_nvme");
+        assert!(nvme.contains("mr=\"nvme_regs\""));
+        assert!(nvme.contains("mr=\"nvme_dma\""));
+        assert!(!nvme.contains("mr=\"ram_disk\""));
+        assert!(!nvme.contains("mr=\"blk_data\""));
+    }
+
+    #[test]
     fn swift_image_skips_serial() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let xml = crate::system::render_system(&root, "swift_sfx14_41g").expect("swift sdf");

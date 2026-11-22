@@ -92,5 +92,3 @@ Move that hash forward only after you have re-read the covered functions at the 
 ## Tools
 
 TLC 1.7.4 checks that the furthest stage only moves forward and that reset ok stays on the command-complete path. The Rust program runs those steps on the real formatters and reads the paint sites from source, so a formatter that disagrees with the milestone fails the check before anyone edits the TLA actions.
-
-After a change that did not re-run this check, use `/maintain-formal-verification-skill`.

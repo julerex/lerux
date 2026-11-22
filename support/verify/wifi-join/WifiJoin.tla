@@ -1,7 +1,9 @@
 ---- MODULE WifiJoin ----
 (* The Swift menu asks for a network and a passphrase, then the radio
    walks scan, auth, assoc, and the 4-way handshake. The address and the
-   ping belong to the shell. `dispatch_psk` calls `key_ok` before `post_wifi`.
+   ping belong to the shell. `join_chosen` calls `write_key` before it notifies
+   the radio. `console-shell` keeps `wifi` for the QEMU desk menu, and
+   `dispatch_psk` calls `key_ok` before `post_wifi`.
    `Mac::associate` returns the stage it just entered when that step fails,
    and `Wait` only after the handshake. `wifi::associate` rejects a handshake
    reply other than one byte `1`. `ready` stays false until `stage` is `Wait`. *)

@@ -68,5 +68,3 @@ One card and one transfer. The model checks that CMD7 appears before CMD16 in th
 ## Tools
 
 TLC, because the question is whether a transfer can run before the card is selected. The driver does not run on the host, so the probe reads the command order and the `initialized` guard.
-
-Bring this check back in line with later edits through `/maintain-formal-verification-skill`.

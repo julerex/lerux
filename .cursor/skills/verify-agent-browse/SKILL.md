@@ -98,5 +98,3 @@ Move that hash forward only after you have re-read the covered functions at the 
 ## Tools
 
 TLC 1.7.4 checks the order of the protection-domain steps. The question is whether a browse can leave a worker blocked with no wake scheduled. The Rust program runs those steps on the real page functions and reads the notify sites from source, so a deleted notify fails the check before anyone edits the TLA actions.
-
-After a change that did not re-run this check, use `/maintain-formal-verification-skill`.

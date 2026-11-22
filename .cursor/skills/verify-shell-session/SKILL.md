@@ -71,5 +71,3 @@ One menu session. The model does not cover the serial transmit queue, the calcul
 ## Tools
 
 TLC, because the question is whether quit, the browser, and `source` can happen in a bad order. The protection domain does not run on the host, so the probe reads the three branches and the model checks every order of those branches.
-
-Bring this check back in line with later edits through `/maintain-formal-verification-skill`.

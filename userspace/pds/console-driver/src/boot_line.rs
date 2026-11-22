@@ -5,8 +5,6 @@
 
 use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-use sel4_microkit::memory_region_symbol;
-
 use crate::screen::{ATTR, CELLS, COLS, ROWS};
 
 static CLEARED: AtomicBool = AtomicBool::new(false);
@@ -17,7 +15,7 @@ pub fn install() {
 }
 
 fn paint(line: &str) {
-    let vga = memory_region_symbol!(vga_text_vaddr: *mut u16).as_ptr();
+    let vga = crate::device::vga_text();
     if !CLEARED.swap(true, Ordering::Relaxed) {
         for index in 0..CELLS {
             // SAFETY: the system map is one uncached page at this symbol.

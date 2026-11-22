@@ -401,6 +401,7 @@ dependencies = [
  "lerux-desk",
  "lerux-driver-protocols",
  "lerux-logging",
+ "lerux-rtw8852be",
  "lerux-signon",
  "log",
  "sel4",
@@ -417,6 +418,7 @@ dependencies = [
  "lerux-desk",
  "lerux-ladybird-image",
  "lerux-logging",
+ "lerux-rtw8852be",
  "lerux-signon",
  "lerux-swift",
  "sel4-microkit",
@@ -1285,6 +1287,10 @@ name = "lerux-machine"
 version = "0.1.0"
 
 [[package]]
+name = "lerux-mt79"
+version = "0.1.0"
+
+[[package]]
 name = "lerux-posix"
 version = "0.1.0"
 dependencies = [
@@ -1929,6 +1935,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "34cdafab440283cfef25f6b08e6dde7339c80efa920865c96a4e1923caae0ee7"
 dependencies = [
  "chrono",
+]
+
+[[package]]
+name = "rtl8852be-driver"
+version = "0.1.0"
+dependencies = [
+ "lerux-rtw8852be",
+ "sel4-microkit",
 ]
 
 [[package]]

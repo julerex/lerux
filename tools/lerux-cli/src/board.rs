@@ -363,6 +363,55 @@ mod tests {
         );
     }
 
+    fn pd_body<'a>(xml: &'a str, name: &str) -> &'a str {
+        let needle = format!("<protection_domain name=\"{name}\"");
+        let start = xml.find(&needle).expect("protection domain");
+        let rest = &xml[start..];
+        let end = rest
+            .find("</protection_domain>")
+            .expect("protection domain end");
+        &rest[..end]
+    }
+
+    #[test]
+    fn z97_iso_owns_rtl8852be() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let z97 = crate::system::render_system(&root, "pc_z97_d3h").expect("z97 sdf");
+        assert!(z97.contains("rtl8852be-driver.elf"));
+        assert!(z97.contains("phys_addr=\"0xf7c0_0000\""));
+        assert!(z97.contains("phys_addr=\"0x6240_0000\""));
+        assert!(z97.contains("phys_addr=\"0x6250_0000\""));
+        assert!(z97.contains("name=\"rtl8852be\" priority=\"3\""));
+        assert!(z97.contains("name=\"console_driver\" priority=\"4\""));
+        assert_eq!(z97.matches("addr=\"0xcf8\"").count(), 1);
+        assert!(pd_body(&z97, "rtl8852be").contains("rtl8852be_mmio"));
+        assert!(!pd_body(&z97, "shell").contains("rtl8852be_mmio"));
+        assert!(pd_body(&z97, "console_driver").contains("rtl8852be_cfg"));
+        assert!(!pd_body(&z97, "console_driver").contains("rtl8852be_mmio"));
+        let qemu = crate::system::render_system(&root, "x86_64_generic_console").expect("qemu sdf");
+        assert!(!qemu.contains("rtl8852be-driver.elf"));
+        assert!(!qemu.contains("0xf7c0_0000"));
+        assert!(!qemu.contains("0x6240_0000"));
+        assert!(!qemu.contains("0x6250_0000"));
+        assert!(qemu.contains("console-shell.elf"));
+        assert!(qemu.contains("console-driver.elf"));
+        assert!(qemu.contains("serial-driver.elf"));
+        assert!(qemu.contains("name=\"console_driver\" priority=\"2\""));
+        let boards = load_boards(&root).unwrap();
+        assert!(boards
+            .get("pc_z97_d3h")
+            .unwrap()
+            .pds
+            .iter()
+            .any(|pd| pd == "rtl8852be-driver"));
+        assert!(!boards
+            .get("x86_64_generic_console")
+            .unwrap()
+            .pds
+            .iter()
+            .any(|pd| pd == "rtl8852be-driver"));
+    }
+
     #[test]
     fn rtl8852be_probe_board_is_hardware_only() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");

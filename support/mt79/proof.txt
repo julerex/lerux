@@ -1,0 +1,1523 @@
+linux tag v7.3.5
+macros emitted 2715
+enum constants emitted 1417
+records emitted 337
+skipped 1517
+linux mismatches 0
+skipped dma.h DMA_DUMMY_DATA not an integer constant
+skipped dma.h mt76_dma_handle_read inline function
+skipped dma.h mt76_dma_handle_write inline function
+skipped dma.h Q_READ statement expression
+skipped dma.h Q_WRITE statement macro
+skipped dma.h mt76_dma_rx_poll function prototype
+skipped dma.h mt76_dma_attach function prototype
+skipped dma.h mt76_dma_cleanup function prototype
+skipped dma.h mt76_dma_rx_fill function prototype
+skipped dma.h mt76_dma_queue_reset function prototype
+skipped dma.h mt76_dma_reset_tx_queue inline function
+skipped dma.h mt76_dma_should_drop_buf inline function
+skipped dma.h mt76_priv inline function
+skipped mt76.h __MT_WED_Q unparsed expression
+skipped mt76.h __MT_WED_RRO_Q not an integer constant
+skipped mt76.h MT_WED_Q_TX not an integer constant
+skipped mt76.h MT_WED_Q_RX not an integer constant
+skipped mt76.h MT_WED_Q_TXFREE not an integer constant
+skipped mt76.h MT_WED_RRO_Q_DATA not an integer constant
+skipped mt76.h MT_WED_RRO_Q_MSDU_PG not an integer constant
+skipped mt76.h MT_WED_RRO_Q_IND not an integer constant
+skipped mt76.h MT_WED_RRO_Q_RXDMAD_C not an integer constant
+skipped mt76.h __MT_NPU_Q unparsed expression
+skipped mt76.h MT_NPU_Q_TX not an integer constant
+skipped mt76.h MT_NPU_Q_RX not an integer constant
+skipped mt76.h MT_NPU_Q_TXFREE unparsed expression
+skipped mt76.h mt76_is_usb unparsed expression
+skipped mt76.h mt76_is_mmio unparsed expression
+skipped mt76.h mt76_is_sdio unparsed expression
+skipped mt76.h DECLARE_EWMA function prototype
+skipped mt76.h declaration unparsed declaration (expected ;, got Tok(kind='ident', value='__counted_by', start=7706, end=7718))
+skipped mt76.h MT_TX_STATUS_SKB_TIMEOUT not an integer constant
+skipped mt76.h mt76_bus_ops pointer field rr
+skipped mt76.h MT_VEND_ADDR token paste
+skipped mt76.h CCK_RATE unparsed expression
+skipped mt76.h OFDM_RATE unparsed expression
+skipped mt76.h __mt76_rr variadic macro
+skipped mt76.h __mt76_wr variadic macro
+skipped mt76.h __mt76_rmw variadic macro
+skipped mt76.h MT_TXQ_BE not an integer constant
+skipped mt76.h MT_TXQ_BEACON implicit enum value
+skipped mt76.h MT_TXQ_BK not an integer constant
+skipped mt76.h MT_TXQ_CAB implicit enum value
+skipped mt76.h MT_TXQ_PSD implicit enum value
+skipped mt76.h MT_TXQ_VI not an integer constant
+skipped mt76.h MT_TXQ_VO not an integer constant
+skipped mt76.h __MT_TXQ_MAX implicit enum value
+skipped mt76.h __mt76_wr_copy variadic macro
+skipped mt76.h __mt76_rr_copy variadic macro
+skipped mt76.h __mt76_set not an integer constant
+skipped mt76.h __mt76_clear not an integer constant
+skipped mt76.h mt76_rr variadic macro
+skipped mt76.h mt76_wr variadic macro
+skipped mt76.h mt76_rmw variadic macro
+skipped mt76.h mt76_wr_copy variadic macro
+skipped mt76.h mt76_rr_copy variadic macro
+skipped mt76.h mt76_wr_rp variadic macro
+skipped mt76.h mt76_rd_rp variadic macro
+skipped mt76.h mt76_mcu_restart variadic macro
+skipped mt76.h mt76_set not an integer constant
+skipped mt76.h mt76_clear not an integer constant
+skipped mt76.h mt76_get_field unparsed expression
+skipped mt76.h mt76_rmw_field unparsed expression
+skipped mt76.h __mt76_rmw_field unparsed expression
+skipped mt76.h mt76_hw unparsed expression
+skipped mt76.h __mt76_poll function prototype
+skipped mt76.h mt76_poll variadic macro
+skipped mt76.h ____mt76_poll_msec function prototype
+skipped mt76.h __mt76_poll_msec variadic macro
+skipped mt76.h mt76_poll_msec variadic macro
+skipped mt76.h mt76_poll_msec_tick variadic macro
+skipped mt76.h mt76_mmio_init function prototype
+skipped mt76.h mt76_pci_disable_aspm function prototype
+skipped mt76.h mt76_pci_aspm_supported function prototype
+skipped mt76.h mt76_chip inline function
+skipped mt76.h mt76_rev inline function
+skipped mt76.h mt76_wed_release_rx_buf function prototype
+skipped mt76.h mt76_wed_offload_disable function prototype
+skipped mt76.h mt76_wed_reset_complete function prototype
+skipped mt76.h mt76_wed_dma_reset function prototype
+skipped mt76.h mt76_wed_net_setup_tc function prototype
+skipped mt76.h mt76_wed_init_rx_buf inline function
+skipped mt76.h mt76_wed_offload_enable inline function
+skipped mt76.h mt76_wed_dma_setup inline function
+skipped mt76.h mt76xx_chip unparsed expression
+skipped mt76.h mt76xx_rev unparsed expression
+skipped mt76.h mt76_init_queues variadic macro
+skipped mt76.h mt76_queue_alloc variadic macro
+skipped mt76.h mt76_tx_queue_skb_raw variadic macro
+skipped mt76.h mt76_tx_queue_skb variadic macro
+skipped mt76.h mt76_queue_rx_reset variadic macro
+skipped mt76.h mt76_queue_tx_cleanup variadic macro
+skipped mt76.h mt76_queue_rx_init variadic macro
+skipped mt76.h mt76_queue_rx_cleanup variadic macro
+skipped mt76.h mt76_queue_kick variadic macro
+skipped mt76.h mt76_queue_reset variadic macro
+skipped mt76.h mt76_for_each_q_rx statement macro
+skipped mt76.h mt76_dereference unparsed expression
+skipped mt76.h mt76_wed_to_dev inline function
+skipped mt76.h __mt76_wcid_ptr inline function
+skipped mt76.h mt76_wcid_ptr unparsed expression
+skipped mt76.h mt76_alloc_device function prototype
+skipped mt76.h mt76_register_device function prototype
+skipped mt76.h mt76_unregister_device function prototype
+skipped mt76.h mt76_free_device function prototype
+skipped mt76.h mt76_reset_device function prototype
+skipped mt76.h mt76_unregister_phy function prototype
+skipped mt76.h mt76_alloc_radio_phy function prototype
+skipped mt76.h mt76_alloc_phy function prototype
+skipped mt76.h mt76_register_phy function prototype
+skipped mt76.h mt76_vif_phy function prototype
+skipped mt76.h mt76_register_debugfs_fops function prototype
+skipped mt76.h mt76_register_debugfs inline function
+skipped mt76.h mt76_queues_read function prototype
+skipped mt76.h mt76_seq_puts_array function prototype
+skipped mt76.h mt76_eeprom_init function prototype
+skipped mt76.h mt76_eeprom_override function prototype
+skipped mt76.h mt76_get_of_data_from_mtd function prototype
+skipped mt76.h mt76_get_of_data_from_nvmem function prototype
+skipped mt76.h mt76_init_queue function prototype
+skipped mt76.h mt76_init_tx_queue inline function
+skipped mt76.h mt76_init_mcu_queue inline function
+skipped mt76.h mt76_dev_phy inline function
+skipped mt76.h mt76_phy_hw inline function
+skipped mt76.h mt76_get_txwi_ptr inline function
+skipped mt76.h mt76_incr inline function
+skipped mt76.h mt76_decr inline function
+skipped mt76.h mt76_ac_to_hwq function prototype
+skipped mt76.h mtxq_to_txq inline function
+skipped mt76.h mt76_wcid_primary inline function
+skipped mt76.h wcid_to_sta inline function
+skipped mt76.h mt76_tx_skb_cb inline function
+skipped mt76.h mt76_skb_get_hdr inline function
+skipped mt76.h mt76_insert_hdr_pad inline function
+skipped mt76.h mt76_is_skb_pktid inline function
+skipped mt76.h mt76_tx_power_path_delta inline function
+skipped mt76.h mt76_testmode_enabled inline function
+skipped mt76.h mt76_is_testmode_skb inline function
+skipped mt76.h mt76_rx function prototype
+skipped mt76.h mt76_tx function prototype
+skipped mt76.h mt76_wake_tx_queue function prototype
+skipped mt76.h mt76_stop_tx_queues function prototype
+skipped mt76.h mt76_tx_check_agg_ssn function prototype
+skipped mt76.h mt76_txq_schedule function prototype
+skipped mt76.h mt76_txq_schedule_all function prototype
+skipped mt76.h mt76_txq_schedule_pending function prototype
+skipped mt76.h mt76_tx_worker_run function prototype
+skipped mt76.h mt76_tx_worker function prototype
+skipped mt76.h mt76_release_buffered_frames function prototype
+skipped mt76.h mt76_sta_ps_transition function prototype
+skipped mt76.h mt76_has_tx_pending function prototype
+skipped mt76.h mt76_update_channel function prototype
+skipped mt76.h mt76_update_survey function prototype
+skipped mt76.h mt76_phy_chandef_set function prototype
+skipped mt76.h mt76_update_survey_active_time function prototype
+skipped mt76.h mt76_get_survey function prototype
+skipped mt76.h mt76_rx_signal function prototype
+skipped mt76.h mt76_set_stream_caps function prototype
+skipped mt76.h mt76_rx_aggr_start function prototype
+skipped mt76.h mt76_rx_aggr_stop function prototype
+skipped mt76.h mt76_wcid_key_setup function prototype
+skipped mt76.h __acquires function prototype
+skipped mt76.h __releases function prototype
+skipped mt76.h mt76_tx_status_skb_add function prototype
+skipped mt76.h mt76_tx_status_skb_get function prototype
+skipped mt76.h mt76_tx_status_skb_done function prototype
+skipped mt76.h __mt76_tx_complete_skb function prototype
+skipped mt76.h mt76_tx_complete_skb inline function
+skipped mt76.h mt76_tx_status_check function prototype
+skipped mt76.h mt76_sta_state function prototype
+skipped mt76.h __mt76_sta_remove function prototype
+skipped mt76.h mt76_sta_pre_rcu_remove function prototype
+skipped mt76.h mt76_get_min_avg_rssi function prototype
+skipped mt76.h mt76_get_power_bound function prototype
+skipped mt76.h mt76_get_txpower function prototype
+skipped mt76.h mt76_init_sar_power function prototype
+skipped mt76.h mt76_get_sar_power function prototype
+skipped mt76.h mt76_csa_check function prototype
+skipped mt76.h mt76_csa_finish function prototype
+skipped mt76.h mt76_get_antenna function prototype
+skipped mt76.h mt76_set_tim function prototype
+skipped mt76.h mt76_insert_ccmp_hdr function prototype
+skipped mt76.h mt76_get_rate function prototype
+skipped mt76.h mt76_hw_scan function prototype
+skipped mt76.h mt76_cancel_hw_scan function prototype
+skipped mt76.h mt76_scan_rx_beacon function prototype
+skipped mt76.h mt76_rx_beacon function prototype
+skipped mt76.h mt76_beacon_mon_check function prototype
+skipped mt76.h mt76_sw_scan function prototype
+skipped mt76.h mt76_sw_scan_complete function prototype
+skipped mt76.h mt76_phy_dfs_state function prototype
+skipped mt76.h mt76_add_chanctx function prototype
+skipped mt76.h mt76_remove_chanctx function prototype
+skipped mt76.h mt76_change_chanctx function prototype
+skipped mt76.h mt76_assign_vif_chanctx function prototype
+skipped mt76.h mt76_unassign_vif_chanctx function prototype
+skipped mt76.h mt76_switch_vif_chanctx function prototype
+skipped mt76.h mt76_remain_on_channel function prototype
+skipped mt76.h mt76_cancel_remain_on_channel function prototype
+skipped mt76.h mt76_testmode_cmd function prototype
+skipped mt76.h mt76_testmode_dump function prototype
+skipped mt76.h mt76_testmode_set_state function prototype
+skipped mt76.h mt76_testmode_alloc_skb function prototype
+skipped mt76.h mt76_npu_check_ppe inline function
+skipped mt76.h mt76_npu_dma_add_buf inline function
+skipped mt76.h mt76_npu_fill_rx_queue inline function
+skipped mt76.h mt76_npu_queue_cleanup inline function
+skipped mt76.h mt76_npu_disable_irqs inline function
+skipped mt76.h mt76_npu_init inline function
+skipped mt76.h mt76_npu_deinit inline function
+skipped mt76.h mt76_npu_queue_setup inline function
+skipped mt76.h mt76_npu_txdesc_cleanup inline function
+skipped mt76.h mt76_npu_net_setup_tc inline function
+skipped mt76.h mt76_npu_send_txrx_addr inline function
+skipped mt76.h mt76_npu_device_active inline function
+skipped mt76.h mt76_ppe_device_active inline function
+skipped mt76.h mt76_npu_send_msg inline function
+skipped mt76.h mt76_npu_get_msg inline function
+skipped mt76.h mt76_testmode_reset inline function
+skipped mt76.h mt76_tx_status_get_hw inline function
+skipped mt76.h mt76_put_txwi function prototype
+skipped mt76.h mt76_put_rxwi function prototype
+skipped mt76.h mt76_get_rxwi function prototype
+skipped mt76.h mt76_free_pending_rxwi function prototype
+skipped mt76.h mt76_rx_complete function prototype
+skipped mt76.h mt76_rx_poll_complete function prototype
+skipped mt76.h mt76_rx_aggr_reorder function prototype
+skipped mt76.h mt76_testmode_tx_pending function prototype
+skipped mt76.h mt76_queue_tx_complete function prototype
+skipped mt76.h __mt76_set_channel function prototype
+skipped mt76.h mt76_offchannel_chandef inline function
+skipped mt76.h mt76_set_channel function prototype
+skipped mt76.h mt76_scan_work function prototype
+skipped mt76.h mt76_abort_scan function prototype
+skipped mt76.h mt76_roc_complete_work function prototype
+skipped mt76.h mt76_roc_complete function prototype
+skipped mt76.h mt76_abort_roc function prototype
+skipped mt76.h mt76_get_vif_phy_link function prototype
+skipped mt76.h mt76_put_vif_phy_link function prototype
+skipped mt76.h mt76_offchannel_notify function prototype
+skipped mt76.h mt76u_urb_error inline function
+skipped mt76.h mt76u_bulk_msg inline function
+skipped mt76.h mt76_ethtool_page_pool_stats function prototype
+skipped mt76.h mt76_ethtool_worker function prototype
+skipped mt76.h mt76_skb_adjust_pad function prototype
+skipped mt76.h __mt76u_vendor_request function prototype
+skipped mt76.h mt76u_vendor_request function prototype
+skipped mt76.h mt76u_single_wr function prototype
+skipped mt76.h mt76u_read_copy function prototype
+skipped mt76.h ___mt76u_rr function prototype
+skipped mt76.h ___mt76u_wr function prototype
+skipped mt76.h __mt76u_init function prototype
+skipped mt76.h mt76u_init function prototype
+skipped mt76.h mt76u_alloc_mcu_queue function prototype
+skipped mt76.h mt76u_alloc_queues function prototype
+skipped mt76.h mt76u_stop_tx function prototype
+skipped mt76.h mt76u_stop_rx function prototype
+skipped mt76.h mt76u_resume_rx function prototype
+skipped mt76.h mt76u_queues_deinit function prototype
+skipped mt76.h mt76s_init function prototype
+skipped mt76.h mt76s_alloc_rx_queue function prototype
+skipped mt76.h mt76s_alloc_tx function prototype
+skipped mt76.h mt76s_deinit function prototype
+skipped mt76.h mt76s_sdio_irq function prototype
+skipped mt76.h mt76s_txrx_worker function prototype
+skipped mt76.h mt76s_txqs_empty function prototype
+skipped mt76.h mt76s_hw_init function prototype
+skipped mt76.h mt76s_rr function prototype
+skipped mt76.h mt76s_wr function prototype
+skipped mt76.h mt76s_rmw function prototype
+skipped mt76.h mt76s_read_pcr function prototype
+skipped mt76.h mt76s_write_copy function prototype
+skipped mt76.h mt76s_read_copy function prototype
+skipped mt76.h mt76s_wr_rp function prototype
+skipped mt76.h mt76s_rd_rp function prototype
+skipped mt76.h __mt76_mcu_msg_alloc function prototype
+skipped mt76.h mt76_mcu_msg_alloc inline function
+skipped mt76.h mt76_mcu_rx_event function prototype
+skipped mt76.h mt76_mcu_get_response function prototype
+skipped mt76.h mt76_mcu_send_and_get_msg function prototype
+skipped mt76.h mt76_mcu_skb_send_and_get_msg function prototype
+skipped mt76.h __mt76_mcu_send_firmware function prototype
+skipped mt76.h mt76_mcu_send_firmware inline function
+skipped mt76.h mt76_mcu_send_msg inline function
+skipped mt76.h mt76_mcu_skb_send_msg inline function
+skipped mt76.h mt76_set_irq_mask function prototype
+skipped mt76.h mt76_find_power_limits_node function prototype
+skipped mt76.h mt76_find_channel_node function prototype
+skipped mt76.h mt76_get_rate_power_limits function prototype
+skipped mt76.h mt76_queue_is_rx inline function
+skipped mt76.h mt76_queue_is_wed_tx_free inline function
+skipped mt76.h mt76_queue_is_wed_rro inline function
+skipped mt76.h mt76_queue_is_wed_rro_ind inline function
+skipped mt76.h mt76_queue_is_wed_rro_rxdmad_c inline function
+skipped mt76.h mt76_queue_is_wed_rro_data inline function
+skipped mt76.h mt76_queue_is_wed_rro_msdu_pg inline function
+skipped mt76.h mt76_queue_is_wed_rx inline function
+skipped mt76.h mt76_queue_is_emi inline function
+skipped mt76.h mt76_queue_is_npu inline function
+skipped mt76.h mt76_queue_is_npu_tx inline function
+skipped mt76.h mt76_queue_is_npu_rx inline function
+skipped mt76.h mt76_queue_is_npu_txfree inline function
+skipped mt76.h mt76_token_release function prototype
+skipped mt76.h mt76_token_consume function prototype
+skipped mt76.h __mt76_set_tx_blocked function prototype
+skipped mt76.h mt76_rx_token_release function prototype
+skipped mt76.h mt76_rx_token_consume function prototype
+skipped mt76.h mt76_create_page_pool function prototype
+skipped mt76.h mt76_put_page_pool_buf inline function
+skipped mt76.h mt76_get_page_pool_buf inline function
+skipped mt76.h mt76_set_tx_blocked inline function
+skipped mt76.h mt76_token_get inline function
+skipped mt76.h mt76_token_put inline function
+skipped mt76.h mt76_wcid_init function prototype
+skipped mt76.h mt76_wcid_cleanup function prototype
+skipped mt76.h mt76_wcid_add_poll function prototype
+skipped mt76.h mt76_vif_init inline function
+skipped mt76.h mt76_vif_cleanup function prototype
+skipped mt76.h mt76_select_links function prototype
+skipped mt76.h mt76_vif_link inline function
+skipped mt76.h mt76_vif_conf_link inline function
+skipped mt76.h mt76_vif_link_phy inline function
+skipped mt76.h mt76_scan_rnr_param unknown ETH_ALEN
+skipped mt76.h mt76_queue_buf depends on dma_addr_t
+skipped mt76.h mt76_tx_info depends on unknown type
+skipped mt76.h mt76_queue_entry pointer field buf
+skipped mt76.h mt76_queue pointer field regs
+skipped mt76.h mt76_mcu_ops pointer field mcu_send_msg
+skipped mt76.h mt76_queue_ops pointer field init
+skipped mt76.h mt76_wcid pointer field aggr
+skipped mt76.h mt76_txwi_cache depends on list_head
+skipped mt76.h mt76_driver_ops pointer field update_survey
+skipped mt76.h mt76_sband depends on ieee80211_supported_band
+skipped mt76.h mt76_mcu depends on mutex
+skipped mt76.h mt76_usb depends on mutex
+skipped mt76.h mt76_sdio depends on unknown type
+skipped mt76.h mt76_mmio pointer field regs
+skipped mt76.h mt76_rx_status pointer field wcid
+skipped mt76.h mt76_freq_range_power pointer field range
+skipped mt76.h mt76_testmode_ops pointer field set_state
+skipped mt76.h mt76_testmode_data depends on enum mt76_testmode_state
+skipped mt76.h mt76_vif_link pointer field ctx
+skipped mt76.h mt76_vif_data pointer field link
+skipped mt76.h mt76_phy pointer field hw
+skipped mt76.h mt76_dev depends on unknown type
+skipped mt76.h mt76_ethtool_worker_info pointer field data
+skipped mt76.h mt76_chanctx pointer field phy
+skipped mt76_connac.h MT76_CONNAC_MAX_TIME_SCHED_SCAN_INTERVAL not an integer constant
+skipped mt76_connac.h MT76_CONNAC_COREDUMP_TIMEOUT not an integer constant
+skipped mt76_connac.h is_connac3 inline function
+skipped mt76_connac.h is_mt7925 inline function
+skipped mt76_connac.h is_mt7927 inline function
+skipped mt76_connac.h is_mt7928 inline function
+skipped mt76_connac.h is_320mhz_supported inline function
+skipped mt76_connac.h is_mt7920 inline function
+skipped mt76_connac.h is_mt7902 inline function
+skipped mt76_connac.h is_mt7922 inline function
+skipped mt76_connac.h is_connac2 inline function
+skipped mt76_connac.h is_mt7663 inline function
+skipped mt76_connac.h is_mt7915 inline function
+skipped mt76_connac.h is_mt7916 inline function
+skipped mt76_connac.h is_mt7981 inline function
+skipped mt76_connac.h is_mt7986 inline function
+skipped mt76_connac.h is_mt798x inline function
+skipped mt76_connac.h is_mt7996 inline function
+skipped mt76_connac.h is_mt7992 inline function
+skipped mt76_connac.h is_mt7990 inline function
+skipped mt76_connac.h is_mt799x inline function
+skipped mt76_connac.h is_mt7622 inline function
+skipped mt76_connac.h is_mt7615 inline function
+skipped mt76_connac.h is_mt7611 inline function
+skipped mt76_connac.h is_connac_v1 inline function
+skipped mt76_connac.h is_mt76_fw_txp inline function
+skipped mt76_connac.h mt76_connac_chan_bw inline function
+skipped mt76_connac.h mt76_connac_lmac_mapping inline function
+skipped mt76_connac.h mt76_connac_txwi_to_txp inline function
+skipped mt76_connac.h mt76_connac_spe_idx inline function
+skipped mt76_connac.h mt76_connac_irq_enable inline function
+skipped mt76_connac.h mt76_connac_pm_wake function prototype
+skipped mt76_connac.h mt76_connac_power_save_sched function prototype
+skipped mt76_connac.h mt76_connac_free_pending_tx_skbs function prototype
+skipped mt76_connac.h CMD_CBW_10MHZ implicit enum value
+skipped mt76_connac.h CMD_CBW_160MHZ not an integer constant
+skipped mt76_connac.h CMD_CBW_20MHZ not an integer constant
+skipped mt76_connac.h CMD_CBW_320MHZ implicit enum value
+skipped mt76_connac.h CMD_CBW_40MHZ not an integer constant
+skipped mt76_connac.h CMD_CBW_5MHZ implicit enum value
+skipped mt76_connac.h CMD_CBW_8080MHZ implicit enum value
+skipped mt76_connac.h CMD_CBW_80MHZ not an integer constant
+skipped mt76_connac.h mt76_connac_tx_cleanup inline function
+skipped mt76_connac.h mt76_connac_pm_ref inline function
+skipped mt76_connac.h mt76_connac_pm_unref inline function
+skipped mt76_connac.h mt76_connac_skip_fw_pmctrl inline function
+skipped mt76_connac.h __acquires inline function
+skipped mt76_connac.h __releases inline function
+skipped mt76_connac.h mt76_connac_gen_ppe_thresh function prototype
+skipped mt76_connac.h mt76_connac_init_tx_queues function prototype
+skipped mt76_connac.h mt76_connac_set_txpower_cur function prototype
+skipped mt76_connac.h mt76_connac_get_rate_power_limit function prototype
+skipped mt76_connac.h mt76_connac_write_hw_txp function prototype
+skipped mt76_connac.h mt76_connac_txp_skb_unmap function prototype
+skipped mt76_connac.h mt76_connac_tx_complete_skb function prototype
+skipped mt76_connac.h mt76_connac_pm_queue_skb function prototype
+skipped mt76_connac.h mt76_connac_pm_dequeue_skbs function prototype
+skipped mt76_connac.h mt76_connac2_mac_write_txwi function prototype
+skipped mt76_connac.h mt76_connac2_mac_tx_rate_val function prototype
+skipped mt76_connac.h mt76_connac2_mac_fill_txs function prototype
+skipped mt76_connac.h mt76_connac2_mac_add_txs_skb function prototype
+skipped mt76_connac.h mt76_connac2_mac_decode_he_radiotap function prototype
+skipped mt76_connac.h mt76_connac2_reverse_frag0_hdr_trans function prototype
+skipped mt76_connac.h mt76_connac2_mac_fill_rx_rate function prototype
+skipped mt76_connac.h mt76_connac2_tx_check_aggr function prototype
+skipped mt76_connac.h mt76_connac2_txwi_free function prototype
+skipped mt76_connac.h mt76_connac2_tx_token_put function prototype
+skipped mt76_connac.h mt76_connac3_mac_decode_he_radiotap function prototype
+skipped mt76_connac.h mt76_connac3_mac_decode_eht_radiotap function prototype
+skipped mt76_connac.h mt76_connac_pm depends on spinlock_t
+skipped mt76_connac.h mt76_connac_coredump depends on sk_buff_head
+skipped mt76_connac2_mac.h MT_PRXV_NUM_RX not an integer constant
+skipped mt76_connac3_mac.h MT_TXD2_BF_TYPE not an integer constant
+skipped mt76_connac3_mac.h MT_TXD2_BF_TYPE_V2 not an integer constant
+skipped mt76_connac_mcu.h declaration unparsed declaration (macro member struct_group_tagged)
+skipped mt76_connac_mcu.h static_assert function prototype
+skipped mt76_connac_mcu.h MT76_CONNAC_WTBL_UPDATE_MAX_SIZE unparsed expression
+skipped mt76_connac_mcu.h MT76_CONNAC_STA_UPDATE_MAX_SIZE unparsed expression
+skipped mt76_connac_mcu.h PHY_TYPE_BIT_HR_DSSS not an integer constant
+skipped mt76_connac_mcu.h PHY_TYPE_BIT_ERP not an integer constant
+skipped mt76_connac_mcu.h PHY_TYPE_BIT_OFDM not an integer constant
+skipped mt76_connac_mcu.h PHY_TYPE_BIT_HT not an integer constant
+skipped mt76_connac_mcu.h PHY_TYPE_BIT_VHT not an integer constant
+skipped mt76_connac_mcu.h PHY_TYPE_BIT_HE not an integer constant
+skipped mt76_connac_mcu.h PHY_TYPE_BIT_BE not an integer constant
+skipped mt76_connac_mcu.h MCU_CMD token paste
+skipped mt76_connac_mcu.h MCU_EXT_CMD token paste
+skipped mt76_connac_mcu.h MCU_EXT_QUERY unparsed expression
+skipped mt76_connac_mcu.h MCU_UNI_CMD token paste
+skipped mt76_connac_mcu.h MCU_UNI_QUERY token paste
+skipped mt76_connac_mcu.h MCU_CE_CMD token paste
+skipped mt76_connac_mcu.h MCU_CE_QUERY unparsed expression
+skipped mt76_connac_mcu.h MCU_WA_CMD unparsed expression
+skipped mt76_connac_mcu.h MCU_WA_EXT_CMD unparsed expression
+skipped mt76_connac_mcu.h MCU_WA_PARAM_CMD token paste
+skipped mt76_connac_mcu.h MCU_WM_UNI_CMD unparsed expression
+skipped mt76_connac_mcu.h MCU_WM_UNI_CMD_QUERY unparsed expression
+skipped mt76_connac_mcu.h MCU_WA_UNI_CMD unparsed expression
+skipped mt76_connac_mcu.h MCU_WMWA_UNI_CMD unparsed expression
+skipped mt76_connac_mcu.h mt76_connac_mcu_get_cipher inline function
+skipped mt76_connac_mcu.h mt76_connac_mcu_gen_dl_mode inline function
+skipped mt76_connac_mcu.h to_wcid_lo unparsed expression
+skipped mt76_connac_mcu.h to_wcid_hi unparsed expression
+skipped mt76_connac_mcu.h mt76_connac_mcu_get_wlan_idx inline function
+skipped mt76_connac_mcu.h mt76_connac_mcu_bss_deact_err inline function
+skipped mt76_connac_mcu.h __mt76_connac_mcu_alloc_sta_req function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_alloc_sta_req inline function
+skipped mt76_connac_mcu.h mt76_connac_mcu_alloc_wtbl_req function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_add_nested_tlv function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_add_tlv inline function
+skipped mt76_connac_mcu.h mt76_connac_mcu_set_channel_domain function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_set_vif_ps function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_sta_basic_tlv function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_wtbl_generic_tlv function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_wtbl_hdr_trans_tlv function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_sta_update_hdr_trans function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_sta_he_tlv_v2 function prototype
+skipped mt76_connac_mcu.h mt76_connac_get_phy_mode_v2 function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_wtbl_update_hdr_trans function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_sta_tlv function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_wtbl_ht_tlv function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_wtbl_ba_tlv function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_sta_ba_tlv function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_uni_add_dev function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_sta_ba function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_uni_set_chctx function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_uni_add_bss function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_sta_cmd function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_beacon_loss_iter function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_set_rts_thresh function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_set_mac_enable function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_init_download function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_start_patch function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_patch_sem_ctrl function prototype
+skipped mt76_connac_mcu.h mt76_connac_cb_mcu_init_download function prototype
+skipped mt76_connac_mcu.h mt76_connac_cb_mcu_start_patch function prototype
+skipped mt76_connac_mcu.h mt76_connac_cb_mcu_patch_sem_ctrl function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_start_firmware function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_build_rnr_scan_param function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_hw_scan function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_cancel_hw_scan function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_sched_scan_req function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_sched_scan_enable function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_update_arp_filter function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_set_gtk_rekey function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_set_wow_ctrl function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_update_gtk_rekey function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_set_suspend_mode function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_set_hif_suspend function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_set_suspend_iter function prototype
+skipped mt76_connac_mcu.h mt76_connac_sta_state_dp function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_chip_config function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_set_deep_sleep function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_coredump_event function prototype
+skipped mt76_connac_mcu.h mt76_connac_get_ch_power function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_set_rate_txpower function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_set_p2p_oppps function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_reg_rr function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_reg_wr function prototype
+skipped mt76_connac_mcu.h mt76_connac_get_he_phy_cap function prototype
+skipped mt76_connac_mcu.h mt76_connac_get_eht_phy_cap function prototype
+skipped mt76_connac_mcu.h mt76_connac_get_phy_mode function prototype
+skipped mt76_connac_mcu.h mt76_connac_get_phy_mode_ext function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_add_key function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_bss_ext_tlv function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_bss_omac_tlv function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_bss_basic_tlv function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_sta_uapsd function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_wtbl_smps_tlv function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_set_pm function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_restart function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_del_wtbl_all function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_rdd_cmd function prototype
+skipped mt76_connac_mcu.h mt76_connac_mcu_sta_wed_update function prototype
+skipped mt76_connac_mcu.h mt76_connac2_load_ram function prototype
+skipped mt76_connac_mcu.h mt76_connac3_load_phy_ram function prototype
+skipped mt76_connac_mcu.h mt76_connac2_load_patch function prototype
+skipped mt76_connac_mcu.h mt76_connac3_load_cb_patch function prototype
+skipped mt76_connac_mcu.h mt76_connac2_mcu_fill_message function prototype
+skipped mt76_connac_mcu.h bss_info_basic unknown ETH_ALEN
+skipped mt76_connac_mcu.h sta_rec_basic unknown ETH_ALEN
+skipped mt76_connac_mcu.h wtbl_generic unknown ETH_ALEN
+skipped mt76_connac_mcu.h wtbl_ba unknown ETH_ALEN
+skipped mt76_connac_mcu.h mt76_connac_bss_basic_tlv unknown ETH_ALEN
+skipped mt76_connac_mcu.h mt76_connac_mcu_scan_ssid unknown IEEE80211_MAX_SSID_LEN
+skipped mt76_connac_mcu.h mt76_connac_mcu_scan_match unknown IEEE80211_MAX_SSID_LEN
+skipped mt76_connac_mcu.h mt76_connac_hw_scan_req depends on unknown type
+skipped mt76_connac_mcu.h mt76_connac_sched_scan_req depends on unknown type
+skipped mt76_connac_mcu.h mt76_connac_gtk_rekey_tlv unknown NL80211_KEK_LEN
+skipped mt76_connac_mcu.h mt76_sta_cmd_info pointer field sta
+skipped mt7915/coredump.h mt7915_coredump_get_mem_layout inline function
+skipped mt7915/coredump.h mt7915_coredump_submit inline function
+skipped mt7915/coredump.h mt7915_coredump_new inline function
+skipped mt7915/coredump.h mt7915_coredump_register inline function
+skipped mt7915/coredump.h mt7915_coredump_unregister inline function
+skipped mt7915/coredump.h mt7915_coredump depends on guid_t
+skipped mt7915/coredump.h mt7915_mem_region depends on size_t
+skipped mt7915/eeprom.h mt7915_get_channel_group_5g inline function
+skipped mt7915/eeprom.h mt7915_get_channel_group_6g inline function
+skipped mt7915/eeprom.h mt7915_tssi_enabled inline function
+skipped mt7915/eeprom.h mt7915_get_cal_group_size inline function
+skipped mt7915/eeprom.h mt7915_get_cal_dpd_size inline function
+skipped mt7915/mcu.h mt7915_mcu_thermal_notify depends on mt76_connac2_mcu_rxd_hdr
+skipped mt7915/mcu.h MT7915_BEACON_UPDATE_SIZE unparsed expression
+skipped mt7915/mcu.h MT7915_MAX_BSS_OFFLOAD_SIZE not an integer constant
+skipped mt7915/mcu.h MT7915_BSS_UPDATE_MAX_SIZE unparsed expression
+skipped mt7915/mcu.h mt7915_mcu_csa_notify depends on mt76_connac2_mcu_rxd_hdr
+skipped mt7915/mcu.h mt7915_mcu_bcc_notify depends on mt76_connac2_mcu_rxd_hdr
+skipped mt7915/mcu.h mt7915_mcu_ps_notify depends on mt76_connac2_mcu_rxd_hdr
+skipped mt7915/mcu.h mt7915_mcu_rdd_report depends on mt76_connac2_mcu_rxd_hdr
+skipped mt7915/mcu.h mt7915_mcu_tx unknown IEEE80211_NUM_ACS
+skipped mt7915/mt7915.h MT7915_WTBL_RESERVED not an integer constant
+skipped mt7915/mt7915.h MT7915_WTBL_STA not an integer constant
+skipped mt7915/mt7915.h MT7915_WATCHDOG_TIME not an integer constant
+skipped mt7915/mt7915.h MT7915_RESET_TIMEOUT not an integer constant
+skipped mt7915/mt7915.h DECLARE_EWMA inline function
+skipped mt7915/mt7915.h mt7915_get_rdd_idx inline function
+skipped mt7915/mt7915.h mt7915_hw_phy inline function
+skipped mt7915/mt7915.h mt7915_hw_dev inline function
+skipped mt7915/mt7915.h mt7915_ext_phy inline function
+skipped mt7915/mt7915.h mt7915_band_chainshift inline function
+skipped mt7915/mt7915.h mt7915_band_chainmask inline function
+skipped mt7915/mt7915.h mt7915_check_adie inline function
+skipped mt7915/mt7915.h mt7986_wmac_enable inline function
+skipped mt7915/mt7915.h mt7986_wmac_disable inline function
+skipped mt7915/mt7915.h mt7915_mmio_probe function prototype
+skipped mt7915/mt7915.h mt7915_wfsys_reset function prototype
+skipped mt7915/mt7915.h mt7915_irq_handler function prototype
+skipped mt7915/mt7915.h __mt7915_get_tsf function prototype
+skipped mt7915/mt7915.h mt7915_wed_init_buf function prototype
+skipped mt7915/mt7915.h mt7915_register_device function prototype
+skipped mt7915/mt7915.h mt7915_unregister_device function prototype
+skipped mt7915/mt7915.h mt7915_eeprom_init function prototype
+skipped mt7915/mt7915.h mt7915_eeprom_parse_hw_cap function prototype
+skipped mt7915/mt7915.h mt7915_eeprom_get_target_power function prototype
+skipped mt7915/mt7915.h mt7915_eeprom_get_power_delta function prototype
+skipped mt7915/mt7915.h mt7915_eeprom_has_background_radar function prototype
+skipped mt7915/mt7915.h mt7915_dma_init function prototype
+skipped mt7915/mt7915.h mt7915_dma_prefetch function prototype
+skipped mt7915/mt7915.h mt7915_dma_cleanup function prototype
+skipped mt7915/mt7915.h mt7915_dma_reset function prototype
+skipped mt7915/mt7915.h mt7915_dma_start function prototype
+skipped mt7915/mt7915.h mt7915_txbf_init function prototype
+skipped mt7915/mt7915.h mt7915_init_txpower function prototype
+skipped mt7915/mt7915.h mt7915_reset function prototype
+skipped mt7915/mt7915.h mt7915_run function prototype
+skipped mt7915/mt7915.h mt7915_mcu_init function prototype
+skipped mt7915/mt7915.h mt7915_mcu_init_firmware function prototype
+skipped mt7915/mt7915.h mt7915_mcu_twt_agrt_update function prototype
+skipped mt7915/mt7915.h mt7915_mcu_add_dev_info function prototype
+skipped mt7915/mt7915.h mt7915_mcu_add_bss_info function prototype
+skipped mt7915/mt7915.h mt7915_mcu_add_sta function prototype
+skipped mt7915/mt7915.h mt7915_mcu_add_tx_ba function prototype
+skipped mt7915/mt7915.h mt7915_mcu_add_rx_ba function prototype
+skipped mt7915/mt7915.h mt7915_mcu_update_bss_color function prototype
+skipped mt7915/mt7915.h mt7915_mcu_add_inband_discov function prototype
+skipped mt7915/mt7915.h mt7915_mcu_add_beacon function prototype
+skipped mt7915/mt7915.h mt7915_mcu_set_protection function prototype
+skipped mt7915/mt7915.h mt7915_mcu_add_obss_spr function prototype
+skipped mt7915/mt7915.h mt7915_mcu_add_rate_ctrl function prototype
+skipped mt7915/mt7915.h mt7915_mcu_add_smps function prototype
+skipped mt7915/mt7915.h mt7915_set_channel function prototype
+skipped mt7915/mt7915.h mt7915_mcu_set_chan_info function prototype
+skipped mt7915/mt7915.h mt7915_mcu_set_tx function prototype
+skipped mt7915/mt7915.h mt7915_mcu_update_edca function prototype
+skipped mt7915/mt7915.h mt7915_mcu_set_fixed_rate_ctrl function prototype
+skipped mt7915/mt7915.h mt7915_mcu_set_eeprom function prototype
+skipped mt7915/mt7915.h mt7915_mcu_get_eeprom function prototype
+skipped mt7915/mt7915.h mt7915_mcu_get_eeprom_free_block function prototype
+skipped mt7915/mt7915.h mt7915_mcu_set_mac function prototype
+skipped mt7915/mt7915.h mt7915_mcu_set_test_param function prototype
+skipped mt7915/mt7915.h mt7915_mcu_set_ser function prototype
+skipped mt7915/mt7915.h mt7915_mcu_set_sku_en function prototype
+skipped mt7915/mt7915.h mt7915_mcu_set_txpower_sku function prototype
+skipped mt7915/mt7915.h mt7915_mcu_get_txpower_sku function prototype
+skipped mt7915/mt7915.h mt7915_mcu_set_txpower_frame_min function prototype
+skipped mt7915/mt7915.h mt7915_mcu_set_txpower_frame function prototype
+skipped mt7915/mt7915.h mt7915_mcu_set_txbf function prototype
+skipped mt7915/mt7915.h mt7915_mcu_set_fcc5_lpn function prototype
+skipped mt7915/mt7915.h mt7915_mcu_set_pulse_th function prototype
+skipped mt7915/mt7915.h mt7915_mcu_set_radar_th function prototype
+skipped mt7915/mt7915.h mt7915_mcu_set_muru_ctrl function prototype
+skipped mt7915/mt7915.h mt7915_mcu_apply_group_cal function prototype
+skipped mt7915/mt7915.h mt7915_mcu_apply_tx_dpd function prototype
+skipped mt7915/mt7915.h mt7915_mcu_get_chan_mib_info function prototype
+skipped mt7915/mt7915.h mt7915_mcu_get_temperature function prototype
+skipped mt7915/mt7915.h mt7915_mcu_set_thermal_throttling function prototype
+skipped mt7915/mt7915.h mt7915_mcu_set_thermal_protect function prototype
+skipped mt7915/mt7915.h mt7915_mcu_get_rx_rate function prototype
+skipped mt7915/mt7915.h mt7915_mcu_rdd_background_enable function prototype
+skipped mt7915/mt7915.h mt7915_mcu_wed_wa_tx_stats function prototype
+skipped mt7915/mt7915.h mt7915_mcu_rf_regval function prototype
+skipped mt7915/mt7915.h mt7915_mcu_wa_cmd function prototype
+skipped mt7915/mt7915.h mt7915_mcu_fw_log_2_host function prototype
+skipped mt7915/mt7915.h mt7915_mcu_fw_dbg_ctrl function prototype
+skipped mt7915/mt7915.h mt7915_mcu_rx_event function prototype
+skipped mt7915/mt7915.h mt7915_mcu_exit function prototype
+skipped mt7915/mt7915.h mt7915_wtbl_size inline function
+skipped mt7915/mt7915.h mt7915_eeprom_size inline function
+skipped mt7915/mt7915.h mt7915_dual_hif_set_irq_mask function prototype
+skipped mt7915/mt7915.h mt7915_irq_enable inline function
+skipped mt7915/mt7915.h mt7915_irq_disable inline function
+skipped mt7915/mt7915.h mt7915_memcpy_fromio function prototype
+skipped mt7915/mt7915.h mt7915_mac_init function prototype
+skipped mt7915/mt7915.h mt7915_mac_wtbl_lmac_addr function prototype
+skipped mt7915/mt7915.h mt7915_mac_wtbl_update function prototype
+skipped mt7915/mt7915.h mt7915_mac_reset_counters function prototype
+skipped mt7915/mt7915.h mt7915_mac_cca_stats_reset function prototype
+skipped mt7915/mt7915.h mt7915_mac_enable_nf function prototype
+skipped mt7915/mt7915.h mt7915_mac_enable_rtscts function prototype
+skipped mt7915/mt7915.h mt7915_mac_write_txwi function prototype
+skipped mt7915/mt7915.h mt7915_mac_set_timing function prototype
+skipped mt7915/mt7915.h mt7915_mac_sta_add function prototype
+skipped mt7915/mt7915.h mt7915_mac_sta_event function prototype
+skipped mt7915/mt7915.h mt7915_mac_sta_remove function prototype
+skipped mt7915/mt7915.h mt7915_mac_work function prototype
+skipped mt7915/mt7915.h mt7915_mac_reset_work function prototype
+skipped mt7915/mt7915.h mt7915_mac_dump_work function prototype
+skipped mt7915/mt7915.h mt7915_mac_sta_rc_work function prototype
+skipped mt7915/mt7915.h mt7915_mac_update_stats function prototype
+skipped mt7915/mt7915.h mt7915_mac_twt_teardown_flow function prototype
+skipped mt7915/mt7915.h mt7915_mac_add_twt_setup function prototype
+skipped mt7915/mt7915.h mt7915_tx_prepare_skb function prototype
+skipped mt7915/mt7915.h mt7915_twt_flow depends on list_head
+skipped mt7915/mt7915.h mt7915_queue_rx_skb function prototype
+skipped mt7915/mt7915.h mt7915_rx_check function prototype
+skipped mt7915/mt7915.h mt7915_stats_work function prototype
+skipped mt7915/mt7915.h mt76_dfs_start_rdd function prototype
+skipped mt7915/mt7915.h mt7915_dfs_init_radar_detector function prototype
+skipped mt7915/mt7915.h mt7915_set_stream_he_caps function prototype
+skipped mt7915/mt7915.h mt7915_set_stream_vht_txbf_caps function prototype
+skipped mt7915/mt7915.h mt7915_update_channel function prototype
+skipped mt7915/mt7915.h mt7915_mcu_muru_debug_set function prototype
+skipped mt7915/mt7915.h mt7915_mcu_muru_debug_get function prototype
+skipped mt7915/mt7915.h mt7915_mcu_wed_enable_rx_stats function prototype
+skipped mt7915/mt7915.h mt7915_init_debugfs function prototype
+skipped mt7915/mt7915.h mt7915_debugfs_rx_fw_monitor function prototype
+skipped mt7915/mt7915.h mt7915_debugfs_rx_log function prototype
+skipped mt7915/mt7915.h mt7915_mmio_wed_init function prototype
+skipped mt7915/mt7915.h mt7915_vif depends on unknown type
+skipped mt7915/mt7915.h mt7915_crash_data depends on guid_t
+skipped mt7915/mt7915.h mt7915_hif depends on list_head
+skipped mt7915/mt7915.h mt7915_phy pointer field mt76
+skipped mt7915/mt7915.h mt7915_dev depends on unknown type
+skipped mt7915/regs.h __REG unparsed expression
+skipped mt7915/regs.h __OFFS unparsed expression
+skipped mt7915/regs.h MT_MCU_INT_EVENT not an integer constant
+skipped mt7915/regs.h mt7915_reg_desc pointer field reg_rev
+skipped mt7915/regs.h MT_FL_Q_EMPTY not an integer constant
+skipped mt7915/regs.h MT_FL_Q0_CTRL not an integer constant
+skipped mt7915/regs.h MT_FL_Q2_CTRL not an integer constant
+skipped mt7915/regs.h MT_FL_Q3_CTRL not an integer constant
+skipped mt7915/regs.h MT_PLE_FREEPG_CNT not an integer constant
+skipped mt7915/regs.h MT_PLE_FREEPG_HEAD_TAIL not an integer constant
+skipped mt7915/regs.h MT_PLE_PG_HIF_GROUP not an integer constant
+skipped mt7915/regs.h MT_PLE_HIF_PG_INFO not an integer constant
+skipped mt7915/regs.h MT_PLE_AC_QEMPTY not an integer constant
+skipped mt7915/regs.h MT_MDP_BNRCFR0 not an integer constant
+skipped mt7915/regs.h MT_MDP_BNRCFR1 not an integer constant
+skipped mt7915/regs.h MT_TMAC_CDTR not an integer constant
+skipped mt7915/regs.h MT_TMAC_ODTR not an integer constant
+skipped mt7915/regs.h MT_TMAC_ATCR not an integer constant
+skipped mt7915/regs.h MT_TMAC_TRCR0 not an integer constant
+skipped mt7915/regs.h MT_TMAC_ICR0 not an integer constant
+skipped mt7915/regs.h MT_TMAC_ICR1 not an integer constant
+skipped mt7915/regs.h MT_TMAC_CTCR0 not an integer constant
+skipped mt7915/regs.h MT_TMAC_TFCR0 not an integer constant
+skipped mt7915/regs.h MT_ETBF_PAR_RPT0 not an integer constant
+skipped mt7915/regs.h MT_LPON_UTTR0 not an integer constant
+skipped mt7915/regs.h MT_LPON_UTTR1 not an integer constant
+skipped mt7915/regs.h MT_LPON_FRCR not an integer constant
+skipped mt7915/regs.h MT_MIB_SDR3 not an integer constant
+skipped mt7915/regs.h MT_MIB_SDR4 not an integer constant
+skipped mt7915/regs.h MT_MIB_SDR5 not an integer constant
+skipped mt7915/regs.h MT_MIB_SDR7 not an integer constant
+skipped mt7915/regs.h MT_MIB_SDR8 not an integer constant
+skipped mt7915/regs.h MT_MIB_SDR9_DNR not an integer constant
+skipped mt7915/regs.h MT_MIB_SDR10 not an integer constant
+skipped mt7915/regs.h MT_MIB_SDR11 not an integer constant
+skipped mt7915/regs.h MT_MIB_SDR12 not an integer constant
+skipped mt7915/regs.h MT_MIB_SDR13 not an integer constant
+skipped mt7915/regs.h MT_MIB_SDR14 not an integer constant
+skipped mt7915/regs.h MT_MIB_SDR15 not an integer constant
+skipped mt7915/regs.h MT_MIB_SDR16 not an integer constant
+skipped mt7915/regs.h MT_MIB_SDR17 not an integer constant
+skipped mt7915/regs.h MT_MIB_SDR18 not an integer constant
+skipped mt7915/regs.h MT_MIB_SDR19 not an integer constant
+skipped mt7915/regs.h MT_MIB_SDR20 not an integer constant
+skipped mt7915/regs.h MT_MIB_SDR21 not an integer constant
+skipped mt7915/regs.h MT_MIB_SDR22 not an integer constant
+skipped mt7915/regs.h MT_MIB_SDR23 not an integer constant
+skipped mt7915/regs.h MT_MIB_SDR24 not an integer constant
+skipped mt7915/regs.h MT_MIB_SDR25 not an integer constant
+skipped mt7915/regs.h MT_MIB_SDR27 not an integer constant
+skipped mt7915/regs.h MT_MIB_SDR28 not an integer constant
+skipped mt7915/regs.h MT_MIB_SDR29 not an integer constant
+skipped mt7915/regs.h MT_MIB_SDRVEC not an integer constant
+skipped mt7915/regs.h MT_MIB_SDR31 not an integer constant
+skipped mt7915/regs.h MT_MIB_SDR32 not an integer constant
+skipped mt7915/regs.h MT_MIB_SDRMUBF not an integer constant
+skipped mt7915/regs.h MT_MIB_DR8 not an integer constant
+skipped mt7915/regs.h MT_MIB_DR9 not an integer constant
+skipped mt7915/regs.h MT_MIB_DR11 not an integer constant
+skipped mt7915/regs.h MT_MIB_MB_SDR0 not an integer constant
+skipped mt7915/regs.h MT_MIB_MB_SDR1 not an integer constant
+skipped mt7915/regs.h MT_TX_AGG_CNT not an integer constant
+skipped mt7915/regs.h MT_TX_AGG_CNT2 not an integer constant
+skipped mt7915/regs.h MT_MIB_ARNG not an integer constant
+skipped mt7915/regs.h MT_WTBLON_TOP_WDUCR not an integer constant
+skipped mt7915/regs.h MT_WTBL_UPDATE not an integer constant
+skipped mt7915/regs.h MT_WTBL_LMAC_OFFS unparsed expression
+skipped mt7915/regs.h MT_AGG_AWSCR0 not an integer constant
+skipped mt7915/regs.h MT_AGG_PCR0 not an integer constant
+skipped mt7915/regs.h MT_AGG_ACR0 not an integer constant
+skipped mt7915/regs.h MT_AGG_ACR4 not an integer constant
+skipped mt7915/regs.h MT_AGG_MRCR not an integer constant
+skipped mt7915/regs.h MT_AGG_ATCR0 not an integer constant
+skipped mt7915/regs.h MT_AGG_ATCR1 not an integer constant
+skipped mt7915/regs.h MT_AGG_ATCR3 not an integer constant
+skipped mt7915/regs.h MT_ARB_SCR not an integer constant
+skipped mt7915/regs.h MT_ARB_DRNGR0 not an integer constant
+skipped mt7915/regs.h MT_WFDMA0_BASE not an integer constant
+skipped mt7915/regs.h MT_WFDMA0 not an integer constant
+skipped mt7915/regs.h MT_WFDMA0_RST not an integer constant
+skipped mt7915/regs.h MT_WFDMA0_BUSY_ENA not an integer constant
+skipped mt7915/regs.h MT_WFDMA0_MCU_HOST_INT_ENA not an integer constant
+skipped mt7915/regs.h MT_WFDMA0_GLO_CFG not an integer constant
+skipped mt7915/regs.h MT_WFDMA0_RST_DTX_PTR not an integer constant
+skipped mt7915/regs.h MT_WFDMA0_EXT0_CFG not an integer constant
+skipped mt7915/regs.h MT_WFDMA0_PRI_DLY_INT_CFG0 not an integer constant
+skipped mt7915/regs.h MT_WFDMA0_PRI_DLY_INT_CFG1 not an integer constant
+skipped mt7915/regs.h MT_WFDMA0_PRI_DLY_INT_CFG2 not an integer constant
+skipped mt7915/regs.h MT_WPDMA_GLO_CFG not an integer constant
+skipped mt7915/regs.h MT_WFDMA_EXT_CSR_BASE not an integer constant
+skipped mt7915/regs.h MT_WFDMA_EXT_CSR not an integer constant
+skipped mt7915/regs.h MT_INT_WED_SOURCE_CSR not an integer constant
+skipped mt7915/regs.h MT_INT_WED_MASK_CSR not an integer constant
+skipped mt7915/regs.h MT_WED_TX_RING_BASE not an integer constant
+skipped mt7915/regs.h MT_WED_RX_RING_BASE not an integer constant
+skipped mt7915/regs.h MT_WFDMA0_PCIE1_BASE not an integer constant
+skipped mt7915/regs.h MT_WFDMA0_PCIE1 not an integer constant
+skipped mt7915/regs.h MT_WFDMA0_PCIE1_BUSY_ENA not an integer constant
+skipped mt7915/regs.h __RXQ not an integer constant
+skipped mt7915/regs.h __TXQ not an integer constant
+skipped mt7915/regs.h MT_Q_ID unparsed expression
+skipped mt7915/regs.h MT_Q_BASE unparsed expression
+skipped mt7915/regs.h MT_MCUQ_ID not an integer constant
+skipped mt7915/regs.h MT_TXQ_ID not an integer constant
+skipped mt7915/regs.h MT_RXQ_ID not an integer constant
+skipped mt7915/regs.h MT_MCUQ_RING_BASE not an integer constant
+skipped mt7915/regs.h MT_TXQ_RING_BASE not an integer constant
+skipped mt7915/regs.h MT_RXQ_RING_BASE not an integer constant
+skipped mt7915/regs.h MT_MCUQ_EXT_CTRL not an integer constant
+skipped mt7915/regs.h MT_RXQ_BAND1_CTRL not an integer constant
+skipped mt7915/regs.h MT_TXQ_EXT_CTRL not an integer constant
+skipped mt7915/regs.h MT_TXQ_WED_RING_BASE not an integer constant
+skipped mt7915/regs.h MT_RXQ_WED_RING_BASE not an integer constant
+skipped mt7915/regs.h MT_RXQ_WED_DATA_RING_BASE not an integer constant
+skipped mt7915/regs.h MT_INT_SOURCE_CSR not an integer constant
+skipped mt7915/regs.h MT_INT_MASK_CSR not an integer constant
+skipped mt7915/regs.h MT_INT1_SOURCE_CSR not an integer constant
+skipped mt7915/regs.h MT_INT1_MASK_CSR not an integer constant
+skipped mt7915/regs.h MT_INT_RX unparsed expression
+skipped mt7915/regs.h MT_INT_TX_MCU unparsed expression
+skipped mt7915/regs.h MT_INT_RX_DONE_MCU not an integer constant
+skipped mt7915/regs.h MT_INT_BAND0_RX_DONE not an integer constant
+skipped mt7915/regs.h MT_INT_BAND1_RX_DONE not an integer constant
+skipped mt7915/regs.h MT_INT_RX_DONE_ALL not an integer constant
+skipped mt7915/regs.h MT_INT_TX_DONE_MCU not an integer constant
+skipped mt7915/regs.h MT_MCU_CMD not an integer constant
+skipped mt7915/regs.h MT_CBTOP1_PHY_END not an integer constant
+skipped mt7915/regs.h MT_INFRA_MCU_END not an integer constant
+skipped mt7915/regs.h MT_AFE_PLL_STB_TIME_VAL unparsed expression
+skipped mt7915/regs.h MT_AFE_PLL_CFG_VAL unparsed expression
+skipped mt7915/regs.h MT_AFE_DIG_TOP_01_VAL unparsed expression
+skipped mt7915/regs.h MT_FW_ASSERT_STAT not an integer constant
+skipped mt7915/regs.h MT_FW_EXCEPT_TYPE not an integer constant
+skipped mt7915/regs.h MT_FW_EXCEPT_COUNT not an integer constant
+skipped mt7915/regs.h MT_FW_CIRQ_COUNT not an integer constant
+skipped mt7915/regs.h MT_FW_CIRQ_IDX not an integer constant
+skipped mt7915/regs.h MT_FW_CIRQ_LISR not an integer constant
+skipped mt7915/regs.h MT_FW_TASK_ID not an integer constant
+skipped mt7915/regs.h MT_FW_TASK_IDX not an integer constant
+skipped mt7915/regs.h MT_FW_TASK_QID1 not an integer constant
+skipped mt7915/regs.h MT_FW_TASK_QID2 not an integer constant
+skipped mt7915/regs.h MT_FW_TASK_START not an integer constant
+skipped mt7915/regs.h MT_FW_TASK_END not an integer constant
+skipped mt7915/regs.h MT_FW_TASK_SIZE not an integer constant
+skipped mt7915/regs.h MT_FW_LAST_MSG_ID not an integer constant
+skipped mt7915/regs.h MT_FW_EINT_INFO not an integer constant
+skipped mt7915/regs.h MT_FW_SCHED_INFO not an integer constant
+skipped mt7915/regs.h MT_SWDEF_BASE not an integer constant
+skipped mt7915/regs.h MT_SWDEF not an integer constant
+skipped mt7915/regs.h MT_SWDEF_MODE not an integer constant
+skipped mt7915/regs.h MT_SWDEF_SER_STATS not an integer constant
+skipped mt7915/regs.h MT_SWDEF_PLE_STATS not an integer constant
+skipped mt7915/regs.h MT_SWDEF_PLE1_STATS not an integer constant
+skipped mt7915/regs.h MT_SWDEF_PLE_AMSDU_STATS not an integer constant
+skipped mt7915/regs.h MT_SWDEF_PSE_STATS not an integer constant
+skipped mt7915/regs.h MT_SWDEF_PSE1_STATS not an integer constant
+skipped mt7915/regs.h MT_SWDEF_LAMC_WISR6_BN0_STATS not an integer constant
+skipped mt7915/regs.h MT_SWDEF_LAMC_WISR6_BN1_STATS not an integer constant
+skipped mt7915/regs.h MT_SWDEF_LAMC_WISR7_BN0_STATS not an integer constant
+skipped mt7915/regs.h MT_SWDEF_LAMC_WISR7_BN1_STATS not an integer constant
+skipped mt7921/mt7921.h to_rssi unparsed expression
+skipped mt7921/mt7921.h mt7921_reg_map function prototype
+skipped mt7921/mt7921.h __mt7921_start function prototype
+skipped mt7921/mt7921.h mt7921_register_device function prototype
+skipped mt7921/mt7921.h mt7921_unregister_device function prototype
+skipped mt7921/mt7921.h mt7921_run_firmware function prototype
+skipped mt7921/mt7921.h mt7921_set_channel function prototype
+skipped mt7921/mt7921.h mt7921_mcu_set_bss_pm function prototype
+skipped mt7921/mt7921.h mt7921_mcu_sta_update function prototype
+skipped mt7921/mt7921.h mt7921_mcu_set_chan_info function prototype
+skipped mt7921/mt7921.h mt7921_mcu_set_tx function prototype
+skipped mt7921/mt7921.h mt7921_mcu_set_eeprom function prototype
+skipped mt7921/mt7921.h mt7921_mcu_get_rx_rate function prototype
+skipped mt7921/mt7921.h mt7921_mcu_fw_log_2_host function prototype
+skipped mt7921/mt7921.h mt7921_mcu_rx_event function prototype
+skipped mt7921/mt7921.h mt7921_mcu_set_rxfilter function prototype
+skipped mt7921/mt7921.h mt7921_mcu_radio_led_ctrl function prototype
+skipped mt7921/mt7921.h mt7921_mcu_wf_rf_pin_ctrl function prototype
+skipped mt7921/mt7921.h mt7921_reg_map_l1 inline function
+skipped mt7921/mt7921.h mt7921_l1_rr inline function
+skipped mt7921/mt7921.h mt7921_l1_wr inline function
+skipped mt7921/mt7921.h mt7921_l1_rmw inline function
+skipped mt7921/mt7921.h mt7921_l1_set not an integer constant
+skipped mt7921/mt7921.h mt7921_l1_clear not an integer constant
+skipped mt7921/mt7921.h mt7921_mac_init function prototype
+skipped mt7921/mt7921.h mt7921_mac_wtbl_update function prototype
+skipped mt7921/mt7921.h mt7921_mac_sta_add function prototype
+skipped mt7921/mt7921.h mt7921_mac_sta_event function prototype
+skipped mt7921/mt7921.h mt7921_mac_sta_remove function prototype
+skipped mt7921/mt7921.h mt7921_mac_reset_work function prototype
+skipped mt7921/mt7921.h mt7921e_tx_prepare_skb function prototype
+skipped mt7921/mt7921.h mt7921_rx_check function prototype
+skipped mt7921/mt7921.h mt7921_queue_rx_skb function prototype
+skipped mt7921/mt7921.h mt7921_stats_work function prototype
+skipped mt7921/mt7921.h mt7921_set_stream_he_caps function prototype
+skipped mt7921/mt7921.h mt7921_init_debugfs function prototype
+skipped mt7921/mt7921.h mt7921_mcu_set_beacon_filter function prototype
+skipped mt7921/mt7921.h mt7921_mcu_uni_tx_ba function prototype
+skipped mt7921/mt7921.h mt7921_mcu_uni_rx_ba function prototype
+skipped mt7921/mt7921.h mt7921_scan_work function prototype
+skipped mt7921/mt7921.h mt7921_roc_work function prototype
+skipped mt7921/mt7921.h mt7921_csa_work function prototype
+skipped mt7921/mt7921.h mt7921_mcu_uni_bss_ps function prototype
+skipped mt7921/mt7921.h mt7921_coredump_work function prototype
+skipped mt7921/mt7921.h mt7921_get_txpwr_info function prototype
+skipped mt7921/mt7921.h mt7921_testmode_cmd function prototype
+skipped mt7921/mt7921.h mt7921_testmode_dump function prototype
+skipped mt7921/mt7921.h mt7921_mcu_parse_response function prototype
+skipped mt7921/mt7921.h mt7921e_driver_own function prototype
+skipped mt7921/mt7921.h mt7921e_mac_reset function prototype
+skipped mt7921/mt7921.h mt7921e_mcu_init function prototype
+skipped mt7921/mt7921.h mt7921s_wfsys_reset function prototype
+skipped mt7921/mt7921.h mt7921s_mac_reset function prototype
+skipped mt7921/mt7921.h mt7921s_init_reset function prototype
+skipped mt7921/mt7921.h mt7921s_mcu_init function prototype
+skipped mt7921/mt7921.h mt7921s_mcu_drv_pmctrl function prototype
+skipped mt7921/mt7921.h mt7921s_mcu_fw_pmctrl function prototype
+skipped mt7921/mt7921.h mt7921_mac_add_txs function prototype
+skipped mt7921/mt7921.h mt7921_set_runtime_pm function prototype
+skipped mt7921/mt7921.h mt7921_mcu_set_suspend_iter function prototype
+skipped mt7921/mt7921.h mt7921_set_ipv6_ns_work function prototype
+skipped mt7921/mt7921.h mt7921_mcu_set_sniffer function prototype
+skipped mt7921/mt7921.h mt7921_mcu_config_sniffer function prototype
+skipped mt7921/mt7921.h mt7921_mcu_get_temperature function prototype
+skipped mt7921/mt7921.h mt7921_usb_sdio_tx_prepare_skb function prototype
+skipped mt7921/mt7921.h mt7921_usb_sdio_tx_complete_skb function prototype
+skipped mt7921/mt7921.h mt7921_usb_sdio_tx_status_data function prototype
+skipped mt7921/mt7921.h mt7921_mcu_uni_add_beacon_offload function prototype
+skipped mt7921/mt7921.h mt7921_set_tx_sar_pwr function prototype
+skipped mt7921/mt7921.h mt7921_mcu_set_clc function prototype
+skipped mt7921/mt7921.h mt7921_mcu_set_roc function prototype
+skipped mt7921/mt7921.h mt7921_mcu_abort_roc function prototype
+skipped mt7921/mt7921.h mt7921_roc_abort_sync function prototype
+skipped mt7921/mt7921.h mt7921_mcu_set_rssimonitor function prototype
+skipped mt7921/regd.h MT7921_REGD_SUPPORTED unparsed expression
+skipped mt7921/regd.h mt7921_mcu_regd_update function prototype
+skipped mt7921/regd.h __mt7921_mcu_regd_update function prototype
+skipped mt7921/regd.h mt7921_regd_notifier function prototype
+skipped mt7921/regd.h mt7921_regd_clc_supported function prototype
+skipped mt7921/regd.h mt7921_regd_change function prototype
+skipped mt7921/regd.h mt7921_regd_init function prototype
+skipped mt7921/regd.h mt7921_regd_update function prototype
+skipped mt7925/mac.h mt7925_mac_wtbl_lmac_addr inline function
+skipped mt7925/mcu.h MT7925_STA_UPDATE_MAX_SIZE unparsed expression
+skipped mt7925/mcu.h MT7925_BSS_UPDATE_MAX_SIZE unparsed expression
+skipped mt7925/mcu.h MT7925_WOW_PATTERN_TLV_V2_SIZE unparsed expression
+skipped mt7925/mcu.h mt7925_mcu_get_cipher inline function
+skipped mt7925/mcu.h mt7925_mcu_tlv_valid inline function
+skipped mt7925/mcu.h mt7925_for_each_tlv statement macro
+skipped mt7925/mcu.h mt7925_mcu_set_dbdc function prototype
+skipped mt7925/mcu.h mt7925_mcu_hw_scan function prototype
+skipped mt7925/mcu.h mt7925_mcu_cancel_hw_scan function prototype
+skipped mt7925/mcu.h mt7925_mcu_sched_scan_req function prototype
+skipped mt7925/mcu.h mt7925_mcu_sched_scan_enable function prototype
+skipped mt7925/mcu.h mt7925_mcu_del_dev function prototype
+skipped mt7925/mcu.h mt7925_mcu_add_bss_info function prototype
+skipped mt7925/mcu.h mt7925_mcu_add_bss_info_sta function prototype
+skipped mt7925/mcu.h mt7925_mcu_set_timing function prototype
+skipped mt7925/mcu.h mt7925_mcu_set_deep_sleep function prototype
+skipped mt7925/mcu.h mt7925_mcu_set_thermal_protect function prototype
+skipped mt7925/mcu.h mt7925_mcu_set_channel_domain function prototype
+skipped mt7925/mcu.h mt7925_mcu_set_radio_en function prototype
+skipped mt7925/mcu.h mt7925_mcu_set_chctx function prototype
+skipped mt7925/mcu.h mt7925_mcu_set_eht_pp function prototype
+skipped mt7925/mcu.h mt7925_mcu_set_rate_txpower function prototype
+skipped mt7925/mcu.h mt7925_mcu_update_arp_filter function prototype
+skipped mt7925/mcu.h mt7925_mcu_uni_bss_bcnft function prototype
+skipped mt7925/mcu.h scan_ssid_tlv depends on unknown type
+skipped mt7925/mcu.h scan_bssid_tlv unknown ETH_ALEN
+skipped mt7925/mcu.h scan_misc_tlv unknown ETH_ALEN
+skipped mt7925/mcu.h scan_sched_ssid_match_sets depends on unknown type
+skipped mt7925/mcu.h bss_mld_tlv unknown ETH_ALEN
+skipped mt7925/mcu.h sta_rec_mld unknown ETH_ALEN
+skipped mt7925/mt7925.h to_rssi unparsed expression
+skipped mt7925/mt7925.h mt7927_band_idx inline function
+skipped mt7925/mt7925.h __mt7925_start function prototype
+skipped mt7925/mt7925.h mt7925_register_device function prototype
+skipped mt7925/mt7925.h mt7925_unregister_device function prototype
+skipped mt7925/mt7925.h mt7925_run_firmware function prototype
+skipped mt7925/mt7925.h mt7925_mcu_set_bss_pm function prototype
+skipped mt7925/mt7925.h mt7925_mcu_sta_update function prototype
+skipped mt7925/mt7925.h mt7925_mcu_set_chan_info function prototype
+skipped mt7925/mt7925.h mt7925_mcu_set_tx function prototype
+skipped mt7925/mt7925.h mt7925_mcu_set_eeprom function prototype
+skipped mt7925/mt7925.h mt7925_mcu_get_rx_rate function prototype
+skipped mt7925/mt7925.h mt7925_mcu_fw_log_2_host function prototype
+skipped mt7925/mt7925.h mt7925_mcu_rx_event function prototype
+skipped mt7925/mt7925.h mt7925_mcu_chip_config function prototype
+skipped mt7925/mt7925.h mt7925_mcu_set_rxfilter function prototype
+skipped mt7925/mt7925.h mt7925_mac_init function prototype
+skipped mt7925/mt7925.h mt7925_mac_sta_add function prototype
+skipped mt7925/mt7925.h mt7925_mac_wtbl_update function prototype
+skipped mt7925/mt7925.h mt7925_mac_sta_event function prototype
+skipped mt7925/mt7925.h mt7925_mac_sta_remove function prototype
+skipped mt7925/mt7925.h mt7925_mac_reset_work function prototype
+skipped mt7925/mt7925.h mt7925e_tx_prepare_skb function prototype
+skipped mt7925/mt7925.h mt7925_tx_token_put function prototype
+skipped mt7925/mt7925.h mt7925_rx_check function prototype
+skipped mt7925/mt7925.h mt7925_queue_rx_skb function prototype
+skipped mt7925/mt7925.h mt7925_stats_work function prototype
+skipped mt7925/mt7925.h mt7925_set_stream_he_eht_caps function prototype
+skipped mt7925/mt7925.h mt7925_init_mlo_caps function prototype
+skipped mt7925/mt7925.h mt7925_init_debugfs function prototype
+skipped mt7925/mt7925.h mt7925_mcu_set_beacon_filter function prototype
+skipped mt7925/mt7925.h mt7925_mcu_uni_tx_ba function prototype
+skipped mt7925/mt7925.h mt7925_mcu_uni_rx_ba function prototype
+skipped mt7925/mt7925.h mt7925_mlo_pm_work function prototype
+skipped mt7925/mt7925.h mt7925_scan_work function prototype
+skipped mt7925/mt7925.h mt7925_roc_work function prototype
+skipped mt7925/mt7925.h mt7925_csa_work function prototype
+skipped mt7925/mt7925.h mt7925_mcu_uni_bss_ps function prototype
+skipped mt7925/mt7925.h mt7925_coredump_work function prototype
+skipped mt7925/mt7925.h mt7925_get_txpwr_info function prototype
+skipped mt7925/mt7925.h mt7925_mac_set_fixed_rate_table function prototype
+skipped mt7925/mt7925.h mt7925_mac_write_txwi function prototype
+skipped mt7925/mt7925.h mt7925_txwi_free function prototype
+skipped mt7925/mt7925.h mt7925_mcu_parse_response function prototype
+skipped mt7925/mt7925.h mt7925e_mac_reset function prototype
+skipped mt7925/mt7925.h mt7925e_mcu_init function prototype
+skipped mt7925/mt7925.h mt7925_mac_add_txs function prototype
+skipped mt7925/mt7925.h mt7928_mac_add_txs_msg function prototype
+skipped mt7925/mt7925.h mt7925_set_runtime_pm function prototype
+skipped mt7925/mt7925.h mt7925_mcu_set_suspend_iter function prototype
+skipped mt7925/mt7925.h mt7925_connac_mcu_set_suspend_iter function prototype
+skipped mt7925/mt7925.h mt7925_set_ipv6_ns_work function prototype
+skipped mt7925/mt7925.h mt7925_mcu_set_sniffer function prototype
+skipped mt7925/mt7925.h mt7925_mcu_config_sniffer function prototype
+skipped mt7925/mt7925.h mt7925_mcu_get_temperature function prototype
+skipped mt7925/mt7925.h mt7925_usb_sdio_tx_prepare_skb function prototype
+skipped mt7925/mt7925.h mt7925_usb_sdio_tx_complete_skb function prototype
+skipped mt7925/mt7925.h mt7925_usb_sdio_tx_status_data function prototype
+skipped mt7925/mt7925.h mt7925_mcu_uni_add_beacon_offload function prototype
+skipped mt7925/mt7925.h mt7925_set_tx_sar_pwr function prototype
+skipped mt7925/mt7925.h mt7925_mcu_regval function prototype
+skipped mt7925/mt7925.h mt7925_mcu_set_clc function prototype
+skipped mt7925/mt7925.h mt7925_mcu_set_mlo_roc function prototype
+skipped mt7925/mt7925.h mt7925_mcu_set_roc function prototype
+skipped mt7925/mt7925.h mt7925_mcu_abort_roc function prototype
+skipped mt7925/mt7925.h mt7925_roc_abort_sync function prototype
+skipped mt7925/mt7925.h mt7925_mcu_fill_message function prototype
+skipped mt7925/mt7925.h mt7925_mcu_add_key function prototype
+skipped mt7925/mt7925.h mt7925_mcu_set_rts_thresh function prototype
+skipped mt7925/mt7925.h mt7925_mcu_wtbl_update_hdr_trans function prototype
+skipped mt7925/mt7925.h mt7925_mcu_wf_rf_pin_ctrl function prototype
+skipped mt7925/mt7925.h mt7925_testmode_cmd function prototype
+skipped mt7925/mt7925.h mt7925_testmode_dump function prototype
+skipped mt7925/mt7925.h mt7925_mcu_set_rssimonitor function prototype
+skipped mt7925/nan.h MT7925_NAN_CONF_MAX_SIZE unparsed expression
+skipped mt7925/nan.h MT7925_NAN_AVAIL_MAX_SIZE unparsed expression
+skipped mt7925/nan.h MT7925_NAN_PEER_MAX_SIZE unparsed expression
+skipped mt7925/nan.h mt7925_nan_enable function prototype
+skipped mt7925/nan.h mt7925_nan_disable function prototype
+skipped mt7925/nan.h mt7925_nan_change_configure function prototype
+skipped mt7925/nan.h mt7925_nan_mcu_event function prototype
+skipped mt7925/nan.h mt7925_nan_set_nmi_addr function prototype
+skipped mt7925/nan.h mt7925_nan_local_sched_changed function prototype
+skipped mt7925/nan.h mt792x_nan_set_peer_schedule function prototype
+skipped mt7925/nan.h mt792x_nan_set_peer_rec function prototype
+skipped mt7925/nan.h mt792x_nan_map_sta_rec function prototype
+skipped mt7925/nan.h nan_dev_info_evt unknown ETH_ALEN
+skipped mt7925/nan.h nan_rpt_dw_evt depends on unknown type
+skipped mt7925/nan.h mt7925_nan_enable_req_tlv unknown ETH_ALEN
+skipped mt7925/nan.h mt7925_nan_cluster_id_tlv unknown ETH_ALEN
+skipped mt7925/nan.h mt7925_nan_de_event unknown ETH_ALEN
+skipped mt7925/nan.h mt7925_nan_nmi_addr_tlv unknown ETH_ALEN
+skipped mt7925/nan.h mt7925_nan_sched_manage_peer_rec_tlv unknown ETH_ALEN
+skipped mt7925/nan.h mt7925_nan_sched_map_sta_rec_tlv unknown ETH_ALEN
+skipped mt7925/regd.h MT7925_REGD_SUPPORTED unparsed expression
+skipped mt7925/regd.h mt7925_mcu_regd_update function prototype
+skipped mt7925/regd.h mt7925_regd_be_ctrl function prototype
+skipped mt7925/regd.h mt7925_regd_notifier function prototype
+skipped mt7925/regd.h mt7925_regd_clc_supported function prototype
+skipped mt7925/regd.h mt7925_regd_update function prototype
+skipped mt7925/regd.h mt7925_regd_change function prototype
+skipped mt7925/regd.h mt7925_regd_is_valid_channel function prototype
+skipped mt7925/regd.h mt7925_regd_init function prototype
+skipped mt792x.h MT792x_PM_TIMEOUT not an integer constant
+skipped mt792x.h MT792x_HW_SCAN_TIMEOUT not an integer constant
+skipped mt792x.h MT792x_WATCHDOG_TIME not an integer constant
+skipped mt792x.h DECLARE_EWMA inline function
+skipped mt792x.h DECLARE_EWMA function prototype
+skipped mt792x.h mt792x_dma_ring unparsed expression
+skipped mt792x.h mt792x_init_reset unparsed expression
+skipped mt792x.h mt792x_dev_reset unparsed expression
+skipped mt792x.h mt792x_mcu_init unparsed expression
+skipped mt792x.h __mt792x_mcu_drv_pmctrl unparsed expression
+skipped mt792x.h __mt792x_mcu_fw_pmctrl unparsed expression
+skipped mt792x.h mt792x_vif_to_link inline function
+skipped mt792x.h mt792x_sta_to_link inline function
+skipped mt792x.h mt792x_link_conf_to_mconf inline function
+skipped mt792x.h mt792x_vif_to_bss_conf inline function
+skipped mt792x.h mt792x_sta_to_link_sta inline function
+skipped mt792x.h mt792x_hw_dev inline function
+skipped mt792x.h mt792x_hw_phy inline function
+skipped mt792x.h mt792x_get_status_freq_info inline function
+skipped mt792x.h mt792x_dma_need_reinit inline function
+skipped mt792x.h mt792x_mutex_acquire unparsed expression
+skipped mt792x.h mt792x_mutex_release unparsed expression
+skipped mt792x.h mt792x_stop function prototype
+skipped mt792x.h mt792x_pm_wake_work function prototype
+skipped mt792x.h mt792x_pm_power_save_work function prototype
+skipped mt792x.h mt792x_reset function prototype
+skipped mt792x.h mt792x_update_channel function prototype
+skipped mt792x.h mt792x_mac_reset_counters function prototype
+skipped mt792x.h mt792x_mac_init_band function prototype
+skipped mt792x.h mt792x_mac_assoc_rssi function prototype
+skipped mt792x.h mt792x_rx_get_wcid function prototype
+skipped mt792x.h mt792x_mac_update_mib_stats function prototype
+skipped mt792x.h mt792x_mac_set_timeing function prototype
+skipped mt792x.h mt792x_mac_work function prototype
+skipped mt792x.h mt792x_remove_interface function prototype
+skipped mt792x.h mt792x_tx function prototype
+skipped mt792x.h mt792x_conf_tx function prototype
+skipped mt792x.h mt792x_get_stats function prototype
+skipped mt792x.h mt792x_get_tsf function prototype
+skipped mt792x.h mt792x_set_tsf function prototype
+skipped mt792x.h mt792x_tx_worker function prototype
+skipped mt792x.h mt792x_roc_timer function prototype
+skipped mt792x.h mt792x_csa_timer function prototype
+skipped mt792x.h mt792x_flush function prototype
+skipped mt792x.h mt792x_get_txpower function prototype
+skipped mt792x.h mt792x_assign_vif_chanctx function prototype
+skipped mt792x.h mt792x_unassign_vif_chanctx function prototype
+skipped mt792x.h mt792x_set_wakeup function prototype
+skipped mt792x.h mt792x_get_et_strings function prototype
+skipped mt792x.h mt792x_get_et_sset_count function prototype
+skipped mt792x.h mt792x_get_et_stats function prototype
+skipped mt792x.h mt792x_sta_statistics function prototype
+skipped mt792x.h mt792x_set_coverage_class function prototype
+skipped mt792x.h mt792x_dma_cleanup function prototype
+skipped mt792x.h mt792x_dma_alloc_queues function prototype
+skipped mt792x.h mt792x_dma_enable function prototype
+skipped mt792x.h mt792x_wpdma_reset function prototype
+skipped mt792x.h mt792x_wpdma_reinit_cond function prototype
+skipped mt792x.h mt792x_dma_disable function prototype
+skipped mt792x.h mt792x_irq_handler function prototype
+skipped mt792x.h mt792x_rx_poll_complete function prototype
+skipped mt792x.h mt792x_poll_tx function prototype
+skipped mt792x.h mt792x_poll_rx function prototype
+skipped mt792x.h mt792x_irq_tasklet function prototype
+skipped mt792x.h mt792x_wfsys_reset function prototype
+skipped mt792x.h mt792x_tx_stats_show function prototype
+skipped mt792x.h mt792x_queues_acq function prototype
+skipped mt792x.h mt792x_queues_read function prototype
+skipped mt792x.h mt792x_pm_stats function prototype
+skipped mt792x.h mt792x_pm_idle_timeout_set function prototype
+skipped mt792x.h mt792x_pm_idle_timeout_get function prototype
+skipped mt792x.h mt792x_init_wiphy function prototype
+skipped mt792x.h mt792x_get_mac80211_ops function prototype
+skipped mt792x.h mt792x_init_wcid function prototype
+skipped mt792x.h mt792x_mcu_drv_pmctrl function prototype
+skipped mt792x.h mt792x_mcu_fw_pmctrl function prototype
+skipped mt792x.h mt792x_mac_link_bss_remove function prototype
+skipped mt792x.h mt792x_config_mac_addr_list function prototype
+skipped mt792x.h mt792x_ram_name inline function
+skipped mt792x.h mt792x_patch_name inline function
+skipped mt792x.h mt792x_cb_patch_name inline function
+skipped mt792x.h mt792x_phy_ram_name inline function
+skipped mt792x.h mt792x_load_firmware function prototype
+skipped mt792x.h MT_USB_TYPE_VENDOR not an integer constant
+skipped mt792x.h MT_USB_TYPE_UHW_VENDOR not an integer constant
+skipped mt792x.h mt792xu_dma_init function prototype
+skipped mt792x.h mt792xu_mcu_power_on function prototype
+skipped mt792x.h mt792xu_wfsys_reset function prototype
+skipped mt792x.h mt792xu_init_reset function prototype
+skipped mt792x.h mt792xu_reset_work_init function prototype
+skipped mt792x.h mt792xu_reset_work_cleanup function prototype
+skipped mt792x.h mt792xu_check_bus function prototype
+skipped mt792x.h mt792xu_reset_on_bus_error function prototype
+skipped mt792x.h mt792xu_rr function prototype
+skipped mt792x.h mt792xu_wr function prototype
+skipped mt792x.h mt792xu_rmw function prototype
+skipped mt792x.h mt792xu_copy function prototype
+skipped mt792x.h mt792xu_disconnect function prototype
+skipped mt792x.h mt792xu_stop function prototype
+skipped mt792x.h mt792x_skb_add_usb_sdio_hdr inline function
+skipped mt792x.h __mt792xe_mcu_drv_pmctrl function prototype
+skipped mt792x.h mt792xe_mcu_drv_pmctrl function prototype
+skipped mt792x.h mt792xe_mcu_fw_pmctrl function prototype
+skipped mt792x.h mt792x_init_acpi_sar inline function
+skipped mt792x.h mt792x_init_acpi_sar_power inline function
+skipped mt792x.h mt792x_acpi_get_flags inline function
+skipped mt792x.h mt792x_acpi_get_mtcl_conf inline function
+skipped mt792x.h mt792x_sta_nan_sched depends on cfg80211_chan_def
+skipped mt792x.h mt792x_sta depends on mt792x_link_sta
+skipped mt792x.h mt792x_chanctx pointer field bss_conf
+skipped mt792x.h mt792x_bss_conf depends on unknown type
+skipped mt792x.h mt792x_nan_conf unknown ETH_ALEN
+skipped mt792x.h mt792x_nan depends on unknown type
+skipped mt792x.h mt792x_vif depends on unknown type
+skipped mt792x.h mt792x_phy pointer field mt76
+skipped mt792x.h mt792x_hif_ops pointer field init_reset
+skipped mt792x.h mt792x_dev depends on unknown type
+skipped mt792x_acpi_sar.h mt792x_asar_dyn depends on DECLARE_FLEX_ARRAY
+skipped mt792x_acpi_sar.h mt792x_asar_dyn_v2 depends on DECLARE_FLEX_ARRAY
+skipped mt792x_acpi_sar.h mt792x_asar_geo depends on DECLARE_FLEX_ARRAY
+skipped mt792x_acpi_sar.h mt792x_asar_geo_v2 depends on DECLARE_FLEX_ARRAY
+skipped mt792x_acpi_sar.h mt792x_acpi_sar pointer field dyn
+skipped mt792x_regs.h MT_WTBL_LMAC_OFFS unparsed expression
+skipped mt7996/coredump.h mt7996_coredump_get_mem_layout inline function
+skipped mt7996/coredump.h mt7996_coredump_submit inline function
+skipped mt7996/coredump.h mt7996_coredump_new inline function
+skipped mt7996/coredump.h mt7996_coredump_register inline function
+skipped mt7996/coredump.h mt7996_coredump_unregister inline function
+skipped mt7996/coredump.h mt7996_coredump depends on guid_t
+skipped mt7996/coredump.h mt7996_mem_region depends on size_t
+skipped mt7996/eeprom.h mt7996_get_channel_group_5g inline function
+skipped mt7996/eeprom.h mt7996_get_channel_group_6g inline function
+skipped mt7996/mcu.h MT7996_HDR_TRANS_MAX_SIZE unparsed expression
+skipped mt7996/mcu.h MT7996_BSS_UPDATE_MAX_SIZE unparsed expression
+skipped mt7996/mcu.h MT7996_STA_UPDATE_MAX_SIZE unparsed expression
+skipped mt7996/mcu.h MT7996_BEACON_UPDATE_SIZE unparsed expression
+skipped mt7996/mcu.h MT7996_MAX_BEACON_SIZE not an integer constant
+skipped mt7996/mcu.h eeprom_data depends on DECLARE_FLEX_ARRAY
+skipped mt7996/mcu.h mt7996_mcu_eeprom_access depends on eeprom_data
+skipped mt7996/mcu.h mt7996_mcu_eeprom_access_event depends on eeprom_data
+skipped mt7996/mcu.h mt7996_mcu_all_sta_info_event depends on DECLARE_FLEX_ARRAY
+skipped mt7996/mcu.h bss_mld_tlv unknown ETH_ALEN
+skipped mt7996/mcu.h bss_mld_link_op_tlv unknown ETH_ALEN
+skipped mt7996/mcu.h sta_rec_mld_setup unknown ETH_ALEN
+skipped mt7996/mcu.h mld_req_hdr unknown ETH_ALEN
+skipped mt7996/mt7996.h MT7996_WTBL_BMC_SIZE unparsed expression
+skipped mt7996/mt7996.h MT7996_WTBL_RESERVED not an integer constant
+skipped mt7996/mt7996.h MT7996_WTBL_STA not an integer constant
+skipped mt7996/mt7996.h MT7996_WATCHDOG_TIME not an integer constant
+skipped mt7996/mt7996.h MT7996_RESET_TIMEOUT not an integer constant
+skipped mt7996/mt7996.h MT7996_RX_MCU_BUF_SIZE unparsed expression
+skipped mt7996/mt7996.h MT7996_FIRMWARE_DSP_233 not an integer constant
+skipped mt7996/mt7996.h MT7996_RX_BUF_SIZE unparsed expression
+skipped mt7996/mt7996.h MT7996_RX_MSDU_PAGE_SIZE unparsed expression
+skipped mt7996/mt7996.h DECLARE_EWMA inline function
+skipped mt7996/mt7996.h mt7996_get_rdd_idx inline function
+skipped mt7996/mt7996.h mt7996_hw_dev inline function
+skipped mt7996/mt7996.h __mt7996_phy inline function
+skipped mt7996/mt7996.h mt7996_phy2 inline function
+skipped mt7996/mt7996.h mt7996_phy3 inline function
+skipped mt7996/mt7996.h mt7996_band_valid inline function
+skipped mt7996/mt7996.h mt7996_band_phy inline function
+skipped mt7996/mt7996.h mt7996_vif_link inline function
+skipped mt7996/mt7996.h mt7996_vif_link_phy inline function
+skipped mt7996/mt7996.h mt7996_vif_conf_link inline function
+skipped mt7996/mt7996.h mt7996_sta_link inline function
+skipped mt7996/mt7996.h mt7996_sta_link_protected inline function
+skipped mt7996/mt7996.h mt7996_for_each_phy statement macro
+skipped mt7996/mt7996.h mt7996_mmio_probe function prototype
+skipped mt7996/mt7996.h mt7996_rro_hw_init function prototype
+skipped mt7996/mt7996.h mt7996_wfsys_reset function prototype
+skipped mt7996/mt7996.h mt7996_irq_handler function prototype
+skipped mt7996/mt7996.h __mt7996_get_tsf function prototype
+skipped mt7996/mt7996.h mt7996_register_device function prototype
+skipped mt7996/mt7996.h mt7996_unregister_device function prototype
+skipped mt7996/mt7996.h mt7996_vif_link_add function prototype
+skipped mt7996/mt7996.h mt7996_vif_link_remove function prototype
+skipped mt7996/mt7996.h mt7996_eeprom_init function prototype
+skipped mt7996/mt7996.h mt7996_eeprom_parse_hw_cap function prototype
+skipped mt7996/mt7996.h mt7996_eeprom_get_target_power function prototype
+skipped mt7996/mt7996.h mt7996_eeprom_get_power_delta function prototype
+skipped mt7996/mt7996.h mt7996_eeprom_has_background_radar function prototype
+skipped mt7996/mt7996.h mt7996_dma_init function prototype
+skipped mt7996/mt7996.h mt7996_dma_reset function prototype
+skipped mt7996/mt7996.h mt7996_dma_prefetch function prototype
+skipped mt7996/mt7996.h mt7996_dma_cleanup function prototype
+skipped mt7996/mt7996.h mt7996_dma_start function prototype
+skipped mt7996/mt7996.h mt7996_init_tx_queues function prototype
+skipped mt7996/mt7996.h mt7996_init_txpower function prototype
+skipped mt7996/mt7996.h mt7996_txbf_init function prototype
+skipped mt7996/mt7996.h mt7996_reset function prototype
+skipped mt7996/mt7996.h mt7996_run function prototype
+skipped mt7996/mt7996.h mt7996_mcu_init function prototype
+skipped mt7996/mt7996.h mt7996_mcu_init_firmware function prototype
+skipped mt7996/mt7996.h mt7996_mcu_twt_agrt_update function prototype
+skipped mt7996/mt7996.h mt7996_mcu_add_dev_info function prototype
+skipped mt7996/mt7996.h mt7996_mcu_add_bss_info function prototype
+skipped mt7996/mt7996.h mt7996_mcu_update_bss_rfch function prototype
+skipped mt7996/mt7996.h mt7996_mcu_add_sta function prototype
+skipped mt7996/mt7996.h mt7996_mcu_teardown_mld_sta function prototype
+skipped mt7996/mt7996.h mt7996_mcu_update_sta_rec_bw function prototype
+skipped mt7996/mt7996.h mt7996_mcu_add_tx_ba function prototype
+skipped mt7996/mt7996.h mt7996_mcu_add_rx_ba function prototype
+skipped mt7996/mt7996.h mt7996_mcu_update_bss_color function prototype
+skipped mt7996/mt7996.h mt7996_mcu_add_beacon function prototype
+skipped mt7996/mt7996.h mt7996_mcu_beacon_inband_discov function prototype
+skipped mt7996/mt7996.h mt7996_mcu_add_obss_spr function prototype
+skipped mt7996/mt7996.h mt7996_mcu_add_rate_ctrl function prototype
+skipped mt7996/mt7996.h mt7996_set_channel function prototype
+skipped mt7996/mt7996.h mt7996_mcu_set_chan_info function prototype
+skipped mt7996/mt7996.h mt7996_mcu_set_tx function prototype
+skipped mt7996/mt7996.h mt7996_mcu_set_fixed_rate_ctrl function prototype
+skipped mt7996/mt7996.h mt7996_mcu_set_fixed_field function prototype
+skipped mt7996/mt7996.h mt7996_mcu_set_eeprom function prototype
+skipped mt7996/mt7996.h mt7996_mcu_get_eeprom function prototype
+skipped mt7996/mt7996.h mt7996_mcu_get_efuse_free_block function prototype
+skipped mt7996/mt7996.h mt7996_mcu_get_chip_config function prototype
+skipped mt7996/mt7996.h mt7996_mcu_set_ser function prototype
+skipped mt7996/mt7996.h mt7996_mcu_set_txbf function prototype
+skipped mt7996/mt7996.h mt7996_mcu_set_fcc5_lpn function prototype
+skipped mt7996/mt7996.h mt7996_mcu_set_pulse_th function prototype
+skipped mt7996/mt7996.h mt7996_mcu_set_radar_th function prototype
+skipped mt7996/mt7996.h mt7996_mcu_set_radio_en function prototype
+skipped mt7996/mt7996.h mt7996_mcu_set_rts_thresh function prototype
+skipped mt7996/mt7996.h mt7996_mcu_set_protection function prototype
+skipped mt7996/mt7996.h mt7996_mcu_set_timing function prototype
+skipped mt7996/mt7996.h mt7996_mcu_set_bssid_mapping_addr function prototype
+skipped mt7996/mt7996.h mt7996_mcu_get_chan_mib_info function prototype
+skipped mt7996/mt7996.h mt7996_mcu_get_temperature function prototype
+skipped mt7996/mt7996.h mt7996_mcu_set_thermal_throttling function prototype
+skipped mt7996/mt7996.h mt7996_mcu_set_thermal_protect function prototype
+skipped mt7996/mt7996.h mt7996_mcu_set_txpower_sku function prototype
+skipped mt7996/mt7996.h mt7996_mcu_rdd_resume_tx function prototype
+skipped mt7996/mt7996.h mt7996_mcu_rdd_cmd function prototype
+skipped mt7996/mt7996.h mt7996_mcu_rdd_background_enable function prototype
+skipped mt7996/mt7996.h mt7996_mcu_set_fixed_rate_table function prototype
+skipped mt7996/mt7996.h mt7996_mcu_rf_regval function prototype
+skipped mt7996/mt7996.h mt7996_mcu_set_hdr_trans function prototype
+skipped mt7996/mt7996.h mt7996_mcu_set_rro function prototype
+skipped mt7996/mt7996.h mt7996_mcu_wa_cmd function prototype
+skipped mt7996/mt7996.h mt7996_mcu_fw_log_2_host function prototype
+skipped mt7996/mt7996.h mt7996_mcu_fw_dbg_ctrl function prototype
+skipped mt7996/mt7996.h mt7996_mcu_trigger_assert function prototype
+skipped mt7996/mt7996.h mt7996_mcu_rx_event function prototype
+skipped mt7996/mt7996.h mt7996_mcu_exit function prototype
+skipped mt7996/mt7996.h mt7996_mcu_get_all_sta_info function prototype
+skipped mt7996/mt7996.h mt7996_mcu_wed_rro_reset_sessions function prototype
+skipped mt7996/mt7996.h mt7996_mcu_set_sniffer_mode function prototype
+skipped mt7996/mt7996.h mt7996_mcu_set_dup_wtbl function prototype
+skipped mt7996/mt7996.h mt7996_mcu_mld_reconf_stop_link function prototype
+skipped mt7996/mt7996.h mt7996_mcu_mld_link_oper function prototype
+skipped mt7996/mt7996.h mt7996_has_hwrro inline function
+skipped mt7996/mt7996.h mt7996_max_interface_num inline function
+skipped mt7996/mt7996.h mt7996_wtbl_size inline function
+skipped mt7996/mt7996.h mt7996_dual_hif_set_irq_mask function prototype
+skipped mt7996/mt7996.h mt7996_irq_enable inline function
+skipped mt7996/mt7996.h mt7996_irq_disable inline function
+skipped mt7996/mt7996.h mt7996_memcpy_fromio function prototype
+skipped mt7996/mt7996.h mt7996_rx_chainmask inline function
+skipped mt7996/mt7996.h mt7996_has_wa inline function
+skipped mt7996/mt7996.h mt7996_has_ext_eeprom inline function
+skipped mt7996/mt7996.h mt7996_mac_init function prototype
+skipped mt7996/mt7996.h mt7996_mac_wtbl_lmac_addr function prototype
+skipped mt7996/mt7996.h mt7996_mac_wtbl_update function prototype
+skipped mt7996/mt7996.h mt7996_mac_reset_counters function prototype
+skipped mt7996/mt7996.h mt7996_mac_cca_stats_reset function prototype
+skipped mt7996/mt7996.h mt7996_mac_enable_nf function prototype
+skipped mt7996/mt7996.h mt7996_get_tx_wcid function prototype
+skipped mt7996/mt7996.h mt7996_mac_write_txwi function prototype
+skipped mt7996/mt7996.h mt7996_mac_update_beacons function prototype
+skipped mt7996/mt7996.h mt7996_mac_set_coverage_class function prototype
+skipped mt7996/mt7996.h mt7996_mac_work function prototype
+skipped mt7996/mt7996.h mt7996_mac_reset_work function prototype
+skipped mt7996/mt7996.h mt7996_mac_dump_work function prototype
+skipped mt7996/mt7996.h mt7996_mac_sta_rc_work function prototype
+skipped mt7996/mt7996.h mt7996_mac_update_stats function prototype
+skipped mt7996/mt7996.h mt7996_mac_twt_teardown_flow function prototype
+skipped mt7996/mt7996.h mt7996_mac_sta_remove_link function prototype
+skipped mt7996/mt7996.h mt7996_mac_add_twt_setup function prototype
+skipped mt7996/mt7996.h mt7996_tx_prepare_skb function prototype
+skipped mt7996/mt7996.h mt7996_tx_token_put function prototype
+skipped mt7996/mt7996.h mt7996_queue_rx_skb function prototype
+skipped mt7996/mt7996.h mt7996_rro_msdu_page_map_free function prototype
+skipped mt7996/mt7996.h mt7996_rro_msdu_page_add function prototype
+skipped mt7996/mt7996.h mt7996_rro_rx_process function prototype
+skipped mt7996/mt7996.h mt7996_rx_check function prototype
+skipped mt7996/mt7996.h mt7996_stats_work function prototype
+skipped mt7996/mt7996.h mt76_dfs_start_rdd function prototype
+skipped mt7996/mt7996.h mt7996_dfs_init_radar_detector function prototype
+skipped mt7996/mt7996.h mt7996_set_stream_he_eht_caps function prototype
+skipped mt7996/mt7996.h mt7996_set_stream_vht_txbf_caps function prototype
+skipped mt7996/mt7996.h mt7996_update_channel function prototype
+skipped mt7996/mt7996.h mt7996_init_debugfs function prototype
+skipped mt7996/mt7996.h mt7996_debugfs_rx_fw_monitor function prototype
+skipped mt7996/mt7996.h mt7996_debugfs_rx_log function prototype
+skipped mt7996/mt7996.h mt7996_mcu_add_key function prototype
+skipped mt7996/mt7996.h mt7996_mcu_bcn_prot_enable function prototype
+skipped mt7996/mt7996.h mt7996_mcu_wtbl_update_hdr_trans function prototype
+skipped mt7996/mt7996.h mt7996_mcu_ps_leave function prototype
+skipped mt7996/mt7996.h mt7996_mcu_cp_support function prototype
+skipped mt7996/mt7996.h mt7996_mcu_set_emlsr_mode function prototype
+skipped mt7996/mt7996.h mt7996_mmio_wed_init function prototype
+skipped mt7996/mt7996.h mt7996_wed_init_buf function prototype
+skipped mt7996/mt7996.h mt7996_dma_rro_init function prototype
+skipped mt7996/mt7996.h mt7996_dma_rro_start function prototype
+skipped mt7996/mt7996.h __mt7996_npu_hw_init inline function
+skipped mt7996/mt7996.h mt7996_npu_hw_init inline function
+skipped mt7996/mt7996.h mt7996_npu_hw_stop inline function
+skipped mt7996/mt7996.h mt7996_npu_rx_queues_init inline function
+skipped mt7996/mt7996.h mt7996_twt_flow depends on list_head
+skipped mt7996/mt7996.h mt7996_sta depends on mt7996_sta_link
+skipped mt7996/mt7996.h mt7996_vif_link depends on unknown type
+skipped mt7996/mt7996.h mt7996_vif_link_info depends on ieee80211_tx_queue_params
+skipped mt7996/mt7996.h mt7996_vif depends on unknown type
+skipped mt7996/mt7996.h mt7996_crash_data depends on guid_t
+skipped mt7996/mt7996.h mt7996_hif depends on list_head
+skipped mt7996/mt7996.h mt7996_wed_rro_session_id depends on list_head
+skipped mt7996/mt7996.h mt7996_msdu_page depends on list_head
+skipped mt7996/mt7996.h mt7996_phy pointer field mt76
+skipped mt7996/mt7996.h mt7996_dev depends on unknown type
+skipped mt7996/regs.h __BASE unparsed expression
+skipped mt7996/regs.h __OFFS unparsed expression
+skipped mt7996/regs.h MT_WF_TMAC_BASE not an integer constant
+skipped mt7996/regs.h MT_WF_TMAC not an integer constant
+skipped mt7996/regs.h MT_TMAC_TCR0 not an integer constant
+skipped mt7996/regs.h MT_TMAC_CDTR not an integer constant
+skipped mt7996/regs.h MT_TMAC_ODTR not an integer constant
+skipped mt7996/regs.h MT_TMAC_ICR0 not an integer constant
+skipped mt7996/regs.h MT_TMAC_ICR1 not an integer constant
+skipped mt7996/regs.h MT_WF_DMA_BASE not an integer constant
+skipped mt7996/regs.h MT_WF_DMA not an integer constant
+skipped mt7996/regs.h MT_DMA_DCR0 not an integer constant
+skipped mt7996/regs.h MT_DMA_TCRF1 not an integer constant
+skipped mt7996/regs.h MT_WTBLOFF_BASE not an integer constant
+skipped mt7996/regs.h MT_WTBLOFF not an integer constant
+skipped mt7996/regs.h MT_WTBLOFF_RSCR not an integer constant
+skipped mt7996/regs.h MT_WTBLOFF_ACR not an integer constant
+skipped mt7996/regs.h MT_WF_ETBF_BASE not an integer constant
+skipped mt7996/regs.h MT_WF_ETBF not an integer constant
+skipped mt7996/regs.h MT_ETBF_RX_FB_CONT not an integer constant
+skipped mt7996/regs.h MT_WF_LPON_BASE not an integer constant
+skipped mt7996/regs.h MT_WF_LPON not an integer constant
+skipped mt7996/regs.h MT_LPON_UTTR0 not an integer constant
+skipped mt7996/regs.h MT_LPON_UTTR1 not an integer constant
+skipped mt7996/regs.h MT_LPON_FRCR not an integer constant
+skipped mt7996/regs.h MT_LPON_TCR not an integer constant
+skipped mt7996/regs.h MT_WF_MIB_BASE not an integer constant
+skipped mt7996/regs.h mt7996_reg_desc pointer field base
+skipped mt7996/regs.h MT_WF_MIB not an integer constant
+skipped mt7996/regs.h MT_MIB_BSCR0 not an integer constant
+skipped mt7996/regs.h MT_MIB_BSCR1 not an integer constant
+skipped mt7996/regs.h MT_MIB_BSCR2 not an integer constant
+skipped mt7996/regs.h MT_MIB_BSCR3 not an integer constant
+skipped mt7996/regs.h MT_MIB_BSCR4 not an integer constant
+skipped mt7996/regs.h MT_MIB_BSCR5 not an integer constant
+skipped mt7996/regs.h MT_MIB_BSCR6 not an integer constant
+skipped mt7996/regs.h MT_MIB_BSCR7 not an integer constant
+skipped mt7996/regs.h MT_MIB_BSCR17 not an integer constant
+skipped mt7996/regs.h MT_MIB_TSCR5 not an integer constant
+skipped mt7996/regs.h MT_MIB_TSCR6 not an integer constant
+skipped mt7996/regs.h MT_MIB_TSCR7 not an integer constant
+skipped mt7996/regs.h MT_MIB_RSCR1 not an integer constant
+skipped mt7996/regs.h MT_MIB_RSCR31 not an integer constant
+skipped mt7996/regs.h MT_MIB_RSCR33 not an integer constant
+skipped mt7996/regs.h MT_MIB_SDR6 not an integer constant
+skipped mt7996/regs.h MT_MIB_RVSR0 not an integer constant
+skipped mt7996/regs.h MT_MIB_RSCR35 not an integer constant
+skipped mt7996/regs.h MT_MIB_RSCR36 not an integer constant
+skipped mt7996/regs.h MT_MIB_TSCR0 not an integer constant
+skipped mt7996/regs.h MT_MIB_TSCR2 not an integer constant
+skipped mt7996/regs.h MT_MIB_TSCR3 not an integer constant
+skipped mt7996/regs.h MT_MIB_TSCR4 not an integer constant
+skipped mt7996/regs.h MT_MIB_RSCR27 not an integer constant
+skipped mt7996/regs.h MT_MIB_RSCR28 not an integer constant
+skipped mt7996/regs.h MT_MIB_RSCR29 not an integer constant
+skipped mt7996/regs.h MT_MIB_RSCR30 not an integer constant
+skipped mt7996/regs.h MT_MIB_SDR27 not an integer constant
+skipped mt7996/regs.h MT_MIB_SDR28 not an integer constant
+skipped mt7996/regs.h MT_MIB_RVSR1 not an integer constant
+skipped mt7996/regs.h MT_MIB_TSCR1 not an integer constant
+skipped mt7996/regs.h MT_MIB_BTSCR0 not an integer constant
+skipped mt7996/regs.h MT_MIB_BTSCR5 not an integer constant
+skipped mt7996/regs.h MT_MIB_BTSCR6 not an integer constant
+skipped mt7996/regs.h MT_MIB_BFTFCR not an integer constant
+skipped mt7996/regs.h MT_TX_AGG_CNT not an integer constant
+skipped mt7996/regs.h MT_MIB_ARNG not an integer constant
+skipped mt7996/regs.h MT_WTBLON_TOP_WDUCR not an integer constant
+skipped mt7996/regs.h MT_WTBL_UPDATE not an integer constant
+skipped mt7996/regs.h MT_WTBL_ITCR not an integer constant
+skipped mt7996/regs.h MT_WTBL_ITDR0 not an integer constant
+skipped mt7996/regs.h MT_WTBL_ITDR1 not an integer constant
+skipped mt7996/regs.h MT_WTBL_LMAC_OFFS unparsed expression
+skipped mt7996/regs.h MT_WF_AGG_BASE not an integer constant
+skipped mt7996/regs.h MT_WF_AGG not an integer constant
+skipped mt7996/regs.h MT_AGG_ACR4 not an integer constant
+skipped mt7996/regs.h MT_WF_ARB_BASE not an integer constant
+skipped mt7996/regs.h MT_WF_ARB not an integer constant
+skipped mt7996/regs.h MT_ARB_SCR not an integer constant
+skipped mt7996/regs.h MT_WF_RMAC_BASE not an integer constant
+skipped mt7996/regs.h MT_WF_RMAC not an integer constant
+skipped mt7996/regs.h MT_WF_RFCR not an integer constant
+skipped mt7996/regs.h MT_WF_RFCR1 not an integer constant
+skipped mt7996/regs.h MT_WF_RMAC_MIB_AIRTIME0 not an integer constant
+skipped mt7996/regs.h MT_WF_RMAC_MIB_AIRTIME1 not an integer constant
+skipped mt7996/regs.h MT_WF_RMAC_MIB_AIRTIME3 not an integer constant
+skipped mt7996/regs.h MT_WF_RMAC_MIB_AIRTIME4 not an integer constant
+skipped mt7996/regs.h MT_WF_RMAC_RSVD0 not an integer constant
+skipped mt7996/regs.h MT_WF_RATE_BASE not an integer constant
+skipped mt7996/regs.h MT_WF_RATE not an integer constant
+skipped mt7996/regs.h MT_RATE_HRCR0 not an integer constant
+skipped mt7996/regs.h __RXQ not an integer constant
+skipped mt7996/regs.h __TXQ not an integer constant
+skipped mt7996/regs.h MT_Q_ID unparsed expression
+skipped mt7996/regs.h MT_Q_BASE unparsed expression
+skipped mt7996/regs.h MT_MCUQ_ID not an integer constant
+skipped mt7996/regs.h MT_TXQ_ID not an integer constant
+skipped mt7996/regs.h MT_RXQ_ID not an integer constant
+skipped mt7996/regs.h MT_MCUQ_RING_BASE not an integer constant
+skipped mt7996/regs.h MT_TXQ_RING_BASE not an integer constant
+skipped mt7996/regs.h MT_RXQ_RING_BASE not an integer constant
+skipped mt7996/regs.h MT_MCUQ_EXT_CTRL not an integer constant
+skipped mt7996/regs.h MT_RXQ_EXT_CTRL not an integer constant
+skipped mt7996/regs.h MT_TXQ_EXT_CTRL not an integer constant
+skipped mt7996/regs.h MT_INT_RX unparsed expression
+skipped mt7996/regs.h MT_INT_TX_MCU unparsed expression
+skipped mt7996/regs.h MT_INT_RX_DONE_MCU not an integer constant
+skipped mt7996/regs.h MT_INT_BAND0_RX_DONE not an integer constant
+skipped mt7996/regs.h MT_INT_BAND1_RX_DONE not an integer constant
+skipped mt7996/regs.h MT_INT_BAND2_RX_DONE not an integer constant
+skipped mt7996/regs.h MT_INT_RRO_RX_DONE not an integer constant
+skipped mt7996/regs.h MT_INT_RX_DONE_ALL not an integer constant
+skipped mt7996/regs.h MT_INT_TX_DONE_MCU not an integer constant
+skipped mt7996/regs.h MT_HIF_REMAP_L1 not an integer constant
+skipped mt7996/regs.h MT_HIF_REMAP_BASE_L1 not an integer constant
+skipped mt7996/regs.h MT_HIF_REMAP_L2 not an integer constant
+skipped mt7996/regs.h MT_HIF_REMAP_BASE_L2 not an integer constant
+skipped mt7996/regs.h MT_CBTOP1_PHY_END not an integer constant
+skipped mt7996/regs.h MT_INFRA_MCU_END not an integer constant
+skipped util.h MT76_INCR not an integer constant
+skipped util.h mt76_wcid_alloc function prototype
+skipped util.h mt76_wcid_mask_set inline function
+skipped util.h mt76_wcid_mask_clear inline function
+skipped util.h mt76_skb_set_moredata inline function
+skipped util.h __mt76_worker_fn function prototype
+skipped util.h mt76_worker_setup inline function
+skipped util.h mt76_worker_schedule inline function
+skipped util.h mt76_worker_disable inline function
+skipped util.h mt76_worker_enable inline function
+skipped util.h mt76_worker_teardown inline function
+skipped util.h mt76_worker pointer field task

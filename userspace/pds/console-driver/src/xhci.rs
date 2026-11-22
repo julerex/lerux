@@ -157,6 +157,19 @@ impl UsbKbd {
         self.ready
     }
 
+    /// PCI config capability and port, when the template set `0xcf8`.
+    ///
+    /// `from_system` stores `u16::MAX` when the setvar is missing. xHCI already
+    /// owns that symbol, so the radio path borrows the stored port.
+    #[cfg(feature = "board-pc_z97_d3h")]
+    pub fn pci_config(&self) -> Option<(u64, u16)> {
+        if self.pci_port == u16::MAX {
+            None
+        } else {
+            Some((self.pci_cap, self.pci_port))
+        }
+    }
+
     /// Drain completion events into `out` as shell bytes.
     pub fn poll(&mut self, out: &mut [u8]) -> usize {
         if !self.ready {

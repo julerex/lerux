@@ -26,6 +26,8 @@ mod boot_line;
 mod device;
 #[cfg(all(not(test), feature = "hardware"))]
 mod handler;
+#[cfg(all(not(test), feature = "board-pc_z97_d3h"))]
+mod rtl8852be;
 #[cfg(all(
     not(test),
     feature = "hardware",
@@ -75,6 +77,8 @@ fn init() -> handler::HandlerImpl {
         not(feature = "board-inspiron_n5010")
     ))]
     let usb = xhci::UsbKbd::bring_up();
+    #[cfg(feature = "board-pc_z97_d3h")]
+    rtl8852be::publish(usb.pci_config());
     #[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-inspiron_n5010"))]
     let usb = usb_off::UsbKbd::off();
     device.enable_cursor();

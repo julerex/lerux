@@ -73,6 +73,11 @@ fn low_u16(value: usize) -> u16 {
     u16::try_from(value & 0xffff).expect("low half")
 }
 
+#[cfg(not(feature = "board-swift_sfx14_41g"))]
+pub(crate) fn vga_text() -> *mut u16 {
+    memory_region_symbol!(vga_text_vaddr: *mut u16).as_ptr()
+}
+
 impl Device {
     pub fn from_system() -> Self {
         let data_id = *var!(kbd_data_ioport_id: usize = usize::MAX) as u64;
@@ -80,7 +85,7 @@ impl Device {
         let status_id = *var!(kbd_cmd_ioport_id: usize = usize::MAX) as u64;
         let status_port = low_u16(*var!(kbd_cmd_ioport_addr: usize = usize::MAX));
         #[cfg(not(feature = "board-swift_sfx14_41g"))]
-        let vga = memory_region_symbol!(vga_text_vaddr: *mut u16).as_ptr();
+        let vga = vga_text();
         #[cfg(not(feature = "board-swift_sfx14_41g"))]
         let crtc_id = *var!(crtc_ioport_id: usize = usize::MAX) as u64;
         #[cfg(not(feature = "board-swift_sfx14_41g"))]

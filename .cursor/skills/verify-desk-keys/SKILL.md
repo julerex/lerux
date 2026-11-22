@@ -73,5 +73,3 @@ One prefix and one letter, two HID reports, one poll, and port ranks 0 through 3
 ## Tools
 
 TLC, because the question is whether the prefix, the poll, and the port stage can move in a bad order. `from_set1` and `PortStop::later` run on the host. `decode` and `UsbKbd::poll` do not, so the probe reads those guards.
-
-Bring this check back in line with later edits through `/maintain-formal-verification-skill`.

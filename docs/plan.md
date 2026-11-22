@@ -509,7 +509,7 @@ Stretch order and exit criteria: **[`plan-arch.md` § Phase 60 stretch sequence]
 | 60 | Security posture | core + stretch A–D done (MCS deferred; image signing shipped in Phase 67) |
 | 61–70 | QEMU-only workstation deepening | done — [`plan-qemu.md`](plan-qemu.md) |
 | 71–80 | Interactive surface (browser + agent) | done — [`plan-interactive.md`](plan-interactive.md) |
-| 81 | Signed Wasm runtime | done — [ADR-010](decisions/010-program-runtime.md); `just test-program` |
+| 81 | Signed Wasm runtime | done — [ADR-012](decisions/012-ordinary-webassembly.md); `sddf-program`, `just test-program-sddf` |
 | 82 | Z97 on-screen shell | done — `just test-x86-console`; `just make-lerux-iso` |
 
 ## Phases 61–70 — QEMU-only workstation deepening ✅
@@ -682,7 +682,7 @@ These two landed after phase 80 and are recorded here. The on-guest compiler is 
 - [x] Host `lerux prog pack` writes `support/prog/smoke.lrw`.
 - [x] Board `qemu_virt_aarch64_program`. `just test-program` expects `lerux-prog: ran`.
 
-The on-guest compiler (a protection domain that reads a small Rust subset and emits this Wasm) is still ahead. `pc_z97_d3h` has no NIC, so this fetch stays on QEMU. Milestone 14 later replaced the interpreter with `wasmi` on the LionsOS image. See [plan-lionsos.md](plan-lionsos.md) and [ADR-012](decisions/012-ordinary-webassembly.md). `wasmtime` and a second runtime domain stay out.
+The on-guest compiler (a protection domain that reads a small Rust subset and emits this Wasm) is still ahead. `pc_z97_d3h` has no NIC, so this fetch stays on QEMU. The live runtime is `wasmi` in `lerux-wasm` on `sddf-program`. `just test-program-sddf` expects `program: rejected` and then `lerux-wasm: ran`. [ADR-010](decisions/010-program-runtime.md) is superseded by [ADR-012](decisions/012-ordinary-webassembly.md). `wasmtime` and a second runtime domain stay out.
 
 ## Phase 82 — Z97 on-screen shell ✅
 
@@ -702,7 +702,7 @@ The same image also arms one USB HID boot keyboard on the xHCI controller at PCI
 
 | Phase | Theme | Status |
 |-------|--------|--------|
-| 81 | Signed Wasm runtime (`program-runtime`) | done — [ADR-010](decisions/010-program-runtime.md); `just test-program` |
+| 81 | Signed Wasm runtime (`sddf-program`) | done — [ADR-012](decisions/012-ordinary-webassembly.md); `just test-program-sddf` |
 | 82 | Z97 VGA shell + PS/2 + Limine ISO | done — `just test-x86-console`; `just make-lerux-iso` |
 
 ## Physical RPi4 lab (hardware-gated)

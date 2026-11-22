@@ -29,7 +29,7 @@ In `Mac::associate`, change both `return Stage::Scan` lines to `return Stage::Wa
 3. The scan fails, and the model reports the radio online.
 4. `OnlineIsFinished` fails.
 
-`wifi::associate` without `nic.rx() != Some(&[1])` reports the handshake as online. `dispatch_psk` calling `post_wifi` before `key_ok` starts the radio on a short passphrase (`ShortKeyStays`). Removing `mac.stage == Stage::Wait` reports online before the firmware is ready. `key_ok(b"net", b"short")` returning true also exits 1, from the host call, even when the call site is unchanged.
+`wifi::associate` without `nic.rx() != Some(&[1])` reports the handshake as online. `join_chosen` calling `SWIFT_MT7921.notify` before `write_key` starts the radio on a short passphrase (`ShortKeyStays`). `console-shell` keeps `wifi` or `3` for the QEMU desk menu only, and `dispatch_psk` still calls `key_ok` before `post_wifi`. Removing `mac.stage == Stage::Wait` reports online before the firmware is ready. `key_ok(b"net", b"short")` returning true also exits 1, from the host call, even when the call site is unchanged.
 
 ## Run
 
@@ -47,7 +47,8 @@ Read every TLC result with `/statechart`. It shows each broken rule as its short
 
 | Step | Source |
 | --- | --- |
-| Menu, network name, passphrase, quit | `dispatch_ssid`, `dispatch_psk`, `post_wifi` in `userspace/pds/console-shell/src/main.rs` |
+| Swift `setup-wifi` | `dispatch_swift`, `cmd_setup_wifi`, `join_chosen` in `userspace/pds/sddf-shell/src/main.rs` |
+| QEMU desk menu `wifi` or `3` | `dispatch_psk` and `post_wifi` in `userspace/pds/console-shell/src/main.rs` |
 | Passphrase length | `key_ok` in `userspace/crates/lerux-swift/src/wpa.rs` |
 | Scan, auth, assoc, handshake | `Mac::associate` in `userspace/pds/swift-mt7921/src/join.rs` |
 | Handshake reply must be `[1]` | `associate` in `userspace/crates/lerux-swift/src/wifi.rs` |
@@ -75,5 +76,3 @@ One network and one passphrase. The model does not cover the WPA message bytes, 
 ## Tools
 
 TLC, because the question is whether a failed stage can be reported as a finished join. `key_ok` and `bring_up` run on the host. `Mac::associate` does not, so the probe reads each `return Stage::...` and the model checks the order.
-
-Bring this check back in line with later edits through `/maintain-formal-verification-skill`.

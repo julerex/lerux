@@ -228,7 +228,7 @@ Landed:
 
 ## Milestone 12 — Display and browser
 
-**Exit:** A Rust virtio graphics driver and virtualiser use the queue and configuration structs from the pinned driver-framework graphics headers. The browser program writes pixels through that client interface and fetches the page through the socket library. `just test-browser-sddf` expects a known pixel pattern and the page title on the serial log. `DisplayRequest` is not ported.
+**Exit:** A Rust virtio graphics driver and virtualiser use the queue and configuration structs from the pinned driver-framework graphics headers. The browser program writes pixels through that client interface and fetches the page through the socket library. `just test-browser-sddf` expects `title lerux` and then `pixel 000000ff`. `DisplayRequest` is not ported.
 
 Done.
 
@@ -238,7 +238,7 @@ Landed:
 - `qemu_virt_aarch64_browser_sddf` adds `gpu_driver` and `gpu_virt` to the fetch protection domains. The programs are `sddf-gpu-driver.elf` and `sddf-gpu-virt.elf`. Virtio-gpu is the third virtio-mmio device, at `+0xa00` and interrupt 77. The driver maps that page and a 2 MiB direct-memory-access region. The shell maps only the four client graphics regions. The shell config stays the serial page, the filesystem page, and the network page.
 - The shell fetches `GET /fixture.html` and prints `title lerux`. It then submits display info, a 16 by 16 resource, and a flush. QEMU rejects a scanout whose width or height is below 16. The pixel bytes are `4c 52 58 ff`. The success line is `pixel 4c5258ff`. `DisplayRequest` is not ported. Postcard `display-server`, `browser-ui`, and `web-content` stay.
 - Shell channel 5 is the graphics virtualiser. Drivers stay at priority 4 and virtualisers at priority 3. The board feature does not share a build with the fetch, web, or filesystem shell features.
-- `support/smoke-expects.toml` expects `title lerux` and then `pixel 4c5258ff`. The continuous integration job is `browser-sddf`. The smoke count is 51.
+- `support/smoke-expects.toml` expects `title lerux` and then `pixel 000000ff`. The continuous integration job is `browser-sddf`. The smoke count is 51.
 - Checked on 2026-10-12: `just check` passed, `just check-pd` passed, and `just test-browser-sddf` printed `title lerux` and `pixel 4c5258ff`.
 
 ## Milestone 13 — Agent
@@ -250,7 +250,7 @@ Done.
 Landed:
 
 - LionsOS 0.4.0 has no agent header. `lerux-sddf` defines `agent_tool_t` for this milestone. The shared page is `0xa_000_000`, one page, mapped read-write by `sddf-grok` and `sddf-agent`. Kinds are Read, Write, Edit, ListDir, Search, WebFetch, and Browse. States are idle, browse, browse done, ok, and err.
-- `qemu_virt_aarch64_agent_sddf` reuses the fetch roles. The shell program is `sddf-grok.elf` and is the serial client. The agent program is `sddf-agent.elf` and is the filesystem client and the network client. `sddf-shell` stays on the other images. The postcard `agent` protection domain stays.
+- `qemu_virt_aarch64_agent_sddf` reuses the fetch roles. The shell program is `sddf-grok.elf` and is the serial client. The agent program is `sddf-agent.elf` and is the filesystem client and the network client. `sddf-shell` stays on the other images. The image is `sddf-agent`. Milestone 17 did not delete the Ladybird postcard servers the browser specs still name.
 - The shell notifies the agent on the tool channel. The agent writes the file through `lerux-posix` and notifies the shell. Browse uses the same page and a second notification. The shell answers Browse on the root before it resumes the worker. WebFetch connects to `10.0.2.2` port 8443 through the socket library. The smoke does not call it.
 - `support/smoke-expects.toml` expects `lerux shell ready`, then `agent: tool write ok`, then `hello-agent`. The continuous integration job is `agent-sddf`. The smoke count is 52.
 - Checked on 2026-10-12: `just check` passed, `just check-pd` passed, and `just test-agent-sddf` printed `lerux shell ready`, `agent: tool write ok`, and `hello-agent`.
@@ -266,7 +266,7 @@ Landed:
 - `lerux-wasm` runs ordinary WebAssembly with `wasmi` 2.0.0. The features are `validate`, `prefer-btree-collections`, and `portable-dispatch`. `run_signed` checks the ed25519 signature before instantiate. [ADR-012](decisions/012-ordinary-webassembly.md) records why `wasmi` is accepted here and why `wasmtime` and the WebAssembly Micro Runtime stay out. [ADR-010](decisions/010-program-runtime.md) still records the envelope. Its interpreter decision is superseded.
 - `qemu_virt_aarch64_program_sddf` is the fetch image with `program` (`sddf-program.elf`) in place of the shell. The protection domain is the serial client, the filesystem client, and the network client. The module reads `/config/hostname` and allocates a socket through `lerux-posix`. The pipe does not connect. The network queues are mapped. `net_buffers_init` runs once on the transmit free queue.
 - A bad signature prints `program: rejected` and does not instantiate the module. The signed module then prints `lerux-wasm: ran`. `support/smoke-expects.toml` expects those two lines in that order. The continuous integration job is `program-sddf`. The smoke count is 53.
-- `lerux-prog` is deleted. The postcard `program-runtime` uses `lerux-wasm` and still logs `lerux-prog: ran`. `just test-program` stays. That protection domain has no network client.
+- `lerux-prog` is deleted. The live runtime is `wasmi` in `lerux-wasm` on `sddf-program`. `just test-program-sddf` is the check.
 - Checked on 2026-10-12: `just check` passed, `just check-pd` passed, `just test-program-sddf` printed `program: rejected` and `lerux-wasm: ran`, and `just test-program` printed `lerux-prog: ran`.
 
 ## Milestone 15 — Packages
@@ -299,7 +299,7 @@ Landed:
 
 ## Milestone 17 — Remove the old model
 
-**Exit:** Guest code has no `lerux_interface_types` dependency, no `LERUXFS`, and no postcard `SerialClient` or `NetRequest`. `docs/ci.md` lists the new recipes. `just test` is the Rust serial-and-filesystem workstation smoke. `just check` still lints the host tool.
+**Exit:** Guest code has no `lerux_interface_types` dependency, no `LERUXFS`, and no postcard `SerialClient` or `NetRequest`. `docs/ci.md` lists the new recipes. `just test` is the browser menu on `qemu_virt_aarch64_browser_sddf`. `just test-fs-sddf` is the filesystem smoke. `just check` still lints the host tool.
 
 This milestone stays. Its scope is that postcard guest model. It does not remove the Ladybird-shaped browser domains, and it does not remove the postcard servers [`desk-browser.md`](desk-browser.md) and [`../lerux-ladybird/PLAN.md`](../lerux-ladybird/PLAN.md) still name (`browser-ui`, `web-content`, `request-server`, `tls-proxy`, `net-server`, `display-server`, `fs-server`). [`../lerux-ladybird/PLAN.md`](../lerux-ladybird/PLAN.md) has its own milestone 17, Forms, and that milestone stays too. The two lists are not the same milestone.
 
@@ -308,7 +308,7 @@ Done.
 Landed:
 
 - Guest code under `userspace/` has no `lerux-interface-types` dependency, no `LERUXFS`, and no `NetRequest`. The crates `lerux-interface-types`, `lerux-ipc`, `lerux-fs`, `lerux-fat`, and `lerux-service-async` are not in the tree. Device-framework images, `hello`, and the drivers that did not use those crates stay. The logging serial sink stays for `hello` and the cothread client. The Ladybird-shaped domains stay in the browser specs named above.
-- `just test` with no `BOARD` boots `qemu_virt_aarch64_fs_sddf`. `just build` still defaults to `qemu_virt_aarch64`. The continuous integration hello job is `BOARD=qemu_virt_aarch64 just test`. The smoke include list is 19 jobs. `docs/ci.md` and the README use that count.
+- `just test` with no `BOARD` is the browser menu on `qemu_virt_aarch64_browser_sddf`. `just test-fs-sddf` is the filesystem smoke. `just build` still defaults to `qemu_virt_aarch64`. The continuous integration hello job is `BOARD=qemu_virt_aarch64 just test`. The smoke include list is 19 jobs. `docs/ci.md` and the README use that count.
 - The Gigabyte Z97-D3H stays a secondary desk page. This milestone does not remove it, and it does not remove the postcard servers the browser specs still name. The metal target being driven is the Acer Swift X.
 - A board `lerux_image::render_board` accepts, including every name ending in `_sddf` and `x86_64_generic_fs_ahci`, takes its system description from that renderer. The `template` string on those rows is not a file in `userspace/systems/templates`, and `system_vars` on those rows are not substituted. Postcard boards still read the template file.
 - Checked on 2026-10-21. `just check` passed. `just check-pd` passed (51 aarch64 crate combinations and 37 x86_64 crate combinations). On a fresh `support/disk.img`, `just test` printed `lerux shell ready`, the scripted shell lines, and `reboot`.
@@ -393,7 +393,7 @@ The Acer Swift X SFX14-41G is the metal target being driven. The Gigabyte Z97-D3
 
 **Exit:** The panel shows `1 browser` and `2 maths`, and the built-in keyboard produces `maths 3`.
 
-Board `swift_sfx14_41g` uses Microkit `x86_64_generic` and `console-swift.system.template`. There is no `serial-driver`. The keyboard is the i8042, pin 1, vector 49. `console-driver` keeps the VGA text path for `pc_z97_d3h` and paints 32-bit pixels on this board. `just make-lerux-iso` packs this image. `just make-lerux-iso pc_z97_d3h` packs the Z97 image. `browser` paints the Lenna test page from `support/browser/lenna.html` over the console until `quit`. The Z97 still prints `browser unavailable`. `ci = false`. On 2026-10-30 the panel showed `hello lerux`, `1 browser`, and `2 maths`. The shell copied the disk page onto that console as `nvme: absent`. That photo did not include `maths 3`.
+Board `swift_sfx14_41g` uses Microkit `x86_64_generic` and `console-swift.system.template`. The template program is `sddf-shell.elf` and the radio command is `setup-wifi`. There is no `serial-driver`. The keyboard is the i8042, pin 1, vector 49. `console-driver` keeps the VGA text path for `pc_z97_d3h` and paints 32-bit pixels on this board. `just make-lerux-iso` packs this image. `just make-lerux-iso pc_z97_d3h` packs the Z97 image. The Z97 image is `console-shell` and still prints `browser unavailable`. `ci = false`. On 2026-10-30 the panel showed `hello lerux`, `1 browser`, and `2 maths`. The shell copied the disk page onto that console as `nvme: absent`. That photo did not include `maths 3`.
 
 ## Milestone 26 — Swift PCI lines
 

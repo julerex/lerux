@@ -68,5 +68,3 @@ One resource record and one note slot. The model does not cover pixel bytes, a s
 ## Tools
 
 TLC, because the question is whether flush can succeed before the transfer is staged. The driver does not run on the host, so the probe reads the branch and the model checks the order.
-
-Bring this check back in line with later edits through `/maintain-formal-verification-skill`.

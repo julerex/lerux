@@ -96,5 +96,3 @@ Move that hash forward only after you have re-read the covered functions at the 
 ## Tools
 
 TLC 1.7.4 checks that the legal schedule never enters a forbidden state and that signal and recv return only after the waiter has run. The Rust program runs that schedule on the real runtime, so a deleted switch or a missing panic fails the check before anyone edits the TLA actions.
-
-After a change that did not re-run this check, use `/maintain-formal-verification-skill`.

@@ -33,7 +33,7 @@ Before scheduling a role on a new architecture, find the compile-time gates and 
 
 The first unit ends with host tests that compare the rendered system description, including the architecture that must stay unchanged. Those tests assert the program name, the regions, and the interrupt element. The next unit's guest smoke starts after those tests are green.
 
-Land each green unit as its own commit or pull request. One branch at the end is the shape only when the operator has said to wait.
+One feature branch per unit. Open a pull request. Do not commit the milestone onto main.
 
 ## Machine description
 

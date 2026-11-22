@@ -7,9 +7,8 @@ How the engineering skills should consume this repo's domain documentation when 
 - **`docs/context.md`**: domain language for this repo.
 - **`docs/decisions/`**: architecture decision records. Read the ones that touch the area you are about to work in.
 - **`GLOSSARY.md`** at the repo root, if it exists. If **`GLOSSARY-MAP.md`** exists, it points at one `GLOSSARY.md` per context; read each one relevant to the topic.
-- **`docs/adr/`**, if it exists. Read records that touch the area you are about to work in.
 
-This repo is single-context. There is no `GLOSSARY-MAP.md`. `/domain-modeling` creates `GLOSSARY.md` and `docs/adr/` lazily when a new term or decision is resolved there.
+This repo is single-context. There is no `GLOSSARY-MAP.md`. `/domain-modeling` creates `GLOSSARY.md` lazily when a new term is resolved there. Architecture decision records live in `docs/decisions/`.
 
 If any of these files don't exist, **proceed silently**. Don't flag their absence; don't suggest creating them upfront. The `/domain-modeling` skill (reached via `/grill-with-docs` and `/improve-codebase-architecture`) creates them lazily when terms or decisions actually get resolved.
 
@@ -21,8 +20,7 @@ Single-context:
 /
 ├── docs/context.md
 ├── docs/decisions/
-├── GLOSSARY.md              ← created lazily by /domain-modeling
-└── docs/adr/                ← created lazily by /domain-modeling
+└── GLOSSARY.md              ← created lazily by /domain-modeling
 ```
 
 ## Use the glossary's vocabulary

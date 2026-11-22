@@ -102,6 +102,7 @@ userspace/pds/sddf-net-virt-rx/src/main.rs
 userspace/pds/sddf-net-virt-tx/src/main.rs
 userspace/pds/sddf-program/src/main.rs
 userspace/pds/sddf-program/src/net.rs
+userspace/pds/sddf-ram-blk/src/main.rs
 userspace/pds/sddf-serial-client/src/main.rs
 userspace/pds/sddf-serial-driver/src/main.rs
 userspace/pds/sddf-serial-driver/src/ns16550_mmio.rs

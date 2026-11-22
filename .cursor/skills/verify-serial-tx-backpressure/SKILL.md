@@ -92,5 +92,3 @@ Move that hash forward only after you have re-read the covered functions at the 
 ## Tools
 
 TLC 1.7.4 checks the order of the protection-domain steps. The question is whether the client can wait with no wake scheduled. The Rust program runs those steps on the real queue functions, so a change inside the queue functions fails the check before anyone edits the TLA actions.
-
-After a change that did not re-run this check, use `/maintain-formal-verification-skill`.

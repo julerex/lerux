@@ -85,7 +85,8 @@ Milestone 13 sits after the bar.
 | Board install steps | [`boards.md`](boards.md) |
 | Device names | [`platforms.md`](platforms.md), [`../GLOSSARY.md`](../GLOSSARY.md) |
 | sDDF shell | `userspace/pds/sddf-shell` (`sddf-shell.elf`) |
-| Desk and Swift menu | `userspace/pds/console-shell` (`console-shell.elf`) |
+| Desk menu | `userspace/pds/console-shell` (`console-shell.elf`) |
+| Swift shell | `userspace/pds/sddf-shell` (`sddf-shell.elf`); the command is `setup-wifi` |
 | FAT server | `userspace/pds/sddf-fatfs` |
 | Filesystem queue layouts | `userspace/crates/lerux-sddf` (`fs_image`, `blk_image`, `net_image`) |
 | File-descriptor library | `userspace/crates/lerux-posix` |
@@ -287,13 +288,13 @@ Do not add a postcard message. New queue code uses `lerux-sddf`. Do not invent a
 
 **Boards.** `swift_sfx14_41g`. The sequence already written in [`plan-swift-wifi.md`](plan-swift-wifi.md) is the path. This milestone is the exit of that path plus LionsOS milestone 27. Survey counters in review do not close it.
 
-**Protection domains and templates.** `swift-mt7921` owns `03:00.0` (`14c3:7961` or `14c3:0608`). `console-shell` owns `3 wifi`. The image maps physical `0xfc82000000` at virtual `0x82000000`. Firmware is `support/mt7921.bin`, gitignored. The service set and passphrase are `support/swift-wifi.txt`, gitignored.
+**Protection domains and templates.** `swift-mt7921` owns `03:00.0` (`14c3:7961` or `14c3:0608`). The template is `sddf-shell.elf` and the command is `setup-wifi`. `console-shell` keeps `wifi` or `3` for the QEMU desk menu only. The image maps physical `0xfc82000000` at virtual `0x82000000`. Firmware is `support/mt7921.bin`, gitignored. The service set and passphrase are `support/swift-wifi.txt`, gitignored.
 
 **Steps.**
 
-- The typed session is [`plan-arch-wifi.md`](plan-arch-wifi.md). The menu lines below are the current image and stay until that plan’s first milestone is the session the image documents. This milestone’s exit stays the address and `ping ok`.
+- The typed session is [`plan-arch-wifi.md`](plan-arch-wifi.md). The template is `sddf-shell.elf` and the command is `setup-wifi`. `console-shell` keeps `wifi` or `3` for the QEMU desk menu only. This milestone’s exit stays the address and `ping ok`.
 - Follow [`plan-swift-wifi.md`](plan-swift-wifi.md) phases 2–8. Do not skip a phase because a host test passed.
-- The menu command `3` or `wifi`, once the radio line is `wait`, asks the radio which names it can hear. The shell prints each as `N name` in byte order, at most 16, then `ssid>`. A printed row number selects that row. Any other listed name, or any other line of 1 to 32 bytes, is the name. `ssid ok` follows, then `psk>`. `psk ok` is a passphrase of 8 to 63 bytes. `wifi err` is the rejection, including a survey the radio did not answer.
+- `setup-wifi`, once the radio line is `wait`, asks the radio which names it can hear. The shell prints each as `N name` in byte order, at most 16, then `ssid>`. A printed row number selects that row. Any other listed name, or any other line of 1 to 32 bytes, is the name. `ssid ok` follows, then `psk>`. `psk ok` is a passphrase of 8 to 63 bytes. `wifi err` is the rejection, including a survey the radio did not answer.
 - On this survey the host is the `swift-mt7921` protection domain on the CPU. The station is the laptop's client identity, registered at `bss_idx` 0. A channel is one frequency in the 21-entry channel domain, and `ch` is how many of those the firmware finished. A beacon is an access point's announcement, and `bcn` is how many the firmware counted. A scan frame is that beacon or a probe response, the frame that carries a network name. The data ring is the DMA ring at `WFDMA0 + 0x520`, and `rx` counts its completions. A scan frame can also arrive on an MCU ring, and `ev` counts those. `bcn` includes beacons that never reached the host. The same definitions are in [context.md](context.md#swift-radio-survey).
 - Empty `ssid>` means the scan command was posted and zero names were stored. It does not mean a beacon was rejected. The survey mark prints `rx`, `ev`, `ok`, `done`, and `fc` when frames arrived and none were kept. `rx` counts data-ring frames and `ev` counts frames on an MCU ring. A finished scan also prints `ch` and `bcn` from the scan-done event. The driver registers the station at `bss_idx` 0, sends the channel domain, sends the mode 1 receive filter, and clears the other-beacon drop, before the scan. The image that programmed the DMA length and sent only the mode 1 filter printed `rx 0 ok 0 done 1 ch 21 bcn 14`. The image that also cleared the other-beacon drop printed `rx 0 ok 0 done 1 ch 21 bcn 12`; that driver read only scan-done from the MCU rings. The image that kept MCU-ring frames printed `rx 1 ev 16 ok 12 done 1 ch 21 bcn 15` and listed the networks. Init reads the NIC capability, sends the world-domain CLC rule, and programs both bands' DMA receive length. The image that also posted the rate-power table and `KeepFullPwr 0` reached `wait`, and the shell then printed `wifi err`. A registration the firmware rejects leaves the request tag, so the shell prints `wifi err`. Those counters are a means, not the exit.
 - After a name is chosen, the stage line is `scan`, `auth tx`, `auth rx`, `assoc`, `eapol`, `dhcp`, then `ping`. A not-ready notify repaints the current stage and keeps no key for the next boot.
@@ -338,13 +339,13 @@ Do not add a postcard message. New queue code uses `lerux-sddf`. Do not invent a
 
 **Boards.** `swift_sfx14_41g`. Depends on Milestones 1–3, 8, and 9.
 
-**Protection domains and templates.** `console-swift.system.template`. Roles: `console_driver`, `console-shell`, `swift-pci-probe`, `swift-mt7921`, `swift-nvme`, `sddf-fatfs`, and the network virtualisers and copier once Milestone 8 speaks sDDF queues. There is no `serial-driver`. The keyboard interrupt stays channel 0 on `console_driver` (I/O APIC pin 1, vector 49).
+**Protection domains and templates.** `console-swift.system.template`. The shell program is `sddf-shell.elf` and the radio command is `setup-wifi`. Roles: `console_driver`, `sddf-shell`, `swift-pci-probe`, `swift-mt7921`, `swift-nvme`, `sddf-fatfs`, and the network virtualisers and copier. There is no `serial-driver`. The keyboard interrupt stays channel 0 on `console_driver` (I/O APIC pin 1, vector 49). The file commands use a RAM volume. The NVMe disk is not formatted.
 
 **Steps.**
 
-- One ISO: `just make-lerux-iso`. The panel still shows the mode line’s geometry (1920 by 1080, pitch 7680, framebuffer `0xfc90000000`) and the menu `1 browser`, `2 maths`, `3 wifi`.
-- `2` or `maths` still runs `lerux-calc`. The proof on metal is `maths 3` from the built-in keyboard. LionsOS milestone 25 recorded the menu without that line.
-- `3 wifi` is Milestone 8. After `ping ok`, `ip` in the shell prints the same address.
+- One ISO: `just make-lerux-iso`. The panel still shows the mode line’s geometry (1920 by 1080, pitch 7680, framebuffer `0xfc90000000`). The template is `sddf-shell.elf` and the command is `setup-wifi`.
+- LionsOS milestone 25 recorded an earlier menu (`1 browser`, `2 maths`) without `maths 3`.
+- `setup-wifi` is Milestone 8. After `ping ok`, `ip` in the shell prints the same address.
 - The read-only disk is Milestone 9. `ls` and `cat` work. Writes print `err`.
 - `config`, `date`, and `dmesg` are Milestone 3. `date err` is acceptable until the Swift image has a timer the shell can call. Do not pretend the TSC was read if it was not.
 - `browser` prints `browser unavailable` until Milestone 11 is on this image.

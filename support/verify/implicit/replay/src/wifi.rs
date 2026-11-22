@@ -32,11 +32,13 @@ pub fn flags() -> Result<Vec<(&'static str, bool)>, String> {
     let host = scan::one(&wifi, "associate")?;
     let console = scan::read("userspace/pds/console-shell/src/main.rs")?;
     let psk = scan::one(&console, "dispatch_psk")?;
+    let shell = scan::read("userspace/pds/sddf-shell/src/main.rs")?;
+    let chosen = scan::one(&shell, "join_chosen")?;
     let device = scan::read("userspace/pds/swift-mt7921/src/device.rs")?;
     Ok(vec![
         ("OwnLabel", own_label(associate)),
         ("EapolChecksReply", host.contains("nic.rx() != Some(&[1])")),
-        ("KeyChecked", key_checked(psk)?),
+        ("KeyChecked", key_checked(psk)? && shell_key_checked(chosen)?),
         ("FirmwareWaits", device.contains("mac.stage == Stage::Wait")),
     ])
 }
@@ -51,7 +53,9 @@ pub fn behavior() -> Result<(), String> {
                 "EapolChecksReply" => {
                     "wifi::associate accepts a handshake reply other than 1".to_string()
                 }
-                "KeyChecked" => "dispatch_psk notifies the radio before key_ok".to_string(),
+                "KeyChecked" => {
+                    "a passphrase reaches the radio before the length check".to_string()
+                }
                 "FirmwareWaits" => "ready is not gated on Stage::Wait".to_string(),
                 _ => format!("{name} is false"),
             });
@@ -65,6 +69,16 @@ fn key_checked(body: &str) -> Result<bool, String> {
         return Err("shape: dispatch_psk does not call post_wifi".to_string());
     };
     match body.find("key_ok(") {
+        Some(key) => Ok(key < post),
+        None => Ok(false),
+    }
+}
+
+fn shell_key_checked(body: &str) -> Result<bool, String> {
+    let Some(post) = body.find("SWIFT_MT7921.notify()") else {
+        return Err("shape: join_chosen does not notify the radio".to_string());
+    };
+    match body.find("write_key(") {
         Some(key) => Ok(key < post),
         None => Ok(false),
     }

@@ -25,8 +25,10 @@ pub const IO_LEN: u32 = 0x100;
 /// BAR 2 on this desk. The ISO maps this address and no other MMIO window.
 pub const MAPPED_MMIO_PHYS: u64 = 0xf7c0_0000;
 
-/// PCI command bits for I/O space, memory space, and bus master.
-const PCI_COMMAND_ENABLE: u16 = 0x0007;
+/// PCI command bit for memory space. BAR 2 is a memory window.
+const PCI_COMMAND_MEMORY: u16 = 1 << 1;
+/// PCI command bit for bus master. This idle path must not set it.
+const PCI_COMMAND_BUS_MASTER: u16 = 1 << 2;
 
 /// `R_AX_SYS_CFG1` in rtw89 v6.8 `reg.h`. Chip version is bits 15:12.
 const R_AX_SYS_CFG1: usize = 0x00F0;
@@ -274,12 +276,15 @@ pub fn card_state(bridge: &[u8], endpoint: &[u8], mapped: u64) -> CardState {
     }
 }
 
-/// Set I/O space, memory space, and bus master. Every other bit stays.
+/// Enable memory space and clear bus master. Every other bit stays.
 ///
-/// A second call returns the same word.
+/// The desk firmware word is `0x0400` (interrupt disable). That becomes
+/// `0x0402`. A word that already has bus master loses that bit, so a failed
+/// idle does not leave the card able to DMA. A second call returns the same
+/// word.
 #[must_use]
 pub const fn enable_command(current: u16) -> u16 {
-    current | PCI_COMMAND_ENABLE
+    (current | PCI_COMMAND_MEMORY) & !PCI_COMMAND_BUS_MASTER
 }
 
 /// Stop the PCI HCI. `SYS_CFG1` of `0` or `0xffff_ffff` writes nothing.
@@ -594,9 +599,12 @@ mod tests {
             panic!("expected programmed, got {state:?}");
         };
         assert_eq!(programmed.card.mmio_phys, 0xf7c0_0000);
-        assert_eq!(programmed.command, 0x0407);
-        assert_eq!(enable_command(0x0407), 0x0407);
-        assert_eq!(enable_command(0x0400), 0x0407);
+        assert_eq!(programmed.command, 0x0403);
+        assert_eq!(enable_command(0x0400), 0x0402);
+        assert_eq!(enable_command(0x0402), 0x0402);
+        assert_eq!(enable_command(0x0407), 0x0403);
+        assert_eq!(programmed.command & PCI_COMMAND_BUS_MASTER, 0);
+        assert_eq!(enable_command(0x0400) & 0x0400, 0x0400);
     }
 
     #[test]

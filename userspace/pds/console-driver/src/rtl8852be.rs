@@ -1,4 +1,4 @@
-//! Copy the RTL8852BE headers and enable the PCI command bits.
+//! Copy the RTL8852BE headers and enable memory space on the endpoint.
 //!
 //! `0xcf8` stays on this domain. The radio reads the copied headers and does
 //! not get a port.

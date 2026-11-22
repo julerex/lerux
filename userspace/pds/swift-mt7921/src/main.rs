@@ -29,9 +29,15 @@
 #[cfg_attr(test, allow(dead_code))]
 mod ether;
 
-#[cfg(not(test))]
+#[cfg_attr(test, allow(dead_code))]
+#[cfg(any(not(test), target_arch = "x86_64"))]
 mod device;
-#[cfg(not(test))]
+#[cfg(all(test, target_arch = "x86_64"))]
+mod drive;
+#[cfg(all(test, target_arch = "x86_64"))]
+mod hook;
+#[cfg_attr(test, allow(dead_code))]
+#[cfg(any(not(test), target_arch = "x86_64"))]
 mod join;
 
 #[cfg(not(test))]
@@ -192,6 +198,9 @@ fn beat_disarm() {
     MARK.disarm();
 }
 
+#[cfg(all(test, target_arch = "x86_64"))]
+pub(crate) fn beat() {}
+
 #[cfg(not(test))]
 pub(crate) fn beat() {
     let Some(tick) = MARK.beat() else {
@@ -204,20 +213,32 @@ pub(crate) fn beat() {
     }
 }
 
+#[cfg(all(test, target_arch = "x86_64"))]
+pub(crate) fn step_cmd() {}
+
 #[cfg(not(test))]
 pub(crate) fn step_cmd() {
     show(1, ROW_CMD, b"cpu: write cmd");
 }
+
+#[cfg(all(test, target_arch = "x86_64"))]
+pub(crate) fn step_desc() {}
 
 #[cfg(not(test))]
 pub(crate) fn step_desc() {
     show(2, ROW_DESC, b"ram: write desc");
 }
 
+#[cfg(all(test, target_arch = "x86_64"))]
+pub(crate) fn step_bell() {}
+
 #[cfg(not(test))]
 pub(crate) fn step_bell() {
     show(3, ROW_BELL, b"wfdma: doorbell");
 }
+
+#[cfg(all(test, target_arch = "x86_64"))]
+pub(crate) fn step_fetch() {}
 
 #[cfg(not(test))]
 pub(crate) fn step_fetch() {

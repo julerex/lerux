@@ -418,10 +418,7 @@ mod tests {
         &rest[..end]
     }
 
-    #[test]
-    fn z97_iso_owns_rtl8852be() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let z97 = crate::system::render_system(&root, "pc_z97_d3h").expect("z97 sdf");
+    fn assert_z97_fetch_image(z97: &str) {
         assert!(z97.contains("rtl8852be-driver.elf"));
         assert!(z97.contains("sddf-shell.elf"));
         assert!(z97.contains("sddf-e1000e-driver.elf"));
@@ -437,9 +434,12 @@ mod tests {
         assert!(z97.contains("name=\"console_driver\" priority=\"5\""));
         assert!(z97.contains("pin=\"20\" vector=\"51\" id=\"0\""));
         assert_eq!(z97.matches("addr=\"0xcf8\"").count(), 1);
-        assert!(pd_body(&z97, "rtl8852be").contains("rtl8852be_mmio"));
-        assert!(!pd_body(&z97, "shell").contains("rtl8852be_mmio"));
-        assert!(pd_body(&z97, "shell").contains("sddf-shell.elf"));
+        assert!(pd_body(z97, "rtl8852be").contains("rtl8852be_mmio"));
+        assert!(!pd_body(z97, "shell").contains("rtl8852be_mmio"));
+        assert!(pd_body(z97, "shell").contains("sddf-shell.elf"));
+    }
+
+    fn assert_z97_channels(z97: &str) {
         assert!(z97.contains("<end pd=\"shell\" id=\"0\" pp=\"true\" />"));
         assert!(z97.contains("<end pd=\"fatfs\" id=\"1\" />"));
         assert!(z97.contains("<end pd=\"shell\" id=\"2\" />"));
@@ -447,20 +447,22 @@ mod tests {
         assert!(z97.contains("<end pd=\"shell\" id=\"4\" />"));
         assert!(!z97.contains("<end pd=\"shell\" id=\"1\""));
         assert!(!z97.contains("<end pd=\"shell\" id=\"5\""));
-        assert!(pd_body(&z97, "serial_driver").contains("serial-driver.elf"));
-        assert!(pd_body(&z97, "serial_driver").contains("<irq "));
+        assert!(pd_body(z97, "serial_driver").contains("serial-driver.elf"));
+        assert!(pd_body(z97, "serial_driver").contains("<irq "));
         assert!(!z97.contains("<end pd=\"serial_driver\""));
         assert!(z97.contains("<end pd=\"net_driver\" id=\"1\" />"));
         assert!(z97.contains("<end pd=\"net_driver\" id=\"2\" />"));
         assert!(z97.contains("<end pd=\"net_driver\" id=\"3\" />"));
         assert!(z97.contains("<end pd=\"console_driver\" id=\"3\" />"));
-        assert!(pd_body(&z97, "console_driver").contains("pci_ioport_id"));
-        assert!(pd_body(&z97, "console_driver").contains("0xcf8"));
-        assert!(!pd_body(&z97, "net_driver").contains("0xcf8"));
-        assert!(!pd_body(&z97, "net_driver").contains("pci_net_config_ioport_id"));
-        assert!(pd_body(&z97, "console_driver").contains("rtl8852be_cfg"));
-        assert!(!pd_body(&z97, "console_driver").contains("rtl8852be_mmio"));
-        let qemu = crate::system::render_system(&root, "x86_64_generic_console").expect("qemu sdf");
+        assert!(pd_body(z97, "console_driver").contains("pci_ioport_id"));
+        assert!(pd_body(z97, "console_driver").contains("0xcf8"));
+        assert!(!pd_body(z97, "net_driver").contains("0xcf8"));
+        assert!(!pd_body(z97, "net_driver").contains("pci_net_config_ioport_id"));
+        assert!(pd_body(z97, "console_driver").contains("rtl8852be_cfg"));
+        assert!(!pd_body(z97, "console_driver").contains("rtl8852be_mmio"));
+    }
+
+    fn assert_qemu_console_menu(qemu: &str) {
         assert!(!qemu.contains("rtl8852be-driver.elf"));
         assert!(!qemu.contains("0xf7c0_0000"));
         assert!(!qemu.contains("0x6240_0000"));
@@ -472,6 +474,16 @@ mod tests {
         assert!(qemu.contains("serial-driver.elf"));
         assert!(qemu.contains("<end pd=\"serial_driver\" id=\"1\" />"));
         assert!(qemu.contains("name=\"console_driver\" priority=\"2\""));
+    }
+
+    #[test]
+    fn z97_iso_owns_rtl8852be() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let z97 = crate::system::render_system(&root, "pc_z97_d3h").expect("z97 sdf");
+        assert_z97_fetch_image(&z97);
+        assert_z97_channels(&z97);
+        let qemu = crate::system::render_system(&root, "x86_64_generic_console").expect("qemu sdf");
+        assert_qemu_console_menu(&qemu);
         let boards = load_boards(&root).unwrap();
         let desk = boards.get("pc_z97_d3h").unwrap();
         assert!(desk.pds.iter().any(|pd| pd == "rtl8852be-driver"));

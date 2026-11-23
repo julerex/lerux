@@ -309,8 +309,8 @@ use lerux_sddf::{
 use lerux_signon::for_each_preamble;
 #[cfg(feature = "board-swift_sfx14_41g")]
 use lerux_swift::{
-    format_survey_report, is_setup_wifi, join_up, read_survey_count, survey_choice, write_key,
-    write_link_name, write_survey, SURVEY_REPORT_MAX,
+    format_ip_link, format_survey_report, is_setup_wifi, join_up, read_survey_count, survey_choice,
+    write_key, write_link_name, write_survey, IP_LINK_MAX, SURVEY_REPORT_MAX,
 };
 
 const CONFIG: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/config.bin"));
@@ -2184,6 +2184,11 @@ fn cmd_df(rest: &[u8]) {
     feature = "board-qemu_virt_riscv64_browser_sddf"
 )))]
 fn cmd_ip(rest: &[u8]) {
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    if rest == b"link" {
+        say_ip_link();
+        return;
+    }
     if !rest.is_empty() {
         say(b"ip err\n");
         return;
@@ -2195,6 +2200,17 @@ fn cmd_ip(rest: &[u8]) {
     };
     #[cfg(not(feature = "net-client"))]
     say(b"ip err\n");
+}
+
+/// `ip link` prints the station address stored on the wifi page.
+#[cfg(feature = "board-swift_sfx14_41g")]
+fn say_ip_link() {
+    let mut out = [0u8; IP_LINK_MAX];
+    let Some(n) = format_ip_link(key_page(), &mut out) else {
+        say(b"ip err\n");
+        return;
+    };
+    say(&out[..n]);
 }
 
 #[cfg(not(any(

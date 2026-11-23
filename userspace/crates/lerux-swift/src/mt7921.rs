@@ -2106,6 +2106,29 @@ pub fn format_survey_report(page: &[u8], out: &mut [u8]) -> Option<usize> {
     Some(n)
 }
 
+/// Room for one [`format_ip_link`] line.
+pub const IP_LINK_MAX: usize = 128;
+
+/// Bytes the shell prints for `ip link`.
+///
+/// The name is `wlan0`. The hardware address is the station field on `page`,
+/// or six zero bytes when the radio has not published that field. The flags
+/// are the set used before the station is associated.
+#[must_use]
+pub fn format_ip_link(page: &[u8], out: &mut [u8]) -> Option<usize> {
+    let address = match read_station(page) {
+        Some((_, address)) => address,
+        None => [0; 6],
+    };
+    let mut n = write_bytes(
+        out,
+        0,
+        b"1: wlan0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 state DOWN\n    link/ether ",
+    )?;
+    n = write_mac(out, n, address)?;
+    write_bytes(out, n, b" brd ff:ff:ff:ff:ff:ff\n")
+}
+
 /// True when `cmd` is `setup-wifi` in either ASCII case.
 ///
 /// The keyboard stores an uppercase letter when Shift or Caps Lock is set,
@@ -3696,6 +3719,31 @@ mod tests {
         ));
         let n = format_survey_report(&page, &mut out).unwrap();
         assert_eq!(&out[..n], b"rx 4 ev 0 ok 0 done 0 fc --\n");
+    }
+
+    #[test]
+    fn ip_link_names_wlan0() {
+        let mut page = [0u8; 0x1000];
+        let mut out = [0u8; IP_LINK_MAX];
+        let n = format_ip_link(&page, &mut out).unwrap();
+        assert_eq!(
+            &out[..n],
+            b"1: wlan0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 state DOWN\n    link/ether 00:00:00:00:00:00 brd ff:ff:ff:ff:ff:ff\n"
+        );
+        let mac = [0x52, 0x54, 0x00, 0x12, 0x34, 0x56];
+        assert!(publish_station(&mut page, true, mac));
+        assert!(write_survey_secured(
+            &mut page,
+            &[b"lerux"],
+            &[SURVEY_SEC_PSK]
+        ));
+        let n = format_ip_link(&page, &mut out).unwrap();
+        assert_eq!(
+            &out[..n],
+            b"1: wlan0: <NO-CARRIER,BROADCAST,MULTICAST,UP> mtu 1500 state DOWN\n    link/ether 52:54:00:12:34:56 brd ff:ff:ff:ff:ff:ff\n"
+        );
+        assert!(n <= IP_LINK_MAX);
+        assert!(format_ip_link(&page, &mut [0u8; 8]).is_none());
     }
 
     #[test]

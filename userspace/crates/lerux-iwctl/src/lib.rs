@@ -359,17 +359,49 @@ mod tests {
         let (_session, body, action) = run("station wlan0 get-networks", &station);
         assert_eq!(action, Action::None);
         assert!(body.contains("Available networks"));
+        assert!(body.contains("Network name"));
+        assert!(body.contains("Security"));
+        assert!(body.contains("Signal"));
         assert!(body.contains("lerux"));
         assert!(body.contains("psk"));
         assert!(body.contains("open"));
         assert!(body.contains("> "));
         assert!(body.contains("open net"));
+        let row = body
+            .lines()
+            .find(|line| line.contains("lerux"))
+            .expect("row");
+        assert!(row.contains("psk"));
+        assert!(!row.bytes().any(|byte| byte.is_ascii_digit()));
     }
 
     #[test]
     fn get_networks_empty() {
-        let (_session, body, _) = run("station wlan0 get-networks", &powered());
-        assert!(body.contains("No networks available\n"));
+        let (_session, body, action) = run("station wlan0 get-networks", &powered());
+        assert_eq!(action, Action::None);
+        assert_eq!(
+            body,
+            "                               Available networks                              \n--------------------------------------------------------------------------------\n      Network name                      Security            Signal\n--------------------------------------------------------------------------------\n\n"
+        );
+    }
+
+    #[test]
+    fn get_networks_fails_when_off() {
+        let mut station = with_net(b"lerux", Security::Psk);
+        station.powered = false;
+        let (_session, body, action) = run("station wlan0 get-networks", &station);
+        assert_eq!(action, Action::None);
+        assert_eq!(body, "Operation failed\n");
+    }
+
+    #[test]
+    fn connect_fails_when_off() {
+        let mut station = with_net(b"lerux", Security::Psk);
+        station.powered = false;
+        let (session, body, action) = run("station wlan0 connect lerux", &station);
+        assert_eq!(action, Action::None);
+        assert!(session.connect().is_none());
+        assert_eq!(body, "Operation failed\n");
     }
 
     #[test]

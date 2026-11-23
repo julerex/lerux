@@ -557,11 +557,6 @@ fn networks_table(station: &Station, out: &mut Out<'_>) {
     header(out, &net_cols());
     crate::fmt::rule(out);
     let n = usize::from(station.count).min(SCAN_MAX);
-    if n == 0 {
-        out.push(b"No networks available\n");
-        footer(out);
-        return;
-    }
     for net in &station.networks[..n] {
         network_row(out, station, net);
     }

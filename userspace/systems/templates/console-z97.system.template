@@ -2,8 +2,9 @@
 <!--
   Z97 desk shell. sddf-shell is the fetch client: console_driver is its byte
   output, fatfs is the RAM volume, and net_driver is the I217-V. There is no
-  setup-wifi channel. serial_driver keeps COM1. Its init does not signal a
-  client, so it has no shell channel. Microkit allows 0xcf8 in one protection
+  setup-wifi channel. serial_driver keeps COM1. The receive interrupt is
+  channel 0. That driver discards the bytes and does not notify a client.
+  Microkit allows 0xcf8 in one protection
   domain. console_driver holds it for the xHCI keyboard, the RTL8852BE header
   copy, and the I217 window. net_driver notifies console channel 3 after the
   MAC reset so that window is written again. console_driver is priority 5, so

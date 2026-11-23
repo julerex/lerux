@@ -447,6 +447,9 @@ mod tests {
         assert!(z97.contains("<end pd=\"shell\" id=\"4\" />"));
         assert!(!z97.contains("<end pd=\"shell\" id=\"1\""));
         assert!(!z97.contains("<end pd=\"shell\" id=\"5\""));
+        assert!(pd_body(&z97, "serial_driver").contains("serial-driver.elf"));
+        assert!(pd_body(&z97, "serial_driver").contains("<irq "));
+        assert!(!z97.contains("<end pd=\"serial_driver\""));
         assert!(z97.contains("<end pd=\"net_driver\" id=\"1\" />"));
         assert!(z97.contains("<end pd=\"net_driver\" id=\"2\" />"));
         assert!(z97.contains("<end pd=\"net_driver\" id=\"3\" />"));
@@ -467,6 +470,7 @@ mod tests {
         assert!(!qemu.contains("sddf-e1000e-driver.elf"));
         assert!(qemu.contains("console-driver.elf"));
         assert!(qemu.contains("serial-driver.elf"));
+        assert!(qemu.contains("<end pd=\"serial_driver\" id=\"1\" />"));
         assert!(qemu.contains("name=\"console_driver\" priority=\"2\""));
         let boards = load_boards(&root).unwrap();
         let desk = boards.get("pc_z97_d3h").unwrap();

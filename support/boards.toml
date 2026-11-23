@@ -515,15 +515,16 @@ template = "console-z97.system.template"
 pds = ["console-shell", "serial-driver", "console-driver", "rtl8852be-driver"]
 system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48 }
 
-# Z97 I217-V. Hardware only. Same roles as x86_64_generic_net_e1000e.
-# Register window 0xf7e00000. The RTL8852BE probe stays a configuration-space
-# read on its own board. This image does not format a disk.
+# Z97 I217-V shell. Hardware only. VGA text, the xHCI keyboard, and the
+# onboard Ethernet port. Register window 0xf7e00000. The RTL8852BE probe
+# stays a configuration-space read on its own board. This image does not
+# format a disk.
 [pc_z97_d3h_i217]
 arch = "x86_64"
 microkit_board = "x86_64_generic"
 target = "x86_64-sel4-microkit"
 template = "net-sddf.system.template"
-pds = ["sddf-e1000e-driver", "sddf-net-virt-tx", "sddf-net-virt-rx", "sddf-net-copy", "sddf-serial-driver", "sddf-serial-virt-tx", "sddf-serial-virt-rx", "sddf-net-client"]
+pds = ["sddf-e1000e-driver", "sddf-net-virt-tx", "sddf-net-virt-rx", "sddf-net-copy", "console-driver", "sddf-shell"]
 ci = false
 system_vars = {}
 

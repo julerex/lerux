@@ -39,6 +39,12 @@ const OFF_CMD: usize = 0x4000;
 const OFF_EP0: usize = 0x5000;
 const OFF_INTR: usize = 0x6000;
 const OFF_SCRATCH_PAGE: usize = 0x1_0000;
+/// Second device, clear of the 32 scratchpad pages that start at `0x1_0000`.
+const MOUSE_OUT: usize = 0x3_0000;
+const MOUSE_IN: usize = 0x3_1000;
+const MOUSE_EP0: usize = 0x3_2000;
+const MOUSE_INTR: usize = 0x3_3000;
+const MOUSE_REPORT: usize = 0x3_4000;
 const MAX_SCRATCH: u32 = 32;
 
 const RING_LAST: u8 = 31;
@@ -92,6 +98,36 @@ struct PciFn {
     vendor: u16,
 }
 
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+struct Mouse {
+    slot: u8,
+    dci: u8,
+    ep0_i: u8,
+    ep0_c: u8,
+    intr_i: u8,
+    intr_c: u8,
+    col: i32,
+    row: i32,
+    buttons: u8,
+}
+
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+impl Mouse {
+    const fn idle() -> Self {
+        Self {
+            slot: 0,
+            dci: 0,
+            ep0_i: 0,
+            ep0_c: 1,
+            intr_i: 0,
+            intr_c: 1,
+            col: 0,
+            row: 0,
+            buttons: 0,
+        }
+    }
+}
+
 /// Armed boot keyboard, or a cold controller when [`Self::ready`] is false.
 #[expect(
     clippy::struct_excessive_bools,
@@ -116,6 +152,10 @@ pub struct UsbKbd {
     hcs2: u32,
     slot: u8,
     dci: u8,
+    /// 1 while the second device's context and rings are selected.
+    focus: u8,
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    mouse: Mouse,
     keys: HidState,
     ready: bool,
     online: bool,
@@ -185,27 +225,62 @@ impl UsbKbd {
                 self.ack_port_event(ev);
                 continue;
             }
-            if kind != TRB_TRANSFER || endpoint_id(ev) != u32::from(self.dci) {
+            if kind != TRB_TRANSFER {
                 continue;
             }
-            let code = completion(ev);
-            if code == CC_SUCCESS || code == CC_SHORT {
-                let mut report = [0u8; 8];
-                self.read_dma(OFF_REPORT, &mut report);
-                let mut decoded = [0u8; 6];
-                let got = hid::decode(&mut self.keys, &report, &mut decoded);
-                for &byte in decoded.iter().take(got) {
-                    if n < out.len() {
-                        out[n] = byte;
-                        n += 1;
-                    }
-                }
-            } else {
-                self.recover_endpoint(Ring::Intr, self.dci);
+            #[cfg(feature = "board-pc_z97_d3h_i217")]
+            if self.take_mouse(ev) {
+                continue;
             }
+            if endpoint_id(ev) != u32::from(self.dci) {
+                continue;
+            }
+            n = self.take_key(ev, out, n);
             if self.broken {
                 break;
             }
+        }
+        n
+    }
+
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    fn take_mouse(&mut self, ev: [u32; 4]) -> bool {
+        if self.mouse.slot == 0
+            || slot_id(ev) != u32::from(self.mouse.slot)
+            || endpoint_id(ev) != u32::from(self.mouse.dci)
+        {
+            return false;
+        }
+        let code = completion(ev);
+        if code == CC_SUCCESS || code == CC_SHORT {
+            let mut report = [0u8; 8];
+            self.read_dma(MOUSE_REPORT, &mut report);
+            let (col, row, buttons) = usb::step_pointer(self.mouse.col, self.mouse.row, &report);
+            self.mouse.col = col;
+            self.mouse.row = row;
+            self.mouse.buttons = buttons;
+        }
+        self.requeue_mouse();
+        true
+    }
+
+    fn take_key(&mut self, ev: [u32; 4], out: &mut [u8], mut n: usize) -> usize {
+        let code = completion(ev);
+        if code == CC_SUCCESS || code == CC_SHORT {
+            let mut report = [0u8; 8];
+            self.read_dma(OFF_REPORT, &mut report);
+            let mut decoded = [0u8; 6];
+            let got = hid::decode(&mut self.keys, &report, &mut decoded);
+            for &byte in decoded.iter().take(got) {
+                if n < out.len() {
+                    out[n] = byte;
+                    n += 1;
+                }
+            }
+        } else {
+            self.recover_endpoint(Ring::Intr, self.dci);
+        }
+        if !self.broken {
             self.queue_intr();
         }
         n
@@ -247,6 +322,9 @@ impl UsbKbd {
             hcs2: 0,
             slot: 0,
             dci: 0,
+            focus: 0,
+            #[cfg(feature = "board-pc_z97_d3h_i217")]
+            mouse: Mouse::idle(),
             keys: HidState::default(),
             ready: false,
             online: false,
@@ -326,6 +404,8 @@ impl UsbKbd {
                 break;
             }
             if self.try_port(port) {
+                #[cfg(feature = "board-pc_z97_d3h_i217")]
+                self.bind_mouse_after(port);
                 return true;
             }
         }
@@ -348,6 +428,118 @@ impl UsbKbd {
             return false;
         }
         true
+    }
+
+    /// Cell the boot mouse currently marks, and the last button byte.
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    pub fn pointer(&self) -> Option<(i32, i32, u8)> {
+        if self.mouse.slot == 0 {
+            None
+        } else {
+            Some((self.mouse.col, self.mouse.row, self.mouse.buttons))
+        }
+    }
+
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    fn bind_mouse_after(&mut self, keyboard_port: u8) {
+        let kbd_slot = self.slot;
+        let kbd_dci = self.dci;
+        for port in keyboard_port.saturating_add(1)..=self.max_ports {
+            if self.broken {
+                break;
+            }
+            if self.try_mouse(port) {
+                self.mouse.slot = self.slot;
+                self.slot = kbd_slot;
+                self.dci = kbd_dci;
+                self.focus = 0;
+                return;
+            }
+        }
+        self.slot = kbd_slot;
+        self.dci = kbd_dci;
+        self.focus = 0;
+    }
+
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    fn try_mouse(&mut self, port: u8) -> bool {
+        let raw = self.read32(self.portsc(port));
+        if raw & 1 == 0 {
+            return false;
+        }
+        let Some(speed) = self.reset_port(port) else {
+            return false;
+        };
+        self.focus = 1;
+        self.mouse.ep0_i = 0;
+        self.mouse.ep0_c = 1;
+        self.mouse.intr_i = 0;
+        self.mouse.intr_c = 1;
+        if !self.enable_slot() {
+            self.focus = 0;
+            return false;
+        }
+        if !self.address(port, speed) || !self.bind_mouse_iface(speed) {
+            self.disable_slot();
+            self.focus = 0;
+            return false;
+        }
+        true
+    }
+
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    fn bind_mouse_iface(&mut self, speed: u8) -> bool {
+        let Some(desc) = self.device_descriptor() else {
+            return false;
+        };
+        let vid = u16::from(desc[8]) | (u16::from(desc[9]) << 8);
+        let pid = u16::from(desc[10]) | (u16::from(desc[11]) << 8);
+        let Some(mouse) = self.config_mouse() else {
+            return false;
+        };
+        if !self.set_boot_protocol(mouse) {
+            return false;
+        }
+        if !self.configure_interrupt(mouse, speed) {
+            return false;
+        }
+        self.mouse.dci = usb::endpoint_dci(mouse.ep_addr);
+        self.dci = self.mouse.dci;
+        self.queue_intr();
+        info!("console-driver: usb mouse {vid:04x}:{pid:04x}");
+        true
+    }
+
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    fn config_mouse(&mut self) -> Option<usb::BootKeyboard> {
+        let n = self.ctrl_in(0x0200, 9)?;
+        if n < 9 {
+            return None;
+        }
+        let mut hdr = [0u8; 9];
+        self.read_dma(OFF_DATA, &mut hdr);
+        let total = usize::from(u16::from(hdr[2]) | (u16::from(hdr[3]) << 8)).clamp(9, 512);
+        let n = self.ctrl_in(0x0200, u16::try_from(total).unwrap_or(9))?;
+        if n < 9 {
+            return None;
+        }
+        let mut cfg = [0u8; 512];
+        let take = n.min(cfg.len());
+        self.read_dma(OFF_DATA, &mut cfg[..take]);
+        usb::find_boot_mouse(&cfg[..take])
+    }
+
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    fn requeue_mouse(&mut self) {
+        let kbd_slot = self.slot;
+        let kbd_dci = self.dci;
+        self.slot = self.mouse.slot;
+        self.dci = self.mouse.dci;
+        self.focus = 1;
+        self.queue_intr();
+        self.focus = 0;
+        self.slot = kbd_slot;
+        self.dci = kbd_dci;
     }
 
     fn bind_keyboard(&mut self, speed: u8) -> bool {
@@ -433,21 +625,21 @@ impl UsbKbd {
         if dci == 0 || kbd.max_packet < 8 {
             return false;
         }
-        self.zero_range(OFF_IN, 33 * self.ctx_bytes);
+        self.zero_range(self.dev_in(), 33 * self.ctx_bytes);
         self.copy_dev_to_input(0, 1);
         let dw0 = self.read_ctx(true, 1, 0);
         let dw0 = (dw0 & !(0x1f << 27)) | (u32::from(dci) << 27);
         self.write_ctx(true, 1, 0, dw0);
-        self.intr_i = 0;
-        self.intr_c = 1;
-        self.zero_range(OFF_INTR, 32 * 16);
+        self.set_ring_index(Ring::Intr, 0);
+        self.set_ring_cycle(Ring::Intr, 1);
+        self.zero_range(self.intr_off(), 32 * 16);
         let interval = usb::xhci_interval(speed, kbd.interval);
         self.write_ep(
             usize::from(dci) + 1,
             7,
             kbd.max_packet,
             interval,
-            OFF_INTR,
+            self.intr_off(),
             8,
         );
         self.write_ctx(true, 0, 1, (1 << 0) | (1 << dci));
@@ -455,26 +647,26 @@ impl UsbKbd {
     }
 
     fn address(&mut self, port: u8, speed: u8) -> bool {
-        self.zero_range(OFF_OUT, 32 * self.ctx_bytes);
-        self.zero_range(OFF_IN, 33 * self.ctx_bytes);
-        self.zero_range(OFF_EP0, 32 * 16);
-        self.ep0_i = 0;
-        self.ep0_c = 1;
+        self.zero_range(self.dev_out(), 32 * self.ctx_bytes);
+        self.zero_range(self.dev_in(), 33 * self.ctx_bytes);
+        self.zero_range(self.ep0_off(), 32 * 16);
+        self.set_ring_index(Ring::Ep0, 0);
+        self.set_ring_cycle(Ring::Ep0, 1);
         self.write_dma_u64(
             OFF_DCBAA + usize::from(self.slot) * 8,
-            DMA_PHYS + OFF_OUT as u64,
+            DMA_PHYS + self.dev_out() as u64,
         );
         self.write_ctx(true, 0, 1, 0b11);
         let dw0 = (u32::from(speed) << 20) | (1 << 27);
         self.write_ctx(true, 1, 0, dw0);
         self.write_ctx(true, 1, 1, u32::from(port) << 16);
         let mps: u16 = if speed >= 3 { 64 } else { 8 };
-        self.write_ep(2, 4, mps, 0, OFF_EP0, 8);
+        self.write_ep(2, 4, mps, 0, self.ep0_off(), 8);
         self.command_ok(TRB_ADDRESS)
     }
 
     fn evaluate_mps(&mut self, mps: u16) -> bool {
-        self.zero_range(OFF_IN, 33 * self.ctx_bytes);
+        self.zero_range(self.dev_in(), 33 * self.ctx_bytes);
         self.copy_dev_to_input(1, 2);
         let dw1 = self.read_ctx(true, 2, 1);
         self.write_ctx(true, 2, 1, (dw1 & 0xffff) | (u32::from(mps) << 16));
@@ -503,7 +695,7 @@ impl UsbKbd {
     }
 
     fn command_ok(&mut self, kind: u32) -> bool {
-        let ptr = DMA_PHYS + OFF_IN as u64;
+        let ptr = DMA_PHYS + self.dev_in() as u64;
         let d3 = trb_type(kind) | (u32::from(self.slot) << 24);
         let Some(ev) = self.submit_cmd(low_u32(ptr), (ptr >> 32) as u32, 0, d3) else {
             return false;
@@ -621,7 +813,7 @@ impl UsbKbd {
         }
         let index = self.ring_index(ring);
         let cycle = u32::from(self.ring_cycle(ring));
-        let ptr = Self::ring_phys(ring) + u64::from(index) * 16;
+        let ptr = self.ring_phys(ring) + u64::from(index) * 16;
         let d0 = (low_u32(ptr) & !0xf) | cycle;
         let d3 = trb_type(TRB_SET_DEQ) | ep | slot;
         let _ = self.submit_cmd(d0, (ptr >> 32) as u32, 0, d3);
@@ -629,8 +821,8 @@ impl UsbKbd {
 
     fn queue_intr(&mut self) {
         self.ensure_room(Ring::Intr, 1);
-        self.zero_range(OFF_REPORT, 8);
-        let buf = DMA_PHYS + OFF_REPORT as u64;
+        self.zero_range(self.report_off(), 8);
+        let buf = DMA_PHYS + self.report_off() as u64;
         let d3 = ISP | IOC | trb_type(TRB_NORMAL);
         self.push_trb(Ring::Intr, low_u32(buf), (buf >> 32) as u32, 8, d3);
         self.doorbell(self.slot, self.dci);
@@ -1017,8 +1209,81 @@ impl UsbKbd {
     }
 
     fn ctx_off(&self, input: bool, index: usize) -> usize {
-        let base = if input { OFF_IN } else { OFF_OUT };
+        let base = if input { self.dev_in() } else { self.dev_out() };
         base + index * self.ctx_bytes
+    }
+
+    fn dev_out(&self) -> usize {
+        if self.mouse_focused() {
+            self.mouse_out()
+        } else {
+            OFF_OUT
+        }
+    }
+
+    fn dev_in(&self) -> usize {
+        if self.mouse_focused() {
+            self.mouse_in()
+        } else {
+            OFF_IN
+        }
+    }
+
+    fn ep0_off(&self) -> usize {
+        if self.mouse_focused() {
+            self.mouse_ep0()
+        } else {
+            OFF_EP0
+        }
+    }
+
+    fn intr_off(&self) -> usize {
+        if self.mouse_focused() {
+            self.mouse_intr()
+        } else {
+            OFF_INTR
+        }
+    }
+
+    fn report_off(&self) -> usize {
+        if self.mouse_focused() {
+            self.mouse_report()
+        } else {
+            OFF_REPORT
+        }
+    }
+
+    fn mouse_focused(&self) -> bool {
+        self.focus == 1
+    }
+
+    fn mouse_out(&self) -> usize {
+        self.mouse_place(MOUSE_OUT, OFF_OUT)
+    }
+
+    fn mouse_in(&self) -> usize {
+        self.mouse_place(MOUSE_IN, OFF_IN)
+    }
+
+    fn mouse_ep0(&self) -> usize {
+        self.mouse_place(MOUSE_EP0, OFF_EP0)
+    }
+
+    fn mouse_intr(&self) -> usize {
+        self.mouse_place(MOUSE_INTR, OFF_INTR)
+    }
+
+    fn mouse_report(&self) -> usize {
+        self.mouse_place(MOUSE_REPORT, OFF_REPORT)
+    }
+
+    fn mouse_place(&self, i217: usize, fallback: usize) -> usize {
+        let _ = self.focus;
+        if cfg!(feature = "board-pc_z97_d3h_i217") {
+            i217
+        } else {
+            fallback
+        }
     }
 
     fn ensure_room(&mut self, ring: Ring, count: u8) {
@@ -1034,7 +1299,7 @@ impl UsbKbd {
         }
         let index = self.ring_index(ring);
         let cycle = u32::from(self.ring_cycle(ring));
-        let phys = Self::ring_phys(ring) + u64::from(index) * 16;
+        let phys = self.ring_phys(ring) + u64::from(index) * 16;
         write_trb(self.trb_ptr(ring, index), d0, d1, d2, d3 | cycle);
         self.set_ring_index(ring, index + 1);
         phys
@@ -1043,7 +1308,7 @@ impl UsbKbd {
     fn write_link(&mut self, ring: Ring) {
         let index = self.ring_index(ring);
         let cycle = u32::from(self.ring_cycle(ring));
-        let base = Self::ring_phys(ring);
+        let base = self.ring_phys(ring);
         let d3 = cycle | TC | trb_type(TRB_LINK);
         write_trb(
             self.trb_ptr(ring, index),
@@ -1078,50 +1343,118 @@ impl UsbKbd {
     fn ring_index(&self, ring: Ring) -> u8 {
         match ring {
             Ring::Cmd => self.cmd_i,
-            Ring::Ep0 => self.ep0_i,
-            Ring::Intr => self.intr_i,
+            Ring::Ep0 => self.ep0_index(),
+            Ring::Intr => self.intr_index(),
         }
+    }
+
+    fn ep0_index(&self) -> u8 {
+        #[cfg(feature = "board-pc_z97_d3h_i217")]
+        if self.focus == 1 {
+            return self.mouse.ep0_i;
+        }
+        self.ep0_i
+    }
+
+    fn intr_index(&self) -> u8 {
+        #[cfg(feature = "board-pc_z97_d3h_i217")]
+        if self.focus == 1 {
+            return self.mouse.intr_i;
+        }
+        self.intr_i
     }
 
     fn set_ring_index(&mut self, ring: Ring, index: u8) {
         match ring {
             Ring::Cmd => self.cmd_i = index,
-            Ring::Ep0 => self.ep0_i = index,
-            Ring::Intr => self.intr_i = index,
+            Ring::Ep0 => self.set_ep0_index(index),
+            Ring::Intr => self.set_intr_index(index),
         }
+    }
+
+    fn set_ep0_index(&mut self, index: u8) {
+        #[cfg(feature = "board-pc_z97_d3h_i217")]
+        if self.focus == 1 {
+            self.mouse.ep0_i = index;
+            return;
+        }
+        self.ep0_i = index;
+    }
+
+    fn set_intr_index(&mut self, index: u8) {
+        #[cfg(feature = "board-pc_z97_d3h_i217")]
+        if self.focus == 1 {
+            self.mouse.intr_i = index;
+            return;
+        }
+        self.intr_i = index;
     }
 
     fn ring_cycle(&self, ring: Ring) -> u8 {
         match ring {
             Ring::Cmd => self.cmd_c,
-            Ring::Ep0 => self.ep0_c,
-            Ring::Intr => self.intr_c,
+            Ring::Ep0 => self.ep0_cycle(),
+            Ring::Intr => self.intr_cycle(),
         }
+    }
+
+    fn ep0_cycle(&self) -> u8 {
+        #[cfg(feature = "board-pc_z97_d3h_i217")]
+        if self.focus == 1 {
+            return self.mouse.ep0_c;
+        }
+        self.ep0_c
+    }
+
+    fn intr_cycle(&self) -> u8 {
+        #[cfg(feature = "board-pc_z97_d3h_i217")]
+        if self.focus == 1 {
+            return self.mouse.intr_c;
+        }
+        self.intr_c
     }
 
     fn set_ring_cycle(&mut self, ring: Ring, cycle: u8) {
         match ring {
             Ring::Cmd => self.cmd_c = cycle,
-            Ring::Ep0 => self.ep0_c = cycle,
-            Ring::Intr => self.intr_c = cycle,
+            Ring::Ep0 => self.set_ep0_cycle(cycle),
+            Ring::Intr => self.set_intr_cycle(cycle),
         }
     }
 
-    fn ring_phys(ring: Ring) -> u64 {
-        DMA_PHYS + Self::ring_off(ring) as u64
+    fn set_ep0_cycle(&mut self, cycle: u8) {
+        #[cfg(feature = "board-pc_z97_d3h_i217")]
+        if self.focus == 1 {
+            self.mouse.ep0_c = cycle;
+            return;
+        }
+        self.ep0_c = cycle;
     }
 
-    fn ring_off(ring: Ring) -> usize {
+    fn set_intr_cycle(&mut self, cycle: u8) {
+        #[cfg(feature = "board-pc_z97_d3h_i217")]
+        if self.focus == 1 {
+            self.mouse.intr_c = cycle;
+            return;
+        }
+        self.intr_c = cycle;
+    }
+
+    fn ring_phys(&self, ring: Ring) -> u64 {
+        DMA_PHYS + self.ring_off(ring) as u64
+    }
+
+    fn ring_off(&self, ring: Ring) -> usize {
         match ring {
             Ring::Cmd => OFF_CMD,
-            Ring::Ep0 => OFF_EP0,
-            Ring::Intr => OFF_INTR,
+            Ring::Ep0 => self.ep0_off(),
+            Ring::Intr => self.intr_off(),
         }
     }
 
     fn trb_ptr(&self, ring: Ring, index: u8) -> *mut u8 {
         self.dma
-            .wrapping_add(Self::ring_off(ring) + usize::from(index) * 16)
+            .wrapping_add(self.ring_off(ring) + usize::from(index) * 16)
     }
 
     fn doorbell(&self, slot: u8, target: u8) {
@@ -1247,6 +1580,11 @@ fn completion(ev: [u32; 4]) -> u32 {
 
 fn endpoint_id(ev: [u32; 4]) -> u32 {
     (ev[3] >> 16) & 0x1f
+}
+
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+fn slot_id(ev: [u32; 4]) -> u32 {
+    ev[3] >> 24
 }
 
 fn event_ptr(ev: [u32; 4]) -> u64 {

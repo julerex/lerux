@@ -493,8 +493,10 @@ template = "serial-hello.system.template"
 pds = ["hello", "serial-driver"]
 system_vars = { serial_mmio_phys_addr = "0xfe201000", serial_irq = 121 }
 
-# Acer Swift X SFX14-41G. Hardware only. The 2026-10-29 GOP line was
+# One x86 ISO. Hardware only. The Swift panel is the 2026-10-29 GOP line
 # `fb 0x000000fc90000000 pitch 7680 1920x1080 r16 g8 b0` (0x7e9000 bytes).
+# Any other framebuffer, including none, uses the VGA text page.
+# ci stays false. A QEMU serial line does not prove the panel.
 [swift_sfx14_41g]
 arch = "x86_64"
 microkit_board = "x86_64_generic"

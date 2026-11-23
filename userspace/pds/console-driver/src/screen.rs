@@ -41,8 +41,14 @@ pub enum Damage {
 }
 
 /// Cursor plus the visible cells. The shell writes bytes; this applies them.
+///
+/// `cols` and `rows` are the page the machine is showing. The Swift panel is
+/// [`COLS`] by [`ROWS`]. A VGA text page is 80 by 25. The cell buffer is the
+/// larger of those, and [`Self::page`] is the visible prefix.
 pub struct Screen {
     cells: [u16; CELLS],
+    cols: usize,
+    rows: usize,
     row: usize,
     col: usize,
     ansi: Ansi,
@@ -55,9 +61,27 @@ pub struct Screen {
 
 impl Screen {
     /// Blank gray-on-black page, cursor at the origin.
+    ///
+    /// On the Swift build this is the panel band. [`Self::vga`] is the 80×25
+    /// text page used when the probe does not see that panel.
     pub fn blank() -> Self {
+        Self::with_geometry(COLS, ROWS)
+    }
+
+    /// VGA text page. The Swift image uses this when the firmware buffer is
+    /// not the panel above 4 GiB.
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    pub fn vga() -> Self {
+        Self::with_geometry(80, 25)
+    }
+
+    pub(crate) fn with_geometry(cols: usize, rows: usize) -> Self {
+        let used = cols.checked_mul(rows).expect("geometry fits");
+        assert!(used <= CELLS, "geometry fits the cell buffer");
         Self {
             cells: blank_cells(),
+            cols,
+            rows,
             row: 0,
             col: 0,
             ansi: Ansi::Ground,
@@ -69,8 +93,19 @@ impl Screen {
         }
     }
 
+    /// Visible cells. The stride is the page width.
+    pub fn used(&self) -> usize {
+        self.cols * self.rows
+    }
+
+    #[cfg(test)]
     pub fn cells(&self) -> &[u16; CELLS] {
         &self.cells
+    }
+
+    /// The visible page. The stride is the page width.
+    pub fn page(&self) -> &[u16] {
+        &self.cells[..self.used()]
     }
 
     #[cfg(test)]
@@ -78,9 +113,9 @@ impl Screen {
         (self.row, self.col)
     }
 
-    /// Hardware cursor index, clamped to the last cell.
+    /// Hardware cursor index, clamped to the last visible cell.
     pub fn cursor_index(&self) -> usize {
-        (self.row * COLS + self.col).min(CELLS - 1)
+        (self.row * self.cols + self.col).min(self.used() - 1)
     }
 
     pub fn apply_byte(&mut self, byte: u8) -> Damage {
@@ -184,12 +219,12 @@ impl Screen {
     }
 
     fn put(&mut self, byte: u8) -> Damage {
-        let scrolled = if self.col >= COLS {
+        let scrolled = if self.col >= self.cols {
             self.newline()
         } else {
             false
         };
-        let index = self.row * COLS + self.col;
+        let index = self.row * self.cols + self.col;
         self.cells[index] = cell(self.attr, byte);
         self.col += 1;
         if scrolled {
@@ -205,7 +240,7 @@ impl Screen {
     /// Advance a line. Returns whether the page scrolled.
     fn newline(&mut self) -> bool {
         self.col = 0;
-        if self.row + 1 >= ROWS {
+        if self.row + 1 >= self.rows {
             self.scroll();
             true
         } else {
@@ -215,12 +250,14 @@ impl Screen {
     }
 
     fn scroll(&mut self) {
-        self.cells.copy_within(COLS.., 0);
+        let cols = self.cols;
+        let used = self.used();
+        self.cells.copy_within(cols..used, 0);
         let fill = cell(self.attr, b' ');
-        for slot in &mut self.cells[CELLS - COLS..] {
+        for slot in &mut self.cells[used - cols..used] {
             *slot = fill;
         }
-        self.row = ROWS - 1;
+        self.row = self.rows - 1;
         self.col = 0;
     }
 
@@ -318,6 +355,18 @@ mod tests {
         }
         assert_eq!(screen.cells()[0] >> 8, 0x05);
         assert_eq!(screen.cells()[1] >> 8, 0x47);
+    }
+
+    #[test]
+    fn vga_width_wraps_at_eighty() {
+        let mut screen = Screen::with_geometry(80, 25);
+        for _ in 0..80 {
+            screen.apply_byte(b'a');
+        }
+        screen.apply_byte(b'b');
+        assert_eq!(screen.cursor(), (1, 1));
+        assert_eq!(screen.page()[80] & 0xff, u16::from(b'b'));
+        assert_eq!(screen.used(), 80 * 25);
     }
 
     #[test]

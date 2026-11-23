@@ -65,11 +65,15 @@ fn init() -> handler::HandlerImpl {
     #[cfg(feature = "board-pc_z97_d3h")]
     boot_line::install();
     debug::init().expect("debug log");
+    let device = device::Device::from_system();
     #[cfg(not(feature = "board-swift_sfx14_41g"))]
     log::info!("console-driver: vga text");
     #[cfg(feature = "board-swift_sfx14_41g")]
-    log::info!("console-driver: panel");
-    let device = device::Device::from_system();
+    if device.uses_panel() {
+        log::info!("console-driver: panel");
+    } else {
+        log::info!("console-driver: vga text");
+    }
     if device.init_keyboard() {
         log::info!("console-driver: i8042 ready");
     } else {
@@ -87,7 +91,14 @@ fn init() -> handler::HandlerImpl {
     #[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-inspiron_n5010"))]
     let usb = usb_off::UsbKbd::off();
     device.enable_cursor();
+    #[cfg(not(feature = "board-swift_sfx14_41g"))]
     let screen = Screen::blank();
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    let screen = if device.uses_panel() {
+        Screen::blank()
+    } else {
+        Screen::vga()
+    };
     device.present_all(&screen);
     device.sync_cursor(&screen);
     // The blank page replaces the log lines. Hold it before the shell prints the sign-on.

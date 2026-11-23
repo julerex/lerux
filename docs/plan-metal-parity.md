@@ -16,8 +16,8 @@ That is the bar. A QEMU line does not close a metal milestone. A panel photo or 
 
 ### The three boards
 
-- **Acer Swift X** (`swift_sfx14_41g`) is the main target. The image is `just make-lerux-iso`. There is no QEMU model and no COM port. The console is the firmware GOP panel. The keyboard is the built-in i8042.
-- **Gigabyte Z97-D3H** (`pc_z97_d3h`) is the desk. The image is `just make-lerux-iso pc_z97_d3h`. QEMU covers the VGA menu (`just test-x86-console`). The onboard Ethernet port is the I217-V. The desk ISO maps the RTL8852BE BAR 2 and stops the PCI HCI. `pc_z97_d3h_rtl8852be` stays a configuration-space probe.
+- **Acer Swift X** (`swift_sfx14_41g`) is the main target. `just make-lerux-iso` packs one image. The stub selects the firmware GOP panel when that buffer is `0xfc90000000`, and the VGA text page on any other x86 PC. There is no QEMU model of the panel and no COM port on the Swift. The keyboard is the built-in i8042. The image does not map the Inspiron AHCI disk and does not touch the Swift NVMe unless the probe selected the panel.
+- **Gigabyte Z97-D3H** (`pc_z97_d3h`) is the desk. `just make-lerux-iso pc_z97_d3h` still packs that board's own image. The one ISO also boots this machine on the VGA text page. QEMU covers the VGA menu (`just test-x86-console`). The onboard Ethernet port is the I217-V. The desk ISO maps the RTL8852BE BAR 2 and stops the PCI HCI. `pc_z97_d3h_rtl8852be` stays a configuration-space probe.
 - **Raspberry Pi 4** (`rpi4b_4gb`, workstation profile `rpi4b_4gb_workstation`) is secondary. It stays behind the two x86 boards. No second single-board computer is added until this one is signed off.
 
 ### Status words
@@ -343,7 +343,7 @@ Do not add a postcard message. New queue code uses `lerux-sddf`. Do not invent a
 
 **Steps.**
 
-- One ISO: `just make-lerux-iso`. The panel still shows the mode line’s geometry (1920 by 1080, pitch 7680, framebuffer `0xfc90000000`). The template is `sddf-shell.elf` and the command is `setup-wifi`.
+- One ISO: `just make-lerux-iso`. On the Swift the panel still shows the mode line’s geometry (1920 by 1080, pitch 7680, framebuffer `0xfc90000000`). On any other x86 PC the same file uses the VGA text page. The template is `sddf-shell.elf` and the command is `setup-wifi`.
 - LionsOS milestone 25 recorded an earlier menu (`1 browser`, `2 maths`) without `maths 3`.
 - `setup-wifi` is Milestone 8. After `ping ok`, `ip` in the shell prints the same address.
 - The read-only disk is Milestone 9. `ls` and `cat` work. Writes print `err`.

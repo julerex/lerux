@@ -223,6 +223,20 @@ compile_error!(
     "the Swift console image does not share a build with the fetch, web, browser, or filesystem image"
 );
 
+#[cfg(all(
+    feature = "board-pc_z97_d3h",
+    any(
+        feature = "board-swift_sfx14_41g",
+        feature = "board-qemu_virt_aarch64_fetch_sddf",
+        feature = "board-qemu_virt_aarch64_web_sddf",
+        feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-qemu_virt_aarch64_fs_sddf",
+    )
+))]
+compile_error!(
+    "the Z97 console image does not share a build with the Swift image or the aarch64 fetch, web, browser, or filesystem image"
+);
+
 #[cfg(not(any(
     feature = "board-qemu_virt_aarch64_browser_sddf",
     feature = "board-qemu_virt_riscv64_browser_sddf"

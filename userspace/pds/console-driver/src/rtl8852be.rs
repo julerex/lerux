@@ -1,6 +1,6 @@
 //! Copy the RTL8852BE headers and enable memory space on the endpoint.
 //!
-//! `0xcf8` stays on this domain. The radio reads the copied headers and does
+//! `console_driver` holds `0xcf8`. The radio reads the copied headers and does
 //! not get a port.
 
 use sel4::with_ipc_buffer_mut;
@@ -64,12 +64,12 @@ fn read_config(cap: u64, addr: u16, bus: u8, dev: u8, func: u8) -> [u8; 64] {
     header
 }
 
-fn read_dword(cap: u64, addr: u16, bus: u8, dev: u8, func: u8, reg: u8) -> u32 {
+pub(crate) fn read_dword(cap: u64, addr: u16, bus: u8, dev: u8, func: u8, reg: u8) -> u32 {
     out32(cap, addr, config_address(bus, dev, func, reg));
     in32(cap, addr + 4)
 }
 
-fn write_config(cap: u64, addr: u16, bus: u8, dev: u8, func: u8, reg: u8, value: u32) {
+pub(crate) fn write_config(cap: u64, addr: u16, bus: u8, dev: u8, func: u8, reg: u8, value: u32) {
     out32(cap, addr, config_address(bus, dev, func, reg));
     out32(cap, addr + 4, value);
 }

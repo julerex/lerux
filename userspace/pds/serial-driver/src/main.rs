@@ -1,16 +1,19 @@
 #![no_std]
 #![no_main]
 
-#[cfg(not(feature = "device-only"))]
+#[cfg(all(not(feature = "device-only"), not(feature = "board-pc_z97_d3h")))]
 mod handler;
 
 #[cfg(feature = "device-only")]
 mod device;
 
-#[cfg(not(feature = "device-only"))]
+#[cfg(all(feature = "board-pc_z97_d3h", not(feature = "device-only")))]
+mod discard;
+
+#[cfg(all(not(feature = "device-only"), not(feature = "board-pc_z97_d3h")))]
 use handler::HandlerImpl;
 use lerux_logging::{debug, log};
-#[cfg(not(feature = "device-only"))]
+#[cfg(all(not(feature = "device-only"), not(feature = "board-pc_z97_d3h")))]
 use sel4_microkit::Channel;
 use sel4_microkit::{protection_domain, Handler};
 
@@ -30,33 +33,51 @@ mod ns16550_mmio;
 use ns16550_mmio::Driver as Ns16550MmioDriver;
 
 // Channel 0: IRQ notification (<irq id="0">).
-#[cfg(not(feature = "device-only"))]
+#[cfg(all(not(feature = "device-only"), not(feature = "board-pc_z97_d3h")))]
 const DEVICE: Channel = Channel::new(0);
 
 #[cfg(not(any(
     feature = "multi-client-2",
     feature = "multi-client-3",
-    feature = "device-only"
+    feature = "device-only",
+    feature = "board-pc_z97_d3h"
 )))]
 const CLIENTS: [Channel; 1] = [Channel::new(1)];
 
-#[cfg(all(feature = "multi-client-2", not(feature = "device-only")))]
+#[cfg(all(
+    feature = "multi-client-2",
+    not(feature = "device-only"),
+    not(feature = "board-pc_z97_d3h")
+))]
 const CLIENTS: [Channel; 2] = [Channel::new(1), Channel::new(2)];
 
-#[cfg(all(feature = "multi-client-3", not(feature = "device-only")))]
+#[cfg(all(
+    feature = "multi-client-3",
+    not(feature = "device-only"),
+    not(feature = "board-pc_z97_d3h")
+))]
 const CLIENTS: [Channel; 3] = [Channel::new(1), Channel::new(2), Channel::new(3)];
 
 #[cfg(not(any(
     feature = "multi-client-2",
     feature = "multi-client-3",
-    feature = "device-only"
+    feature = "device-only",
+    feature = "board-pc_z97_d3h"
 )))]
 type SerialHandler<D> = HandlerImpl<D, 1>;
 
-#[cfg(all(feature = "multi-client-2", not(feature = "device-only")))]
+#[cfg(all(
+    feature = "multi-client-2",
+    not(feature = "device-only"),
+    not(feature = "board-pc_z97_d3h")
+))]
 type SerialHandler<D> = HandlerImpl<D, 2>;
 
-#[cfg(all(feature = "multi-client-3", not(feature = "device-only")))]
+#[cfg(all(
+    feature = "multi-client-3",
+    not(feature = "device-only"),
+    not(feature = "board-pc_z97_d3h")
+))]
 type SerialHandler<D> = HandlerImpl<D, 3>;
 
 #[cfg(all(feature = "board-qemu_virt_aarch64", not(feature = "device-only")))]
@@ -79,13 +100,26 @@ fn init() -> impl Handler {
     device::DeviceHandler::new(driver)
 }
 
-#[cfg(all(feature = "board-x86_64_generic", not(feature = "device-only")))]
+#[cfg(all(
+    feature = "board-x86_64_generic",
+    not(feature = "device-only"),
+    not(feature = "board-pc_z97_d3h")
+))]
 #[protection_domain]
 fn init() -> impl Handler {
     debug::init().unwrap();
     log::info!("serial driver: NS16550 COM1 (IRQ RX)");
     let driver = Ns16550Driver::from_system_vars();
     SerialHandler::new(driver, DEVICE, CLIENTS)
+}
+
+#[cfg(all(feature = "board-pc_z97_d3h", not(feature = "device-only")))]
+#[protection_domain]
+fn init() -> impl Handler {
+    debug::init().unwrap();
+    log::info!("serial driver: NS16550 COM1 (IRQ RX)");
+    let driver = Ns16550Driver::from_system_vars();
+    discard::DiscardHandler::new(driver)
 }
 
 #[cfg(all(feature = "board-x86_64_generic", feature = "device-only"))]

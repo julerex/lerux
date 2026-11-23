@@ -8,13 +8,14 @@ use core::{
     sync::atomic::{compiler_fence, Ordering},
 };
 
-use lerux_machine::{
-    e1000e::{
-        e1000e_map, i217_map, ClaimedNic, E1000eMap, UnclaimedNic, REGISTER_BAR, REGISTER_BAR_SIZE,
-    },
-    PciAddress,
-};
+use lerux_machine::e1000e::{e1000e_map, i217_map, E1000eMap};
+#[cfg(not(feature = "board-pc_z97_d3h"))]
+use lerux_machine::e1000e::{ClaimedNic, UnclaimedNic, REGISTER_BAR, REGISTER_BAR_SIZE};
+#[cfg(not(feature = "board-pc_z97_d3h"))]
+use lerux_machine::PciAddress;
+#[cfg(not(feature = "board-pc_z97_d3h"))]
 use sel4::with_ipc_buffer_mut;
+#[cfg(not(feature = "board-pc_z97_d3h"))]
 use sel4_microkit::var;
 
 pub(crate) const BUF_SIZE: usize = 2048;
@@ -86,23 +87,41 @@ const RX_EOP: u8 = 0x02;
 const MTA_DWORDS: u32 = 128;
 const DEVICE_SPIN: usize = 10_000_000;
 
+/// `console_driver` channel that rewrites the I217 window. Matches
+/// `console-z97.system.template`.
+#[cfg(feature = "board-pc_z97_d3h")]
+const CONSOLE_WINDOW: usize = 3;
+
+#[cfg(not(feature = "board-pc_z97_d3h"))]
 const PCI_VENDOR: u8 = 0x00;
-#[cfg(feature = "board-pc_z97_d3h_i217")]
+#[cfg(all(feature = "board-pc_z97_d3h_i217", not(feature = "board-pc_z97_d3h")))]
 const PCI_REVISION: u8 = 0x08;
-#[cfg(feature = "board-pc_z97_d3h_i217")]
+#[cfg(all(feature = "board-pc_z97_d3h_i217", not(feature = "board-pc_z97_d3h")))]
 const PCI_SUBSYSTEM: u8 = 0x2c;
+#[cfg(not(feature = "board-pc_z97_d3h"))]
 const PCI_COMMAND: u8 = 0x04;
+#[cfg(not(feature = "board-pc_z97_d3h"))]
 const PCI_CAP_PTR: u8 = 0x34;
+#[cfg(not(feature = "board-pc_z97_d3h"))]
 const CMD_MEMORY: u32 = 1 << 1;
+#[cfg(not(feature = "board-pc_z97_d3h"))]
 const CMD_BUS_MASTER: u32 = 1 << 2;
+#[cfg(not(feature = "board-pc_z97_d3h"))]
 const CMD_INTX_DISABLE: u32 = 1 << 10;
+#[cfg(not(feature = "board-pc_z97_d3h"))]
 const CAP_MSI: u8 = 0x05;
+#[cfg(not(feature = "board-pc_z97_d3h"))]
 const CAP_MSIX: u8 = 0x11;
+#[cfg(not(feature = "board-pc_z97_d3h"))]
 const MSI_ENABLE: u32 = 1 << 16;
+#[cfg(not(feature = "board-pc_z97_d3h"))]
 const MSIX_ENABLE: u32 = 1 << 31;
 
+#[cfg(not(feature = "board-pc_z97_d3h"))]
 const BASE_IOPORT_CAP: u64 = 394;
+#[cfg(not(feature = "board-pc_z97_d3h"))]
 const PCI_CONFIG_ADDR_OFFSET: u16 = 0;
+#[cfg(not(feature = "board-pc_z97_d3h"))]
 const PCI_CONFIG_DATA_OFFSET: u16 = 4;
 
 /// Owns the 82574. The handler cannot name a descriptor slot.
@@ -173,21 +192,36 @@ impl Engine {
     /// Claim the NIC for this image, program BAR0, reset, bring the link up,
     /// install `mac` into the receive address, and publish both rings.
     ///
-    /// The QEMU image claims `8086:10d3` at `00:04.0`. The desk image claims
-    /// `8086:153b` at `00:19.0` with revision 0 and subsystem `1458:e000`.
-    /// Both images program the same rings.
+    /// The QEMU image claims `8086:10d3` at `00:04.0`. The standalone desk image
+    /// claims `8086:153b` at `00:19.0` with revision 0 and subsystem `1458:e000`.
+    /// The composed desk image leaves `0xcf8` on `console_driver`. That domain
+    /// programs the window before this init, and channel 3 asks it to write the
+    /// window again after reset. `CTRL.RST` reloads the command word and can
+    /// enable MSI, which masks the pin.
     ///
     /// Call once. A second call would reset the NIC under live rings.
     pub fn open(map: E1000eMap, mac: [u8; 6]) -> Result<Self, OpenError> {
-        let pci = Pci::new();
-        let claimed = claim_device(&pci)?;
-        pci.program(claimed, &map)?;
+        #[cfg(not(feature = "board-pc_z97_d3h"))]
+        let pci = {
+            let pci = Pci::new();
+            let claimed = claim_device(&pci)?;
+            pci.program(claimed, &map)?;
+            pci
+        };
         let regs = usize::try_from(map.regs_vaddr).expect("regs vaddr");
         reset_mac(regs)?;
-        // CTRL.RST reloads the EEPROM image into BAR0 and the command word,
-        // and it can set the MSI and MSI-X enables. Either enable masks the pin.
-        pci.write_window(&map)?;
-        pci.force_pin()?;
+        #[cfg(not(feature = "board-pc_z97_d3h"))]
+        {
+            // CTRL.RST reloads the EEPROM image into BAR0 and the command word,
+            // and it can set the MSI and MSI-X enables. Either enable masks the pin.
+            pci.write_window(&map)?;
+            pci.force_pin()?;
+        }
+        #[cfg(feature = "board-pc_z97_d3h")]
+        {
+            // Priority 5 runs the console rewrite before this notify returns.
+            sel4_microkit::Channel::new(CONSOLE_WINDOW).notify();
+        }
         write_u32(regs, IMC, 0xffff_ffff);
         bring_link(regs)?;
         install_mac(regs, mac)?;
@@ -504,6 +538,7 @@ fn write_u32(regs: usize, off: u32, value: u32) {
     unsafe { ptr::write_volatile((regs + off as usize) as *mut u32, value) }
 }
 
+#[cfg(not(feature = "board-pc_z97_d3h"))]
 struct Pci {
     cap: u64,
     base: u16,
@@ -512,6 +547,7 @@ struct Pci {
     func: u8,
 }
 
+#[cfg(not(feature = "board-pc_z97_d3h"))]
 impl Pci {
     fn new() -> Self {
         let ioport_id =
@@ -609,16 +645,17 @@ impl Pci {
     }
 }
 
-#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
+#[cfg(not(any(feature = "board-pc_z97_d3h_i217", feature = "board-pc_z97_d3h")))]
 fn probe_address() -> PciAddress {
     UnclaimedNic::compiled().address()
 }
 
-#[cfg(feature = "board-pc_z97_d3h_i217")]
+#[cfg(all(feature = "board-pc_z97_d3h_i217", not(feature = "board-pc_z97_d3h")))]
 fn probe_address() -> PciAddress {
     UnclaimedNic::i217().address()
 }
 
+#[cfg(not(feature = "board-pc_z97_d3h"))]
 fn claim_device(pci: &Pci) -> Result<ClaimedNic, OpenError> {
     #[cfg(not(feature = "board-pc_z97_d3h_i217"))]
     {
@@ -630,7 +667,7 @@ fn claim_device(pci: &Pci) -> Result<ClaimedNic, OpenError> {
     }
 }
 
-#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
+#[cfg(not(any(feature = "board-pc_z97_d3h_i217", feature = "board-pc_z97_d3h")))]
 fn claim_82574(pci: &Pci) -> Result<ClaimedNic, OpenError> {
     let id = pci.read_config(PCI_VENDOR);
     let vendor = (id & 0xffff) as u16;
@@ -640,7 +677,7 @@ fn claim_82574(pci: &Pci) -> Result<ClaimedNic, OpenError> {
         .map_err(|_| OpenError)
 }
 
-#[cfg(feature = "board-pc_z97_d3h_i217")]
+#[cfg(all(feature = "board-pc_z97_d3h_i217", not(feature = "board-pc_z97_d3h")))]
 fn claim_i217(pci: &Pci) -> Result<ClaimedNic, OpenError> {
     let id = pci.read_config(PCI_VENDOR);
     let revision = pci.read_config(PCI_REVISION);

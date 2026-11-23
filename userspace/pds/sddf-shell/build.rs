@@ -2,6 +2,7 @@ fn main() {
     emit_describe();
     reject_mixed_filesystem_boards();
     reject_swift_sharing_a_build();
+    reject_z97_sharing_a_build();
     reject_fetch_sharing_a_build();
     reject_web_against_filesystem();
     reject_web_against_fetch();
@@ -49,6 +50,22 @@ fn reject_swift_sharing_a_build() {
     ))]
     compile_error!(
         "the Swift console image does not share a build with the fetch, web, browser, or filesystem image"
+    );
+}
+
+fn reject_z97_sharing_a_build() {
+    #[cfg(all(
+        feature = "board-pc_z97_d3h",
+        any(
+            feature = "board-swift_sfx14_41g",
+            feature = "board-qemu_virt_aarch64_fetch_sddf",
+            feature = "board-qemu_virt_aarch64_web_sddf",
+            feature = "board-qemu_virt_aarch64_browser_sddf",
+            feature = "board-qemu_virt_aarch64_fs_sddf",
+        )
+    ))]
+    compile_error!(
+        "the Z97 console image does not share a build with the Swift image or the aarch64 fetch, web, browser, or filesystem image"
     );
 }
 

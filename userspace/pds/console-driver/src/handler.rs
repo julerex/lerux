@@ -22,6 +22,9 @@ use crate::{
     screen::{Damage, Screen},
 };
 
+#[cfg(feature = "board-pc_z97_d3h")]
+const NIC_WINDOW: Channel = Channel::new(3);
+
 pub struct HandlerImpl {
     device: Device,
     screen: Screen,
@@ -95,9 +98,13 @@ impl Handler for HandlerImpl {
     type Error = Infallible;
 
     fn notified(&mut self, channels: ChannelSet) -> Result<(), Self::Error> {
+        #[cfg(feature = "board-pc_z97_d3h")]
+        if channels.contains(NIC_WINDOW) {
+            crate::i217::program(self.usb.pci_config());
+        }
         let ps2 = channels.contains(self.ps2_irq);
         let usb = channels.contains(self.usb_irq);
-        if !ps2 && !usb {
+        if !ps2 && !usb && !nic_window(channels) {
             unreachable!("unexpected notification");
         }
         if usb {
@@ -143,6 +150,16 @@ impl Handler for HandlerImpl {
             Err(_) => simple_ipc::send_unspecified_error(),
         })
     }
+}
+
+#[cfg(feature = "board-pc_z97_d3h")]
+fn nic_window(channels: ChannelSet) -> bool {
+    channels.contains(NIC_WINDOW)
+}
+
+#[cfg(not(feature = "board-pc_z97_d3h"))]
+fn nic_window(_channels: ChannelSet) -> bool {
+    false
 }
 
 #[cfg(not(any(feature = "board-swift_sfx14_41g", feature = "board-inspiron_n5010")))]

@@ -239,23 +239,23 @@ Read Milestones 9, 10, 11, and 12 in [lerux-ladybird/PLAN.md](lerux-ladybird/PLA
 
 ## Desk console (`pc_z97_d3h`)
 
-The prompt is `console-shell`. It is not the filesystem shell. `console-driver` paints light gray on black and speaks the existing serial byte protocol. The shell writes the same bytes to that driver and to `serial-driver` on COM1.
+The shell program is `sddf-shell`. `console-driver` paints light gray on black and speaks the serial byte protocol on the shell's console channel. File commands use the RAM volume. `ip`, `fetch`, and `chat` use the I217-V. This feature does not compile `setup-wifi`.
 
-- Protection domains are `serial_driver`, `console_driver`, `rtl8852be`, and `shell` (`console-shell.elf`). The template is `console-z97.system.template`. The QEMU board `x86_64_generic_console` still uses `console-pc.system.template`. The shell is priority 1. On this image `console_driver` is priority 4 and `rtl8852be` is priority 3. `serial_driver` is priority 10. `wifi` prints `wifi ok` or `wifi err`. Keep those two strings out of `expect` and `assert` messages in the protection domains. `wifi` on `board-x86_64_generic_console` still falls through to `err`. Do not accept `3` on this menu.
-- Shell channel 0 is the console, `pp="true"`. Shell channel 1 is COM1, `pp="true"`. The keyboard interrupt is channel 0 on `console_driver` (IOAPIC pin 1, vector 49, edge, high). The xHCI MSI is channel 2 (`pcidev="00:14.0"`, vector 50).
-- The page is 80×25. The attribute byte is `0x07`. The CRTC cursor is an underline, scanlines 13 through 15. The shell prints the sign-on once, then `[root@lerux ~]# `. `browser` prints `browser unavailable` because this image has no network and no page painter. `maths` is the `lerux-calc` session. `quit` prints the prompt again. A line is at most 80 bytes. Backspace is `0x7f` from the keyboard and is painted as backspace, space, backspace.
+- Protection domains are `serial_driver`, `console_driver`, `rtl8852be`, `net_driver` (`sddf-e1000e-driver.elf`), `net_virt_tx`, `net_virt_rx`, `net_copy`, `ram_blk`, `blk_virt`, `fatfs`, and `shell` (`sddf-shell.elf`). The template is `console-z97.system.template`. The QEMU board `x86_64_generic_console` still uses `console-pc.system.template` and `console-shell.elf`. The shell is priority 1. On this image `console_driver` is priority 5, `net_driver` is priority 4, and `rtl8852be` is priority 3. `serial_driver` is priority 10. `wifi` on `board-x86_64_generic_console` still falls through to `err`.
+- Shell channel 0 is the console, `pp="true"`. Shell channel 2 is `fatfs`. Shell channel 3 is network receive. Shell channel 4 is network transmit. There is no shell channel 1 and no shell channel 5. The keyboard interrupt is channel 0 on `console_driver` (IOAPIC pin 1, vector 49, edge, high). The xHCI MSI is channel 2 (`pcidev="00:14.0"`, vector 50). `console_driver` holds port `0xcf8`. It arms the Microsoft transceiver `045e:07b2` and writes the I217 window. `net_driver` channel 3 notifies `console_driver` channel 3 after the MAC reset so that window is written again. The I217 line is pin 20, vector 51, channel 0 on `net_driver`. A Holtek boot-keyboard interface is not the shell keyboard.
+- The page is 80×25. The attribute byte is `0x07`. The CRTC cursor is an underline, scanlines 13 through 15. The shell prints `lerux shell ready` and then takes `mkdir`, `write`, `cat`, `ls`, `mv`, `rm`, `stat`, `df`, `ip`, `date`, `dmesg`, `edit`, `reboot`, `calc`, `backup`, `source`, `fetch`, `cert`, and `chat`. A line is at most 80 bytes.
 - `just test-x86-console` expects the login line `lerux login: root (automatic login)`, then QMP keys `2`, Enter, `6`, `/`, `2`, Enter, and expects `maths 3`. `pc_z97_d3h` is the secondary Z97 desk image and stays out of the workflow. The metal target being driven is `swift_sfx14_41g`. The USB-keyboard QEMU board stays out. The template still maps the xHCI window at `0xf7e20000` and the DMA region at `0x62000000`.
 - Keep the login line, `browser unavailable`, `maths 3`, and `maths err` out of `expect` and `assert` messages.
 
 ## Inspiron console (`inspiron_n5010`)
 
-The on-screen menu is the same `console-shell` as the desk. The template is `console-inspiron.system.template`. `just make-lerux-iso` still packs `swift_sfx14_41g`. `just make-lerux-iso inspiron_n5010` packs this image. `ci = false`. There is no QEMU model.
+The on-screen menu is `console-shell`. The desk image is `sddf-shell`. The template is `console-inspiron.system.template`. `just make-lerux-iso` still packs `swift_sfx14_41g`. `just make-lerux-iso inspiron_n5010` packs this image. `ci = false`. There is no QEMU model.
 
 - Protection domains are `console_driver` and `shell` (`console-shell.elf`). The shell is priority 1. `console_driver` is priority 2. There is no `serial_driver`.
 - Shell channel 0 is the console, `pp="true"`. The keyboard interrupt is channel 0 on `console_driver` (I/O APIC pin 1, vector 49, edge, high). The probe recorded no IRQ 1 override.
 - The console is the VGA text page at `0xb8000`. The 2026-11-14 probe recorded no GOP framebuffer, so this image does not map one. It does not map the Z97 xHCI window or the Z97 DMA region.
 - The AHCI controller is `8086:3b2f` at `00:1f.2`. Leave it unmapped. Do not format the WDC WD5000BEVT-75A0RT0.
-- The page is the same 80×25 gray-on-black sign-on as the desk. `browser` prints `browser unavailable`. The ISO is UEFI only. The recorded boot was legacy BIOS. A QEMU smoke does not close a metal boot.
+- The page is 80×25, light gray on black. `browser` prints `browser unavailable`. The ISO is UEFI only. The recorded boot was legacy BIOS. A QEMU smoke does not close a metal boot.
 - Keep the login line, `browser unavailable`, `maths 3`, and `maths err` out of `expect` and `assert` messages.
 
 ## Swift panel (`swift_sfx14_41g`)

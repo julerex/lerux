@@ -414,14 +414,38 @@ mod tests {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let z97 = crate::system::render_system(&root, "pc_z97_d3h").expect("z97 sdf");
         assert!(z97.contains("rtl8852be-driver.elf"));
+        assert!(z97.contains("sddf-shell.elf"));
+        assert!(z97.contains("sddf-e1000e-driver.elf"));
+        assert!(z97.contains("sddf-fatfs.elf"));
+        assert!(!z97.contains("console-shell.elf"));
+        assert!(!z97.contains("swift_mt7921"));
         assert!(z97.contains("phys_addr=\"0xf7c0_0000\""));
         assert!(z97.contains("phys_addr=\"0x6240_0000\""));
         assert!(z97.contains("phys_addr=\"0x6250_0000\""));
+        assert!(z97.contains("phys_addr=\"0xf7e0_0000\""));
+        assert!(z97.contains("phys_addr=\"0x6000_0000\""));
         assert!(z97.contains("name=\"rtl8852be\" priority=\"3\""));
-        assert!(z97.contains("name=\"console_driver\" priority=\"4\""));
+        assert!(z97.contains("name=\"console_driver\" priority=\"5\""));
+        assert!(z97.contains("pin=\"20\" vector=\"51\" id=\"0\""));
         assert_eq!(z97.matches("addr=\"0xcf8\"").count(), 1);
         assert!(pd_body(&z97, "rtl8852be").contains("rtl8852be_mmio"));
         assert!(!pd_body(&z97, "shell").contains("rtl8852be_mmio"));
+        assert!(pd_body(&z97, "shell").contains("sddf-shell.elf"));
+        assert!(z97.contains("<end pd=\"shell\" id=\"0\" pp=\"true\" />"));
+        assert!(z97.contains("<end pd=\"fatfs\" id=\"1\" />"));
+        assert!(z97.contains("<end pd=\"shell\" id=\"2\" />"));
+        assert!(z97.contains("<end pd=\"shell\" id=\"3\" />"));
+        assert!(z97.contains("<end pd=\"shell\" id=\"4\" />"));
+        assert!(!z97.contains("<end pd=\"shell\" id=\"1\""));
+        assert!(!z97.contains("<end pd=\"shell\" id=\"5\""));
+        assert!(z97.contains("<end pd=\"net_driver\" id=\"1\" />"));
+        assert!(z97.contains("<end pd=\"net_driver\" id=\"2\" />"));
+        assert!(z97.contains("<end pd=\"net_driver\" id=\"3\" />"));
+        assert!(z97.contains("<end pd=\"console_driver\" id=\"3\" />"));
+        assert!(pd_body(&z97, "console_driver").contains("pci_ioport_id"));
+        assert!(pd_body(&z97, "console_driver").contains("0xcf8"));
+        assert!(!pd_body(&z97, "net_driver").contains("0xcf8"));
+        assert!(!pd_body(&z97, "net_driver").contains("pci_net_config_ioport_id"));
         assert!(pd_body(&z97, "console_driver").contains("rtl8852be_cfg"));
         assert!(!pd_body(&z97, "console_driver").contains("rtl8852be_mmio"));
         let qemu = crate::system::render_system(&root, "x86_64_generic_console").expect("qemu sdf");
@@ -430,16 +454,20 @@ mod tests {
         assert!(!qemu.contains("0x6240_0000"));
         assert!(!qemu.contains("0x6250_0000"));
         assert!(qemu.contains("console-shell.elf"));
+        assert!(!qemu.contains("sddf-shell.elf"));
+        assert!(!qemu.contains("sddf-e1000e-driver.elf"));
         assert!(qemu.contains("console-driver.elf"));
         assert!(qemu.contains("serial-driver.elf"));
         assert!(qemu.contains("name=\"console_driver\" priority=\"2\""));
         let boards = load_boards(&root).unwrap();
-        assert!(boards
-            .get("pc_z97_d3h")
-            .unwrap()
-            .pds
-            .iter()
-            .any(|pd| pd == "rtl8852be-driver"));
+        let desk = boards.get("pc_z97_d3h").unwrap();
+        assert!(desk.pds.iter().any(|pd| pd == "rtl8852be-driver"));
+        assert!(desk.pds.iter().any(|pd| pd == "sddf-shell"));
+        assert!(desk.pds.iter().any(|pd| pd == "sddf-e1000e-driver"));
+        assert!(desk.pds.iter().any(|pd| pd == "sddf-fatfs"));
+        assert!(!desk.pds.iter().any(|pd| pd == "console-shell"));
+        assert!(!desk.ci);
+        assert!(desk.qemu.is_none());
         assert!(!boards
             .get("x86_64_generic_console")
             .unwrap()

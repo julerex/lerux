@@ -31,6 +31,7 @@ board-x86_64_generic_fs_sddf = []
 board-x86_64_generic_fs_ahci = ["board-x86_64_generic_fs_sddf"]
 console-out = ["dep:embedded-hal-nb", "dep:sel4-microkit-driver-adapters"]
 board-swift_sfx14_41g = ["board-x86_64_generic_fetch_sddf", "console-out", "dep:lerux-swift", "dep:lerux-signon", "dep:lerux-iwctl"]
+board-pc_z97_d3h = ["board-x86_64_generic_fetch_sddf", "console-out"]
 
 [dependencies]
 lerux-calc = { path = "../../crates/lerux-calc" }

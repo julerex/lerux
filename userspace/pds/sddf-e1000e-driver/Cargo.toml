@@ -9,6 +9,8 @@ workspace = true
 
 [features]
 board-pc_z97_d3h_i217 = []
+# Same I217-V claim as the COM1 image. The desk shell build passes this board name.
+board-pc_z97_d3h = ["board-pc_z97_d3h_i217"]
 
 [dependencies]
 lerux-logging = { path = "../../crates/lerux-logging" }

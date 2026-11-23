@@ -424,15 +424,15 @@ fn print_desk_usb() {
         "Firmware boot menu (F12) → the USB entry that says UEFI (GRUB EFI/BOOT/BOOTX64.EFI)."
     );
     println!("mb2-stub loads sel4.elf (64-bit) at 1 MiB after ExitBootServices.");
-    println!("Screen: gray on black, the sign-on, then \"[root@lerux ~]# \".");
+    println!("Screen: 80x25 gray on black. The shell prints \"lerux shell ready\".");
     println!(
-        "Keyboard: PS/2 in the rear combo port, or a USB HID boot keyboard on a root xHCI port."
+        "Keyboard: the Microsoft transceiver 045e:07b2. PS/2 in the rear combo port is the fallback."
     );
     println!(
-        "1 or browser prints \"browser unavailable\". 2 or maths reads expressions until quit."
+        "Commands include mkdir, write, cat, ls, ip, fetch, and chat. There is no setup-wifi."
     );
-    println!("Console: COM1 115200 8N1 on the COMA header.");
-    println!("Expect: lerux login: root (automatic login)");
+    println!("Files are the RAM volume. ip, fetch, and chat use the I217-V.");
+    println!("Console: COM1 115200 8N1 on the COMA header. It is not the shell.");
     println!("Full procedure: docs/boards.md#gigabyte-z97-d3h-install-path");
 }
 

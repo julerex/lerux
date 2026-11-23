@@ -3,8 +3,10 @@
 //! The Z97 image maps the controller at `0xf7e20000` and a 256 KiB DMA window
 //! at `0x62000000`. Bring-up takes the controller from firmware (legacy SMI
 //! and, on Intel, the USB2/USB3 port-routing registers), then speaks the boot
-//! protocol. Hubs are not walked. PS/2 stays in charge when this returns
-//! without a keyboard.
+//! protocol. Enumeration asks [`usb::classify_keyboard`] on every connected
+//! port. The Microsoft transceiver is armed on that pass. Otherwise the first
+//! interface-0 boot keyboard is reset again and armed. Hubs are not walked.
+//! PS/2 stays in charge when this returns without a keyboard.
 
 use core::sync::atomic::{fence, Ordering};
 
@@ -14,7 +16,7 @@ use sel4_microkit::{memory_region_symbol, var};
 
 use crate::{
     hid::{self, HidState},
-    usb::{self, BootKeyboard},
+    usb::{self, BootKeyboard, KeyboardChoice},
 };
 
 const DMA_PHYS: u64 = 0x6200_0000;
@@ -90,6 +92,13 @@ struct PciFn {
     dev: u8,
     func: u8,
     vendor: u16,
+}
+
+struct OpenedPort {
+    speed: u8,
+    vendor: u16,
+    product: u16,
+    choice: KeyboardChoice,
 }
 
 /// Armed boot keyboard, or a cold controller when [`Self::ready`] is false.
@@ -321,54 +330,73 @@ impl UsbKbd {
     fn enumerate(&mut self) -> bool {
         self.power_ports();
         self.wait_connect();
+        // Drop an interface-0 slot so a later transceiver can be addressed.
+        // That port is reset again when the scan finds no transceiver.
+        let mut fallback_port = None;
         for port in 1..=self.max_ports {
             if self.broken {
                 break;
             }
-            if self.try_port(port) {
-                return true;
+            let Some(opened) = self.open_port(port) else {
+                continue;
+            };
+            match opened.choice {
+                KeyboardChoice::MicrosoftTransceiver(kbd) => {
+                    return self.arm_keyboard(kbd, opened.speed, opened.vendor, opened.product);
+                }
+                KeyboardChoice::InterfaceZero(_) => {
+                    self.disable_slot();
+                    if fallback_port.is_none() {
+                        fallback_port = Some(port);
+                    }
+                }
             }
         }
-        false
-    }
-
-    fn try_port(&mut self, port: u8) -> bool {
-        let raw = self.read32(self.portsc(port));
-        if raw & 1 == 0 {
-            return false;
-        }
-        let Some(speed) = self.reset_port(port) else {
+        let Some(port) = fallback_port else {
             return false;
         };
+        let Some(opened) = self.open_port(port) else {
+            return false;
+        };
+        let kbd = match opened.choice {
+            KeyboardChoice::MicrosoftTransceiver(kbd) | KeyboardChoice::InterfaceZero(kbd) => kbd,
+        };
+        self.arm_keyboard(kbd, opened.speed, opened.vendor, opened.product)
+    }
+
+    fn open_port(&mut self, port: u8) -> Option<OpenedPort> {
+        if self.read32(self.portsc(port)) & 1 == 0 {
+            return None;
+        }
+        let speed = self.reset_port(port)?;
         if !self.enable_slot() {
-            return false;
+            return None;
         }
-        if !self.address(port, speed) || !self.bind_keyboard(speed) {
+        if !self.address(port, speed) {
             self.disable_slot();
-            return false;
+            return None;
         }
-        true
+        let Some((vendor, product, choice)) = self.classify_device() else {
+            self.disable_slot();
+            return None;
+        };
+        Some(OpenedPort {
+            speed,
+            vendor,
+            product,
+            choice,
+        })
     }
 
-    fn bind_keyboard(&mut self, speed: u8) -> bool {
-        let Some(desc) = self.device_descriptor() else {
-            return false;
-        };
-        let vid = u16::from(desc[8]) | (u16::from(desc[9]) << 8);
-        let pid = u16::from(desc[10]) | (u16::from(desc[11]) << 8);
-        let Some(kbd) = self.config_keyboard() else {
-            return false;
-        };
-        if !self.set_boot_protocol(kbd) {
-            return false;
-        }
-        if !self.configure_interrupt(kbd, speed) {
+    fn arm_keyboard(&mut self, kbd: BootKeyboard, speed: u8, vendor: u16, product: u16) -> bool {
+        if !self.set_boot_protocol(kbd) || !self.configure_interrupt(kbd, speed) {
+            self.disable_slot();
             return false;
         }
         self.dci = usb::endpoint_dci(kbd.ep_addr);
         self.queue_intr();
         self.ready = true;
-        info!("console-driver: usb keyboard {vid:04x}:{pid:04x}");
+        info!("console-driver: usb keyboard {vendor:04x}:{product:04x}");
         true
     }
 
@@ -392,7 +420,10 @@ impl UsbKbd {
         Some(desc)
     }
 
-    fn config_keyboard(&mut self) -> Option<BootKeyboard> {
+    fn classify_device(&mut self) -> Option<(u16, u16, KeyboardChoice)> {
+        let desc = self.device_descriptor()?;
+        let vendor = u16::from(desc[8]) | (u16::from(desc[9]) << 8);
+        let product = u16::from(desc[10]) | (u16::from(desc[11]) << 8);
         let n = self.ctrl_in(0x0200, 9)?;
         if n < 9 {
             return None;
@@ -407,7 +438,8 @@ impl UsbKbd {
         let mut cfg = [0u8; 512];
         let take = n.min(cfg.len());
         self.read_dma(OFF_DATA, &mut cfg[..take]);
-        usb::find_boot_keyboard(&cfg[..take])
+        let choice = usb::classify_keyboard(vendor, product, &cfg[..take])?;
+        Some((vendor, product, choice))
     }
 
     fn set_boot_protocol(&mut self, kbd: BootKeyboard) -> bool {

@@ -60,20 +60,11 @@ const USB_IRQ: Channel = Channel::new(2);
 fn init() -> handler::HandlerImpl {
     use lerux_logging::{debug, log};
 
-    use crate::screen::Screen;
-
     #[cfg(feature = "board-pc_z97_d3h")]
     boot_line::install();
     debug::init().expect("debug log");
     let device = device::Device::from_system();
-    #[cfg(not(feature = "board-swift_sfx14_41g"))]
-    log::info!("console-driver: vga text");
-    #[cfg(feature = "board-swift_sfx14_41g")]
-    if device.uses_panel() {
-        log::info!("console-driver: panel");
-    } else {
-        log::info!("console-driver: vga text");
-    }
+    log_surface(&device);
     if device.init_keyboard() {
         log::info!("console-driver: i8042 ready");
     } else {
@@ -91,18 +82,51 @@ fn init() -> handler::HandlerImpl {
     #[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-inspiron_n5010"))]
     let usb = usb_off::UsbKbd::off();
     device.enable_cursor();
-    #[cfg(not(feature = "board-swift_sfx14_41g"))]
-    let screen = Screen::blank();
-    #[cfg(feature = "board-swift_sfx14_41g")]
-    let screen = if device.uses_panel() {
-        Screen::blank()
-    } else {
-        Screen::vga()
-    };
+    let screen = open_screen(&device);
     device.present_all(&screen);
     device.sync_cursor(&screen);
     // The blank page replaces the log lines. Hold it before the shell prints the sign-on.
     #[cfg(feature = "board-pc_z97_d3h")]
     debug::after_boot_line();
     handler::HandlerImpl::new(device, screen, usb, IRQ, USB_IRQ, SHELL)
+}
+
+#[cfg(all(not(test), feature = "hardware", feature = "board-swift_sfx14_41g"))]
+fn log_surface(device: &device::Device) {
+    use lerux_logging::log;
+
+    if device.uses_panel() {
+        log::info!("console-driver: panel");
+    } else {
+        log::info!("console-driver: vga text");
+    }
+}
+
+#[cfg(all(
+    not(test),
+    feature = "hardware",
+    not(feature = "board-swift_sfx14_41g")
+))]
+fn log_surface(_device: &device::Device) {
+    use lerux_logging::log;
+
+    log::info!("console-driver: vga text");
+}
+
+#[cfg(all(not(test), feature = "hardware", feature = "board-swift_sfx14_41g"))]
+fn open_screen(device: &device::Device) -> screen::Screen {
+    if device.uses_panel() {
+        screen::Screen::blank()
+    } else {
+        screen::Screen::vga()
+    }
+}
+
+#[cfg(all(
+    not(test),
+    feature = "hardware",
+    not(feature = "board-swift_sfx14_41g")
+))]
+fn open_screen(_device: &device::Device) -> screen::Screen {
+    screen::Screen::blank()
 }

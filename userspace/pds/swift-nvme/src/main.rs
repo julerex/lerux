@@ -11,13 +11,13 @@ use sel4_microkit::{
     memory_region_symbol, protection_domain, Channel, ChannelSet, Handler, Infallible,
 };
 
-use lerux_desk::FRAMEBUFFER_BYTES;
+use lerux_desk::{touch_swift_devices, FRAMEBUFFER_BYTES};
 use lerux_sddf::{
     blk_dequeue_req, blk_enqueue_req, blk_queue_handle_t, blk_queue_init, blk_req_code_t,
 };
 use lerux_swift::{
-    class_code, io_allowed, load_header, load_named, paint_row, report_bytes, vendor_device,
-    working_line, write_result, DiskReport, WaitMark, NVME_BDF, NVME_CLASS,
+    class_code, io_allowed, load_header, load_named, paint_row, radio_present, report_bytes,
+    vendor_device, working_line, write_result, DiskReport, WaitMark, NVME_BDF, NVME_CLASS,
 };
 
 const ROW: usize = lerux_desk::ROW_NVME;
@@ -59,9 +59,15 @@ struct HandlerImpl {
 fn init() -> HandlerImpl {
     let headers = memory_region_symbol!(pci_headers_vaddr: *mut u8).as_ptr();
     let headers = unsafe { core::slice::from_raw_parts(headers, 0x1000) };
+    let mode = mode_ptr();
+    let record = unsafe { core::slice::from_raw_parts(mode, 40) };
     let (bus, dev, func) = NVME_BDF;
     let header = load_header(headers, bus, dev, func);
-    let present = vendor_device(&header).is_some() && class_code(&header) == Some(NVME_CLASS);
+    // The register window stays mapped so the Swift read-only path can use it.
+    // A VGA boot does not load or store it, and does not submit a command.
+    let present = touch_swift_devices(record, radio_present(headers))
+        && vendor_device(&header).is_some()
+        && class_code(&header) == Some(NVME_CLASS);
     let regs = memory_region_symbol!(nvme_regs_vaddr: *mut u8).as_ptr();
     let dma = memory_region_symbol!(nvme_dma_vaddr: *mut u8).as_ptr();
     let report = if present && queue_read(dma) {
@@ -383,8 +389,12 @@ fn wait_rdy(regs: *mut u8, ready: bool) -> bool {
     false
 }
 
+fn mode_ptr() -> *mut u8 {
+    memory_region_symbol!(mode_record_vaddr: *mut u8).as_ptr()
+}
+
 fn paint(text: &[u8]) {
-    let mode = memory_region_symbol!(mode_record_vaddr: *mut u8).as_ptr();
+    let mode = mode_ptr();
     let frame = memory_region_symbol!(fb_vaddr: *mut u8).as_ptr();
     let record = unsafe { core::slice::from_raw_parts(mode, 40) };
     let bytes = usize::try_from(FRAMEBUFFER_BYTES).expect("framebuffer fits");

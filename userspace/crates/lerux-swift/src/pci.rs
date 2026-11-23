@@ -269,6 +269,14 @@ pub fn memory_bar(header: &[u8]) -> Option<u64> {
     Some(addr)
 }
 
+/// The recorded MT7921 is in the shared header page.
+#[must_use]
+pub fn radio_present(page: &[u8]) -> bool {
+    let (bus, dev, func) = MT7921_BDF;
+    let header = load_header(page, bus, dev, func);
+    vendor_device(&header).is_some_and(|id| MT7921_IDS.contains(&id))
+}
+
 #[must_use]
 pub fn vendor_device(header: &[u8]) -> Option<(u16, u16)> {
     if header.len() < 4 || header[0] == 0xff {

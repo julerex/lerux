@@ -234,6 +234,7 @@ mod tests {
         assert_eq!(xml.matches("addr=\"0xcf8\"").count(), 1);
         assert!(xml.contains("addr=\"0x60\""));
         assert!(xml.contains("addr=\"0x64\""));
+        assert_one_image_console(&xml);
         assert!(xml.contains("pin=\"1\""));
         assert!(xml.contains("vector=\"49\""));
         assert!(xml.contains("console-driver.elf"));
@@ -397,6 +398,14 @@ mod tests {
             board.pds,
             ["console-shell".to_string(), "console-driver".to_string()]
         );
+    }
+
+    fn assert_one_image_console(xml: &str) {
+        assert!(xml.contains("phys_addr=\"0xb8000\""));
+        assert!(xml.contains("addr=\"0x3d4\""));
+        assert!(!xml.contains("ahci"));
+        assert!(pd_body(xml, "console_driver").contains("mr=\"vga_text\""));
+        assert!(!pd_body(xml, "swift_nvme").contains("mr=\"vga_text\""));
     }
 
     fn pd_body<'a>(xml: &'a str, name: &str) -> &'a str {

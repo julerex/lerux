@@ -18,6 +18,7 @@
 #include <stdint.h>
 
 #include "fb_paint.h"
+#include "machine.h"
 #include "multiboot2.h"
 
 #define PAGE_SIZE 0x1000u
@@ -300,6 +301,61 @@ static uint32_t append_tag(uint32_t idx, uint32_t size) {
     return align_up(idx + size, 8);
 }
 
+#define SPAN_CAP 128
+static mem_span span_in[SPAN_CAP];
+static mem_span span_out[SPAN_CAP];
+
+static void copy_memory_map(const struct multiboot2_tag_mmap *tag, uint32_t *idx) {
+    uint32_t entry_size = tag->entry_size;
+    uint32_t header = sizeof(struct multiboot2_tag_mmap);
+    uint32_t count;
+    uint32_t i;
+    size_t carved;
+    uint32_t size;
+    struct multiboot2_tag_mmap *out;
+    struct multiboot2_mmap_entry *entries;
+
+    if (entry_size < sizeof(struct multiboot2_mmap_entry) || tag->size < header) {
+        fail("mmap entry");
+    }
+    count = (tag->size - header) / entry_size;
+    if (count > SPAN_CAP) {
+        fail("mmap too long");
+    }
+    for (i = 0; i < count; i++) {
+        const uint8_t *base = (const uint8_t *)tag->entries + (i * entry_size);
+        const struct multiboot2_mmap_entry *entry = (const struct multiboot2_mmap_entry *)base;
+        span_in[i].addr = entry->addr;
+        span_in[i].len = entry->len;
+        span_in[i].type = entry->type;
+    }
+    carved = carve_mode_page(span_in, count, span_out, SPAN_CAP);
+    if (carved == 0) {
+        fail("mode page carve");
+    }
+    carved = reserve_missing_windows(span_out, carved, SPAN_CAP, host_phys_bits());
+    if (carved == 0) {
+        fail("device window reserve");
+    }
+    size = header + (uint32_t)carved * (uint32_t)sizeof(struct multiboot2_mmap_entry);
+    if (*idx + size > sizeof(new_mbi)) {
+        fail("mbi overflow");
+    }
+    out = (struct multiboot2_tag_mmap *)(new_mbi + *idx);
+    out->type = MULTIBOOT2_TAG_MMAP;
+    out->size = size;
+    out->entry_size = sizeof(struct multiboot2_mmap_entry);
+    out->entry_version = 0;
+    entries = (struct multiboot2_mmap_entry *)(new_mbi + *idx + header);
+    for (i = 0; i < carved; i++) {
+        entries[i].addr = span_out[i].addr;
+        entries[i].len = span_out[i].len;
+        entries[i].type = span_out[i].type;
+        entries[i].zero = 0;
+    }
+    *idx = append_tag(*idx, size);
+}
+
 static void copy_forwarded_tags(struct multiboot2_header *src, uint32_t *idx) {
     uint8_t *p = (uint8_t *)(src + 1);
     uint8_t *end = (uint8_t *)src + src->total_size;
@@ -309,19 +365,22 @@ static void copy_forwarded_tags(struct multiboot2_header *src, uint32_t *idx) {
         if (tag->type == MULTIBOOT2_TAG_END) {
             break;
         }
-        int forward = tag->type == MULTIBOOT2_TAG_CMDLINE
-            || tag->type == MULTIBOOT2_TAG_BOOT_LOADER_NAME
-            || tag->type == MULTIBOOT2_TAG_BASIC_MEMINFO
-            || tag->type == MULTIBOOT2_TAG_MMAP
-            || tag->type == MULTIBOOT2_TAG_FRAMEBUFFER
-            || tag->type == MULTIBOOT2_TAG_ACPI_OLD
-            || tag->type == MULTIBOOT2_TAG_ACPI_NEW;
-        if (forward) {
-            if (*idx + tag->size > sizeof(new_mbi)) {
-                fail("mbi overflow");
+        if (tag->type == MULTIBOOT2_TAG_MMAP && tag->size >= sizeof(struct multiboot2_tag_mmap)) {
+            copy_memory_map((const struct multiboot2_tag_mmap *)tag, idx);
+        } else {
+            int forward = tag->type == MULTIBOOT2_TAG_CMDLINE
+                || tag->type == MULTIBOOT2_TAG_BOOT_LOADER_NAME
+                || tag->type == MULTIBOOT2_TAG_BASIC_MEMINFO
+                || tag->type == MULTIBOOT2_TAG_FRAMEBUFFER
+                || tag->type == MULTIBOOT2_TAG_ACPI_OLD
+                || tag->type == MULTIBOOT2_TAG_ACPI_NEW;
+            if (forward) {
+                if (*idx + tag->size > sizeof(new_mbi)) {
+                    fail("mbi overflow");
+                }
+                memcpy(new_mbi + *idx, tag, tag->size);
+                *idx = append_tag(*idx, tag->size);
             }
-            memcpy(new_mbi + *idx, tag, tag->size);
-            *idx = append_tag(*idx, tag->size);
         }
         p += align_up(tag->size, 8);
     }
@@ -353,6 +412,7 @@ static void write_mode_record(const struct fb_tag *tag) {
     mode_page[32] = tag->green_width;
     mode_page[33] = tag->blue_shift;
     mode_page[34] = tag->blue_width;
+    mode_page[CONSOLE_KIND_OFF] = console_kind_for_framebuffer(tag->addr);
 }
 
 static uint32_t read_cr(const char *which) {
@@ -507,7 +567,16 @@ void stub_main(uint32_t magic, struct multiboot2_header *mbi) {
     if (mbi == 0) {
         fail("null mbi");
     }
+    /* VGA until a framebuffer tag names the Swift panel. paint_firmware_mode
+       overwrites this when it writes a mode record. A machine with no GOP
+       tag, including the Inspiron, keeps this byte. */
+    mode_page[CONSOLE_KIND_OFF] = CONSOLE_VGA;
     paint_firmware_mode(mbi);
+    if (mode_page[CONSOLE_KIND_OFF] == CONSOLE_PANEL) {
+        com1_write("mb2-stub: console panel\r\n");
+    } else {
+        com1_write("mb2-stub: console vga\r\n");
+    }
 
     uint32_t k_start = 0, k_end = 0, l_start = 0, l_end = 0;
     if (find_modules(mbi, &k_start, &k_end, &l_start, &l_end) < 2) {

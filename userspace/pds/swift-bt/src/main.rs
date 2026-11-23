@@ -18,10 +18,10 @@ use sel4_microkit::{
     memory_region_symbol, protection_domain, Channel, ChannelSet, Handler, Infallible,
 };
 
-use lerux_desk::FRAMEBUFFER_BYTES;
+use lerux_desk::{touch_swift_devices, FRAMEBUFFER_BYTES};
 use lerux_swift::{
-    bt_bring_up, bt_line, class_code, fail_line, further, load_header, vendor_device, version_line,
-    working_line, BtReport, WaitMark, XferFail, XHCI_BDFS, XHCI_CLASS,
+    bt_bring_up, bt_line, class_code, fail_line, further, load_header, radio_present,
+    vendor_device, version_line, working_line, BtReport, WaitMark, XferFail, XHCI_BDFS, XHCI_CLASS,
 };
 
 mod xhci;
@@ -39,12 +39,19 @@ struct HandlerImpl {
 fn init() -> HandlerImpl {
     let page = memory_region_symbol!(pci_headers_vaddr: *mut u8).as_ptr();
     let page = unsafe { core::slice::from_raw_parts(page, 0x1000) };
+    let mode = mode_ptr();
+    let record = unsafe { core::slice::from_raw_parts(mode, 40) };
     let regs = [
         memory_region_symbol!(xhci0_regs_vaddr: *mut u8).as_ptr(),
         memory_region_symbol!(xhci1_regs_vaddr: *mut u8).as_ptr(),
     ];
     let dma = memory_region_symbol!(xhci_dma_vaddr: *mut u8).as_ptr();
-    let (live, foreign) = controllers_live(page, &regs);
+    // The xHCI windows are the Swift controllers. A VGA boot does not read them.
+    let (live, foreign) = if touch_swift_devices(record, radio_present(page)) {
+        controllers_live(page, &regs)
+    } else {
+        (false, None)
+    };
     let mut text = [0u8; 24];
     let n = bring_up_text(&regs, dma, live, foreign, &mut text);
     paint(&text[..n]);
@@ -141,8 +148,12 @@ fn paint_working(tick: u32) {
     paint(&line[..n]);
 }
 
+fn mode_ptr() -> *mut u8 {
+    memory_region_symbol!(mode_record_vaddr: *mut u8).as_ptr()
+}
+
 fn paint(text: &[u8]) {
-    let mode = memory_region_symbol!(mode_record_vaddr: *mut u8).as_ptr();
+    let mode = mode_ptr();
     let frame = memory_region_symbol!(fb_vaddr: *mut u8).as_ptr();
     let record = unsafe { core::slice::from_raw_parts(mode, 40) };
     let bytes = usize::try_from(FRAMEBUFFER_BYTES).expect("framebuffer fits");

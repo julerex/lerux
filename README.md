@@ -8,7 +8,7 @@ The seL4 kernel is **not vendored**. `just build-sdk` builds it from the checkou
 
 ## Quick start
 
-Build the Acer Swift X image as a UEFI USB ISO, write it to a flash drive, and boot that drive with **UEFI**. The board is `swift_sfx14_41g` (Acer Swift X SFX14-41G). First boot, including Wi-Fi: [`docs/setup.md`](docs/setup.md). Board reference: [`docs/boards.md`](docs/boards.md#acer-swift-x-install-path). The Gigabyte Z97-D3H image is `just make-lerux-iso pc_z97_d3h` ([`docs/boards.md`](docs/boards.md#gigabyte-z97-d3h-install-path)). The Dell Inspiron N5010 image is `just make-lerux-iso inspiron_n5010` ([`docs/boards.md`](docs/boards.md#dell-inspiron-n5010-install-path)).
+Build one UEFI USB ISO and boot it on the Acer Swift X or on another x86 PC. `just make-lerux-iso` packs `swift_sfx14_41g`. The stub probes the firmware framebuffer. When that buffer is the Swift panel (`0xfc90000000`, above 4 GiB) the image paints the panel and keeps `setup-wifi`. On the Z97 desk, the Inspiron, and any other x86 machine it paints the VGA text page at `0xb8000`. It does not map the Inspiron AHCI disk, and it does not touch the Swift NVMe unless that probe selected the panel. First boot, including Wi-Fi: [`docs/setup.md`](docs/setup.md). Board reference: [`docs/boards.md`](docs/boards.md#acer-swift-x-install-path).
 
 **Prerequisites:** Linux, `git`, `just`, `rustup`, `cmake`, `ninja`, `libclang-dev`, `clang` (for the Multiboot 2 trampoline), and a USB flash drive. Packing the ISO needs `xorriso` and `grub-mkimage`. On Arch those packages are `libisoburn` and `grub` (`sudo pacman -S libisoburn grub`). Debian packages are `xorriso` and `grub-efi-amd64-bin`. Do not overwrite the host OS disk.
 
@@ -22,7 +22,7 @@ just burn-lerux-iso       # pack that ISO, then write it to a USB stick
 
 Reboot and open the firmware boot menu. Choose the USB entry that says **UEFI** (GRUB `EFI/BOOT/BOOTX64.EFI`). GRUB reads `/boot/grub/grub.cfg` and boots immediately. It Multiboot 2-loads `/boot/mb2-stub.elf` with modules `/boot/sel4.elf` and `/boot/loader.img`. The stub places the kernel at 1 MiB after `ExitBootServices`.
 
-The panel is the firmware GOP buffer. On 2026-10-29 it showed `fb 0x000000fc90000000 pitch 7680 1920x1080 r16 g8 b0`. The shell band is 240 by 40 cells of the VGA 8×16 font, light gray on black. The sign-on is `Lerux` and the short git describe, the login line, the archiso message of the day, and `[root@lerux ~]# `. The keyboard is the built-in i8042. This machine has no COM port. The prompt runs the shell, including `setup-wifi`. Device rows sit below the band. Device roles: [`docs/platforms.md`](docs/platforms.md#swift-x-devices).
+On the Swift the panel is the firmware GOP buffer. On 2026-10-29 it showed `fb 0x000000fc90000000 pitch 7680 1920x1080 r16 g8 b0`. The shell band is 240 by 40 cells of the VGA 8×16 font, light gray on black. The sign-on is `Lerux` and the short git describe, the login line, the archiso message of the day, and `[root@lerux ~]# `. The keyboard is the built-in i8042. This machine has no COM port. The prompt runs the shell, including `setup-wifi`. Device rows sit below the band. Device roles: [`docs/platforms.md`](docs/platforms.md#swift-x-devices). On a generic x86 PC the same ISO uses the 80×25 VGA text page and leaves Swift Wi-Fi, the NVMe window, and the Inspiron disk alone. A QEMU hello line does not prove the panel.
 
 ## Quick start (QEMU)
 

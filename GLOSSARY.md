@@ -20,7 +20,7 @@ _Avoid_: [q35](#q35), [Swift X](#swift-x)
 
 ### Inspiron N5010
 
-The Dell Inspiron N5010 probed on 2026-11-14. Arrandale Core i5-460M and an Intel HM57 chipset. The record is [support/arch-probe/machines/inspiron-n5010.md](support/arch-probe/machines/inspiron-n5010.md). The [Microkit](#microkit) board name is `inspiron_n5010`. `just make-lerux-iso inspiron_n5010` packs the image. The console on that boot was the [VGA text page](#vga-text-page). The keyboard is the [i8042](#i8042). The probe recorded no [GOP](#gop) framebuffer and no serial port. The AHCI disk is not mapped.
+The Dell Inspiron N5010 probed on 2026-11-14. Arrandale Core i5-460M and an Intel HM57 chipset. The record is [support/arch-probe/machines/inspiron-n5010.md](support/arch-probe/machines/inspiron-n5010.md). The [Microkit](#microkit) board name is `inspiron_n5010`. `just make-lerux-iso inspiron_n5010` packs this board's own image. The one ISO from `just make-lerux-iso` also boots this machine on the [VGA text page](#vga-text-page). The console on that boot was the [VGA text page](#vga-text-page). The keyboard is the [i8042](#i8042). The probe recorded no [GOP](#gop) framebuffer and no serial port. The AHCI disk is not mapped.
 
 _Avoid_: [q35](#q35), [Z97 desk](#z97-desk), [Swift X](#swift-x)
 
@@ -368,7 +368,7 @@ The [firmware](#firmware) interface the [Swift X](#swift-x) and the [Z97 desk](#
 
 ### ISO
 
-The image `just make-lerux-iso` writes for the [Swift X](#swift-x). The file is `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`. The recipe's own status line includes `Wrote ISO`. [GRUB](#grub) is the loader on that image. The boot entry has to say [UEFI](#uefi).
+The one image `just make-lerux-iso` writes. The file is `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`. On the [Swift X](#swift-x) the [GOP](#gop) buffer is `0xfc90000000` and the panel is used. On any other x86 PC the [VGA text page](#vga-text-page) is used. The recipe's own status line includes `Wrote ISO`. [GRUB](#grub) is the loader. The boot entry has to say [UEFI](#uefi).
 
 _Avoid_: [OVMF](#ovmf), and the [Arch live image](#arch-live-image). [OVMF](#ovmf) is the [firmware](#firmware) QEMU uses for an x86 [ISO](#iso). The [Arch live image](#arch-live-image) is the Arch installer. This entry is the [Swift X](#swift-x) image.
 
@@ -420,13 +420,13 @@ _Avoid_: the [firmware](#firmware) on the [Swift X](#swift-x), and [SeaBIOS](#se
 
 ### mb2-stub
 
-The Multiboot 2 trampoline linked at 32 MiB. [GRUB](#grub) loads it under [UEFI](#uefi). It asks for a framebuffer, paints the [GOP](#gop) mode line, writes the mode record at `0x01fe0000`, and then jumps to [seL4](#sel4). A [GOP](#gop) buffer above 4 GiB is painted with paging on, on a stack inside the identity map. `wbinvd` runs before [seL4](#sel4), so those [cache lines](#cache-line) reach the panel.
+The Multiboot 2 trampoline linked at 32 MiB. [GRUB](#grub) loads it under [UEFI](#uefi). It asks for a framebuffer, paints the [GOP](#gop) mode line, writes the mode record at `0x01fe0000`, and then jumps to [seL4](#sel4). The kind byte is the panel when that buffer is `0xfc90000000` and [VGA text page](#vga-text-page) otherwise. A [GOP](#gop) buffer above 4 GiB is painted with paging on, on a stack inside the identity map. `wbinvd` runs before [seL4](#sel4), so those [cache lines](#cache-line) reach the panel.
 
 ## Acer Swift X
 
 ### Swift X
 
-The Acer [Swift X](#swift-x) SFX14-41G, Ryzen 5 5500U. The [Microkit](#microkit) board name is `swift_sfx14_41g`. There is no [COM1](#com1), no serial [driver](#driver), and no QEMU model. The keyboard is the built-in [i8042](#i8042). The panel is the [GOP](#gop) buffer of the [Swift Radeon](#swift-radeon). `just make-lerux-iso` packs this image.
+The Acer [Swift X](#swift-x) SFX14-41G, Ryzen 5 5500U. The [Microkit](#microkit) board name is `swift_sfx14_41g`. There is no [COM1](#com1), no serial [driver](#driver), and no QEMU model. The keyboard is the built-in [i8042](#i8042). The panel is the [GOP](#gop) buffer of the [Swift Radeon](#swift-radeon). `just make-lerux-iso` packs this image, and the same file boots another x86 PC on [VGA text page](#vga-text-page).
 
 _Avoid_: [Z97 desk](#z97-desk), [q35](#q35)
 

@@ -110,6 +110,11 @@ fn clone_or_checkout_commit(workspace: &Path, name: &str, url: &str, commit: &st
 fn prepare_commit_repo(dest: &Path, name: &str, url: &str, commit: &str) -> Result<()> {
     if dest.join(".git").is_dir() {
         eprintln!("==> {name}: already cloned, checking out {commit}");
+        let dest_arg = dest.to_string_lossy();
+        run_checked(
+            "git",
+            &["-C", dest_arg.as_ref(), "remote", "set-url", "origin", url],
+        )?;
         return Ok(());
     }
     if dest.exists() {
@@ -330,7 +335,7 @@ remote = "https://github.com/au-ts/lionsos.git"
 
 [redox-drivers]
 tag = "20ffe4d7f4a85b7cc1f59495d7e6e355fed4cb06"
-remote = "https://gitlab.redox-os.org/redox-os/drivers.git"
+remote = "https://github.com/redox-os/drivers.git"
 "#,
         )
         .expect("write fixture");
@@ -347,7 +352,7 @@ remote = "https://gitlab.redox-os.org/redox-os/drivers.git"
         );
         assert_eq!(
             versions.redox_drivers.remote,
-            "https://gitlab.redox-os.org/redox-os/drivers.git"
+            "https://github.com/redox-os/drivers.git"
         );
         assert!(super::is_full_commit(&versions.redox_drivers.tag));
         assert!(!super::is_full_commit(&versions.lionsos.tag));

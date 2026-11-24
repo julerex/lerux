@@ -20,7 +20,9 @@ tag = "0.4.0"
 remote = "https://github.com/au-ts/lionsos.git"
 
 # Hardware reference. Not a Cargo member and not compiled into a protection domain.
-# The pin is a commit. This repository has no release tag, and the GitHub mirror is archived.
+# The pin is a commit. Upstream is gitlab.redox-os.org/redox-os/drivers.
+# The SDK runner gets HTTP 403 from that host, so the checkout uses the GitHub
+# mirror, which has this commit. The mirror is archived.
 [redox-drivers]
 tag = "20ffe4d7f4a85b7cc1f59495d7e6e355fed4cb06"
-remote = "https://gitlab.redox-os.org/redox-os/drivers.git"
+remote = "https://github.com/redox-os/drivers.git"

@@ -75,18 +75,11 @@ const USB_IRQ: Channel = Channel::new(2);
 fn init() -> handler::HandlerImpl {
     use lerux_logging::{debug, log};
 
-    #[cfg(feature = "board-pc_z97_d3h")]
-    boot_line::install();
     debug::init().expect("debug log");
     let device = device::Device::from_system();
-    #[cfg(not(feature = "board-swift_sfx14_41g"))]
-    log::info!("console-driver: vga text");
-    #[cfg(feature = "board-swift_sfx14_41g")]
-    if device.uses_panel() {
-        log::info!("console-driver: panel");
-    } else {
-        log::info!("console-driver: vga text");
-    }
+    #[cfg(feature = "board-pc_z97_d3h")]
+    install_boot_lines(&device);
+    note_ready(&device);
     if device.init_keyboard() {
         log::info!("console-driver: i8042 ready");
     } else {
@@ -110,6 +103,7 @@ fn open_shell(device: device::Device) -> handler::HandlerImpl {
     note_i217();
     #[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-inspiron_n5010"))]
     let usb = usb_off::UsbKbd::off();
+    #[cfg(not(feature = "board-pc_z97_d3h"))]
     device.enable_cursor();
     #[cfg(not(feature = "board-swift_sfx14_41g"))]
     let screen = Screen::blank();
@@ -143,5 +137,32 @@ fn note_i217() {
         log::info!("console-driver: i217 window");
     } else {
         log::info!("console-driver: i217 absent");
+    }
+}
+
+#[cfg(all(not(test), feature = "board-pc_z97_d3h"))]
+fn install_boot_lines(device: &device::Device) {
+    if let Some((frame, pen)) = device.boot_target() {
+        boot_line::install(frame, pen);
+    }
+}
+
+#[cfg(all(not(test), feature = "hardware"))]
+fn note_ready(device: &device::Device) {
+    use lerux_logging::log;
+    #[cfg(feature = "board-pc_z97_d3h")]
+    if device.uses_desk() {
+        log::info!("console-driver: desk");
+    }
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    if device.uses_panel() {
+        log::info!("console-driver: panel");
+    } else {
+        log::info!("console-driver: vga text");
+    }
+    #[cfg(not(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h",)))]
+    {
+        let _ = device;
+        log::info!("console-driver: vga text");
     }
 }

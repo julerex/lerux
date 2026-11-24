@@ -20,7 +20,6 @@ hardware = [
     "dep:sel4-microkit-simple-ipc",
 ]
 board-pc_z97_d3h = ["hardware", "lerux-logging/boot-line-gap", "dep:lerux-rtw8852be"]
-board-pc_z97_d3h_i217 = ["hardware"]
 board-inspiron_n5010 = ["hardware"]
 board-x86_64_generic_console = ["hardware"]
 board-x86_64_generic_usb_kbd = ["hardware"]

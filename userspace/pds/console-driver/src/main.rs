@@ -78,6 +78,7 @@ fn init() -> handler::HandlerImpl {
     rtl8852be::publish(usb.pci_config());
     #[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-inspiron_n5010"))]
     let usb = usb_off::UsbKbd::off();
+    #[cfg(not(feature = "board-pc_z97_d3h"))]
     device.enable_cursor();
     #[cfg(not(feature = "board-swift_sfx14_41g"))]
     let screen = Screen::blank();
@@ -105,7 +106,7 @@ fn install_boot_lines(device: &device::Device) {
 #[cfg(all(not(test), feature = "hardware"))]
 fn note_ready(device: &device::Device) {
     use lerux_logging::log;
-    #[cfg(any(feature = "board-pc_z97_d3h", feature = "board-pc_z97_d3h_i217"))]
+    #[cfg(feature = "board-pc_z97_d3h")]
     if device.uses_desk() {
         log::info!("console-driver: desk");
     }
@@ -115,11 +116,7 @@ fn note_ready(device: &device::Device) {
     } else {
         log::info!("console-driver: vga text");
     }
-    #[cfg(not(any(
-        feature = "board-swift_sfx14_41g",
-        feature = "board-pc_z97_d3h",
-        feature = "board-pc_z97_d3h_i217"
-    )))]
+    #[cfg(not(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h",)))]
     {
         let _ = device;
         log::info!("console-driver: vga text");

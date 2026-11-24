@@ -1,9 +1,3 @@
-//! Copy each boot log line into the Z97 firmware buffer before the five-second pause.
-//!
-//! The shell later replaces those rows with the sign-on. A fault during
-//! bring-up leaves the last line on the monitor for that pause. The hook is
-//! installed only after the frame exists, and it does not touch `0xb8000`.
-
 use core::sync::atomic::{AtomicPtr, AtomicU8, AtomicUsize, Ordering};
 
 use lerux_desk::{paint_text_row, Pen, DESK_FB_BYTES};
@@ -49,8 +43,7 @@ fn paint(line: &str) {
         blue: BLUE.load(Ordering::Relaxed),
     };
     let len = usize::try_from(DESK_FB_BYTES).expect("desk frame fits");
-    // SAFETY: `install` stored the `desk_fb` mapping, and this hook runs on
-    // the root after that store. The slice is that mapping.
+    // SAFETY: `install` stored the `desk_fb` mapping. The slice is that mapping.
     let pixels = unsafe { core::slice::from_raw_parts_mut(frame, len) };
     paint_text_row(pixels, pen, row, &bytes);
 }

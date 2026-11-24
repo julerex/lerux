@@ -33,7 +33,7 @@ pub const FRAMEBUFFER_WIDTH: u32 = 1920;
 
 pub const FRAMEBUFFER_HEIGHT: u32 = 1080;
 
-/// Firmware buffer the Z97 consoles paint. Pitch times height is [`DESK_FB_BYTES`].
+/// Firmware buffer the Z97 desk paints. Pitch times height is [`DESK_FB_BYTES`].
 pub const DESK_FB_PHYS: u64 = 0xd000_0000;
 
 pub const DESK_FB_PITCH: u32 = 4096;
@@ -598,8 +598,7 @@ pub fn panel_mode(record: &[u8]) -> Option<ScanoutMode> {
 /// Whether this boot may touch Swift device registers.
 ///
 /// The panel mark is the Swift. An explicit VGA mark is not, even when an
-/// MT7921 is plugged into some other machine. [`CONSOLE_DESK`] is the Z97
-/// firmware buffer and is not this radio. A cleared record (kind 0) still
+/// MT7921 is plugged into some other machine. A cleared record (kind 0) still
 /// counts when that radio is present, because a Swift boot used to lose the
 /// mode page when seL4 retyped it.
 #[must_use]
@@ -614,8 +613,7 @@ pub fn touch_swift_devices(record: &[u8], mt7921_present: bool) -> bool {
 /// Store [`CONSOLE_DESK`] when `record` is the Z97 firmware buffer.
 ///
 /// A Swift panel record, a cleared record, and any other geometry return
-/// `None` and leave the kind byte unchanged. This does not call
-/// [`ScanoutMode::write_record`], which would zero the rest of the record.
+/// `None` and leave the kind byte unchanged.
 #[must_use]
 pub fn desk_target(record: &mut [u8]) -> Option<ScanoutMode> {
     let mode = ScanoutMode::parse(record)?;
@@ -1125,9 +1123,11 @@ mod tests {
         mode.write_record(&mut record)
             .expect("the mode record is 40 bytes");
         record[CONSOLE_KIND] = CONSOLE_VGA;
+        let mut kept = record;
+        kept[CONSOLE_KIND] = CONSOLE_DESK;
         let found = desk_target(&mut record);
         assert_eq!(found, Some(mode), "the recorded buffer is the desk target");
-        assert_eq!(record[CONSOLE_KIND], CONSOLE_DESK);
+        assert_eq!(record, kept);
         assert!(panel_mode(&record).is_none());
         assert!(!touch_swift_devices(&record, false));
         assert!(!touch_swift_devices(&record, true));

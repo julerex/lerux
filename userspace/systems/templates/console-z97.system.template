@@ -6,8 +6,6 @@
   to console_driver. Channel 1 speaks it to serial_driver. xHCI registers
   sit at the Z97 BAR. The DMA window is RAM. rtl8852be owns BAR 2.
   console_driver writes the config page. The shell reads the status page.
-  The 80 by 25 sign-on is painted into that buffer. This image does not
-  map the VGA text page.
 -->
 <system>
     <memory_region name="mode_record" size="0x1000" phys_addr="0x1fe0000" />

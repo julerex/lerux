@@ -419,6 +419,22 @@ mod tests {
     }
 
     #[test]
+    fn z97_image_maps_the_firmware_buffer() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let z97 = crate::system::render_system(&root, "pc_z97_d3h").expect("z97 sdf");
+        let console = pd_body(&z97, "console_driver");
+        assert!(z97.contains("phys_addr=\"0xd0000000\""));
+        assert!(z97.contains("name=\"desk_fb\" size=\"0x300000\""));
+        assert!(z97.contains("vaddr=\"0x40000000\""));
+        assert!(z97.contains("phys_addr=\"0x1fe0000\""));
+        assert!(console.contains("mr=\"desk_fb\""));
+        assert!(console.contains("mr=\"mode_record\""));
+        assert!(!z97.contains("phys_addr=\"0xb8000\""));
+        assert!(!z97.contains("addr=\"0x3d4\""));
+        assert!(!console.contains("mr=\"vga_text\""));
+    }
+
+    #[test]
     fn z97_iso_owns_rtl8852be() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let z97 = crate::system::render_system(&root, "pc_z97_d3h").expect("z97 sdf");

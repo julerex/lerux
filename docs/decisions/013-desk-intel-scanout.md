@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted for the Intel scanout on `pc_z97_d3h`. The ISO no longer boots Limine ([ADR-014](014-uefi-mb2-stub.md)). The live Z97 consoles paint the 80 by 25 sign-on into the recorded firmware buffer at `0xd0000000`, pitch 4096, 1024 by 768. The driver does not program the Intel display engine.
+Accepted for the Intel scanout on `pc_z97_d3h`. The ISO no longer boots Limine ([ADR-014](014-uefi-mb2-stub.md)). The `pc_z97_d3h` image paints the 80 by 25 sign-on into the recorded firmware buffer at `0xd0000000`, pitch 4096, 1024 by 768. The driver does not program the Intel display engine.
 
 ## Date
 
@@ -42,7 +42,7 @@ That is the same class of driver, aimed at the other device. The Intel option RO
 
 - A Video BIOS call reaches the Intel option ROM only after Initial Display Output is `IGFX`. On 2026-10-22 the Setup variable's byte at offset 3 was changed from 1 (PCIEX16 slot) to 0 (`IGFX`). Intel Processor Graphics was already enabled. After the reboot, firmware reports the Intel device as the boot VGA device and the RX 560 as not.
 - The address, pitch, and color masks come from a boot that reads the Intel mode-info block. On 2026-10-22 that boot reported `0xd0000000`, pitch 4096, 1024 by 768, and 32 bits per pixel, with red at shift 16, green at shift 8, and blue at shift 0. The address matches the Intel prefetchable region. It is used because the Multiboot 2 tag names it.
-- Once `IGFX` is the primary device, the live Z97 consoles paint 80 by 25 cells into the recorded firmware buffer. The driver still does not program the Intel display engine.
+- Once `IGFX` is the primary device, the `pc_z97_d3h` image paints 80 by 25 cells into the recorded firmware buffer. The driver still does not program the Intel display engine.
 - A mode shorter than 16 rows, or no linear direct-color mode, fails this path. The spec does not then start a display-engine driver.
 - [`context.md`](../context.md) and [`boards.md`](../boards.md) carry the desk terms.
 

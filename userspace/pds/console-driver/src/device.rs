@@ -1,22 +1,18 @@
 //! VGA text aperture, the Z97 firmware buffer, and the i8042 keyboard controller.
 //!
 //! QEMU and the Inspiron map `0xb8000` uncached and grant the CRTC ports plus
-//! keyboard ports `0x60` and `0x64`. The Z97 consoles map the firmware buffer
-//! at `0xd0000000` and do not map that text page. On the Swift image the same
+//! keyboard ports `0x60` and `0x64`. The Z97 desk maps the firmware buffer
+//! at `0xd0000000`. It does not map that text page. On the Swift image the same
 //! driver paints the GOP panel when the mode record names that buffer, and the
-//! VGA text page otherwise. Scan-code translation stays in [`crate::scancode`].
+//! VGA text page otherwise.
 
-#[cfg(any(
-    feature = "board-swift_sfx14_41g",
-    feature = "board-pc_z97_d3h",
-    feature = "board-pc_z97_d3h_i217"
-))]
+#[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h",))]
 use core::cell::Cell;
 
 use sel4::with_ipc_buffer_mut;
 use sel4_microkit::{memory_region_symbol, var};
 
-#[cfg(any(feature = "board-pc_z97_d3h", feature = "board-pc_z97_d3h_i217"))]
+#[cfg(feature = "board-pc_z97_d3h")]
 use lerux_desk::{
     desk_target, fill_background, paint_cell, paint_underline, Pen, ScanoutMode, DESK_FB_BYTES,
 };
@@ -26,17 +22,9 @@ use lerux_desk::{
 };
 
 use crate::screen::Screen;
-#[cfg(any(
-    feature = "board-swift_sfx14_41g",
-    feature = "board-pc_z97_d3h",
-    feature = "board-pc_z97_d3h_i217"
-))]
+#[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h",))]
 use crate::screen::CELLS;
-#[cfg(any(
-    feature = "board-swift_sfx14_41g",
-    feature = "board-pc_z97_d3h",
-    feature = "board-pc_z97_d3h_i217"
-))]
+#[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h",))]
 use crate::screen::COLS;
 
 #[cfg(feature = "board-swift_sfx14_41g")]
@@ -53,8 +41,7 @@ struct Panel {
     cursor: Cell<Option<usize>>,
 }
 
-/// Mapped Z97 firmware buffer. `live` is false when the mode record is not that geometry.
-#[cfg(any(feature = "board-pc_z97_d3h", feature = "board-pc_z97_d3h_i217"))]
+#[cfg(feature = "board-pc_z97_d3h")]
 struct DeskFb {
     frame: *mut u8,
     len: usize,
@@ -88,27 +75,15 @@ const SPIN: u32 = 100_000;
 
 /// CRTC index/data and the two i8042 ports. Each range has its own cap.
 pub struct Device {
-    #[cfg(not(any(
-        feature = "board-swift_sfx14_41g",
-        feature = "board-pc_z97_d3h",
-        feature = "board-pc_z97_d3h_i217"
-    )))]
+    #[cfg(not(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h",)))]
     vga: *mut u16,
     #[cfg(feature = "board-swift_sfx14_41g")]
     surface: Surface,
-    #[cfg(any(feature = "board-pc_z97_d3h", feature = "board-pc_z97_d3h_i217"))]
+    #[cfg(feature = "board-pc_z97_d3h")]
     desk: DeskFb,
-    #[cfg(not(any(
-        feature = "board-swift_sfx14_41g",
-        feature = "board-pc_z97_d3h",
-        feature = "board-pc_z97_d3h_i217"
-    )))]
+    #[cfg(not(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h",)))]
     crtc_cap: u64,
-    #[cfg(not(any(
-        feature = "board-swift_sfx14_41g",
-        feature = "board-pc_z97_d3h",
-        feature = "board-pc_z97_d3h_i217"
-    )))]
+    #[cfg(not(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h",)))]
     crtc_port: u16,
     data_cap: u64,
     data_port: u16,
@@ -122,7 +97,7 @@ fn low_u16(value: usize) -> u16 {
     u16::try_from(value & 0xffff).expect("low half")
 }
 
-#[cfg(not(any(feature = "board-pc_z97_d3h", feature = "board-pc_z97_d3h_i217")))]
+#[cfg(not(feature = "board-pc_z97_d3h"))]
 pub(crate) fn vga_text() -> *mut u16 {
     memory_region_symbol!(vga_text_vaddr: *mut u16).as_ptr()
 }
@@ -157,11 +132,7 @@ fn kbd_ports() -> KbdPorts {
 }
 
 impl Device {
-    #[cfg(not(any(
-        feature = "board-swift_sfx14_41g",
-        feature = "board-pc_z97_d3h",
-        feature = "board-pc_z97_d3h_i217"
-    )))]
+    #[cfg(not(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h",)))]
     pub fn from_system() -> Self {
         let kbd = kbd_ports();
         let crtc_id = *var!(crtc_ioport_id: usize = usize::MAX) as u64;
@@ -188,7 +159,7 @@ impl Device {
         }
     }
 
-    #[cfg(any(feature = "board-pc_z97_d3h", feature = "board-pc_z97_d3h_i217"))]
+    #[cfg(feature = "board-pc_z97_d3h")]
     pub fn from_system() -> Self {
         let kbd = kbd_ports();
         Self {
@@ -206,13 +177,11 @@ impl Device {
         matches!(self.surface, Surface::Panel(_))
     }
 
-    /// The mode record is the Z97 firmware buffer, so this boot paints pixels.
-    #[cfg(any(feature = "board-pc_z97_d3h", feature = "board-pc_z97_d3h_i217"))]
+    #[cfg(feature = "board-pc_z97_d3h")]
     pub fn uses_desk(&self) -> bool {
         self.desk.live
     }
 
-    /// Frame and pen for the boot-line hook. `None` stores no pixels.
     #[cfg(feature = "board-pc_z97_d3h")]
     pub fn boot_target(&self) -> Option<(*mut u8, Pen)> {
         self.desk
@@ -234,14 +203,10 @@ impl Device {
         }
     }
 
+    #[cfg(not(feature = "board-pc_z97_d3h"))]
     pub(crate) fn enable_cursor(&self) {
         // Scanlines 13 through 15, disable-bit clear: an underline.
-        // The Swift panel and the Z97 firmware buffer draw that underline in pixels.
-        #[cfg(not(any(
-            feature = "board-swift_sfx14_41g",
-            feature = "board-pc_z97_d3h",
-            feature = "board-pc_z97_d3h_i217"
-        )))]
+        #[cfg(not(feature = "board-swift_sfx14_41g"))]
         {
             self.crtc(0x0a, 0x0d);
             self.crtc(0x0b, 0x0f);
@@ -256,22 +221,16 @@ impl Device {
             Self::crtc_at(crtc_cap, crtc_port, 0x0a, 0x0d);
             Self::crtc_at(crtc_cap, crtc_port, 0x0b, 0x0f);
         }
-        #[cfg(any(feature = "board-pc_z97_d3h", feature = "board-pc_z97_d3h_i217"))]
-        let _ = self;
     }
 
     pub(crate) fn sync_cursor(&self, screen: &Screen) {
-        #[cfg(not(any(
-            feature = "board-swift_sfx14_41g",
-            feature = "board-pc_z97_d3h",
-            feature = "board-pc_z97_d3h_i217"
-        )))]
+        #[cfg(not(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h",)))]
         {
             let pos = u16::try_from(screen.cursor_index()).expect("cursor fits");
             self.crtc(0x0e, (pos >> 8) as u8);
             self.crtc(0x0f, (pos & 0xff) as u8);
         }
-        #[cfg(any(feature = "board-pc_z97_d3h", feature = "board-pc_z97_d3h_i217"))]
+        #[cfg(feature = "board-pc_z97_d3h")]
         sync_desk_cursor(&self.desk, screen);
         #[cfg(feature = "board-swift_sfx14_41g")]
         match &self.surface {
@@ -334,15 +293,11 @@ impl Device {
     }
 
     fn write_cell(&self, index: usize, value: u16) {
-        #[cfg(not(any(
-            feature = "board-swift_sfx14_41g",
-            feature = "board-pc_z97_d3h",
-            feature = "board-pc_z97_d3h_i217"
-        )))]
+        #[cfg(not(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h",)))]
         unsafe {
             self.vga.add(index).write_volatile(value);
         }
-        #[cfg(any(feature = "board-pc_z97_d3h", feature = "board-pc_z97_d3h_i217"))]
+        #[cfg(feature = "board-pc_z97_d3h")]
         write_desk_cell(&self.desk, index, value);
         #[cfg(feature = "board-swift_sfx14_41g")]
         match &self.surface {
@@ -370,16 +325,13 @@ impl Device {
         );
     }
 
+    #[cfg(not(feature = "board-pc_z97_d3h"))]
     fn crtc_at(cap: u64, port: u16, index: u8, value: u8) {
         Self::out8(cap, port, index);
         Self::out8(cap, port.wrapping_add(1), value);
     }
 
-    #[cfg(not(any(
-        feature = "board-swift_sfx14_41g",
-        feature = "board-pc_z97_d3h",
-        feature = "board-pc_z97_d3h_i217"
-    )))]
+    #[cfg(not(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h",)))]
     fn crtc(&self, index: u8, value: u8) {
         Self::crtc_at(self.crtc_cap, self.crtc_port, index, value);
     }
@@ -552,23 +504,17 @@ fn panel_from_record(record: &[u8]) -> Panel {
     }
 }
 
-#[cfg(any(feature = "board-pc_z97_d3h", feature = "board-pc_z97_d3h_i217"))]
-const _: () = assert!(COLS == 80);
-
-/// Copy the mode record, mark a matching Z97 buffer, then paint.
-///
-/// The 40 bytes go back before any store into the frame. A miss writes no pixels
-/// and does not use the VGA text page.
-#[cfg(any(feature = "board-pc_z97_d3h", feature = "board-pc_z97_d3h_i217"))]
+#[cfg(feature = "board-pc_z97_d3h")]
 fn desk_from_system() -> DeskFb {
     let mode_ptr = memory_region_symbol!(mode_record_vaddr: *mut u8).as_ptr();
     let mut record = [0u8; 40];
+    let mode_len = record.len();
     // SAFETY: `mode_record` is one mapped page. The mode is its first 40 bytes.
     unsafe {
-        record.copy_from_slice(core::slice::from_raw_parts(mode_ptr, record.len()));
+        record.copy_from_slice(core::slice::from_raw_parts(mode_ptr, mode_len));
     }
     let mode = desk_target(&mut record);
-    // SAFETY: same mapped page as the copy above. This store happens before any pixel write.
+    // SAFETY: same mapped page as the copy above. The kind byte is stored before any pixel write.
     unsafe {
         core::slice::from_raw_parts_mut(mode_ptr, record.len()).copy_from_slice(&record);
     }
@@ -577,12 +523,14 @@ fn desk_from_system() -> DeskFb {
     let desk = desk_fb(frame, len, mode);
     if desk.live {
         let pen = desk_pen(&desk);
-        fill_background(desk_frame(&desk), pen);
+        // SAFETY: Microkit mapped `desk_fb` read-write for `DESK_FB_BYTES` bytes.
+        let frame = unsafe { core::slice::from_raw_parts_mut(desk.frame, desk.len) };
+        fill_background(frame, pen);
     }
     desk
 }
 
-#[cfg(any(feature = "board-pc_z97_d3h", feature = "board-pc_z97_d3h_i217"))]
+#[cfg(feature = "board-pc_z97_d3h")]
 fn desk_fb(frame: *mut u8, len: usize, mode: Option<ScanoutMode>) -> DeskFb {
     let live = mode.is_some();
     let (pitch, width, height, red, green, blue) = match mode {
@@ -610,7 +558,7 @@ fn desk_fb(frame: *mut u8, len: usize, mode: Option<ScanoutMode>) -> DeskFb {
     }
 }
 
-#[cfg(any(feature = "board-pc_z97_d3h", feature = "board-pc_z97_d3h_i217"))]
+#[cfg(feature = "board-pc_z97_d3h")]
 fn desk_pen(desk: &DeskFb) -> Pen {
     Pen {
         pitch: desk.pitch,
@@ -622,30 +570,25 @@ fn desk_pen(desk: &DeskFb) -> Pen {
     }
 }
 
-/// The mapped frame. It stays the mapping; it is not copied onto the stack.
-#[cfg(any(feature = "board-pc_z97_d3h", feature = "board-pc_z97_d3h_i217"))]
-fn desk_frame(desk: &DeskFb) -> &mut [u8] {
-    // SAFETY: Microkit mapped `desk_fb` read-write for `DESK_FB_BYTES` bytes.
-    unsafe { core::slice::from_raw_parts_mut(desk.frame, desk.len) }
-}
-
-#[cfg(any(feature = "board-pc_z97_d3h", feature = "board-pc_z97_d3h_i217"))]
+#[cfg(feature = "board-pc_z97_d3h")]
 fn write_desk_cell(desk: &DeskFb, index: usize, value: u16) {
     if !desk.live || index >= CELLS {
         return;
     }
     let pen = desk_pen(desk);
+    // SAFETY: Microkit mapped `desk_fb` read-write for `DESK_FB_BYTES` bytes.
+    let frame = unsafe { core::slice::from_raw_parts_mut(desk.frame, desk.len) };
     paint_cell(
-        desk_frame(desk),
+        frame,
         pen,
-        index % 80,
-        index / 80,
+        index % COLS,
+        index / COLS,
         (value & 0xff) as u8,
         (value >> 8) as u8,
     );
 }
 
-#[cfg(any(feature = "board-pc_z97_d3h", feature = "board-pc_z97_d3h_i217"))]
+#[cfg(feature = "board-pc_z97_d3h")]
 fn sync_desk_cursor(desk: &DeskFb, screen: &Screen) {
     if !desk.live {
         return;
@@ -664,17 +607,13 @@ fn sync_desk_cursor(desk: &DeskFb, screen: &Screen) {
     }
 }
 
-#[cfg(any(feature = "board-pc_z97_d3h", feature = "board-pc_z97_d3h_i217"))]
+#[cfg(feature = "board-pc_z97_d3h")]
 fn desk_underline(desk: &DeskFb, index: usize, value: u16) {
     if index >= CELLS {
         return;
     }
     let pen = desk_pen(desk);
-    paint_underline(
-        desk_frame(desk),
-        pen,
-        index % 80,
-        index / 80,
-        (value >> 8) as u8,
-    );
+    // SAFETY: Microkit mapped `desk_fb` read-write for `DESK_FB_BYTES` bytes.
+    let frame = unsafe { core::slice::from_raw_parts_mut(desk.frame, desk.len) };
+    paint_underline(frame, pen, index % COLS, index / COLS, (value >> 8) as u8);
 }

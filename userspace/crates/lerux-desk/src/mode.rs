@@ -598,13 +598,14 @@ pub fn panel_mode(record: &[u8]) -> Option<ScanoutMode> {
 /// Whether this boot may touch Swift device registers.
 ///
 /// The panel mark is the Swift. An explicit VGA mark is not, even when an
-/// MT7921 is plugged into some other machine. A cleared record (kind 0) still
+/// MT7921 is plugged into some other machine. [`CONSOLE_DESK`] is the Z97
+/// firmware buffer and is not this radio. A cleared record (kind 0) still
 /// counts when that radio is present, because a Swift boot used to lose the
 /// mode page when seL4 retyped it.
 #[must_use]
 pub fn touch_swift_devices(record: &[u8], mt7921_present: bool) -> bool {
     match console_kind(record) {
-        CONSOLE_VGA => false,
+        CONSOLE_VGA | CONSOLE_DESK => false,
         CONSOLE_PANEL => true,
         _ => mt7921_present,
     }
@@ -617,8 +618,27 @@ pub fn touch_swift_devices(record: &[u8], mt7921_present: bool) -> bool {
 /// [`ScanoutMode::write_record`], which would zero the rest of the record.
 #[must_use]
 pub fn desk_target(record: &mut [u8]) -> Option<ScanoutMode> {
-    let _ = record;
-    None
+    let mode = ScanoutMode::parse(record)?;
+    if !recorded_desk(&mode) {
+        return None;
+    }
+    *record.get_mut(CONSOLE_KIND)? = CONSOLE_DESK;
+    Some(mode)
+}
+
+fn recorded_desk(mode: &ScanoutMode) -> bool {
+    mode.address() == DESK_FB_PHYS
+        && mode.pitch() == DESK_FB_PITCH
+        && mode.width() == DESK_FB_WIDTH
+        && mode.height() == DESK_FB_HEIGHT
+        && u64::from(mode.pitch()) * u64::from(mode.height()) == DESK_FB_BYTES
+        && mode.bits_per_pixel() == 32
+        && mode.red_shift() == 16
+        && mode.green_shift() == 8
+        && mode.blue_shift() == 0
+        && mode.red_width() == 8
+        && mode.green_width() == 8
+        && mode.blue_width() == 8
 }
 
 fn push(out: &mut [u8; 80], len: &mut usize, bytes: &[u8]) -> bool {

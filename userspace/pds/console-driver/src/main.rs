@@ -59,18 +59,11 @@ fn init() -> handler::HandlerImpl {
 
     use crate::screen::Screen;
 
-    #[cfg(feature = "board-pc_z97_d3h")]
-    boot_line::install();
     debug::init().expect("debug log");
     let device = device::Device::from_system();
-    #[cfg(not(feature = "board-swift_sfx14_41g"))]
-    log::info!("console-driver: vga text");
-    #[cfg(feature = "board-swift_sfx14_41g")]
-    if device.uses_panel() {
-        log::info!("console-driver: panel");
-    } else {
-        log::info!("console-driver: vga text");
-    }
+    #[cfg(feature = "board-pc_z97_d3h")]
+    install_boot_lines(&device);
+    note_ready(&device);
     if device.init_keyboard() {
         log::info!("console-driver: i8042 ready");
     } else {
@@ -100,4 +93,35 @@ fn init() -> handler::HandlerImpl {
     #[cfg(feature = "board-pc_z97_d3h")]
     debug::after_boot_line();
     handler::HandlerImpl::new(device, screen, usb, IRQ, USB_IRQ, SHELL)
+}
+
+#[cfg(all(not(test), feature = "board-pc_z97_d3h"))]
+fn install_boot_lines(device: &device::Device) {
+    if let Some((frame, pen)) = device.boot_target() {
+        boot_line::install(frame, pen);
+    }
+}
+
+#[cfg(all(not(test), feature = "hardware"))]
+fn note_ready(device: &device::Device) {
+    use lerux_logging::log;
+    #[cfg(any(feature = "board-pc_z97_d3h", feature = "board-pc_z97_d3h_i217"))]
+    if device.uses_desk() {
+        log::info!("console-driver: desk");
+    }
+    #[cfg(feature = "board-swift_sfx14_41g")]
+    if device.uses_panel() {
+        log::info!("console-driver: panel");
+    } else {
+        log::info!("console-driver: vga text");
+    }
+    #[cfg(not(any(
+        feature = "board-swift_sfx14_41g",
+        feature = "board-pc_z97_d3h",
+        feature = "board-pc_z97_d3h_i217"
+    )))]
+    {
+        let _ = device;
+        log::info!("console-driver: vga text");
+    }
 }

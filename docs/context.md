@@ -30,7 +30,7 @@ lerux builds **Rust-only userspace** on the formally verified [seL4](https://sel
 | Userspace language | Rust only (no musllibc/relibc in lerux code) |
 | New device and filesystem connections | LionsOS structures in Rust (`lerux-sddf`, [ADR-011](decisions/011-lionsos-structures.md)) |
 | First platform | aarch64 QEMU virt; x86_64 parameterized for follow-up |
-| Dependency fetch | `lerux fetch` git clones (pinned tags) |
+| Dependency fetch | `lerux fetch` git clones (pinned tags and commits) |
 
 **Interactive surface (2026-09, ADR-009; engines approved 2026-11-10):** QEMU software framebuffer is in scope. A GPU compositor, Wayland, and libvmm are not. JavaScript and WebAssembly are approved. The browser is modelled on Ladybird's engine shape and process isolation and rewritten in Rust, not a port of the Ladybird, Chromium, or WebKit C++ sources. The agent is a new protection domain, not a port of `grok`. See [`plan-interactive.md`](plan-interactive.md).
 

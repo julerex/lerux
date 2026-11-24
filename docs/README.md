@@ -16,7 +16,7 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [swift-wifi-survey-retrospective.md](swift-wifi-survey-retrospective.md) | Why the Swift survey printed `rx 0` for so many boots: the scan frames arrived on an MCU ring the driver did not read for frames |
 | [plan-swift-wifi.md](plan-swift-wifi.md) | Phased plan from the `fw sem` stall to an application on the internet over the Swift radio |
 | [plan.md](plan.md) | Roadmap and cross-arch smoke parity (phases 1–82, done). The metal target being driven is the Acer Swift X. The Z97 desk page and the [Physical RPi4 lab](plan.md#physical-rpi4-lab-hardware-gated) stay secondary |
-| [plan-lionsos.md](plan-lionsos.md) | LionsOS structures in a Rust guest. Milestone 17 stays (postcard guest model). The metal target being driven is the Acer Swift X (milestones 24–29). Milestone 22, the Z97 bind, stays secondary |
+| [plan-lionsos.md](plan-lionsos.md) | LionsOS structures in a Rust guest. Milestone 17 stays (postcard guest model). The metal target being driven is the Acer Swift X (milestones 24–29). Milestone 22, the Z97 bind, stays secondary. Milestone 30 pins the Redox driver checkout and does not port a driver |
 | [plan-arch.md](plan-arch.md) | Phases 50–60 living checklist. The Acer Swift X is the metal target being driven. [Physical RPi4 lab](plan-arch.md#physical-rpi4-lab-hardware-gated) stays secondary |
 | [plan-qemu.md](plan-qemu.md) | Phases 61–70 living checklist (QEMU-only workstation deepening; done) |
 | [plan-interactive.md](plan-interactive.md) | Phases 71–80 record: QEMU interactive surface. Milestone 17 stays and did not remove those domains. JavaScript and WebAssembly are approved |

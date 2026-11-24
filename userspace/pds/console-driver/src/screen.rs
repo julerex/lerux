@@ -108,6 +108,16 @@ impl Screen {
         &self.cells[..self.used()]
     }
 
+    #[cfg(any(test, feature = "board-pc_z97_d3h_i217"))]
+    pub fn cell(&self, index: usize) -> u16 {
+        self.cells[index]
+    }
+
+    #[cfg(any(test, feature = "board-pc_z97_d3h_i217"))]
+    pub fn set_cell(&mut self, index: usize, value: u16) {
+        self.cells[index] = value;
+    }
+
     #[cfg(test)]
     pub fn cursor(&self) -> (usize, usize) {
         (self.row, self.col)
@@ -290,6 +300,13 @@ fn blank_cells() -> [u16; CELLS] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn set_cell_replaces_one_glyph() {
+        let mut screen = Screen::blank();
+        screen.set_cell(3, 0x0741);
+        assert_eq!(screen.cell(3), 0x0741);
+    }
 
     #[test]
     fn bytes_land_on_the_first_line() {

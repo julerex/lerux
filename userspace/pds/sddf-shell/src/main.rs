@@ -3,12 +3,10 @@
 #![cfg_attr(
     any(
         feature = "board-qemu_virt_aarch64_browser_sddf",
-        feature = "board-qemu_virt_riscv64_browser_sddf"
+        feature = "board-qemu_virt_riscv64_browser_sddf",
+        feature = "board-pc_z97_d3h_i217"
     ),
-    expect(
-        dead_code,
-        reason = "this image is the start menu and does not run the file-command loop"
-    )
+    expect(dead_code, reason = "this image does not run the file-command loop")
 )]
 #[cfg(any(
     all(
@@ -205,6 +203,20 @@ compile_error!(
 compile_error!("the fetch image, the web image, and the browser image are separate boards");
 
 #[cfg(all(
+    feature = "board-pc_z97_d3h_i217",
+    any(
+        feature = "board-swift_sfx14_41g",
+        feature = "board-qemu_virt_aarch64_fetch_sddf",
+        feature = "board-qemu_virt_riscv64_fetch_sddf",
+        feature = "board-x86_64_generic_fetch_sddf",
+        feature = "board-qemu_virt_aarch64_fs_sddf",
+        feature = "board-qemu_virt_riscv64_fs_sddf",
+        feature = "board-x86_64_generic_fs_sddf",
+    )
+))]
+compile_error!("the I217 shell does not share a build with Swift, fetch, or the filesystem image");
+
+#[cfg(all(
     any(feature = "board-swift_sfx14_41g", feature = "console-out"),
     any(
         feature = "board-qemu_virt_aarch64_fetch_sddf",
@@ -313,11 +325,17 @@ const _: () = assert!(FS_SHELL_SERVER_CHANNEL == 2);
 /// Console byte channel. `console_driver` aliases `serial_driver` in the channel check.
 #[cfg(feature = "console-out")]
 const SERIAL_DRIVER: Channel = Channel::new(0);
+/// Receive copier. The I217 shell has no filesystem channel, so this is 1.
+#[cfg(all(feature = "net-client", feature = "board-pc_z97_d3h_i217"))]
+const NET_COPY: Channel = Channel::new(1);
+/// Transmit virtualiser on the I217 shell.
+#[cfg(all(feature = "net-client", feature = "board-pc_z97_d3h_i217"))]
+const NET_VIRT_TX: Channel = Channel::new(2);
 /// Receive copier. The literal matches `SHELL_NET_RX_CHANNEL`.
-#[cfg(feature = "net-client")]
+#[cfg(all(feature = "net-client", not(feature = "board-pc_z97_d3h_i217")))]
 const NET_COPY: Channel = Channel::new(3);
 /// Transmit virtualiser. The literal matches `SHELL_NET_TX_CHANNEL`.
-#[cfg(feature = "net-client")]
+#[cfg(all(feature = "net-client", not(feature = "board-pc_z97_d3h_i217")))]
 const NET_VIRT_TX: Channel = Channel::new(4);
 /// Survey notify. The radio's channel 3 runs the same handler as a passphrase.
 #[cfg(feature = "board-swift_sfx14_41g")]
@@ -330,10 +348,15 @@ pub(crate) fn kick_radio() {
     SWIFT_MT7921.notify();
 }
 
-#[cfg(feature = "net-client")]
+#[cfg(all(feature = "net-client", not(feature = "board-pc_z97_d3h_i217")))]
 const _: () = {
     assert!(lerux_sddf::net_image::SHELL_NET_RX_CHANNEL == 3);
     assert!(lerux_sddf::net_image::SHELL_NET_TX_CHANNEL == 4);
+};
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+const _: () = {
+    assert!(lerux_sddf::net_image::I217_SHELL_NET_RX_CHANNEL == 1);
+    assert!(lerux_sddf::net_image::I217_SHELL_NET_TX_CHANNEL == 2);
 };
 #[cfg(feature = "net-client")]
 const STACK_SIZE: usize = 0x1_0000;
@@ -484,6 +507,12 @@ struct Name {
     len: u8,
 }
 
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+extern "C" fn worker() {
+    i217_worker();
+}
+
+#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
 extern "C" fn worker() {
     if !bind_files() {
         return;
@@ -521,6 +550,35 @@ extern "C" fn worker() {
 #[cfg(feature = "board-swift_sfx14_41g")]
 fn say_preamble() {
     for_each_preamble(env!("LERUX_GIT_DESCRIBE").as_bytes(), say);
+}
+
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+fn i217_worker() {
+    use lerux_signon::{for_each_i217_preamble, PROMPT};
+    for_each_i217_preamble(env!("LERUX_GIT_DESCRIBE").as_bytes(), say);
+    let mut line = [0u8; LINE_MAX];
+    loop {
+        let len = read_line(&mut line);
+        dispatch_i217(&line[..len]);
+        say(PROMPT);
+    }
+}
+
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+fn dispatch_i217(line: &[u8]) {
+    let line = trim(line);
+    if line.is_empty() {
+        return;
+    }
+    let Some((cmd, rest)) = split_first(line) else {
+        say(b"err\n");
+        return;
+    };
+    if cmd == b"ping" && rest.is_empty() {
+        say_ping(net::ping_gateway());
+    } else {
+        say(b"err\n");
+    }
 }
 
 fn bind_files() -> bool {
@@ -1070,7 +1128,7 @@ fn chosen_ssid(line: &[u8]) -> Option<([u8; 32], usize)> {
     Some((owned, name.len()))
 }
 
-#[cfg(feature = "board-swift_sfx14_41g")]
+#[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h_i217"))]
 fn say_ping(result: net::PingResult) {
     match result {
         net::PingResult::NoAddress => say(b"ip err\n"),
@@ -2844,6 +2902,8 @@ impl Handler for HandlerImpl {
         if channels.contains(Channel::new(RX_CH)) {
             microkit_cothread_recv_ntfn(RX_CH);
         }
+        // On the I217 shell channel 2 is the transmit virtualiser, not fatfs.
+        #[cfg(not(feature = "board-pc_z97_d3h_i217"))]
         if channels.contains(FATFS) {
             microkit_cothread_recv_ntfn(FS_CH);
         }
@@ -2862,19 +2922,25 @@ impl Handler for HandlerImpl {
 
 #[cfg(feature = "net-client")]
 fn install_net(at: usize) {
-    use lerux_sddf::{
-        net_client_config_t,
-        net_image::{self, SHELL_NET_RX_CHANNEL, SHELL_NET_TX_CHANNEL},
-        SDDF_NET_MAGIC,
-    };
+    #[cfg(not(feature = "board-pc_z97_d3h_i217"))]
+    use lerux_sddf::net_image::{SHELL_NET_RX_CHANNEL, SHELL_NET_TX_CHANNEL};
+    use lerux_sddf::{net_client_config_t, net_image, SDDF_NET_MAGIC};
 
     let net_len = size_of::<net_client_config_t>();
     assert_eq!(CONFIG.len(), at + net_len);
     // SAFETY: the build script wrote the network client page after the filesystem page.
     let net = unsafe { net_image::net_config_from_bytes::<net_client_config_t>(&CONFIG[at..]) };
     assert_eq!(net.magic, SDDF_NET_MAGIC);
-    assert_eq!(net.rx.id, SHELL_NET_RX_CHANNEL);
-    assert_eq!(net.tx.id, SHELL_NET_TX_CHANNEL);
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    {
+        assert_eq!(net.rx.id, lerux_sddf::net_image::I217_SHELL_NET_RX_CHANNEL);
+        assert_eq!(net.tx.id, lerux_sddf::net_image::I217_SHELL_NET_TX_CHANNEL);
+    }
+    #[cfg(not(feature = "board-pc_z97_d3h_i217"))]
+    {
+        assert_eq!(net.rx.id, SHELL_NET_RX_CHANNEL);
+        assert_eq!(net.tx.id, SHELL_NET_TX_CHANNEL);
+    }
     net::install(&net);
 }
 

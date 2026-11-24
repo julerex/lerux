@@ -20,9 +20,11 @@ die() {
 usage() {
   echo "usage: just burn-lerux-iso" >&2
   echo "       just burn-lerux-iso /dev/sdX" >&2
+  echo "       just burn-lerux-iso z97" >&2
+  echo "       just burn-lerux-iso z97 /dev/sdX" >&2
   echo "With no device, USB sticks are listed and the stick you number is erased." >&2
-  echo "The image is build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso from just make-lerux-iso." >&2
-  echo "That is the Swift image. Z97 and Inspiron images are not this default." >&2
+  echo "No target writes build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso." >&2
+  echo "z97 writes build/pc_z97_d3h_i217/lerux_pc_z97_d3h_i217.iso." >&2
 }
 
 here=$(cd "$(dirname "$0")" && pwd)

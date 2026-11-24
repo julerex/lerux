@@ -27,6 +27,8 @@ pub(crate) enum Page {
     NetCopy,
     NetClient,
     NetShell,
+    /// I217 shell. Console is channel 0, so the network ends are 1 and 2.
+    NetShellI217,
     NetRequest,
     TimerShell,
     FsSchedule,
@@ -117,7 +119,11 @@ fn shell_pages(board_features: &[&str]) -> Result<Vec<Page>, ImageError> {
         pages.push(Page::TimerShell);
         pages.push(Page::FsSchedule);
     } else if network {
-        pages.push(Page::NetShell);
+        if board_features.contains(&"board-pc_z97_d3h_i217") {
+            pages.push(Page::NetShellI217);
+        } else {
+            pages.push(Page::NetShell);
+        }
     }
     Ok(pages)
 }
@@ -140,6 +146,13 @@ fn append_page(bytes: &mut Vec<u8>, page: Page) {
         Page::NetCopy => append_net(bytes, &net_image::copy_config()),
         Page::NetClient => append_net(bytes, &net_image::client_config()),
         Page::NetShell => append_net(bytes, &net_image::shell_client_config()),
+        Page::NetShellI217 => append_net(
+            bytes,
+            &net_image::client_config_for(
+                net_image::I217_SHELL_NET_RX_CHANNEL,
+                net_image::I217_SHELL_NET_TX_CHANNEL,
+            ),
+        ),
         Page::NetRequest => append_net(bytes, &request_net_config()),
         Page::TimerShell => append_timer(bytes, &timer::shell_client_config()),
         Page::FsSchedule => append_schedule(bytes),

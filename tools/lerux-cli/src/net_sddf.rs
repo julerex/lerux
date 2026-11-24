@@ -21,13 +21,26 @@ pub fn write_configs(dir: &Path, board: &str) -> Result<()> {
     bind(dir, "sddf-net-virt-tx", "net_virt_tx_config.bin")?;
     bind(dir, "sddf-net-virt-rx", "net_virt_rx_config.bin")?;
     bind(dir, "sddf-net-copy", "net_copy_config.bin")?;
-    bind(dir, "sddf-net-client", "net_client_config.bin")?;
+    if board == "pc_z97_d3h_i217" {
+        bind_with(
+            dir,
+            "sddf-shell",
+            &["net-client", "board-pc_z97_d3h_i217"],
+            "shell_config.bin",
+        )?;
+    } else {
+        bind(dir, "sddf-net-client", "net_client_config.bin")?;
+    }
     Ok(())
 }
 
 fn bind(dir: &Path, crate_name: &str, file_name: &str) -> Result<()> {
+    bind_with(dir, crate_name, &[], file_name)
+}
+
+fn bind_with(dir: &Path, crate_name: &str, features: &[&str], file_name: &str) -> Result<()> {
     let path = dir.join(file_name);
-    lerux_image::emit_pd_binding(crate_name, &[], &path)
+    lerux_image::emit_pd_binding(crate_name, features, &path)
         .map_err(|error| anyhow::anyhow!("{error}"))
         .with_context(|| format!("bind {crate_name}"))
 }

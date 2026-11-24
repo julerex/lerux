@@ -16,6 +16,8 @@ use crate::usb_off::UsbKbd;
 #[cfg(not(any(feature = "board-swift_sfx14_41g", feature = "board-inspiron_n5010")))]
 use crate::xhci::UsbKbd;
 
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+use crate::screen::COLS;
 use crate::{
     device::Device,
     scancode::{decode, KeyState},
@@ -31,8 +33,16 @@ pub struct HandlerImpl {
     ps2_irq: Channel,
     usb_irq: Channel,
     client: Channel,
+    /// I217 window rewrite. The Ethernet driver calls this after MAC reset.
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    window: Channel,
     /// Notify the shell on the next key only after it has drained the queue.
     notify: bool,
+    /// Cell covered by the mouse marker, and the glyph that was there.
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    marker: Option<usize>,
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    marker_saved: u16,
 }
 
 impl HandlerImpl {
@@ -43,6 +53,7 @@ impl HandlerImpl {
         ps2_irq: Channel,
         usb_irq: Channel,
         client: Channel,
+        #[cfg(feature = "board-pc_z97_d3h_i217")] window: Channel,
     ) -> Self {
         Self {
             device,
@@ -53,8 +64,55 @@ impl HandlerImpl {
             ps2_irq,
             usb_irq,
             client,
+            #[cfg(feature = "board-pc_z97_d3h_i217")]
+            window,
             notify: true,
+            #[cfg(feature = "board-pc_z97_d3h_i217")]
+            marker: None,
+            #[cfg(feature = "board-pc_z97_d3h_i217")]
+            marker_saved: 0,
         }
+    }
+
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    fn place_marker(&mut self, col: i32, row: i32) {
+        let col = usize::try_from(col).expect("marker column");
+        let row = usize::try_from(row).expect("marker row");
+        let index = row * COLS + col;
+        if index >= crate::screen::CELLS {
+            return;
+        }
+        if self.marker == Some(index) {
+            return;
+        }
+        if let Some(prev) = self.marker {
+            self.screen.set_cell(prev, self.marker_saved);
+            self.device.present_cells(&self.screen, prev, prev + 1);
+        }
+        let saved = self.screen.cell(index);
+        self.marker_saved = saved;
+        // Black on light gray, so the marker is not the typing cursor.
+        let marked = (saved & 0x00ff) | (0x70 << 8);
+        self.screen.set_cell(index, marked);
+        self.device.present_cells(&self.screen, index, index + 1);
+        self.marker = Some(index);
+    }
+
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    fn refresh_marker(&mut self) {
+        let Some(index) = self.marker else {
+            return;
+        };
+        let current = self.screen.cell(index);
+        let glyph = current & 0x00ff;
+        let marked = glyph | (0x70 << 8);
+        if current == marked {
+            self.marker_saved = (self.marker_saved & 0xff00) | glyph;
+            return;
+        }
+        self.marker_saved = current;
+        self.screen.set_cell(index, marked);
+        self.device.present_cells(&self.screen, index, index + 1);
     }
 
     fn paint(&mut self, byte: u8) {
@@ -81,6 +139,8 @@ impl HandlerImpl {
             }
             Request::Write(byte) => {
                 self.paint(*byte);
+                #[cfg(feature = "board-pc_z97_d3h_i217")]
+                self.refresh_marker();
                 SuccessResponse::Write(NonBlocking::Ready(()))
             }
             Request::Flush => {
@@ -108,6 +168,10 @@ impl Handler for HandlerImpl {
                 let _ = self.rx.push_back(byte);
             }
             ack_usb(&mut self.usb);
+            #[cfg(feature = "board-pc_z97_d3h_i217")]
+            if let Some((col, row, _)) = self.usb.pointer() {
+                self.place_marker(col, row);
+            }
             self.usb_irq.irq_ack().expect("ack usb irq");
         }
         if ps2 {
@@ -135,6 +199,11 @@ impl Handler for HandlerImpl {
         channel: Channel,
         msg_info: MessageInfo,
     ) -> Result<MessageInfo, Self::Error> {
+        #[cfg(feature = "board-pc_z97_d3h_i217")]
+        if channel == self.window {
+            let label = u64::from(!crate::i217::rewrite());
+            return Ok(MessageInfo::new(label, 0));
+        }
         if channel != self.client {
             unreachable!("unexpected IPC channel");
         }

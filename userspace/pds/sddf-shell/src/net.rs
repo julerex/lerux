@@ -15,7 +15,7 @@ use sel4_microkit::{Channel, ChannelSet};
 
 #[cfg(feature = "browser-net")]
 use smoltcp::socket::dns::{self, GetQueryResultError};
-#[cfg(feature = "board-swift_sfx14_41g")]
+#[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h_i217"))]
 use smoltcp::socket::icmp;
 #[cfg(feature = "browser-net")]
 use smoltcp::wire::DnsQueryType;
@@ -31,14 +31,16 @@ use smoltcp::{
         Ipv4Address,
     },
 };
-#[cfg(feature = "board-swift_sfx14_41g")]
+#[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h_i217"))]
 use smoltcp::{
     phy::ChecksumCapabilities,
     wire::{Icmpv4Packet, Icmpv4Repr},
 };
 
 use lerux_cothread::microkit_cothread_recv_ntfn;
-use lerux_posix::{Errno, SockFd, Sockets, Tcp};
+#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
+use lerux_posix::SockFd;
+use lerux_posix::{Errno, Sockets, Tcp};
 use lerux_sddf::{
     net_buffers_init, net_client_config_t, net_connection_resource_t,
     net_image::SHELL_NET_RX_CHANNEL, net_queue_handle_t, net_queue_init,
@@ -58,11 +60,11 @@ use crate::net_device::NetDevice;
 
 const SPINS_PER_VIRTUAL_MS: u32 = 30_000;
 const LIMIT_MS: u64 = 30_000;
-#[cfg(feature = "board-swift_sfx14_41g")]
+#[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h_i217"))]
 const PING_INTERVAL_MS: u64 = 2_000;
-#[cfg(feature = "board-swift_sfx14_41g")]
+#[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h_i217"))]
 const ECHO_IDENT: u16 = 0x4c58;
-#[cfg(feature = "board-swift_sfx14_41g")]
+#[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h_i217"))]
 const ECHO_DATA: [u8; 2] = [0x4c, 0x58];
 const LOCAL_PORT: u16 = 49152;
 const GATEWAY: Ipv4Address = Ipv4Address::new(10, 0, 2, 2);
@@ -312,7 +314,7 @@ struct Stack {
     sockets: SocketSet<'static>,
     dhcp: SocketHandle,
     tcp: SocketHandle,
-    #[cfg(feature = "board-swift_sfx14_41g")]
+    #[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h_i217"))]
     icmp: SocketHandle,
     #[cfg(feature = "browser-net")]
     dns: SocketHandle,
@@ -320,7 +322,7 @@ struct Stack {
     op_start: u64,
     local_port: u16,
     local_ip: Ipv4Address,
-    #[cfg(feature = "board-swift_sfx14_41g")]
+    #[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h_i217"))]
     gateway: Ipv4Address,
     connecting: bool,
     listening: bool,
@@ -345,7 +347,7 @@ impl Stack {
         let mut sockets = empty_sockets();
         let dhcp = add_dhcp(&mut sockets);
         let tcp = add_tcp(&mut sockets);
-        #[cfg(feature = "board-swift_sfx14_41g")]
+        #[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h_i217"))]
         let icmp = add_icmp(&mut sockets);
         #[cfg(feature = "browser-net")]
         let dns = add_dns(&mut sockets);
@@ -355,7 +357,7 @@ impl Stack {
             sockets,
             dhcp,
             tcp,
-            #[cfg(feature = "board-swift_sfx14_41g")]
+            #[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h_i217"))]
             icmp,
             #[cfg(feature = "browser-net")]
             dns,
@@ -363,7 +365,7 @@ impl Stack {
             op_start: 0,
             local_port: LOCAL_PORT,
             local_ip: Ipv4Address::UNSPECIFIED,
-            #[cfg(feature = "board-swift_sfx14_41g")]
+            #[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h_i217"))]
             gateway: Ipv4Address::UNSPECIFIED,
             connecting: false,
             listening: false,
@@ -485,20 +487,21 @@ impl Stack {
             return Err(());
         }
         self.local_ip = address;
-        #[cfg(feature = "board-swift_sfx14_41g")]
+        #[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h_i217"))]
         {
             self.gateway = router;
         }
         Ok(true)
     }
 
-    #[cfg(feature = "board-swift_sfx14_41g")]
+    #[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h_i217"))]
     fn echo_gateway(&mut self) -> bool {
         let start = self.ms;
         let gateway = self.gateway;
         let mut last_send = None;
         let mut seq_no = 0u16;
         loop {
+            #[cfg(feature = "board-swift_sfx14_41g")]
             crate::kick_radio();
             self.poll_iface();
             let now = self.ms;
@@ -595,7 +598,7 @@ fn add_dhcp(sockets: &mut SocketSet<'static>) -> SocketHandle {
     sockets.add(dhcp)
 }
 
-#[cfg(feature = "board-swift_sfx14_41g")]
+#[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h_i217"))]
 fn add_icmp(sockets: &mut SocketSet<'static>) -> SocketHandle {
     let mut socket = icmp::Socket::new(packet_buffer(), packet_buffer());
     socket
@@ -604,7 +607,7 @@ fn add_icmp(sockets: &mut SocketSet<'static>) -> SocketHandle {
     sockets.add(socket)
 }
 
-#[cfg(feature = "board-swift_sfx14_41g")]
+#[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h_i217"))]
 fn packet_buffer() -> icmp::PacketBuffer<'static> {
     let meta: &'static mut [icmp::PacketMetadata] =
         Box::leak(Box::new([icmp::PacketMetadata::EMPTY; 4]));
@@ -613,7 +616,7 @@ fn packet_buffer() -> icmp::PacketBuffer<'static> {
 }
 
 /// One ICMP echo to the DHCP router after the lease.
-#[cfg(feature = "board-swift_sfx14_41g")]
+#[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h_i217"))]
 #[derive(Clone, Copy)]
 pub enum PingResult {
     /// The router answered. The octets are the leased address.
@@ -625,7 +628,7 @@ pub enum PingResult {
 }
 
 /// Bring the interface up, then ping the router from that lease.
-#[cfg(feature = "board-swift_sfx14_41g")]
+#[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h_i217"))]
 pub fn ping_gateway() -> PingResult {
     let Ok(sockets) = sockets() else {
         return PingResult::NoAddress;
@@ -643,7 +646,7 @@ pub fn ping_gateway() -> PingResult {
     })
 }
 
-#[cfg(feature = "board-swift_sfx14_41g")]
+#[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h_i217"))]
 fn send_echo(socket: &mut icmp::Socket<'_>, gateway: Ipv4Address, seq_no: u16) {
     let repr = Icmpv4Repr::EchoRequest {
         ident: ECHO_IDENT,

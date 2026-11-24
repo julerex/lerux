@@ -7,12 +7,13 @@ use crate::model::render_forcing_end;
 use lerux_machine::{
     ahci_map,
     description::{
-        ahci_msi, e1000e_fetch_irq, e1000e_standalone_irq, i217_irq, pci_config_port,
-        pci_net_config_port, IoApicPin, IoApicVector, IoPort, Irq, MmioDevice, MmioWindow, PciBar,
-        Polarity, SerialNode, Trigger, VirtioNode, X86Irq,
+        ahci_msi, console_keyboard_irq, e1000e_fetch_irq, e1000e_standalone_irq, i217_irq,
+        pci_config_port, pci_console_config_port, pci_net_config_port, xhci_msi, IoApicPin,
+        IoApicVector, IoPort, Irq, MmioDevice, MmioWindow, PciBar, Polarity, SerialNode, Trigger,
+        VirtioNode, X86Irq,
     },
     e1000e::{self, e1000e_map, i217_map},
-    virtio_dma_guest, virtio_dma_phys_addr, virtio_node, Arch, VirtioRole, AHCI_PORT,
+    virtio_dma_guest, virtio_dma_phys_addr, virtio_node, Arch, SpelledAddr, VirtioRole, AHCI_PORT,
 };
 
 use lerux_sddf::gpu_image;
@@ -450,6 +451,9 @@ fn fs_links() -> Vec<Link> {
 }
 
 fn net_image(arch: Arch, net: NetBackend) -> Image {
+    if net == NetBackend::I217 {
+        return i217_shell_image();
+    }
     let serial = serial_attachment(arch);
     let mut client = serial_client_slots();
     client.extend(net_client_slots());
@@ -1321,8 +1325,11 @@ fn e1000e_domain(place: &E1000ePlace) -> Domain {
             cached: Some(true),
             setvar: None,
         }),
-        Slot::Port(pci_net_config_port()),
     ];
+    // The desk console owns `0xcf8` so it can program the I217 window and the xHCI.
+    if !matches!(place, E1000ePlace::Desk) {
+        slots.push(Slot::Port(pci_net_config_port()));
+    }
     slots.extend(driver_queue_slots());
     domain(
         "net_driver",
@@ -1332,6 +1339,115 @@ fn e1000e_domain(place: &E1000ePlace) -> Domain {
         slots,
         Some(irq),
     )
+}
+
+/// Desk I217 image: VGA shell, xHCI keyboard, and the e1000e queue path.
+///
+/// Channel assignment gives every IRQ an id before any link. The console's
+/// keyboard pin is channel 0 and its xHCI MSI is channel 1, so the shell byte
+/// channel is 2 on the console and 0 on the shell. Network receive and
+/// transmit on the shell are 1 and 2. The driver's rewrite call is channel 3
+/// on both ends, protected on the console.
+fn i217_shell_image() -> Image {
+    let (device_regions, driver) = e1000e_device(&E1000ePlace::Desk);
+    let mut console = domain(
+        "console_driver",
+        5,
+        None,
+        "console-driver.elf",
+        i217_console_slots(),
+        Some(Irq::X86(console_keyboard_irq())),
+    );
+    console.second_irq = Some(Irq::Msi(xhci_msi()));
+    let mut links = link_rows(&[
+        ("net_driver", "net_virt_rx", 0),
+        ("net_driver", "net_virt_tx", 1),
+        ("net_virt_rx", "net_copy", 2),
+        ("console_driver", "shell", 3),
+        ("net_copy", "shell", 4),
+        ("net_virt_tx", "shell", 5),
+    ]);
+    links[3].pp_b = true;
+    links.push(Link {
+        a: "net_driver",
+        b: "console_driver",
+        pp_b: true,
+        order: 6,
+    });
+    Image {
+        groups: vec![device_regions, net_regions(false), i217_console_regions()],
+        domains: vec![
+            driver,
+            net_virt_tx(None),
+            net_virt_rx(None),
+            net_copy(None),
+            console,
+            domain("shell", 1, None, "sddf-shell.elf", net_client_slots(), None),
+        ],
+        links,
+    }
+}
+
+fn i217_console_regions() -> Vec<Region> {
+    vec![
+        phys("vga_text", 0x1000, 0xb8000, "0xb8000"),
+        phys("xhci_regs", 0x1_0000, 0xf7e2_0000, "0xf7e2_0000"),
+        phys("xhci_dma", 0x4_0000, 0x6200_0000, "0x6200_0000"),
+    ]
+}
+
+fn i217_console_slots() -> Vec<Slot> {
+    vec![
+        Slot::Map(Map {
+            region: "vga_text",
+            cached: Some(false),
+            setvar: Some("vga_text_vaddr"),
+        }),
+        Slot::Map(Map {
+            region: "xhci_regs",
+            cached: Some(false),
+            setvar: Some("xhci_regs_vaddr"),
+        }),
+        Slot::Map(Map {
+            region: "xhci_dma",
+            cached: Some(false),
+            setvar: Some("xhci_dma_vaddr"),
+        }),
+        Slot::Port(console_port(
+            "0x3d4",
+            2,
+            "crtc_ioport_id",
+            "crtc_ioport_addr",
+        )),
+        Slot::Port(console_port(
+            "0x60",
+            1,
+            "kbd_data_ioport_id",
+            "kbd_data_ioport_addr",
+        )),
+        Slot::Port(console_port(
+            "0x64",
+            1,
+            "kbd_cmd_ioport_id",
+            "kbd_cmd_ioport_addr",
+        )),
+        Slot::Port(pci_console_config_port()),
+    ]
+}
+
+fn console_port(
+    addr: &'static str,
+    size: u16,
+    id: &'static str,
+    addr_symbol: &'static str,
+) -> IoPort {
+    IoPort {
+        addr: SpelledAddr::new(addr),
+        size,
+        id_symbol: id,
+        addr_symbol,
+        element_id: None,
+    }
 }
 
 fn driver_queue_slots() -> Vec<Slot> {
@@ -1801,6 +1917,7 @@ fn domain(
         program,
         slots,
         irq,
+        second_irq: None,
     }
 }
 

@@ -104,17 +104,51 @@ pub fn e1000e_fetch_irq() -> X86Irq {
     x86_level_low(10, 50)
 }
 
-/// Pin 20, vector 50, level, active-low for the I217-V at `00:19.0`.
+/// Pin 11, vector 51, level, active-low for the I217-V at `00:19.0`.
 ///
-/// The 2026-10-22 configuration-space read recorded the identity and the
-/// base-address registers. It did not record the interrupt line. Other
-/// GA-Z97-D3H listings route pin A of `8086:153b` subsystem `1458:e000` to
-/// IRQ 20. This binding stays provisional until a desk boot shows whether the
-/// guest took the interrupt. The QEMU 82574 image uses
-/// [`e1000e_standalone_irq`] and does not take this pin.
+/// The 2026-11-23 configuration-space read on this desk stored interrupt line
+/// 11 and interrupt pin 1 (INTA). Vector 51 leaves vector 50 for the xHCI MSI.
+/// The QEMU 82574 image uses [`e1000e_standalone_irq`] and does not take this pin.
 #[must_use]
 pub fn i217_irq() -> X86Irq {
-    x86_level_low(20, 50)
+    x86_level_low(11, 51)
+}
+
+/// PS/2 keyboard on the desk: I/O APIC pin 1, vector 49, edge, active-high.
+#[must_use]
+pub fn console_keyboard_irq() -> X86Irq {
+    X86Irq {
+        pin: IoApicPin(1),
+        vector: IoApicVector(49),
+        trigger: Trigger::Edge,
+        polarity: Polarity::High,
+    }
+}
+
+/// xHCI at `00:14.0`. Userspace writes the MSI message. The SDF handle is 1
+/// and the vector is 50, matching the desk console template.
+#[must_use]
+pub fn xhci_msi() -> MsiIrq {
+    MsiIrq {
+        pcidev: PciAddress::new(0, 0x14, 0),
+        handle: 1,
+        vector: IoApicVector(50),
+    }
+}
+
+/// Config port at `0xcf8` with the console driver's symbol pair.
+///
+/// The address range matches [`pci_config_port`]. The I217 image gives this
+/// port to `console_driver` and not to the Ethernet driver.
+#[must_use]
+pub fn pci_console_config_port() -> IoPort {
+    IoPort {
+        addr: X86_PCI_CONFIG_PORT,
+        size: X86_PCI_CONFIG_SIZE,
+        id_symbol: "pci_ioport_id",
+        addr_symbol: "pci_ioport_addr",
+        element_id: None,
+    }
 }
 
 #[must_use]

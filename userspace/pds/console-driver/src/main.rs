@@ -26,6 +26,8 @@ mod boot_line;
 mod device;
 #[cfg(all(not(test), feature = "hardware"))]
 mod handler;
+#[cfg(all(not(test), feature = "board-pc_z97_d3h_i217"))]
+mod i217;
 #[cfg(all(not(test), feature = "board-pc_z97_d3h"))]
 mod rtl8852be;
 #[cfg(all(
@@ -47,17 +49,31 @@ use sel4_microkit::{protection_domain, Channel};
 
 #[cfg(all(not(test), feature = "hardware"))]
 const IRQ: Channel = Channel::new(0);
-#[cfg(all(not(test), feature = "hardware"))]
+/// The I217 image assigns both IRQs before links, so the shell is channel 2
+/// and the xHCI MSI is channel 1. Other images keep the desk template's ids.
+#[cfg(all(not(test), feature = "hardware", feature = "board-pc_z97_d3h_i217"))]
+const SHELL: Channel = Channel::new(2);
+#[cfg(all(not(test), feature = "hardware", feature = "board-pc_z97_d3h_i217"))]
+const USB_IRQ: Channel = Channel::new(1);
+#[cfg(all(not(test), feature = "hardware", feature = "board-pc_z97_d3h_i217"))]
+const I217_WINDOW: Channel = Channel::new(3);
+#[cfg(all(
+    not(test),
+    feature = "hardware",
+    not(feature = "board-pc_z97_d3h_i217")
+))]
 const SHELL: Channel = Channel::new(1);
-#[cfg(all(not(test), feature = "hardware"))]
+#[cfg(all(
+    not(test),
+    feature = "hardware",
+    not(feature = "board-pc_z97_d3h_i217")
+))]
 const USB_IRQ: Channel = Channel::new(2);
 
 #[cfg(all(not(test), feature = "hardware"))]
 #[protection_domain]
 fn init() -> handler::HandlerImpl {
     use lerux_logging::{debug, log};
-
-    use crate::screen::Screen;
 
     debug::init().expect("debug log");
     let device = device::Device::from_system();
@@ -69,6 +85,13 @@ fn init() -> handler::HandlerImpl {
     } else {
         log::info!("console-driver: i8042 timeout");
     }
+    open_shell(device)
+}
+
+#[cfg(all(not(test), feature = "hardware"))]
+fn open_shell(device: device::Device) -> handler::HandlerImpl {
+    use crate::screen::Screen;
+
     #[cfg(all(
         not(feature = "board-swift_sfx14_41g"),
         not(feature = "board-inspiron_n5010")
@@ -76,6 +99,8 @@ fn init() -> handler::HandlerImpl {
     let usb = xhci::UsbKbd::bring_up();
     #[cfg(feature = "board-pc_z97_d3h")]
     rtl8852be::publish(usb.pci_config());
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    note_i217();
     #[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-inspiron_n5010"))]
     let usb = usb_off::UsbKbd::off();
     #[cfg(not(feature = "board-pc_z97_d3h"))]
@@ -92,8 +117,27 @@ fn init() -> handler::HandlerImpl {
     device.sync_cursor(&screen);
     // The blank page replaces the log lines. Hold it before the shell prints the sign-on.
     #[cfg(feature = "board-pc_z97_d3h")]
-    debug::after_boot_line();
-    handler::HandlerImpl::new(device, screen, usb, IRQ, USB_IRQ, SHELL)
+    lerux_logging::debug::after_boot_line();
+    handler::HandlerImpl::new(
+        device,
+        screen,
+        usb,
+        IRQ,
+        USB_IRQ,
+        SHELL,
+        #[cfg(feature = "board-pc_z97_d3h_i217")]
+        I217_WINDOW,
+    )
+}
+
+#[cfg(all(not(test), feature = "board-pc_z97_d3h_i217"))]
+fn note_i217() {
+    use lerux_logging::log;
+    if i217::rewrite() {
+        log::info!("console-driver: i217 window");
+    } else {
+        log::info!("console-driver: i217 absent");
+    }
 }
 
 #[cfg(all(not(test), feature = "board-pc_z97_d3h"))]

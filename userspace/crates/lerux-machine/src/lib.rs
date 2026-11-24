@@ -12,10 +12,11 @@ pub mod description;
 
 #[cfg(feature = "system-description")]
 pub use description::{
-    ahci_msi, e1000e_fetch_irq, e1000e_standalone_irq, i217_irq, pci_config_port,
-    pci_net_config_port, qemu_plan, serial_node, virtio_node, IoApicPin, IoApicVector, IoPort, Irq,
-    LineIrq, MmioDevice, MmioWindow, MsiIrq, PciBar, Polarity, QemuDevice, QemuPlan, SerialNode,
-    SpelledAddr, Trigger, VirtioNode, X86Irq,
+    ahci_msi, console_keyboard_irq, e1000e_fetch_irq, e1000e_standalone_irq, i217_irq,
+    pci_config_port, pci_console_config_port, pci_net_config_port, qemu_plan, serial_node,
+    virtio_node, xhci_msi, IoApicPin, IoApicVector, IoPort, Irq, LineIrq, MmioDevice, MmioWindow,
+    MsiIrq, PciBar, Polarity, QemuDevice, QemuPlan, SerialNode, SpelledAddr, Trigger, VirtioNode,
+    X86Irq,
 };
 
 use table::{

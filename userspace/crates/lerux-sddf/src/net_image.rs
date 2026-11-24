@@ -72,6 +72,10 @@ pub const CLIENT_NET_TX_CHANNEL: u8 = 3;
 /// The shell already uses channel 2 for the filesystem server.
 pub const SHELL_NET_RX_CHANNEL: u8 = 3;
 pub const SHELL_NET_TX_CHANNEL: u8 = 4;
+/// The I217 shell's channel 0 is the console, so the network ends are the next two.
+/// This image has no filesystem channel.
+pub const I217_SHELL_NET_RX_CHANNEL: u8 = 1;
+pub const I217_SHELL_NET_TX_CHANNEL: u8 = 2;
 
 /// QEMU's default virtio-net address for the first device.
 pub const CLIENT_MAC: mac_addr_t = mac_addr_t {

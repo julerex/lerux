@@ -501,7 +501,37 @@ mod tests {
             .expect("render")
             .expect("i217 image");
         assert_i217_driver_image(&xml);
+        assert_i217_shell_channels(&xml);
         assert_i217_board_entry();
+    }
+
+    fn assert_i217_shell_channels(xml: &str) {
+        assert!(xml.contains(
+            "<protection_domain name=\"console_driver\" priority=\"5\" stack_size=\"0x10_000\">"
+        ));
+        assert!(xml.contains("sddf-shell.elf"));
+        assert!(xml.contains("console-driver.elf"));
+        assert!(xml.contains("pci_ioport_id"));
+        assert!(!xml.contains("pci_net_config_ioport"));
+        assert!(xml.contains(
+            "<irq pin=\"1\" vector=\"49\" id=\"0\" trigger=\"edge\" polarity=\"high\" />"
+        ));
+        assert!(xml.contains("pcidev=\"00:14.0\""));
+        assert_eq!(channel_end_id(xml, "console_driver", "shell", "shell"), 0);
+        assert_eq!(
+            channel_end_id(xml, "console_driver", "shell", "console_driver"),
+            2
+        );
+        assert_eq!(channel_end_id(xml, "net_copy", "shell", "shell"), 1);
+        assert_eq!(channel_end_id(xml, "net_virt_tx", "shell", "shell"), 2);
+        assert_eq!(
+            channel_end_id(xml, "net_driver", "console_driver", "net_driver"),
+            3
+        );
+        assert_eq!(
+            channel_end_id(xml, "net_driver", "console_driver", "console_driver"),
+            3
+        );
     }
 
     fn assert_i217_driver_image(xml: &str) {
@@ -521,12 +551,13 @@ mod tests {
             "<irq pin=\"{}\" vector=\"{}\" id=\"0\" trigger=\"level\" polarity=\"low\" />",
             irq.pin.0, irq.vector.0
         )));
-        assert_eq!((irq.pin.0, irq.vector.0), (20, 50));
+        assert_eq!((irq.pin.0, irq.vector.0), (11, 51));
         assert!(xml.contains(
             "<protection_domain name=\"net_driver\" priority=\"4\" stack_size=\"0x10_000\">"
         ));
         assert!(!xml.contains("budget="));
-        assert!(xml.contains("sddf-net-client.elf"));
+        assert!(!xml.contains("sddf-net-client.elf"));
+        assert!(!xml.contains("sddf-serial-driver.elf"));
         assert!(xml.contains("sddf-net-virt-tx.elf"));
         assert!(xml.contains("sddf-net-virt-rx.elf"));
         assert!(xml.contains("sddf-net-copy.elf"));

@@ -146,6 +146,9 @@ pub(crate) struct Domain {
     pub program: &'static str,
     pub slots: Vec<Slot>,
     pub irq: Option<Irq>,
+    /// Assigned immediately after [`Self::irq`]. The desk console uses this
+    /// for the xHCI MSI once the keyboard pin has taken channel 0.
+    pub second_irq: Option<Irq>,
 }
 
 pub(crate) enum Slot {
@@ -241,7 +244,8 @@ fn assign_domain_irqs(
     ends: &mut Vec<AssignedEnd>,
 ) -> Result<(), ImageError> {
     for domain in &image.domains {
-        if domain.irq.is_some() {
+        let count = domain.irq.iter().chain(domain.second_irq.iter()).count();
+        for _ in 0..count {
             let id = take_id(next, domain.name)?;
             irqs.push(AssignedIrq {
                 pd: domain.name,
@@ -396,12 +400,24 @@ fn domain_block(image: &Image, domain: &Domain, assigned: &Assigned) -> Result<S
             }
         }
     }
-    if let Some(irq) = &domain.irq {
-        let id = irq_id(&assigned.irqs, domain.name)?;
-        out.push_str(&irq_line(irq, id));
-    }
+    write_irqs(&mut out, domain, assigned)?;
     out.push_str("    </protection_domain>\n");
     Ok(out)
+}
+
+fn write_irqs(out: &mut String, domain: &Domain, assigned: &Assigned) -> Result<(), ImageError> {
+    let mut irq_ids = assigned
+        .irqs
+        .iter()
+        .filter(|irq| irq.pd == domain.name)
+        .map(|irq| irq.id);
+    for irq in domain.irq.iter().chain(domain.second_irq.iter()) {
+        let id = irq_ids.next().ok_or_else(|| ImageError::MissingIrq {
+            pd: domain.name.to_string(),
+        })?;
+        out.push_str(&irq_line(irq, id));
+    }
+    Ok(())
 }
 
 fn domain_attrs(domain: &Domain) -> String {
@@ -453,13 +469,6 @@ pub(crate) fn find_region<'a>(
         .ok_or_else(|| ImageError::UnknownRegion {
             name: name.to_string(),
         })
-}
-
-fn irq_id(irqs: &[AssignedIrq], pd: &str) -> Result<u8, ImageError> {
-    irqs.iter()
-        .find(|irq| irq.pd == pd)
-        .map(|irq| irq.id)
-        .ok_or_else(|| ImageError::MissingIrq { pd: pd.to_string() })
 }
 
 fn port_line(index: u8, port: &IoPort) -> String {

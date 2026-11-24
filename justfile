@@ -80,8 +80,10 @@ image: build
 # UEFI GRUB ISO. `just make-lerux-iso` rebuilds one image. The stub selects the
 # Swift panel or the VGA text page. It does not map the Inspiron AHCI disk.
 # `just make-lerux-iso pc_z97_d3h` and `just make-lerux-iso inspiron_n5010`
-# still pack those boards' own images. Does not write a disk.
-# `just burn-lerux-iso` runs the one-image recipe, then writes that ISO.
+# still pack those boards' own images. `just make-lerux-iso pc_z97_d3h_i217`
+# packs the I217 VGA shell. Does not write a disk.
+# `just burn-lerux-iso` writes the one-image ISO. `just burn-lerux-iso z97`
+# writes the I217 shell ISO.
 # `LERUX_GIT_DESCRIBE` is `git describe --always --dirty` for the tree being
 # packed, with one leading `v` removed. Cargo reruns the console-driver build
 # script when that value changes, so an unstaged edit repaints the Swift
@@ -89,13 +91,22 @@ image: build
 make-lerux-iso target="swift_sfx14_41g":
     describe=$(git -C '{{root}}' describe --always --dirty) && LERUX_GIT_DESCRIBE="${describe#v}" {{lerux}} iso --board {{target}} --build-dir {{build_dir}} --config {{config}}
 
-# Pack the one x86 ISO with `make-lerux-iso`, then erase a USB stick and write it.
-# That image selects the Swift panel or the VGA text page. It does not write an internal disk.
-# With no argument, lists USB sticks and asks which one to erase.
-# just burn-lerux-iso
-# just burn-lerux-iso /dev/sdX
-burn-lerux-iso *args: (make-lerux-iso "swift_sfx14_41g")
-    bash "{{root}}/support/burn-lerux-iso.sh" --image "{{root}}/{{build_dir}}/swift_sfx14_41g/lerux_swift_sfx14_41g.iso" {{args}}
+# Pack an ISO, then erase a USB stick and write it.
+# `just burn-lerux-iso` and `just burn-lerux-iso /dev/sdX` write the one x86 image.
+# That image selects the Swift panel or the VGA text page.
+# `just burn-lerux-iso z97` and `just burn-lerux-iso z97 /dev/sdX` write the I217 shell.
+# With no device, lists USB sticks and asks which one to erase.
+burn-lerux-iso *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    target=swift_sfx14_41g
+    if [[ "${1:-}" == "z97" ]]; then
+        target=pc_z97_d3h_i217
+        shift
+    fi
+    describe=$(git -C '{{root}}' describe --always --dirty)
+    LERUX_GIT_DESCRIBE="${describe#v}" {{lerux}} iso --board "$target" --build-dir '{{build_dir}}' --config '{{config}}'
+    bash "{{root}}/support/burn-lerux-iso.sh" --image "{{root}}/{{build_dir}}/$target/lerux_${target}.iso" "$@"
 
 # Copy the Pi loader onto a mounted FAT boot directory. Verifies loader.img.sha256 first.
 # DEST=/media/$USER/boot just deploy-rpi4

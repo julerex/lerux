@@ -401,6 +401,7 @@ dependencies = [
  "lerux-desk",
  "lerux-driver-protocols",
  "lerux-logging",
+ "lerux-machine",
  "lerux-rtw8852be",
  "lerux-signon",
  "log",

@@ -8,14 +8,18 @@ use core::{
     sync::atomic::{compiler_fence, Ordering},
 };
 
+use lerux_machine::e1000e::{e1000e_map, i217_map, E1000eMap};
+#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
 use lerux_machine::{
-    e1000e::{
-        e1000e_map, i217_map, ClaimedNic, E1000eMap, UnclaimedNic, REGISTER_BAR, REGISTER_BAR_SIZE,
-    },
+    e1000e::{ClaimedNic, UnclaimedNic, REGISTER_BAR, REGISTER_BAR_SIZE},
     PciAddress,
 };
+#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
 use sel4::with_ipc_buffer_mut;
+#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
 use sel4_microkit::var;
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+use sel4_microkit::{Channel, MessageInfo};
 
 pub(crate) const BUF_SIZE: usize = 2048;
 
@@ -86,24 +90,37 @@ const RX_EOP: u8 = 0x02;
 const MTA_DWORDS: u32 = 128;
 const DEVICE_SPIN: usize = 10_000_000;
 
+#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
 const PCI_VENDOR: u8 = 0x00;
-#[cfg(feature = "board-pc_z97_d3h_i217")]
-const PCI_REVISION: u8 = 0x08;
-#[cfg(feature = "board-pc_z97_d3h_i217")]
-const PCI_SUBSYSTEM: u8 = 0x2c;
+#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
 const PCI_COMMAND: u8 = 0x04;
+#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
 const PCI_CAP_PTR: u8 = 0x34;
+#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
 const CMD_MEMORY: u32 = 1 << 1;
+#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
 const CMD_BUS_MASTER: u32 = 1 << 2;
+#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
 const CMD_INTX_DISABLE: u32 = 1 << 10;
+#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
 const CAP_MSI: u8 = 0x05;
+#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
 const CAP_MSIX: u8 = 0x11;
+#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
 const MSI_ENABLE: u32 = 1 << 16;
+#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
 const MSIX_ENABLE: u32 = 1 << 31;
 
+#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
 const BASE_IOPORT_CAP: u64 = 394;
+#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
 const PCI_CONFIG_ADDR_OFFSET: u16 = 0;
+#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
 const PCI_CONFIG_DATA_OFFSET: u16 = 4;
+
+/// Console channel that rewrites the I217 window after `CTRL.RST`.
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+const WINDOW_CHANNEL: Channel = Channel::new(3);
 
 /// Owns the 82574. The handler cannot name a descriptor slot.
 pub struct Engine {
@@ -173,21 +190,19 @@ impl Engine {
     /// Claim the NIC for this image, program BAR0, reset, bring the link up,
     /// install `mac` into the receive address, and publish both rings.
     ///
-    /// The QEMU image claims `8086:10d3` at `00:04.0`. The desk image claims
-    /// `8086:153b` at `00:19.0` with revision 0 and subsystem `1458:e000`.
-    /// Both images program the same rings.
+    /// The QEMU image claims `8086:10d3` at `00:04.0` and programs the window
+    /// itself. The desk image leaves `0xcf8` with the console, which writes
+    /// the I217 window before this runs and again after `CTRL.RST`.
     ///
     /// Call once. A second call would reset the NIC under live rings.
     pub fn open(map: E1000eMap, mac: [u8; 6]) -> Result<Self, OpenError> {
-        let pci = Pci::new();
-        let claimed = claim_device(&pci)?;
-        pci.program(claimed, &map)?;
+        #[cfg(not(feature = "board-pc_z97_d3h_i217"))]
+        prepare(&map)?;
         let regs = usize::try_from(map.regs_vaddr).expect("regs vaddr");
         reset_mac(regs)?;
         // CTRL.RST reloads the EEPROM image into BAR0 and the command word,
         // and it can set the MSI and MSI-X enables. Either enable masks the pin.
-        pci.write_window(&map)?;
-        pci.force_pin()?;
+        restore_window(&map)?;
         write_u32(regs, IMC, 0xffff_ffff);
         bring_link(regs)?;
         install_mac(regs, mac)?;
@@ -494,6 +509,30 @@ fn spin_until(mut ready: impl FnMut() -> bool) -> Result<(), OpenError> {
     }
 }
 
+#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
+fn prepare(map: &E1000eMap) -> Result<(), OpenError> {
+    let pci = Pci::new();
+    let claimed = claim_82574(&pci)?;
+    pci.program(claimed, map)
+}
+
+#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
+fn restore_window(map: &E1000eMap) -> Result<(), OpenError> {
+    let pci = Pci::new();
+    pci.write_window(map)?;
+    pci.force_pin()
+}
+
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+fn restore_window(_map: &E1000eMap) -> Result<(), OpenError> {
+    let reply = WINDOW_CHANNEL.pp_call(MessageInfo::new(0, 0));
+    if reply.label() == 0 {
+        Ok(())
+    } else {
+        Err(OpenError)
+    }
+}
+
 fn read_u32(regs: usize, off: u32) -> u32 {
     // SAFETY: the protection domain maps the 82574 register window.
     unsafe { ptr::read_volatile((regs + off as usize) as *const u32) }
@@ -504,6 +543,7 @@ fn write_u32(regs: usize, off: u32, value: u32) {
     unsafe { ptr::write_volatile((regs + off as usize) as *mut u32, value) }
 }
 
+#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
 struct Pci {
     cap: u64,
     base: u16,
@@ -512,6 +552,7 @@ struct Pci {
     func: u8,
 }
 
+#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
 impl Pci {
     fn new() -> Self {
         let ioport_id =
@@ -614,22 +655,6 @@ fn probe_address() -> PciAddress {
     UnclaimedNic::compiled().address()
 }
 
-#[cfg(feature = "board-pc_z97_d3h_i217")]
-fn probe_address() -> PciAddress {
-    UnclaimedNic::i217().address()
-}
-
-fn claim_device(pci: &Pci) -> Result<ClaimedNic, OpenError> {
-    #[cfg(not(feature = "board-pc_z97_d3h_i217"))]
-    {
-        claim_82574(pci)
-    }
-    #[cfg(feature = "board-pc_z97_d3h_i217")]
-    {
-        claim_i217(pci)
-    }
-}
-
 #[cfg(not(feature = "board-pc_z97_d3h_i217"))]
 fn claim_82574(pci: &Pci) -> Result<ClaimedNic, OpenError> {
     let id = pci.read_config(PCI_VENDOR);
@@ -637,21 +662,5 @@ fn claim_82574(pci: &Pci) -> Result<ClaimedNic, OpenError> {
     let device = (id >> 16) as u16;
     UnclaimedNic::compiled()
         .claim(vendor, device)
-        .map_err(|_| OpenError)
-}
-
-#[cfg(feature = "board-pc_z97_d3h_i217")]
-fn claim_i217(pci: &Pci) -> Result<ClaimedNic, OpenError> {
-    let id = pci.read_config(PCI_VENDOR);
-    let revision = pci.read_config(PCI_REVISION);
-    let subsystem = pci.read_config(PCI_SUBSYSTEM);
-    UnclaimedNic::i217()
-        .claim_i217(
-            (id & 0xffff) as u16,
-            (id >> 16) as u16,
-            (revision & 0xff) as u8,
-            (subsystem & 0xffff) as u16,
-            (subsystem >> 16) as u16,
-        )
         .map_err(|_| OpenError)
 }

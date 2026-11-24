@@ -8,7 +8,7 @@
 pub const SPEED_FULL: u8 = 1;
 pub const SPEED_LOW: u8 = 2;
 
-/// One interrupt-IN endpoint on a boot-keyboard interface.
+/// One interrupt-IN endpoint on a boot-keyboard or boot-mouse interface.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BootKeyboard {
     pub config_value: u8,
@@ -63,6 +63,19 @@ pub fn xhci_interval(speed: u8, b_interval: u8) -> u8 {
 /// is not the first HID device on the bus. A mouse after the only keyboard
 /// does not replace it.
 pub fn find_boot_keyboard(config: &[u8]) -> Option<BootKeyboard> {
+    find_boot(config, 1)
+}
+
+/// First HID boot mouse (class 3, subclass 1, protocol 2) with an IN interrupt.
+///
+/// Protocol 1 is a boot keyboard. The Holtek gaming mouse advertises that
+/// interface as well, and it is not the shell keyboard.
+#[cfg(any(test, feature = "board-pc_z97_d3h_i217"))]
+pub fn find_boot_mouse(config: &[u8]) -> Option<BootKeyboard> {
+    find_boot(config, 2)
+}
+
+fn find_boot(config: &[u8], protocol: u8) -> Option<BootKeyboard> {
     let mut config_value = 0u8;
     let mut boot_interface = None;
     let mut found = None;
@@ -76,7 +89,8 @@ pub fn find_boot_keyboard(config: &[u8]) -> Option<BootKeyboard> {
         if kind == 2 && len >= 6 {
             config_value = config[index + 5];
         } else if kind == 4 && len >= 8 {
-            let boot = config[index + 5] == 3 && config[index + 6] == 1 && config[index + 7] == 1;
+            let boot =
+                config[index + 5] == 3 && config[index + 6] == 1 && config[index + 7] == protocol;
             boot_interface = boot.then_some(config[index + 2]);
         } else if kind == 5
             && len >= 7
@@ -99,6 +113,26 @@ pub fn find_boot_keyboard(config: &[u8]) -> Option<BootKeyboard> {
         index += len;
     }
     found
+}
+
+/// VGA text page the I217 shell paints.
+#[cfg(any(test, feature = "board-pc_z97_d3h_i217"))]
+const POINTER_COLS: i32 = 80;
+#[cfg(any(test, feature = "board-pc_z97_d3h_i217"))]
+const POINTER_ROWS: i32 = 25;
+
+/// Add a boot-mouse report to a cell. Bytes are buttons, X, Y. X and Y are
+/// signed displacements. Later bytes in an 8-byte packet are ignored.
+#[cfg(any(test, feature = "board-pc_z97_d3h_i217"))]
+pub fn step_pointer(col: i32, row: i32, report: &[u8]) -> (i32, i32, u8) {
+    if report.len() < 3 {
+        return (col, row, 0);
+    }
+    let dx = i32::from(report[1].cast_signed());
+    let dy = i32::from(report[2].cast_signed());
+    let col = (col + dx).clamp(0, POINTER_COLS - 1);
+    let row = (row + dy).clamp(0, POINTER_ROWS - 1);
+    (col, row, report[0])
 }
 
 #[cfg(test)]
@@ -162,6 +196,30 @@ mod tests {
                 interval: 8,
             }
         );
+    }
+
+    #[test]
+    fn holtek_mouse_keeps_the_boot_mouse_and_not_its_keyboard() {
+        // Interface 0 boot mouse `0x81`, interface 1 boot keyboard `0x82`.
+        // The keyboard interface is the Holtek one and is not the shell keyboard.
+        let config = [
+            9u8, 2, 50, 0, 2, 1, 0, 0xa0, 50, //
+            9, 4, 0, 0, 1, 3, 1, 2, 0, // boot mouse
+            7, 5, 0x81, 3, 8, 0, 1, //
+            9, 4, 1, 0, 1, 3, 1, 1, 0, // boot keyboard
+            7, 5, 0x82, 3, 8, 0, 2, //
+        ];
+        let mouse = find_boot_mouse(&config).unwrap();
+        assert_eq!(mouse.interface, 0);
+        assert_eq!(mouse.ep_addr, 0x81);
+        assert_eq!(mouse.interval, 1);
+        assert_eq!(find_boot_keyboard(&config).unwrap().interface, 1);
+        let (col, row, buttons) = step_pointer(0, 0, &[0, 10, 4, 0, 0, 0, 0, 0]);
+        assert_eq!((col, row, buttons), (10, 4, 0));
+        let (col, row, buttons) = step_pointer(col, row, &[1, 0xff, 0]);
+        assert_eq!((col, row, buttons), (9, 4, 1));
+        let (col, row, _) = step_pointer(0, 0, &[0, 0x80, 0x7f]);
+        assert_eq!((col, row), (0, 24));
     }
 
     #[test]

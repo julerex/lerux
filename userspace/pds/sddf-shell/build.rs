@@ -355,6 +355,7 @@ fn emit_config() {
         "board-qemu_virt_riscv64_web_sddf",
         "board-qemu_virt_aarch64_browser_sddf",
         "board-qemu_virt_riscv64_browser_sddf",
+        "board-pc_z97_d3h_i217",
         "net-client",
     ] {
         let key = format!(

@@ -96,8 +96,25 @@ fn is_full_commit(pin: &str) -> bool {
     pin.len() == 40 && pin.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
+fn mark_safe(dest: &Path) {
+    // `git -C` refuses a directory owned by another user. The SDK container
+    // can hand over a checkout like that. Record the exception before any
+    // command that uses `-C`, including `remote set-url`.
+    let _ = run_checked(
+        "git",
+        &[
+            "config",
+            "--global",
+            "--add",
+            "safe.directory",
+            &dest.to_string_lossy(),
+        ],
+    );
+}
+
 fn clone_or_checkout_commit(workspace: &Path, name: &str, url: &str, commit: &str) -> Result<()> {
     let dest = workspace.join(name);
+    mark_safe(&dest);
     prepare_commit_repo(&dest, name, url, commit)?;
     fetch_pinned_commit(&dest, name, commit)?;
     let head = head_commit(&dest)?;
@@ -136,16 +153,6 @@ fn prepare_commit_repo(dest: &Path, name: &str, url: &str, commit: &str) -> Resu
 
 fn fetch_pinned_commit(dest: &Path, name: &str, commit: &str) -> Result<()> {
     let dest_arg = dest.to_string_lossy();
-    let _ = run_checked(
-        "git",
-        &[
-            "config",
-            "--global",
-            "--add",
-            "safe.directory",
-            dest_arg.as_ref(),
-        ],
-    );
     // `git clone --branch` rejects a commit. GitLab serves one reachable
     // commit at depth 1, and this checkout does not initialise submodules.
     run_checked(
@@ -211,16 +218,7 @@ fn clone_or_checkout(workspace: &Path, name: &str, url: &str, tag: &str) -> Resu
 }
 
 fn checkout_existing(dest: &Path, name: &str, tag: &str) -> Result<()> {
-    let _ = run_checked(
-        "git",
-        &[
-            "config",
-            "--global",
-            "--add",
-            "safe.directory",
-            &dest.to_string_lossy(),
-        ],
-    );
+    mark_safe(dest);
     eprintln!("==> {name}: already cloned, checking out {tag}");
     // `--tags` retrieves every tag. Git then fetches a populated submodule
     // commit recorded by that history. Older LionsOS history records an

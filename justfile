@@ -108,6 +108,16 @@ burn-lerux-iso *args:
     LERUX_GIT_DESCRIBE="${describe#v}" {{lerux}} iso --board "$target" --build-dir '{{build_dir}}' --config '{{config}}'
     bash "{{root}}/support/burn-lerux-iso.sh" --image "{{root}}/{{build_dir}}/$target/lerux_${target}.iso" "$@"
 
+# One-shot boot of the Lerux USB already plugged into this Linux host.
+# Sets UEFI BootNext only (does not change the lasting BootOrder), so the next
+# power-on after Lerux returns to Omarchy / the previous default. Interactive
+# stick pick when no device is named. Pass --no-reboot to set BootNext only.
+# just boot-lerux-usb
+# just boot-lerux-usb /dev/sdX
+# just boot-lerux-usb --no-reboot
+boot-lerux-usb *args:
+    bash "{{root}}/support/boot-lerux-usb.sh" {{args}}
+
 # Copy the Pi loader onto a mounted FAT boot directory. Verifies loader.img.sha256 first.
 # DEST=/media/$USER/boot just deploy-rpi4
 deploy-rpi4:

@@ -107,9 +107,20 @@ burn-lerux-iso: writing /path/to/lerux/build/swift_sfx14_41g/lerux_swift_sfx14_4
 burn-lerux-iso: wrote /path/to/lerux/build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso to /dev/sdb
 ```
 
-That last line means the stick is ready. Wait until the command has returned to the Linux shell before you unplug the stick. If this computer is the Swift, leave the stick plugged in and reboot.
+That last line means the stick is ready. Wait until the command has returned to the Linux shell before you unplug the stick. If this computer is the Swift (or any Linux host that already runs Omarchy or another UEFI OS you want to keep as the default), leave the stick plugged in and run:
 
-If you already know the device name, this does the same pack and the same confirmation, and it skips the numbered list:
+```bash
+just boot-lerux-usb
+```
+
+That command lists the USB sticks, sets UEFI `BootNext` to the Lerux entry for one reboot only, asks you to type `reboot`, and reboots. It does not change the lasting `BootOrder`, so the next power-on returns to Omarchy (or whatever already boots). Pass the device name to skip the list, or `--no-reboot` to set `BootNext` and reboot yourself:
+
+```bash
+just boot-lerux-usb /dev/sdc
+just boot-lerux-usb --no-reboot
+```
+
+If you already know the device name for the write step, this does the same pack and the same confirmation, and it skips the numbered list:
 
 ```bash
 just burn-lerux-iso /dev/sdb

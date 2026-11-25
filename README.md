@@ -18,9 +18,10 @@ just fetch-sdk      # download prebuilt Microkit SDK 2.3.0
 # or: just build-sdk   # build the SDK from source instead
 just make-lerux-iso            # pack build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso
 just burn-lerux-iso       # pack that ISO, then write it to a USB stick
+just boot-lerux-usb       # one-shot UEFI boot of that stick, then back to this host OS
 ```
 
-Reboot and open the firmware boot menu. Choose the USB entry that says **UEFI** (GRUB `EFI/BOOT/BOOTX64.EFI`). GRUB reads `/boot/grub/grub.cfg` and boots immediately. It Multiboot 2-loads `/boot/mb2-stub.elf` with modules `/boot/sel4.elf` and `/boot/loader.img`. The stub places the kernel at 1 MiB after `ExitBootServices`.
+On the build machine itself, `just boot-lerux-usb` sets UEFI `BootNext` for one reboot and leaves the lasting boot order alone, so Omarchy (or whatever already boots) returns on the next power-on. Otherwise reboot and open the firmware boot menu. Choose the USB entry that says **UEFI** (GRUB `EFI/BOOT/BOOTX64.EFI`). GRUB reads `/boot/grub/grub.cfg` and boots immediately. It Multiboot 2-loads `/boot/mb2-stub.elf` with modules `/boot/sel4.elf` and `/boot/loader.img`. The stub places the kernel at 1 MiB after `ExitBootServices`.
 
 On the Swift the panel is the firmware GOP buffer. On 2026-10-29 it showed `fb 0x000000fc90000000 pitch 7680 1920x1080 r16 g8 b0`. The shell band is 240 by 40 cells of the VGA 8×16 font, light gray on black. The sign-on is `Lerux` and the short git describe, the login line, the archiso message of the day, and `[root@lerux ~]# `. The keyboard is the built-in i8042. This machine has no COM port. The prompt runs the shell, including `setup-wifi`. Device rows sit below the band. Device roles: [`docs/platforms.md`](docs/platforms.md#swift-x-devices). On a generic x86 PC the same ISO uses the 80×25 VGA text page and leaves Swift Wi-Fi, the NVMe window, and the Inspiron disk alone. A QEMU hello line does not prove the panel.
 

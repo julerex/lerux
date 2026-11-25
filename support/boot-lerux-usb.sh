@@ -386,48 +386,45 @@ ensure_entry() {
   mapfile -t uuids < <(part_uuids "$esp" | awk 'NF' | sort -u)
   [[ ${#uuids[@]} -gt 0 ]] || die "no PARTUUID for $esp"
 
+  order=$(boot_order)
+
   if bootnum=$(find_entry_for_uuids "${uuids[@]}"); then
     echo "boot-lerux-usb: using existing Boot${bootnum}" >&2
-    printf '%s\n' "$bootnum"
-    return 0
+  else
+    echo "boot-lerux-usb: creating EFI entry for $dev partition $esp_part" >&2
+    # Drop stale label-only entries that no longer match this stick.
+    while read -r num; do
+      [[ -n "$num" ]] || continue
+      as_root efibootmgr --bootnum "$num" --delete-bootnum >/dev/null
+    done < <(entries_named_lerux)
+
+    as_root efibootmgr --create \
+      --disk "$dev" \
+      --part "$esp_part" \
+      --label "$LERUX_LABEL" \
+      --loader "$EFI_LOADER" >/dev/null
+    bootnum=$(entries_named_lerux | tail -n1)
+    [[ -n "$bootnum" ]] || die "efibootmgr did not report a new Boot number"
   fi
 
-  order=$(boot_order)
-  echo "boot-lerux-usb: creating EFI entry for $dev partition $esp_part" >&2
-  # Drop stale label-only entries that no longer match this stick.
-  while read -r num; do
-    [[ -n "$num" ]] || continue
-    as_root efibootmgr --bootnum "$num" --delete-bootnum >/dev/null
-  done < <(entries_named_lerux)
-
-  as_root efibootmgr --create \
-    --disk "$dev" \
-    --part "$esp_part" \
-    --label "$LERUX_LABEL" \
-    --loader "$EFI_LOADER" >/dev/null
-  bootnum=$(entries_named_lerux | tail -n1)
-  [[ -n "$bootnum" ]] || die "efibootmgr did not report a new Boot number"
-
-  # --create puts the new entry first; put the previous order back and keep the
-  # new number at the end so Omarchy/Limine stays the lasting default.
-  if [[ -n "$order" ]]; then
-    restored=$(
-      awk -v keep="$order" -v neu="$bootnum" 'BEGIN {
-        n = split(keep, a, ",")
-        out = ""
-        for (i = 1; i <= n; i++) {
-          gsub(/^[ \t]+|[ \t]+$/, "", a[i])
-          if (a[i] == "" || tolower(a[i]) == tolower(neu)) continue
-          out = (out == "" ? a[i] : out "," a[i])
-        }
-        if (out == "") out = neu
-        else out = out "," neu
-        print out
-      }'
-    )
-    as_root efibootmgr --bootorder "$restored" >/dev/null
-    echo "boot-lerux-usb: restored BootOrder ($restored)" >&2
-  fi
+  # Always restore BootOrder with the entry at the end so Omarchy/Limine stays
+  # the lasting default.
+  restored=$(
+    awk -v keep="$order" -v neu="$bootnum" 'BEGIN {
+      n = split(keep, a, ",")
+      out = ""
+      for (i = 1; i <= n; i++) {
+        gsub(/^[ \t]+|[ \t]+$/, "", a[i])
+        if (a[i] == "" || tolower(a[i]) == tolower(neu)) continue
+        out = (out == "" ? a[i] : out "," a[i])
+      }
+      if (out == "") out = neu
+      else out = out "," neu
+      print out
+    }'
+  )
+  as_root efibootmgr --bootorder "$restored" >/dev/null
+  echo "boot-lerux-usb: restored BootOrder ($restored)" >&2
 
   printf '%s\n' "$bootnum"
 }
@@ -455,10 +452,10 @@ find_esp
 echo "boot-lerux-usb: ESP is $esp (partition $esp_part)" >&2
 
 bootnum=$(ensure_entry)
-echo "boot-lerux-usb: BootNext -> Boot${bootnum} ($LERUX_LABEL)" >&2
-as_root efibootmgr --bootnext "$bootnum" >/dev/null
 
 if [[ "$do_reboot" -eq 0 ]]; then
+  echo "boot-lerux-usb: BootNext -> Boot${bootnum} ($LERUX_LABEL)" >&2
+  as_root efibootmgr --bootnext "$bootnum" >/dev/null
   echo "boot-lerux-usb: BootNext set; reboot when ready (stick stays default only for that one boot)"
   exit 0
 fi
@@ -467,5 +464,8 @@ if ! have_terminal; then
   die "no terminal to confirm reboot (pass --no-reboot, then reboot yourself)"
 fi
 confirm_reboot
+
+echo "boot-lerux-usb: BootNext -> Boot${bootnum} ($LERUX_LABEL)" >&2
+as_root efibootmgr --bootnext "$bootnum" >/dev/null
 echo "boot-lerux-usb: rebooting" >&2
 as_root systemctl reboot

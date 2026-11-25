@@ -330,8 +330,54 @@ find_esp() {
   fi
 }
 
-boot_order() {
-  efibootmgr | awk -F': ' '/^BootOrder:/{print $2; exit}'
+# Print "unset" when firmware has no BootOrder. Print the comma list when it
+# does. Fail when the dump has neither, so a missed line cannot become a guess.
+parse_boot_order_dump() {
+  local line value
+  line=$(awk '/^BootOrder:/{print; exit} /^No BootOrder is set/{print; exit}')
+  if [[ "$line" == "No BootOrder is set"* ]]; then
+    printf 'unset\n'
+    return 0
+  fi
+  if [[ "$line" == BootOrder:* ]]; then
+    value=${line#BootOrder:}
+    value=${value#"${value%%[![:space:]]*}"}
+    value=${value%"${value##*[![:space:]]}"}
+    if [[ -z "$value" ]]; then
+      printf 'unset\n'
+    else
+      printf '%s\n' "$value"
+    fi
+    return 0
+  fi
+  return 2
+}
+
+boot_order_state() {
+  local dump
+  dump=$(efibootmgr) || return 2
+  printf '%s\n' "$dump" | parse_boot_order_dump
+}
+
+# Print the BootOrder to write, with NEU last. Print nothing when the firmware
+# had no BootOrder. An empty snapshot must not become a one-entry order.
+restored_boot_order() {
+  local saved=$1 neu=$2
+  if [[ "$saved" == unset || -z "$saved" ]]; then
+    return 0
+  fi
+  awk -v keep="$saved" -v neu="$neu" 'BEGIN {
+    n = split(keep, a, ",")
+    out = ""
+    for (i = 1; i <= n; i++) {
+      gsub(/^[ \t]+|[ \t]+$/, "", a[i])
+      if (a[i] == "" || tolower(a[i]) == tolower(neu)) continue
+      out = (out == "" ? a[i] : out "," a[i])
+    }
+    if (out == "") out = neu
+    else out = out "," neu
+    print out
+  }'
 }
 
 # Print Boot#### numbers whose verbose path mentions any of the given PARTUUIDs
@@ -386,7 +432,9 @@ ensure_entry() {
   mapfile -t uuids < <(part_uuids "$esp" | awk 'NF' | sort -u)
   [[ ${#uuids[@]} -gt 0 ]] || die "no PARTUUID for $esp"
 
-  order=$(boot_order)
+  if ! order=$(boot_order_state); then
+    die "cannot read BootOrder"
+  fi
 
   if bootnum=$(find_entry_for_uuids "${uuids[@]}"); then
     echo "boot-lerux-usb: using existing Boot${bootnum}" >&2
@@ -398,33 +446,34 @@ ensure_entry() {
       as_root efibootmgr --bootnum "$num" --delete-bootnum >/dev/null
     done < <(entries_named_lerux)
 
-    as_root efibootmgr --create \
-      --disk "$dev" \
-      --part "$esp_part" \
-      --label "$LERUX_LABEL" \
-      --loader "$EFI_LOADER" >/dev/null
+    # --create inserts the new number at the front of BootOrder. --create-only
+    # leaves an unset BootOrder unset.
+    if [[ "$order" == unset ]]; then
+      as_root efibootmgr --create-only \
+        --disk "$dev" \
+        --part "$esp_part" \
+        --label "$LERUX_LABEL" \
+        --loader "$EFI_LOADER" >/dev/null
+    else
+      as_root efibootmgr --create \
+        --disk "$dev" \
+        --part "$esp_part" \
+        --label "$LERUX_LABEL" \
+        --loader "$EFI_LOADER" >/dev/null
+    fi
     bootnum=$(entries_named_lerux | tail -n1)
     [[ -n "$bootnum" ]] || die "efibootmgr did not report a new Boot number"
   fi
 
-  # Always restore BootOrder with the entry at the end so Omarchy/Limine stays
-  # the lasting default.
-  restored=$(
-    awk -v keep="$order" -v neu="$bootnum" 'BEGIN {
-      n = split(keep, a, ",")
-      out = ""
-      for (i = 1; i <= n; i++) {
-        gsub(/^[ \t]+|[ \t]+$/, "", a[i])
-        if (a[i] == "" || tolower(a[i]) == tolower(neu)) continue
-        out = (out == "" ? a[i] : out "," a[i])
-      }
-      if (out == "") out = neu
-      else out = out "," neu
-      print out
-    }'
-  )
-  as_root efibootmgr --bootorder "$restored" >/dev/null
-  echo "boot-lerux-usb: restored BootOrder ($restored)" >&2
+  # Put the entry last when a snapshot exists, so Omarchy or Limine stays the
+  # lasting default. An unset snapshot must not become a one-entry BootOrder.
+  restored=$(restored_boot_order "$order" "$bootnum")
+  if [[ -n "$restored" ]]; then
+    as_root efibootmgr --bootorder "$restored" >/dev/null
+    echo "boot-lerux-usb: restored BootOrder ($restored)" >&2
+  else
+    echo "boot-lerux-usb: BootOrder stays unset" >&2
+  fi
 
   printf '%s\n' "$bootnum"
 }

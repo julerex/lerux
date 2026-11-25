@@ -2,16 +2,24 @@
 //!
 //! QEMU and the Inspiron map `0xb8000` uncached and grant the CRTC ports plus
 //! keyboard ports `0x60` and `0x64`. The Z97 desk maps the firmware buffer
-//! at `0xd0000000`. It does not map that text page. On the Swift image the same
-//! driver paints the GOP panel when the mode record names that buffer, and the
-//! VGA text page otherwise.
+//! at `0xd0000000` and does not map that text page. The I217 image maps both,
+//! and paints the same cells into the firmware buffer when the mode record
+//! names that aperture. On the Swift image the same driver paints the GOP panel
+//! when the mode record names that buffer, and the VGA text page otherwise.
+//! Scan-code translation stays in [`crate::scancode`].
 
-#[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h",))]
+#[cfg(any(
+    feature = "board-swift_sfx14_41g",
+    feature = "board-pc_z97_d3h",
+    feature = "board-pc_z97_d3h_i217",
+))]
 use core::cell::Cell;
 
 use sel4::with_ipc_buffer_mut;
 use sel4_microkit::{memory_region_symbol, var};
 
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+use lerux_desk::{desk_gop_paint, fill_background, paint_cell, paint_underline, Pen};
 #[cfg(feature = "board-pc_z97_d3h")]
 use lerux_desk::{
     desk_target, fill_background, paint_cell, paint_underline, Pen, ScanoutMode, DESK_FB_BYTES,
@@ -22,10 +30,16 @@ use lerux_desk::{
 };
 
 use crate::screen::Screen;
-#[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h",))]
+#[cfg(any(
+    feature = "board-swift_sfx14_41g",
+    feature = "board-pc_z97_d3h",
+    feature = "board-pc_z97_d3h_i217",
+))]
 use crate::screen::CELLS;
 #[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h",))]
 use crate::screen::COLS;
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+use crate::screen::COLS as GOP_COLS;
 
 #[cfg(feature = "board-swift_sfx14_41g")]
 struct Panel {
@@ -73,6 +87,21 @@ const CONFIG_FALLBACK: u8 = 0x65;
 
 const SPIN: u32 = 100_000;
 
+/// Linear framebuffer inside the Intel aperture. The HDMI port scans this
+/// after the stub's blue mode line. Cells are the 80 by 25 VGA page.
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+struct Gop {
+    frame: *mut u8,
+    len: usize,
+    pitch: usize,
+    width: usize,
+    height: usize,
+    red: u8,
+    green: u8,
+    blue: u8,
+    cursor: Cell<Option<usize>>,
+}
+
 /// CRTC index/data and the two i8042 ports. Each range has its own cap.
 pub struct Device {
     #[cfg(not(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h",)))]
@@ -81,6 +110,8 @@ pub struct Device {
     surface: Surface,
     #[cfg(feature = "board-pc_z97_d3h")]
     desk: DeskFb,
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    gop: Option<Gop>,
     #[cfg(not(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h",)))]
     crtc_cap: u64,
     #[cfg(not(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h",)))]
@@ -136,8 +167,12 @@ impl Device {
     pub fn from_system() -> Self {
         let kbd = kbd_ports();
         let crtc_id = *var!(crtc_ioport_id: usize = usize::MAX) as u64;
+        #[cfg(feature = "board-pc_z97_d3h_i217")]
+        let gop = gop_from_system();
         Self {
             vga: vga_text(),
+            #[cfg(feature = "board-pc_z97_d3h_i217")]
+            gop,
             crtc_cap: BASE_IOPORT_CAP + crtc_id,
             crtc_port: low_u16(*var!(crtc_ioport_addr: usize = usize::MAX)),
             data_cap: kbd.data_cap,
@@ -175,6 +210,12 @@ impl Device {
     #[cfg(feature = "board-swift_sfx14_41g")]
     pub fn uses_panel(&self) -> bool {
         matches!(self.surface, Surface::Panel(_))
+    }
+
+    /// This boot paints the Intel GOP buffer named by the mode record.
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    pub fn paints_gop(&self) -> bool {
+        self.gop.is_some()
     }
 
     #[cfg(feature = "board-pc_z97_d3h")]
@@ -230,6 +271,8 @@ impl Device {
             self.crtc(0x0e, (pos >> 8) as u8);
             self.crtc(0x0f, (pos & 0xff) as u8);
         }
+        #[cfg(feature = "board-pc_z97_d3h_i217")]
+        self.underline_gop(screen);
         #[cfg(feature = "board-pc_z97_d3h")]
         sync_desk_cursor(&self.desk, screen);
         #[cfg(feature = "board-swift_sfx14_41g")]
@@ -297,6 +340,8 @@ impl Device {
         unsafe {
             self.vga.add(index).write_volatile(value);
         }
+        #[cfg(feature = "board-pc_z97_d3h_i217")]
+        self.paint_gop(index, value);
         #[cfg(feature = "board-pc_z97_d3h")]
         write_desk_cell(&self.desk, index, value);
         #[cfg(feature = "board-swift_sfx14_41g")]
@@ -396,6 +441,103 @@ impl Device {
             ret.result
         })
     }
+
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    fn paint_gop(&self, index: usize, value: u16) {
+        let Some(gop) = &self.gop else {
+            return;
+        };
+        if index >= CELLS {
+            return;
+        }
+        // SAFETY: `gop_from_system` checked `offset + len` against the mapped
+        // aperture. The slice is that mode, and this runs on the root.
+        let frame = unsafe { core::slice::from_raw_parts_mut(gop.frame, gop.len) };
+        paint_cell(
+            frame,
+            gop_pen(gop),
+            index % GOP_COLS,
+            index / GOP_COLS,
+            (value & 0xff) as u8,
+            (value >> 8) as u8,
+        );
+    }
+
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    fn underline_gop(&self, screen: &Screen) {
+        let Some(gop) = &self.gop else {
+            return;
+        };
+        let next = screen.cursor_index();
+        let page = screen.page();
+        if let Some(prev) = gop.cursor.replace(Some(next))
+            && prev != next
+            && prev < page.len()
+        {
+            self.paint_gop(prev, page[prev]);
+        }
+        if next >= page.len() {
+            return;
+        }
+        self.paint_gop(next, page[next]);
+        // SAFETY: same mapped mode as `paint_gop`.
+        let frame = unsafe { core::slice::from_raw_parts_mut(gop.frame, gop.len) };
+        paint_underline(
+            frame,
+            gop_pen(gop),
+            next % GOP_COLS,
+            next / GOP_COLS,
+            (page[next] >> 8) as u8,
+        );
+    }
+}
+
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+fn gop_pen(gop: &Gop) -> Pen {
+    Pen {
+        pitch: gop.pitch,
+        width: gop.width,
+        height: gop.height,
+        red: gop.red,
+        green: gop.green,
+        blue: gop.blue,
+    }
+}
+
+/// Black the firmware buffer, then keep the pointer at the mode the record named.
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+fn gop_from_system() -> Option<Gop> {
+    let mode_ptr = memory_region_symbol!(mode_record_vaddr: *mut u8).as_ptr();
+    // SAFETY: the system description maps one page at the mode record.
+    let record = unsafe { core::slice::from_raw_parts(mode_ptr, 40) };
+    let paint = desk_gop_paint(record)?;
+    let base = memory_region_symbol!(fb_vaddr: *mut u8).as_ptr();
+    let pen = Pen {
+        pitch: paint.pitch,
+        width: paint.width,
+        height: paint.height,
+        red: paint.red,
+        green: paint.green,
+        blue: paint.blue,
+    };
+    // SAFETY: `desk_gop_paint` keeps `offset + len` inside the mapped aperture.
+    // This runs once during init, before the handler borrows the buffer.
+    let frame = unsafe {
+        let frame = base.add(paint.offset);
+        fill_background(core::slice::from_raw_parts_mut(frame, paint.len), pen);
+        frame
+    };
+    Some(Gop {
+        frame,
+        len: paint.len,
+        pitch: paint.pitch,
+        width: paint.width,
+        height: paint.height,
+        red: paint.red,
+        green: paint.green,
+        blue: paint.blue,
+        cursor: Cell::new(None),
+    })
 }
 
 #[cfg(feature = "board-swift_sfx14_41g")]

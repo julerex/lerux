@@ -515,7 +515,8 @@ template = "console-z97.system.template"
 pds = ["console-shell", "serial-driver", "console-driver", "rtl8852be-driver"]
 system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48 }
 
-# Z97 I217-V shell. Hardware only. VGA text, the xHCI keyboard, and the
+# Z97 I217-V shell. Hardware only. The 80 by 25 shell is painted into the
+# Intel GOP aperture at 0xd0000000, plus the xHCI keyboard and the
 # onboard Ethernet port. Register window 0xf7e00000. The RTL8852BE probe
 # stays a configuration-space read on its own board. This image does not
 # format a disk.

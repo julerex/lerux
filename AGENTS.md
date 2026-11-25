@@ -4,6 +4,14 @@ Instructions for LLM agents writing Rust in this repository.
 
 Read [docs/context.md](docs/context.md) first for domain terms (protection domain, Microkit, board features, rust-sel4).
 
+## Writing to a person
+
+Spell out acronyms. `.cursor/rules/expand-acronyms.mdc` is that rule. The three names below are not acronyms. A person still cannot see what they refer to. In a message to a person, name the program and the picture in the same sentence. Do not say "the stub", "the mode bar", or "`0xb8000`" alone. Leave those words unchanged in code, commit subjects, and serial strings.
+
+- The stub is `support/mb2-stub`, packed as `/boot/mb2-stub.elf`. GRUB (GRand Unified Bootloader) loads that file. After `ExitBootServices` it copies the seL4 kernel to 1 MiB and starts it. It is the boot trampoline on the Unified Extensible Firmware Interface (UEFI) image. It is not a placeholder and not a test double.
+- The mode bar is the first paint that trampoline makes. White glyphs on a blue strip across the top of the firmware linear framebuffer. The glyphs are one line, `fb 0xADDR pitch PITCH WIDTHxHEIGHT rR gG bB`. That line is the display mode the firmware left behind. It is the same picture as "the mode line" and "the blue framebuffer line". It is not the shell and not a progress bar.
+- `0xb8000` is the classic Video Graphics Array (VGA) text page. Eighty columns by twenty-five rows. Each cell is a character byte and a color byte. `console-driver` writes that page for the on-screen menu. On a UEFI boot of this Z97 desk the motherboard High-Definition Multimedia Interface (HDMI) port scans the Intel linear framebuffer, so those cells are not the picture on that port.
+
 ## Scope
 
 - Applies to all Rust files (`**/*.rs`) in this repo.

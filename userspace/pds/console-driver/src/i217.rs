@@ -4,13 +4,11 @@
 //! Init writes the window once, and the driver's protected call writes it again.
 
 use sel4::with_ipc_buffer_mut;
-use sel4_microkit::var;
 
 use lerux_machine::e1000e::{
     i217_map, I217_REVISION, I217_SUBSYSTEM, I217_V, REGISTER_BAR, REGISTER_BAR_SIZE,
 };
 
-const BASE_IOPORT_CAP: u64 = 394;
 const PCI_VENDOR: u8 = 0x00;
 const PCI_REVISION: u8 = 0x08;
 const PCI_SUBSYSTEM: u8 = 0x2c;
@@ -35,19 +33,6 @@ struct Pci {
 }
 
 impl Pci {
-    fn from_system() -> Option<Self> {
-        let id = *var!(pci_ioport_id: usize = usize::MAX);
-        let addr = *var!(pci_ioport_addr: usize = usize::MAX);
-        if id == usize::MAX || addr == usize::MAX {
-            return None;
-        }
-        let base = u16::try_from(addr & 0xffff).ok()?;
-        Some(Self {
-            cap: BASE_IOPORT_CAP + u64::try_from(id).ok()?,
-            base,
-        })
-    }
-
     fn matches_i217(&self) -> bool {
         let id = self.read_config(PCI_VENDOR);
         let revision = self.read_config(PCI_REVISION);
@@ -135,10 +120,14 @@ impl Pci {
 
 /// Write the recorded BAR and force the legacy pin. False when the port is
 /// absent or `00:19.0` is not the recorded I217-V.
-pub fn rewrite() -> bool {
-    let Some(pci) = Pci::from_system() else {
+///
+/// `pci` is the config port xHCI stored. A second `var!` of that symbol does
+/// not compile in this crate.
+pub fn rewrite(pci: Option<(u64, u16)>) -> bool {
+    let Some((cap, base)) = pci else {
         return false;
     };
+    let pci = Pci { cap, base };
     if !pci.matches_i217() {
         return false;
     }

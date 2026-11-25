@@ -81,7 +81,7 @@ image: build
 # Swift panel or the VGA text page. It does not map the Inspiron AHCI disk.
 # `just make-lerux-iso pc_z97_d3h` and `just make-lerux-iso inspiron_n5010`
 # still pack those boards' own images. `just make-lerux-iso pc_z97_d3h_i217`
-# packs the I217 VGA shell. Does not write a disk.
+# packs the I217 shell. Does not write a disk.
 # `just burn-lerux-iso` writes the one-image ISO. `just burn-lerux-iso z97`
 # writes the I217 shell ISO.
 # `LERUX_GIT_DESCRIBE` is `git describe --always --dirty` for the tree being
@@ -107,6 +107,16 @@ burn-lerux-iso *args:
     describe=$(git -C '{{root}}' describe --always --dirty)
     LERUX_GIT_DESCRIBE="${describe#v}" {{lerux}} iso --board "$target" --build-dir '{{build_dir}}' --config '{{config}}'
     bash "{{root}}/support/burn-lerux-iso.sh" --image "{{root}}/{{build_dir}}/$target/lerux_${target}.iso" "$@"
+
+# One-shot boot of the Lerux USB already plugged into this Linux host.
+# Sets UEFI BootNext only (does not change the lasting BootOrder), so the next
+# power-on after Lerux returns to Omarchy / the previous default. Interactive
+# stick pick when no device is named. Pass --no-reboot to set BootNext only.
+# just boot-lerux-usb
+# just boot-lerux-usb /dev/sdX
+# just boot-lerux-usb --no-reboot
+boot-lerux-usb *args:
+    bash "{{root}}/support/boot-lerux-usb.sh" {{args}}
 
 # Copy the Pi loader onto a mounted FAT boot directory. Verifies loader.img.sha256 first.
 # DEST=/media/$USER/boot just deploy-rpi4

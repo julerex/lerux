@@ -201,7 +201,7 @@ impl Handler for HandlerImpl {
     ) -> Result<MessageInfo, Self::Error> {
         #[cfg(feature = "board-pc_z97_d3h_i217")]
         if channel == self.window {
-            let label = u64::from(!crate::i217::rewrite());
+            let label = u64::from(!crate::i217::rewrite(self.usb.pci_config()));
             return Ok(MessageInfo::new(label, 0));
         }
         if channel != self.client {

@@ -511,6 +511,18 @@ mod tests {
         ));
         assert!(xml.contains("sddf-shell.elf"));
         assert!(xml.contains("console-driver.elf"));
+        assert!(xml.contains(
+            "<memory_region name=\"framebuffer\" size=\"0x1_000_000\" phys_addr=\"0xd0000000\" />"
+        ));
+        assert!(xml.contains(
+            "<memory_region name=\"mode_record\" size=\"0x1_000\" phys_addr=\"0x1fe0000\" />"
+        ));
+        assert!(xml.contains(
+            "<map mr=\"framebuffer\" vaddr=\"0x40_000_000\" perms=\"rw\" cached=\"false\" setvar_vaddr=\"fb_vaddr\" />"
+        ));
+        assert!(xml.contains(
+            "<map mr=\"mode_record\" vaddr=\"0x3f_ff0_000\" perms=\"rw\" cached=\"false\" setvar_vaddr=\"mode_record_vaddr\" />"
+        ));
         assert!(xml.contains("pci_ioport_id"));
         assert!(!xml.contains("pci_net_config_ioport"));
         assert!(xml.contains(
@@ -532,6 +544,7 @@ mod tests {
             channel_end_id(xml, "net_driver", "console_driver", "console_driver"),
             3
         );
+        assert!(xml.contains("<end pd=\"net_driver\" id=\"3\" pp=\"true\" />"));
     }
 
     fn assert_i217_driver_image(xml: &str) {

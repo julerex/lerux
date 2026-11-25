@@ -79,7 +79,16 @@ fn init() -> handler::HandlerImpl {
     boot_line::install();
     debug::init().expect("debug log");
     let device = device::Device::from_system();
-    #[cfg(not(feature = "board-swift_sfx14_41g"))]
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    if device.paints_gop() {
+        log::info!("console-driver: gop");
+    } else {
+        log::info!("console-driver: vga text");
+    }
+    #[cfg(all(
+        not(feature = "board-swift_sfx14_41g"),
+        not(feature = "board-pc_z97_d3h_i217")
+    ))]
     log::info!("console-driver: vga text");
     #[cfg(feature = "board-swift_sfx14_41g")]
     if device.uses_panel() {
@@ -107,7 +116,7 @@ fn open_shell(device: device::Device) -> handler::HandlerImpl {
     #[cfg(feature = "board-pc_z97_d3h")]
     rtl8852be::publish(usb.pci_config());
     #[cfg(feature = "board-pc_z97_d3h_i217")]
-    note_i217();
+    note_i217(&usb);
     #[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-inspiron_n5010"))]
     let usb = usb_off::UsbKbd::off();
     device.enable_cursor();
@@ -137,9 +146,9 @@ fn open_shell(device: device::Device) -> handler::HandlerImpl {
 }
 
 #[cfg(all(not(test), feature = "board-pc_z97_d3h_i217"))]
-fn note_i217() {
+fn note_i217(usb: &xhci::UsbKbd) {
     use lerux_logging::log;
-    if i217::rewrite() {
+    if i217::rewrite(usb.pci_config()) {
         log::info!("console-driver: i217 window");
     } else {
         log::info!("console-driver: i217 absent");

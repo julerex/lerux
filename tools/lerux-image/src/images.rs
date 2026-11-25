@@ -1341,13 +1341,17 @@ fn e1000e_domain(place: &E1000ePlace) -> Domain {
     )
 }
 
-/// Desk I217 image: VGA shell, xHCI keyboard, and the e1000e queue path.
+/// Desk I217 image: GOP shell, xHCI keyboard, and the e1000e queue path.
+///
+/// The HDMI port scans the Intel aperture at `0xd0000000`. The console paints
+/// the 80 by 25 shell there when the mode record names that window. The VGA
+/// text page stays mapped for the CRTC cursor.
 ///
 /// Channel assignment gives every IRQ an id before any link. The console's
 /// keyboard pin is channel 0 and its xHCI MSI is channel 1, so the shell byte
 /// channel is 2 on the console and 0 on the shell. Network receive and
 /// transmit on the shell are 1 and 2. The driver's rewrite call is channel 3
-/// on both ends, protected on the console.
+/// on both ends. `pp` sits on the driver, the caller. The console handles it.
 fn i217_shell_image() -> Image {
     let (device_regions, driver) = e1000e_device(&E1000ePlace::Desk);
     let mut console = domain(
@@ -1369,8 +1373,8 @@ fn i217_shell_image() -> Image {
     ]);
     links[3].pp_b = true;
     links.push(Link {
-        a: "net_driver",
-        b: "console_driver",
+        a: "console_driver",
+        b: "net_driver",
         pp_b: true,
         order: 6,
     });
@@ -1391,6 +1395,9 @@ fn i217_shell_image() -> Image {
 fn i217_console_regions() -> Vec<Region> {
     vec![
         phys("vga_text", 0x1000, 0xb8000, "0xb8000"),
+        phys("mode_record", 0x1000, 0x3fff_0000, "0x1fe0000"),
+        // First 16 MiB of the Intel aperture. Matches lerux_desk::DESK_GOP_BYTES.
+        phys("framebuffer", 0x100_0000, 0x4000_0000, "0xd0000000"),
         phys("xhci_regs", 0x1_0000, 0xf7e2_0000, "0xf7e2_0000"),
         phys("xhci_dma", 0x4_0000, 0x6200_0000, "0x6200_0000"),
     ]
@@ -1398,21 +1405,11 @@ fn i217_console_regions() -> Vec<Region> {
 
 fn i217_console_slots() -> Vec<Slot> {
     vec![
-        Slot::Map(Map {
-            region: "vga_text",
-            cached: Some(false),
-            setvar: Some("vga_text_vaddr"),
-        }),
-        Slot::Map(Map {
-            region: "xhci_regs",
-            cached: Some(false),
-            setvar: Some("xhci_regs_vaddr"),
-        }),
-        Slot::Map(Map {
-            region: "xhci_dma",
-            cached: Some(false),
-            setvar: Some("xhci_dma_vaddr"),
-        }),
+        mmio("vga_text", "vga_text_vaddr"),
+        mmio("mode_record", "mode_record_vaddr"),
+        mmio("framebuffer", "fb_vaddr"),
+        mmio("xhci_regs", "xhci_regs_vaddr"),
+        mmio("xhci_dma", "xhci_dma_vaddr"),
         Slot::Port(console_port(
             "0x3d4",
             2,

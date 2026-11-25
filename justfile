@@ -81,7 +81,7 @@ image: build
 # Swift panel or the VGA text page. It does not map the Inspiron AHCI disk.
 # `just make-lerux-iso pc_z97_d3h` and `just make-lerux-iso inspiron_n5010`
 # still pack those boards' own images. `just make-lerux-iso pc_z97_d3h_i217`
-# packs the I217 VGA shell. Does not write a disk.
+# packs the I217 shell. Does not write a disk.
 # `just burn-lerux-iso` writes the one-image ISO. `just burn-lerux-iso z97`
 # writes the I217 shell ISO.
 # `LERUX_GIT_DESCRIBE` is `git describe --always --dirty` for the tree being

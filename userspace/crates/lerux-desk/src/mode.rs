@@ -564,6 +564,62 @@ pub fn console_kind(record: &[u8]) -> u8 {
     record.get(CONSOLE_KIND).copied().unwrap_or(0)
 }
 
+/// Intel HD Graphics 4600 prefetchable aperture on this Z97 desk.
+///
+/// BAR2 of `00:02.0` is `0xd0000000` for 256 MiB. The 2026-10-22 GOP line
+/// starts at that base. The console maps the first 16 MiB.
+pub const DESK_GOP_PHYS: u64 = 0xD000_0000;
+
+/// Bytes of [`DESK_GOP_PHYS`] the I217 console maps.
+pub const DESK_GOP_BYTES: u64 = FRAMEBUFFER_CAP;
+
+/// Where to paint when the mode record names a buffer inside [`DESK_GOP_PHYS`].
+///
+/// The stub marks every non-Swift address as VGA. That mark keeps Swift
+/// device registers off. It does not describe the buffer the HDMI port scans
+/// after a UEFI GOP boot. A cleared record stays off, so a missing mode does
+/// not scribble a guessed geometry.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DeskGop {
+    /// Byte offset from [`DESK_GOP_PHYS`].
+    pub offset: usize,
+    /// `pitch * height`. This fits in the mapped window.
+    pub len: usize,
+    pub pitch: usize,
+    pub width: usize,
+    pub height: usize,
+    pub red: u8,
+    pub green: u8,
+    pub blue: u8,
+}
+
+/// Paint target for the Z97 GOP window, or nothing when the record names
+/// another address.
+#[must_use]
+pub fn desk_gop_paint(record: &[u8]) -> Option<DeskGop> {
+    let mode = ScanoutMode::parse(record)?;
+    let bytes = u64::from(mode.pitch()).checked_mul(u64::from(mode.height()))?;
+    let address = mode.address();
+    if address < DESK_GOP_PHYS {
+        return None;
+    }
+    let offset = address - DESK_GOP_PHYS;
+    let end = offset.checked_add(bytes)?;
+    if end > DESK_GOP_BYTES {
+        return None;
+    }
+    Some(DeskGop {
+        offset: usize::try_from(offset).ok()?,
+        len: usize::try_from(bytes).ok()?,
+        pitch: usize::try_from(mode.pitch()).ok()?,
+        width: usize::try_from(mode.width()).ok()?,
+        height: usize::try_from(mode.height()).ok()?,
+        red: mode.red_shift(),
+        green: mode.green_shift(),
+        blue: mode.blue_shift(),
+    })
+}
+
 /// Mode to paint. An explicit VGA mark stays off, including when the address
 /// bytes still name the Swift panel. A record that names another address stays
 /// off. A cleared record uses [`swift_recorded_mode`].
@@ -995,6 +1051,49 @@ mod tests {
         assert_eq!(panel_mode(&record), Some(mode));
         record[8..16].copy_from_slice(&0x8000_0000u64.to_le_bytes());
         assert!(panel_mode(&record).is_none());
+    }
+
+    fn vga_record(mode: ScanoutMode) -> [u8; RECORD_LEN] {
+        let mut record = [0u8; RECORD_LEN];
+        mode.write_record(&mut record)
+            .expect("the mode record is 40 bytes");
+        record[CONSOLE_KIND] = CONSOLE_VGA;
+        record
+    }
+
+    #[test]
+    fn desk_gop_paints_the_recorded_z97_mode() {
+        let record = vga_record(mode_from_mb2_tag(TAG).expect("recorded tag"));
+        assert!(panel_mode(&record).is_none());
+        let paint = desk_gop_paint(&record).expect("the Z97 aperture is the scanout");
+        assert_eq!(paint.offset, 0);
+        assert_eq!(paint.len, 4096 * 768);
+        assert!(paint.width / 8 >= 80);
+        assert!(paint.height / 16 >= 25);
+        assert!(desk_gop_paint(&[0; RECORD_LEN]).is_none());
+    }
+
+    #[test]
+    fn desk_gop_paints_the_live_hdmi_mode_and_rejects_other_addresses() {
+        let mut tag = [0u8; TAG.len()];
+        tag.copy_from_slice(TAG);
+        tag[16..20].copy_from_slice(&7680u32.to_le_bytes());
+        tag[20..24].copy_from_slice(&1920u32.to_le_bytes());
+        tag[24..28].copy_from_slice(&1080u32.to_le_bytes());
+        let paint = desk_gop_paint(&vga_record(
+            mode_from_mb2_tag(&tag).expect("1920x1080 at the aperture base"),
+        ))
+        .expect("the live HDMI mode fits");
+        assert_eq!(paint.len, 7680 * 1080);
+        assert!(desk_gop_paint(&vga_record(swift_recorded_mode())).is_none());
+        let address = DESK_GOP_PHYS + DESK_GOP_BYTES - 4096;
+        tag.copy_from_slice(TAG);
+        tag[8..16].copy_from_slice(&address.to_le_bytes());
+        tag[16..20].copy_from_slice(&512u32.to_le_bytes());
+        tag[20..24].copy_from_slice(&16u32.to_le_bytes());
+        tag[24..28].copy_from_slice(&16u32.to_le_bytes());
+        let past = mode_from_mb2_tag(&tag).expect("a short mode still parses");
+        assert!(desk_gop_paint(&vga_record(past)).is_none());
     }
 
     #[test]

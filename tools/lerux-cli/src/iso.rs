@@ -383,6 +383,8 @@ fn print_usb_instructions(board: &str, iso: &Path) {
         print_swift_usb();
     } else if board == "inspiron_n5010" {
         print_inspiron_usb();
+    } else if board == "pc_z97_d3h_i217" {
+        print_i217_usb();
     } else {
         print_desk_usb();
     }
@@ -417,6 +419,25 @@ fn print_inspiron_usb() {
     );
     println!("The recorded boot was legacy BIOS. This ISO is UEFI only.");
     println!("Full procedure: docs/boards.md#dell-inspiron-n5010-install-path");
+}
+
+fn print_i217_usb() {
+    println!(
+        "Replace sdX with the flash drive from lsblk. Do not use sda (Ubuntu SSD) or sdb (data disk)."
+    );
+    println!(
+        "Firmware boot menu (F12) → the USB entry that says UEFI (GRUB EFI/BOOT/BOOTX64.EFI)."
+    );
+    println!("mb2-stub loads sel4.elf (64-bit) at 1 MiB after ExitBootServices.");
+    println!("Screen: the Arch sign-on on the Intel framebuffer, then \"[root@lerux ~]# \".");
+    println!("The blue mode line remains when that paint did not reach the scanned buffer.");
+    println!(
+        "Keyboard: PS/2 in the rear combo port, or a USB HID boot keyboard on a root xHCI port."
+    );
+    println!("Type ping. Success is ip and the address, then ping ok.");
+    println!("Console: COM1 115200 8N1 on the COMA header.");
+    println!("Expect: lerux login: root (automatic login)");
+    println!("Full procedure: docs/boards.md#gigabyte-z97-d3h-install-path");
 }
 
 fn print_desk_usb() {

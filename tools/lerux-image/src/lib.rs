@@ -164,7 +164,7 @@ mod tests {
 
     #[test]
     fn board_without_sddf_suffix_is_none() {
-        assert_eq!(render_board("pc_z97_d3h").expect("render"), None);
+        assert_eq!(render_board("inspiron_n5010").expect("render"), None);
     }
 
     #[test]
@@ -552,7 +552,6 @@ mod tests {
         let irq = i217_irq();
         assert!(xml.contains("sddf-e1000e-driver.elf"));
         assert!(!xml.contains("sddf-net-driver.elf"));
-        assert!(!xml.contains("rtl8852be"));
         assert!(xml.contains("e1000e_regs"));
         assert!(xml.contains("e1000e_dma"));
         assert!(xml.contains(&format!("phys_addr=\"{}\"", map.regs_paddr.text())));

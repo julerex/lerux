@@ -17,7 +17,7 @@ Last updated: 2026-11-09
 - Leave the firmware download order in `userspace/pds/swift-mt7921/src/device.rs` as it is until a boot shows a word that names a later step. A readback is a change of information, not a change of sequence.
 - The panel is 120 columns. The console owns rows 0 to 24. The probe owns rows 25 to 30. The image does not paint rows 31 to 66. Those rows were the photograph dump and the end marker. `lerux_swift::dump` still lays them out for a host test. Do not paint them. A new value on a row that is still painted is a byte formatter in `lerux-swift` with a host test of the exact bytes.
 - A photograph of the panel is the record of a boot. Every number on it is in hexadecimal with no `0x`. Keep the row and column of each field stable between ISOs, so two photographs can be compared.
-- `just check`, `just check-pd`, and `just make-lerux-iso` are sequential. `just make-lerux-iso` is the image that goes on the stick, and it rebuilds the Swift protection domains before packing.
+- `just check`, `just check-pd`, and `just make-lerux-iso-swift` are sequential. `just make-lerux-iso-swift` is the image that goes on the stick, and it rebuilds the Swift protection domains before packing.
 
 ## Phase 1 — Full-panel dump and root-port readback
 

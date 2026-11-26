@@ -1,9 +1,9 @@
 //! Sign-on and command prompt on the VGA text console.
 //!
 //! Channel 0 is `console_driver` (keyboard bytes in, screen bytes out).
-//! On the desk, channel 1 is `serial_driver` (the same output bytes on COM1).
+//! On the QEMU console, channel 1 is `serial_driver` (the same output bytes on COM1).
 //! The Inspiron N5010 image has no serial channel.
-//! The desk and the QEMU console have no page painter, so the browser choice
+//! The QEMU console has no page painter, so the browser choice
 //! reports that it is unavailable. On the Swift X, channel 1 is the read-only
 //! `NVMe` result, and the browser choice paints the Lenna test page over the
 //! console until `quit`.
@@ -15,7 +15,7 @@ use embedded_hal_nb::{
     nb,
     serial::{Read, Write},
 };
-#[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h"))]
+#[cfg(feature = "board-swift_sfx14_41g")]
 use sel4_microkit::memory_region_symbol;
 use sel4_microkit::{protection_domain, Channel, ChannelSet, Handler, Infallible, MessageInfo};
 use sel4_microkit_driver_adapters::serial::client::Client;
@@ -25,8 +25,6 @@ use lerux_calc::{eval, write_i64, Error};
 use lerux_desk::{panel_mode, BROWSER_HOLD};
 #[cfg(feature = "board-swift_sfx14_41g")]
 use lerux_ladybird_image::{paint_page, Shifts};
-#[cfg(feature = "board-pc_z97_d3h")]
-use lerux_rtw8852be::{report, Status};
 use lerux_signon::{for_each_preamble, PROMPT};
 #[cfg(feature = "board-swift_sfx14_41g")]
 use lerux_swift::{
@@ -95,8 +93,6 @@ fn init() -> HandlerImpl {
     for_each_preamble(env!("LERUX_GIT_DESCRIBE").as_bytes(), |part| {
         shell.emit_boot(part);
     });
-    #[cfg(feature = "board-pc_z97_d3h")]
-    lerux_logging::debug::after_boot_line();
     #[cfg(feature = "board-swift_sfx14_41g")]
     shell.emit_disk();
     shell
@@ -125,7 +121,7 @@ impl HandlerImpl {
         }
     }
 
-    /// Sign-on bytes. The desk holds the finished screen once, after this returns.
+    /// Sign-on bytes.
     fn emit_boot(&mut self, bytes: &[u8]) {
         for &byte in bytes {
             push(&mut self.screen, byte);
@@ -233,11 +229,6 @@ impl HandlerImpl {
             b"2" | b"maths" => {
                 self.mode = Mode::Maths;
                 self.emit(b"maths> ");
-            }
-            #[cfg(feature = "board-pc_z97_d3h")]
-            b"wifi" => {
-                self.emit(report(&desk_wifi_status()));
-                self.emit(PROMPT);
             }
             #[cfg(feature = "board-swift_sfx14_41g")]
             b"3" | b"wifi" => {
@@ -484,14 +475,6 @@ fn disk_payload() -> &'static [u8] {
     let n = u16::from_le_bytes([page[0], page[1]]) as usize;
     let n = n.min(256).min(page.len().saturating_sub(2));
     &page[2..2 + n]
-}
-
-#[cfg(feature = "board-pc_z97_d3h")]
-fn desk_wifi_status() -> Status {
-    let ptr = memory_region_symbol!(rtl8852be_status_vaddr: *mut Status).as_ptr();
-    // SAFETY: the desk template maps a 4 KiB status page at this symbol. Status
-    // is 16 bytes at offset 0 of a 4 KiB aligned page. The driver writes it in init.
-    unsafe { ptr.read_volatile() }
 }
 
 fn trim(line: &[u8]) -> &[u8] {

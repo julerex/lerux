@@ -28,11 +28,6 @@ timeout_secs = 120
 qmp_keys = ["2", "ret", "6", "slash", "2", "ret"]
 qmp_expect = "maths 3"
 
-# Same console image as x86_64_generic_console; ISO smoke under OVMF (no QMP).
-[boards.pc_z97_d3h]
-expects = ["lerux login: root (automatic login)"]
-timeout_secs = 180
-
 # One ISO. OVMF's GOP buffer is not the Swift panel, so the probe selects VGA.
 # This line does not prove the panel. ci stays false; the metal panel is the proof.
 [boards.swift_sfx14_41g]

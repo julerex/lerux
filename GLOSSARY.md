@@ -20,7 +20,7 @@ _Avoid_: [q35](#q35), [Swift X](#swift-x)
 
 ### Inspiron N5010
 
-The Dell Inspiron N5010 probed on 2026-11-14. Arrandale Core i5-460M and an Intel HM57 chipset. The record is [support/arch-probe/machines/inspiron-n5010.md](support/arch-probe/machines/inspiron-n5010.md). The [Microkit](#microkit) board name is `inspiron_n5010`. `just make-lerux-iso inspiron_n5010` packs this board's own image. The one ISO from `just make-lerux-iso` also boots this machine on the [VGA text page](#vga-text-page). The console on that boot was the [VGA text page](#vga-text-page). The keyboard is the [i8042](#i8042). The probe recorded no [GOP](#gop) framebuffer and no serial port. The AHCI disk is not mapped.
+The Dell Inspiron N5010 probed on 2026-11-14. Arrandale Core i5-460M and an Intel HM57 chipset. The record is [support/arch-probe/machines/inspiron-n5010.md](support/arch-probe/machines/inspiron-n5010.md). The [Microkit](#microkit) board name is `inspiron_n5010`. `just make-lerux-iso-inspiron` packs this board's own image. The one ISO from `just make-lerux-iso-swift` also boots this machine on the [VGA text page](#vga-text-page). The console on that boot was the [VGA text page](#vga-text-page). The keyboard is the [i8042](#i8042). The probe recorded no [GOP](#gop) framebuffer and no serial port. The AHCI disk is not mapped.
 
 _Avoid_: [q35](#q35), [Z97 desk](#z97-desk), [Swift X](#swift-x)
 
@@ -146,7 +146,7 @@ _Avoid_: using it as the name of the [Z97 desk](#z97-desk) part
 
 ### RTL8852BE
 
-The Realtek wireless card on the [Z97 desk](#z97-desk), behind root port `00:1c.6`, identity `10ec:b852`. On the desk ISO, `rtl8852be` maps BAR 2 and stops the PCI HCI. `console-driver` enables the PCI command bits. `rtl8852be-probe` reads [configuration space](#configuration-space) and does not map the card.
+The Realtek wireless card on the [Z97 desk](#z97-desk), behind root port `00:1c.6`, identity `10ec:b852`. No lerux image maps or probes it.
 
 _Avoid_: [I217-V](#i217-v), [MT7921](#mt7921)
 
@@ -368,7 +368,7 @@ The [firmware](#firmware) interface the [Swift X](#swift-x) and the [Z97 desk](#
 
 ### ISO
 
-The one image `just make-lerux-iso` writes. The file is `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`. On the [Swift X](#swift-x) the [GOP](#gop) buffer is `0xfc90000000` and the panel is used. On any other x86 PC the [VGA text page](#vga-text-page) is used. The recipe's own status line includes `Wrote ISO`. [GRUB](#grub) is the loader. The boot entry has to say [UEFI](#uefi).
+The one image `just make-lerux-iso-swift` writes. The file is `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`. On the [Swift X](#swift-x) the [GOP](#gop) buffer is `0xfc90000000` and the panel is used. On any other x86 PC the [VGA text page](#vga-text-page) is used. The recipe's own status line includes `Wrote ISO`. [GRUB](#grub) is the loader. The boot entry has to say [UEFI](#uefi).
 
 _Avoid_: [OVMF](#ovmf), and the [Arch live image](#arch-live-image). [OVMF](#ovmf) is the [firmware](#firmware) QEMU uses for an x86 [ISO](#iso). The [Arch live image](#arch-live-image) is the Arch installer. This entry is the [Swift X](#swift-x) image.
 
@@ -426,7 +426,7 @@ The Multiboot 2 trampoline linked at 32 MiB. [GRUB](#grub) loads it under [UEFI]
 
 ### Swift X
 
-The Acer [Swift X](#swift-x) SFX14-41G, Ryzen 5 5500U. The [Microkit](#microkit) board name is `swift_sfx14_41g`. There is no [COM1](#com1), no serial [driver](#driver), and no QEMU model. The keyboard is the built-in [i8042](#i8042). The panel is the [GOP](#gop) buffer of the [Swift Radeon](#swift-radeon). `just make-lerux-iso` packs this image, and the same file boots another x86 PC on [VGA text page](#vga-text-page).
+The Acer [Swift X](#swift-x) SFX14-41G, Ryzen 5 5500U. The [Microkit](#microkit) board name is `swift_sfx14_41g`. There is no [COM1](#com1), no serial [driver](#driver), and no QEMU model. The keyboard is the built-in [i8042](#i8042). The panel is the [GOP](#gop) buffer of the [Swift Radeon](#swift-radeon). `just make-lerux-iso-swift` packs this image, and the same file boots another x86 PC on [VGA text page](#vga-text-page).
 
 _Avoid_: [Z97 desk](#z97-desk), [q35](#q35)
 
@@ -618,7 +618,7 @@ _Avoid_: treating the host test as that boot.
 
 The official Arch Linux installer written to a USB stick. The measured file is `archlinux-2026.11.01-x86_64.iso`, 1256.5 MiB, Linux 7.2.11. The size breakdown is [docs/arch-live-image.md](docs/arch-live-image.md). BIOS boot reads the kernel from the image's file tree. [UEFI](#uefi) boot reads the same kernel from the appended [FAT](#fat) partition.
 
-_Avoid_: [ISO](#iso). That file is the [Swift X](#swift-x) image `just make-lerux-iso` writes.
+_Avoid_: [ISO](#iso). That file is the [Swift X](#swift-x) image `just make-lerux-iso-swift` writes.
 
 ### squashfs
 

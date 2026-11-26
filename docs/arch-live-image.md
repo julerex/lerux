@@ -4,7 +4,7 @@ This is the official Arch Linux live image written straight to a [USB](../GLOSSA
 
 A MiB is 1024 × 1024 bytes. On a larger stick, the spare capacity stays empty.
 
-Words used below are defined in [GLOSSARY.md](../GLOSSARY.md#arch-live-image). This image is the [Arch live image](../GLOSSARY.md#arch-live-image). The lerux [ISO](../GLOSSARY.md#iso) is a different file, the one `just make-lerux-iso` writes for the Swift X.
+Words used below are defined in [GLOSSARY.md](../GLOSSARY.md#arch-live-image). This image is the [Arch live image](../GLOSSARY.md#arch-live-image). The lerux [ISO](../GLOSSARY.md#iso) is a different file, the one `just make-lerux-iso-swift` writes for the Swift X.
 
 ## What lands on the stick
 

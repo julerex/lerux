@@ -20,7 +20,7 @@ The board name is `swift_sfx14_41g`. The reference for that board is [boards.md]
 
 ## Build the ISO and write the stick
 
-The commands below are run on the Linux computer, in a checkout of this repo. `just make-lerux-iso` with no extra word packs the Swift image. `just burn-lerux-iso` packs that same image and then writes it to a USB stick.
+The commands below are run on the Linux computer, in a checkout of this repo. `just make-lerux-iso-swift` packs the Swift image. `just burn-lerux-iso-swift` packs that same image and then writes it to a USB stick.
 
 ### Get the source
 
@@ -38,7 +38,7 @@ just fetch-sdk
 Plug in the USB stick. From the repo directory:
 
 ```bash
-just burn-lerux-iso
+just burn-lerux-iso-swift
 ```
 
 That command first packs `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`. When the pack finishes, the log contains a line of this shape:
@@ -120,10 +120,10 @@ just boot-lerux-usb /dev/sdc
 just boot-lerux-usb --no-reboot
 ```
 
-If you already know the device name for the write step, this does the same pack and the same confirmation, and it skips the numbered list:
+The recipe takes no arguments. If you already know the device name, the script itself takes it and skips the numbered list. It writes the Swift ISO that `just make-lerux-iso-swift` already packed, with the same confirmation:
 
 ```bash
-just burn-lerux-iso /dev/sdb
+bash support/burn-lerux-iso.sh /dev/sdb
 ```
 
 Replace `/dev/sdb` with the disk from `lsblk`. Pass the whole disk, such as `/dev/sdb`. A partition such as `/dev/sdb1` is refused with `burn-lerux-iso: pass the whole stick`.
@@ -135,10 +135,10 @@ Replace `/dev/sdb` with the disk from `lsblk`. Pass the whole disk, such as `/de
 | `burn-lerux-iso: refusing /dev/sda because it holds the host OS (/)` | That disk is the computer you are building on. Pick the USB stick. |
 | `burn-lerux-iso: refusing /dev/sda (transport is nvme)` | That disk is not a USB stick. The word in parentheses is the transport `lsblk` reported. |
 | `burn-lerux-iso: stick is too small: the image is N bytes and /dev/sdb is M bytes` | Use a larger stick. |
-| `burn-lerux-iso: image not found: … (run: just make-lerux-iso)` | The pack step did not leave the ISO. Run `just make-lerux-iso` and read the error above that line. |
-| `burn-lerux-iso: name the stick: just burn-lerux-iso /dev/sdX` | The command has no terminal to ask you. Run it again in a terminal, or pass the device name. |
+| `burn-lerux-iso: image not found: … (run the matching just make-lerux-iso-* recipe)` | The pack step did not leave the ISO. Run `just make-lerux-iso-swift` and read the error above that line. |
+| `burn-lerux-iso: no terminal to ask which stick to erase: run the recipe in a terminal` | The command has no terminal to ask you. Run it again in a terminal. |
 
-`just make-lerux-iso` alone packs the ISO and stops. It does not write a stick. `just burn-lerux-iso` always packs the Swift image, including after a previous `just make-lerux-iso pc_z97_d3h` or `just make-lerux-iso inspiron_n5010`. Those other names are different machines.
+`just make-lerux-iso-swift` alone packs the ISO and stops. It does not write a stick. `just burn-lerux-iso-swift` always packs the Swift image, including after a previous `just make-lerux-iso-z97` or `just make-lerux-iso-inspiron`. Those other recipes are different machines.
 
 ## Boot the Swift
 
@@ -185,7 +185,7 @@ Under the 40-row band, other programs paint device lines in the same font. The W
 
 | What you see | What it means |
 | --- | --- |
-| `WARNING: no console will be available to OS` | GRUB had no framebuffer to hand to the stub. Rebuild with `just burn-lerux-iso` from a current checkout and rewrite the stick. |
+| `WARNING: no console will be available to OS` | GRUB had no framebuffer to hand to the stub. Rebuild with `just burn-lerux-iso-swift` from a current checkout and rewrite the stick. |
 | The mode line, and no sign-on | The panel address on that line is not the buffer this image maps, or the shell did not start. A current Swift image maps `0xfc90000000`. Read the hex on the mode line, then rebuild and rewrite the stick. |
 | The sign-on and `[root@lerux ~]# ` | The shell is ready. Continue at the prompt. |
 

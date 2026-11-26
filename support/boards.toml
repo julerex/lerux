@@ -450,7 +450,7 @@ qemu = {}
 ci = true
 system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48 }
 
-# Same console image as pc_z97_d3h, booted under QEMU q35 so CI can inject PS/2 keys.
+# console-shell on the VGA text page, booted under QEMU q35 so CI can inject PS/2 keys.
 [x86_64_generic_console]
 arch = "x86_64"
 microkit_board = "x86_64_generic"
@@ -506,19 +506,9 @@ pds = ["sddf-shell", "console-driver", "swift-pci-probe", "swift-mt7921", "swift
 system_vars = { fb_phys = "0xfc90000000", fb_bytes = "0x7e9000" }
 ci = false
 
-# On-screen menu for this desk. Hardware only. QEMU coverage is x86_64_generic_console.
-[pc_z97_d3h]
-arch = "x86_64"
-microkit_board = "x86_64_generic"
-target = "x86_64-sel4-microkit"
-template = "console-z97.system.template"
-pds = ["console-shell", "serial-driver", "console-driver", "rtl8852be-driver"]
-system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48 }
-
-# Z97 I217-V shell. Hardware only. The 80 by 25 shell is painted into the
-# Intel GOP aperture at 0xd0000000, plus the xHCI keyboard and the
-# onboard Ethernet port. Register window 0xf7e00000. The RTL8852BE probe
-# stays a configuration-space read on its own board. This image does not
+# The one Z97 desk image. Hardware only. The 80 by 25 shell is painted into
+# the Intel GOP aperture at 0xd0000000, plus the xHCI keyboard and the
+# onboard Ethernet port. Register window 0xf7e00000. This image does not
 # format a disk.
 [pc_z97_d3h_i217]
 arch = "x86_64"
@@ -529,20 +519,9 @@ pds = ["sddf-e1000e-driver", "sddf-net-virt-tx", "sddf-net-virt-rx", "sddf-net-c
 ci = false
 system_vars = {}
 
-# Z97 RTL8852BE config-space probe. Hardware only. Reads root port 00:1c.6,
-# then the device on that port's secondary bus, and logs the id and BAR.
-# Does not map MMIO. Not the shell image. No QEMU model of the card, so no ci.
-[pc_z97_d3h_rtl8852be]
-arch = "x86_64"
-microkit_board = "x86_64_generic"
-target = "x86_64-sel4-microkit"
-template = "rtl8852be-probe.system.template"
-pds = ["rtl8852be-probe", "serial-driver"]
-system_vars = { serial_ioport_addr = "0x3f8", serial_ioapic_pin = 4, serial_ioapic_vector = 48 }
-
 # Dell Inspiron N5010. Hardware only. VGA text and the built-in i8042.
 # The 2026-11-14 probe recorded no GOP framebuffer, no serial port, and no xHCI.
-# The AHCI disk is not mapped. `just make-lerux-iso` still defaults to the Swift X.
+# The AHCI disk is not mapped. `just make-lerux-iso-inspiron` packs this image.
 [inspiron_n5010]
 arch = "x86_64"
 microkit_board = "x86_64_generic"

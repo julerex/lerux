@@ -9,7 +9,7 @@
 | **1** | aarch64 QEMU virt; RPi4 | `workstation` → `qemu_virt_aarch64_workstation`; `workstation-rpi4` | CI: `workstation`; HW optional |
 | **2** | RISC-V virt; x86_64 q35 | `workstation-riscv`, `workstation-x86` | CI: `workstation-riscv`, `workstation-x86` |
 | **3** | Other Microkit boards | Bring-up boards only (serial/echo/virtio slices) | Per-board |
-| **HW x86** | Gigabyte Z97-D3H (this desktop) | Phase 82: `pc_z97_d3h` VGA shell + PS/2 or USB boot keyboard + COM1; native disk and Ethernet are [Milestones 19–22](plan-lionsos.md#milestone-19--advanced-host-controller-interface-disk) | Optional `test-hw` |
+| **HW x86** | Gigabyte Z97-D3H (this desktop) | `pc_z97_d3h_i217`: Arch sign-on painted into the Intel framebuffer, PS/2 or USB boot keyboard, I217-V Ethernet; native disk is [Milestone 19](plan-lionsos.md#milestone-19--advanced-host-controller-interface-disk) | Optional `test-hw` |
 | **HW x86** | Acer Swift X SFX14-41G | [Milestones 24–29](plan-lionsos.md#milestone-24--swift-mode-line): panel menu, PCI lines, MT7921, read-only NVMe, Bluetooth HCI. No QEMU model | Metal only |
 
 ## Arch drivers
@@ -47,20 +47,19 @@ QEMU machine `q35` with OVMF and the GRUB ISO (same path as metal UEFI). The vir
 
 ### Z97 desk devices
 
-The Gigabyte GA-Z97-D3H. Firmware scanout uses the HD Graphics 4600 when Initial Display Output is `IGFX`. The RX 560 stays unused. The onboard Ethernet port is the I217-V. The RTL8852BE is a wireless card. The desk ISO maps BAR 2, enables the PCI command bits, and stops the PCI HCI. `rtl8852be-probe` still only reads configuration space.
+The Gigabyte GA-Z97-D3H. Firmware scanout uses the HD Graphics 4600 when Initial Display Output is `IGFX`. The RX 560 stays unused. The onboard Ethernet port is the I217-V. The RTL8852BE is a wireless card that no image drives. The one Z97 image is `pc_z97_d3h_i217`.
 
 | Category | Device | lerux driver | In the tree |
 |----------|--------|--------------|-------------|
-| Serial | NS16550 at COM1 (`0x3f8`), COMA header | `serial-driver` | yes |
-| Text console | VGA text page at `0xb8000`, cursor through the CRTC. The HD Graphics 4600 scans it out. The Intel display engine is not programmed | `console-driver` | yes |
-| Linear framebuffer | The mode firmware publishes (recorded boot: `0xd0000000`, 1024 by 768). The HD Graphics 4600 scans it out | none. The desk-browser spec names `browser-ui` to map this buffer | no `browser-ui` crate |
+| Serial | NS16550 at COM1 (`0x3f8`), COMA header | none. The I217 image has no serial driver | no |
+| Linear framebuffer | The mode firmware publishes inside the Intel aperture at `0xd0000000` (recorded boot: 1024 by 768). The HD Graphics 4600 scans it out. The Intel display engine is not programmed | `console-driver` paints the 80 by 25 shell there | yes |
 | Keyboard | i8042 PS/2 controller, rear combo port | `console-driver` | yes |
 | Keyboard | Intel xHCI at `00:14.0` and a USB boot keyboard on a root port | `console-driver` | yes |
 | Wall clock | CMOS real-time clock | `cmos-rtc-driver` on the init image | yes |
 | Interval timer | time-stamp counter | `tsc-timer-driver` on the init image | yes |
 | Disk | 9 Series AHCI `8086:8c82` at `00:1f.2`, class `0x010601`, subsystem `1458:b005`. The drive is identified. The volume is not formatted | `sddf-ahci-driver` accepts this id beside QEMU `8086:2922`. The desk image does not map the controller | yes |
 | Network | I217-V, `8086:153b` at `00:19.0` | `sddf-e1000e-driver`, [Milestone 22](plan-lionsos.md#milestone-22--desk) | yes |
-| Wireless | RTL8852BE, `10ec:b852`, behind root port `00:1c.6` | `rtl8852be` maps BAR 2 and stops the PCI HCI. `console-driver` enables the command bits. `rtl8852be-probe` reads configuration space and does not map the card | yes |
+| Wireless | RTL8852BE, `10ec:b852`, behind root port `00:1c.6` | none | no |
 | Display | HD Graphics 4600, `8086:0412` at `00:02.0` | none | no |
 | Display | RX 560, `1002:67ff` at `01:00.0` | none | no |
 
@@ -82,7 +81,7 @@ The Acer Swift X SFX14-41G (Ryzen 5 5500U, Orion_CA). The panel belongs to the R
 
 ### Inspiron N5010
 
-The Dell Inspiron N5010 (Core i5-460M, HM57, BIOS A15). Probed 2026-11-14. The full record is [support/arch-probe/machines/inspiron-n5010.md](../support/arch-probe/machines/inspiron-n5010.md). The console on that boot was the VGA text page. The log has no EFI framebuffer. The image is `just make-lerux-iso inspiron_n5010`. It paints that page and does not map the disk.
+The Dell Inspiron N5010 (Core i5-460M, HM57, BIOS A15). Probed 2026-11-14. The full record is [support/arch-probe/machines/inspiron-n5010.md](../support/arch-probe/machines/inspiron-n5010.md). The console on that boot was the VGA text page. The log has no EFI framebuffer. The image is `just make-lerux-iso-inspiron`. It paints that page and does not map the disk.
 
 | Category | Device | lerux driver | In the tree |
 |----------|--------|--------------|-------------|
@@ -100,10 +99,10 @@ The Dell Inspiron N5010 (Core i5-460M, HM57, BIOS A15). Probed 2026-11-14. The f
 just test-workstation          # Tier 1 aarch64 (SP804 QEMU)
 just test-workstation-riscv    # Tier 2 RISC-V
 just test-workstation-x86      # Tier 2 x86
-just make-lerux-iso                                 # Swift X USB ISO → build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso
-just make-lerux-iso pc_z97_d3h                      # Z97-D3H USB ISO → build/pc_z97_d3h/lerux_pc_z97_d3h.iso
-just make-lerux-iso inspiron_n5010                  # Inspiron N5010 USB ISO → build/inspiron_n5010/lerux_inspiron_n5010.iso
-just deploy-pc DEST=/path/to/usb-fat      # Z97-D3H VGA shell onto a FAT volume (Multiboot 2)
+just make-lerux-iso-swift                           # Swift X USB ISO → build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso
+just make-lerux-iso-z97                             # Z97-D3H I217 shell USB ISO → build/pc_z97_d3h_i217/lerux_pc_z97_d3h_i217.iso
+just make-lerux-iso-inspiron                        # Inspiron N5010 USB ISO → build/inspiron_n5010/lerux_inspiron_n5010.iso
+just deploy-pc DEST=/path/to/usb-fat      # Z97-D3H I217 shell onto a FAT volume (Multiboot 2)
 
 lerux profile build workstation
 lerux profile build workstation-riscv

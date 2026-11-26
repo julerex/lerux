@@ -112,7 +112,7 @@ pub fn resolve_loader(root: &Path, board: &str, build_dir: &str, path: Option<&P
 ///
 /// `verify-image` prints this only after the digest matches. The ISO boards
 /// pack that `loader.img` with `lerux iso --no-build`, then `dd` the ISO.
-/// `just make-lerux-iso` rebuilds the loader, so it is not a flash line.
+/// The `just make-lerux-iso-*` recipes rebuild the loader, so they are not a flash line.
 /// The Z97 FAT copy is a comment: it is the other write, and a paste of the
 /// block does not run it with `dd`. Other boards have no flash line here.
 pub fn flash_instruction(board: &str, build_dir: &str) -> Option<String> {
@@ -121,9 +121,9 @@ pub fn flash_instruction(board: &str, build_dir: &str) -> Option<String> {
             "lerux iso --board swift_sfx14_41g --build-dir {build_dir} --no-build\n\
              sudo dd if={build_dir}/swift_sfx14_41g/lerux_swift_sfx14_41g.iso of=/dev/sdX bs=4M status=progress conv=fsync"
         )),
-        "pc_z97_d3h" => Some(format!(
-            "lerux iso --board pc_z97_d3h --build-dir {build_dir} --no-build\n\
-             sudo dd if={build_dir}/pc_z97_d3h/lerux_pc_z97_d3h.iso of=/dev/sdX bs=4M status=progress conv=fsync\n\
+        "pc_z97_d3h_i217" => Some(format!(
+            "lerux iso --board pc_z97_d3h_i217 --build-dir {build_dir} --no-build\n\
+             sudo dd if={build_dir}/pc_z97_d3h_i217/lerux_pc_z97_d3h_i217.iso of=/dev/sdX bs=4M status=progress conv=fsync\n\
              # or, instead of that ISO, a mounted FAT volume:\n\
              # DEST=/media/$USER/boot just deploy-pc"
         )),
@@ -218,11 +218,11 @@ mod tests {
         assert!(!swift.contains("deploy-rpi4"), "{swift}");
         assert!(!swift.contains("deploy-pc"), "{swift}");
 
-        let z97 = flash_instruction("pc_z97_d3h", "build").unwrap();
+        let z97 = flash_instruction("pc_z97_d3h_i217", "build").unwrap();
         assert_packs_then_dd(
             &z97,
-            "pc_z97_d3h",
-            "sudo dd if=build/pc_z97_d3h/lerux_pc_z97_d3h.iso of=/dev/sdX bs=4M status=progress conv=fsync",
+            "pc_z97_d3h_i217",
+            "sudo dd if=build/pc_z97_d3h_i217/lerux_pc_z97_d3h_i217.iso of=/dev/sdX bs=4M status=progress conv=fsync",
         );
         assert!(
             z97.contains("# DEST=/media/$USER/boot just deploy-pc"),

@@ -200,8 +200,8 @@ impl UsbKbd {
     /// PCI config capability and port, when the template set `0xcf8`.
     ///
     /// `from_system` stores `u16::MAX` when the setvar is missing. xHCI owns
-    /// that symbol. The radio path and the I217 rewrite borrow the stored port.
-    #[cfg(any(feature = "board-pc_z97_d3h", feature = "board-pc_z97_d3h_i217"))]
+    /// that symbol. The I217 rewrite borrows the stored port.
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
     pub fn pci_config(&self) -> Option<(u64, u16)> {
         if self.pci_port == u16::MAX {
             None

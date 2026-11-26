@@ -77,36 +77,45 @@ build-pd crate:
 image: build
     {{lerux}} image --board {{board}} --build-dir {{build_dir}} --config {{config}}
 
-# UEFI GRUB ISO. `just make-lerux-iso` rebuilds one image. The stub selects the
-# Swift panel or the VGA text page. It does not map the Inspiron AHCI disk.
-# `just make-lerux-iso pc_z97_d3h` and `just make-lerux-iso inspiron_n5010`
-# still pack those boards' own images. `just make-lerux-iso pc_z97_d3h_i217`
-# packs the I217 shell. Does not write a disk.
-# `just burn-lerux-iso` writes the one-image ISO. `just burn-lerux-iso z97`
-# writes the I217 shell ISO.
+# UEFI GRUB ISOs. Each recipe rebuilds one board image, then packs
+# `build/<board>/lerux_<board>.iso`. None of them writes a disk.
+# `make-lerux-iso-swift` is `swift_sfx14_41g`. The stub selects the Swift panel
+# or the VGA text page, so that ISO also boots the Inspiron and any other x86
+# PC. It does not map the Inspiron AHCI disk.
+# `make-lerux-iso-z97` is the one Z97 image: the I217 shell with the Arch
+# sign-on (`pc_z97_d3h_i217`).
+# `make-lerux-iso-inspiron` is `inspiron_n5010`.
 # `LERUX_GIT_DESCRIBE` is `git describe --always --dirty` for the tree being
 # packed, with one leading `v` removed. Cargo reruns the console-driver build
 # script when that value changes, so an unstaged edit repaints the Swift
 # banner with `-dirty`. `.git/HEAD` and the index mtime do not.
-make-lerux-iso target="swift_sfx14_41g":
+
+# Pack the Swift ISO (VGA text page on any other x86 PC)
+make-lerux-iso-swift: (_make-lerux-iso "swift_sfx14_41g")
+
+# Pack the Z97 ISO (I217 shell, Arch sign-on)
+make-lerux-iso-z97: (_make-lerux-iso "pc_z97_d3h_i217")
+
+# Pack the Inspiron N5010 ISO
+make-lerux-iso-inspiron: (_make-lerux-iso "inspiron_n5010")
+
+_make-lerux-iso target:
     describe=$(git -C '{{root}}' describe --always --dirty) && LERUX_GIT_DESCRIBE="${describe#v}" {{lerux}} iso --board {{target}} --build-dir {{build_dir}} --config {{config}}
 
-# Pack an ISO, then erase a USB stick and write it.
-# `just burn-lerux-iso` and `just burn-lerux-iso /dev/sdX` write the one x86 image.
-# That image selects the Swift panel or the VGA text page.
-# `just burn-lerux-iso z97` and `just burn-lerux-iso z97 /dev/sdX` write the I217 shell.
-# With no device, lists USB sticks and asks which one to erase.
-burn-lerux-iso *args:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    target=swift_sfx14_41g
-    if [[ "${1:-}" == "z97" ]]; then
-        target=pc_z97_d3h_i217
-        shift
-    fi
-    describe=$(git -C '{{root}}' describe --always --dirty)
-    LERUX_GIT_DESCRIBE="${describe#v}" {{lerux}} iso --board "$target" --build-dir '{{build_dir}}' --config '{{config}}'
-    bash "{{root}}/support/burn-lerux-iso.sh" --image "{{root}}/{{build_dir}}/$target/lerux_${target}.iso" "$@"
+# Each burn recipe runs the matching make recipe, then lists the USB sticks,
+# asks which one to erase, and writes that ISO to it.
+
+# Pack the Swift ISO and write it to a USB stick
+burn-lerux-iso-swift: (_burn-lerux-iso "swift_sfx14_41g")
+
+# Pack the Z97 ISO (I217 shell, Arch sign-on) and write it to a USB stick
+burn-lerux-iso-z97: (_burn-lerux-iso "pc_z97_d3h_i217")
+
+# Pack the Inspiron N5010 ISO and write it to a USB stick
+burn-lerux-iso-inspiron: (_burn-lerux-iso "inspiron_n5010")
+
+_burn-lerux-iso target: (_make-lerux-iso target)
+    bash "{{root}}/support/burn-lerux-iso.sh" --image "{{root}}/{{build_dir}}/{{target}}/lerux_{{target}}.iso"
 
 # One-shot boot of the Lerux USB already plugged into this Linux host.
 # Sets UEFI BootNext only (does not change the lasting BootOrder), so the next
@@ -126,7 +135,7 @@ deploy-rpi4:
 # Copy the Z97 GRUB layout onto a mounted FAT volume. Verifies loader.img.sha256 first.
 # DEST=/media/$USER/boot just deploy-pc
 deploy-pc:
-    {{lerux}} deploy --board pc_z97_d3h --dest {{env_var("DEST")}} --build-dir {{build_dir}} --config {{config}}
+    {{lerux}} deploy --board pc_z97_d3h_i217 --dest {{env_var("DEST")}} --build-dir {{build_dir}} --config {{config}}
 
 # Erase a USB stick and write the Arch install image plus the desk probe.
 # With no argument, lists USB sticks and asks which one to erase.

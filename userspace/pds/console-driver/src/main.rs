@@ -96,8 +96,17 @@ fn open_shell(device: device::Device) -> handler::HandlerImpl {
     #[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-inspiron_n5010"))]
     let usb = usb_off::UsbKbd::off();
     device.enable_cursor();
-    #[cfg(not(feature = "board-swift_sfx14_41g"))]
+    #[cfg(all(
+        not(feature = "board-swift_sfx14_41g"),
+        not(feature = "board-pc_z97_d3h_i217")
+    ))]
     let screen = Screen::blank();
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    let screen = {
+        let mut screen = Screen::blank();
+        note_usb(&usb, &mut screen);
+        screen
+    };
     #[cfg(feature = "board-swift_sfx14_41g")]
     let screen = if device.uses_panel() {
         Screen::blank()
@@ -125,6 +134,19 @@ fn note_i217(usb: &xhci::UsbKbd) {
         log::info!("console-driver: i217 window");
     } else {
         log::info!("console-driver: i217 absent");
+    }
+}
+
+/// COM1 is not wired on the desk, so a keyboard that did not arm says why
+/// on the page, above the sign-on.
+#[cfg(all(not(test), feature = "board-pc_z97_d3h_i217"))]
+fn note_usb(usb: &xhci::UsbKbd, screen: &mut screen::Screen) {
+    let mut line = [0u8; usb::STATUS_MAX];
+    let Some(len) = usb.status(&mut line) else {
+        return;
+    };
+    for &byte in &line[..len] {
+        let _ = screen.apply_byte(byte);
     }
 }
 

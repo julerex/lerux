@@ -490,7 +490,10 @@ fn reset_mac(regs: usize) -> Result<(), OpenError> {
 /// The PCH sequence in `e1000_reset_hw_ich8lan`. The MAC is not read during
 /// the reset, and BAR0 may have moved until the window is restored.
 #[cfg(feature = "board-pc_z97_d3h_i217")]
-#[expect(clippy::unnecessary_wraps, reason = "same signature as the 82574 reset")]
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "same signature as the 82574 reset"
+)]
 fn reset_mac(regs: usize) -> Result<(), OpenError> {
     write_u32(regs, IMC, 0xffff_ffff);
     write_u32(regs, RCTL, 0);
@@ -522,7 +525,10 @@ fn bring_link(regs: usize) -> Result<(), OpenError> {
 /// Autonegotiation takes seconds, and no cable takes forever. The shell's
 /// sign-on waits behind this init, so the link arrives later as `IMS_LSC`.
 #[cfg(feature = "board-pc_z97_d3h_i217")]
-#[expect(clippy::unnecessary_wraps, reason = "same signature as the 82574 link wait")]
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "same signature as the 82574 link wait"
+)]
 fn bring_link(regs: usize) -> Result<(), OpenError> {
     write_u32(regs, CTRL, read_u32(regs, CTRL) | CTRL_SLU);
     Ok(())

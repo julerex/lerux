@@ -66,11 +66,23 @@ pub fn find_boot_keyboard(config: &[u8]) -> Option<BootKeyboard> {
     find_boot(config, 1)
 }
 
+/// The boot keyboard the shell types from, or `None` for a mouse.
+///
+/// A device whose boot mouse sits on an earlier interface than its boot
+/// keyboard is a mouse. The Holtek gaming mouse is that shape. The Microsoft
+/// receiver puts its keyboard on interface 0 and its mouse after it.
+pub fn find_shell_keyboard(config: &[u8]) -> Option<BootKeyboard> {
+    let keyboard = find_boot_keyboard(config)?;
+    match find_boot_mouse(config) {
+        Some(mouse) if mouse.interface < keyboard.interface => None,
+        _ => Some(keyboard),
+    }
+}
+
 /// First HID boot mouse (class 3, subclass 1, protocol 2) with an IN interrupt.
 ///
 /// Protocol 1 is a boot keyboard. The Holtek gaming mouse advertises that
 /// interface as well, and it is not the shell keyboard.
-#[cfg(any(test, feature = "board-pc_z97_d3h_i217"))]
 pub fn find_boot_mouse(config: &[u8]) -> Option<BootKeyboard> {
     find_boot(config, 2)
 }
@@ -113,6 +125,78 @@ fn find_boot(config: &[u8], protocol: u8) -> Option<BootKeyboard> {
         index += len;
     }
     found
+}
+
+/// Root ports the driver walks. `HCSPARAMS1` is clamped to this.
+pub const MAX_PORTS: usize = 30;
+
+/// Port mark for the device that armed as the keyboard.
+pub const MARK_KEYBOARD: u8 = b'k';
+
+/// Longest [`status_line`]: the note, 30 marked ports, and the code.
+pub const STATUS_MAX: usize = 192;
+
+/// `usb: NOTE, ports 4a 10n, cc 4` for a bring-up that armed no keyboard.
+///
+/// Bit `n - 1` of `connected` is root port `n`. `marks[n - 1]` is where
+/// that port stopped as a keyboard: `r` port reset, `s` enable slot, `a`
+/// address device, `d` device descriptor, `g` configuration descriptor,
+/// `n` no shell keyboard in it, `p` set configuration or boot protocol,
+/// `i` configure the interrupt endpoint. 0 is not tried. `cc` is the last
+/// xHCI completion code that was not success, and 0 means no event came.
+pub fn status_line(
+    note: &str,
+    connected: u32,
+    marks: &[u8; MAX_PORTS],
+    cc: Option<u8>,
+    out: &mut [u8; STATUS_MAX],
+) -> usize {
+    let mut n = 0;
+    let mut put = |bytes: &[u8]| {
+        for &byte in bytes {
+            if n < out.len() {
+                out[n] = byte;
+                n += 1;
+            }
+        }
+    };
+    put(b"usb: ");
+    put(note.as_bytes());
+    if connected != 0 {
+        put(b", ports");
+        for (index, &mark) in marks.iter().enumerate() {
+            if connected & (1 << index) == 0 {
+                continue;
+            }
+            put(b" ");
+            put_decimal(&mut put, index + 1);
+            if mark != 0 {
+                put(&[mark]);
+            }
+        }
+    }
+    if let Some(code) = cc {
+        put(b", cc ");
+        put_decimal(&mut put, usize::from(code));
+    }
+    put(b"\n");
+    n
+}
+
+fn put_decimal(put: &mut impl FnMut(&[u8]), value: usize) {
+    let mut digits = [0u8; 3];
+    let mut len = 0;
+    let mut rest = value.min(999);
+    loop {
+        digits[len] = b'0' + u8::try_from(rest % 10).unwrap_or(0);
+        len += 1;
+        rest /= 10;
+        if rest == 0 {
+            break;
+        }
+    }
+    digits[..len].reverse();
+    put(&digits[..len]);
 }
 
 /// VGA text page the I217 shell paints.
@@ -214,12 +298,42 @@ mod tests {
         assert_eq!(mouse.ep_addr, 0x81);
         assert_eq!(mouse.interval, 1);
         assert_eq!(find_boot_keyboard(&config).unwrap().interface, 1);
+        assert!(find_shell_keyboard(&config).is_none());
         let (col, row, buttons) = step_pointer(0, 0, &[0, 10, 4, 0, 0, 0, 0, 0]);
         assert_eq!((col, row, buttons), (10, 4, 0));
         let (col, row, buttons) = step_pointer(col, row, &[1, 0xff, 0]);
         assert_eq!((col, row, buttons), (9, 4, 1));
         let (col, row, _) = step_pointer(0, 0, &[0, 0x80, 0x7f]);
         assert_eq!((col, row), (0, 24));
+    }
+
+    #[test]
+    fn the_receiver_keyboard_is_the_shell_keyboard_ahead_of_its_mouse() {
+        let head = receiver_config();
+        let mouse = [9u8, 4, 1, 0, 1, 3, 1, 2, 0, 7, 5, 0x82, 3, 4, 0, 1];
+        let mut config = [0u8; 50];
+        config[..head.len()].copy_from_slice(&head);
+        config[head.len()..head.len() + mouse.len()].copy_from_slice(&mouse);
+        let found = find_shell_keyboard(&config[..head.len() + mouse.len()]).unwrap();
+        assert_eq!(found.interface, 0);
+        assert_eq!(found.ep_addr, 0x81);
+    }
+
+    #[test]
+    fn status_line_names_the_note_the_ports_and_the_code() {
+        let mut out = [0u8; STATUS_MAX];
+        let mut marks = [0u8; MAX_PORTS];
+        marks[3] = b'a';
+        marks[9] = b'n';
+        marks[13] = MARK_KEYBOARD;
+        let connected = (1 << 3) | (1 << 9) | (1 << 13) | (1 << 15);
+        let n = status_line("xhci no keyboard", connected, &marks, Some(4), &mut out);
+        assert_eq!(
+            &out[..n],
+            b"usb: xhci no keyboard, ports 4a 10n 14k 16, cc 4\n"
+        );
+        let n = status_line("xhci none", 0, &[0; MAX_PORTS], None, &mut out);
+        assert_eq!(&out[..n], b"usb: xhci none\n");
     }
 
     #[test]

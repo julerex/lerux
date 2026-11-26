@@ -144,11 +144,14 @@ pub const STATUS_MAX: usize = 192;
 /// `n` no shell keyboard in it, `p` set configuration or boot protocol,
 /// `i` configure the interrupt endpoint. 0 is not tried. `cc` is the last
 /// xHCI completion code that was not success, and 0 means no event came.
+/// `ep` is endpoint 0's context state after the last control transfer that
+/// got no event: 0 disabled, 1 running, 2 halted, 3 stopped, 4 error.
 pub fn status_line(
     note: &str,
     connected: u32,
     marks: &[u8; MAX_PORTS],
     cc: Option<u8>,
+    ep: Option<u8>,
     out: &mut [u8; STATUS_MAX],
 ) -> usize {
     let mut n = 0;
@@ -178,6 +181,10 @@ pub fn status_line(
     if let Some(code) = cc {
         put(b", cc ");
         put_decimal(&mut put, usize::from(code));
+    }
+    if let Some(state) = ep {
+        put(b" ep ");
+        put_decimal(&mut put, usize::from(state));
     }
     put(b"\n");
     n
@@ -327,12 +334,29 @@ mod tests {
         marks[9] = b'n';
         marks[13] = MARK_KEYBOARD;
         let connected = (1 << 3) | (1 << 9) | (1 << 13) | (1 << 15);
-        let n = status_line("xhci no keyboard", connected, &marks, Some(4), &mut out);
+        let n = status_line(
+            "xhci no keyboard",
+            connected,
+            &marks,
+            Some(4),
+            None,
+            &mut out,
+        );
         assert_eq!(
             &out[..n],
             b"usb: xhci no keyboard, ports 4a 10n 14k 16, cc 4\n"
         );
-        let n = status_line("xhci none", 0, &[0; MAX_PORTS], None, &mut out);
+        marks[3] = b'd';
+        let n = status_line(
+            "xhci no keyboard",
+            1 << 3,
+            &marks,
+            Some(0),
+            Some(1),
+            &mut out,
+        );
+        assert_eq!(&out[..n], b"usb: xhci no keyboard, ports 4d, cc 0 ep 1\n");
+        let n = status_line("xhci none", 0, &[0; MAX_PORTS], None, None, &mut out);
         assert_eq!(&out[..n], b"usb: xhci none\n");
     }
 

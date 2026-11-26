@@ -90,7 +90,6 @@ const CC_SHORT: u32 = 13;
 
 const TC: u32 = 1 << 1;
 const ISP: u32 = 1 << 2;
-const CHAIN: u32 = 1 << 4;
 const IOC: u32 = 1 << 5;
 const IDT: u32 = 1 << 6;
 
@@ -182,6 +181,8 @@ pub struct UsbKbd {
     marks: [u8; usb::MAX_PORTS],
     /// Last completion code that was not success, or [`CC_TIMEOUT`].
     last_cc: Option<u8>,
+    /// Endpoint 0 state after the last control transfer that got no event.
+    last_ep: Option<u8>,
     ready: bool,
     online: bool,
     broken: bool,
@@ -234,6 +235,7 @@ impl UsbKbd {
             self.connected,
             &self.marks,
             self.last_cc,
+            self.last_ep,
             out,
         ))
     }
@@ -381,6 +383,7 @@ impl UsbKbd {
             connected: 0,
             marks: [0; usb::MAX_PORTS],
             last_cc: None,
+            last_ep: None,
             ready: false,
             online: false,
             broken: false,
@@ -632,7 +635,11 @@ impl UsbKbd {
         }
         let mut first = [0u8; 8];
         self.read_dma(OFF_DATA, &mut first);
-        let mps = u16::from(first[7]);
+        // SuperSpeed reports the exponent: 9 is 512.
+        let mps = match first[7] {
+            9 if self.ep_mps() == 512 => 512,
+            size => u16::from(size),
+        };
         if mps != 0 && mps != self.ep_mps() && !self.evaluate_mps(mps) {
             return None;
         }
@@ -721,7 +728,11 @@ impl UsbKbd {
         let dw0 = (u32::from(speed) << 20) | (1 << 27);
         self.write_ctx(true, 1, 0, dw0);
         self.write_ctx(true, 1, 1, u32::from(port) << 16);
-        let mps: u16 = if speed >= 3 { 64 } else { 8 };
+        let mps: u16 = match speed {
+            4.. => 512,
+            3 => 64,
+            _ => 8,
+        };
         self.write_ep(2, 4, mps, 0, self.ep0_off(), 8);
         if !self.command_ok(TRB_ADDRESS) {
             return false;
@@ -801,7 +812,8 @@ impl UsbKbd {
         } else {
             2
         };
-        let setup_d3 = CHAIN | IDT | trb_type(TRB_SETUP) | (trt << 16);
+        // Setup, data, and status are separate TDs, so none of them chains.
+        let setup_d3 = IDT | trb_type(TRB_SETUP) | (trt << 16);
         self.push_trb(Ring::Ep0, setup_d0, setup_d1, 8, setup_d3);
 
         let mut data_trb = 0u64;
@@ -809,7 +821,7 @@ impl UsbKbd {
             let buf = DMA_PHYS + OFF_DATA as u64;
             let dir = if bm & 0x80 != 0 { 1 << 16 } else { 0 };
             let isp = if bm & 0x80 != 0 { ISP } else { 0 };
-            let data_d3 = isp | CHAIN | trb_type(TRB_DATA) | dir;
+            let data_d3 = isp | trb_type(TRB_DATA) | dir;
             data_trb = self.push_trb(
                 Ring::Ep0,
                 low_u32(buf),
@@ -870,6 +882,7 @@ impl UsbKbd {
             }
         }
         self.last_cc = Some(CC_TIMEOUT);
+        self.last_ep = u8::try_from(self.read_ctx(false, 1, 0) & 0x7).ok();
         Ctl::Fail
     }
 
@@ -1284,7 +1297,9 @@ impl UsbKbd {
         self.write_ctx(true, index, 1, dw1);
         self.write_ctx(true, index, 2, (low_u32(phys) & !0xf) | 1);
         self.write_ctx(true, index, 3, (phys >> 32) as u32);
-        self.write_ctx(true, index, 4, u32::from(avg) | (u32::from(mps) << 16));
+        // Max ESIT payload is for periodic endpoints only.
+        let esit = if kind == 4 { 0 } else { u32::from(mps) };
+        self.write_ctx(true, index, 4, u32::from(avg) | (esit << 16));
     }
 
     fn ep_mps(&self) -> u16 {

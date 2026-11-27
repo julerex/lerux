@@ -4,7 +4,7 @@ The stick is `just burn-arch-probe`, documented in [support/arch-probe/README.md
 
 Arch is enough. The install image already contains `linux-firmware` (the MT7961 patch and RAM image), `pciutils`, and `kmod`. It has no network until this driver comes up, so the script does not install `trace-cmd`. It reads the same two events from the kernel tracer.
 
-`just make-lerux-iso` is a different stick. That one is the lerux image. This trace does not build lerux.
+`just make-lerux-iso-swift` is a different stick. That one is the lerux image. This trace does not build lerux.
 
 ## On the Acer
 

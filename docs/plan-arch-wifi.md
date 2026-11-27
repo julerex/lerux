@@ -60,7 +60,7 @@ The Swift template [`userspace/systems/templates/console-swift.system.template`]
 
 `console-shell` still implements `3 wifi`, `ssid>`, and `psk>`. That program is not the shell in the Swift template.
 
-`swift-mt7921` is the static form of `mt7921e`. It accepts `MT7921_IDS` (`14c3:7961` and `14c3:0608`) at `03:00.0` and refuses another id. `firmware_kind` treats chip ids `0x7922` and `0x7925` as unsupported and uses the 7961 images otherwise. The protection domain embeds the 7961 patch, the `1a` patch, the RAM image, and the `1a` RAM image. There is no module loader. USB and SDIO are not this image. The Z97 Ethernet path stays the I217-V. The Pi path stays GENET. The desk ISO maps the RTL8852BE and stops the PCI HCI. It does not scan or associate. `pc_z97_d3h_rtl8852be` stays a configuration-space probe.
+`swift-mt7921` is the static form of `mt7921e`. It accepts `MT7921_IDS` (`14c3:7961` and `14c3:0608`) at `03:00.0` and refuses another id. `firmware_kind` treats chip ids `0x7922` and `0x7925` as unsupported and uses the 7961 images otherwise. The protection domain embeds the 7961 patch, the `1a` patch, the RAM image, and the `1a` RAM image. There is no module loader. USB and SDIO are not this image. The Z97 Ethernet path stays the I217-V. The Pi path stays GENET. No image drives the Z97 RTL8852BE.
 
 The same protection domain scans, sends open-system authentication, associates, runs the software 4-way, and copies Ethernet frames onto the sDDF network queues ([`userspace/pds/swift-mt7921/src/join.rs`](../userspace/pds/swift-mt7921/src/join.rs)). `join.rs` leaves DHCP and ICMP to the shell. The shell already links smoltcp DHCP because `board-swift_sfx14_41g` pulls the fetch feature. The Swift command loop does not call `bring_up`. That feature has no DNS socket and no ICMP socket. The ICMP socket lives in `sddf-net-client`. The DNS socket is the browser feature.
 
@@ -169,7 +169,7 @@ Arch’s stack underneath the same keystrokes is `iwctl`, `iwd`, nl80211, mac802
 
 **Arch capability.** Ethernet in the installation guide is the cable, the same DHCP, and the same ping. Those machines have no `iwctl` device. A different Wi-Fi chip is a different driver.
 
-**Boards.** The e1000e fetch image, then `pc_z97_d3h` when the I217-V enqueues frames, then `rpi4b_4gb` when GENET enqueues frames. Depends on Milestone 3 for `ip link` and `ping`.
+**Boards.** The e1000e fetch image, then `pc_z97_d3h_i217` when the I217-V enqueues frames, then `rpi4b_4gb` when GENET enqueues frames. Depends on Milestone 3 for `ip link` and `ping`.
 
 **Protection domains and templates.** The shell that already owns the network queues on that board. `swift-mt7921` is not added to the Z97 or the Pi. A new Wi-Fi chip is a new protection domain and a new id table, the way `mt7921e` and `iwlwifi` are different modules.
 

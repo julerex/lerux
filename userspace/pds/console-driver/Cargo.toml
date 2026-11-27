@@ -19,7 +19,6 @@ hardware = [
     "dep:sel4-microkit",
     "dep:sel4-microkit-simple-ipc",
 ]
-board-pc_z97_d3h = ["hardware", "lerux-logging/boot-line-gap", "dep:lerux-rtw8852be"]
 board-inspiron_n5010 = ["hardware"]
 board-x86_64_generic_console = ["hardware"]
 board-x86_64_generic_usb_kbd = ["hardware"]
@@ -32,7 +31,6 @@ lerux-desk = { path = "../../crates/lerux-desk" }
 lerux-driver-protocols = { path = "../../crates/lerux-driver-protocols", optional = true }
 lerux-logging = { path = "../../crates/lerux-logging", optional = true }
 lerux-machine = { path = "../../crates/lerux-machine" }
-lerux-rtw8852be = { path = "../../crates/lerux-rtw8852be", optional = true }
 log = { workspace = true, optional = true }
 sel4 = { workspace = true, optional = true }
 sel4-microkit = { workspace = true, optional = true }

@@ -16,8 +16,8 @@ That is the bar. A QEMU line does not close a metal milestone. A panel photo or 
 
 ### The three boards
 
-- **Acer Swift X** (`swift_sfx14_41g`) is the main target. `just make-lerux-iso` packs one image. The stub selects the firmware GOP panel when that buffer is `0xfc90000000`, and the VGA text page on any other x86 PC. There is no QEMU model of the panel and no COM port on the Swift. The keyboard is the built-in i8042. The image does not map the Inspiron AHCI disk and does not touch the Swift NVMe unless the probe selected the panel.
-- **Gigabyte Z97-D3H** (`pc_z97_d3h`) is the desk. `just make-lerux-iso pc_z97_d3h` still packs that board's own image. The one ISO also boots this machine on the VGA text page. QEMU covers the VGA menu (`just test-x86-console`). The onboard Ethernet port is the I217-V. The desk ISO maps the RTL8852BE BAR 2 and stops the PCI HCI. `pc_z97_d3h_rtl8852be` stays a configuration-space probe.
+- **Acer Swift X** (`swift_sfx14_41g`) is the main target. `just make-lerux-iso-swift` packs one image. The stub selects the firmware GOP panel when that buffer is `0xfc90000000`, and the VGA text page on any other x86 PC. There is no QEMU model of the panel and no COM port on the Swift. The keyboard is the built-in i8042. The image does not map the Inspiron AHCI disk and does not touch the Swift NVMe unless the probe selected the panel.
+- **Gigabyte Z97-D3H** (`pc_z97_d3h_i217`) is the desk. `just make-lerux-iso-z97` packs its one image: the I217-V shell with the Arch sign-on, painted into the Intel framebuffer. QEMU covers the VGA menu (`just test-x86-console`). The onboard Ethernet port is the I217-V. No image drives the RTL8852BE.
 - **Raspberry Pi 4** (`rpi4b_4gb`, workstation profile `rpi4b_4gb_workstation`) is secondary. It stays behind the two x86 boards. No second single-board computer is added until this one is signed off.
 
 ### Status words
@@ -199,7 +199,7 @@ Do not add a postcard message. New queue code uses `lerux-sddf`. Do not invent a
 
 - `lerux package install` and `lerux package upgrade` rebuild the selected board profile and print the pin digest.
 - The image build writes `loader.img.sha256`. `lerux verify-image` checks it before a flash instruction is printed.
-- [`boards.md`](boards.md) states one sequence for each board: build the image, verify the digest, write the media, boot. Swift stays `just make-lerux-iso` and the `dd` line. Z97 stays `just make-lerux-iso pc_z97_d3h` or `just deploy-pc`. Pi stays `just deploy-rpi4`. Do not invent a fourth writer.
+- [`boards.md`](boards.md) states one sequence for each board: build the image, verify the digest, write the media, boot. Swift stays `just make-lerux-iso-swift` and the `dd` line. Z97 stays `just make-lerux-iso-z97` or `just deploy-pc`. Pi stays `just deploy-rpi4`. Do not invent a fourth writer.
 - Say, on each of those three pages, that the guest cannot install a package. The operator rebuilds on the host.
 - Do not add an on-device package manager.
 
@@ -215,7 +215,7 @@ Do not add a postcard message. New queue code uses `lerux-sddf`. Do not invent a
 
 **Arch capability.** The desk disk is a real controller, not QEMU `ich9-ahci`. Arch reads that disk. lerux does not know the Z97 vendor and device id yet. [`platforms.md`](platforms.md) records the identifier as not taken.
 
-**Boards.** `pc_z97_d3h` only. QEMU `x86_64_generic_fs_ahci` stays the regression and does not close the milestone.
+**Boards.** `pc_z97_d3h_i217` only. QEMU `x86_64_generic_fs_ahci` stays the regression and does not close the milestone.
 
 **Protection domains and templates.** `sddf-ahci-driver`. The desk image template, once the identifier is known. The driver still accepts class `0x010601` and `8086:2922`.
 
@@ -239,7 +239,7 @@ Do not add a postcard message. New queue code uses `lerux-sddf`. Do not invent a
 
 **Arch capability.** The onboard Ethernet port gets an address from the router. The QEMU 82574 (`8086:10d3`) is a different physical-layer path. [`context.md`](context.md) already records the I217-V as `8086:153b` at `00:19.0`, revision `0`, subsystem `1458:e000`, memory `0xf7e00000` (128 KiB) and `0xf7e3c000` (4 KiB), I/O `0xf080`.
 
-**Boards.** `pc_z97_d3h`. The RTL8852BE probe board is not this milestone.
+**Boards.** `pc_z97_d3h_i217`.
 
 **Protection domains and templates.** `sddf-e1000e-driver` in the network-driver role. The desk image composes it the way `x86_64_generic_net_e1000e` composes the QEMU device. The client address on QEMU stays `52:54:00:12:34:56`. The metal address is whatever DHCP grants.
 
@@ -248,7 +248,6 @@ Do not add a postcard message. New queue code uses `lerux-sddf`. Do not invent a
 - Accept `8086:153b` at `00:19.0` with the recorded subsystem. Keep the QEMU `8086:10d3` path.
 - Program the same rings the QEMU driver programs. Do not copy a Linux driver.
 - DHCP, then one ping of the gateway. The success lines are an address line and `ping ok`. A miss prints `ip err` or `ping err`.
-- Do not change the RTL8852BE driver in this milestone. `pc_z97_d3h_rtl8852be` stays a configuration-space probe.
 
 **QEMU.** `just test-x86-e1000e` still prints `e1000e: ready`, `ip 10.0.2.15`, and `ping ok`. That smoke does not close the milestone.
 
@@ -262,7 +261,7 @@ Do not add a postcard message. New queue code uses `lerux-sddf`. Do not invent a
 
 **Arch capability.** One installed system: local console, disk, and network, with the shell from Milestones 2 and 3. Arch does not ask the operator to swap images to get a shell.
 
-**Boards.** `pc_z97_d3h`. Depends on Milestones 1–3, 5, and 6.
+**Boards.** `pc_z97_d3h_i217`. Depends on Milestones 1–3, 5, and 6.
 
 **Protection domains and templates.** `console-pc.system.template` grows the AHCI driver, the e1000e driver, `sddf-fatfs`, and `sddf-shell` (or the console shell learns the same commands, one of the two, not both). The VGA menu stays. COM1 stays. Priorities stay in the LionsOS bands: drivers above the filesystem server, shell at the bottom. The menu program and the filesystem shell are not two copies of `mkdir`.
 
@@ -343,7 +342,7 @@ Do not add a postcard message. New queue code uses `lerux-sddf`. Do not invent a
 
 **Steps.**
 
-- One ISO: `just make-lerux-iso`. On the Swift the panel still shows the mode line’s geometry (1920 by 1080, pitch 7680, framebuffer `0xfc90000000`). On any other x86 PC the same file uses the VGA text page. The template is `sddf-shell.elf` and the command is `setup-wifi`.
+- One ISO: `just make-lerux-iso-swift`. On the Swift the panel still shows the mode line’s geometry (1920 by 1080, pitch 7680, framebuffer `0xfc90000000`). On any other x86 PC the same file uses the VGA text page. The template is `sddf-shell.elf` and the command is `setup-wifi`.
 - LionsOS milestone 25 recorded an earlier menu (`1 browser`, `2 maths`) without `maths 3`.
 - `setup-wifi` is Milestone 8. After `ping ok`, `ip` in the shell prints the same address.
 - The read-only disk is Milestone 9. `ls` and `cat` work. Writes print `err`.

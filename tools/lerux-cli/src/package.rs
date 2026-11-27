@@ -20,7 +20,7 @@ use crate::{
 
 /// Boards whose flash line is an ISO `dd`, `just deploy-pc`, or
 /// `just deploy-rpi4`. `upgrade --all` rebuilds this set.
-pub(crate) const ROLLING_BOARDS: &[&str] = &["swift_sfx14_41g", "pc_z97_d3h", "rpi4b_4gb"];
+pub(crate) const ROLLING_BOARDS: &[&str] = &["swift_sfx14_41g", "pc_z97_d3h_i217", "rpi4b_4gb"];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub(crate) struct BoardPin {
@@ -283,9 +283,11 @@ mod tests {
     fn upgrade_refuses_a_rebuild_that_writes_no_image() {
         let tmp = tempfile::tempdir().unwrap();
         let root = tmp.path();
-        let err = upgrade(root, "pc_z97_d3h", "build", "debug", |_, _, _, _| Ok(()))
-            .unwrap_err()
-            .to_string();
+        let err = upgrade(root, "pc_z97_d3h_i217", "build", "debug", |_, _, _, _| {
+            Ok(())
+        })
+        .unwrap_err()
+        .to_string();
         assert!(err.contains("loader.img"), "{err}");
         assert!(!pins_path(root).exists());
     }

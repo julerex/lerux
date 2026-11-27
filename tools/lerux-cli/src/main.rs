@@ -371,7 +371,7 @@ enum PackageCommands {
         /// Board profile to rebuild. Omit this when passing `--all`.
         #[arg(long)]
         board: Option<String>,
-        /// Rebuild `swift_sfx14_41g`, `pc_z97_d3h`, and `rpi4b_4gb`.
+        /// Rebuild `swift_sfx14_41g`, `pc_z97_d3h_i217`, and `rpi4b_4gb`.
         #[arg(long, default_value_t = false)]
         all: bool,
         #[arg(long, default_value = "build")]

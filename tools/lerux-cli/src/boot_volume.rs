@@ -320,6 +320,8 @@ impl StubBootImage {
 /// available to OS`, and the info block has no framebuffer for the mode
 /// line. Timeout is hidden and zero so QEMU smokes do not sit on a menu.
 /// The board name is not in the menu: one entry, same bytes on every board.
+/// The stub forwards its command line to seL4. Microkit maps no device into
+/// an IOMMU domain, so with VT-d on (the Z97) xHCI and e1000e DMA is blocked.
 fn grub_cfg() -> String {
     format!(
         "\
@@ -327,7 +329,7 @@ set timeout=0
 set timeout_style=hidden
 set gfxpayload=keep
 menuentry \"lerux\" {{
-    multiboot2 {stub}
+    multiboot2 {stub} disable_iommu
     module2 {kernel}
     module2 {loader}
 }}
@@ -388,6 +390,10 @@ mod tests {
             .find(&format!("module2 {}", LOADER_PATH.grub()))
             .expect("loader");
         assert!(stub_at < kernel_at && kernel_at < loader_at, "{cfg}");
+        assert!(
+            cfg.contains(&format!("multiboot2 {} disable_iommu\n", STUB_PATH.grub())),
+            "{cfg}"
+        );
         assert!(
             !cfg.contains(&format!("multiboot2 {}", KERNEL_PATH.grub())),
             "{cfg}"

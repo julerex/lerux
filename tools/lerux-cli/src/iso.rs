@@ -563,7 +563,7 @@ mod tests {
         append_ovmf_iso_boot(
             &mut cmd,
             Path::new("/usr/share/ovmf/OVMF.fd"),
-            Path::new("lerux_pc_z97_d3h.iso"),
+            Path::new("lerux_pc_z97_d3h_i217.iso"),
         );
         let line = format!("{cmd:?}");
         assert!(line.contains("\"-bios\""), "{line}");
@@ -783,10 +783,10 @@ mod tests {
 
     #[test]
     fn recipe_path_is_iso_sibling() {
-        let path = recipe_path(Path::new("build/pc_z97_d3h/lerux_pc_z97_d3h.iso"));
+        let path = recipe_path(Path::new("build/pc_z97_d3h_i217/lerux_pc_z97_d3h_i217.iso"));
         assert_eq!(
             path,
-            Path::new("build/pc_z97_d3h/lerux_pc_z97_d3h.iso.boot-recipe")
+            Path::new("build/pc_z97_d3h_i217/lerux_pc_z97_d3h_i217.iso.boot-recipe")
         );
     }
 
@@ -798,8 +798,11 @@ mod tests {
     }
 
     fn assert_iso_output_defaults(root: &Path) {
-        let default = resolve_iso_output(root, "build", "pc_z97_d3h", None).unwrap();
-        assert_eq!(default, root.join("build/pc_z97_d3h/lerux_pc_z97_d3h.iso"));
+        let default = resolve_iso_output(root, "build", "pc_z97_d3h_i217", None).unwrap();
+        assert_eq!(
+            default,
+            root.join("build/pc_z97_d3h_i217/lerux_pc_z97_d3h_i217.iso")
+        );
         let swift = resolve_iso_output(root, "build", "swift_sfx14_41g", None).unwrap();
         assert_eq!(
             swift,
@@ -808,31 +811,40 @@ mod tests {
         let custom = resolve_iso_output(
             root,
             "build",
-            "pc_z97_d3h",
-            Some(Path::new("build/pc_z97_d3h/custom.iso")),
+            "pc_z97_d3h_i217",
+            Some(Path::new("build/pc_z97_d3h_i217/custom.iso")),
         )
         .unwrap();
-        assert_eq!(custom, root.join("build/pc_z97_d3h/custom.iso"));
+        assert_eq!(custom, root.join("build/pc_z97_d3h_i217/custom.iso"));
     }
 
     fn assert_iso_output_guards(root: &Path) {
         let outside = resolve_iso_output(
             root,
             "build",
-            "pc_z97_d3h",
+            "pc_z97_d3h_i217",
             Some(Path::new("build/../outside.iso")),
         )
         .unwrap_err()
         .to_string();
         assert!(outside.contains(".."), "{outside}");
-        let device = resolve_iso_output(root, "build", "pc_z97_d3h", Some(Path::new("/dev/sdb")))
-            .unwrap_err()
-            .to_string();
+        let device = resolve_iso_output(
+            root,
+            "build",
+            "pc_z97_d3h_i217",
+            Some(Path::new("/dev/sdb")),
+        )
+        .unwrap_err()
+        .to_string();
         assert!(device.contains("/dev"), "{device}");
-        let relative =
-            resolve_iso_output(root, "build", "pc_z97_d3h", Some(Path::new("other.iso")))
-                .unwrap_err()
-                .to_string();
+        let relative = resolve_iso_output(
+            root,
+            "build",
+            "pc_z97_d3h_i217",
+            Some(Path::new("other.iso")),
+        )
+        .unwrap_err()
+        .to_string();
         assert!(relative.contains("build"), "{relative}");
     }
 }

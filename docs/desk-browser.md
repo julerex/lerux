@@ -2,7 +2,7 @@
 
 Written 2026-10-22. Updated 2026-11-10. This is the spec for showing one public page on the Gigabyte Z97-D3H monitor. That desk page stays secondary. The metal target being driven is the Acer Swift X SFX14-41G (`swift_sfx14_41g`). The RPi4 workstation lab stays secondary as well. The decisions are recorded under [`.scratch/desk-browser/`](../.scratch/desk-browser/map.md). Building the browser is later work.
 
-The desk this spec describes is the Gigabyte Z97-D3H (`pc_z97_d3h`). The monitor cable is on the motherboard HDMI port. The product on this page is a metal boot of the image below. Terms live in [`context.md`](context.md). Scanout is [ADR-013](decisions/013-desk-intel-scanout.md), which amends [ADR-009](decisions/009-interactive-surface.md) for this board. QEMU images still present through `display-server`. The browser is modelled on Ladybird's engine shape and process isolation and rewritten in Rust. It is not a port of the Ladybird, Chromium, or WebKit C++ sources.
+The desk this spec describes is the Gigabyte Z97-D3H (`pc_z97_d3h_i217`). The monitor cable is on the motherboard HDMI port. The product on this page is a metal boot of the image below. Terms live in [`context.md`](context.md). Scanout is [ADR-013](decisions/013-desk-intel-scanout.md), which amends [ADR-009](decisions/009-interactive-surface.md) for this board. QEMU images still present through `display-server`. The browser is modelled on Ladybird's engine shape and process isolation and rewritten in Rust. It is not a port of the Ladybird, Chromium, or WebKit C++ sources.
 
 ## Satisfaction
 
@@ -127,7 +127,7 @@ The controller is the onboard Ethernet port. A new protection domain owns it and
 | Memory | `0xf7e3c000`, 4 KiB |
 | I/O | `0xf080`, 32 bytes |
 
-The other three base-address registers are zero. The RTL8852BE probe (`10ec:b852` at `05:00.0`, behind root port `00:1c.6`) stays a configuration-space read and is not this path.
+The other three base-address registers are zero. The RTL8852BE (`10ec:b852` at `05:00.0`, behind root port `00:1c.6`) is not this path.
 
 The link uses Dynamic Host Configuration Protocol. The offer's IPv4 address, prefix, gateway, and Domain Name System resolver are the ones the spec uses.
 

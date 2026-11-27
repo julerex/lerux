@@ -93,7 +93,7 @@ struct Gap {
     detail: String,
 }
 
-/// Fail with one report when `just make-lerux-iso` is missing a host tool.
+/// Fail with one report when `lerux iso` is missing a host tool.
 pub(crate) fn require_iso_host(
     root: &Path,
     board: &str,
@@ -279,7 +279,7 @@ fn push_image_toolchain_gaps(gaps: &mut Vec<Gap>, facts: &HostFacts) {
             detail: "\
 cargo was not found on PATH.
 Install rustup from https://rustup.rs and open a new shell.
-Re-run just make-lerux-iso from this repository. rust-toolchain.toml selects nightly-2026-04-04, which includes rust-src."
+Re-run the just make-lerux-iso-* or burn-lerux-iso-* recipe from this repository. rust-toolchain.toml selects nightly-2026-04-04, which includes rust-src."
                 .to_string(),
         });
     } else if !facts.pd.rust_src {
@@ -400,7 +400,7 @@ fn rustup_src_detail() -> String {
 The active Rust toolchain has no standard-library source.
 The protection-domain build rebuilds core for a custom target from that source.
 Run: rustup component add rust-src
-Re-run just make-lerux-iso from this repository. rust-toolchain.toml selects nightly-2026-04-04, which includes rust-src."
+Re-run the just make-lerux-iso-* or burn-lerux-iso-* recipe from this repository. rust-toolchain.toml selects nightly-2026-04-04, which includes rust-src."
         .to_string()
 }
 
@@ -411,7 +411,7 @@ cargo is {cargo}, and its sysroot has no standard-library source.
 The protection-domain build rebuilds core for a custom target from that source.
 rustup's cargo is {}. Put it first on PATH:
   export PATH=\"$HOME/.cargo/bin:$PATH\"
-Re-run just make-lerux-iso from this repository. rust-toolchain.toml selects nightly-2026-04-04, which includes rust-src.",
+Re-run the just make-lerux-iso-* or burn-lerux-iso-* recipe from this repository. rust-toolchain.toml selects nightly-2026-04-04, which includes rust-src.",
         rustup.display()
     );
     append_arch_rust_src(&mut detail, distro);
@@ -424,7 +424,7 @@ fn packaged_cargo_src_detail(cargo: &str, distro: Distro) -> String {
 cargo is {cargo}, and its sysroot has no standard-library source.
 The protection-domain build rebuilds core for a custom target from that source.
 Install rustup from https://rustup.rs and open a new shell.
-Re-run just make-lerux-iso from this repository. rust-toolchain.toml selects nightly-2026-04-04, which includes rust-src."
+Re-run the just make-lerux-iso-* or burn-lerux-iso-* recipe from this repository. rust-toolchain.toml selects nightly-2026-04-04, which includes rust-src."
     );
     append_arch_rust_src(&mut detail, distro);
     detail
@@ -439,8 +439,7 @@ fn append_arch_rust_src(detail: &mut String, distro: Distro) {
 }
 
 fn format_gaps(gaps: &[Gap]) -> String {
-    let mut report =
-        String::from("just make-lerux-iso cannot start. Required tools are missing.\n");
+    let mut report = String::from("lerux iso cannot start. Required tools are missing.\n");
     for gap in gaps {
         report.push('\n');
         report.push_str(gap.title);

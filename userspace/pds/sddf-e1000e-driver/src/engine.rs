@@ -32,6 +32,7 @@ const RING_MASK: u16 = (RING_LEN as u16) - 1;
 
 const CTRL: u32 = 0x0000;
 const STATUS: u32 = 0x0008;
+#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
 const EECD: u32 = 0x0010;
 const ICR: u32 = 0x00c0;
 const ITR: u32 = 0x00c4;
@@ -60,7 +61,11 @@ const RAH0: u32 = 0x5404;
 
 const CTRL_SLU: u32 = 1 << 6;
 const CTRL_RST: u32 = 1 << 26;
+#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
 const STATUS_LU: u32 = 1 << 1;
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+const STATUS_LAN_INIT_DONE: u32 = 1 << 9;
+#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
 const EECD_AUTO_RD: u32 = 1 << 9;
 const RCTL_EN: u32 = 1 << 1;
 const RCTL_BAM: u32 = 1 << 15;
@@ -88,7 +93,17 @@ const RX_DD: u8 = 0x01;
 const RX_EOP: u8 = 0x02;
 
 const MTA_DWORDS: u32 = 128;
-const DEVICE_SPIN: usize = 10_000_000;
+
+/// TSC ticks in one millisecond at 5 GHz. A slower TSC only lengthens a wait.
+const TSC_PER_MS: u64 = 5_000_000;
+/// Every wait runs at priority 4 during init, ahead of the shell's sign-on.
+const RESET_MS: u64 = 100;
+const RINGS_MS: u64 = 100;
+#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
+const LINK_MS: u64 = 5_000;
+/// `e1000_lan_init_done_ich8lan` polls 1500 times at 100 µs.
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+const LAN_INIT_MS: u64 = 150;
 
 #[cfg(not(feature = "board-pc_z97_d3h_i217"))]
 const PCI_VENDOR: u8 = 0x00;
@@ -203,6 +218,8 @@ impl Engine {
         // CTRL.RST reloads the EEPROM image into BAR0 and the command word,
         // and it can set the MSI and MSI-X enables. Either enable masks the pin.
         restore_window(&map)?;
+        #[cfg(feature = "board-pc_z97_d3h_i217")]
+        lan_init_done(regs)?;
         write_u32(regs, IMC, 0xffff_ffff);
         bring_link(regs)?;
         install_mac(regs, mac)?;
@@ -406,7 +423,7 @@ impl Engine {
         write_u32(self.regs, RDT, u32::from(RING_MASK));
         write_u32(self.regs, RXDCTL, read_u32(self.regs, RXDCTL) | DCTL_ENABLE);
         write_u32(self.regs, TXDCTL, read_u32(self.regs, TXDCTL) | DCTL_ENABLE);
-        spin_until(|| {
+        spin_until(RINGS_MS, || {
             read_u32(self.regs, RXDCTL) & DCTL_ENABLE != 0
                 && read_u32(self.regs, TXDCTL) & DCTL_ENABLE != 0
         })
@@ -467,15 +484,60 @@ fn prior_stores_visible() {
     fence(Ordering::SeqCst);
 }
 
+#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
 fn reset_mac(regs: usize) -> Result<(), OpenError> {
     write_u32(regs, IMC, 0xffff_ffff);
     write_u32(regs, CTRL, read_u32(regs, CTRL) | CTRL_RST);
-    spin_until(|| read_u32(regs, CTRL) & CTRL_RST == 0 && read_u32(regs, EECD) & EECD_AUTO_RD != 0)
+    spin_until(RESET_MS, || {
+        read_u32(regs, CTRL) & CTRL_RST == 0 && read_u32(regs, EECD) & EECD_AUTO_RD != 0
+    })
 }
 
+/// The PCH sequence in `e1000_reset_hw_ich8lan`. The MAC is not read during
+/// the reset, and BAR0 may have moved until the window is restored.
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "same signature as the 82574 reset"
+)]
+fn reset_mac(regs: usize) -> Result<(), OpenError> {
+    write_u32(regs, IMC, 0xffff_ffff);
+    write_u32(regs, RCTL, 0);
+    write_u32(regs, TCTL, TCTL_PSP);
+    let _ = read_u32(regs, STATUS);
+    pause_ms(10);
+    write_u32(regs, CTRL, read_u32(regs, CTRL) | CTRL_RST);
+    pause_ms(20);
+    Ok(())
+}
+
+/// Linux logs a missing `LAN_INIT_DONE` and continues. A reset bit that is
+/// still set is a MAC that did not come back.
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+fn lan_init_done(regs: usize) -> Result<(), OpenError> {
+    let _ = spin_until(LAN_INIT_MS, || {
+        read_u32(regs, STATUS) & STATUS_LAN_INIT_DONE != 0
+    });
+    write_u32(regs, STATUS, read_u32(regs, STATUS) & !STATUS_LAN_INIT_DONE);
+    spin_until(RESET_MS, || read_u32(regs, CTRL) & CTRL_RST == 0)
+}
+
+#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
 fn bring_link(regs: usize) -> Result<(), OpenError> {
     write_u32(regs, CTRL, read_u32(regs, CTRL) | CTRL_SLU);
-    spin_until(|| read_u32(regs, STATUS) & STATUS_LU != 0)
+    spin_until(LINK_MS, || read_u32(regs, STATUS) & STATUS_LU != 0)
+}
+
+/// Autonegotiation takes seconds, and no cable takes forever. The shell's
+/// sign-on waits behind this init, so the link arrives later as `IMS_LSC`.
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "same signature as the 82574 link wait"
+)]
+fn bring_link(regs: usize) -> Result<(), OpenError> {
+    write_u32(regs, CTRL, read_u32(regs, CTRL) | CTRL_SLU);
+    Ok(())
 }
 
 fn install_mac(regs: usize, mac: [u8; 6]) -> Result<(), OpenError> {
@@ -501,8 +563,11 @@ fn write_base(regs: usize, low: u32, high: u32, phys: u64) {
     write_u32(regs, high, high_bits);
 }
 
-fn spin_until(mut ready: impl FnMut() -> bool) -> Result<(), OpenError> {
-    for _ in 0..DEVICE_SPIN {
+/// Bounded by the TSC, not by a read count. A register read on the PCH can
+/// take microseconds, and a read of a missing window longer.
+fn spin_until(limit_ms: u64, mut ready: impl FnMut() -> bool) -> Result<(), OpenError> {
+    let start = tsc();
+    while tsc().wrapping_sub(start) < limit_ms * TSC_PER_MS {
         if ready() {
             return Ok(());
         }
@@ -513,6 +578,19 @@ fn spin_until(mut ready: impl FnMut() -> bool) -> Result<(), OpenError> {
     } else {
         Err(OpenError)
     }
+}
+
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+fn pause_ms(ms: u64) {
+    let start = tsc();
+    while tsc().wrapping_sub(start) < ms * TSC_PER_MS {
+        core::hint::spin_loop();
+    }
+}
+
+fn tsc() -> u64 {
+    // SAFETY: RDTSC is unprivileged and touches no memory.
+    unsafe { core::arch::x86_64::_rdtsc() }
 }
 
 #[cfg(not(feature = "board-pc_z97_d3h_i217"))]

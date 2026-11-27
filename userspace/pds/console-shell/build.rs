@@ -1,6 +1,6 @@
 //! The issue line uses `git describe --always --dirty`.
 //!
-//! `just make-lerux-iso` passes that string in `LERUX_GIT_DESCRIBE`. Cargo
+//! Each `just make-lerux-iso-*` recipe passes that string in `LERUX_GIT_DESCRIBE`. Cargo
 //! reruns this script when the variable changes, including an unstaged edit
 //! that appends `-dirty`.
 

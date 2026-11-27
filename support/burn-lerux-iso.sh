@@ -1,7 +1,9 @@
 #!/bin/bash
 # Write the lerux ISO onto one USB stick.
 #
-# The default image is the Acer Swift X ISO from `just make-lerux-iso`:
+# The `just burn-lerux-iso-*` recipes pack one board's ISO and pass it with
+# --image. Without --image this writes the Acer Swift X ISO from
+# `just make-lerux-iso-swift`:
 # build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso
 #
 # With no device, the command lists USB sticks and asks for a number. Passing
@@ -18,13 +20,12 @@ die() {
 }
 
 usage() {
-  echo "usage: just burn-lerux-iso" >&2
-  echo "       just burn-lerux-iso /dev/sdX" >&2
-  echo "       just burn-lerux-iso z97" >&2
-  echo "       just burn-lerux-iso z97 /dev/sdX" >&2
+  echo "usage: just burn-lerux-iso-swift" >&2
+  echo "       just burn-lerux-iso-z97" >&2
+  echo "       just burn-lerux-iso-inspiron" >&2
+  echo "       bash support/burn-lerux-iso.sh [--image ISO] [/dev/sdX]" >&2
   echo "With no device, USB sticks are listed and the stick you number is erased." >&2
-  echo "No target writes build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso." >&2
-  echo "z97 writes build/pc_z97_d3h_i217/lerux_pc_z97_d3h_i217.iso." >&2
+  echo "Without --image, the script writes build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso." >&2
 }
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -232,7 +233,7 @@ collect_usb() {
 choose_device() {
   local choice i index
   if ! have_terminal; then
-    die "name the stick: just burn-lerux-iso /dev/sdX"
+    die "no terminal to ask which stick to erase: run the recipe in a terminal"
   fi
   collect_usb
   if [[ ${#usb_paths[@]} -eq 0 ]]; then
@@ -304,7 +305,7 @@ unmount_disk() {
 }
 
 require_image() {
-  [[ -f "$image" ]] || die "image not found: $image (run: just make-lerux-iso)"
+  [[ -f "$image" ]] || die "image not found: $image (run the matching just make-lerux-iso-* recipe)"
   [[ -s "$image" ]] || die "image is empty: $image"
 }
 

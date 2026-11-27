@@ -6,15 +6,15 @@ lerux packages are **host-side composition units**, not runtime packages. A pack
 
 ```bash
 lerux package install --board swift_sfx14_41g
-lerux package upgrade --board pc_z97_d3h
+lerux package upgrade --board pc_z97_d3h_i217
 lerux package upgrade --all
 
 lerux verify-image --board rpi4b_4gb
 ```
 
-`lerux package install` and `lerux package upgrade` rebuild the selected board profile, write `support/package-pins.toml`, write `loader.img.sha256`, and print the pin digest. `--all` rebuilds the Swift (`swift_sfx14_41g`), the Z97 (`pc_z97_d3h`), and the Pi (`rpi4b_4gb`). The guest cannot install a package. The operator rebuilds on the host.
+`lerux package install` and `lerux package upgrade` rebuild the selected board profile, write `support/package-pins.toml`, write `loader.img.sha256`, and print the pin digest. `--all` rebuilds the Swift (`swift_sfx14_41g`), the Z97 (`pc_z97_d3h_i217`), and the Pi (`rpi4b_4gb`). The guest cannot install a package. The operator rebuilds on the host.
 
-`lerux image` also writes `loader.img.sha256`. `lerux verify-image` checks that sidecar and, when the digest matches, prints the flash line for the Swift, the Z97, or the Pi. That line packs the checked `loader.img` with `lerux iso --no-build` and then `dd` for the Swift. The Z97 line is that ISO path, or `just deploy-pc` on a mounted FAT volume. The Pi line is `just deploy-rpi4`. `just make-lerux-iso` rebuilds `loader.img`, so it stays the build step and is not the flash line.
+`lerux image` also writes `loader.img.sha256`. `lerux verify-image` checks that sidecar and, when the digest matches, prints the flash line for the Swift, the Z97, or the Pi. That line packs the checked `loader.img` with `lerux iso --no-build` and then `dd` for the Swift. The Z97 line is that ISO path, or `just deploy-pc` on a mounted FAT volume. The Pi line is `just deploy-rpi4`. The `just make-lerux-iso-*` recipes rebuild `loader.img`, so they stay the build step and are not the flash line.
 
 ## Recipes (Phase 55 / 60)
 

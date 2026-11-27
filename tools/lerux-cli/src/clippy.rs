@@ -58,7 +58,6 @@ const SHARED_CRATES: &[&str] = &[
     "lerux-ladybird-js",
     "lerux-ladybird-image",
     "lerux-wasm",
-    "lerux-rtw8852be",
     "lerux-logging",
     "lerux-virtio-hal",
     "lerux-virtio-pci",

@@ -20,16 +20,12 @@ mod screen;
 ))]
 mod usb;
 
-#[cfg(all(not(test), feature = "board-pc_z97_d3h"))]
-mod boot_line;
 #[cfg(all(not(test), feature = "hardware"))]
 mod device;
 #[cfg(all(not(test), feature = "hardware"))]
 mod handler;
 #[cfg(all(not(test), feature = "board-pc_z97_d3h_i217"))]
 mod i217;
-#[cfg(all(not(test), feature = "board-pc_z97_d3h"))]
-mod rtl8852be;
 #[cfg(all(
     not(test),
     feature = "hardware",
@@ -77,8 +73,6 @@ fn init() -> handler::HandlerImpl {
 
     debug::init().expect("debug log");
     let device = device::Device::from_system();
-    #[cfg(feature = "board-pc_z97_d3h")]
-    install_boot_lines(&device);
     note_ready(&device);
     if device.init_keyboard() {
         log::info!("console-driver: i8042 ready");
@@ -97,16 +91,22 @@ fn open_shell(device: device::Device) -> handler::HandlerImpl {
         not(feature = "board-inspiron_n5010")
     ))]
     let usb = xhci::UsbKbd::bring_up();
-    #[cfg(feature = "board-pc_z97_d3h")]
-    rtl8852be::publish(usb.pci_config());
     #[cfg(feature = "board-pc_z97_d3h_i217")]
     note_i217(&usb);
     #[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-inspiron_n5010"))]
     let usb = usb_off::UsbKbd::off();
-    #[cfg(not(feature = "board-pc_z97_d3h"))]
     device.enable_cursor();
-    #[cfg(not(feature = "board-swift_sfx14_41g"))]
+    #[cfg(all(
+        not(feature = "board-swift_sfx14_41g"),
+        not(feature = "board-pc_z97_d3h_i217")
+    ))]
     let screen = Screen::blank();
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    let screen = {
+        let mut screen = Screen::blank();
+        note_usb(&usb, &mut screen);
+        screen
+    };
     #[cfg(feature = "board-swift_sfx14_41g")]
     let screen = if device.uses_panel() {
         Screen::blank()
@@ -115,9 +115,6 @@ fn open_shell(device: device::Device) -> handler::HandlerImpl {
     };
     device.present_all(&screen);
     device.sync_cursor(&screen);
-    // The blank page replaces the log lines. Hold it before the shell prints the sign-on.
-    #[cfg(feature = "board-pc_z97_d3h")]
-    lerux_logging::debug::after_boot_line();
     handler::HandlerImpl::new(
         device,
         screen,
@@ -140,20 +137,22 @@ fn note_i217(usb: &xhci::UsbKbd) {
     }
 }
 
-#[cfg(all(not(test), feature = "board-pc_z97_d3h"))]
-fn install_boot_lines(device: &device::Device) {
-    if let Some((frame, pen)) = device.boot_target() {
-        boot_line::install(frame, pen);
+/// COM1 is not wired on the desk, so a keyboard that did not arm says why
+/// on the page, above the sign-on.
+#[cfg(all(not(test), feature = "board-pc_z97_d3h_i217"))]
+fn note_usb(usb: &xhci::UsbKbd, screen: &mut screen::Screen) {
+    let mut line = [0u8; usb::STATUS_MAX];
+    let Some(len) = usb.status(&mut line) else {
+        return;
+    };
+    for &byte in &line[..len] {
+        let _ = screen.apply_byte(byte);
     }
 }
 
 #[cfg(all(not(test), feature = "hardware"))]
 fn note_ready(device: &device::Device) {
     use lerux_logging::log;
-    #[cfg(feature = "board-pc_z97_d3h")]
-    if device.uses_desk() {
-        log::info!("console-driver: desk");
-    }
     #[cfg(feature = "board-swift_sfx14_41g")]
     if device.uses_panel() {
         log::info!("console-driver: panel");
@@ -166,11 +165,7 @@ fn note_ready(device: &device::Device) {
     } else {
         log::info!("console-driver: vga text");
     }
-    #[cfg(not(any(
-        feature = "board-swift_sfx14_41g",
-        feature = "board-pc_z97_d3h",
-        feature = "board-pc_z97_d3h_i217",
-    )))]
+    #[cfg(not(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h_i217",)))]
     {
         let _ = device;
         log::info!("console-driver: vga text");

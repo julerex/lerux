@@ -169,7 +169,7 @@ fn pd_cargo_command(
 
     let include = format!("{sdk}/board/{microkit_board}/{config}/include");
     cmd.env("SEL4_INCLUDE_DIRS", include);
-    // `just make-lerux-iso` sets this from `git describe --always --dirty`.
+    // The `just make-lerux-iso-*` recipes set this from `git describe --always --dirty`.
     // The console-driver build script reruns when it changes.
     if let Ok(describe) = env::var("LERUX_GIT_DESCRIBE")
         && !describe.is_empty()
@@ -304,11 +304,13 @@ pub fn test_all(root: &Path, build_dir: &str, config: &str) -> Result<()> {
 }
 
 pub(crate) fn iso_recipe(board: &str) -> String {
-    if board == "swift_sfx14_41g" {
-        "just make-lerux-iso".to_string()
-    } else {
-        format!("just make-lerux-iso {board}")
-    }
+    let recipe = match board {
+        "swift_sfx14_41g" => "make-lerux-iso-swift",
+        "pc_z97_d3h_i217" => "make-lerux-iso-z97",
+        "inspiron_n5010" => "make-lerux-iso-inspiron",
+        _ => return format!("cargo run -p lerux-cli -- iso --board {board}"),
+    };
+    format!("just {recipe}")
 }
 
 fn hardware_ready_message(board: &str, arch: &str) -> String {
@@ -359,7 +361,7 @@ mod tests {
         let elf_dir = sdk.join("board/x86_64_generic/debug/elf");
         fs::create_dir_all(&elf_dir).unwrap();
         fs::write(elf_dir.join("sel4.elf"), b"kernel64").unwrap();
-        let dest_dir = tmp.path().join("build/pc_z97_d3h");
+        let dest_dir = tmp.path().join("build/pc_z97_d3h_i217");
 
         let dest =
             stage_x86_kernel(sdk.to_str().unwrap(), "x86_64_generic", "debug", &dest_dir).unwrap();
@@ -372,12 +374,12 @@ mod tests {
 
     #[test]
     fn hardware_ready_message_points_at_z97_docs() {
-        let msg = hardware_ready_message("pc_z97_d3h", "x86_64");
+        let msg = hardware_ready_message("pc_z97_d3h_i217", "x86_64");
         assert!(
-            msg.contains("lerux verify-image --board pc_z97_d3h"),
+            msg.contains("lerux verify-image --board pc_z97_d3h_i217"),
             "{msg}"
         );
-        assert!(msg.contains("just make-lerux-iso"), "{msg}");
+        assert!(msg.contains("just make-lerux-iso-z97"), "{msg}");
         assert!(msg.contains("gigabyte-z97-d3h-install-path"), "{msg}");
         assert!(!msg.contains("deploy-rpi4"), "{msg}");
         assert!(!msg.contains("lerux deploy --board"), "{msg}");
@@ -389,7 +391,7 @@ mod tests {
         );
         let inspiron = hardware_ready_message("inspiron_n5010", "x86_64");
         assert!(
-            inspiron.contains("just make-lerux-iso inspiron_n5010"),
+            inspiron.contains("just make-lerux-iso-inspiron"),
             "{inspiron}"
         );
         assert!(

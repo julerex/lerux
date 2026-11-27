@@ -8,7 +8,7 @@ The seL4 kernel is **not vendored**. `just build-sdk` builds it from the checkou
 
 ## Quick start
 
-Build one UEFI USB ISO and boot it on the Acer Swift X or on another x86 PC. `just make-lerux-iso` packs `swift_sfx14_41g`. The stub probes the firmware framebuffer. When that buffer is the Swift panel (`0xfc90000000`, above 4 GiB) the image paints the panel and keeps `setup-wifi`. On the Z97 desk, the Inspiron, and any other x86 machine it paints the VGA text page at `0xb8000`. It does not map the Inspiron AHCI disk, and it does not touch the Swift NVMe unless that probe selected the panel. First boot, including Wi-Fi: [`docs/setup.md`](docs/setup.md). Board reference: [`docs/boards.md`](docs/boards.md#acer-swift-x-install-path).
+Build one UEFI USB ISO and boot it on the Acer Swift X or on another x86 PC. `just make-lerux-iso-swift` packs `swift_sfx14_41g`. The stub probes the firmware framebuffer. When that buffer is the Swift panel (`0xfc90000000`, above 4 GiB) the image paints the panel and keeps `setup-wifi`. On the Z97 desk, the Inspiron, and any other x86 machine it paints the VGA text page at `0xb8000`. It does not map the Inspiron AHCI disk, and it does not touch the Swift NVMe unless that probe selected the panel. First boot, including Wi-Fi: [`docs/setup.md`](docs/setup.md). Board reference: [`docs/boards.md`](docs/boards.md#acer-swift-x-install-path).
 
 **Prerequisites:** Linux, `git`, `just`, `rustup`, `cmake`, `ninja`, `libclang-dev`, `clang` (for the Multiboot 2 trampoline), and a USB flash drive. Packing the ISO needs `xorriso` and `grub-mkimage`. On Arch those packages are `libisoburn` and `grub` (`sudo pacman -S libisoburn grub`). Debian packages are `xorriso` and `grub-efi-amd64-bin`. Do not overwrite the host OS disk.
 
@@ -16,8 +16,9 @@ Build one UEFI USB ISO and boot it on the Acer Swift X or on another x86 PC. `ju
 just fetch          # clone seL4 + microkit into deps/workspace/
 just fetch-sdk      # download prebuilt Microkit SDK 2.3.0
 # or: just build-sdk   # build the SDK from source instead
-just make-lerux-iso            # pack build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso
-just burn-lerux-iso       # pack that ISO, then write it to a USB stick
+just make-lerux-iso-swift # pack build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso
+just burn-lerux-iso-swift # pack that ISO, then write it to a USB stick
+just burn-lerux-iso-z97   # same for the Z97 I217 shell (also -inspiron)
 just boot-lerux-usb       # one-shot UEFI boot of that stick, then back to this host OS
 ```
 

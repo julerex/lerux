@@ -17,10 +17,9 @@ mod url;
 use lerux_input::{Key, KeyEvent};
 
 pub use mode::{
-    console_kind, desk_gop_paint, desk_target, mode_from_mb2_tag, mode_line, panel_mode,
-    panel_ready, swift_recorded_mode, touch_swift_devices, DeskGop, ScanoutMode, BROWSER_HOLD,
-    CONSOLE_DESK, CONSOLE_KIND, CONSOLE_PANEL, CONSOLE_VGA, DESK_FB_BYTES, DESK_FB_HEIGHT,
-    DESK_FB_PHYS, DESK_FB_PITCH, DESK_FB_WIDTH, DESK_GOP_BYTES, DESK_GOP_PHYS, FRAMEBUFFER_BYTES,
+    console_kind, desk_gop_paint, mode_from_mb2_tag, mode_line, panel_mode, panel_ready,
+    swift_recorded_mode, touch_swift_devices, DeskGop, ScanoutMode, BROWSER_HOLD, CONSOLE_KIND,
+    CONSOLE_PANEL, CONSOLE_VGA, DESK_GOP_BYTES, DESK_GOP_PHYS, FRAMEBUFFER_BYTES,
     FRAMEBUFFER_HEIGHT, FRAMEBUFFER_PHYS, FRAMEBUFFER_PITCH, FRAMEBUFFER_WIDTH, MODE_RECORD_PHYS,
 };
 pub use palette::{vga_rgb, CellAttr, DEFAULT_ATTR};

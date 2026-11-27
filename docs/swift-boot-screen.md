@@ -329,4 +329,4 @@ If you want to see the same facts in the source, these are the files. The screen
 | `userspace/crates/lerux-swift/src/pci.rs` | The exclusion addresses and the text of `cmd` and `excl` |
 | `GLOSSARY.md` | Short definitions of the same words, linked to each other |
 
-The ISO you boot is `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`, produced by `just make-lerux-iso`. An older file on the USB stick does not contain a line that was added later. The `cmd` line is on the ISO built after that readback was added.
+The ISO you boot is `build/swift_sfx14_41g/lerux_swift_sfx14_41g.iso`, produced by `just make-lerux-iso-swift`. An older file on the USB stick does not contain a line that was added later. The `cmd` line is on the ISO built after that readback was added.

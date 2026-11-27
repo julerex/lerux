@@ -9,7 +9,6 @@ description = "Arch sign-on and the console commands on the VGA page"
 workspace = true
 
 [features]
-board-pc_z97_d3h = ["dep:lerux-logging", "lerux-logging/boot-line-gap", "dep:lerux-rtw8852be"]
 board-inspiron_n5010 = []
 board-x86_64_generic_console = []
 board-swift_sfx14_41g = ["dep:lerux-swift", "dep:lerux-desk", "dep:lerux-ladybird-image"]
@@ -20,8 +19,6 @@ lerux-calc = { path = "../../crates/lerux-calc" }
 lerux-signon = { path = "../../crates/lerux-signon" }
 lerux-desk = { path = "../../crates/lerux-desk", optional = true }
 lerux-ladybird-image = { path = "../../../lerux-ladybird/crates/lerux-ladybird-image", optional = true }
-lerux-logging = { path = "../../crates/lerux-logging", optional = true }
-lerux-rtw8852be = { path = "../../crates/lerux-rtw8852be", optional = true }
 lerux-swift = { path = "../../crates/lerux-swift", optional = true }
 sel4-microkit = { workspace = true }
 sel4-microkit-driver-adapters = { workspace = true }

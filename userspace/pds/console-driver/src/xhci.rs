@@ -51,6 +51,23 @@ const RING_LAST: u8 = 31;
 const EV_LEN: u8 = 64;
 const SPIN: u32 = 500_000;
 
+/// TSC ticks in one millisecond at 5 GHz. A slower TSC only lengthens a wait.
+const TSC_PER_MS: u64 = 5_000_000;
+/// After HCRST each root port reconnects on its own clock. The boot stick
+/// or the mouse can come back before the keyboard receiver.
+const SETTLE_MS: u64 = 300;
+const CONNECT_MAX_MS: u64 = 2_000;
+/// USB 2.0 TRSTRCY is 10 ms after a port reset. QEMU answers at once; a
+/// real device can drop the address request inside that window.
+const RESET_RECOVERY_MS: u64 = 20;
+/// USB 2.0 TSETADDR is 2 ms. Linux waits 10.
+const ADDRESS_RECOVERY_MS: u64 = 10;
+/// One command or control transfer. A full-speed device can NAK for a while.
+const EVENT_MS: u64 = 500;
+const _: () = assert!(usb::MAX_PORTS == 30, "read_caps clamps to 30 ports");
+/// Recorded in place of a completion code when no event arrived.
+const CC_TIMEOUT: u8 = 0;
+
 const TRB_NORMAL: u32 = 1;
 const TRB_SETUP: u32 = 2;
 const TRB_DATA: u32 = 3;
@@ -73,7 +90,6 @@ const CC_SHORT: u32 = 13;
 
 const TC: u32 = 1 << 1;
 const ISP: u32 = 1 << 2;
-const CHAIN: u32 = 1 << 4;
 const IOC: u32 = 1 << 5;
 const IDT: u32 = 1 << 6;
 
@@ -157,6 +173,16 @@ pub struct UsbKbd {
     #[cfg(feature = "board-pc_z97_d3h_i217")]
     mouse: Mouse,
     keys: HidState,
+    /// Why no keyboard is armed, for the log and the I217 screen.
+    note: &'static str,
+    /// Bit `n - 1` is root port `n` with a device after the settle wait.
+    connected: u32,
+    /// Where each root port stopped as a keyboard. See [`usb::status_line`].
+    marks: [u8; usb::MAX_PORTS],
+    /// Last completion code that was not success, or [`CC_TIMEOUT`].
+    last_cc: Option<u8>,
+    /// Endpoint 0 state after the last control transfer that got no event.
+    last_ep: Option<u8>,
     ready: bool,
     online: bool,
     broken: bool,
@@ -177,15 +203,17 @@ impl UsbKbd {
     pub fn bring_up() -> Self {
         let mut kbd = Self::from_system();
         if !kbd.attached {
-            info!("console-driver: xhci none");
+            kbd.log_status();
             return kbd;
         }
         if !kbd.start() {
+            kbd.log_status();
             kbd.stop();
             return kbd;
         }
         if !kbd.enumerate() {
-            info!("console-driver: xhci no keyboard");
+            kbd.note = "xhci no keyboard";
+            kbd.log_status();
             kbd.stop();
             return kbd;
         }
@@ -197,11 +225,35 @@ impl UsbKbd {
         self.ready
     }
 
+    /// The `usb:` line for a bring-up that armed no keyboard.
+    pub fn status(&self, out: &mut [u8; usb::STATUS_MAX]) -> Option<usize> {
+        if self.ready {
+            return None;
+        }
+        Some(usb::status_line(
+            self.note,
+            self.connected,
+            &self.marks,
+            self.last_cc,
+            self.last_ep,
+            out,
+        ))
+    }
+
+    fn log_status(&self) {
+        let mut line = [0u8; usb::STATUS_MAX];
+        let Some(len) = self.status(&mut line) else {
+            return;
+        };
+        let text = core::str::from_utf8(&line[..len]).unwrap_or("usb: ?");
+        info!("console-driver: {}", text.trim_end());
+    }
+
     /// PCI config capability and port, when the template set `0xcf8`.
     ///
     /// `from_system` stores `u16::MAX` when the setvar is missing. xHCI owns
-    /// that symbol. The radio path and the I217 rewrite borrow the stored port.
-    #[cfg(any(feature = "board-pc_z97_d3h", feature = "board-pc_z97_d3h_i217"))]
+    /// that symbol. The I217 rewrite borrows the stored port.
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
     pub fn pci_config(&self) -> Option<(u64, u16)> {
         if self.pci_port == u16::MAX {
             None
@@ -297,6 +349,7 @@ impl UsbKbd {
         self.write32(self.op + 4, 1 << 3);
     }
 
+    #[expect(clippy::too_many_lines, reason = "one struct field per line")]
     fn from_system() -> Self {
         let regs = memory_region_symbol!(xhci_regs_vaddr: *mut u8).as_ptr();
         let dma = memory_region_symbol!(xhci_dma_vaddr: *mut u8).as_ptr();
@@ -326,6 +379,11 @@ impl UsbKbd {
             #[cfg(feature = "board-pc_z97_d3h_i217")]
             mouse: Mouse::idle(),
             keys: HidState::default(),
+            note: "xhci none",
+            connected: 0,
+            marks: [0; usb::MAX_PORTS],
+            last_cc: None,
+            last_ep: None,
             ready: false,
             online: false,
             broken: false,
@@ -341,10 +399,18 @@ impl UsbKbd {
     }
 
     fn start(&mut self) -> bool {
-        let Some(pci) = self.find_xhci() else {
-            info!("console-driver: xhci none");
-            return false;
-        };
+        match self.start_steps() {
+            Ok(()) => true,
+            Err(note) => {
+                self.note = note;
+                false
+            }
+        }
+    }
+
+    /// `Err` is the note for the step that failed.
+    fn start_steps(&mut self) -> Result<(), &'static str> {
+        let pci = self.find_xhci().ok_or("xhci none")?;
         info!("console-driver: xhci 00:{:02x}.{}", pci.dev, pci.func);
         self.assign_bar(&pci);
         self.online = true;
@@ -352,39 +418,34 @@ impl UsbKbd {
             self.intel_route(&pci);
         }
         if !self.read_caps() {
-            info!("console-driver: xhci regs");
-            return false;
+            return Err("xhci regs");
         }
         self.legacy_handoff();
         if !self.halt() {
-            info!("console-driver: xhci halt timeout");
-            return false;
+            return Err("xhci halt timeout");
         }
         if !self.reset_controller() {
-            info!("console-driver: xhci reset timeout");
-            return false;
+            return Err("xhci reset timeout");
         }
         if self.read32(self.op + 8) != 1 {
-            info!("console-driver: xhci pagesize");
-            return false;
+            return Err("xhci pagesize");
         }
         self.zero_dma();
         if !self.program_rings() {
-            return false;
+            return Err("xhci scratchpad");
         }
         if !self.program_msi(&pci) {
-            info!("console-driver: xhci no msi");
-            return false;
+            return Err("xhci no msi");
         }
         // QEMU arms MSI-X only when interrupter 0's IE bit is written while
         // MSI-X is already enabled. `program_rings` sets IE earlier.
         self.write32(self.iman, 0x2);
         self.write32(self.op, (1 << 0) | (1 << 2));
         if self.wait_status(|status| status & 1 == 0) {
-            return true;
+            Ok(())
+        } else {
+            Err("xhci run timeout")
         }
-        info!("console-driver: xhci run timeout");
-        false
     }
 
     fn stop(&mut self) {
@@ -405,7 +466,7 @@ impl UsbKbd {
             }
             if self.try_port(port) {
                 #[cfg(feature = "board-pc_z97_d3h_i217")]
-                self.bind_mouse_after(port);
+                self.bind_mouse(port);
                 return true;
             }
         }
@@ -417,17 +478,29 @@ impl UsbKbd {
         if raw & 1 == 0 {
             return false;
         }
-        let Some(speed) = self.reset_port(port) else {
-            return false;
+        let stage = match self.bind_port(port) {
+            Ok(()) => usb::MARK_KEYBOARD,
+            Err(stage) => stage,
         };
+        self.marks[usize::from(port - 1)] = stage;
+        stage == usb::MARK_KEYBOARD
+    }
+
+    /// `Err` is the [`usb::status_line`] letter of the step that failed.
+    fn bind_port(&mut self, port: u8) -> Result<(), u8> {
+        let speed = self.reset_port(port).ok_or(b'r')?;
         if !self.enable_slot() {
-            return false;
+            return Err(b's');
         }
-        if !self.address(port, speed) || !self.bind_keyboard(speed) {
+        let bound = if self.address(port, speed) {
+            self.bind_keyboard(speed)
+        } else {
+            Err(b'a')
+        };
+        if bound.is_err() {
             self.disable_slot();
-            return false;
         }
-        true
+        bound
     }
 
     /// Cell the boot mouse currently marks, and the last button byte.
@@ -440,13 +513,18 @@ impl UsbKbd {
         }
     }
 
+    /// The mouse can sit on a lower port than the keyboard. That port was
+    /// tried as a keyboard first, and its slot was disabled.
     #[cfg(feature = "board-pc_z97_d3h_i217")]
-    fn bind_mouse_after(&mut self, keyboard_port: u8) {
+    fn bind_mouse(&mut self, keyboard_port: u8) {
         let kbd_slot = self.slot;
         let kbd_dci = self.dci;
-        for port in keyboard_port.saturating_add(1)..=self.max_ports {
+        for port in 1..=self.max_ports {
             if self.broken {
                 break;
+            }
+            if port == keyboard_port {
+                continue;
             }
             if self.try_mouse(port) {
                 self.mouse.slot = self.slot;
@@ -512,21 +590,9 @@ impl UsbKbd {
 
     #[cfg(feature = "board-pc_z97_d3h_i217")]
     fn config_mouse(&mut self) -> Option<usb::BootKeyboard> {
-        let n = self.ctrl_in(0x0200, 9)?;
-        if n < 9 {
-            return None;
-        }
-        let mut hdr = [0u8; 9];
-        self.read_dma(OFF_DATA, &mut hdr);
-        let total = usize::from(u16::from(hdr[2]) | (u16::from(hdr[3]) << 8)).clamp(9, 512);
-        let n = self.ctrl_in(0x0200, u16::try_from(total).unwrap_or(9))?;
-        if n < 9 {
-            return None;
-        }
         let mut cfg = [0u8; 512];
-        let take = n.min(cfg.len());
-        self.read_dma(OFF_DATA, &mut cfg[..take]);
-        usb::find_boot_mouse(&cfg[..take])
+        let len = self.read_config(&mut cfg)?;
+        usb::find_boot_mouse(&cfg[..len])
     }
 
     #[cfg(feature = "board-pc_z97_d3h_i217")]
@@ -542,26 +608,24 @@ impl UsbKbd {
         self.dci = kbd_dci;
     }
 
-    fn bind_keyboard(&mut self, speed: u8) -> bool {
-        let Some(desc) = self.device_descriptor() else {
-            return false;
-        };
+    fn bind_keyboard(&mut self, speed: u8) -> Result<(), u8> {
+        let desc = self.device_descriptor().ok_or(b'd')?;
         let vid = u16::from(desc[8]) | (u16::from(desc[9]) << 8);
         let pid = u16::from(desc[10]) | (u16::from(desc[11]) << 8);
-        let Some(kbd) = self.config_keyboard() else {
-            return false;
-        };
+        let mut cfg = [0u8; 512];
+        let len = self.read_config(&mut cfg).ok_or(b'g')?;
+        let kbd = usb::find_shell_keyboard(&cfg[..len]).ok_or(b'n')?;
         if !self.set_boot_protocol(kbd) {
-            return false;
+            return Err(b'p');
         }
         if !self.configure_interrupt(kbd, speed) {
-            return false;
+            return Err(b'i');
         }
         self.dci = usb::endpoint_dci(kbd.ep_addr);
         self.queue_intr();
         self.ready = true;
         info!("console-driver: usb keyboard {vid:04x}:{pid:04x}");
-        true
+        Ok(())
     }
 
     fn device_descriptor(&mut self) -> Option<[u8; 18]> {
@@ -571,7 +635,11 @@ impl UsbKbd {
         }
         let mut first = [0u8; 8];
         self.read_dma(OFF_DATA, &mut first);
-        let mps = u16::from(first[7]);
+        // SuperSpeed reports the exponent: 9 is 512.
+        let mps = match first[7] {
+            9 if self.ep_mps() == 512 => 512,
+            size => u16::from(size),
+        };
         if mps != 0 && mps != self.ep_mps() && !self.evaluate_mps(mps) {
             return None;
         }
@@ -584,7 +652,8 @@ impl UsbKbd {
         Some(desc)
     }
 
-    fn config_keyboard(&mut self) -> Option<BootKeyboard> {
+    /// The whole first configuration descriptor, up to 512 bytes.
+    fn read_config(&mut self, cfg: &mut [u8; 512]) -> Option<usize> {
         let n = self.ctrl_in(0x0200, 9)?;
         if n < 9 {
             return None;
@@ -596,10 +665,9 @@ impl UsbKbd {
         if n < 9 {
             return None;
         }
-        let mut cfg = [0u8; 512];
         let take = n.min(cfg.len());
         self.read_dma(OFF_DATA, &mut cfg[..take]);
-        usb::find_boot_keyboard(&cfg[..take])
+        Some(take)
     }
 
     fn set_boot_protocol(&mut self, kbd: BootKeyboard) -> bool {
@@ -660,9 +728,17 @@ impl UsbKbd {
         let dw0 = (u32::from(speed) << 20) | (1 << 27);
         self.write_ctx(true, 1, 0, dw0);
         self.write_ctx(true, 1, 1, u32::from(port) << 16);
-        let mps: u16 = if speed >= 3 { 64 } else { 8 };
+        let mps: u16 = match speed {
+            4.. => 512,
+            3 => 64,
+            _ => 8,
+        };
         self.write_ep(2, 4, mps, 0, self.ep0_off(), 8);
-        self.command_ok(TRB_ADDRESS)
+        if !self.command_ok(TRB_ADDRESS) {
+            return false;
+        }
+        pause_ms(ADDRESS_RECOVERY_MS);
+        true
     }
 
     fn evaluate_mps(&mut self, mps: u16) -> bool {
@@ -679,6 +755,7 @@ impl UsbKbd {
             return false;
         };
         if completion(ev) != CC_SUCCESS {
+            self.note_cc(completion(ev));
             return false;
         }
         self.slot = (ev[3] >> 24) as u8;
@@ -700,7 +777,15 @@ impl UsbKbd {
         let Some(ev) = self.submit_cmd(low_u32(ptr), (ptr >> 32) as u32, 0, d3) else {
             return false;
         };
-        completion(ev) == CC_SUCCESS
+        if completion(ev) != CC_SUCCESS {
+            self.note_cc(completion(ev));
+            return false;
+        }
+        true
+    }
+
+    fn note_cc(&mut self, code: u32) {
+        self.last_cc = Some(u8::try_from(code).unwrap_or(u8::MAX));
     }
 
     fn ctrl_in(&mut self, value: u16, len: u16) -> Option<usize> {
@@ -727,7 +812,8 @@ impl UsbKbd {
         } else {
             2
         };
-        let setup_d3 = CHAIN | IDT | trb_type(TRB_SETUP) | (trt << 16);
+        // Setup, data, and status are separate TDs, so none of them chains.
+        let setup_d3 = IDT | trb_type(TRB_SETUP) | (trt << 16);
         self.push_trb(Ring::Ep0, setup_d0, setup_d1, 8, setup_d3);
 
         let mut data_trb = 0u64;
@@ -735,7 +821,7 @@ impl UsbKbd {
             let buf = DMA_PHYS + OFF_DATA as u64;
             let dir = if bm & 0x80 != 0 { 1 << 16 } else { 0 };
             let isp = if bm & 0x80 != 0 { ISP } else { 0 };
-            let data_d3 = isp | CHAIN | trb_type(TRB_DATA) | dir;
+            let data_d3 = isp | trb_type(TRB_DATA) | dir;
             data_trb = self.push_trb(
                 Ring::Ep0,
                 low_u32(buf),
@@ -757,7 +843,8 @@ impl UsbKbd {
 
     fn await_control(&mut self, len: u16, data_trb: u64, status_trb: u64) -> Ctl {
         let mut actual = usize::from(len);
-        for _ in 0..SPIN {
+        let start = tsc();
+        while tsc().wrapping_sub(start) < EVENT_MS * TSC_PER_MS {
             let Some(ev) = self.pop_event() else {
                 core::hint::spin_loop();
                 continue;
@@ -783,19 +870,24 @@ impl UsbKbd {
             }
             if ptr == status_trb & !0xf {
                 if code == CC_STALL {
+                    self.note_cc(code);
                     self.recover_endpoint(Ring::Ep0, 1);
                     return Ctl::Stall;
                 }
                 if code == CC_SUCCESS || code == CC_SHORT {
                     return Ctl::Done(actual);
                 }
+                self.note_cc(code);
                 return Ctl::Fail;
             }
         }
+        self.last_cc = Some(CC_TIMEOUT);
+        self.last_ep = u8::try_from(self.read_ctx(false, 1, 0) & 0x7).ok();
         Ctl::Fail
     }
 
     fn transfer_failed(&mut self, code: u32) -> Ctl {
+        self.note_cc(code);
         if code == CC_STALL {
             self.recover_endpoint(Ring::Ep0, 1);
             Ctl::Stall
@@ -834,13 +926,15 @@ impl UsbKbd {
         self.doorbell(0, 0);
         let ev = self.wait_completion(phys);
         if ev.is_none() {
+            self.last_cc = Some(CC_TIMEOUT);
             self.broken = true;
         }
         ev
     }
 
     fn wait_completion(&mut self, trb: u64) -> Option<[u32; 4]> {
-        for _ in 0..SPIN {
+        let start = tsc();
+        while tsc().wrapping_sub(start) < EVENT_MS * TSC_PER_MS {
             let Some(ev) = self.pop_event() else {
                 core::hint::spin_loop();
                 continue;
@@ -1120,15 +1214,33 @@ impl UsbKbd {
         }
     }
 
-    fn wait_connect(&self) {
-        for _ in 0..SPIN {
-            for port in 1..=self.max_ports {
-                if self.read32(self.portsc(port)) & 1 != 0 {
-                    return;
-                }
+    /// Wait until the connected set has held still for [`SETTLE_MS`]. The
+    /// first port to connect is not always the keyboard.
+    fn wait_connect(&mut self) {
+        let start = tsc();
+        let mut seen = self.connected_ports();
+        let mut since = start;
+        loop {
+            let now = tsc();
+            if now.wrapping_sub(start) >= CONNECT_MAX_MS * TSC_PER_MS {
+                break;
+            }
+            let ports = self.connected_ports();
+            if ports != seen {
+                seen = ports;
+                since = now;
+            } else if ports != 0 && now.wrapping_sub(since) >= SETTLE_MS * TSC_PER_MS {
+                break;
             }
             core::hint::spin_loop();
         }
+        self.connected = seen;
+    }
+
+    fn connected_ports(&self) -> u32 {
+        (1..=self.max_ports)
+            .filter(|&port| self.read32(self.portsc(port)) & 1 != 0)
+            .fold(0, |bits, port| bits | (1 << (port - 1)))
     }
 
     fn reset_port(&self, port: u8) -> Option<u8> {
@@ -1148,6 +1260,7 @@ impl UsbKbd {
                 return None;
             }
             let speed = ((cur >> 10) & 0xf) as u8;
+            pause_ms(RESET_RECOVERY_MS);
             return (speed != 0).then_some(speed);
         }
         None
@@ -1184,7 +1297,9 @@ impl UsbKbd {
         self.write_ctx(true, index, 1, dw1);
         self.write_ctx(true, index, 2, (low_u32(phys) & !0xf) | 1);
         self.write_ctx(true, index, 3, (phys >> 32) as u32);
-        self.write_ctx(true, index, 4, u32::from(avg) | (u32::from(mps) << 16));
+        // Max ESIT payload is for periodic endpoints only.
+        let esit = if kind == 4 { 0 } else { u32::from(mps) };
+        self.write_ctx(true, index, 4, u32::from(avg) | (esit << 16));
     }
 
     fn ep_mps(&self) -> u16 {
@@ -1551,6 +1666,18 @@ impl UsbKbd {
     fn write_dma_u64(&self, off: usize, value: u64) {
         self.write_dma_u32(off, low_u32(value));
         self.write_dma_u32(off + 4, (value >> 32) as u32);
+    }
+}
+
+fn tsc() -> u64 {
+    // SAFETY: RDTSC is unprivileged and touches no memory.
+    unsafe { core::arch::x86_64::_rdtsc() }
+}
+
+fn pause_ms(ms: u64) {
+    let start = tsc();
+    while tsc().wrapping_sub(start) < ms * TSC_PER_MS {
+        core::hint::spin_loop();
     }
 }
 

@@ -33,17 +33,6 @@ pub const FRAMEBUFFER_WIDTH: u32 = 1920;
 
 pub const FRAMEBUFFER_HEIGHT: u32 = 1080;
 
-/// Firmware buffer the Z97 desk paints. Pitch times height is [`DESK_FB_BYTES`].
-pub const DESK_FB_PHYS: u64 = 0xd000_0000;
-
-pub const DESK_FB_PITCH: u32 = 4096;
-
-pub const DESK_FB_WIDTH: u32 = 1024;
-
-pub const DESK_FB_HEIGHT: u32 = 768;
-
-pub const DESK_FB_BYTES: u64 = 0x30_0000;
-
 /// `fb 0x` followed by the 16 lowercase hex digits of [`FRAMEBUFFER_PHYS`].
 pub open spec fn recorded_prefix_byte(index: int) -> u8 {
     if index == 0 {
@@ -558,8 +547,6 @@ pub(crate) fn recorded_mode_line() -> (line: [u8; 80])
 
 } // verus!
 const _: () = assert!(FRAMEBUFFER_PITCH as u64 * FRAMEBUFFER_HEIGHT as u64 == FRAMEBUFFER_BYTES);
-const _: () = assert!(DESK_FB_PITCH as u64 * DESK_FB_HEIGHT as u64 == DESK_FB_BYTES);
-
 /// Offset of the console kind in the mode record. The stub writes it.
 /// A cleared record leaves 0.
 pub const CONSOLE_KIND: usize = 36;
@@ -569,9 +556,6 @@ pub const CONSOLE_PANEL: u8 = 1;
 
 /// VGA text page. This is every machine that is not the Swift panel.
 pub const CONSOLE_VGA: u8 = 2;
-
-/// Z97 firmware buffer at [`DESK_FB_PHYS`]. The shared stub still stores [`CONSOLE_VGA`].
-pub const CONSOLE_DESK: u8 = 3;
 
 /// Kind byte the stub stored. 0 is a cleared record.
 #[must_use]
@@ -660,39 +644,10 @@ pub fn panel_mode(record: &[u8]) -> Option<ScanoutMode> {
 #[must_use]
 pub fn touch_swift_devices(record: &[u8], mt7921_present: bool) -> bool {
     match console_kind(record) {
-        CONSOLE_VGA | CONSOLE_DESK => false,
+        CONSOLE_VGA => false,
         CONSOLE_PANEL => true,
         _ => mt7921_present,
     }
-}
-
-/// Store [`CONSOLE_DESK`] when `record` is the Z97 firmware buffer.
-///
-/// A Swift panel record, a cleared record, and any other geometry return
-/// `None` and leave the kind byte unchanged.
-#[must_use]
-pub fn desk_target(record: &mut [u8]) -> Option<ScanoutMode> {
-    let mode = ScanoutMode::parse(record)?;
-    if !recorded_desk(&mode) {
-        return None;
-    }
-    *record.get_mut(CONSOLE_KIND)? = CONSOLE_DESK;
-    Some(mode)
-}
-
-fn recorded_desk(mode: &ScanoutMode) -> bool {
-    mode.address() == DESK_FB_PHYS
-        && mode.pitch() == DESK_FB_PITCH
-        && mode.width() == DESK_FB_WIDTH
-        && mode.height() == DESK_FB_HEIGHT
-        && u64::from(mode.pitch()) * u64::from(mode.height()) == DESK_FB_BYTES
-        && mode.bits_per_pixel() == 32
-        && mode.red_shift() == 16
-        && mode.green_shift() == 8
-        && mode.blue_shift() == 0
-        && mode.red_width() == 8
-        && mode.green_width() == 8
-        && mode.blue_width() == 8
 }
 
 fn push(out: &mut [u8; 80], len: &mut usize, bytes: &[u8]) -> bool {
@@ -1208,61 +1163,23 @@ mod tests {
     }
 
     #[test]
-    fn z97_recorded_buffer_is_the_desk_target() {
+    fn z97_recorded_buffer_stays_off_the_swift_panel() {
         let mode = mode_from_mb2_tag(TAG).expect("the recorded tag is a linear mode");
-        assert_eq!(mode.address(), DESK_FB_PHYS);
-        assert_eq!(mode.pitch(), DESK_FB_PITCH);
-        assert_eq!(mode.width(), DESK_FB_WIDTH);
-        assert_eq!(mode.height(), DESK_FB_HEIGHT);
-        assert_eq!(
-            u64::from(mode.pitch()) * u64::from(mode.height()),
-            DESK_FB_BYTES
-        );
         let mut record = [0u8; RECORD_LEN];
         mode.write_record(&mut record)
             .expect("the mode record is 40 bytes");
         record[CONSOLE_KIND] = CONSOLE_VGA;
-        let mut kept = record;
-        kept[CONSOLE_KIND] = CONSOLE_DESK;
-        let found = desk_target(&mut record);
-        assert_eq!(found, Some(mode), "the recorded buffer is the desk target");
-        assert_eq!(record, kept);
         assert!(panel_mode(&record).is_none());
         assert!(!touch_swift_devices(&record, false));
         assert!(!touch_swift_devices(&record, true));
-        assert_swift_panel_is_not_the_desk();
-        assert_cleared_record_is_not_the_desk();
-        assert_other_geometry_is_not_the_desk();
-    }
 
-    fn assert_swift_panel_is_not_the_desk() {
-        let mode = swift_recorded_mode();
+        let swift = swift_recorded_mode();
         let mut record = [0u8; RECORD_LEN];
-        mode.write_record(&mut record)
+        swift
+            .write_record(&mut record)
             .expect("the mode record is 40 bytes");
         record[CONSOLE_KIND] = CONSOLE_PANEL;
-        let before = record;
-        assert!(desk_target(&mut record).is_none());
-        assert_eq!(record, before);
-        assert_eq!(panel_mode(&record), Some(mode));
-    }
-
-    fn assert_cleared_record_is_not_the_desk() {
-        let mut record = [0u8; RECORD_LEN];
-        assert!(desk_target(&mut record).is_none());
-        assert_eq!(record, [0u8; RECORD_LEN]);
-    }
-
-    fn assert_other_geometry_is_not_the_desk() {
-        let mode = mode_from_mb2_tag(TAG).expect("the recorded tag is a linear mode");
-        let mut record = [0u8; RECORD_LEN];
-        mode.write_record(&mut record)
-            .expect("the mode record is 40 bytes");
-        record[CONSOLE_KIND] = CONSOLE_VGA;
-        record[34] = 7;
-        let before = record;
-        assert!(desk_target(&mut record).is_none());
-        assert_eq!(record, before);
+        assert_eq!(panel_mode(&record), Some(swift));
     }
 
     #[test]

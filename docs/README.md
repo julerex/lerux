@@ -14,6 +14,7 @@ lerux is a Rust-on-seL4 project. The kernel comes from upstream seL4; lerux owns
 | [swift-boot-screen.md](swift-boot-screen.md) | Plain-language guide to the Swift X Wi-Fi stall: where the ring, the note, the doorbell, and the IOMMU live, how to read the screen lines, and the dump rows 31 to 66 |
 | [swift-wifi-assessment.md](swift-wifi-assessment.md) | Assessment of the Swift X bring-up against Linux v6.8 `mt76`: what is verified, the remaining suspects in order, and the gap between `ping ok` and applications on the internet |
 | [swift-wifi-survey-retrospective.md](swift-wifi-survey-retrospective.md) | Why the Swift survey printed `rx 0` for so many boots: the scan frames arrived on an MCU ring the driver did not read for frames |
+| [z97-keyboard-retrospective.md](z97-keyboard-retrospective.md) | Why the Z97 Microsoft transceiver took four images: VT-d blocked the xHCI command ring, then a control TRB change shipped beside a second one |
 | [plan-swift-wifi.md](plan-swift-wifi.md) | Phased plan from the `fw sem` stall to an application on the internet over the Swift radio |
 | [plan.md](plan.md) | Roadmap and cross-arch smoke parity (phases 1–82, done). The metal target being driven is the Acer Swift X. The Z97 desk page and the [Physical RPi4 lab](plan.md#physical-rpi4-lab-hardware-gated) stay secondary |
 | [plan-lionsos.md](plan-lionsos.md) | LionsOS structures in a Rust guest. Milestone 17 stays (postcard guest model). The metal target being driven is the Acer Swift X (milestones 24–29). Milestone 22, the Z97 bind, stays secondary |

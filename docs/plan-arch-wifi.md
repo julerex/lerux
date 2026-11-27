@@ -1,8 +1,8 @@
 # Arch Wi-Fi session
 
-Last updated: 2026-11-15.
+Last updated: 2026-11-23.
 
-**Status:** Milestones 1–4 are not started.
+**Status:** Milestone 1 is done. Milestones 2–4 are not started.
 
 **Goal:** The Swift console accepts the wireless session from the Arch installation guide. The operator types `ip link`, then `iwctl`, then `ping ping.archlinux.org`, and the last command prints a reply. The radio stays `swift-mt7921`.
 
@@ -88,7 +88,7 @@ Arch’s stack underneath the same keystrokes is `iwctl`, `iwd`, nl80211, mac802
 
 ## Milestone 1 — The iwctl session
 
-**Status:** not started.
+**Status:** done.
 
 **Arch capability.** `iwctl` lists the station, scans, lists networks, and accepts a passphrase. `ip link` lists `wlan0`.
 

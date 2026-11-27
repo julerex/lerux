@@ -9,6 +9,8 @@ use crate::process::{download, ensure_dir, run_checked};
 struct Versions {
     repos: Repos,
     lionsos: RepoPin,
+    #[serde(rename = "redox-drivers")]
+    redox_drivers: RepoPin,
 }
 
 #[derive(Debug, Deserialize)]
@@ -69,9 +71,122 @@ pub fn fetch(root: &Path) -> Result<()> {
         ],
     )
     .context("initialise LionsOS dep/sddf")?;
+    // The Redox tree is a hardware reference. It is not compiled, and it has
+    // no submodule this checkout initialises.
+    clone_or_checkout_pin(
+        &workspace,
+        "redox-drivers",
+        &versions.redox_drivers.remote,
+        &versions.redox_drivers.tag,
+    )?;
 
     eprintln!("==> Dependencies ready under {}", workspace.display());
     Ok(())
+}
+
+fn clone_or_checkout_pin(workspace: &Path, name: &str, url: &str, pin: &str) -> Result<()> {
+    if is_full_commit(pin) {
+        clone_or_checkout_commit(workspace, name, url, pin)
+    } else {
+        clone_or_checkout(workspace, name, url, pin)
+    }
+}
+
+fn is_full_commit(pin: &str) -> bool {
+    pin.len() == 40 && pin.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+fn mark_safe(dest: &Path) {
+    // `git -C` refuses a directory owned by another user. The SDK container
+    // can hand over a checkout like that. Record the exception before any
+    // command that uses `-C`, including `remote set-url`.
+    let _ = run_checked(
+        "git",
+        &[
+            "config",
+            "--global",
+            "--add",
+            "safe.directory",
+            &dest.to_string_lossy(),
+        ],
+    );
+}
+
+fn clone_or_checkout_commit(workspace: &Path, name: &str, url: &str, commit: &str) -> Result<()> {
+    let dest = workspace.join(name);
+    mark_safe(&dest);
+    prepare_commit_repo(&dest, name, url, commit)?;
+    fetch_pinned_commit(&dest, name, commit)?;
+    let head = head_commit(&dest)?;
+    if head != commit {
+        bail!("{name}: checked out {head}, pin is {commit}");
+    }
+    Ok(())
+}
+
+fn prepare_commit_repo(dest: &Path, name: &str, url: &str, commit: &str) -> Result<()> {
+    if dest.join(".git").is_dir() {
+        eprintln!("==> {name}: already cloned, checking out {commit}");
+        let dest_arg = dest.to_string_lossy();
+        run_checked(
+            "git",
+            &["-C", dest_arg.as_ref(), "remote", "set-url", "origin", url],
+        )?;
+        return Ok(());
+    }
+    if dest.exists() {
+        eprintln!(
+            "==> {name}: removing existing non-repository path at {}",
+            dest.display()
+        );
+        std::fs::remove_dir_all(dest)?;
+    }
+    eprintln!("==> {name}: cloning {commit}");
+    let dest_arg = dest.to_string_lossy();
+    run_checked("git", &["init", "-q", dest_arg.as_ref()])?;
+    run_checked(
+        "git",
+        &["-C", dest_arg.as_ref(), "remote", "add", "origin", url],
+    )?;
+    Ok(())
+}
+
+fn fetch_pinned_commit(dest: &Path, name: &str, commit: &str) -> Result<()> {
+    let dest_arg = dest.to_string_lossy();
+    // `git clone --branch` rejects a commit. GitLab serves one reachable
+    // commit at depth 1, and this checkout does not initialise submodules.
+    run_checked(
+        "git",
+        &[
+            "-C",
+            dest_arg.as_ref(),
+            "fetch",
+            "--depth",
+            "1",
+            "--no-recurse-submodules",
+            "origin",
+            commit,
+        ],
+    )
+    .with_context(|| format!("fetch {name} {commit}"))?;
+    run_checked(
+        "git",
+        &[
+            "-C",
+            dest_arg.as_ref(),
+            "checkout",
+            "--detach",
+            "FETCH_HEAD",
+        ],
+    )?;
+    Ok(())
+}
+
+fn head_commit(dest: &Path) -> Result<String> {
+    let output = run_checked("git", &["-C", &dest.to_string_lossy(), "rev-parse", "HEAD"])
+        .context("read checkout commit")?;
+    let text = String::from_utf8(output.stdout).context("commit id is not utf-8")?;
+    Ok(text.trim().to_string())
 }
 
 fn clone_or_checkout(workspace: &Path, name: &str, url: &str, tag: &str) -> Result<()> {
@@ -103,16 +218,7 @@ fn clone_or_checkout(workspace: &Path, name: &str, url: &str, tag: &str) -> Resu
 }
 
 fn checkout_existing(dest: &Path, name: &str, tag: &str) -> Result<()> {
-    let _ = run_checked(
-        "git",
-        &[
-            "config",
-            "--global",
-            "--add",
-            "safe.directory",
-            &dest.to_string_lossy(),
-        ],
-    );
+    mark_safe(dest);
     eprintln!("==> {name}: already cloned, checking out {tag}");
     // `--tags` retrieves every tag. Git then fetches a populated submodule
     // commit recorded by that history. Older LionsOS history records an
@@ -224,6 +330,10 @@ microkit = { remote = "https://example.com/microkit.git", tag = "2.2.0" }
 [lionsos]
 tag = "0.4.0"
 remote = "https://github.com/au-ts/lionsos.git"
+
+[redox-drivers]
+tag = "20ffe4d7f4a85b7cc1f59495d7e6e355fed4cb06"
+remote = "https://github.com/redox-os/drivers.git"
 "#,
         )
         .expect("write fixture");
@@ -234,6 +344,16 @@ remote = "https://github.com/au-ts/lionsos.git"
             versions.lionsos.remote,
             "https://github.com/au-ts/lionsos.git"
         );
+        assert_eq!(
+            versions.redox_drivers.tag,
+            "20ffe4d7f4a85b7cc1f59495d7e6e355fed4cb06"
+        );
+        assert_eq!(
+            versions.redox_drivers.remote,
+            "https://github.com/redox-os/drivers.git"
+        );
+        assert!(super::is_full_commit(&versions.redox_drivers.tag));
+        assert!(!super::is_full_commit(&versions.lionsos.tag));
 
         fs::remove_dir_all(&root).expect("remove temp");
     }

@@ -50,6 +50,25 @@ const ATA_SMART_READ: u8 = 0xd0;
 /// LBA mid `0x4F` and LBA high `0xC2`, the SMART signature.
 const SMART_LBA: u64 = 0x00c2_4f00;
 
+#[derive(Clone, Copy)]
+struct DmaCmd {
+    write: bool,
+    lba: u64,
+    sectors: u16,
+    command: u8,
+    features: u8,
+}
+
+fn ata(write: bool, lba: u64, sectors: u16, command: u8, features: u8) -> DmaCmd {
+    DmaCmd {
+        write,
+        lba,
+        sectors,
+        command,
+        features,
+    }
+}
+
 #[repr(C, packed)]
 struct HbaCmdHeader {
     flags: u32,
@@ -124,11 +143,7 @@ impl Engine {
             self.abar,
             self.dma_vaddr,
             self.dma_paddr,
-            false,
-            SMART_LBA,
-            1,
-            ATA_CMD_SMART,
-            ATA_SMART_READ,
+            ata(false, SMART_LBA, 1, ATA_CMD_SMART, ATA_SMART_READ),
         )?;
         // SAFETY: the bounce buffer is inside the mapped DMA window, and `out` holds 512 bytes.
         unsafe {
@@ -189,11 +204,7 @@ impl Engine {
                 self.abar,
                 self.dma_vaddr,
                 self.dma_paddr,
-                false,
-                lba,
-                sectors,
-                ATA_CMD_READ_DMA_EXT,
-                0,
+                ata(false, lba, sectors, ATA_CMD_READ_DMA_EXT, 0),
             )?;
             // SAFETY: bounce lies inside the mapped DMA window and `chunk` fits.
             unsafe {
@@ -216,11 +227,7 @@ impl Engine {
                 self.abar,
                 self.dma_vaddr,
                 self.dma_paddr,
-                true,
-                lba,
-                sectors,
-                ATA_CMD_WRITE_DMA_EXT,
-                0,
+                ata(true, lba, sectors, ATA_CMD_WRITE_DMA_EXT, 0),
             )?;
         }
         Ok(sectors)
@@ -473,7 +480,14 @@ fn identify_device(
     dma_vaddr: usize,
     dma_phys: u64,
 ) -> Result<(u64, AtaModel), OpenError> {
-    if run_dma(abar, dma_vaddr, dma_phys, false, 0, 1, ATA_CMD_IDENTIFY, 0).is_err() {
+    if run_dma(
+        abar,
+        dma_vaddr,
+        dma_phys,
+        ata(false, 0, 1, ATA_CMD_IDENTIFY, 0),
+    )
+    .is_err()
+    {
         return Err(OpenError);
     }
     let words = dma_vaddr + BOUNCE_OFF as usize;
@@ -504,23 +518,12 @@ fn identify_device(
     Ok((sectors, model))
 }
 
-fn run_dma(
-    abar: usize,
-    dma_vaddr: usize,
-    dma_phys: u64,
-    write: bool,
-    lba: u64,
-    sectors: u16,
-    command: u8,
-    features: u8,
-) -> Result<(), ()> {
+fn run_dma(abar: usize, dma_vaddr: usize, dma_phys: u64, cmd: DmaCmd) -> Result<(), ()> {
     if read_u32(abar, PX_CMD) & (1 << 15) == 0 && !start_port(abar) {
         return Err(());
     }
-    let byte_count = usize::from(sectors) * 512;
-    build_command(
-        dma_vaddr, dma_phys, write, lba, sectors, command, features, byte_count,
-    );
+    let byte_count = usize::from(cmd.sectors) * 512;
+    build_command(dma_vaddr, dma_phys, cmd, byte_count);
     write_u32(abar, PX_CI, 1);
     if !poll_pxci(abar) {
         stop_port(abar);
@@ -533,16 +536,7 @@ fn run_dma(
     Ok(())
 }
 
-fn build_command(
-    dma_vaddr: usize,
-    dma_phys: u64,
-    write: bool,
-    lba: u64,
-    sectors: u16,
-    command: u8,
-    features: u8,
-    byte_count: usize,
-) {
+fn build_command(dma_vaddr: usize, dma_phys: u64, cmd: DmaCmd, byte_count: usize) {
     let hdr_addr = dma_vaddr + CMD_LIST_OFF as usize;
     let tbl_addr = dma_vaddr + CMD_TBL_OFF as usize;
     let bounce_paddr = dma_phys + u64::from(BOUNCE_OFF);
@@ -554,7 +548,7 @@ fn build_command(
         ptr::write_bytes(hdr_addr as *mut u8, 0, 32);
         let hdr = hdr_addr as *mut HbaCmdHeader;
         let cfl = 5u32;
-        let w = u32::from(write);
+        let w = u32::from(cmd.write);
         let prdtl = 1u32;
         (*hdr).flags = cfl | (w << 6) | (prdtl << 16);
         (*hdr).ctba = u32::try_from(table_phys).expect("table paddr");
@@ -569,17 +563,17 @@ fn build_command(
         fis.write_volatile(FIS_REG_H2D);
         // Bit 7 tells the device this frame is a command, not a control update.
         fis.add(1).write_volatile(0x80);
-        fis.add(2).write_volatile(command);
-        fis.add(3).write_volatile(features);
-        fis.add(4).write_volatile((lba & 0xff) as u8);
-        fis.add(5).write_volatile(((lba >> 8) & 0xff) as u8);
-        fis.add(6).write_volatile(((lba >> 16) & 0xff) as u8);
+        fis.add(2).write_volatile(cmd.command);
+        fis.add(3).write_volatile(cmd.features);
+        fis.add(4).write_volatile((cmd.lba & 0xff) as u8);
+        fis.add(5).write_volatile(((cmd.lba >> 8) & 0xff) as u8);
+        fis.add(6).write_volatile(((cmd.lba >> 16) & 0xff) as u8);
         fis.add(7).write_volatile(0x40);
-        fis.add(8).write_volatile(((lba >> 24) & 0xff) as u8);
-        fis.add(9).write_volatile(((lba >> 32) & 0xff) as u8);
-        fis.add(10).write_volatile(((lba >> 40) & 0xff) as u8);
-        fis.add(12).write_volatile((sectors & 0xff) as u8);
-        fis.add(13).write_volatile((sectors >> 8) as u8);
+        fis.add(8).write_volatile(((cmd.lba >> 24) & 0xff) as u8);
+        fis.add(9).write_volatile(((cmd.lba >> 32) & 0xff) as u8);
+        fis.add(10).write_volatile(((cmd.lba >> 40) & 0xff) as u8);
+        fis.add(12).write_volatile((cmd.sectors & 0xff) as u8);
+        fis.add(13).write_volatile((cmd.sectors >> 8) as u8);
 
         let prdt = (tbl_addr + 0x80) as *mut HbaPrdtEntry;
         (*prdt).dba = u32::try_from(bounce_paddr).expect("bounce paddr");

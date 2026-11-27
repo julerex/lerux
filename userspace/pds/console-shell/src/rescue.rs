@@ -152,7 +152,7 @@ fn view() -> View<'static> {
 fn pci_lines() -> &'static [&'static [u8]] {
     #[cfg(feature = "board-swift_sfx14_41g")]
     {
-        return PCI;
+        PCI
     }
     #[cfg(not(feature = "board-swift_sfx14_41g"))]
     {
@@ -163,11 +163,11 @@ fn pci_lines() -> &'static [&'static [u8]] {
 fn arch_name() -> &'static [u8] {
     #[cfg(target_arch = "x86_64")]
     {
-        return b"x86_64";
+        b"x86_64"
     }
     #[cfg(target_arch = "aarch64")]
     {
-        return b"aarch64";
+        b"aarch64"
     }
     #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64")))]
     {

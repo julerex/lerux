@@ -1,6 +1,6 @@
 //! Milestone 14 command names. A missing device prints the name and `err`.
 
-use lerux_rescue::{ethtool_line, owns, step, Flags, Role, Step, View};
+use lerux_rescue::{owns, step, Flags, Role, Step, View};
 
 #[cfg(not(any(
     feature = "board-pc_z97_d3h_i217",
@@ -188,11 +188,11 @@ fn fill_roles(out: &mut [Role<'static>]) -> usize {
         feature = "board-x86_64_generic_fs_sddf"
     ))]
     {
-        return fill_schedule(out);
+        fill_schedule(out)
     }
     #[cfg(feature = "board-swift_sfx14_41g")]
     {
-        return copy_roles(SWIFT_ROLES, out);
+        copy_roles(SWIFT_ROLES, out)
     }
     #[cfg(not(any(
         feature = "board-qemu_virt_aarch64_fs_sddf",
@@ -248,15 +248,15 @@ fn role_of(entry: &'static lerux_sddf::sched_entry_t) -> Role<'static> {
 fn arch_name() -> &'static [u8] {
     #[cfg(target_arch = "aarch64")]
     {
-        return b"aarch64";
+        b"aarch64"
     }
     #[cfg(target_arch = "x86_64")]
     {
-        return b"x86_64";
+        b"x86_64"
     }
     #[cfg(target_arch = "riscv64")]
     {
-        return b"riscv64";
+        b"riscv64"
     }
     #[cfg(not(any(
         target_arch = "aarch64",
@@ -320,7 +320,7 @@ fn mounted_fat() -> bool {
         feature = "board-qemu_virt_riscv64_browser_sddf"
     ))]
     {
-        return false;
+        false
     }
     #[cfg(not(any(
         feature = "board-pc_z97_d3h_i217",
@@ -335,6 +335,17 @@ fn mounted_fat() -> bool {
     }
 }
 
+#[cfg_attr(
+    all(
+        feature = "net-client",
+        not(feature = "board-qemu_virt_aarch64_browser_sddf"),
+        not(feature = "board-qemu_virt_riscv64_browser_sddf")
+    ),
+    expect(
+        clippy::unnecessary_wraps,
+        reason = "a board without a network client returns None"
+    )
+)]
 fn mac_addr() -> Option<[u8; 6]> {
     #[cfg(all(
         feature = "net-client",
@@ -342,7 +353,7 @@ fn mac_addr() -> Option<[u8; 6]> {
         not(feature = "board-qemu_virt_riscv64_browser_sddf")
     ))]
     {
-        return Some(super::net::hardware_address());
+        Some(super::net::hardware_address())
     }
     #[cfg(not(all(
         feature = "net-client",
@@ -357,7 +368,7 @@ fn mac_addr() -> Option<[u8; 6]> {
 fn nvme_model() -> Option<&'static [u8]> {
     #[cfg(feature = "board-swift_sfx14_41g")]
     {
-        return disk_slot(512);
+        disk_slot(512)
     }
     #[cfg(not(feature = "board-swift_sfx14_41g"))]
     {
@@ -368,7 +379,7 @@ fn nvme_model() -> Option<&'static [u8]> {
 fn smart_bytes() -> Option<&'static [u8]> {
     #[cfg(feature = "board-swift_sfx14_41g")]
     {
-        return disk_slot(768);
+        disk_slot(768)
     }
     #[cfg(not(feature = "board-swift_sfx14_41g"))]
     {
@@ -427,7 +438,7 @@ fn show_link(mac: [u8; 6]) {
     {
         let up = super::net::local_address().is_ok();
         let mut line = [0u8; 40];
-        let n = ethtool_line(up, mac, &mut line);
+        let n = lerux_rescue::ethtool_line(up, mac, &mut line);
         if n == 0 {
             miss(b"ethtool");
         } else {

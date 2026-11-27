@@ -1835,7 +1835,11 @@ pub(crate) fn boot_ns() -> Option<u64> {
     ))]
     {
         let ns = BOOT_NS.load(Ordering::Relaxed);
-        return if ns == 0 { None } else { Some(ns) };
+        if ns == 0 {
+            None
+        } else {
+            Some(ns)
+        }
     }
     #[cfg(not(any(
         feature = "board-qemu_virt_aarch64_fs_sddf",

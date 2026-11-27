@@ -108,6 +108,7 @@ userspace/pds/sddf-shell/src/gpu.rs
 userspace/pds/sddf-shell/src/main.rs
 userspace/pds/sddf-shell/src/net.rs
 userspace/pds/sddf-shell/src/net_device.rs
+userspace/pds/sddf-shell/src/rescue.rs
 userspace/pds/sddf-timer-driver/src/main.rs
 userspace/pds/serial-driver/src/main.rs
 userspace/pds/serial-driver/src/ns16550.rs

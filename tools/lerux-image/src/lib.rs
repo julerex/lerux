@@ -502,6 +502,7 @@ mod tests {
             .expect("i217 image");
         assert_i217_driver_image(&xml);
         assert_i217_shell_channels(&xml);
+        assert_i217_ping_maps(&xml);
         assert_i217_board_entry();
     }
 
@@ -545,6 +546,15 @@ mod tests {
             3
         );
         assert!(xml.contains("<end pd=\"net_driver\" id=\"3\" pp=\"true\" />"));
+    }
+
+    fn assert_i217_ping_maps(xml: &str) {
+        assert!(xml.contains(
+            "<map mr=\"e1000e_regs\" vaddr=\"0xf7_e00_000\" perms=\"rw\" cached=\"false\" setvar_vaddr=\"e1000e_regs_vaddr\" />"
+        ));
+        assert!(xml.contains(
+            "<map mr=\"e1000e_dma\" vaddr=\"0x8_000_000_000\" perms=\"rw\" cached=\"true\" setvar_vaddr=\"e1000e_dma_vaddr\" />"
+        ));
     }
 
     fn assert_i217_driver_image(xml: &str) {

@@ -8,7 +8,13 @@ use core::{
     sync::atomic::{compiler_fence, fence, Ordering},
 };
 
-use lerux_machine::e1000e::{e1000e_map, i217_map, E1000eMap};
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+use lerux_logging::log;
+#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
+use lerux_machine::e1000e::STATUS_LU;
+use lerux_machine::e1000e::{e1000e_map, i217_map, E1000eMap, CTRL_SLU, RAH_AV};
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+use lerux_machine::e1000e::{PingDiag, CTRL_FRCDPX, CTRL_FRCSPD, PING_DIAG_MAGIC, PING_DIAG_OFF};
 #[cfg(not(feature = "board-pc_z97_d3h_i217"))]
 use lerux_machine::{
     e1000e::{ClaimedNic, UnclaimedNic, REGISTER_BAR, REGISTER_BAR_SIZE},
@@ -59,10 +65,7 @@ const MTA: u32 = 0x5200;
 const RAL0: u32 = 0x5400;
 const RAH0: u32 = 0x5404;
 
-const CTRL_SLU: u32 = 1 << 6;
 const CTRL_RST: u32 = 1 << 26;
-#[cfg(not(feature = "board-pc_z97_d3h_i217"))]
-const STATUS_LU: u32 = 1 << 1;
 #[cfg(feature = "board-pc_z97_d3h_i217")]
 const STATUS_LAN_INIT_DONE: u32 = 1 << 9;
 #[cfg(not(feature = "board-pc_z97_d3h_i217"))]
@@ -76,7 +79,6 @@ const TCTL_CT: u32 = 0x10 << 4;
 const TCTL_COLD: u32 = 0x3f << 12;
 const DCTL_ENABLE: u32 = 1 << 25;
 const RFCTL_EXTEN: u32 = 1 << 15;
-const RAH_AV: u32 = 1 << 31;
 const IMS_TXDW: u32 = 1 << 0;
 const IMS_LSC: u32 = 1 << 2;
 const IMS_RXO: u32 = 1 << 6;
@@ -201,6 +203,13 @@ const _: () = {
     assert!(size_of::<DmaLayout>() as u64 <= i217_map().dma_size);
 };
 
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+const _: () = {
+    assert!(PING_DIAG_OFF >= size_of::<DmaLayout>());
+    // Same bound as `i217_map().dma_size`. A usize compare stays const on every arch.
+    assert!(PING_DIAG_OFF + size_of::<PingDiag>() <= 0x200_000);
+};
+
 impl Engine {
     /// Claim the NIC for this image, program BAR0, reset, bring the link up,
     /// install `mac` into the receive address, and publish both rings.
@@ -211,6 +220,9 @@ impl Engine {
     ///
     /// Call once. A second call would reset the NIC under live rings.
     pub fn open(map: E1000eMap, mac: [u8; 6]) -> Result<Self, OpenError> {
+        // A stale magic from an earlier boot would look like a live trace.
+        #[cfg(feature = "board-pc_z97_d3h_i217")]
+        clear_diag(map.dma_vaddr);
         #[cfg(not(feature = "board-pc_z97_d3h_i217"))]
         prepare(&map)?;
         let regs = usize::try_from(map.regs_vaddr).expect("regs vaddr");
@@ -234,12 +246,15 @@ impl Engine {
         };
         engine.publish_rings()?;
         engine.enable_paths();
+        #[cfg(feature = "board-pc_z97_d3h_i217")]
+        engine.publish_diag();
         Ok(engine)
     }
 
     /// Read the cause register. Idempotent. Does not touch the sDDF queues.
     pub fn ack(&self) {
-        let _ = read_u32(self.regs, ICR);
+        let cause = read_u32(self.regs, ICR);
+        self.note_icr(cause);
     }
 
     /// Copy `frame` into a private transmit buffer and ring the NIC.
@@ -249,12 +264,15 @@ impl Engine {
     pub fn submit_tx(&mut self, frame: &[u8]) {
         self.reclaim_tx();
         let Ok(length) = u16::try_from(frame.len()) else {
+            self.note_drop_len();
             return;
         };
         if length == 0 || usize::from(length) > BUF_SIZE {
+            self.note_drop_len();
             return;
         }
         if next_index(self.tx_tail) == self.tx_clean {
+            self.note_drop_full();
             return;
         }
         let index = self.tx_tail;
@@ -280,6 +298,7 @@ impl Engine {
         prior_stores_visible();
         self.tx_tail = next_index(index);
         write_u32(self.regs, TDT, u32::from(self.tx_tail));
+        self.note_tx_submit(length);
     }
 
     /// Copy one completed Ethernet frame into `dst` and retire that buffer.
@@ -306,8 +325,10 @@ impl Engine {
                     );
                 }
                 self.retire_rx(index);
+                self.note_rx_ok(len, header.status, header.errors);
                 return Some(len);
             }
+            self.note_rx_drop(header.status, header.errors);
             self.retire_rx(index);
         }
     }
@@ -472,6 +493,148 @@ impl Engine {
             + u64::try_from(base_off).expect("buffer offset")
             + u64::from(index) * u64::try_from(BUF_SIZE).expect("buffer size")
     }
+
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    fn publish_diag(&self) {
+        let sta = read_u32(self.regs, STATUS);
+        let ctrl = read_u32(self.regs, CTRL);
+        let ral = read_u32(self.regs, RAL0);
+        let rah = read_u32(self.regs, RAH0);
+        let tdt = read_u32(self.regs, TDT);
+        let tdh = read_u32(self.regs, TDH);
+        let rdt = read_u32(self.regs, RDT);
+        let rdh = read_u32(self.regs, RDH);
+        let base = self.diag_words();
+        for index in 0..(size_of::<PingDiag>() / 4) {
+            // SAFETY: `PING_DIAG_OFF` is inside the mapped DMA window and 4-byte aligned.
+            unsafe { ptr::write_volatile(base.add(index), 0) };
+        }
+        self.diag_store(offset_of!(PingDiag, magic), PING_DIAG_MAGIC);
+        log::info!(
+            "ping open sta {sta:08x} ctrl {ctrl:08x} ral {ral:08x} rah {rah:08x} td {tdt:x}/{tdh:x} rd {rdt:x}/{rdh:x}"
+        );
+    }
+
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    fn note_tx_submit(&self, length: u16) {
+        self.diag_bump(offset_of!(PingDiag, submit));
+        self.diag_store(offset_of!(PingDiag, last_tx_len), u32::from(length));
+        log::info!("ping drv submit {length} tdt {}", self.tx_tail);
+    }
+
+    #[cfg(not(feature = "board-pc_z97_d3h_i217"))]
+    #[expect(
+        clippy::unused_self,
+        reason = "the I217 build records the transmit on this method"
+    )]
+    fn note_tx_submit(&self, _length: u16) {}
+
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    fn note_drop_len(&self) {
+        self.diag_bump(offset_of!(PingDiag, drop_len));
+        log::info!("ping drv drop len");
+    }
+
+    #[cfg(not(feature = "board-pc_z97_d3h_i217"))]
+    #[expect(
+        clippy::unused_self,
+        reason = "the I217 build records the drop on this method"
+    )]
+    fn note_drop_len(&self) {}
+
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    fn note_drop_full(&self) {
+        self.diag_bump(offset_of!(PingDiag, drop_full));
+        log::info!(
+            "ping drv drop full tdt {} tdh-clean {}",
+            self.tx_tail,
+            self.tx_clean
+        );
+    }
+
+    #[cfg(not(feature = "board-pc_z97_d3h_i217"))]
+    #[expect(
+        clippy::unused_self,
+        reason = "the I217 build records the full ring on this method"
+    )]
+    fn note_drop_full(&self) {}
+
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    fn note_rx_ok(&self, len: u16, status: u8, errors: u8) {
+        self.diag_bump(offset_of!(PingDiag, rx_ok));
+        self.diag_store(offset_of!(PingDiag, last_rx_len), u32::from(len));
+        self.diag_store(offset_of!(PingDiag, last_rx_status), u32::from(status));
+        self.diag_store(offset_of!(PingDiag, last_rx_errors), u32::from(errors));
+        log::info!("ping drv rx {len} sta {status:02x} err {errors:02x}");
+    }
+
+    #[cfg(not(feature = "board-pc_z97_d3h_i217"))]
+    #[expect(
+        clippy::unused_self,
+        reason = "the I217 build records the received frame on this method"
+    )]
+    fn note_rx_ok(&self, _len: u16, _status: u8, _errors: u8) {}
+
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    fn note_rx_drop(&self, status: u8, errors: u8) {
+        self.diag_bump(offset_of!(PingDiag, rx_drop));
+        self.diag_store(offset_of!(PingDiag, last_rx_status), u32::from(status));
+        self.diag_store(offset_of!(PingDiag, last_rx_errors), u32::from(errors));
+        log::info!("ping drv rx drop sta {status:02x} err {errors:02x}");
+    }
+
+    #[cfg(not(feature = "board-pc_z97_d3h_i217"))]
+    #[expect(
+        clippy::unused_self,
+        reason = "the I217 build records the rejected frame on this method"
+    )]
+    fn note_rx_drop(&self, _status: u8, _errors: u8) {}
+
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    fn note_icr(&self, cause: u32) {
+        if cause == 0 {
+            return;
+        }
+        self.diag_store(offset_of!(PingDiag, last_icr), cause);
+        log::info!("ping drv icr {cause:08x}");
+    }
+
+    #[cfg(not(feature = "board-pc_z97_d3h_i217"))]
+    #[expect(
+        clippy::unused_self,
+        reason = "the I217 build records the interrupt cause on this method"
+    )]
+    fn note_icr(&self, _cause: u32) {}
+
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    fn diag_words(&self) -> *mut u32 {
+        (self.dma_vaddr + PING_DIAG_OFF) as *mut u32
+    }
+
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    fn diag_store(&self, offset: usize, value: u32) {
+        // SAFETY: `offset` is a u32 field of `PingDiag`, inside the mapped DMA window.
+        unsafe { ptr::write_volatile(self.diag_words().byte_add(offset), value) };
+    }
+
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    fn diag_bump(&self, offset: usize) {
+        // SAFETY: same field as `diag_store`. The driver is the only writer.
+        unsafe {
+            let ptr = self.diag_words().byte_add(offset);
+            let next = ptr::read_volatile(ptr).wrapping_add(1);
+            ptr::write_volatile(ptr, next);
+        }
+    }
+}
+
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+fn clear_diag(dma_vaddr: u64) {
+    let base = usize::try_from(dma_vaddr).expect("dma vaddr") + PING_DIAG_OFF;
+    for index in 0..(size_of::<PingDiag>() / 4) {
+        // SAFETY: the protection domain maps the DMA window for its whole life.
+        unsafe { ptr::write_volatile((base as *mut u32).add(index), 0) };
+    }
 }
 
 fn next_index(index: u16) -> u16 {
@@ -530,13 +693,20 @@ fn bring_link(regs: usize) -> Result<(), OpenError> {
 
 /// Autonegotiation takes seconds, and no cable takes forever. The shell's
 /// sign-on waits behind this init, so the link arrives later as `IMS_LSC`.
+///
+/// `e1000_setup_copper_link_pch_lpt` in Linux `ich8lan.c` sets SLU and clears
+/// force-speed and force-duplex. The PHY setup after that write is not in
+/// this image. The ping trace prints `lu` so a later boot can see the link.
 #[cfg(feature = "board-pc_z97_d3h_i217")]
 #[expect(
     clippy::unnecessary_wraps,
     reason = "same signature as the 82574 link wait"
 )]
 fn bring_link(regs: usize) -> Result<(), OpenError> {
-    write_u32(regs, CTRL, read_u32(regs, CTRL) | CTRL_SLU);
+    let before = read_u32(regs, CTRL);
+    let ctrl = (before | CTRL_SLU) & !(CTRL_FRCSPD | CTRL_FRCDPX);
+    write_u32(regs, CTRL, ctrl);
+    log::info!("ping link ctrl {before:08x} -> {ctrl:08x}");
     Ok(())
 }
 

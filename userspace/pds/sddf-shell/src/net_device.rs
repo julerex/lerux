@@ -10,6 +10,8 @@
 //! virtualiser only after those bytes are in the shared buffer.
 
 use core::marker::PhantomData;
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+use core::sync::atomic::{AtomicU32, Ordering};
 
 use sel4_microkit::Channel;
 
@@ -29,6 +31,21 @@ const FRAME_SIZE: usize = {
     assert!(NET_BUFFER_SIZE == 2048);
     2048
 };
+
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+static TX_POSTED: AtomicU32 = AtomicU32::new(0);
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+static RX_POSTED: AtomicU32 = AtomicU32::new(0);
+
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+pub(crate) fn tx_posted() -> u32 {
+    TX_POSTED.load(Ordering::Relaxed)
+}
+
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+pub(crate) fn rx_posted() -> u32 {
+    RX_POSTED.load(Ordering::Relaxed)
+}
 
 pub(crate) struct NetDevice {
     rx: net_queue_handle_t,
@@ -142,6 +159,8 @@ impl TxToken for NetTxToken<'_> {
             unsafe { net_cancel_signal_active(&self.tx) };
             self.tx_ch.notify();
         }
+        #[cfg(feature = "board-pc_z97_d3h_i217")]
+        TX_POSTED.fetch_add(1, Ordering::Relaxed);
         result
     }
 }
@@ -194,6 +213,8 @@ impl Device for NetDevice {
             len: self.frame_len,
             _lifetime: PhantomData,
         };
+        #[cfg(feature = "board-pc_z97_d3h_i217")]
+        RX_POSTED.fetch_add(1, Ordering::Relaxed);
         Some((token, self.tx_token()))
     }
 

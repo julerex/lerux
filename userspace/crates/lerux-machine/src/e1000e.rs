@@ -84,6 +84,274 @@ pub const fn i217_map() -> E1000eMap {
     }
 }
 
+/// `E1000_CTRL_SLU` in `drivers/net/ethernet/intel/e1000e/defines.h`.
+pub const CTRL_SLU: u32 = 1 << 6;
+/// `E1000_CTRL_FRCSPD`.
+pub const CTRL_FRCSPD: u32 = 1 << 11;
+/// `E1000_CTRL_FRCDPX`.
+pub const CTRL_FRCDPX: u32 = 1 << 12;
+/// `E1000_STATUS_LU`.
+pub const STATUS_LU: u32 = 1 << 1;
+/// Receive-address valid bit in RAH.
+pub const RAH_AV: u32 = 1 << 31;
+
+pub const REG_CTRL: u32 = 0x0000;
+pub const REG_STATUS: u32 = 0x0008;
+pub const REG_RDH: u32 = 0x2810;
+pub const REG_RDT: u32 = 0x2818;
+pub const REG_TDH: u32 = 0x3810;
+pub const REG_TDT: u32 = 0x3818;
+pub const REG_RAL0: u32 = 0x5400;
+pub const REG_RAH0: u32 = 0x5404;
+
+/// Byte offset of [`PingDiag`] in the I217 DMA window, past the descriptor rings.
+pub const PING_DIAG_OFF: usize = 0x10_0000;
+/// `LXD1`. Zero means the driver did not finish `open`.
+pub const PING_DIAG_MAGIC: u32 = 0x4c58_4431;
+/// One console row is 80 columns. A trace line stays on one row.
+pub const PING_LINE_MAX: usize = 79;
+
+/// How to read a `ping` trace row. Printed again above a failing result.
+pub const PING_READ: &[u8] = b"ping read tx>sub queue-drop sub>tdh nic-held lu=0 no-link";
+/// `lu` is STATUS bit 1. `slu` is CTRL.SLU. `frc` is force-speed or force-duplex.
+pub const PING_LEGEND_BITS: &[u8] =
+    b"ping legend lu=link slu=set-link-up frc=forced-speed-or-duplex";
+/// `td` is TDT/TDH. `rd` is RDT/RDH. `sub` rang the NIC. `dl`/`df` are driver drops.
+pub const PING_LEGEND_Q: &[u8] =
+    b"ping legend td=TDT/TDH rd=RDT/RDH sub=nic-tx dl=oversize df=ring-full";
+
+/// Driver counters at [`PING_DIAG_OFF`]. The shell reads them while `ping` waits.
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct PingDiag {
+    pub magic: u32,
+    pub submit: u32,
+    pub drop_len: u32,
+    pub drop_full: u32,
+    pub rx_ok: u32,
+    pub rx_drop: u32,
+    pub last_icr: u32,
+    pub last_tx_len: u32,
+    pub last_rx_len: u32,
+    pub last_rx_status: u32,
+    pub last_rx_errors: u32,
+}
+
+const _: () = {
+    assert!(core::mem::size_of::<PingDiag>().is_multiple_of(4));
+    assert!(PING_DIAG_OFF + core::mem::size_of::<PingDiag>() <= 0x200_000);
+    assert!(PING_READ.len() <= PING_LINE_MAX);
+    assert!(PING_LEGEND_BITS.len() <= PING_LINE_MAX);
+    assert!(PING_LEGEND_Q.len() <= PING_LINE_MAX);
+};
+
+/// One `ping` sample. `td` is transmit tail/head. `rd` is receive tail/head.
+#[derive(Clone, Copy)]
+pub struct PingPath {
+    pub tag: &'static [u8],
+    pub ms: u32,
+    pub tx: u32,
+    pub rx: u32,
+    pub tdt: u32,
+    pub tdh: u32,
+    pub rdt: u32,
+    pub rdh: u32,
+    pub status: u32,
+    pub ctrl: u32,
+}
+
+/// Register and driver-counter row. `diag_live` is false when the magic is absent.
+#[derive(Clone, Copy)]
+pub struct PingRegs {
+    pub status: u32,
+    pub ctrl: u32,
+    pub submit: u32,
+    pub drop_len: u32,
+    pub drop_full: u32,
+    pub icr: u32,
+    pub diag_live: bool,
+}
+
+/// Last frame the driver copied or rejected. `diag_live` false prints `diag0`.
+#[derive(Clone, Copy)]
+pub struct PingFrame {
+    pub tx_len: u32,
+    pub rx_len: u32,
+    pub rx_ok: u32,
+    pub rx_drop: u32,
+    pub rx_status: u32,
+    pub rx_errors: u32,
+    pub diag_live: bool,
+}
+
+/// Write one path row. Counts above 9999 print as 9999 so the row stays on one line.
+pub fn format_ping_path(path: &PingPath, out: &mut [u8]) -> usize {
+    let mut line = Line { buf: out, n: 0 };
+    line.bytes(b"ping ");
+    line.bytes(path.tag);
+    line.bytes(b" ");
+    line.u32(cap(path.ms, 99_999));
+    line.bytes(b" tx");
+    line.u32(cap(path.tx, 9_999));
+    line.bytes(b" rx");
+    line.u32(cap(path.rx, 9_999));
+    line.bytes(b" td ");
+    line.hex_trim(path.tdt);
+    line.bytes(b"/");
+    line.hex_trim(path.tdh);
+    line.bytes(b" rd ");
+    line.hex_trim(path.rdt);
+    line.bytes(b"/");
+    line.hex_trim(path.rdh);
+    line.bytes(b" lu");
+    line.u32(u32::from(path.status & STATUS_LU != 0));
+    line.bytes(b" slu");
+    line.u32(u32::from(path.ctrl & CTRL_SLU != 0));
+    line.bytes(b" frc");
+    line.u32(u32::from(path.ctrl & (CTRL_FRCSPD | CTRL_FRCDPX) != 0));
+    line.n
+}
+
+/// Write the register row. `diag0` means the driver did not publish [`PingDiag`].
+pub fn format_ping_regs(regs: &PingRegs, out: &mut [u8]) -> usize {
+    let mut line = Line { buf: out, n: 0 };
+    line.bytes(b"ping regs sta ");
+    line.hex_width(regs.status, 8);
+    line.bytes(b" ctrl ");
+    line.hex_width(regs.ctrl, 8);
+    if regs.diag_live {
+        line.bytes(b" sub");
+        line.u32(cap(regs.submit, 9_999));
+        line.bytes(b" dl");
+        line.u32(cap(regs.drop_len, 9_999));
+        line.bytes(b" df");
+        line.u32(cap(regs.drop_full, 9_999));
+        line.bytes(b" icr ");
+        line.hex_width(regs.icr, 8);
+    } else {
+        line.bytes(b" diag0");
+    }
+    line.n
+}
+
+/// Write the last-frame row.
+pub fn format_ping_frame(frame: &PingFrame, out: &mut [u8]) -> usize {
+    let mut line = Line { buf: out, n: 0 };
+    if !frame.diag_live {
+        line.bytes(b"ping frame diag0");
+        return line.n;
+    }
+    line.bytes(b"ping frame txlen ");
+    line.u32(cap(frame.tx_len, 9_999));
+    line.bytes(b" rxlen ");
+    line.u32(cap(frame.rx_len, 9_999));
+    line.bytes(b" rxok ");
+    line.u32(cap(frame.rx_ok, 9_999));
+    line.bytes(b" rxdrop ");
+    line.u32(cap(frame.rx_drop, 9_999));
+    line.bytes(b" sta ");
+    line.hex_width(frame.rx_status, 2);
+    line.bytes(b" err ");
+    line.hex_width(frame.rx_errors, 2);
+    line.n
+}
+
+/// `mac` is the address the stack sends. `ral`/`rah` are the receive-address registers.
+pub fn format_ping_mac(mac: [u8; 6], ral: u32, rah: u32, out: &mut [u8]) -> usize {
+    let mut line = Line { buf: out, n: 0 };
+    line.bytes(b"ping mac ");
+    line.mac(mac);
+    line.bytes(b" ral ");
+    line.mac(station(ral, rah));
+    line.bytes(b" av ");
+    line.u32(u32::from(rah & RAH_AV != 0));
+    line.n
+}
+
+fn station(ral: u32, rah: u32) -> [u8; 6] {
+    let low = ral.to_le_bytes();
+    let high = rah.to_le_bytes();
+    [low[0], low[1], low[2], low[3], high[0], high[1]]
+}
+
+fn cap(value: u32, max: u32) -> u32 {
+    if value > max {
+        max
+    } else {
+        value
+    }
+}
+
+struct Line<'a> {
+    buf: &'a mut [u8],
+    n: usize,
+}
+
+impl Line<'_> {
+    fn bytes(&mut self, data: &[u8]) {
+        for &byte in data {
+            if self.n >= self.buf.len() {
+                return;
+            }
+            self.buf[self.n] = byte;
+            self.n += 1;
+        }
+    }
+
+    fn u32(&mut self, mut value: u32) {
+        let mut tmp = [0u8; 10];
+        let mut index = tmp.len();
+        loop {
+            index -= 1;
+            let digit = u8::try_from(value % 10).expect("decimal digit");
+            tmp[index] = b'0' + digit;
+            value /= 10;
+            if value == 0 {
+                break;
+            }
+        }
+        self.bytes(&tmp[index..]);
+    }
+
+    fn hex_trim(&mut self, mut value: u32) {
+        let mut tmp = [0u8; 8];
+        let mut index = tmp.len();
+        loop {
+            index -= 1;
+            tmp[index] = hex_digit(value & 0xf);
+            value >>= 4;
+            if value == 0 {
+                break;
+            }
+        }
+        self.bytes(&tmp[index..]);
+    }
+
+    fn hex_width(&mut self, mut value: u32, width: usize) {
+        let mut tmp = [0u8; 8];
+        for slot in (0..width).rev() {
+            tmp[slot] = hex_digit(value & 0xf);
+            value >>= 4;
+        }
+        self.bytes(&tmp[..width]);
+    }
+
+    fn mac(&mut self, mac: [u8; 6]) {
+        for byte in mac {
+            self.hex_width(u32::from(byte), 2);
+        }
+    }
+}
+
+fn hex_digit(nibble: u32) -> u8 {
+    let nibble = u8::try_from(nibble & 0xf).expect("hex digit");
+    if nibble < 10 {
+        b'0' + nibble
+    } else {
+        b'a' + (nibble - 10)
+    }
+}
+
 /// Identity not yet matched. [`UnclaimedNic::compiled`] is the QEMU BDF `00:04.0`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct UnclaimedNic(PciAddress);
@@ -399,5 +667,126 @@ mod tests {
             assert!(hit.is_none(), "{name} contains {hit:?}");
         }
         assert_eq!(foreign_inside(0xfed2_0000, 0x2_0000), Some("X86_NET_BAR1"));
+    }
+
+    #[test]
+    fn ping_trace_rows_name_the_link_and_the_rings() {
+        assert_eq!(CTRL_SLU, 0x40);
+        assert_eq!(CTRL_FRCSPD, 0x800);
+        assert_eq!(CTRL_FRCDPX, 0x1000);
+        assert_eq!(STATUS_LU, 2);
+        let mut buf = [0u8; 96];
+        let n = format_ping_path(
+            &PingPath {
+                tag: b"wait",
+                ms: 4000,
+                tx: 1,
+                rx: 0,
+                tdt: 1,
+                tdh: 0,
+                rdt: 0x1f,
+                rdh: 0,
+                status: 0x8008_0083,
+                ctrl: CTRL_SLU,
+            },
+            &mut buf,
+        );
+        assert_eq!(
+            &buf[..n],
+            b"ping wait 4000 tx1 rx0 td 1/0 rd 1f/0 lu1 slu1 frc0"
+        );
+        assert!(n <= PING_LINE_MAX);
+        let n = format_ping_path(
+            &PingPath {
+                tag: b"timeout",
+                ms: 99_999,
+                tx: 9_999,
+                rx: 9_999,
+                tdt: 0xffff,
+                tdh: 0xffff,
+                rdt: 0xffff,
+                rdh: 0xffff,
+                status: 0xffff_ffff,
+                ctrl: CTRL_SLU | CTRL_FRCSPD | CTRL_FRCDPX,
+            },
+            &mut buf,
+        );
+        assert!(n <= PING_LINE_MAX);
+    }
+
+    #[test]
+    fn ping_trace_rows_name_the_driver_counters() {
+        let mut buf = [0u8; 96];
+        let regs = PingRegs {
+            status: 0x8008_0083,
+            ctrl: CTRL_SLU,
+            submit: 1,
+            drop_len: 0,
+            drop_full: 0,
+            icr: 0,
+            diag_live: true,
+        };
+        let n = format_ping_regs(&regs, &mut buf);
+        assert_eq!(
+            &buf[..n],
+            b"ping regs sta 80080083 ctrl 00000040 sub1 dl0 df0 icr 00000000"
+        );
+        assert!(n <= PING_LINE_MAX);
+        let n = format_ping_regs(
+            &PingRegs {
+                diag_live: false,
+                ..regs
+            },
+            &mut buf,
+        );
+        assert_eq!(&buf[..n], b"ping regs sta 80080083 ctrl 00000040 diag0");
+    }
+
+    #[test]
+    fn ping_trace_frame_row_names_the_last_copy() {
+        let mut buf = [0u8; 96];
+        let n = format_ping_frame(
+            &PingFrame {
+                tx_len: 342,
+                rx_len: 0,
+                rx_ok: 0,
+                rx_drop: 0,
+                rx_status: 0,
+                rx_errors: 0,
+                diag_live: true,
+            },
+            &mut buf,
+        );
+        assert_eq!(
+            &buf[..n],
+            b"ping frame txlen 342 rxlen 0 rxok 0 rxdrop 0 sta 00 err 00"
+        );
+        assert!(n <= PING_LINE_MAX);
+        let n = format_ping_frame(
+            &PingFrame {
+                tx_len: 0,
+                rx_len: 0,
+                rx_ok: 0,
+                rx_drop: 0,
+                rx_status: 0,
+                rx_errors: 0,
+                diag_live: false,
+            },
+            &mut buf,
+        );
+        assert_eq!(&buf[..n], b"ping frame diag0");
+    }
+
+    #[test]
+    fn ping_trace_mac_is_the_wire_order() {
+        let mut buf = [0u8; 96];
+        let n = format_ping_mac(
+            [0x52, 0x54, 0x00, 0x12, 0x34, 0x56],
+            0xc814_aafc,
+            RAH_AV | 0x9e00,
+            &mut buf,
+        );
+        assert_eq!(&buf[..n], b"ping mac 525400123456 ral fcaa14c8009e av 1");
+        assert!(n <= PING_LINE_MAX);
     }
 }

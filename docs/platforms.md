@@ -47,7 +47,7 @@ QEMU machine `q35` with OVMF and the GRUB ISO (same path as metal UEFI). The vir
 
 ### Z97 desk devices
 
-The Gigabyte GA-Z97-D3H. Firmware scanout uses the HD Graphics 4600 when Initial Display Output is `IGFX`. The RX 560 stays unused. The onboard Ethernet port is the I217-V. The RTL8852BE is a wireless card that no image drives. The one Z97 image is `pc_z97_d3h_i217`.
+The Gigabyte GA-Z97-D3H. Firmware scanout uses the HD Graphics 4600 when Initial Display Output is `IGFX`. The RX 560 stays unused. The onboard Ethernet port is the I217-V. The RTL8852BE is a wireless card that no image drives. The one Z97 image is `pc_z97_d3h_i217`. The device inventory from the 2026-11-27 Linux boot of this machine is [z97-d3h-hardware.md](z97-d3h-hardware.md).
 
 | Category | Device | lerux driver | In the tree |
 |----------|--------|--------------|-------------|

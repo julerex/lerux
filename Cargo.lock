@@ -417,6 +417,7 @@ dependencies = [
  "lerux-calc",
  "lerux-desk",
  "lerux-ladybird-image",
+ "lerux-rescue",
  "lerux-signon",
  "lerux-swift",
  "sel4-microkit",
@@ -1299,6 +1300,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "lerux-rescue"
+version = "0.1.0"
+
+[[package]]
 name = "lerux-ring"
 version = "0.1.0"
 dependencies = [
@@ -2088,6 +2093,7 @@ dependencies = [
  "lerux-image",
  "lerux-logging",
  "lerux-machine",
+ "lerux-rescue",
  "lerux-sddf",
  "sel4",
  "sel4-microkit",
@@ -2350,6 +2356,7 @@ dependencies = [
  "lerux-iwctl",
  "lerux-machine",
  "lerux-posix",
+ "lerux-rescue",
  "lerux-sddf",
  "lerux-signon",
  "lerux-swift",
@@ -3041,6 +3048,7 @@ name = "swift-nvme"
 version = "0.1.0"
 dependencies = [
  "lerux-desk",
+ "lerux-rescue",
  "lerux-sddf",
  "lerux-swift",
  "sel4",

@@ -319,9 +319,11 @@ impl StubBootImage {
 /// default console is EGA text, EFI prints `WARNING: no console will be
 /// available to OS`, and the info block has no framebuffer for the mode
 /// line. Timeout is hidden and zero so QEMU smokes do not sit on a menu.
-/// The board name is not in the menu: one entry, same bytes on every board.
-/// The stub forwards its command line to seL4. Microkit maps no device into
-/// an IOMMU domain, so with VT-d on (the Z97) xHCI and e1000e DMA is blocked.
+/// The first entry is the same on every board. The second entry is `memtest`.
+/// It loads only the stub, which writes a pattern and does not start seL4.
+/// A Multiboot handoff cannot return to this menu. The stub forwards its
+/// command line to seL4. Microkit maps no device into an IOMMU domain, so
+/// with VT-d on (the Z97) xHCI and e1000e DMA is blocked.
 fn grub_cfg() -> String {
     format!(
         "\
@@ -332,6 +334,9 @@ menuentry \"lerux\" {{
     multiboot2 {stub} disable_iommu
     module2 {kernel}
     module2 {loader}
+}}
+menuentry \"memtest\" {{
+    multiboot2 {stub} memtest
 }}
 ",
         stub = STUB_PATH.grub(),
@@ -407,6 +412,9 @@ mod tests {
         assert!(cfg.contains("set timeout_style=hidden\n"), "{cfg}");
         assert!(cfg.contains("set gfxpayload=keep\n"), "{cfg}");
         assert!(cfg.contains("menuentry \"lerux\" {\n"), "{cfg}");
+        let memtest = cfg.split("menuentry \"memtest\"").nth(1).expect("memtest");
+        assert!(memtest.contains("memtest\n"), "{memtest}");
+        assert!(!memtest.contains("module2"), "{memtest}");
         assert_eq!(EMBEDDED_NORMAL, "normal\n");
         assert!(!EMBEDDED_NORMAL.contains("multiboot"));
     }

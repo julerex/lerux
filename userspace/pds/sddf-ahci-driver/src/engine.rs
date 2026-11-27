@@ -45,6 +45,10 @@ const FIS_REG_H2D: u8 = 0x27;
 const ATA_CMD_IDENTIFY: u8 = 0xec;
 const ATA_CMD_READ_DMA_EXT: u8 = 0x25;
 const ATA_CMD_WRITE_DMA_EXT: u8 = 0x35;
+const ATA_CMD_SMART: u8 = 0xb0;
+const ATA_SMART_READ: u8 = 0xd0;
+/// LBA mid `0x4F` and LBA high `0xC2`, the SMART signature.
+const SMART_LBA: u64 = 0x00c2_4f00;
 
 #[repr(C, packed)]
 struct HbaCmdHeader {
@@ -111,6 +115,32 @@ impl Engine {
         self.model.as_str()
     }
 
+    /// Read one SMART data page. A failure stops the port and does not change identify.
+    pub fn read_smart(&mut self, out: &mut [u8]) -> Result<(), ()> {
+        if out.len() < 512 {
+            return Err(());
+        }
+        run_dma(
+            self.abar,
+            self.dma_vaddr,
+            self.dma_paddr,
+            false,
+            SMART_LBA,
+            1,
+            ATA_CMD_SMART,
+            ATA_SMART_READ,
+        )?;
+        // SAFETY: the bounce buffer is inside the mapped DMA window, and `out` holds 512 bytes.
+        unsafe {
+            ptr::copy_nonoverlapping(
+                (self.dma_vaddr + BOUNCE_OFF as usize) as *const u8,
+                out.as_mut_ptr(),
+                512,
+            );
+        }
+        Ok(())
+    }
+
     pub fn ack(&self) {
         let port_is = read_u32(self.abar, PX_IS);
         write_u32(self.abar, PX_IS, port_is);
@@ -163,6 +193,7 @@ impl Engine {
                 lba,
                 sectors,
                 ATA_CMD_READ_DMA_EXT,
+                0,
             )?;
             // SAFETY: bounce lies inside the mapped DMA window and `chunk` fits.
             unsafe {
@@ -189,6 +220,7 @@ impl Engine {
                 lba,
                 sectors,
                 ATA_CMD_WRITE_DMA_EXT,
+                0,
             )?;
         }
         Ok(sectors)
@@ -441,7 +473,7 @@ fn identify_device(
     dma_vaddr: usize,
     dma_phys: u64,
 ) -> Result<(u64, AtaModel), OpenError> {
-    if run_dma(abar, dma_vaddr, dma_phys, false, 0, 1, ATA_CMD_IDENTIFY).is_err() {
+    if run_dma(abar, dma_vaddr, dma_phys, false, 0, 1, ATA_CMD_IDENTIFY, 0).is_err() {
         return Err(OpenError);
     }
     let words = dma_vaddr + BOUNCE_OFF as usize;
@@ -480,13 +512,14 @@ fn run_dma(
     lba: u64,
     sectors: u16,
     command: u8,
+    features: u8,
 ) -> Result<(), ()> {
     if read_u32(abar, PX_CMD) & (1 << 15) == 0 && !start_port(abar) {
         return Err(());
     }
     let byte_count = usize::from(sectors) * 512;
     build_command(
-        dma_vaddr, dma_phys, write, lba, sectors, command, byte_count,
+        dma_vaddr, dma_phys, write, lba, sectors, command, features, byte_count,
     );
     write_u32(abar, PX_CI, 1);
     if !poll_pxci(abar) {
@@ -507,6 +540,7 @@ fn build_command(
     lba: u64,
     sectors: u16,
     command: u8,
+    features: u8,
     byte_count: usize,
 ) {
     let hdr_addr = dma_vaddr + CMD_LIST_OFF as usize;
@@ -536,6 +570,7 @@ fn build_command(
         // Bit 7 tells the device this frame is a command, not a control update.
         fis.add(1).write_volatile(0x80);
         fis.add(2).write_volatile(command);
+        fis.add(3).write_volatile(features);
         fis.add(4).write_volatile((lba & 0xff) as u8);
         fis.add(5).write_volatile(((lba >> 8) & 0xff) as u8);
         fis.add(6).write_volatile(((lba >> 16) & 0xff) as u8);

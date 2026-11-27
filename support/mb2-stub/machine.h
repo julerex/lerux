@@ -49,3 +49,7 @@ unsigned host_phys_bits(void);
  * address it. A 36-bit machine does not get the Swift panel or the MT7921
  * window. Returns the new count, or 0 when the list cannot grow. */
 size_t reserve_missing_windows(mem_span *spans, size_t count, size_t cap, unsigned phys_bits);
+
+/* Write 0xA5 and then 0x5A. Returns 1 when both patterns read back.
+   A null or empty window returns 0. */
+int memtest_window(uint8_t *window, size_t len);

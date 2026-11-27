@@ -53,6 +53,7 @@ fn init() -> HandlerImpl {
         );
     }
     log_identity(&engine);
+    log_disk_tools(&mut engine);
     log::info!("{READY_LINE}");
     HandlerImpl {
         engine,
@@ -61,6 +62,38 @@ fn init() -> HandlerImpl {
         virt: Channel::new(usize::from(config.virt.id)),
         capacity_blocks,
     }
+}
+
+fn log_disk_tools(engine: &mut engine::Engine) {
+    log_model("hdparm", engine.model());
+    log_model("sdparm", engine.model());
+    log_smart(engine);
+}
+
+fn log_model(cmd: &str, model: &str) {
+    if model.is_empty() {
+        log::info!("{cmd} err");
+        return;
+    }
+    log::info!("{cmd} {model}");
+}
+
+fn log_smart(engine: &mut engine::Engine) {
+    let mut page = [0u8; 512];
+    if engine.read_smart(&mut page).is_err() {
+        log::info!("smartctl err");
+        return;
+    }
+    let mut line = [0u8; 32];
+    let Some(n) = lerux_rescue::ata_smart_line(&page, &mut line) else {
+        log::info!("smartctl err");
+        return;
+    };
+    let Ok(text) = core::str::from_utf8(&line[..n]) else {
+        log::info!("smartctl err");
+        return;
+    };
+    log::info!("{text}");
 }
 
 fn log_identity(engine: &engine::Engine) {

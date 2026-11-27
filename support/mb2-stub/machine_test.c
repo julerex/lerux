@@ -148,13 +148,28 @@ static int test_phys_limit(void) {
     return 0;
 }
 
+static int test_memtest(void) {
+    uint8_t buf[32];
+    if (memtest_window(0, 32) != 0) {
+        return fail("null window");
+    }
+    if (memtest_window(buf, 0) != 0) {
+        return fail("empty window");
+    }
+    if (memtest_window(buf, sizeof(buf)) != 1) {
+        return fail("pattern");
+    }
+    return 0;
+}
+
 int main(void) {
-    if (test_kind() || test_carve() || test_windows() || test_phys_limit()) {
+    if (test_kind() || test_carve() || test_windows() || test_phys_limit() || test_memtest()) {
         return 1;
     }
     printf("kind-swift %u\n", (unsigned)console_kind_for_framebuffer(SWIFT_FB_PHYS));
     printf("kind-ovmf %u\n", (unsigned)console_kind_for_framebuffer(0x80000000ull));
     printf("kind-none %u\n", (unsigned)console_kind_for_framebuffer(0));
     printf("carve-ok\n");
+    printf("memtest-ok\n");
     return 0;
 }

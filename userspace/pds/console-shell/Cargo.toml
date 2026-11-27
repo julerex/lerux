@@ -16,6 +16,7 @@ board-swift_sfx14_41g = ["dep:lerux-swift", "dep:lerux-desk", "dep:lerux-ladybir
 [dependencies]
 embedded-hal-nb = { workspace = true }
 lerux-calc = { path = "../../crates/lerux-calc" }
+lerux-rescue = { path = "../../crates/lerux-rescue" }
 lerux-signon = { path = "../../crates/lerux-signon" }
 lerux-desk = { path = "../../crates/lerux-desk", optional = true }
 lerux-ladybird-image = { path = "../../../lerux-ladybird/crates/lerux-ladybird-image", optional = true }

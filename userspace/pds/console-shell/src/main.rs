@@ -32,6 +32,8 @@ use lerux_swift::{
     write_survey, SCAN_MAX,
 };
 
+mod rescue;
+
 const CONSOLE: Channel = Channel::new(0);
 #[cfg(not(any(feature = "board-swift_sfx14_41g", feature = "board-inspiron_n5010")))]
 const SERIAL: Channel = Channel::new(1);
@@ -244,7 +246,11 @@ impl HandlerImpl {
                 self.show_networks();
                 self.emit(b"ssid> ");
             }
-            _ => self.reject(),
+            _ => {
+                if !rescue::offer(self, line) {
+                    self.reject();
+                }
+            }
         }
     }
 

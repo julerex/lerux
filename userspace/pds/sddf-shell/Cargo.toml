@@ -38,6 +38,7 @@ lerux-calc = { path = "../../crates/lerux-calc" }
 lerux-machine = { path = "../../crates/lerux-machine", optional = true }
 lerux-cothread = { path = "../../crates/lerux-cothread" }
 lerux-posix = { path = "../../crates/lerux-posix" }
+lerux-rescue = { path = "../../crates/lerux-rescue" }
 lerux-sddf = { path = "../../crates/lerux-sddf" }
 lerux-signon = { path = "../../crates/lerux-signon", optional = true }
 lerux-swift = { path = "../../crates/lerux-swift", optional = true }

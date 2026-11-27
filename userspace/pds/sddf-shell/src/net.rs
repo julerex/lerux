@@ -11,6 +11,8 @@ use core::{cell::UnsafeCell, mem::MaybeUninit};
 
 use alloc::boxed::Box;
 
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+use sel4_microkit::memory_region_symbol;
 use sel4_microkit::{Channel, ChannelSet};
 
 #[cfg(feature = "browser-net")]
@@ -38,6 +40,13 @@ use smoltcp::{
 };
 
 use lerux_cothread::microkit_cothread_recv_ntfn;
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+use lerux_machine::e1000e::{
+    format_ping_frame, format_ping_mac, format_ping_path, format_ping_regs, PingDiag, PingFrame,
+    PingPath, PingRegs, PING_DIAG_MAGIC, PING_DIAG_OFF, PING_LEGEND_BITS, PING_LEGEND_Q,
+    PING_LINE_MAX, PING_READ, REG_CTRL, REG_RAH0, REG_RAL0, REG_RDH, REG_RDT, REG_STATUS, REG_TDH,
+    REG_TDT, STATUS_LU,
+};
 #[cfg(not(feature = "board-pc_z97_d3h_i217"))]
 use lerux_posix::SockFd;
 use lerux_posix::{Errno, Sockets, Tcp};
@@ -422,18 +431,27 @@ impl Stack {
 
     fn bring_up(&mut self) -> bool {
         let start = self.ms;
+        self.trace_begin();
         loop {
             #[cfg(feature = "board-swift_sfx14_41g")]
             crate::kick_radio();
             self.poll_iface();
             match self.take_dhcp() {
-                Ok(true) => return true,
+                Ok(true) => {
+                    self.trace_mark(start, b"lease");
+                    return true;
+                }
                 Ok(false) => {}
-                Err(()) => return false,
+                Err(()) => {
+                    self.trace_mark(start, b"bad");
+                    return false;
+                }
             }
             if self.ms.saturating_sub(start) >= LIMIT_MS {
+                self.trace_mark(start, b"timeout");
                 return false;
             }
+            self.trace_sample(start, b"wait");
             self.advance();
         }
     }
@@ -497,6 +515,8 @@ impl Stack {
     #[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h_i217"))]
     fn echo_gateway(&mut self) -> bool {
         let start = self.ms;
+        self.trace_mark(start, b"echo");
+        self.trace_continue();
         let gateway = self.gateway;
         let mut last_send = None;
         let mut seq_no = 0u16;
@@ -522,12 +542,129 @@ impl Stack {
                 }
             };
             if replied {
+                self.trace_mark(start, b"reply");
                 return true;
             }
             if now.saturating_sub(start) >= LIMIT_MS {
+                self.trace_mark(start, b"norep");
                 return false;
             }
+            self.trace_sample(start, b"echo");
             self.advance();
+        }
+    }
+
+    // `self.ms` stays used on boards that do not print this trace.
+    fn trace_begin(&mut self) {
+        let _ = self.ms;
+        #[cfg(feature = "board-pc_z97_d3h_i217")]
+        {
+            let gate = gate();
+            *gate = TraceGate::new(self.ms);
+            say_trace(PING_LEGEND_BITS);
+            say_trace(PING_LEGEND_Q);
+            self.trace_mark(self.ms, b"start");
+        }
+    }
+
+    #[cfg(any(feature = "board-swift_sfx14_41g", feature = "board-pc_z97_d3h_i217"))]
+    fn trace_continue(&mut self) {
+        let _ = self.ms;
+        #[cfg(feature = "board-pc_z97_d3h_i217")]
+        {
+            gate().samples = 0;
+        }
+    }
+
+    fn trace_mark(&mut self, start: u64, tag: &'static [u8]) {
+        let _ = self.ms;
+        #[cfg(feature = "board-pc_z97_d3h_i217")]
+        {
+            if tag == b"start" || tag == b"timeout" || tag == b"bad" || tag == b"norep" {
+                self.trace_mac();
+            }
+            say_trace(PING_READ);
+            self.trace_emit(start, tag);
+        }
+        #[cfg(not(feature = "board-pc_z97_d3h_i217"))]
+        {
+            let _ = (start, tag);
+        }
+    }
+
+    fn trace_sample(&mut self, start: u64, tag: &'static [u8]) {
+        let _ = self.ms;
+        #[cfg(feature = "board-pc_z97_d3h_i217")]
+        {
+            if gate().samples >= 8 {
+                return;
+            }
+            let snap = self.trace_snap(start);
+            let due = {
+                let gate = gate();
+                let elapsed = self.ms.saturating_sub(gate.last_ms);
+                let changed = snap.tx != gate.last_tx
+                    || snap.rx != gate.last_rx
+                    || snap.tdt != gate.last_tdt
+                    || snap.tdh != gate.last_tdh
+                    || snap.rdh != gate.last_rdh
+                    || snap.lu != gate.last_lu;
+                elapsed >= 4_000 || changed
+            };
+            if !due {
+                return;
+            }
+            let samples = gate().samples.saturating_add(1);
+            gate().samples = samples;
+            self.trace_emit(start, tag);
+        }
+        #[cfg(not(feature = "board-pc_z97_d3h_i217"))]
+        {
+            let _ = (start, tag);
+        }
+    }
+
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    fn trace_mac(&self) {
+        let _ = self.ms;
+        let mut buf = [0u8; PING_LINE_MAX + 1];
+        let n = format_ping_mac(map().mac, nic(REG_RAL0), nic(REG_RAH0), &mut buf);
+        say_trace(&buf[..n]);
+    }
+
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    fn trace_emit(&mut self, start: u64, tag: &'static [u8]) {
+        let snap = self.trace_snap(start);
+        say_path(&snap, tag);
+        say_regs(&snap);
+        say_frame(&snap);
+        let gate = gate();
+        gate.last_ms = self.ms;
+        gate.last_tx = snap.tx;
+        gate.last_rx = snap.rx;
+        gate.last_tdt = snap.tdt;
+        gate.last_tdh = snap.tdh;
+        gate.last_rdh = snap.rdh;
+        gate.last_lu = snap.lu;
+    }
+
+    #[cfg(feature = "board-pc_z97_d3h_i217")]
+    fn trace_snap(&self, start: u64) -> Snap {
+        let diag = load_diag();
+        let status = nic(REG_STATUS);
+        Snap {
+            ms: u32::try_from(self.ms.saturating_sub(start)).unwrap_or(u32::MAX),
+            tx: crate::net_device::tx_posted(),
+            rx: crate::net_device::rx_posted(),
+            tdt: nic(REG_TDT),
+            tdh: nic(REG_TDH),
+            rdt: nic(REG_RDT),
+            rdh: nic(REG_RDH),
+            status,
+            ctrl: nic(REG_CTRL),
+            live: diag.magic == PING_DIAG_MAGIC,
+            diag,
+            lu: u32::from(status & STATUS_LU != 0),
         }
     }
 
@@ -584,6 +721,147 @@ impl Stack {
             Err(GetQueryResultError::Failed) => DnsPoll::Fail,
         }
     }
+}
+
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+struct Snap {
+    ms: u32,
+    tx: u32,
+    rx: u32,
+    tdt: u32,
+    tdh: u32,
+    rdt: u32,
+    rdh: u32,
+    status: u32,
+    ctrl: u32,
+    diag: PingDiag,
+    live: bool,
+    lu: u32,
+}
+
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+struct TraceGate {
+    last_ms: u64,
+    last_tx: u32,
+    last_rx: u32,
+    last_tdt: u32,
+    last_tdh: u32,
+    last_rdh: u32,
+    last_lu: u32,
+    samples: u8,
+}
+
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+impl TraceGate {
+    const fn new(now: u64) -> Self {
+        Self {
+            last_ms: now,
+            last_tx: 0,
+            last_rx: 0,
+            last_tdt: 0,
+            last_tdh: 0,
+            last_rdh: 0,
+            last_lu: 0,
+            samples: 0,
+        }
+    }
+}
+
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+struct TraceCell(UnsafeCell<TraceGate>);
+
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+// SAFETY: the shell worker is the only caller. The root does not ping.
+unsafe impl Sync for TraceCell {}
+
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+static TRACE: TraceCell = TraceCell(UnsafeCell::new(TraceGate::new(0)));
+
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+fn gate() -> &'static mut TraceGate {
+    // SAFETY: `TRACE` is only used by the worker, and this call does not overlap another borrow.
+    unsafe { &mut *TRACE.0.get() }
+}
+
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+fn say_trace(bytes: &[u8]) {
+    let mut buf = [0u8; PING_LINE_MAX + 1];
+    let n = bytes.len().min(PING_LINE_MAX);
+    buf[..n].copy_from_slice(&bytes[..n]);
+    buf[n] = b'\n';
+    crate::say(&buf[..=n]);
+}
+
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+fn say_path(snap: &Snap, tag: &'static [u8]) {
+    let mut buf = [0u8; PING_LINE_MAX + 1];
+    let n = format_ping_path(
+        &PingPath {
+            tag,
+            ms: snap.ms,
+            tx: snap.tx,
+            rx: snap.rx,
+            tdt: snap.tdt,
+            tdh: snap.tdh,
+            rdt: snap.rdt,
+            rdh: snap.rdh,
+            status: snap.status,
+            ctrl: snap.ctrl,
+        },
+        &mut buf,
+    );
+    say_trace(&buf[..n]);
+}
+
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+fn say_regs(snap: &Snap) {
+    let mut buf = [0u8; PING_LINE_MAX + 1];
+    let n = format_ping_regs(
+        &PingRegs {
+            status: snap.status,
+            ctrl: snap.ctrl,
+            submit: snap.diag.submit,
+            drop_len: snap.diag.drop_len,
+            drop_full: snap.diag.drop_full,
+            icr: snap.diag.last_icr,
+            diag_live: snap.live,
+        },
+        &mut buf,
+    );
+    say_trace(&buf[..n]);
+}
+
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+fn say_frame(snap: &Snap) {
+    let mut buf = [0u8; PING_LINE_MAX + 1];
+    let n = format_ping_frame(
+        &PingFrame {
+            tx_len: snap.diag.last_tx_len,
+            rx_len: snap.diag.last_rx_len,
+            rx_ok: snap.diag.rx_ok,
+            rx_drop: snap.diag.rx_drop,
+            rx_status: snap.diag.last_rx_status,
+            rx_errors: snap.diag.last_rx_errors,
+            diag_live: snap.live,
+        },
+        &mut buf,
+    );
+    say_trace(&buf[..n]);
+}
+
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+fn nic(off: u32) -> u32 {
+    let base = memory_region_symbol!(e1000e_regs_vaddr: *mut u8).as_ptr();
+    let off = usize::try_from(off).expect("register offset");
+    // SAFETY: the I217 shell maps the register window for its whole life.
+    unsafe { core::ptr::read_volatile(base.add(off).cast()) }
+}
+
+#[cfg(feature = "board-pc_z97_d3h_i217")]
+fn load_diag() -> PingDiag {
+    let base = memory_region_symbol!(e1000e_dma_vaddr: *mut u8).as_ptr();
+    // SAFETY: `PING_DIAG_OFF` is inside the DMA window mapped into this shell.
+    unsafe { core::ptr::read_volatile(base.add(PING_DIAG_OFF).cast()) }
 }
 
 fn empty_sockets() -> SocketSet<'static> {

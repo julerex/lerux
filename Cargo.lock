@@ -2348,6 +2348,7 @@ dependencies = [
  "lerux-cothread",
  "lerux-image",
  "lerux-iwctl",
+ "lerux-machine",
  "lerux-posix",
  "lerux-sddf",
  "lerux-signon",

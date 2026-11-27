@@ -1341,6 +1341,15 @@ fn e1000e_domain(place: &E1000ePlace) -> Domain {
     )
 }
 
+fn i217_shell_slots() -> Vec<Slot> {
+    let mut slots = net_client_slots();
+    let map = i217_map();
+    // The shell reads STATUS, the ring tails, and the driver trace during `ping`.
+    slots.push(mmio(map.regs_region, "e1000e_regs_vaddr"));
+    slots.push(dma(map.dma_region, "e1000e_dma_vaddr"));
+    slots
+}
+
 /// Desk I217 image: GOP shell, xHCI keyboard, and the e1000e queue path.
 ///
 /// The HDMI port scans the Intel aperture at `0xd0000000`. The console paints
@@ -1386,7 +1395,7 @@ fn i217_shell_image() -> Image {
             net_virt_rx(None),
             net_copy(None),
             console,
-            domain("shell", 1, None, "sddf-shell.elf", net_client_slots(), None),
+            domain("shell", 1, None, "sddf-shell.elf", i217_shell_slots(), None),
         ],
         links,
     }

@@ -299,7 +299,7 @@ pub fn local_address() -> Result<[u8; 4], ()> {
         feature = "board-qemu_virt_riscv64_browser_sddf"
     ))
 ))]
-pub fn hardware_address() -> [u8; 6] {
+pub(crate) fn hardware_address() -> [u8; 6] {
     map().mac
 }
 
@@ -311,7 +311,7 @@ pub fn hardware_address() -> [u8; 6] {
         feature = "board-qemu_virt_riscv64_browser_sddf"
     ))
 ))]
-pub fn probe_port(addr: [u8; 4], port: u16) -> Result<bool, ()> {
+pub(crate) fn probe_port(addr: [u8; 4], port: u16) -> Result<bool, ()> {
     let sockets = sockets()?;
     let fd = sockets.socket().map_err(|_| ())?;
     let opened = sockets.connect(fd, addr, port);

@@ -116,7 +116,7 @@ impl Engine {
     }
 
     /// Read one SMART data page. A failure stops the port and does not change identify.
-    pub fn read_smart(&mut self, out: &mut [u8]) -> Result<(), ()> {
+    pub(crate) fn read_smart(&mut self, out: &mut [u8]) -> Result<(), ()> {
         if out.len() < 512 {
             return Err(());
         }

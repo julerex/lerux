@@ -5,7 +5,7 @@
 use core::{
     mem::{offset_of, size_of},
     ptr,
-    sync::atomic::{compiler_fence, Ordering},
+    sync::atomic::{compiler_fence, fence, Ordering},
 };
 
 use lerux_machine::e1000e::{e1000e_map, i217_map, E1000eMap};
@@ -260,7 +260,7 @@ impl Engine {
                 },
             );
         }
-        compiler_fence(Ordering::Release);
+        prior_stores_visible();
         self.tx_tail = next_index(index);
         write_u32(self.regs, TDT, u32::from(self.tx_tail));
     }
@@ -348,7 +348,7 @@ impl Engine {
                 },
             );
         }
-        compiler_fence(Ordering::Release);
+        prior_stores_visible();
         write_u32(self.regs, RDT, u32::from(index));
         self.rx_next = next_index(index);
     }
@@ -384,7 +384,7 @@ impl Engine {
     }
 
     fn arm_rings(&mut self) -> Result<(), OpenError> {
-        compiler_fence(Ordering::Release);
+        prior_stores_visible();
         write_base(
             self.regs,
             RDBAL,
@@ -459,6 +459,12 @@ impl Engine {
 
 fn next_index(index: u16) -> u16 {
     (index + 1) & RING_MASK
+}
+
+/// Descriptor and buffer stores are write-back. The tail registers are not.
+/// A compiler fence leaves those stores invisible to the NIC.
+fn prior_stores_visible() {
+    fence(Ordering::SeqCst);
 }
 
 fn reset_mac(regs: usize) -> Result<(), OpenError> {

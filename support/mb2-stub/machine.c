@@ -192,7 +192,7 @@ size_t reserve_missing_windows(mem_span *spans, size_t count, size_t cap, unsign
     return count;
 }
 
-static int paint_check(uint8_t *window, size_t len, uint8_t byte) {
+static int paint_check(volatile uint8_t *window, size_t len, uint8_t byte) {
     size_t i;
     for (i = 0; i < len; i++) {
         window[i] = byte;

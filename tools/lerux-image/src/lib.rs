@@ -678,8 +678,20 @@ mod tests {
         let smokes = fs::read_to_string(root.join("support/smoke-expects.toml")).expect("smokes");
         let native = board_section(&smokes, "boards.x86_64_generic_fetch_native");
         let virtio = board_section(&smokes, "boards.x86_64_generic_fetch_sddf");
-        assert_eq!(native, virtio);
-        // The daily shell ends with `reboot`. x86 starts a new QEMU for that step.
+        // The daily commands stay. This image names the AHCI disk and has a
+        // network role, so the diagnostic steps differ, and they sit before reboot.
+        let reboot = "  { send = \"reboot\\r\", expect = \"lerux shell ready\" },\n";
+        let diagnostic = concat!(
+            "  { send = \"lsblk\\r\", expect = \"lsblk ahci\" },\n",
+            "  { send = \"fdisk\\r\", expect = \"fdisk none\" },\n",
+            "  { send = \"fsck\\r\", expect = \"fsck ok\" },\n",
+            "  { send = \"ss\\r\", expect = \"ss none\" },\n",
+            "  { send = \"dig\\r\", expect = \"dig err\" },\n",
+        );
+        let with_diag = virtio.replacen(reboot, &format!("{diagnostic}{reboot}"), 1);
+        assert_ne!(with_diag, virtio);
+        assert_eq!(native, with_diag);
+        // x86 starts a new QEMU for the reboot step.
         assert!(native.contains("reboot"));
         let docs = fs::read_to_string(root.join("docs/system-generation.md")).expect("docs");
         assert!(docs.contains("x86_64_generic_fetch_native"));

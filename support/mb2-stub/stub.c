@@ -560,6 +560,98 @@ static void paint_firmware_mode(struct multiboot2_header *mbi) {
     paint_high(tag, line);
 }
 
+static uint8_t memtest_ram[4096];
+
+static int has_word(const char *text, uint32_t text_len, const char *word, size_t word_len) {
+    uint32_t i = 0;
+    if (word_len == 0) {
+        return 0;
+    }
+    while (i + word_len <= text_len) {
+        uint32_t n;
+        int edge = i == 0 || text[i - 1] == ' ';
+        int match = edge;
+        for (n = 0; match && n < word_len; n++) {
+            match = text[i + n] == word[n];
+        }
+        if (match && (i + word_len == text_len || text[i + word_len] == ' ' || text[i + word_len] == 0)) {
+            return 1;
+        }
+        i++;
+    }
+    return 0;
+}
+
+static int cmdline_has_word(struct multiboot2_header *mbi, const char *word) {
+    uint8_t *p = (uint8_t *)(mbi + 1);
+    uint8_t *end = (uint8_t *)mbi + mbi->total_size;
+    size_t word_len = 0;
+    while (word[word_len] != 0) {
+        word_len++;
+    }
+    while (p + sizeof(struct multiboot2_tag) <= end) {
+        struct multiboot2_tag *tag = (struct multiboot2_tag *)p;
+        if (tag->type == MULTIBOOT2_TAG_END) {
+            return 0;
+        }
+        if (tag->type == MULTIBOOT2_TAG_CMDLINE && tag->size >= 8
+            && has_word((const char *)(p + 8), tag->size - 8, word, word_len)) {
+            return 1;
+        }
+        if (tag->size < 8) {
+            return 0;
+        }
+        p += align_up(tag->size, 8);
+    }
+    return 0;
+}
+
+static void paint_vga_line(const char *line) {
+    volatile uint8_t *page = (volatile uint8_t *)(uintptr_t)0xb8000;
+    unsigned i;
+    for (i = 0; line[i] != 0 && i < 80; i++) {
+        page[i * 2] = (uint8_t)line[i];
+        page[i * 2 + 1] = 0x07;
+    }
+}
+
+static void paint_result(struct multiboot2_header *mbi, const char *line) {
+    const struct fb_tag *tag = framebuffer_tag(mbi);
+    paint_vga_line(line);
+    if (tag == 0 || tag->fb_type != 1 || tag->bpp != 32 || tag->width < 16 || tag->height < 16) {
+        return;
+    }
+    if (tag->addr <= 0xffffffffull && tag->addr + 16ull * tag->pitch <= 0x100000000ull) {
+        fb_paint_line(
+            (uint8_t *)(uintptr_t)tag->addr,
+            tag->pitch,
+            tag->width,
+            tag->height,
+            tag->red_shift,
+            tag->green_shift,
+            tag->blue_shift,
+            line
+        );
+        flush_writes();
+        return;
+    }
+    paint_high(tag, line);
+}
+
+static void run_memtest(struct multiboot2_header *mbi) {
+    const char *line = "memtest fail";
+    if (memtest_window(memtest_ram, sizeof(memtest_ram))) {
+        line = "memtest pass";
+    }
+    com1_write("mb2-stub: ");
+    com1_write(line);
+    com1_write("\r\n");
+    paint_result(mbi, line);
+    for (;;) {
+        __asm__ volatile("hlt");
+    }
+}
+
 void stub_main(uint32_t magic, struct multiboot2_header *mbi) {
     if (magic != MULTIBOOT2_BOOTLOADER_MAGIC) {
         fail("bad multiboot magic");
@@ -576,6 +668,9 @@ void stub_main(uint32_t magic, struct multiboot2_header *mbi) {
         com1_write("mb2-stub: console panel\r\n");
     } else {
         com1_write("mb2-stub: console vga\r\n");
+    }
+    if (cmdline_has_word(mbi, "memtest")) {
+        run_memtest(mbi);
     }
 
     uint32_t k_start = 0, k_end = 0, l_start = 0, l_end = 0;

@@ -191,3 +191,29 @@ size_t reserve_missing_windows(mem_span *spans, size_t count, size_t cap, unsign
     }
     return count;
 }
+
+static int paint_check(uint8_t *window, size_t len, uint8_t byte) {
+    /* -Os deletes a plain store whose next read the compiler can see.
+       The trampoline has to touch the window. */
+    volatile uint8_t *cells = window;
+    size_t i;
+    for (i = 0; i < len; i++) {
+        cells[i] = byte;
+    }
+    for (i = 0; i < len; i++) {
+        if (cells[i] != byte) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+int memtest_window(uint8_t *window, size_t len) {
+    if (window == 0 || len == 0) {
+        return 0;
+    }
+    if (!paint_check(window, len, 0xA5)) {
+        return 0;
+    }
+    return paint_check(window, len, 0x5A);
+}

@@ -291,6 +291,34 @@ pub fn local_address() -> Result<[u8; 4], ()> {
     sockets.with_pipe(|stack| stack.leased_address()).ok_or(())
 }
 
+/// Hardware address from the client configuration. This does not change offload.
+#[cfg(all(
+    feature = "net-client",
+    not(any(
+        feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-qemu_virt_riscv64_browser_sddf"
+    ))
+))]
+pub(crate) fn hardware_address() -> [u8; 6] {
+    map().mac
+}
+
+/// One connect to `addr`:`port`. `Ok(false)` is a closed or refused port.
+#[cfg(all(
+    feature = "net-client",
+    not(any(
+        feature = "board-qemu_virt_aarch64_browser_sddf",
+        feature = "board-qemu_virt_riscv64_browser_sddf"
+    ))
+))]
+pub(crate) fn probe_port(addr: [u8; 4], port: u16) -> Result<bool, ()> {
+    let sockets = sockets()?;
+    let fd = sockets.socket().map_err(|_| ())?;
+    let opened = sockets.connect(fd, addr, port);
+    let _ = sockets.close(fd);
+    Ok(opened.is_ok())
+}
+
 fn copy_queue(queue: &net_queue_handle_t) -> net_queue_handle_t {
     net_queue_handle_t {
         free: queue.free,

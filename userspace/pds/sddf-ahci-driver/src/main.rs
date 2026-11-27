@@ -31,7 +31,7 @@ fn init() -> HandlerImpl {
     // SAFETY: the build script wrote a `blk_driver_config_t`.
     let config = unsafe { blk_image::blk_config_from_bytes::<blk_driver_config_t>(CONFIG) };
     assert_eq!(config.magic, SDDF_BLK_MAGIC);
-    let engine = engine::Engine::open(ahci_map()).expect("ahci engine");
+    let mut engine = engine::Engine::open(ahci_map()).expect("ahci engine");
     let capacity_blocks = engine.capacity_blocks();
     // SAFETY: this protection domain maps the storage-info page at the config address.
     unsafe { publish_storage(config.virt.storage_info.vaddr.cast(), capacity_blocks) };
@@ -53,6 +53,7 @@ fn init() -> HandlerImpl {
         );
     }
     log_identity(&engine);
+    log_disk_tools(&mut engine);
     log::info!("{READY_LINE}");
     HandlerImpl {
         engine,
@@ -61,6 +62,38 @@ fn init() -> HandlerImpl {
         virt: Channel::new(usize::from(config.virt.id)),
         capacity_blocks,
     }
+}
+
+fn log_disk_tools(engine: &mut engine::Engine) {
+    log_model("hdparm", engine.model());
+    log_model("sdparm", engine.model());
+    log_smart(engine);
+}
+
+fn log_model(cmd: &str, model: &str) {
+    if model.is_empty() {
+        log::info!("{cmd} err");
+        return;
+    }
+    log::info!("{cmd} {model}");
+}
+
+fn log_smart(engine: &mut engine::Engine) {
+    let mut page = [0u8; 512];
+    if engine.read_smart(&mut page).is_err() {
+        log::info!("smartctl err");
+        return;
+    }
+    let mut line = [0u8; 32];
+    let Some(n) = lerux_rescue::ata_smart_line(&page, &mut line) else {
+        log::info!("smartctl err");
+        return;
+    };
+    let Ok(text) = core::str::from_utf8(&line[..n]) else {
+        log::info!("smartctl err");
+        return;
+    };
+    log::info!("{text}");
 }
 
 fn log_identity(engine: &engine::Engine) {

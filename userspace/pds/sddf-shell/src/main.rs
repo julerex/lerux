@@ -235,6 +235,12 @@ compile_error!(
     "the Swift console image does not share a build with the fetch, web, browser, or filesystem image"
 );
 
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf"
+))]
+use core::sync::atomic::AtomicU64;
 #[cfg(not(any(
     feature = "board-qemu_virt_aarch64_browser_sddf",
     feature = "board-qemu_virt_riscv64_browser_sddf"
@@ -394,6 +400,7 @@ mod gpu;
 mod net;
 #[cfg(feature = "net-client")]
 mod net_device;
+mod rescue;
 
 #[repr(C, align(16))]
 struct Stack([u8; STACK_SIZE]);
@@ -533,6 +540,12 @@ extern "C" fn worker() {
         feature = "board-qemu_virt_riscv64_browser_sddf"
     )))]
     {
+        #[cfg(any(
+            feature = "board-qemu_virt_aarch64_fs_sddf",
+            feature = "board-qemu_virt_riscv64_fs_sddf",
+            feature = "board-x86_64_generic_fs_sddf"
+        ))]
+        note_boot();
         #[cfg(feature = "board-swift_sfx14_41g")]
         say_preamble();
         #[cfg(not(feature = "board-swift_sfx14_41g"))]
@@ -576,9 +589,24 @@ fn dispatch_i217(line: &[u8]) {
     };
     if cmd == b"ping" && rest.is_empty() {
         say_ping(net::ping_gateway());
-    } else {
-        say(b"err\n");
+        return;
     }
+    if cmd == b"ip" {
+        cmd_ip(rest);
+        return;
+    }
+    if cmd == b"date" {
+        cmd_date(rest);
+        return;
+    }
+    if cmd == b"dmesg" {
+        cmd_dmesg(rest);
+        return;
+    }
+    if rescue::command(cmd, rest) {
+        return;
+    }
+    say(b"err\n");
 }
 
 fn bind_files() -> bool {
@@ -982,6 +1010,9 @@ fn dispatch(line: &[u8]) {
     }
     #[cfg(feature = "board-swift_sfx14_41g")]
     if dispatch_swift(cmd, rest) {
+        return;
+    }
+    if rescue::command(cmd, rest) {
         return;
     }
     say_named_err(cmd, b"unknown");
@@ -1770,6 +1801,54 @@ fn cmd_date(rest: &[u8]) {
         feature = "board-x86_64_generic_fs_sddf"
     )))]
     say(b"date err\n");
+}
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf"
+))]
+static BOOT_NS: AtomicU64 = AtomicU64::new(0);
+
+#[cfg(any(
+    feature = "board-qemu_virt_aarch64_fs_sddf",
+    feature = "board-qemu_virt_riscv64_fs_sddf",
+    feature = "board-x86_64_generic_fs_sddf"
+))]
+fn note_boot() {
+    let reply = Channel::new(usize::from(SHELL_TIMER_CHANNEL))
+        .pp_call(MessageInfo::new(SDDF_TIMER_GET_TIME, 0));
+    if reply.count() < 1 {
+        return;
+    }
+    let ns = get_mr(0);
+    if ns != 0 {
+        BOOT_NS.store(ns, Ordering::Relaxed);
+    }
+}
+
+pub(crate) fn boot_ns() -> Option<u64> {
+    #[cfg(any(
+        feature = "board-qemu_virt_aarch64_fs_sddf",
+        feature = "board-qemu_virt_riscv64_fs_sddf",
+        feature = "board-x86_64_generic_fs_sddf"
+    ))]
+    {
+        let ns = BOOT_NS.load(Ordering::Relaxed);
+        if ns == 0 {
+            None
+        } else {
+            Some(ns)
+        }
+    }
+    #[cfg(not(any(
+        feature = "board-qemu_virt_aarch64_fs_sddf",
+        feature = "board-qemu_virt_riscv64_fs_sddf",
+        feature = "board-x86_64_generic_fs_sddf"
+    )))]
+    {
+        None
+    }
 }
 
 #[cfg(any(

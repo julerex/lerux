@@ -70,10 +70,18 @@ fn init() -> HandlerImpl {
         && class_code(&header) == Some(NVME_CLASS);
     let regs = memory_region_symbol!(nvme_regs_vaddr: *mut u8).as_ptr();
     let dma = memory_region_symbol!(nvme_dma_vaddr: *mut u8).as_ptr();
+    let result = memory_region_symbol!(disk_result_vaddr: *mut u8).as_ptr();
+    // SAFETY: this domain maps `disk_result` read-write for its whole life.
+    let page = unsafe { core::slice::from_raw_parts_mut(result, 0x1000) };
+    page.fill(0);
     let report = if present && queue_read(dma) {
         beat_arm();
         let report = match Ctrl::open(regs, dma) {
-            Ok(mut ctrl) => load_named(|lba| ctrl.read_lba(lba)),
+            Ok(mut ctrl) => {
+                let report = load_named(|lba| ctrl.read_lba(lba));
+                ctrl.note_pages(page);
+                report
+            }
             Err(stage) => stage.report(),
         };
         beat_disarm();
@@ -82,14 +90,29 @@ fn init() -> HandlerImpl {
         DiskReport::Absent
     };
     let payload = report_bytes(&report);
-    let result = memory_region_symbol!(disk_result_vaddr: *mut u8).as_ptr();
-    let page = unsafe { core::slice::from_raw_parts_mut(result, 0x1000) };
     write_result(page, payload);
     paint(payload);
     SHELL.notify();
     HandlerImpl {
         irq: Channel::new(0),
     }
+}
+
+fn store_slot(page: &mut [u8], at: usize, bytes: &[u8]) {
+    let Ok(len) = u16::try_from(bytes.len()) else {
+        return;
+    };
+    let Some(end) = at
+        .checked_add(2)
+        .and_then(|start| start.checked_add(bytes.len()))
+    else {
+        return;
+    };
+    if bytes.is_empty() || end > page.len() {
+        return;
+    }
+    page[at..at + 2].copy_from_slice(&len.to_le_bytes());
+    page[at + 2..end].copy_from_slice(bytes);
 }
 
 fn queue_read(dma: *mut u8) -> bool {
@@ -216,6 +239,39 @@ impl Ctrl {
 
     fn dma_at(&self, off: usize) -> *mut u8 {
         unsafe { self.dma.add(off) }
+    }
+
+    /// Identify and the health log. Admin format and IO write stay rejected.
+    fn note_pages(&mut self, page: &mut [u8]) {
+        self.store_model(page);
+        self.store_health(page);
+    }
+
+    fn store_model(&mut self, page: &mut [u8]) {
+        unsafe { self.dma_at(DATA).write_bytes(0, 0x1000) };
+        if self.admin(0x06, 0, DMA_PHYS + DATA as u64, 1, 0) != Some(0) {
+            return;
+        }
+        let mut raw = [0u8; 64];
+        unsafe { core::ptr::copy_nonoverlapping(self.dma_at(DATA), raw.as_mut_ptr(), raw.len()) };
+        let Some(model) = lerux_rescue::nvme_model(&raw) else {
+            return;
+        };
+        store_slot(page, 512, model);
+    }
+
+    fn store_health(&mut self, page: &mut [u8]) {
+        unsafe { self.dma_at(DATA).write_bytes(0, 512) };
+        let cdw10 = 2u32 | (127 << 16);
+        if self.admin(0x02, 0xffff_ffff, DMA_PHYS + DATA as u64, cdw10, 0) != Some(0) {
+            return;
+        }
+        let mut raw = [0u8; 32];
+        unsafe { core::ptr::copy_nonoverlapping(self.dma_at(DATA), raw.as_mut_ptr(), raw.len()) };
+        if lerux_rescue::nvme_celsius(&raw).is_none() {
+            return;
+        }
+        store_slot(page, 768, &raw);
     }
 
     fn read_lba(&mut self, lba: u64) -> Option<[u8; 512]> {

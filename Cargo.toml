@@ -67,6 +67,7 @@ members = [
     "userspace/crates/lerux-logging",
     "userspace/crates/lerux-cothread",
     "userspace/crates/lerux-calc",
+    "userspace/crates/lerux-rescue",
     "userspace/crates/lerux-gate",
     "userspace/crates/lerux-posix",
     "userspace/pds/debug-handler",

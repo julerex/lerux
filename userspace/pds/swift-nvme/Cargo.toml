@@ -13,6 +13,7 @@ board-swift_sfx14_41g = []
 
 [dependencies]
 lerux-desk = { path = "../../crates/lerux-desk" }
+lerux-rescue = { path = "../../crates/lerux-rescue" }
 lerux-sddf = { path = "../../crates/lerux-sddf" }
 lerux-swift = { path = "../../crates/lerux-swift" }
 sel4 = { workspace = true }

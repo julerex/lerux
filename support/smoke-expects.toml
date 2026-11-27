@@ -187,6 +187,11 @@ script = [
   { send = "config set net.mode dhcp\r", expect = "config ok" },
   { send = "config get net.mode\r", expect = "dhcp" },
   { send = "dmesg\r", expect = "lerux shell ready" },
+  { send = "lsblk\r", expect = "lsblk ahci" },
+  { send = "fdisk\r", expect = "fdisk none" },
+  { send = "fsck\r", expect = "fsck ok" },
+  { send = "ss\r", expect = "ss none" },
+  { send = "dig\r", expect = "dig err" },
   { send = "reboot\r", expect = "lerux shell ready" },
 ]
 
@@ -311,6 +316,11 @@ script = [
   { send = "ps\r", expect = "shell 1 1000" },
   { send = "qos\r", expect = "fatfs 2 2000" },
   { send = "dmesg\r", expect = "lerux shell ready" },
+  { send = "lsblk\r", expect = "lsblk virtio-blk" },
+  { send = "fdisk\r", expect = "fdisk none" },
+  { send = "fsck\r", expect = "fsck ok" },
+  { send = "ss\r", expect = "ss err" },
+  { send = "dig\r", expect = "dig err" },
   { send = "reboot\r", expect = "lerux shell ready" },
   { send = "config get hostname\r", expect = "desk" },
 ]

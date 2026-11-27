@@ -1,0 +1,11 @@
+[package]
+name = "lerux-rescue"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Rescue and diagnostic command lines for the shell"
+
+[lints]
+workspace = true
+
+[dependencies]

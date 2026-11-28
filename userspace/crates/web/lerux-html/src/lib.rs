@@ -17,7 +17,8 @@ use alloc::{string::String, vec::Vec};
 use token::{tokenize, Token};
 
 /// Committed smoke fixture (`support/payload/fixtures/browser/html/fixture.html`).
-pub const SMOKE_FIXTURE: &str = include_str!("../../../../../support/payload/fixtures/browser/html/fixture.html");
+pub const SMOKE_FIXTURE: &str =
+    include_str!("../../../../../support/payload/fixtures/browser/html/fixture.html");
 
 /// Node index into [`Document::nodes`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -321,7 +322,8 @@ mod tests {
     use token::tokenize;
 
     fn browser_dir() -> std::path::PathBuf {
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../../support/payload/fixtures/browser/html")
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../../support/payload/fixtures/browser/html")
     }
 
     fn read_fixture(name: &str) -> String {

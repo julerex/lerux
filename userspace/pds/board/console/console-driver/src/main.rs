@@ -8,22 +8,27 @@
 #![cfg_attr(not(test), no_main)]
 
 mod input;
+mod pc;
 #[path = "usb/mod.rs"]
 mod usb_bus;
-mod pc;
 
-pub(crate) use input::scancode;
 #[cfg(all(
+    not(test),
+    feature = "hardware",
     not(feature = "board-swift_sfx14_41g"),
     not(feature = "board-inspiron_n5010")
 ))]
 pub(crate) use input::hid;
+#[cfg(all(not(test), feature = "hardware"))]
+pub(crate) use input::scancode;
+#[cfg(all(not(test), feature = "board-pc_z97_d3h_i217"))]
+pub(crate) use pc::i217;
+#[cfg(all(not(test), feature = "hardware"))]
 pub(crate) use pc::screen;
 #[cfg(all(not(test), feature = "hardware"))]
 pub(crate) use pc::{device, handler};
-#[cfg(all(not(test), feature = "board-pc_z97_d3h_i217"))]
-pub(crate) use pc::i217;
 #[cfg(all(
+    not(test),
     not(feature = "board-swift_sfx14_41g"),
     not(feature = "board-inspiron_n5010")
 ))]

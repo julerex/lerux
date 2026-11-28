@@ -43,7 +43,8 @@ fn smoke_key() -> SigningKey {
 }
 
 fn smoke_vk() -> [u8; 32] {
-    let bytes = fs::read(repo_root().join("support/payload/fixtures/keys/smoke.ed25519.pub")).unwrap();
+    let bytes =
+        fs::read(repo_root().join("support/payload/fixtures/keys/smoke.ed25519.pub")).unwrap();
     bytes.as_slice().try_into().unwrap()
 }
 
@@ -125,7 +126,8 @@ fn flipped_byte_fails_verify_and_does_not_instantiate() {
 
 #[test]
 fn sum_not_two_does_not_log() {
-    let src_text = fs::read_to_string(repo_root().join("support/payload/fixtures/prog/smoke.rs")).unwrap();
+    let src_text =
+        fs::read_to_string(repo_root().join("support/payload/fixtures/prog/smoke.rs")).unwrap();
     let edited = src_text.replacen("if sum == 2", "if sum == 3", 1);
     assert_ne!(edited, src_text);
     let dir = std::env::temp_dir();

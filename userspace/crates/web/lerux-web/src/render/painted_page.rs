@@ -540,7 +540,8 @@ mod tests {
     const OPAQUE_WHITE: [u8; 4] = [0xff, 0xff, 0xff, 0xff];
 
     fn browser_dir() -> std::path::PathBuf {
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../../support/payload/fixtures/browser/html")
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../../support/payload/fixtures/browser/html")
     }
 
     fn fixture_html() -> Vec<u8> {

@@ -9,14 +9,19 @@
 #![allow(clippy::module_inception)] // the chip header repeats its directory name
 #![allow(clippy::pub_underscore_fields)] // kernel fields keep a leading underscore
 
-mod hw;
 mod chip;
+mod hw;
 
+pub use chip::{
+    mt7915, mt7921, mt7925,
+    mt792x::{mt792x, mt792x_acpi_sar, mt792x_regs},
+    mt7996,
+};
 pub(crate) use hw::base::{bits, endian};
-pub use hw::base::{dma, util};
-pub use hw::mt76::{mt76, mt76_connac, mt76_connac2_mac, mt76_connac3_mac, mt76_connac_mcu};
-pub use chip::{mt7915, mt7921, mt7925, mt7996};
-pub use chip::mt792x::{mt792x, mt792x_acpi_sar, mt792x_regs};
+pub use hw::{
+    base::{dma, util},
+    mt76::{mt76, mt76_connac, mt76_connac2_mac, mt76_connac3_mac, mt76_connac_mcu},
+};
 
 pub use bits::{bit, div, genmask, rem, shl, shr};
 pub use endian::{Be16, Be32, Be64, Le16, Le32, Le64};
@@ -957,4 +962,3 @@ pub use mt7996::{
     },
 };
 pub use util::{MT76_WORKER_RUNNING, MT76_WORKER_SCHEDULED};
-

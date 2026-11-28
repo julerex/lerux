@@ -1,6 +1,6 @@
 pub(crate) mod bits;
-pub(crate) mod endian;
 pub mod dma;
+pub(crate) mod endian;
 pub mod util;
 
 #[cfg(test)]

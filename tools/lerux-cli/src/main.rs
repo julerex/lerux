@@ -1,23 +1,33 @@
-mod image;
-#[path = "build/mod.rs"]
-mod make;
-mod run;
 mod boot;
+mod image;
+#[path = "make/mod.rs"]
+mod make;
 mod project;
+mod run;
 
-pub(crate) use image::compose::{agent_sddf, fetch_sddf, fs_sddf, gpu_sddf, net_sddf, serial_sddf};
-pub(crate) use image::guest::{ladybird, program_sddf};
-pub(crate) use make::compile::{build, build_sdk, clippy, fetch, libclang, package};
-pub(crate) use make::layout::{path, system};
-pub(crate) use run::qemu::{hw_lock, qemu, smoke_expects, test};
-pub(crate) use run::helpers::{dns_one, http_one, https_one, tcp_echo};
-pub(crate) use boot::iso::{boot_volume, fat_esp, iso, iso_host};
-pub(crate) use boot::disk::{dev_image, disk_img, image_digest, image_sign};
-pub(crate) use project::layout::{board, channel_consts, channels};
-pub(crate) use project::policy::{ci_lists, profile, qos_check};
-pub(crate) use project::ship::{config_cmd, deploy, github_release};
-pub(crate) use project::report::{analyze, bench, process};
-pub(crate) use project::content::{fs_scaffold, install, prog};
+pub(crate) use boot::{
+    disk::{disk_img, image_digest, image_sign},
+    iso::{boot_volume, fat_esp, iso, iso_host},
+};
+pub(crate) use image::{
+    compose::{agent_sddf, fetch_sddf, fs_sddf, net_sddf, serial_sddf},
+    guest::program_sddf,
+};
+pub(crate) use make::{
+    compile::{build, build_sdk, clippy, fetch, libclang, package},
+    layout::{path, system},
+};
+pub(crate) use project::{
+    content::{fs_scaffold, install, prog},
+    layout::{board, channel_consts, channels},
+    policy::{profile, qos_check},
+    report::{analyze, bench, process},
+    ship::{config_cmd, deploy, github_release},
+};
+pub(crate) use run::{
+    helpers::{dns_one, http_one, https_one, tcp_echo},
+    qemu::{hw_lock, qemu, smoke_expects, test},
+};
 
 use std::{
     path::{Path, PathBuf},

@@ -36,7 +36,8 @@ use lerux_wasm::{run_signed, Error, Imports};
 const CONFIG: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/config.bin"));
 const GOOD: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/smoke.lrw"));
 const BAD: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/smoke-bad.lrw"));
-const VERIFYING_KEY: [u8; 32] = *include_bytes!("../../../../../support/payload/fixtures/keys/smoke.ed25519.pub");
+const VERIFYING_KEY: [u8; 32] =
+    *include_bytes!("../../../../../support/payload/fixtures/keys/smoke.ed25519.pub");
 const STACK_SIZE: usize = 0x1_0000;
 const TX_CH: usize = CLIENT_TX_CHANNEL as usize;
 const RX_CH: usize = CLIENT_RX_CHANNEL as usize;

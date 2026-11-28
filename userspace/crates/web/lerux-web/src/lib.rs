@@ -21,8 +21,8 @@ pub use painted_page::{FrameError, PaintedPage, PixelLine};
 pub(crate) use paint::Bitmap;
 
 /// Committed paint fixture (`support/payload/fixtures/browser/html/paint.html`).
-pub const PAINT_FIXTURE: &str = include_str!("../../../../../support/payload/fixtures/browser/html/paint.html");
-
+pub const PAINT_FIXTURE: &str =
+    include_str!("../../../../../support/payload/fixtures/browser/html/paint.html");
 
 /// Visible body text with whitespace collapsed (agent `Browse` result).
 #[must_use]
@@ -88,7 +88,8 @@ mod tests {
     use alloc::{vec, vec::Vec};
 
     fn browser_dir() -> std::path::PathBuf {
-        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../../support/payload/fixtures/browser/html")
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../../../support/payload/fixtures/browser/html")
     }
 
     fn paint(html: &str, w: u32, h: u32) -> Vec<u8> {

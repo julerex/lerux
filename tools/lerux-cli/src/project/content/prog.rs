@@ -1,0 +1,129 @@
+//! Pack `support/payload/fixtures/prog/smoke.rs` into a signed `LRW1` blob (ADR-010).
+
+use std::{fs, path::Path, process::Command};
+
+use anyhow::{bail, Context, Result};
+use ed25519_dalek::{Signer, SigningKey};
+
+use crate::process::repo_root;
+
+/// Compile `src` (default `support/payload/fixtures/prog/smoke.rs`) and write a signed blob.
+pub fn pack(root: &Path, key: &Path, out: &Path, src: Option<&Path>) -> Result<()> {
+    let src = match src {
+        Some(path) => path.to_path_buf(),
+        None => root.join("support/payload/fixtures/prog/smoke.rs"),
+    };
+    if !src.is_file() {
+        bail!("missing {}", src.display());
+    }
+    let wasm = compile_smoke_wasm(&src)?;
+    let blob = sign_wasm(&wasm, key)?;
+    if let Some(parent) = out.parent() {
+        fs::create_dir_all(parent).ok();
+    }
+    fs::write(out, &blob).with_context(|| format!("write {}", out.display()))?;
+    println!(
+        "==> wrote {} (wasm {} bytes, blob {} bytes)",
+        out.display(),
+        wasm.len(),
+        blob.len()
+    );
+    Ok(())
+}
+
+fn compile_smoke_wasm(src: &Path) -> Result<Vec<u8>> {
+    let wasm_tmp = tempfile::NamedTempFile::new().context("wasm temp file")?;
+    let status = Command::new("rustc")
+        .args(lerux_wasm::SMOKE_RUSTC_ARGS)
+        .arg(src)
+        .arg("-o")
+        .arg(wasm_tmp.path())
+        .status()
+        .context("spawn rustc (wasm32-unknown-unknown)")?;
+    if !status.success() {
+        bail!("rustc failed for {}", src.display());
+    }
+    let wasm = fs::read(wasm_tmp.path()).context("read wasm")?;
+    if wasm.len() > lerux_wasm::MAX_WASM_LEN {
+        bail!(
+            "wasm is {} bytes; max is {}",
+            wasm.len(),
+            lerux_wasm::MAX_WASM_LEN
+        );
+    }
+    Ok(wasm)
+}
+
+fn sign_wasm(wasm: &[u8], key: &Path) -> Result<Vec<u8>> {
+    let secret = fs::read(key).with_context(|| format!("read {}", key.display()))?;
+    let secret: [u8; 32] = secret
+        .as_slice()
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("ed25519 secret key must be 32 bytes"))?;
+    let signing = SigningKey::from_bytes(&secret);
+    let mut message = vec![0u8; lerux_wasm::HEADER_LEN + wasm.len()];
+    let message_len = lerux_wasm::signing_message(wasm, &mut message)
+        .map_err(|err| anyhow::anyhow!("signing message: {err:?}"))?;
+    let signature = signing.sign(&message[..message_len]);
+    let mut sig = [0u8; lerux_wasm::SIG_LEN];
+    sig.copy_from_slice(&signature.to_bytes());
+    let mut blob = vec![0u8; message_len + lerux_wasm::SIG_LEN];
+    let n = lerux_wasm::encode(wasm, &sig, &mut blob)
+        .map_err(|err| anyhow::anyhow!("encode blob: {err:?}"))?;
+    blob.truncate(n);
+    Ok(blob)
+}
+
+/// `lerux prog pack` with repo-relative defaults resolved from `root` when the
+/// path is relative.
+pub fn pack_cli(key: &Path, out: &Path, src: Option<&Path>) -> Result<()> {
+    let root = repo_root()?;
+    let key = resolve(&root, key);
+    let out = resolve(&root, out);
+    let src = src.map(|path| resolve(&root, path));
+    pack(&root, &key, &out, src.as_deref())
+}
+
+fn resolve(root: &Path, path: &Path) -> std::path::PathBuf {
+    if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        root.join(path)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct Capture(Vec<u8>);
+
+    impl lerux_wasm::Imports for Capture {
+        fn log(&mut self, bytes: &[u8]) {
+            self.0.extend_from_slice(bytes);
+        }
+
+        fn read(&mut self, _path: &[u8], _dst: &mut [u8]) -> i32 {
+            -1
+        }
+
+        fn socket(&mut self) -> i32 {
+            -1
+        }
+    }
+
+    #[test]
+    fn pack_smoke_verifies_and_runs() {
+        let root = repo_root().unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let out = tmp.path().join("smoke.lrw");
+        pack(&root, &root.join("support/payload/fixtures/keys/smoke.ed25519"), &out, None).unwrap();
+        let blob = fs::read(&out).unwrap();
+        let vk = fs::read(root.join("support/payload/fixtures/keys/smoke.ed25519.pub")).unwrap();
+        let vk: [u8; 32] = vk.as_slice().try_into().unwrap();
+        let wasm = lerux_wasm::verify(&blob, &vk).unwrap();
+        let mut logged = Capture(Vec::new());
+        lerux_wasm::run(wasm, &mut logged).unwrap();
+        assert_eq!(logged.0, lerux_wasm::SMOKE_LOG);
+    }
+}

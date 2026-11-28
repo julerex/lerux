@@ -1,50 +1,23 @@
-mod agent_sddf;
-mod analyze;
-mod bench;
-mod board;
-mod boot_volume;
-mod build;
-mod build_sdk;
-mod channel_consts;
-mod channels;
-mod ci_lists;
-mod clippy;
-mod config_cmd;
-mod deploy;
-mod dev_image;
-mod disk_img;
-mod dns_one;
-mod fat_esp;
-mod fetch;
-mod fetch_sddf;
-mod fs_scaffold;
-mod fs_sddf;
-mod github_release;
-mod gpu_sddf;
-mod http_one;
-mod https_one;
-mod hw_lock;
-mod image_digest;
-mod image_sign;
-mod install;
-mod iso;
-mod iso_host;
-mod ladybird;
-mod libclang;
-mod net_sddf;
-mod package;
-mod path;
-mod process;
-mod profile;
-mod prog;
-mod program_sddf;
-mod qemu;
-mod qos_check;
-mod serial_sddf;
-mod smoke_expects;
-mod system;
-mod tcp_echo;
-mod test;
+mod image;
+#[path = "build/mod.rs"]
+mod make;
+mod run;
+mod boot;
+mod project;
+
+pub(crate) use image::compose::{agent_sddf, fetch_sddf, fs_sddf, gpu_sddf, net_sddf, serial_sddf};
+pub(crate) use image::guest::{ladybird, program_sddf};
+pub(crate) use make::compile::{build, build_sdk, clippy, fetch, libclang, package};
+pub(crate) use make::layout::{path, system};
+pub(crate) use run::qemu::{hw_lock, qemu, smoke_expects, test};
+pub(crate) use run::helpers::{dns_one, http_one, https_one, tcp_echo};
+pub(crate) use boot::iso::{boot_volume, fat_esp, iso, iso_host};
+pub(crate) use boot::disk::{dev_image, disk_img, image_digest, image_sign};
+pub(crate) use project::layout::{board, channel_consts, channels};
+pub(crate) use project::policy::{ci_lists, profile, qos_check};
+pub(crate) use project::ship::{config_cmd, deploy, github_release};
+pub(crate) use project::report::{analyze, bench, process};
+pub(crate) use project::content::{fs_scaffold, install, prog};
 
 use std::{
     path::{Path, PathBuf},
@@ -184,7 +157,7 @@ enum Commands {
         /// Output directory (default: `{build_dir}/bench`).
         #[arg(long)]
         out_dir: Option<PathBuf>,
-        /// Phase 57: fail if metrics miss `support/bench-thresholds.toml`.
+        /// Phase 57: fail if metrics miss `support/config/boards/bench-thresholds.toml`.
         #[arg(long, default_value_t = false)]
         check: bool,
     },
@@ -231,12 +204,12 @@ enum Commands {
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         cmd: Vec<String>,
     },
-    /// System profile commands (named PD sets + templates from support/profiles/).
+    /// System profile commands (named PD sets + templates from support/config/boards/profiles/).
     Profile {
         #[command(subcommand)]
         command: ProfileCommands,
     },
-    /// ADR-010: compile `support/prog/smoke.rs` and write a signed LRW1 blob.
+    /// ADR-010: compile `support/payload/fixtures/prog/smoke.rs` and write a signed LRW1 blob.
     Prog {
         #[command(subcommand)]
         command: ProgCommands,
@@ -334,7 +307,7 @@ enum Commands {
     },
     /// Phase 67: write an ed25519 keypair (`path` + `path.pub`).
     Keygen {
-        #[arg(long, default_value = "support/keys/smoke.ed25519")]
+        #[arg(long, default_value = "support/payload/fixtures/keys/smoke.ed25519")]
         out: PathBuf,
     },
     /// Phase 67: sign `loader.img` with an ed25519 secret key.
@@ -345,7 +318,7 @@ enum Commands {
         build_dir: String,
         #[arg(long, short = 'p')]
         path: Option<PathBuf>,
-        #[arg(long, default_value = "support/keys/smoke.ed25519")]
+        #[arg(long, default_value = "support/payload/fixtures/keys/smoke.ed25519")]
         key: PathBuf,
     },
     /// Phase 54: config schema and disk seed helpers.
@@ -417,7 +390,7 @@ enum ProfileCommands {
     Show { name: String },
     /// Validate structured channel manifests (unique ends, known PDs).
     Validate {
-        /// Profile name; omit to validate all profiles under support/profiles/.
+        /// Profile name; omit to validate all profiles under support/config/boards/profiles/.
         name: Option<String>,
     },
     /// Write the composed Microkit SDF for a profile (`-o` or stdout).
@@ -441,14 +414,14 @@ enum ProfileCommands {
     },
     /// Phase 60: capability audit — trust class, PD domains, high-risk edges.
     Audit {
-        /// Profile name; omit to audit all profiles under support/profiles/.
+        /// Profile name; omit to audit all profiles under support/config/boards/profiles/.
         name: Option<String>,
     },
     /// Phase 60 Track D: validate PD priorities and PPC edges (no MCS).
     ///
     /// Checks composed SDF: every `pp="true"` caller has strictly lower
     /// priority than its callee; admin/admin-core profiles also get
-    /// service-class band checks (docs/qos.md).
+    /// service-class band checks (docs/guide/quality/qos.md).
     CheckQos {
         /// Profile name; omit to check all profiles with a `default_board`.
         name: Option<String>,
@@ -465,7 +438,7 @@ enum ProgCommands {
         /// Output `LRW1` blob. Relative paths are repo-rooted.
         #[arg(long, short = 'o')]
         out: PathBuf,
-        /// Rust source. Default: `support/prog/smoke.rs`.
+        /// Rust source. Default: `support/payload/fixtures/prog/smoke.rs`.
         #[arg(long)]
         src: Option<PathBuf>,
     },

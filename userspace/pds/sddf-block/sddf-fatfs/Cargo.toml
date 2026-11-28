@@ -1,0 +1,17 @@
+[package]
+name = "sddf-fatfs"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[lints]
+workspace = true
+
+[dependencies]
+lerux-cothread = { path = "../../../crates/queue/lerux-cothread" }
+lerux-logging = { path = "../../../crates/platform/lerux-logging" }
+lerux-sddf = { path = "../../../crates/queue/lerux-sddf" }
+sel4-microkit = { workspace = true }
+
+[build-dependencies]
+lerux-image = { path = "../../../../tools/lerux-image" }

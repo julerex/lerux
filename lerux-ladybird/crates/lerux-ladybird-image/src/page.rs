@@ -7,10 +7,10 @@ use lerux_ladybird_html::{Children, Document, Element, Node};
 
 use crate::{decode_png, PngError};
 
-const PAGE_HTML: &str = include_str!("../../../../support/browser/lenna.html");
+const PAGE_HTML: &str = include_str!("../../../../support/payload/fixtures/browser/sample/lenna.html");
 /// The tokenizer drops attributes, so `src` is never stored. The page's one
 /// `img` element is this file.
-const PAGE_PNG: &[u8] = include_bytes!("../../../../support/browser/lenna.png");
+const PAGE_PNG: &[u8] = include_bytes!("../../../../support/payload/fixtures/browser/sample/lenna.png");
 const STRIP_ROWS: u32 = GLYPH_HEIGHT.unsigned_abs();
 
 /// Bit position of each 8-bit channel in a little-endian 32-bit pixel.

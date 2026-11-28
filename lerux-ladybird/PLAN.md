@@ -2,17 +2,17 @@
 
 Last updated: 2026-11-14
 
-**Status:** Milestone 12 has landed. Milestones 13 through 20 have not. Milestones run in order. Implement one milestone per pass, and only after the previous milestone's exit holds. This file is the plan. Milestone 1 adds the library crates. It adds no protection domain and no continuous-integration job. Milestone 2 parses an `https` URL in `lerux-ladybird-url`. Milestone 3 paints a frame bitmap and one glyph in `lerux-ladybird-gfx`. Milestone 4 parses the fixture in `lerux-ladybird-html` and the title text is `lerux`. Milestone 5 parses a style sheet into rules, selectors, and declarations in `lerux-ladybird-web`. Milestone 6 computes the style of every element from the user-agent sheet and one author sheet in `lerux-ladybird-web`. Milestone 7 lays out the fixture paragraph at y=24 in `lerux-ladybird-web`. Milestone 8 paints that paragraph in `lerux-ladybird-web`. Milestone 9 paints that page from `web_content` on `qemu_virt_aarch64_ladybird`. Milestone 10 loads the same fixture with `GET /fixture.html` through `request_server`. `web_content` no longer embeds the file. Milestone 11 gives the page one top-level navigable. A link replaces that document. A fragment updates the URL and scrolls without a second load. One iframe is fetched after its parent, and its pixels are the next sample on `qemu_virt_aarch64_ladybird`. Milestone 12 decodes one 8-bit non-interlaced PNG in `image_decoder`. `web_content` sends the encoded bytes and blits the pixels. The sampled pixel is the top-left of `support/browser/grid.png`.
+**Status:** Milestone 12 has landed. Milestones 13 through 20 have not. Milestones run in order. Implement one milestone per pass, and only after the previous milestone's exit holds. This file is the plan. Milestone 1 adds the library crates. It adds no protection domain and no continuous-integration job. Milestone 2 parses an `https` URL in `lerux-ladybird-url`. Milestone 3 paints a frame bitmap and one glyph in `lerux-ladybird-gfx`. Milestone 4 parses the fixture in `lerux-ladybird-html` and the title text is `lerux`. Milestone 5 parses a style sheet into rules, selectors, and declarations in `lerux-ladybird-web`. Milestone 6 computes the style of every element from the user-agent sheet and one author sheet in `lerux-ladybird-web`. Milestone 7 lays out the fixture paragraph at y=24 in `lerux-ladybird-web`. Milestone 8 paints that paragraph in `lerux-ladybird-web`. Milestone 9 paints that page from `web_content` on `qemu_virt_aarch64_ladybird`. Milestone 10 loads the same fixture with `GET /fixture.html` through `request_server`. `web_content` no longer embeds the file. Milestone 11 gives the page one top-level navigable. A link replaces that document. A fragment updates the URL and scrolls without a second load. One iframe is fetched after its parent, and its pixels are the next sample on `qemu_virt_aarch64_ladybird`. Milestone 12 decodes one 8-bit non-interlaced PNG in `image_decoder`. `web_content` sends the encoded bytes and blits the pixels. The sampled pixel is the top-left of `support/payload/fixtures/browser/sample/grid.png`.
 
-**Goal:** A browser named lerux-ladybird, written in Rust, `#![no_std]` plus `alloc`, that runs as lerux protection domains. It is modelled on [Ladybird](https://github.com/LadybirdBrowser/ladybird)'s engine shape and process isolation and rewritten in Rust. It is not a port of the Ladybird, Chromium, or WebKit C++ sources. Its process split and its path from a load to pixels follow Ladybird. The code is written in this tree. JavaScript and WebAssembly are in this plan (milestones 13, 14, and 18). Milestone 17 of this file is Forms and stays. It is not [docs/plan-lionsos.md](../docs/plan-lionsos.md) milestone 17, which also stays and is the postcard guest-model removal.
+**Goal:** A browser named lerux-ladybird, written in Rust, `#![no_std]` plus `alloc`, that runs as lerux protection domains. It is modelled on [Ladybird](https://github.com/LadybirdBrowser/ladybird)'s engine shape and process isolation and rewritten in Rust. It is not a port of the Ladybird, Chromium, or WebKit C++ sources. Its process split and its path from a load to pixels follow Ladybird. The code is written in this tree. JavaScript and WebAssembly are in this plan (milestones 13, 14, and 18). Milestone 17 of this file is Forms and stays. It is not [docs/plans/core/plan-lionsos.md](../docs/plans/core/plan-lionsos.md) milestone 17, which also stays and is the postcard guest-model removal.
 
 **Architecture:** Ladybird splits the browser into separate processes and builds a page through a fixed pipeline: fetch, HTML parse, CSS object model, style, a layout tree that is separate from the document, a paintable tree, stacking contexts, then paint. JavaScript is a sibling library: lexer, parser, abstract syntax tree, bytecode, then a garbage-collected interpreter. lerux keeps that split. Microkit's protection-domain set is static, so each Ladybird process that this plan includes is one protection domain, created at boot.
 
 Upstream documents and directories below are the reference for the milestone that names them. Read that document before editing. A developer machine may also have a checkout at `/home/julian/repos/github_orgs/LadybirdBrowser/ladybird`. That checkout stays outside this repo. So do the upstream sources. Nothing from either tree is copied into git.
 
-The live browser smoke stays `just test-browser-sddf`. It uses `lerux-html` and `lerux-web`. This tree does not depend on those crates and does not grow them. [`docs/desk-browser.md`](../docs/desk-browser.md) stays the Z97 desk-page spec. That page is secondary. The metal target being driven is the Acer Swift X. Milestone 20 names the seam and does not implement that spec.
+The live browser smoke stays `just test-browser-sddf`. It uses `lerux-html` and `lerux-web`. This tree does not depend on those crates and does not grow them. [`docs/hardware/boards/desk-browser.md`](../docs/hardware/boards/desk-browser.md) stays the Z97 desk-page spec. That page is secondary. The metal target being driven is the Acer Swift X. Milestone 20 names the seam and does not implement that spec.
 
-Related: [`docs/plan-interactive.md`](../docs/plan-interactive.md) (phases 71–80, the earlier Ladybird-shaped protection domains), [`docs/plan-lionsos.md`](../docs/plan-lionsos.md) milestones 12 and 18 (the live graphics smoke), [ADR-009](../docs/decisions/009-interactive-surface.md), [ADR-012](../docs/decisions/012-ordinary-webassembly.md).
+Related: [`docs/plans/core/plan-interactive.md`](../docs/plans/core/plan-interactive.md) (phases 71–80, the earlier Ladybird-shaped protection domains), [`docs/plans/core/plan-lionsos.md`](../docs/plans/core/plan-lionsos.md) milestones 12 and 18 (the live graphics smoke), [ADR-009](../docs/decisions/007-012/009-interactive-surface.md), [ADR-012](../docs/decisions/007-012/012-ordinary-webassembly.md).
 
 ## What Ladybird is today
 
@@ -96,7 +96,7 @@ LibCore's event loop waits on file descriptors. The Microkit analogue is the roo
 
 These hold for every milestone.
 
-- Every library and every protection domain is `#![no_std]` and may use `alloc`. Host tests enable `std` only under `cfg(test)`, the same pattern as `userspace/crates/lerux-html`. Edition 2024, license MIT, `[lints] workspace = true`.
+- Every library and every protection domain is `#![no_std]` and may use `alloc`. Host tests enable `std` only under `cfg(test)`, the same pattern as `userspace/crates/web/lerux-html`. Edition 2024, license MIT, `[lints] workspace = true`.
 - A library may depend on other `lerux-ladybird-*` crates, and on the workspace crates `heapless` and `log` with their default features off.
 - A protection domain may also depend on `sel4-microkit`, `lerux-sddf`, and `lerux-cothread`. `request-server` may depend on `lerux-tls`. `web-content` may depend on `lerux-wasm` only in milestone 18, with the existing `wasmi` features `validate`, `prefer-btree-collections`, and `portable-dispatch`.
 - `browser-ui` depends on `lerux-ladybird-gfx`. It does not depend on `lerux-ladybird-web`, `lerux-ladybird-html`, or `lerux-ladybird-js`.
@@ -106,10 +106,10 @@ These hold for every milestone.
 - This image follows the other device-framework images. Channel identifiers live in the system template and in the configuration struct the protection domain reads. A number that the template does not contain is a bug. When the board has a profile, `lerux profile check-channels` is the check.
 - One `web_content`. The root holds assertions. A cothread does not panic. The protection-domain stack attribute stays `0x10_000`.
 - The HTML subset is named in `lerux-ladybird-html` and widens only when a milestone says so. The parser is a tokenizer plus insertion modes, so a new tag is a new state in that parser.
-- Host milestones exit on `cargo test -p <crate>`. From milestone 1 onward, `just check` names the new libraries. From milestone 9 onward, the milestone also passes `just check-pd` and `just test-ladybird`. `just test-browser-sddf` keeps passing. The workflow `include` list and the smoke counts in `docs/ci.md` move together, and only after that milestone's smoke has passed.
+- Host milestones exit on `cargo test -p <crate>`. From milestone 1 onward, `just check` names the new libraries. From milestone 9 onward, the milestone also passes `just check-pd` and `just test-ladybird`. `just test-browser-sddf` keeps passing. The workflow `include` list and the smoke counts in `docs/guide/ops/ci.md` move together, and only after that milestone's smoke has passed.
 - `cargo fmt --all --check` covers this tree once the crates are workspace members. Milestone 1 is the one that adds the members.
 
-The first bitmap has to paint the tags in [`support/browser/fixture.html`](../support/browser/fixture.html): `html`, `head`, `body`, `title`, and `p`. The user-agent sheet hides `head` and `title` and lays the paragraph out as a block. That sheet lives in `lerux-ladybird-web` once milestone 6 writes it. The frame is 320 by 64. Bytes are tightly packed, stride `320 * 4`, little-endian B, G, R, A, with alpha set to `0xff` before the sample. The sample is the first pixel that is not opaque white, in row-major order. The serial line is `pixel ` , eight lowercase hex digits, and a newline. For this fixture that line is `pixel 000000ff`.
+The first bitmap has to paint the tags in [`support/payload/fixtures/browser/html/fixture.html`](../support/payload/fixtures/browser/html/fixture.html): `html`, `head`, `body`, `title`, and `p`. The user-agent sheet hides `head` and `title` and lays the paragraph out as a block. That sheet lives in `lerux-ladybird-web` once milestone 6 writes it. The frame is 320 by 64. Bytes are tightly packed, stride `320 * 4`, little-endian B, G, R, A, with alpha set to `0xff` before the sample. The sample is the first pixel that is not opaque white, in row-major order. The serial line is `pixel ` , eight lowercase hex digits, and a newline. For this fixture that line is `pixel 000000ff`.
 
 ## Milestone 1 — Tree and Page
 
@@ -119,7 +119,7 @@ The first bitmap has to paint the tags in [`support/browser/fixture.html`](../su
 
 - Create `lerux-ladybird/crates/` with `lerux-ladybird-url`, `lerux-ladybird-gfx`, `lerux-ladybird-html`, `lerux-ladybird-web`, `lerux-ladybird-http`, `lerux-ladybird-js`, and `lerux-ladybird-image`.
 - Add those paths to the workspace `members` list in the root `Cargo.toml`.
-- Add the same crate names to the `just check` clippy line and the `just check` test line, and to `SHARED_CRATES` in `tools/lerux-cli/src/clippy.rs`.
+- Add the same crate names to the `just check` clippy line and the `just check` test line, and to `SHARED_CRATES` in `tools/lerux-cli/src/build/compile/clippy.rs`.
 - Each crate's crate-level comment names the Ladybird library it stands in for.
 - `Page` lives in `lerux-ladybird-web` and owns one `Document`. `Document` lives in `lerux-ladybird-html`. The document has a root and no elements yet.
 - Add a row for this file to the index table in `docs/README.md`.
@@ -155,7 +155,7 @@ Out of scope: scaling, paths, and image formats.
 
 **Ladybird:** the `libweb_html_tokenizer` crate, and the HTML section of `Documentation/LibWebFromLoadingToPainting.md`.
 
-**Exit:** `cargo test -p lerux-ladybird-html` parses [`support/browser/fixture.html`](../support/browser/fixture.html) into a document whose title text is `lerux`.
+**Exit:** `cargo test -p lerux-ladybird-html` parses [`support/payload/fixtures/browser/html/fixture.html`](../support/payload/fixtures/browser/html/fixture.html) into a document whose title text is `lerux`.
 
 - The tokenizer and the tree builder are separate types. The tree builder drives the tokenizer.
 - Nodes are a document, elements, and text. An element has a tag, a parent, and children.
@@ -207,7 +207,7 @@ Out of scope: floats, flex, grid, tables, and absolute positioning.
 
 **Ladybird:** the paintable, stacking context, and painting sections of `Documentation/LibWebFromLoadingToPainting.md`.
 
-**Exit:** `cargo test -p lerux-ladybird-web` paints [`support/browser/fixture.html`](../support/browser/fixture.html) and the sampled line is `pixel 000000ff`.
+**Exit:** `cargo test -p lerux-ladybird-web` paints [`support/payload/fixtures/browser/html/fixture.html`](../support/payload/fixtures/browser/html/fixture.html) and the sampled line is `pixel 000000ff`.
 
 - After layout, build a paintable tree. A layout box that cannot be visible has no paintable.
 - One stacking context, rooted at the initial containing block.
@@ -230,7 +230,7 @@ Out of scope: scroll, transforms, and shadows.
 - `browser_ui` copies the bitmap through the existing graphics client queues and prints the title line and the pixel line on the serial client. It does not parse HTML.
 - Priorities follow the browser image: drivers at 4 with budget 4000, virtualisers at 3 with budget 3000, `web_content` at 2 with budget 2000, `browser_ui` at 1 with budget 1000. The period equals the budget. A notify to the higher priority domain runs it before the caller waits, and the channel semaphore keeps the signal.
 - Heap on `web_content` is 1 MiB. Its worker stack is `0x4000`. Assertions stay on the root.
-- `support/smoke-expects.toml` gains the two lines. `ci` for the board stays false until the workflow `include` list and the counts in `docs/ci.md` are updated in the same change that records a green smoke.
+- `support/config/boards/smoke-expects.toml` gains the two lines. `ci` for the board stays false until the workflow `include` list and the counts in `docs/guide/ops/ci.md` are updated in the same change that records a green smoke.
 - Add an `AGENTS.md` section for this board, in the same style as the browser-image section, once the smoke is green.
 
 Out of scope: an address line, keyboard input, and any fetch.
@@ -259,7 +259,7 @@ Out of scope: public Domain Name System, redirects, cookies, and a second reques
 - One top-level navigable on the `Page`. Navigating replaces the document. There is no back stack.
 - A link with no host resolves against the current document's URL from milestone 2. A link that only changes the fragment updates the URL and scrolls. It does not call `request_server`.
 - One child navigable for a single `iframe`. The child document is fetched through the same request page, sequentially, after the parent. The child paints inside the parent's content box.
-- The guest fixture is a new file under `support/browser/`, small enough to fit the 64 KiB body region. It contains one link and one `iframe`. The iframe is the first painted content, so the first non-white pixel belongs to the child. After the fixture lines, `web_content` loads this URL on its own. The address line does not exist yet. Milestone 16 replaces that baked load with a typed one.
+- The guest fixture is a new file under `support/payload/fixtures/browser/`, small enough to fit the 64 KiB body region. It contains one link and one `iframe`. The iframe is the first painted content, so the first non-white pixel belongs to the child. After the fixture lines, `web_content` loads this URL on its own. The address line does not exist yet. Milestone 16 replaces that baked load with a typed one.
 
 Out of scope: `target` that would open a new tab, and nested iframes past one child.
 
@@ -368,13 +368,13 @@ Out of scope: structured clone, shared memory, and a worker that fetches.
 
 ## Milestone 20 — Desk seam
 
-**Ladybird:** the same process split. The desk document is [`docs/desk-browser.md`](../docs/desk-browser.md). Scanout is [ADR-013](../docs/decisions/013-desk-intel-scanout.md). The QEMU decision is [ADR-009](../docs/decisions/009-interactive-surface.md).
+**Ladybird:** the same process split. The desk document is [`docs/hardware/boards/desk-browser.md`](../docs/hardware/boards/desk-browser.md). Scanout is [ADR-013](../docs/decisions/013-014/013-desk-intel-scanout.md). The QEMU decision is [ADR-009](../docs/decisions/007-012/009-interactive-surface.md).
 
 **Exit:** This file names `browser_ui` as the protection domain that would map the desk framebuffer, and `request_server` as the protection domain that would speak to a future onboard Ethernet driver. No new protection domain is added. `just test-ladybird` still passes.
 
 - State the seam in this milestone's notes: the page bitmap remains the one `web_content` paints; `browser_ui` would copy it into the firmware framebuffer on the desk, the way it copies into the graphics client buffer on QEMU.
 - `request_server` remains the only fetcher. A desk driver would sit where `net_driver` sits on this QEMU board.
-- Leave [`docs/desk-browser.md`](../docs/desk-browser.md) as it stands. A later edit may point that spec at these protection domains after `just test-ladybird` is the smoke the spec should name. That edit is a separate change.
+- Leave [`docs/hardware/boards/desk-browser.md`](../docs/hardware/boards/desk-browser.md) as it stands. A later edit may point that spec at these protection domains after `just test-ladybird` is the smoke the spec should name. That edit is a separate change.
 
 Out of scope: the Ethernet driver, programming the Intel display engine, and a metal boot.
 

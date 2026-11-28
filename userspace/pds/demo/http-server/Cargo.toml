@@ -1,0 +1,28 @@
+[package]
+name = "http-server"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[lints]
+workspace = true
+
+[features]
+unified-dma = []
+board-qemu_virt_aarch64_http = ["serial-ipc", "unified-dma"]
+board-qemu_virt_aarch64_http_composed = ["composed-sync", "serial-ipc", "unified-dma"]
+board-qemu_virt_riscv64_http = ["serial-ipc", "unified-dma"]
+board-x86_64_generic_http = ["serial-ipc", "unified-dma"]
+composed-sync = []
+serial-ipc = ["lerux-logging/serial"]
+
+[dependencies]
+lerux-logging = { path = "../../../crates/platform/lerux-logging" }
+sel4-microkit = { workspace = true, features = ["alloc"] }
+sel4-driver-interfaces = { workspace = true }
+sel4-microkit-driver-adapters = { workspace = true }
+sel4-shared-memory = { workspace = true }
+sel4-shared-ring-buffer = { workspace = true }
+sel4-shared-ring-buffer-smoltcp = { workspace = true }
+sel4-abstract-allocator = { workspace = true }
+smoltcp = { workspace = true, features = ["medium-ethernet", "proto-ipv4", "socket-tcp", "socket-udp"] }

@@ -1,0 +1,24 @@
+[package]
+name = "swift-mt7921"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "MT7921 WPA-Personal client for the Swift X"
+build = "build.rs"
+
+[lints]
+workspace = true
+
+[features]
+# Host `cargo test` builds the queue module only. The board build enables seL4.
+board-swift_sfx14_41g = ["dep:sel4", "dep:sel4-microkit"]
+
+[dependencies]
+lerux-desk = { path = "../../../../crates/desk/lerux-desk" }
+lerux-sddf = { path = "../../../../crates/queue/lerux-sddf" }
+lerux-swift = { path = "../../../../crates/desk/lerux-swift" }
+sel4 = { workspace = true, optional = true }
+sel4-microkit = { workspace = true, optional = true }
+
+[build-dependencies]
+lerux-sddf = { path = "../../../../crates/queue/lerux-sddf" }

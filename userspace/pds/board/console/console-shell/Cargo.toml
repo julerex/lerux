@@ -1,0 +1,24 @@
+[package]
+name = "console-shell"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Arch sign-on and the console commands on the VGA page"
+
+[lints]
+workspace = true
+
+[features]
+board-inspiron_n5010 = []
+board-x86_64_generic_console = []
+board-swift_sfx14_41g = ["dep:lerux-swift", "dep:lerux-desk", "dep:lerux-ladybird-image"]
+
+[dependencies]
+embedded-hal-nb = { workspace = true }
+lerux-calc = { path = "../../../../crates/web/lerux-calc" }
+lerux-signon = { path = "../../../../crates/desk/lerux-signon" }
+lerux-desk = { path = "../../../../crates/desk/lerux-desk", optional = true }
+lerux-ladybird-image = { path = "../../../../../lerux-ladybird/crates/lerux-ladybird-image", optional = true }
+lerux-swift = { path = "../../../../crates/desk/lerux-swift", optional = true }
+sel4-microkit = { workspace = true }
+sel4-microkit-driver-adapters = { workspace = true }

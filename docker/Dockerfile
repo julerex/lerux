@@ -56,14 +56,14 @@ COPY rust-toolchain.toml /work/rust-toolchain.toml
 COPY tools/lerux-cli /work/tools/lerux-cli
 # Cargo reads every workspace member before it builds lerux-cli.
 COPY tools/lerux-image /work/tools/lerux-image
-COPY support/boards.toml /work/support/boards.toml
+COPY support/config/boards/boards.toml /work/support/config/boards/boards.toml
 COPY userspace/pds /work/userspace/pds
 COPY userspace/crates /work/userspace/crates
 COPY lerux-ladybird/crates /work/lerux-ladybird/crates
 COPY lerux-ladybird/pds /work/lerux-ladybird/pds
 # lerux-cli builds lerux-ladybird-image. That crate embeds these two files.
-COPY support/browser/lenna.html /work/support/browser/lenna.html
-COPY support/browser/lenna.png /work/support/browser/lenna.png
+COPY support/payload/fixtures/browser/sample/lenna.html /work/support/payload/fixtures/browser/sample/lenna.html
+COPY support/payload/fixtures/browser/sample/lenna.png /work/support/payload/fixtures/browser/sample/lenna.png
 COPY Cargo.toml /work/Cargo.toml
 COPY Cargo.lock /work/Cargo.lock
 WORKDIR /work

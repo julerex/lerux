@@ -76,5 +76,5 @@ jobs:
           BOARD: ${{ inputs.board }}
         run: |
           set -euo pipefail
-          # Build image and match support/smoke-expects.toml via --mode hw-serial.
+          # Build image and match support/config/boards/smoke-expects.toml via --mode hw-serial.
           just test-hw

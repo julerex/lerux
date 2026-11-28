@@ -3,12 +3,12 @@
 #
 # extractions/setup-just lists every GitHub release and fails with
 # "no release for just matching version specifier" when that lookup is empty.
-# support/github-release.sh retries the pinned asset, then uses the API when
+# support/scripts/host/github-release.sh retries the pinned asset, then uses the API when
 # releases/download returns HTTP 504.
 set -euo pipefail
 
 # shellcheck disable=SC1091
-source "$(cd "$(dirname "$0")/../.." && pwd)/support/github-release.sh"
+source "$(cd "$(dirname "$0")/../.." && pwd)/support/scripts/host/github-release.sh"
 
 version=1.59.0
 case "$(uname -m)" in

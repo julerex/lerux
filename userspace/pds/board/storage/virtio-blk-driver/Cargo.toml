@@ -1,0 +1,29 @@
+[package]
+name = "virtio-blk-driver"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[lints]
+workspace = true
+
+[features]
+board-qemu_virt_aarch64_virtio = []
+board-qemu_virt_riscv64_virtio = []
+board-x86_64_generic_virtio = ["dep:lerux-virtio-hal", "dep:lerux-virtio-pci"]
+
+[dependencies]
+lerux-logging = { path = "../../../../crates/platform/lerux-logging" }
+log = { workspace = true }
+sel4 = { workspace = true }
+sel4-driver-interfaces = { workspace = true }
+sel4-microkit = { workspace = true }
+sel4-microkit-driver-adapters = { workspace = true }
+sel4-shared-memory = { workspace = true }
+sel4-shared-ring-buffer = { workspace = true }
+sel4-shared-ring-buffer-block-io-types = { workspace = true }
+sel4-virtio-blk = { workspace = true }
+sel4-virtio-hal-impl = { workspace = true }
+lerux-virtio-hal = { workspace = true, optional = true }
+lerux-virtio-pci = { workspace = true, optional = true }
+virtio-drivers = { workspace = true }

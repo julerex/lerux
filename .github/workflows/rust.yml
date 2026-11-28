@@ -45,14 +45,14 @@ jobs:
       - name: Format and clippy
         run: just check
 
-      # The repro is support/host-check.sh. It sets CARGO_TARGET_DIR to
+      # The repro is support/scripts/host/host-check.sh. It sets CARGO_TARGET_DIR to
       # build/host and runs fmt, clippy -D warnings, and the host tests.
       - name: Publish the host check repro script
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: host-check-repro
-          path: support/host-check.sh
+          path: support/scripts/host/host-check.sh
 
   verify-ring:
     runs-on: ubuntu-latest
@@ -202,7 +202,7 @@ jobs:
             deps/toolchains/qemu-sp804
             deps/toolchains/qemu-6.2.0-src
             deps/toolchains/qemu-6.2.0.tar.xz
-          key: qemu-sp804-${{ hashFiles('support/qemu/arm-virt-sp804.patch', 'tools/lerux-cli/**') }}
+          key: qemu-sp804-${{ hashFiles('support/boot/qemu/arm-virt-sp804.patch', 'tools/lerux-cli/**') }}
           restore-keys: |
             qemu-sp804-
 
@@ -227,7 +227,7 @@ jobs:
             deps/toolchains/qemu-sp804
             deps/toolchains/qemu-6.2.0-src
             deps/toolchains/qemu-6.2.0.tar.xz
-          key: qemu-sp804-${{ hashFiles('support/qemu/arm-virt-sp804.patch', 'tools/lerux-cli/**') }}
+          key: qemu-sp804-${{ hashFiles('support/boot/qemu/arm-virt-sp804.patch', 'tools/lerux-cli/**') }}
 
       # The Actions cache is shared with Docker layer caches and can be evicted
       # before the smoke jobs restore it. The artifact is the copy those jobs use.

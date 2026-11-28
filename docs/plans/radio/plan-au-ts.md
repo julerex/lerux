@@ -1,0 +1,361 @@
+# PLAN — au-ts inspiration
+
+Last updated: 2026-09-26 (closed pointers to finished phases 63, 65, and 70)
+
+Upstream mirror: [`/home/julian/repos/github_orgs/au-ts`](https://github.com/au-ts) (Trustworthy Systems).  
+Related: [`plan.md`](../core/plan.md) (main roadmap), [`plan-interactive.md`](../core/plan-interactive.md) (same “steal the idea, not the code” rule for Ladybird / Grok Build), [`context.md`](../../guide/overview/context.md) (domain language).
+
+This plan turns the highest-leverage ideas from the au-ts ecosystem into lerux work **without** adopting C sDDF/LionsOS as userspace or abandoning the Rust-only, typed postcard RPC, non-POSIX direction.
+
+## Principles
+
+| Keep | Steal the idea, not the code |
+|------|------------------------------|
+| Rust-only PDs (`#![no_std]`) | sDDF virtualiser topology and queue protocols |
+| Typed postcard RPC (`lerux-interface-types`) | sdfgen-style programmatic system composition |
+| Static Microkit images + profiles | LionsOS component *menu* as ported PD candidates |
+| No musl / POSIX ABI | libmicrokitco-style sync-over-async where poll loops hurt |
+| Upstream via rust-sel4 / Microkit pins | libgdb, systems-ci patterns for debug and HW CI |
+
+**Do not** vendor `deps/` copies of sDDF or LionsOS into the tree. Prefer reimplementing protocols in Rust (or wrapping rust-sel4 crates that already encode the same shapes). Link ADRs when a choice hardens (e.g. “adopt sdfgen vs extend `lerux profile`”).
+
+## Source map
+
+| Inspiration | au-ts repos | lerux touchpoints today |
+|-------------|-------------|-------------------------|
+| Driver / virtualiser / client | `sddf` (+ design PDF) | `serial-driver`, virtio/genet/emmc2, `net-server`, `blk-server` |
+| Programmatic SDF | `microkit_sdf_gen` | `.system` templates (layout body), `support/config/boards/profiles/`, `lerux profile` / `render_system` |
+| Component catalog | `lionsos` examples + `components/` | workstation profile, Phase 40 apps |
+| Sync over Microkit events | `libmicrokitco` | poll-based `FsRequest` / `NetRequest` |
+| Remote GDB | `libgdb` | none |
+| HW CI / board lock | `systems-ci`, `machine_queue` | `LERUX_HW_SERIAL=… just test` |
+| Partitioned scheduling | `arinc-scheduling` | `supervisor` notify / priorities |
+| Perf baselines | `sel4bench`, `ipbench` | smoke-only (functional) |
+
+## Tracer-bullet order
+
+Dependency-aware order after Phase 40 packaging:
+
+```
+41 system-gen  →  42 serial virt  →  43 net virt
+        ↓                                    ↓
+   44 FS backends ←—————— 45 sync runtime
+        ↓
+   46 debug PD  ·  47 HW CI  ·  48 QoS (optional)
+        ↓
+   49 perf baselines (optional)
+```
+
+Phases 41–43 strengthen the static system and I/O mux story.  
+Phases 44–45 grow services without POSIX.  
+Phases 46–47 harden bring-up on real boards.  
+48–49 are optional once mux and CI exist.
+
+---
+
+## Phase 41 — System generation (sdfgen-shaped) ✅ complete
+
+**Goal:** Profiles and channel manifests drive composition with fewer hand-edited XML edges; validate against Microkit SDF rules before `microkit` runs.
+
+### Inspiration
+
+`microkit_sdf_gen`: programmatic PDs, memory regions, channels, and subsystem recipes (Python/C/Zig).
+
+### Scope
+
+- [x] Inventory current templates: which regions/channels are mechanical vs board-specific → [`system-generation.md`](../../guide/overview/system-generation.md)
+- [x] ADR: extend `lerux profile` / `lerux system` in-tree **vs** call out to sdfgen Python → [ADR-001](../../decisions/001-006/001-in-tree-system-generation.md)
+  - **Accepted:** in-tree Rust generator in `lerux-cli`; optional later bridge to sdfgen for sDDF-compatible layouts only
+- [x] Structured channel manifest (`[[channel]]`) + load-time validation (`lerux profile validate|show`)
+- [x] Channel XML composition: `render_system` / `render_profile_system` = layout body (`system_vars` + template) + generated channels from profile
+- [x] Workstation + workstation-rpi4 templates are **channel-free layout recipes**; channels live only in profile TOML
+- [x] Named channel constants: `lerux profile emit-channels` + `check-channels` (PD `const` drift check); `channel_consts.rs` written next to `system.system`
+- [x] Full SDF emit path: `lerux profile sdf <name>` / `lerux system --board …` compose complete Microkit XML (layout body from template + channels from manifest; hardware from `boards.toml`)
+- [x] `lerux profile diff` shows PD/channel TOML delta **and** composed SDF delta
+- [x] Golden unit tests (17) for workstation composition + channel checks; `just check` clean
+
+### Out of scope (deferred)
+
+- Full sDDF subsystem recipes in C
+- Replacing all layout templates with pure device-recipe IR (MRs/maps still in `.system.template` bodies; Phase 42+ can shrink further)
+- Replacing `support/config/boards/boards.toml` hardware constants
+
+### Exit
+
+- [x] Workstation (QEMU aarch64) SDF composed from profile + board (channels generated)
+- [x] Host checks green (`just check`, `cargo test -p lerux-cli`)
+- [x] AGENTS.md notes channels come from the profile manifest
+
+### CLI surface (Phase 41)
+
+| Command | Purpose |
+|---------|---------|
+| `lerux profile list\|show\|validate` | Inspect structured channels |
+| `lerux profile sdf <name> [-o file]` | Emit composed Microkit SDF |
+| `lerux profile emit-channels <name>` | Generate `channel_consts.rs` text |
+| `lerux profile check-channels [name]` | Drift-check PD `Channel::new` vs manifest |
+| `lerux profile diff a b` | TOML topology + SDF delta |
+| `lerux system --board … -o …` | Compose + write SDF (+ channel_consts side file) |
+
+---
+
+## Phase 42 — Serial virtualiser (sDDF serial shape) ✅ complete (workstation slice)
+
+**Goal:** Least-privilege serial mux: UART driver owns MMIO/IRQ only; a virtualiser multiplexes clients over shared queues.
+
+### Inspiration
+
+sDDF serial: driver ↔ Tx/Rx virtualisers ↔ clients; SPSC queues; power-of-two capacity; `producer_signalled` protocol ([`sddf/docs/serial/serial.md`](https://github.com/au-ts/sddf/blob/main/docs/serial/serial.md)).
+
+### Scope
+
+- [x] Document current multi-client model vs sDDF split → [ADR-002](../../decisions/001-006/002-serial-virtualiser.md)
+- [x] `lerux-serial-queue` SPSC + data region + `producer_signalled` (host unit tests)
+- [x] Split on workstation: `serial-driver` `device-only` + `serial-virt` multi-client postcard RPC (clients unchanged wire format)
+- [x] Shell / supervisor / log-server → `serial_virt`; driver ↔ virt notify + shared TX/RX queues
+- [x] Non-workstation boards keep combined multi-client driver (migration later)
+- [x] Full QEMU workstation smoke regression (`just test-workstation` in CI, plus RISC-V and x86)
+
+### Out of scope
+
+- Porting C sDDF serial components
+- Changing postcard `LogRequest` / shell line protocol
+- Per-client TX queues shipped in [Phase 65](../core/plan-qemu.md#phase-65--serial-virtualiser-v2). Separate TX+RX virt PDs stay deferred.
+
+### Exit
+
+- [x] Driver PD has no client PPCs (sole client = `serial-virt`); UART MMIO only
+- [x] Virt owns multi-client mux; workstation profile/template/board updated
+- [x] Workstation smoke green (`just test-workstation`, CI fix `cb3ef88`)
+
+---
+
+## Phase 43 — Net virtualiser (sDDF net shape) ✅
+
+**Goal:** Multi-client ethernet with clear trust boundaries: NIC driver without client DMA; Rx/Tx virtualisers; optional per-client copy for untrusted clients.
+
+### Inspiration
+
+sDDF network architecture ([`sddf/docs/network/network.md`](https://github.com/au-ts/sddf/blob/main/docs/network/network.md)): driver / Rx virt / Tx virt / copy PDs; shared queue metadata + DMA vs client data regions.
+
+### Scope
+
+- [x] Design note → [ADR-003](../../decisions/001-006/003-net-virtualiser.md), [`net-topology.md`](../../guide/quality/net-topology.md)
+- [x] Apps stay behind `NetRequest` / `NetResponse`; sole L2 Microkit client of the NIC driver is `net-server`
+- [x] **Unified DMA (aarch64 virtio-net):** remove separate `virtio_net_client_dma` MR; driver maps only `virtio_net_driver_dma` (Hal low half + bounce high half); stack maps same MR for bounce; feature `unified-dma`
+- [x] Prefer RPC for untrusted apps; no app L2 DMA
+- [x] Preserve `NetRequest` / `NetResponse`
+- [x] Smoke: `just test-net`, `just test-fetch`, `just test-http` (and workstation)
+- [x] Stretch: x86 + RISC-V unified-dma → [Phase 61](../core/plan-qemu.md#phase-61--qemu-dma-parity-x86-pci--risc-v-virtio); separate Rx/Tx virt PDs / copy PDs still deferred. GENET unified-dma is [`plan-arch.md` — Physical RPi4 lab](../core/plan-arch.md#physical-rpi4-lab-hardware-gated).
+
+### Out of scope
+
+- Full sDDF copy-PD swarm
+- Replacing smoltcp with lwIP
+
+### Exit
+
+- [x] Documented trust map
+- [x] Aarch64 virtio-net boards: no distinct client_dma map in the NIC driver PD
+- [x] Apps never map NIC DMA; net/fetch/HTTP smokes green
+
+---
+
+## Phase 44 — Filesystem backends (LionsOS menu) ✅ FAT slice
+
+**Goal:** Real on-disk / network FS options behind existing `FsRequest` / `FsResponse`, without POSIX.
+
+### Inspiration
+
+LionsOS `components/fs/fat`, `components/fs/nfs`, `examples/fileio`.
+
+### Scope
+
+- [x] Keep LERUXFS as the default smoke FS (`just test-fs`; Phase 50 → **LERUXFS2**)
+- [x] FAT16 backend behind `fs-server` (`lerux-fat` + `backend-fat`) matching `Open`/`Create`/`Read`/`Write`/`Stat`/`ListDir`/`Poll` on virtio-blk
+- [ ] Optional NFS client PD. Host-backed files shipped as disk inject in [Phase 63](../core/plan-qemu.md#phase-63--host-backed-fs-qemu-virtfs--9p); NFS and virtio-9p stay deferred ([ADR-008](../../decisions/007-012/008-host-backed-fs.md)).
+- [x] Board/feature selection: `qemu_virt_aarch64_fs` (LERUXFS2) vs `qemu_virt_aarch64_fs_fat` (FAT16); Cargo features `backend-lerux` / `backend-fat`
+- [x] Shell / edit unchanged at IPC boundary
+- [x] Smoke: `just test-fs-fat`; format choice in `docs/guide/overview/context.md`
+
+### Out of scope
+
+- Mounting Linux rootfs or glibc apps
+- Full POSIX VFS
+- NFS client and virtio-9p stay deferred. Host-backed files are the Phase 63 disk inject. FAT has multi-cluster files, LFN, and subdirectories.
+
+### Exit
+
+- [x] One alternate FS backend selectable by board/feature; `just test-fs` and `just test-fs-fat` green
+- [ ] Workstation optional FAT demo. [Phase 70](../core/plan-qemu.md#phase-70--qemu-developer-loop) left FAT on `just test-fs-fat`.
+
+---
+
+## Phase 45 — Sync runtime for service PDs ✅
+
+**Goal:** Replace the worst poll loops in `fs-server` / `net-server` with structured concurrency that still fits Microkit’s `Handler` model.
+
+### Inspiration
+
+`libmicrokitco` — coroutines / sync API over async notifications.
+
+### Scope
+
+- [x] Spike: stackful libmicrokitco **vs** rust-sel4 `LocalPool` **vs** thin in-tree stackless async → [ADR-004](../../decisions/001-006/004-service-async.md)
+- [x] ADR: **stackless coop async** server-internal; clients keep poll RPC
+- [x] Adopt in `fs-server`: `lerux-service-async` + async sector helpers; LERUXFS2 **format/mount** as `SingleTask` future
+- [x] Clients keep poll-based RPC (`FsRequest::Poll`)
+- [x] Smokes: `just test-fs`, `just test-fs-fat`
+
+### Out of scope
+
+- Preemptive threads in every PD
+- Porting libmicrokitco C into the tree
+- Full multi-task executor / net-server migration (follow-up)
+
+### Exit
+
+- [x] ADR-004 accepted
+- [x] `fs-server` uses the model for format; no smoke regression
+
+---
+
+## Phase 46 — Debug protection domain ✅
+
+**Goal:** Attach GDB to a crashing or hung PD on QEMU (then RPi4).
+
+### Inspiration
+
+`libgdb` (debugger PD as fault handler; serial or TCP transport).
+
+### Scope
+
+- [x] Feasibility: libgdb needs forked seL4/Microkit → **not** adopted on stock 2.2.0 ([ADR-005](../../decisions/001-006/005-debug-pd.md))
+- [x] Minimal path: Microkit hierarchy `debug-handler` (parent `fault`) + `crash-demo` (child VM fault) on `qemu_virt_aarch64_debug`
+- [x] Board + smoke `just test-debug` (fault log strings)
+- [x] Doc: QEMU gdbstub + `gdb-multiarch` — [`docs/guide/ops/debug.md`](../../guide/ops/debug.md)
+- [x] x86 and RISC-V debug ([Phase 66](../core/plan-qemu.md#phase-66--qemu-arch-parity-debug-isolation-serial-virt): `just test-debug-x86`, `just test-debug-riscv`)
+- [ ] Optional: in-guest GDB RSP / TCP (deferred until upstream APIs or explicit fork)
+
+### Out of scope
+
+- Shipping a permanent debugger in production workstation images
+- libgdb + forked kernel as default
+
+### Exit
+
+- [x] Documented QEMU + gdb-multiarch workflow
+- [x] Deliberate fault in demo PD → parent logs VmFault (smoke); host GDB for interactive backtrace
+
+---
+
+## Phase 47 — Hardware CI harness ✅
+
+**Goal:** Reliable RPi4 (and future board) serial expect tests without ad-hoc cable folklore.
+
+### Inspiration
+
+`systems-ci` (`ts_ci` TestCase, board locking) and `machine_queue`.
+
+### Scope
+
+- [x] Formalize modes: `lerux test --mode auto|qemu|hw-serial` (+ `LERUX_TEST_MODE`); `just test-hw`
+- [x] Expects as data: [`support/config/boards/smoke-expects.toml`](../../../support/config/boards/smoke-expects.toml) shared by QEMU and hw-serial
+- [x] Board lock: `LERUX_HW_LOCK_DIR` / `{board}.lock` (PID + stale reclaim)
+- [x] CI: [`.github/workflows/hw-serial.yml`](../.github/workflows/hw-serial.yml) `workflow_dispatch` + `self-hosted,lerux-hw` when `LERUX_HW_ENABLED=true`
+- [x] Docs: [`ci.md`](../../guide/ops/ci.md), [`boards.md`](../../hardware/boards/boards.md)
+
+### Out of scope
+
+- UNSW machine_queue integration
+- Full matrix of every smoke on HW
+
+### Exit
+
+- [x] Golden path: `BOARD=rpi4b_4gb_workstation LERUX_HW_SERIAL=… just test-hw`
+- [x] Phase 39 boot expects automated via TOML + hw-serial; on-device REPL sign-off → [`plan-arch.md` — Physical RPi4 lab](../core/plan-arch.md#physical-rpi4-lab-hardware-gated)
+
+---
+
+## Phase 48 — Supervisor QoS / partitioning (optional) ✅
+
+**Goal:** Explicit time or priority isolation between shell, net, and FS when contention matters.
+
+### Inspiration
+
+`arinc-scheduling` sampling/queuing ports; Microkit priorities already in templates.
+
+### Scope
+
+- [x] Inventory current PD priorities and PPC behaviour → [`docs/guide/quality/qos.md`](../../guide/quality/qos.md)
+- [x] Service classes (platform / services / control / bulk / interactive); document Microkit PPC callee>caller rule (shell stays at 1)
+- [x] Inherent bulk throttle: document fs/net single-flight jobs (no MCS budgets in v1)
+- [x] Stress note + `just test-workstation` concurrent boot as smoke proxy; shell `qos` command
+
+### Exit
+
+- [x] Documented priority policy ([ADR-006](../../decisions/001-006/006-workstation-qos.md), `qos.md`)
+- [x] Template comments + shell `qos`; `just test-workstation` green
+
+---
+
+## Phase 49 — Performance baselines (optional) ✅
+
+**Goal:** Know whether Rust ring + postcard paths are in the same ballpark as sDDF/LionsOS anecdotes.
+
+### Inspiration
+
+`sel4bench`, `ipbench` / `autobench`.
+
+### Scope
+
+- [x] Host-driven microbench: echo RTT, blk read IOPS, UDP TX PPS on QEMU aarch64 (`bench_*` boards + `lerux-bench-time`)
+- [x] Record numbers: `just bench` → `build/bench/bench-results.{md,json}` + `docs/guide/quality/bench-results.latest.md`
+- [x] Optional external sDDF compare: documented as out-of-tree only ([`docs/guide/quality/bench.md`](../../guide/quality/bench.md))
+
+### Exit
+
+- [x] Reproducible `just bench` / `lerux bench` producing markdown + JSON summary
+
+---
+
+## Phase 40 interaction
+
+Keep Phase 40 packaging/apps on the main [`plan.md`](../core/plan.md) track. Prefer:
+
+1. Finish Phase 40 package pin story enough that new virt/FS PDs can be profile fragments.
+2. Start Phase 41 in parallel with “more apps” only if generator work unblocks channel/manifest pain.
+
+Suggested app ports once 41–44 land:
+
+| App idea | Depends on | Notes |
+|----------|------------|-------|
+| HTTP file browser | FS + net IPC | LionsOS webserver *idea*; stay Rust PD |
+| MicroPython / WAMR PD | Phase 45 helpful | Optional runtime; IPC to fs/net only |
+| `top` / chat-client | Phase 40 | Unchanged |
+
+---
+
+## Explicit non-goals
+
+- Replacing lerux userspace with LionsOS or sDDF C components
+- Formal verification of lerux PDs (gordian / Cogent / CakeML) unless product requirements change
+- libvmm / guest Linux or Windows (revisit only with a dedicated ADR)
+- Nix flakes as the primary developer UX (au-ts uses Nix heavily; lerux stays `just` + `lerux-cli`)
+
+## Version / upstream pins
+
+Track alongside [`plan.md`](../core/plan.md) version table. Revisit when adopting debug or newer Microkit APIs:
+
+| Component | Current | Watch |
+|-----------|---------|-------|
+| seL4 | 16.0.0 | libgdb fork branches |
+| Microkit | 2.3.0 | sdfgen / GDB patches |
+| rust-sel4 | v5.0.0 | shared-ring + driver-adapter evolution |
+
+## Success criteria (program-level)
+
+- Inspiration is visible as **Rust PDs + profiles**, not as C submodules
+- Workstation QEMU smokes remain green after each phase
+- At least one of: generated SDF (41), serial virt (42), or net virt (43) ships before optional 48–49 — **Phase 41 done**
+- HW bring-up (47) shipped the harness; on-device sign-off is [`plan-arch.md` — Physical RPi4 lab](../core/plan-arch.md#physical-rpi4-lab-hardware-gated)

@@ -228,7 +228,7 @@ compact_trace() {
   {
     echo "# mt76:reg_rr / mt76:reg_wr, one event per line: rr|wr <bar offset> <value>"
     echo "# Addresses are BAR offsets. mt76 traces the access after remap."
-    echo "# map_reg in userspace/crates/lerux-swift/src/mt7921.rs is the logical address."
+    echo "# map_reg in userspace/crates/desk/lerux-swift/src/radio/mt7921.rs is the logical address."
     if [[ -f "$work/trace-report.txt" ]]; then
       echo "# lost-event lines: $(grep -c 'LOST' "$work/trace-report.txt" || true)"
     fi

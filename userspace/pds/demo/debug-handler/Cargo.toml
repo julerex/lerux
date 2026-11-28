@@ -1,0 +1,24 @@
+[package]
+name = "debug-handler"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Parent PD that logs child faults (Phase 46)"
+
+[lints]
+workspace = true
+
+[features]
+board-qemu_virt_aarch64_debug = []
+board-qemu_virt_riscv64_debug = []
+board-x86_64_generic_debug = []
+# Phase 60: notify fs-client after suspending crash-demo.
+isolation-notify = []
+board-qemu_virt_aarch64_isolation = ["isolation-notify"]
+board-qemu_virt_riscv64_isolation = ["isolation-notify"]
+
+[dependencies]
+lerux-logging = { path = "../../../crates/platform/lerux-logging" }
+log = { workspace = true }
+sel4 = { workspace = true }
+sel4-microkit = { workspace = true }

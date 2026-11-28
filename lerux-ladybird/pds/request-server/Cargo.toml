@@ -8,11 +8,11 @@ license = "MIT"
 workspace = true
 
 [dependencies]
-lerux-cothread = { path = "../../../userspace/crates/lerux-cothread" }
-lerux-ladybird-http = { path = "../../crates/lerux-ladybird-http" }
-lerux-posix = { path = "../../../userspace/crates/lerux-posix" }
-lerux-sddf = { path = "../../../userspace/crates/lerux-sddf" }
-lerux-tls = { path = "../../../userspace/crates/lerux-tls" }
+lerux-cothread = { path = "../../../userspace/crates/queue/lerux-cothread" }
+lerux-ladybird-http = { path = "../../crates/net/lerux-ladybird-http" }
+lerux-posix = { path = "../../../userspace/crates/net/lerux-posix" }
+lerux-sddf = { path = "../../../userspace/crates/queue/lerux-sddf" }
+lerux-tls = { path = "../../../userspace/crates/net/lerux-tls" }
 sel4-microkit = { workspace = true }
 smoltcp = { workspace = true, features = [
     "medium-ethernet",

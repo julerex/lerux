@@ -1,0 +1,36 @@
+[package]
+name = "lerux-sddf"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+description = "Rust copies of the LionsOS and seL4 Device Driver Framework shared structures"
+
+[lints]
+workspace = true
+
+[dependencies]
+lerux-ring = { path = "../lerux-ring" }
+
+[[test]]
+name = "serial_image"
+path = "tests/image/serial_image.rs"
+
+[[test]]
+name = "net_image"
+path = "tests/image/net_image.rs"
+
+[[test]]
+name = "blk_queue"
+path = "tests/queue/blk_queue.rs"
+
+[[test]]
+name = "fs_queue"
+path = "tests/queue/fs_queue.rs"
+
+[[test]]
+name = "net_queue"
+path = "tests/queue/net_queue.rs"
+
+[[test]]
+name = "serial_queue"
+path = "tests/queue/serial_queue.rs"

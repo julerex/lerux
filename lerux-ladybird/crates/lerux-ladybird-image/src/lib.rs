@@ -2,7 +2,7 @@
 //!
 //! [`decode_png`] reads an 8-bit, non-interlaced RGB or RGBA PNG into tightly
 //! packed B, G, R, A. Inflate and the scanline filters are written here.
-//! [`paint_page`] paints `support/browser/lenna.html` into a caller's 32-bit
+//! [`paint_page`] paints `support/payload/fixtures/browser/sample/lenna.html` into a caller's 32-bit
 //! framebuffer.
 
 #![no_std]

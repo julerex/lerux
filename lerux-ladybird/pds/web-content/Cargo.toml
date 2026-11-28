@@ -8,11 +8,11 @@ license = "MIT"
 workspace = true
 
 [dependencies]
-lerux-cothread = { path = "../../../userspace/crates/lerux-cothread" }
+lerux-cothread = { path = "../../../userspace/crates/queue/lerux-cothread" }
 lerux-ladybird-gfx = { path = "../../crates/lerux-ladybird-gfx" }
-lerux-ladybird-html = { path = "../../crates/lerux-ladybird-html" }
-lerux-ladybird-http = { path = "../../crates/lerux-ladybird-http" }
+lerux-ladybird-html = { path = "../../crates/document/lerux-ladybird-html" }
+lerux-ladybird-http = { path = "../../crates/net/lerux-ladybird-http" }
 lerux-ladybird-image = { path = "../../crates/lerux-ladybird-image" }
-lerux-ladybird-url = { path = "../../crates/lerux-ladybird-url" }
-lerux-ladybird-web = { path = "../../crates/lerux-ladybird-web" }
+lerux-ladybird-url = { path = "../../crates/net/lerux-ladybird-url" }
+lerux-ladybird-web = { path = "../../crates/document/lerux-ladybird-web" }
 sel4-microkit = { workspace = true }

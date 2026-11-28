@@ -8,9 +8,9 @@ license = "MIT"
 workspace = true
 
 [dependencies]
-lerux-cothread = { path = "../../../userspace/crates/lerux-cothread" }
+lerux-cothread = { path = "../../../userspace/crates/queue/lerux-cothread" }
 lerux-ladybird-gfx = { path = "../../crates/lerux-ladybird-gfx" }
-lerux-sddf = { path = "../../../userspace/crates/lerux-sddf" }
+lerux-sddf = { path = "../../../userspace/crates/queue/lerux-sddf" }
 sel4-microkit = { workspace = true }
 
 [build-dependencies]

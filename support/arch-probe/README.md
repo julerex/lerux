@@ -4,7 +4,7 @@ One USB stick holds the official Arch install image and `probe.sh`. Boot it on a
 
 `just make-lerux-iso-swift` is a different stick. That one is the lerux image. This recipe does not build lerux.
 
-`support/arch-probe/fixture` is the host check for the summary. It is not a dump from a machine.
+`support/arch-probe/scripts/fixture/text` is the host check for the summary. It is not a dump from a machine.
 
 ## Make the stick
 
@@ -66,7 +66,7 @@ Plug the stick into this machine and run:
 just read-arch-probe
 ```
 
-The command copies each stamp into `support/arch-probe/out/<product>_<stamp>/`. When the desktop has already mounted `CAPTURE`, that mount is used and left in place. Otherwise the partition is mounted read-only and unmounted afterwards. It prints the path of `board.txt`. That directory is gitignored: it is the raw capture, including PCI config space and ACPI tables. A machine kept in the tree is copied by hand into `support/arch-probe/machines/`. The Inspiron N5010 record is [machines/inspiron-n5010.md](machines/inspiron-n5010.md).
+The command copies each stamp into `support/arch-probe/scripts/out/<product>_<stamp>/`. When the desktop has already mounted `CAPTURE`, that mount is used and left in place. Otherwise the partition is mounted read-only and unmounted afterwards. It prints the path of `board.txt`. That directory is gitignored: it is the raw capture, including PCI config space and ACPI tables. A machine kept in the tree is copied by hand into `support/arch-probe/scripts/machines/`. The Inspiron N5010 record is [machines/inspiron-n5010.md](machines/inspiron-n5010.md).
 
 `just read-arch-probe /dev/sdX` uses that stick directly. One CAPTURE partition is used without a prompt. Several are listed.
 

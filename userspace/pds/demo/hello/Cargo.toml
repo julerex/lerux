@@ -1,0 +1,50 @@
+[package]
+name = "hello"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[lints]
+workspace = true
+
+[features]
+unified-dma = []
+board-qemu_virt_aarch64 = ["serial-ipc"]
+board-qemu_virt_aarch64_virtio = ["serial-ipc", "virtio", "unified-dma"]
+board-qemu_virt_aarch64_composed = ["virtio", "composed-sync", "serial-ipc", "unified-dma"]
+composed-sync = []
+board-qemu_virt_riscv64 = ["serial-ipc"]
+board-qemu_virt_riscv64_virtio = ["serial-ipc", "virtio", "unified-dma"]
+board-x86_64_generic = ["serial-ipc"]
+board-x86_64_generic_virtio = ["serial-ipc", "virtio", "unified-dma"]
+board-rpi4b_4gb = ["serial-ipc"]
+serial-ipc = ["lerux-logging/serial"]
+virtio = [
+    "dep:async-unsync",
+    "dep:sel4-driver-interfaces",
+    "dep:sel4-microkit-driver-adapters",
+    "dep:sel4-shared-memory",
+    "dep:sel4-shared-ring-buffer",
+    "dep:sel4-shared-ring-buffer-block-io",
+    "dep:sel4-shared-ring-buffer-block-io-types",
+    "dep:sel4-shared-ring-buffer-bookkeeping",
+    "dep:sel4-shared-ring-buffer-smoltcp",
+    "dep:sel4-abstract-allocator",
+    "dep:smoltcp",
+    "sel4-microkit/alloc",
+]
+
+[dependencies]
+async-unsync = { version = "0.3.0", default-features = false, optional = true }
+sel4-microkit = { workspace = true }
+sel4-driver-interfaces = { workspace = true, optional = true }
+sel4-microkit-driver-adapters = { workspace = true, optional = true }
+sel4-shared-memory = { workspace = true, optional = true }
+sel4-shared-ring-buffer = { workspace = true, optional = true }
+sel4-shared-ring-buffer-block-io = { workspace = true, optional = true }
+sel4-shared-ring-buffer-block-io-types = { workspace = true, optional = true }
+sel4-shared-ring-buffer-bookkeeping = { workspace = true, optional = true, features = ["async-unsync"] }
+sel4-abstract-allocator = { workspace = true, optional = true }
+sel4-shared-ring-buffer-smoltcp = { workspace = true, optional = true }
+smoltcp = { workspace = true, optional = true, features = ["medium-ethernet", "proto-ipv4", "socket-udp", "socket-tcp"] }
+lerux-logging = { path = "../../../crates/platform/lerux-logging" }

@@ -594,14 +594,14 @@ mod tests {
     }
 
     fn assert_i217_board_entry() {
-        let boards = fs::read_to_string(repo_root().join("support/boards.toml")).expect("boards");
+        let boards = fs::read_to_string(repo_root().join("support/config/boards/boards.toml")).expect("boards");
         let header = boards.split("\n[").next().expect("header");
         assert!(header.contains("pc_z97_d3h_i217"));
         let section = board_section(&boards, "pc_z97_d3h_i217");
         assert!(section.contains("sddf-e1000e-driver"));
         assert!(section.contains("ci = false"));
         assert!(!section.contains("qemu"));
-        let docs = fs::read_to_string(repo_root().join("docs/system-generation.md")).expect("docs");
+        let docs = fs::read_to_string(repo_root().join("docs/guide/overview/system-generation.md")).expect("docs");
         assert!(docs.contains("pc_z97_d3h_i217"));
         assert_eq!(
             board_registration("pc_z97_d3h_i217")
@@ -664,7 +664,7 @@ mod tests {
     #[test]
     fn x86_fetch_native_board_row_stays_out_of_ci() {
         let root = repo_root();
-        let boards = fs::read_to_string(root.join("support/boards.toml")).expect("boards");
+        let boards = fs::read_to_string(root.join("support/config/boards/boards.toml")).expect("boards");
         let header = boards.split("\n[").next().expect("header");
         assert!(header.contains("x86_64_generic_fetch_native"));
         let section = board_section(&boards, "x86_64_generic_fetch_native");
@@ -675,19 +675,19 @@ mod tests {
         assert!(section.contains("ci = false"));
         assert!(section.contains("disk = \"rw\""));
         assert!(section.contains("https_one = true"));
-        let smokes = fs::read_to_string(root.join("support/smoke-expects.toml")).expect("smokes");
+        let smokes = fs::read_to_string(root.join("support/config/boards/smoke-expects.toml")).expect("smokes");
         let native = board_section(&smokes, "boards.x86_64_generic_fetch_native");
         let virtio = board_section(&smokes, "boards.x86_64_generic_fetch_sddf");
         assert_eq!(native, virtio);
         // The daily shell ends with `reboot`. x86 starts a new QEMU for that step.
         assert!(native.contains("reboot"));
-        let docs = fs::read_to_string(root.join("docs/system-generation.md")).expect("docs");
+        let docs = fs::read_to_string(root.join("docs/guide/overview/system-generation.md")).expect("docs");
         assert!(docs.contains("x86_64_generic_fetch_native"));
     }
 
     #[test]
     fn e1000e_board_row_swaps_the_driver_and_stays_out_of_ci() {
-        let boards = fs::read_to_string(repo_root().join("support/boards.toml")).expect("boards");
+        let boards = fs::read_to_string(repo_root().join("support/config/boards/boards.toml")).expect("boards");
         let header = boards.split("\n[").next().expect("header");
         assert!(header.contains("x86_64_generic_net_e1000e"));
         let section = board_section(&boards, "x86_64_generic_net_e1000e");
@@ -890,7 +890,7 @@ mod tests {
                 net: NetBackend::Virtio,
             })
         );
-        let boards = fs::read_to_string(repo_root().join("support/boards.toml")).expect("boards");
+        let boards = fs::read_to_string(repo_root().join("support/config/boards/boards.toml")).expect("boards");
         let section = board_section(&boards, "x86_64_generic_web_sddf");
         assert!(
             section.contains("hostfwd"),
@@ -959,7 +959,7 @@ mod tests {
             })
         );
         assert!(web.contains("sddf-shell.elf"));
-        let boards = fs::read_to_string(repo_root().join("support/boards.toml")).expect("boards");
+        let boards = fs::read_to_string(repo_root().join("support/config/boards/boards.toml")).expect("boards");
         let section = board_section(&boards, "qemu_virt_aarch64_web_sddf");
         assert!(
             section.contains("hostfwd"),
@@ -1408,7 +1408,7 @@ mod tests {
 
     #[test]
     fn pci_ecam_images_match_the_sibling_smokes() {
-        let script = fs::read_to_string(repo_root().join("support/check-sibling-smoke.py"))
+        let script = fs::read_to_string(repo_root().join("support/scripts/check/check-sibling-smoke.py"))
             .expect("sibling script");
         let named = sibling_ecam_smokes(&script);
         assert_eq!(named.len(), PCI_ECAM_SMOKES.len(), "{named:?}");

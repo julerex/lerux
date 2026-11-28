@@ -4,7 +4,7 @@ How the engineering skills should consume this repo's domain documentation when 
 
 ## Before exploring, read these
 
-- **`docs/context.md`**: domain language for this repo.
+- **`docs/guide/overview/context.md`**: domain language for this repo.
 - **`docs/decisions/`**: architecture decision records. Read the ones that touch the area you are about to work in.
 - **`GLOSSARY.md`** at the repo root, if it exists. If **`GLOSSARY-MAP.md`** exists, it points at one `GLOSSARY.md` per context; read each one relevant to the topic.
 
@@ -18,14 +18,14 @@ Single-context:
 
 ```
 /
-├── docs/context.md
+├── docs/guide/overview/context.md
 ├── docs/decisions/
 └── GLOSSARY.md              ← created lazily by /domain-modeling
 ```
 
 ## Use the glossary's vocabulary
 
-When your output names a domain concept (in an issue title, a refactor proposal, a hypothesis, a test name), use the term as defined in `docs/context.md`, and in `GLOSSARY.md` when that file exists. Don't drift to synonyms the glossary explicitly avoids.
+When your output names a domain concept (in an issue title, a refactor proposal, a hypothesis, a test name), use the term as defined in `docs/guide/overview/context.md`, and in `GLOSSARY.md` when that file exists. Don't drift to synonyms the glossary explicitly avoids.
 
 If the concept you need isn't written down yet, that's a signal: either you're inventing language the project doesn't use (reconsider) or there's a real gap (note it for `/domain-modeling`).
 

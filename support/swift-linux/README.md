@@ -1,6 +1,6 @@
 # Linux probe of the Swift MT7921
 
-The stick is `just burn-arch-probe`, documented in [support/arch-probe/README.md](../arch-probe/README.md). That recipe writes the Arch install image, the desk probe, and `capture.sh`. This file is the radio trace. Boot it on the Acer, with the card's driver held until the script loads it. The output is the Phase 4 record in [docs/plan-swift-wifi.md](../../docs/plan-swift-wifi.md): `lspci -vvv` for the MT7921 and its root port, the `dmesg` lines matching `mt7921|AMD-Vi`, and the `mt76:reg_rr` / `mt76:reg_wr` trace of that probe.
+The stick is `just burn-arch-probe`, documented in [support/arch-probe/scripts/README.md](../arch-probe/README.md). That recipe writes the Arch install image, the desk probe, and `capture.sh`. This file is the radio trace. Boot it on the Acer, with the card's driver held until the script loads it. The output is the Phase 4 record in [docs/plans/radio/plan-swift-wifi.md](../../docs/plans/radio/plan-swift-wifi.md): `lspci -vvv` for the MT7921 and its root port, the `dmesg` lines matching `mt7921|AMD-Vi`, and the `mt76:reg_rr` / `mt76:reg_wr` trace of that probe.
 
 Arch is enough. The install image already contains `linux-firmware` (the MT7961 patch and RAM image), `pciutils`, and `kmod`. It has no network until this driver comes up, so the script does not install `trace-cmd`. It reads the same two events from the kernel tracer.
 

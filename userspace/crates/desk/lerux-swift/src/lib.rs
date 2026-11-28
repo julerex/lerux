@@ -1,0 +1,49 @@
+//! Swift X SFX14-41G device logic that does not touch seL4.
+//!
+//! The protection domains paint with [`paint_row`] and call the parsers here.
+//! A missing firmware blob or a controller that does not answer stays an error.
+//! Nothing in this crate formats a disk or sends an `NVMe` write.
+
+#![cfg_attr(not(test), no_std)]
+
+mod radio;
+mod device;
+mod paint;
+
+pub use radio::{mt7921, mt7921_card, wpa};
+pub(crate) use radio::wifi;
+pub(crate) use device::{bt, nvme, pci};
+pub use paint::dump;
+pub(crate) use paint::{crypto, panel};
+
+pub use bt::{
+    acknowledge_reset, bring_up as bt_bring_up, fail_line, find_bluetooth_interface,
+    find_hci_interrupt, first_interface_class, format_report as bt_line, frame_usb_event, further,
+    hci_reset, is_bluetooth_interface, usb_hci_reset, version_line, xfer_line, BtReport, HciIntr,
+    PortStop, XferFail,
+};
+pub use mt7921::{
+    drop_requested, format_survey_report, is_setup_wifi, join_pending, join_up, mirror_heard,
+    note_dropped, publish_station, read_heard_count, read_heard_security, read_heard_ssid,
+    read_key, read_link_name, read_station, read_survey_count, read_survey_mark,
+    read_survey_security, read_survey_ssid, request_drop, survey_choice, survey_requested,
+    write_join, write_key, write_link_name, write_survey, write_survey_mark, write_survey_secured,
+    FirmwareKind, Stage, SCAN_MAX, SURVEY_REPORT_MAX, SURVEY_SEC_OPEN, SURVEY_SEC_OTHER,
+    SURVEY_SEC_PSK,
+};
+pub use nvme::{
+    io_allowed, io_rejected, load_named, report_bytes, write_result, DiskReport, NAMED_FILE,
+};
+pub use panel::{paint_row, working_line, WaitMark};
+pub use pci::{
+    bar_line, class_code, config_address, describe, exclusion_base, exclusion_limit, iommu_base,
+    iommu_with_bit, load_header, load_iommu, memory_bar, radio_present, store_header, store_iommu,
+    vendor_device, write_cmd_line, write_excl_line, HEADER_BYTES, IOMMU_CTRL, IOMMU_EXCL_BASE,
+    IOMMU_EXCL_LIMIT, IOMMU_OFF_BITS, IOMMU_RECORD, LOCATIONS, MT7921_BAR, MT7921_BDF, MT7921_IDS,
+    NVME_BDF, NVME_CLASS, SWIFT_DMA_END, SWIFT_DMA_START, XHCI_BDFS, XHCI_CLASS,
+};
+pub use wifi::{
+    bring_up, credentials, dhcp_router, dhcp_yiaddr, enqueue_frame, format_report, icmp_reply,
+    write_discover, write_echo, write_request, Nic, WifiReport, CLIENT_MAC,
+};
+pub use wpa::{beacon_security, key_ok, write_deauth, BEACON_OPEN, BEACON_OTHER, BEACON_PSK};

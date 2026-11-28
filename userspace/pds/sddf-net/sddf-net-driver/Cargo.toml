@@ -1,0 +1,27 @@
+[package]
+name = "sddf-net-driver"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[lints]
+workspace = true
+
+[features]
+board-x86_64_generic_fetch_sddf = []
+board-x86_64_generic_web_sddf = []
+
+[dependencies]
+lerux-logging = { path = "../../../crates/platform/lerux-logging" }
+lerux-machine = { path = "../../../crates/desk/lerux-machine" }
+lerux-sddf = { path = "../../../crates/queue/lerux-sddf" }
+sel4-microkit = { workspace = true }
+sel4-virtio-hal-impl = { workspace = true }
+virtio-drivers = { workspace = true, features = ["alloc"] }
+
+[build-dependencies]
+lerux-image = { path = "../../../../tools/lerux-image" }
+
+[target.'cfg(target_arch = "x86_64")'.dependencies]
+lerux-virtio-hal = { path = "../../../crates/virtio/lerux-virtio-hal" }
+lerux-virtio-pci = { path = "../../../crates/virtio/lerux-virtio-pci" }

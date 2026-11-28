@@ -28,9 +28,9 @@ tempfile = "3"
 sha2 = "0.10"
 ed25519-dalek = { version = "2", features = ["rand_core"] }
 rand = "0.8"
-lerux-wasm = { path = "../../userspace/crates/lerux-wasm" }
-lerux-sddf = { path = "../../userspace/crates/lerux-sddf" }
+lerux-wasm = { path = "../../userspace/crates/web/lerux-wasm" }
+lerux-sddf = { path = "../../userspace/crates/queue/lerux-sddf" }
 lerux-image = { path = "../lerux-image" }
 lerux-ladybird-gfx = { path = "../../lerux-ladybird/crates/lerux-ladybird-gfx" }
-lerux-ladybird-http = { path = "../../lerux-ladybird/crates/lerux-ladybird-http" }
+lerux-ladybird-http = { path = "../../lerux-ladybird/crates/net/lerux-ladybird-http" }
 lerux-ladybird-image = { path = "../../lerux-ladybird/crates/lerux-ladybird-image" }

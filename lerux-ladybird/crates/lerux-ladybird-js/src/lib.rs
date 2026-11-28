@@ -13,15 +13,12 @@ extern crate alloc;
 #[cfg(test)]
 extern crate std;
 
-mod ast;
-mod compile;
 mod error;
-mod heap;
-mod lex;
-mod opcode;
-mod parse;
-mod value;
+mod front;
 mod vm;
+
+pub(crate) use front::{ast, lex, parse};
+pub(crate) use vm::{compile, heap, opcode, value};
 
 pub use error::Error;
 pub use value::Value;

@@ -1,6 +1,6 @@
 use lerux_ladybird_image::{decode_png, Image, PngError};
 
-const LENNA: &[u8] = include_bytes!("../../../../support/browser/lenna.png");
+const LENNA: &[u8] = include_bytes!("../../../../support/payload/fixtures/browser/sample/lenna.png");
 
 /// Four by five RGB, row `y` filtered with PNG filter `y` (None, Sub, Up,
 /// Average, Paeth). The pixels are [`grid`]. Python `zlib.compress(raw, 0)`
@@ -109,7 +109,7 @@ fn assert_grid(image: &Image) {
 
 #[test]
 fn the_guest_grid_names_its_top_left() {
-    let image = decode_png(include_bytes!("../../../../support/browser/grid.png")).expect("grid");
+    let image = decode_png(include_bytes!("../../../../support/payload/fixtures/browser/sample/grid.png")).expect("grid");
     assert_eq!((image.width(), image.height()), (4, 5));
     assert_eq!(rgba(&image, 0, 0), grid(0, 0));
     assert_eq!(image.pixels()[..4], [0x05, 0xc8, 0x09, 0xff]);

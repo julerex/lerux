@@ -1,0 +1,21 @@
+[package]
+name = "sddf-e1000e-driver"
+version = "0.1.0"
+edition = "2024"
+license = "MIT"
+
+[lints]
+workspace = true
+
+[features]
+board-pc_z97_d3h_i217 = []
+
+[dependencies]
+lerux-logging = { path = "../../../../crates/platform/lerux-logging" }
+lerux-machine = { path = "../../../../crates/desk/lerux-machine" }
+lerux-sddf = { path = "../../../../crates/queue/lerux-sddf" }
+sel4 = { workspace = true }
+sel4-microkit = { workspace = true }
+
+[build-dependencies]
+lerux-image = { path = "../../../../../tools/lerux-image" }

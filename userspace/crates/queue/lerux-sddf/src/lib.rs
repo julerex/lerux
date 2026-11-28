@@ -11,17 +11,20 @@
 )]
 
 mod block;
-mod fs;
-mod gpu;
-mod net;
+mod files;
+mod graphics;
+mod network;
 mod rest;
 
 pub use block::{blk, blk_image, blk_queue};
-pub use fs::{fs, fs_image, fs_queue};
-pub use gpu::{gpu, gpu_image, gpu_queue};
-pub use net::{net, net_image, net_queue};
-pub use rest::serial::{serial, serial_image, serial_queue};
-pub use rest::{agent, sched, timer};
+pub use files::{fs, fs_image, fs_queue};
+pub use graphics::{gpu, gpu_image, gpu_queue};
+pub use network::{net, net_image, net_queue};
+pub use rest::{
+    agent,
+    link::{serial, serial_image, serial_queue},
+    sched, timer,
+};
 
 pub use agent::*;
 pub use blk::*;

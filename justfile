@@ -12,15 +12,15 @@ workspace := root + "/deps/workspace"
 sdk_path_file := root + "/deps/.sdk-path"
 lerux := "cargo run -q -p lerux-cli --"
 
-export RUST_TARGET_PATH := root + "/support/targets"
+export RUST_TARGET_PATH := root + "/support/config/boards/targets"
 export RUSTC_BOOTSTRAP := "1"
 
 default: build
 
 # Format, clippy, and host tests for host crates (no SDK required).
-# The command is support/host-check.sh. It sets CARGO_TARGET_DIR=build/host.
+# The command is support/scripts/host/host-check.sh. It sets CARGO_TARGET_DIR=build/host.
 check:
-    bash support/host-check.sh
+    bash support/scripts/host/host-check.sh
 
 # One host-only crate. Does not start the protection-domain clippy gate.
 check-host crate:
@@ -36,13 +36,13 @@ check-pd:
 
 check-all: check check-pd
 
-# Prove userspace/crates/lerux-ring with the pinned Verus release.
+# Prove userspace/crates/queue/lerux-ring with the pinned Verus release.
 # Downloads the release into deps/verus on first use. A host whose C library
 # is older than the release binary re-runs the proof inside Ubuntu 24.04.
 verify-ring:
-    bash support/verify-ring.sh
+    bash support/scripts/verify/verify-ring.sh
 
-# Rewrite support/lionsos-layout.toml from the LionsOS 0.4.0 headers.
+# Rewrite support/config/boards/lionsos-layout.toml from the LionsOS 0.4.0 headers.
 lionsos-layout:
     LERUX_LIONSOS_LAYOUT=1 LERUX_LIONSOS_LAYOUT_WRITE=1 cargo test -p lerux-sddf --test layout
 
@@ -115,7 +115,7 @@ burn-lerux-iso-z97: (_burn-lerux-iso "pc_z97_d3h_i217")
 burn-lerux-iso-inspiron: (_burn-lerux-iso "inspiron_n5010")
 
 _burn-lerux-iso target: (_make-lerux-iso target)
-    bash "{{root}}/support/burn-lerux-iso.sh" --image "{{root}}/{{build_dir}}/{{target}}/lerux_{{target}}.iso"
+    bash "{{root}}/support/boot/scripts/burn-lerux-iso.sh" --image "{{root}}/{{build_dir}}/{{target}}/lerux_{{target}}.iso"
 
 # One-shot boot of the Lerux USB already plugged into this Linux host.
 # Sets UEFI BootNext only (does not change the lasting BootOrder), so the next
@@ -125,7 +125,7 @@ _burn-lerux-iso target: (_make-lerux-iso target)
 # just boot-lerux-usb /dev/sdX
 # just boot-lerux-usb --no-reboot
 boot-lerux-usb *args:
-    bash "{{root}}/support/boot-lerux-usb.sh" {{args}}
+    bash "{{root}}/support/boot/scripts/boot-lerux-usb.sh" {{args}}
 
 # Copy the Pi loader onto a mounted FAT boot directory. Verifies loader.img.sha256 first.
 # DEST=/media/$USER/boot just deploy-rpi4
@@ -142,13 +142,13 @@ deploy-pc:
 # just burn-arch-probe
 # just burn-arch-probe /dev/sdX
 burn-arch-probe *args:
-    bash "{{root}}/support/arch-probe/write-stick.sh" {{args}}
+    bash "{{root}}/support/arch-probe/scripts/write-stick.sh" {{args}}
 
 # Copy a desk probe off the CAPTURE partition into support/arch-probe/out/.
 # just read-arch-probe
 # just read-arch-probe /dev/sdX
 read-arch-probe *args:
-    bash "{{root}}/support/arch-probe/read-stick.sh" {{args}}
+    bash "{{root}}/support/arch-probe/scripts/read-stick.sh" {{args}}
 
 # Boot in QEMU for the selected board
 run: image
@@ -348,12 +348,12 @@ test-all:
     {{lerux}} test-all --build-dir {{build_dir}} --config {{config}}
 
 # Host microbench runner. No boards are registered.
-# Writes build/bench/bench-results.{md,json} and docs/bench-results.latest.md
+# Writes build/bench/bench-results.{md,json} and docs/guide/quality/bench-results.latest.md
 bench:
     just disk-img
     {{lerux}} bench --build-dir {{build_dir}} --config {{config}}
 
-# Phase 57: microbenches + threshold gate (support/bench-thresholds.toml)
+# Phase 57: microbenches + threshold gate (support/config/boards/bench-thresholds.toml)
 bench-check:
     just disk-img
     {{lerux}} bench --build-dir {{build_dir}} --config {{config}} --check
